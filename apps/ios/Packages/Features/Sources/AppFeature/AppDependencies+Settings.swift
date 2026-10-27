@@ -15,6 +15,8 @@ public struct SettingsModels {
     public let saleEmails: SaleEmailsModel
     /// Settings > Delete account.
     public let accountDeletion: AccountDeletionModel
+    /// Settings > People: the owner's invites.
+    public let invites: InvitesModel
 
     /// `profileDirectory` keeps the profile photo; `LISTORA_RESET_LOCAL_DATA` empties it first.
     init(
@@ -35,6 +37,7 @@ public struct SettingsModels {
         )
         self.profile = profile
         saleEmails = SaleEmailsModel(service: APISaleEmailsService(api: apiClient))
+        invites = InvitesModel(service: APIInvitesService(client: apiClient.client))
         accountDeletion = Self.accountDeletion(apiClient, accessTokens, signIn, phone.sessions, profile)
     }
 

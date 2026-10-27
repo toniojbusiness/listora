@@ -75,11 +75,20 @@ export type TaskEgress =
  * - `dev`: the API's dev driver, whose one-time codes appear only in the API's log. Staging and
  *   prod run it until they get their user pool (with public sign-up and Sign in with Apple,
  *   T-31's follow-up); it must never serve real people.
- * - `owner-pool`: a Cognito user pool (the auth stack) with email one-time codes, no self
- *   sign-up, and one user, the deploy target's `ownerEmail`. The API runs the `cognito` driver
- *   against it, and the dev driver is refused.
+ * - `owner-pool`: a Cognito user pool (the auth stack) with email one-time codes and no self
+ *   sign-up. Its users are the deploy target's `ownerEmail`, whom the stack creates, and the
+ *   people the owner invites, whom the API creates when they redeem an invite
+ *   (docs/features/invites.md). The API runs the `cognito` driver against it with invite-only
+ *   sign-up, and the dev driver is refused. `inviteEmailVerification` is `ses` while the
+ *   account's SES is in its sandbox (it sends only to verified addresses, so each invitee's
+ *   address is verified first), `none` once SES has production access.
  */
-export type SignIn = { readonly via: 'dev' } | { readonly via: 'owner-pool' };
+export type SignIn =
+  | { readonly via: 'dev' }
+  | { readonly via: 'owner-pool'; readonly inviteEmailVerification: InviteEmailVerification };
+
+/** How the API makes sure invitees receive the pool's codes (`INVITE_EMAIL_VERIFICATION`). */
+export type InviteEmailVerification = 'none' | 'ses';
 
 export type ApiIngress =
   | { readonly via: 'load-balancer' }
@@ -242,8 +251,10 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     // The execute-api URL stays on until every URL registered with a third party has moved
     // to api.<domain>.
     ingress: { via: 'http-api', disableDefaultEndpoint: false },
-    // The owner signs in to their own copy with an emailed code; nobody else can (no sign-up).
-    signIn: { via: 'owner-pool' },
+    // The owner signs in to their own copy with an emailed code, and invites the others. The
+    // account's SES is in its sandbox (no domain, no production access), so each invitee's
+    // address gets verified before codes reach it.
+    signIn: { via: 'owner-pool', inviteEmailVerification: 'ses' },
     database: {
       // Single-AZ Graviton RDS beats Aurora Serverless v2: the worker keeps connections open,
       // so Aurora never pauses and bills at least 0.5 ACU around the clock.

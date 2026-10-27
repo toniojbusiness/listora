@@ -95,6 +95,12 @@ targets:
         ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         ListoraSupportEmail: $(SUPPORT_EMAIL)
         ITSAppUsesNonExemptEncryption: false
+        # Invite links (`listora://invite/<code>`, docs/features/invites.md) open the sign-up with
+        # the code filled in.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.listora.invite
+            CFBundleURLSchemes:
+              - listora
         NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
         # Assisted tasks save an item's photos to the camera roll, in posting order, for the
         # marketplace's app to pick up (add-only access).

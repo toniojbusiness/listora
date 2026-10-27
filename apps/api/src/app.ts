@@ -4,6 +4,7 @@ import type { AiClient } from '@listora/ai';
 import type { AnalysisJobQueue } from '@listora/analysis';
 import { loadAutomationSettings } from '@listora/automation';
 import { graphileBatchJobs, type BatchJobQueue } from '@listora/batches';
+import { openInviteeDirectory } from '@listora/accounts';
 import type { Db } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import type { PhotoJobQueue } from '@listora/photos';
@@ -18,6 +19,7 @@ import {
 
 import type { AuthDriver } from './auth/driver.ts';
 import type { ConnectionsDependencies } from './connections/routes.ts';
+import type { InvitesDependencies } from './invites/routes.ts';
 import { registerErrorHandling } from './errors.ts';
 import { API_FEATURES, type ApiRouteContext } from './features.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
@@ -28,11 +30,19 @@ import type { PhotoUploads } from './photos/uploads.ts';
 import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
+import type { SignUpPolicy } from './tenancy.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 export interface AppDependencies extends HealthDependencies {
   db: Db;
   auth: AuthDriver;
+  /** Who gets an account on their first sign-in (`SIGN_UP`, docs/features/invites.md). */
+  signUp: SignUpPolicy;
+  /**
+   * The sign-in provider's users that invitees sign in as; defaults to none to create (the dev
+   * driver's), which a Cognito deployment must replace with its pool.
+   */
+  invites?: InvitesDependencies;
   /** Photo uploads and derived images. The local driver's routes are served by this app. */
   storage: ObjectStorage;
   /** Where `addItemPhoto` adds each new photo's processing job. */
@@ -117,6 +127,8 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const context: ApiRouteContext = {
     db: deps.db,
     auth: deps.auth,
+    signUp: deps.signUp,
+    invites: deps.invites ?? { directory: openInviteeDirectory },
     storage: deps.storage,
     uploads: deps.uploads ?? new SessionPhotoUploads(deps.storage, now),
     photoJobs: deps.photoJobs,

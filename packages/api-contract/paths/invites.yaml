@@ -1,0 +1,148 @@
+/v1/invites:
+  get:
+    tags: [invites]
+    operationId: listInvites
+    summary: List the account's invites and the people who joined through them
+    description: |
+      Every invite the account made, newest first (at most 100), with each one's state and the
+      invitee's email once they redeemed it. `canInvite` says whether this account may invite:
+      only an account created directly may (an invited person's account may not), and for one
+      that may not, `data` is empty.
+    responses:
+      '200':
+        description: The account's invites.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/invites.yaml#/InviteList'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [invites]
+    operationId: createInvite
+    summary: Create an invite
+    description: |
+      A new invite with a one-time code. The answer is the only time the code is shown: the
+      server keeps only its hash. `403 forbidden` when this account may not invite
+      (`canInvite`), and `409 invalid_state_transition` when it already has 20 invites nobody has
+      used yet.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/invites.yaml#/InviteCreate'
+    responses:
+      '201':
+        description: The invite and its code.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/invites.yaml#/CreatedInvite'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/invites/{inviteId}/revoke:
+  parameters:
+    - $ref: '../components/parameters.yaml#/InviteId'
+  post:
+    tags: [invites]
+    operationId: revokeInvite
+    summary: Revoke an invite, or the access of the person who joined through it
+    description: |
+      An invite nobody redeemed can no longer be. Once someone redeemed it, they can no longer
+      sign in: their sessions end and the API refuses them at once. Their account and its data
+      are kept, so `restoreInvite` gives the access back. Revoking a revoked invite changes
+      nothing. A `503` (the sign-in provider did not answer) revoked nothing; retry it.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The revoked invite.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/invites.yaml#/Invite'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/invites/{inviteId}/restore:
+  parameters:
+    - $ref: '../components/parameters.yaml#/InviteId'
+  post:
+    tags: [invites]
+    operationId: restoreInvite
+    summary: Give a revoked person their access back
+    description: |
+      Only for a revoked invite that someone had redeemed (`restore` is in `availableActions`):
+      they can sign in again, to their own account as they left it. `409
+      invalid_state_transition` otherwise; an invite revoked before anyone redeemed it is
+      replaced by a new one instead.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The restored invite.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/invites.yaml#/Invite'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/invite-redemptions:
+  post:
+    tags: [invites]
+    operationId: redeemInvite
+    summary: Redeem an invite code with the invitee's email (no sign-in yet)
+    description: |
+      The first step of signing up: the invitee, not signed in yet, enters the code they were
+      sent and their own email. No bearer token: the code is the credential. It binds the invite
+      to the email and lets that email sign in; the app then signs in with the emailed one-time
+      code as usual, and the first signed-in request creates the invitee's own, empty account.
+
+      Redeeming is safe to repeat: the same code and email give the same answer (so the
+      `Idempotency-Key` is not stored), and until the invitee has signed in, the same code with
+      another email moves the invite to that address (a typo), a few times at most. While
+      `status` is `email_verification_sent`, the sign-in codes cannot reach the address yet: the
+      invitee opens the verification link emailed to them, then redeems again.
+
+      `404 not_found` for a code that names no invite, `409 invalid_state_transition` for an
+      invite that expired, was revoked, or was already used by someone who signed in, and `409
+      already_exists` for an email that already has a Listora account. Wrong codes are limited
+      (`429 rate_limited`).
+    security: []
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/invites.yaml#/InviteRedeem'
+    responses:
+      '200':
+        description: The invite is the email's; the invitee signs in next.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/invites.yaml#/InviteRedemption'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      '429':
+        $ref: '../components/responses.yaml#/RateLimited'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

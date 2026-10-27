@@ -28,6 +28,7 @@ struct WelcomeView: View {
                     )
                 } else {
                     form
+                    inviteEntry
                 }
             }
             .padding(.horizontal, Spacing.lg)
@@ -92,6 +93,23 @@ struct WelcomeView: View {
             }
         }
         .cardStyle(.elevated)
+    }
+
+    /// New here: someone who uses Listora sent an invite code.
+    @ViewBuilder
+    private var inviteEntry: some View {
+        if model.invite != nil {
+            VStack(spacing: Spacing.xs) {
+                Text("New to Listora?")
+                    .font(Typography.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+                Button("Sign up with an invite") { model.openInvite(code: nil) }
+                    .buttonStyle(.listoraTertiary)
+                    .disabled(model.isWorking)
+                    .accessibilityIdentifier("signIn.invite")
+            }
+            .frame(maxWidth: .infinity)
+        }
     }
 
     private func requestCode() {

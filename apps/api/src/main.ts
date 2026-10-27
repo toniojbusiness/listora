@@ -24,6 +24,7 @@ import { buildApp } from './app.ts';
 import { createAuthDriver } from './auth/create-driver.ts';
 import { loadApiConfig } from './config.ts';
 import { pingDatabase } from './db.ts';
+import { createInviteeDirectory } from './invites/create-directory.ts';
 
 /** How long a stopping API task on ECS keeps serving (within the task's 30 s stop timeout). */
 const SHUTDOWN_DRAIN_MS = 10_000;
@@ -48,6 +49,8 @@ const app = buildApp({
   logger,
   db,
   auth: createAuthDriver(config.auth, logger),
+  signUp: config.signUp,
+  invites: { directory: createInviteeDirectory(config) },
   storage: createStorage(config.storage),
   photoJobs: graphilePhotoJobs,
   ai: createAiClient(config.ai, {

@@ -182,7 +182,7 @@ function createAjv(coerceTypes: false | 'array', defs: ContractSchema): Ajv2020 
   // `useDefaults` fills in the contract's defaults (for example `quantity: 1`), which the
   // generated types already treat as present.
   const ajv = new Ajv2020({ allErrors: true, strict: true, coerceTypes, useDefaults: true });
-  addFormats(ajv, ['date', 'date-time', 'uri']);
+  addFormats(ajv, ['date', 'date-time', 'email', 'uri']);
   // ajv-formats' `uuid` also accepts a `urn:uuid:` prefix, which Postgres rejects.
   ajv.addFormat('uuid', /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   ajv.addFormat('int32', {

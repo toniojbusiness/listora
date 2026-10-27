@@ -17,6 +17,7 @@ import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
 import type { ConnectionsDependencies } from './connections/routes.ts';
+import type { InvitesDependencies } from './invites/routes.ts';
 import type { RouteDependencies } from './contract/routes.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
@@ -48,6 +49,8 @@ export interface ApiRouteContext extends RouteDependencies {
   ebayWebhook?: EbayWebhookDependencies;
   /** Email sale detection: the forwarding addresses' domain and the dev drop folder. */
   saleEmails: SaleEmailsDependencies;
+  /** The sign-in provider's users that invitees sign in as. */
+  invites: InvitesDependencies;
   /** The marketplace work phones run (docs/features/phone-execution.md); none without it. */
   phone: PhoneWorkDependencies | undefined;
   /** The clock upload sessions expire by. */

@@ -94,8 +94,12 @@
             },
             {
               "Action": [
+                "cognito-idp:AdminCreateUser",
                 "cognito-idp:AdminDeleteUser",
-                "cognito-idp:AdminGetUser"
+                "cognito-idp:AdminDisableUser",
+                "cognito-idp:AdminEnableUser",
+                "cognito-idp:AdminGetUser",
+                "cognito-idp:AdminUserGlobalSignOut"
               ],
               "Effect": "Allow",
               "Resource": {
@@ -105,6 +109,16 @@
                   "OutputName": "PublishOutputFnGetAttUserPool6BA7E5F2Arn6E09B627"
                 }
               }
+            },
+            {
+              "Action": [
+                "ses:CreateEmailIdentity",
+                "ses:DeleteEmailIdentity",
+                "ses:GetEmailIdentity"
+              ],
+              "Effect": "Allow",
+              "Resource": "arn:aws:ses:us-east-1:333333333333:identity/*@*",
+              "Sid": "VerifyInviteeAddresses"
             },
             {
               "Action": [
@@ -243,6 +257,18 @@
                     "OutputName": "PublishOutputRefUserPoolIPhoneApp88BB6ABF22F930E1"
                   }
                 }
+              },
+              {
+                "Name": "SIGN_UP",
+                "Value": "invite"
+              },
+              {
+                "Name": "SIGN_UP_OWNER_EMAIL",
+                "Value": "owner@example.com"
+              },
+              {
+                "Name": "INVITE_EMAIL_VERIFICATION",
+                "Value": "ses"
               },
               {
                 "Name": "DATABASE_URL",

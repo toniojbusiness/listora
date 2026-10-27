@@ -207,6 +207,8 @@ src/
   profile/       The profile Settings shows (getProfile, replaceProfile)
   account/       Account deletion (deleteAccount); the job that finishes it is in
                  @listora/accounts
+  invites/       Invites: the owner's invites and the people who joined, and the public
+                 redemption an invitee signs up with (docs/features/invites.md)
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
   items/ photos/ One folder per resource: routes.ts, feature.ts, repository.ts, mapping and views
@@ -255,7 +257,9 @@ src/
   account, so another account's rows read as `404 not_found` and cannot be changed.
   `contractRoute` refuses operations the contract marks public. A person's first request
   creates their user, an account (SKU prefix from the email's initials), and the owner
-  membership; a user without exactly one account gets `403 forbidden`. A token issued before
+  membership, if the sign-up policy gives them one (`SIGN_UP`: anyone, or only the owner and
+  the people they invited, [invites.md](features/invites.md)); a user without exactly one
+  account gets `403 forbidden`, and so does one whose invite was revoked. A token issued before
   its person deleted their account, or while the deletion still waits for the identity
   provider, is `401`, so it cannot provision a new account (checked under the lock deletion
   takes, so a deletion that commits meanwhile cannot be missed).
@@ -294,6 +298,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`)              | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production`         |
 | Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email` ([email-sales.md](features/email-sales.md))                                                                        | SES inbound → S3 + SQS     | `EMAIL_INGEST=folder\|ses\|off`               |
 | Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`                    |
+| Sign-up          | Anyone gets an account (`SIGN_UP=open`); invitees' users are only the dev driver's tokens                                                                               | Invite-only, Cognito users | `SIGN_UP`, `INVITE_EMAIL_VERIFICATION`        |
 | Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`                 |
 | Push             | Recording fake that logs each notification (`packages/push`)                                                                                                            | APNs (with device tokens)  | `PUSH_DRIVER=fake`                            |
 | Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`), for OAuth tokens and browser sessions                                                                           | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                            |
@@ -314,7 +319,9 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   and the platform tables `ai_kill_switch` and `ai_control_audit`, which belong to no single
   tenant. Child
   rows reference parents through composite `(account_id, <parent>_id)` foreign keys, so the
-  database rejects a row that points at another tenant's data. Deleting an account deletes
+  database rejects a row that points at another tenant's data. The one exception is
+  `account_invite`, whose invitee columns name the account and user the invite created, which
+  belong to the invitee ([invites.md](features/invites.md#data)). Deleting an account deletes
   all of its data.
 - **Columns.** Ids are `uuidv7()`. Money is `bigint` cents (`*_cents`) plus a `currency`
   column (`currency_code` domain, USD only for now). Status-like columns are text with a
@@ -357,7 +364,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [auto-delist.md](features/auto-delist.md#data), the lifecycle and fee columns in
   [sales.md](features/sales.md#data), the profit dashboard's index in
   [profit.md](features/profit.md#data)); pricing in [pricing.md](features/pricing.md#data);
-  deleted identities and account deletion in [auth.md](features/auth.md#data); the morning
+  deleted identities and account deletion in [auth.md](features/auth.md#data); invites in
+  [invites.md](features/invites.md#data); the morning
   summary setting in [today.md](features/today.md#data); sale email inboxes in
   [email-sales.md](features/email-sales.md#data); the marketplace pre-fill's answers and AI picks in
   [marketplace-prefill.md](features/marketplace-prefill.md#data). Billing
@@ -452,6 +460,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                    |
 | [features/items.md](features/items.md)                             | Inventory items, item status, the audit log                                   |
 | [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                      |
+| [features/invites.md](features/invites.md)                         | Invite-based sign-up: invites, redemption, revoking, separate accounts        |
 | [features/profile.md](features/profile.md)                         | Profile and settings: the avatar, names, the photo, diagnostics, the API      |
 | [features/infra.md](features/infra.md)                             | Hosting and deploys                                                           |
 | [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                       |

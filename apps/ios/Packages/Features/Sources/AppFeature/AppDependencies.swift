@@ -180,7 +180,14 @@ public struct AppDependencies {
         if let grant = launchOptions.accessGrant, configuration.environment == .dev {
             accessTokens.signIn(grant)
         }
-        return (accessTokens, SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens))
+        // Redeeming an invite needs no session, so the client sends no token before sign-in.
+        let invites = APIInviteRedeemer(
+            client: APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens).client,
+        )
+        return (
+            accessTokens,
+            SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens, inviteRedeemer: invites),
+        )
     }
 
     /// The Cognito client of a build with a user pool app client. The Share Extension builds the

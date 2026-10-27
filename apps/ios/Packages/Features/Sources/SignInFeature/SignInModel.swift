@@ -56,6 +56,10 @@ public final class SignInModel {
     public private(set) var codeSentAt: Date?
 
     public let kind: SignInKind?
+    /// Signing up with an invite; nil when this build cannot (it has no way to sign in).
+    public private(set) var invite: InviteSignUpModel?
+    /// The invite sign-up screen is open over the welcome screen.
+    public var showsInvite = false
     private let method: (any SignInMethod)?
     private let tokens: AccessTokenStore
     private let now: @Sendable () -> Date
@@ -71,6 +75,7 @@ public final class SignInModel {
     public init(
         method: (any SignInMethod)?,
         tokens: AccessTokenStore,
+        inviteRedeemer: (any InviteRedeemer)? = nil,
         now: @escaping @Sendable () -> Date = Date.init,
     ) {
         self.method = method
@@ -78,6 +83,11 @@ public final class SignInModel {
         self.now = now
         kind = method?.kind
         stage = Self.stage(method: method, grant: tokens.grant)
+        if let inviteRedeemer, method != nil {
+            invite = InviteSignUpModel(redeemer: inviteRedeemer) { [weak self] email in
+                await self?.signUp(email: email)
+            }
+        }
     }
 
     public var isSignedIn: Bool {
@@ -233,6 +243,7 @@ public final class SignInModel {
             code = ""
             problem = nil
             notice = nil
+            showsInvite = false
         }
         stage = .signedIn(email: grant.email)
         // A session without a refresh token (the dev driver's) just ends: nothing announces it.
@@ -320,8 +331,8 @@ public final class SignInModel {
         return SignInProblem(kind: .other, message: failure.message)
     }
 
-    static let notAllowed = "This email can't sign in to Listora. Check the address, or use the email "
-        + "your Listora account was set up with."
+    static let notAllowed = "This email can't sign in to Listora. Check the address, or if you're new, "
+        + "sign up with the invite code you were sent."
 }
 
 extension Character {

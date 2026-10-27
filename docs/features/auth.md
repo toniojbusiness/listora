@@ -16,6 +16,10 @@ tenancy guard included, are in [architecture.md](../architecture.md#4-api-conven
 | `dev`     | Local development and tests; staging and prod until a pool        | A one-time code printed to the API log ([Signing in locally](#signing-in-locally)) |
 | `cognito` | The personal environment (its owner pool); staging and prod later | The app signs in with the Cognito user pool and sends the pool's ID token          |
 
+Who gets an account at their first sign-in is a separate switch, `SIGN_UP`: anyone the driver
+verified (`open`, the default), or only the owner and the people they invited (`invite`, the
+personal environment; [invites.md](invites.md)).
+
 Which driver a deployed environment runs is its `signIn` setting (`ENVIRONMENT_SETTINGS` in
 `infra/src/config.ts`), and `signInResources` (`infra/src/containers.ts`) turns it into the
 containers' environment: an `owner-pool` environment gets `AUTH_DRIVER=cognito` with its
@@ -82,20 +86,24 @@ named "My account" with the SKU prefix `LS`.
 
 ## The owner pool (personal)
 
-The personal environment is one person's own copy of Listora, so its pool (the auth stack,
-`signIn: { via: 'owner-pool' }`) lets exactly that person in:
+The personal environment is one person's own copy of Listora, which they share by invitation,
+so its pool (the auth stack, `signIn: { via: 'owner-pool', ... }`) lets in that person and the
+people they invite:
 
-- **One user.** The stack creates the deploy target's `ownerEmail` (`LISTORA_OWNER_EMAIL`,
-  from deploy config, never from code) as the pool's only user, verified, with no password and
-  no invitation. Self sign-up is off and the app client has no hosted UI, so nobody else can
-  get a user. Changing the owner email replaces the user: the new one signs in to a new, empty
-  Listora account.
+- **The owner, and invitees.** The stack creates the deploy target's `ownerEmail`
+  (`LISTORA_OWNER_EMAIL`, from deploy config, never from code) as a user, verified, with no
+  password and no invitation. Self sign-up is off and the app client has no hosted UI, so nobody
+  can get a user on their own: the only other users are the ones the API creates, the same way,
+  when someone redeems an invite the owner made, and the API gives an account only to the owner
+  and to those invitees (`SIGN_UP=invite`; [invites.md](invites.md)). Changing the owner email
+  replaces the owner's user: the new one signs in to a new, empty Listora account.
 - **Email one-time codes only.** Essentials plan, `AllowedFirstAuthFactors: [PASSWORD,
 EMAIL_OTP]` (Cognito requires `PASSWORD` in the list; nobody has one), MFA off (one-time
   codes cannot be combined with it), and no account recovery (there is no password to reset).
 - **SES sending.** Email codes need the pool to send through SES (`DEVELOPER`). The email stack
   holds the owner's address as an SES identity, which in the SES sandbox is also what lets SES
-  send to it. The codes come from the owner's own address without a domain, and from
+  send to it; each invitee's address becomes one when they redeem their invite
+  (`INVITE_EMAIL_VERIFICATION=ses`, [invites.md](invites.md#reaching-invitees-in-the-ses-sandbox)). The codes come from the owner's own address without a domain, and from
   `no-reply@<domain>` (the domain's DKIM-verified identity) with one.
 - **The one-time setup.** Creating the identity emails the owner a verification link from AWS.
   `scripts/deploy-personal.sh` waits after the email stack until it is clicked, then deploys
@@ -122,6 +130,8 @@ them in the Keychain and refreshes them with the refresh token (`REFRESH_TOKEN_A
   `PREFERRED_CHALLENGE=EMAIL_OTP`, then `RespondToAuthChallenge` with `EMAIL_OTP_CODE`; the app
   does this today (`CognitoSignInClient`, from the welcome screen), against the owner pool. Cognito's
   errors are shown in the app's own words, and a challenge other than `EMAIL_OTP` is refused.
+  An invitee does the same once they redeemed their invite ([invites.md](invites.md)), which
+  is what creates their user.
   With public sign-up (later), a new person calls `SignUp` with only their email (no password)
   and `ConfirmSignUp` with the emailed code; the returned session signs them in through
   `InitiateAuth` with `AuthFlow=USER_AUTH`.

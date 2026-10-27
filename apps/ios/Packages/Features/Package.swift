@@ -97,7 +97,10 @@ let package = Package(
             dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         // The welcome and sign-in screens, the app's root while nobody is signed in.
-        .target(name: "SignInFeature", dependencies: ["DesignSystem", "APIClient"]),
+        .target(
+            name: "SignInFeature",
+            dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .target(
             name: "MarketplacesFeature",
             dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
@@ -178,7 +181,10 @@ let package = Package(
             name: "SettingsFeatureTests",
             dependencies: ["SettingsFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
-        .testTarget(name: "SignInFeatureTests", dependencies: ["SignInFeature", "APIClient"]),
+        .testTarget(
+            name: "SignInFeatureTests",
+            dependencies: ["SignInFeature", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .testTarget(
             name: "MarketplacesFeatureTests",
             dependencies: ["MarketplacesFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],

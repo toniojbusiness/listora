@@ -807,6 +807,72 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/tasks/{taskId}/dismiss`.
     /// - Remark: Generated from `#/paths//v1/tasks/{taskId}/dismiss/post(dismissTask)`.
     func dismissTask(_ input: Operations.DismissTask.Input) async throws -> Operations.DismissTask.Output
+    /// List the account's invites and the people who joined through them
+    ///
+    /// Every invite the account made, newest first (at most 100), with each one's state and the
+    /// invitee's email once they redeemed it. `canInvite` says whether this account may invite:
+    /// only an account created directly may (an invited person's account may not), and for one
+    /// that may not, `data` is empty.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/invites`.
+    /// - Remark: Generated from `#/paths//v1/invites/get(listInvites)`.
+    func listInvites(_ input: Operations.ListInvites.Input) async throws -> Operations.ListInvites.Output
+    /// Create an invite
+    ///
+    /// A new invite with a one-time code. The answer is the only time the code is shown: the
+    /// server keeps only its hash. `403 forbidden` when this account may not invite
+    /// (`canInvite`), and `409 invalid_state_transition` when it already has 20 invites nobody has
+    /// used yet.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites`.
+    /// - Remark: Generated from `#/paths//v1/invites/post(createInvite)`.
+    func createInvite(_ input: Operations.CreateInvite.Input) async throws -> Operations.CreateInvite.Output
+    /// Revoke an invite, or the access of the person who joined through it
+    ///
+    /// An invite nobody redeemed can no longer be. Once someone redeemed it, they can no longer
+    /// sign in: their sessions end and the API refuses them at once. Their account and its data
+    /// are kept, so `restoreInvite` gives the access back. Revoking a revoked invite changes
+    /// nothing. A `503` (the sign-in provider did not answer) revoked nothing; retry it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites/{inviteId}/revoke`.
+    /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/revoke/post(revokeInvite)`.
+    func revokeInvite(_ input: Operations.RevokeInvite.Input) async throws -> Operations.RevokeInvite.Output
+    /// Give a revoked person their access back
+    ///
+    /// Only for a revoked invite that someone had redeemed (`restore` is in `availableActions`):
+    /// they can sign in again, to their own account as they left it. `409
+    /// invalid_state_transition` otherwise; an invite revoked before anyone redeemed it is
+    /// replaced by a new one instead.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites/{inviteId}/restore`.
+    /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/restore/post(restoreInvite)`.
+    func restoreInvite(_ input: Operations.RestoreInvite.Input) async throws -> Operations.RestoreInvite.Output
+    /// Redeem an invite code with the invitee's email (no sign-in yet)
+    ///
+    /// The first step of signing up: the invitee, not signed in yet, enters the code they were
+    /// sent and their own email. No bearer token: the code is the credential. It binds the invite
+    /// to the email and lets that email sign in; the app then signs in with the emailed one-time
+    /// code as usual, and the first signed-in request creates the invitee's own, empty account.
+    ///
+    /// Redeeming is safe to repeat: the same code and email give the same answer (so the
+    /// `Idempotency-Key` is not stored), and until the invitee has signed in, the same code with
+    /// another email moves the invite to that address (a typo), a few times at most. While
+    /// `status` is `email_verification_sent`, the sign-in codes cannot reach the address yet: the
+    /// invitee opens the verification link emailed to them, then redeems again.
+    ///
+    /// `404 not_found` for a code that names no invite, `409 invalid_state_transition` for an
+    /// invite that expired, was revoked, or was already used by someone who signed in, and `409
+    /// already_exists` for an email that already has a Listora account. Wrong codes are limited
+    /// (`429 rate_limited`).
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invite-redemptions`.
+    /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)`.
+    func redeemInvite(_ input: Operations.RedeemInvite.Input) async throws -> Operations.RedeemInvite.Output
     /// Get the sale email forwarding address and its status
     ///
     /// The account's forwarding address (created on first use), the setup steps, the provider's
@@ -2335,6 +2401,106 @@ extension APIProtocol {
         try await dismissTask(Operations.DismissTask.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// List the account's invites and the people who joined through them
+    ///
+    /// Every invite the account made, newest first (at most 100), with each one's state and the
+    /// invitee's email once they redeemed it. `canInvite` says whether this account may invite:
+    /// only an account created directly may (an invited person's account may not), and for one
+    /// that may not, `data` is empty.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/invites`.
+    /// - Remark: Generated from `#/paths//v1/invites/get(listInvites)`.
+    public func listInvites(headers: Operations.ListInvites.Input.Headers = .init()) async throws -> Operations.ListInvites.Output {
+        try await listInvites(Operations.ListInvites.Input(headers: headers))
+    }
+    /// Create an invite
+    ///
+    /// A new invite with a one-time code. The answer is the only time the code is shown: the
+    /// server keeps only its hash. `403 forbidden` when this account may not invite
+    /// (`canInvite`), and `409 invalid_state_transition` when it already has 20 invites nobody has
+    /// used yet.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites`.
+    /// - Remark: Generated from `#/paths//v1/invites/post(createInvite)`.
+    public func createInvite(
+        headers: Operations.CreateInvite.Input.Headers,
+        body: Operations.CreateInvite.Input.Body
+    ) async throws -> Operations.CreateInvite.Output {
+        try await createInvite(Operations.CreateInvite.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Revoke an invite, or the access of the person who joined through it
+    ///
+    /// An invite nobody redeemed can no longer be. Once someone redeemed it, they can no longer
+    /// sign in: their sessions end and the API refuses them at once. Their account and its data
+    /// are kept, so `restoreInvite` gives the access back. Revoking a revoked invite changes
+    /// nothing. A `503` (the sign-in provider did not answer) revoked nothing; retry it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites/{inviteId}/revoke`.
+    /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/revoke/post(revokeInvite)`.
+    public func revokeInvite(
+        path: Operations.RevokeInvite.Input.Path,
+        headers: Operations.RevokeInvite.Input.Headers
+    ) async throws -> Operations.RevokeInvite.Output {
+        try await revokeInvite(Operations.RevokeInvite.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Give a revoked person their access back
+    ///
+    /// Only for a revoked invite that someone had redeemed (`restore` is in `availableActions`):
+    /// they can sign in again, to their own account as they left it. `409
+    /// invalid_state_transition` otherwise; an invite revoked before anyone redeemed it is
+    /// replaced by a new one instead.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites/{inviteId}/restore`.
+    /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/restore/post(restoreInvite)`.
+    public func restoreInvite(
+        path: Operations.RestoreInvite.Input.Path,
+        headers: Operations.RestoreInvite.Input.Headers
+    ) async throws -> Operations.RestoreInvite.Output {
+        try await restoreInvite(Operations.RestoreInvite.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Redeem an invite code with the invitee's email (no sign-in yet)
+    ///
+    /// The first step of signing up: the invitee, not signed in yet, enters the code they were
+    /// sent and their own email. No bearer token: the code is the credential. It binds the invite
+    /// to the email and lets that email sign in; the app then signs in with the emailed one-time
+    /// code as usual, and the first signed-in request creates the invitee's own, empty account.
+    ///
+    /// Redeeming is safe to repeat: the same code and email give the same answer (so the
+    /// `Idempotency-Key` is not stored), and until the invitee has signed in, the same code with
+    /// another email moves the invite to that address (a typo), a few times at most. While
+    /// `status` is `email_verification_sent`, the sign-in codes cannot reach the address yet: the
+    /// invitee opens the verification link emailed to them, then redeems again.
+    ///
+    /// `404 not_found` for a code that names no invite, `409 invalid_state_transition` for an
+    /// invite that expired, was revoked, or was already used by someone who signed in, and `409
+    /// already_exists` for an email that already has a Listora account. Wrong codes are limited
+    /// (`429 rate_limited`).
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invite-redemptions`.
+    /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)`.
+    public func redeemInvite(
+        headers: Operations.RedeemInvite.Input.Headers,
+        body: Operations.RedeemInvite.Input.Body
+    ) async throws -> Operations.RedeemInvite.Output {
+        try await redeemInvite(Operations.RedeemInvite.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// Get the sale email forwarding address and its status

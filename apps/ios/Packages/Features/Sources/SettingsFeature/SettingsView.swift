@@ -56,53 +56,6 @@ public struct SettingsSummary: Equatable, Sendable {
     }
 }
 
-/// The screens Settings opens that other features own; the caller (AppFeature) builds them, since
-/// a feature never imports another. A nil screen hides its row.
-public struct SettingsScreens {
-    public var linkAccounts: (@MainActor () -> AnyView)?
-    public var marketplaces: (@MainActor () -> AnyView)?
-    public var notifications: (@MainActor () -> AnyView)?
-    public var saleEmails: (@MainActor () -> AnyView)?
-
-    /// The screen of one of the rows above; nil for every other destination.
-    @MainActor
-    func screen(for destination: SettingsDestination) -> AnyView? {
-        switch destination {
-        case .linkAccounts: linkAccounts?()
-        case .marketplaces: marketplaces?()
-        case .notifications: notifications?()
-        case .saleEmails: saleEmails?()
-        case .profile, .help, .legal, .diagnostics, .deleteAccount: nil
-        }
-    }
-
-    public init(
-        linkAccounts: (@MainActor () -> AnyView)? = nil,
-        marketplaces: (@MainActor () -> AnyView)? = nil,
-        notifications: (@MainActor () -> AnyView)? = nil,
-        saleEmails: (@MainActor () -> AnyView)? = nil,
-    ) {
-        self.linkAccounts = linkAccounts
-        self.marketplaces = marketplaces
-        self.notifications = notifications
-        self.saleEmails = saleEmails
-    }
-}
-
-/// A screen Settings opens, also from elsewhere in the app (the connection banner opens
-/// Marketplaces, the first-run guide Link accounts).
-public enum SettingsDestination: Hashable, Sendable {
-    case profile
-    case linkAccounts
-    case marketplaces
-    case notifications
-    case saleEmails
-    case help
-    case legal(LegalDocument.Kind)
-    case diagnostics
-    case deleteAccount
-}
-
 /// Profile and settings, opened over the app from the avatar in the Today and Sales headers: the
 /// seller's profile at the top, then only what a seller needs (their marketplaces, notifications
 /// and delisting, sale emails, help, the legal documents, signing out, and deleting the account,
@@ -112,6 +65,8 @@ public struct SettingsView: View {
     private let profile: ProfileModel?
     private let account: SettingsAccount?
     private let accountDeletion: AccountDeletionModel?
+    /// Settings > People: invites; shown only to the account that may invite.
+    let invites: InvitesModel?
     private let screens: SettingsScreens
     /// The marketplaces' health, on the Linked marketplaces row.
     private let marketplacesSummary: SettingsSummary?
@@ -127,6 +82,7 @@ public struct SettingsView: View {
         profile: ProfileModel? = nil,
         account: SettingsAccount? = nil,
         accountDeletion: AccountDeletionModel? = nil,
+        invites: InvitesModel? = nil,
         screens: SettingsScreens = SettingsScreens(),
         marketplacesSummary: SettingsSummary? = nil,
         saleEmailsSummary: SettingsSummary? = nil,
@@ -138,6 +94,7 @@ public struct SettingsView: View {
         self.profile = profile
         self.account = account
         self.accountDeletion = accountDeletion
+        self.invites = invites
         self.screens = screens
         self.marketplacesSummary = marketplacesSummary
         self.saleEmailsSummary = saleEmailsSummary
@@ -152,6 +109,7 @@ public struct SettingsView: View {
                 profileSection
                 marketplacesSection
                 sellingSection
+                peopleSection
                 supportSection
                 accountSection
                 versionFooter
@@ -173,6 +131,11 @@ public struct SettingsView: View {
             .onAppear { accountDeletion?.refresh() }
             .onChange(of: account?.email) { accountDeletion?.refresh() }
             .task(id: account?.email) { await profile?.load() }
+            .task(id: account?.email) {
+                if account != nil {
+                    await invites?.load()
+                }
+            }
         }
     }
 
@@ -366,6 +329,10 @@ extension SettingsView {
             }
         case .linkAccounts, .marketplaces, .notifications, .saleEmails:
             screens.screen(for: destination)
+        case .people:
+            if let invites {
+                InvitesView(model: invites)
+            }
         case .help:
             HelpView(supportEmail: content.supportEmail, version: content.fullVersion)
         case let .legal(kind):

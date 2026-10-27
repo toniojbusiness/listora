@@ -723,7 +723,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
               signIn: signInResources(
                 settings.signIn,
                 settings.signIn.via === 'owner-pool'
-                  ? { userPoolId: '', clientIds: [''] }
+                  ? { userPoolId: '', clientIds: [''], ownerEmail: '' }
                   : undefined,
               ),
             }),
@@ -797,13 +797,44 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(api['COGNITO_USER_POOL_ID']).toContain('UserPool');
         expect(api['COGNITO_CLIENT_IDS']).toContain('IPhoneApp');
         expect(worker['COGNITO_USER_POOL_ID']).toBe(api['COGNITO_USER_POOL_ID']);
-        // Only the worker deletes users, and only these two calls on this pool.
-        expect(cognitoGrant).toHaveLength(1);
-        expect(cognitoGrant[0]).toMatchObject({
-          Effect: 'Allow',
-          Action: ['cognito-idp:AdminDeleteUser', 'cognito-idp:AdminGetUser'],
-        });
-        expect(JSON.stringify(cognitoGrant[0]?.['Resource'])).toContain('UserPool');
+        // Invite-only sign-up, with the deploy's owner (docs/features/invites.md).
+        expect(api['SIGN_UP']).toBe('"invite"');
+        expect(api['SIGN_UP_OWNER_EMAIL']).toBe(JSON.stringify(target.ownerEmail));
+        expect(api['INVITE_EMAIL_VERIFICATION']).toBe(
+          JSON.stringify(settings.signIn.inviteEmailVerification),
+        );
+        // The API manages invitees' users and the worker deletes deleted accounts' users, on
+        // this pool only. A combined task's one role holds both.
+        const separate = settings.services.layout === 'separate';
+        expect(cognitoGrant).toHaveLength(separate ? 2 : 1);
+        expect(new Set(cognitoGrant.flatMap((grant) => asList(grant['Action'])))).toEqual(
+          new Set([
+            'cognito-idp:AdminCreateUser',
+            'cognito-idp:AdminDeleteUser',
+            'cognito-idp:AdminDisableUser',
+            'cognito-idp:AdminEnableUser',
+            'cognito-idp:AdminGetUser',
+            'cognito-idp:AdminUserGlobalSignOut',
+          ]),
+        );
+        for (const grant of cognitoGrant) {
+          expect(grant['Effect']).toBe('Allow');
+          expect(JSON.stringify(grant['Resource'])).toContain('UserPool');
+        }
+        // Invitees' addresses as SES identities, and nothing else at SES.
+        const sesGrant = statements(t).filter((statement) =>
+          asList(statement['Action']).some((action) => String(action).startsWith('ses:')),
+        );
+        if (settings.signIn.inviteEmailVerification === 'ses') {
+          expect(sesGrant).toHaveLength(1);
+          expect(sesGrant[0]).toMatchObject({
+            Effect: 'Allow',
+            Action: ['ses:CreateEmailIdentity', 'ses:DeleteEmailIdentity', 'ses:GetEmailIdentity'],
+          });
+          expect(JSON.stringify(sesGrant[0]?.['Resource'])).toContain(':identity/*@*');
+        } else {
+          expect(sesGrant).toEqual([]);
+        }
       } else {
         expect(api['AUTH_DRIVER']).toBe('"dev"');
         expect(api).not.toHaveProperty('COGNITO_USER_POOL_ID');

@@ -27,7 +27,7 @@
 #                    ~/.config/listora/anthropic.env). The key is never printed.
 #
 # Required, from the environment: LISTORA_OWNER_EMAIL, the address the owner signs in to the app
-# with (the user pool's only user; docs/features/auth.md).
+# with (the user pool's owner, who invites the others; docs/features/auth.md).
 #
 # Optional settings, from the environment (.env.example): LISTORA_AWS_REGION (us-east-1),
 # LISTORA_AVAILABILITY_ZONES, LISTORA_ALARM_EMAIL, LISTORA_DOMAIN with LISTORA_HOSTED_ZONE_ID,
@@ -195,7 +195,7 @@ fi
 # The run's log is public in a public repository: GitHub masks the address (as written here,
 # lowercase) wherever it would appear.
 [[ -z "${GITHUB_ACTIONS:-}" ]] || echo "::add-mask::$owner_email"
-info "owner (the only person who can sign in): $owner_email"
+info "owner (who invites everyone else): $owner_email"
 
 anthropic_key=""
 if [[ "$ci" == true ]]; then
@@ -335,8 +335,11 @@ ai_provider=$(container_env api AI_PROVIDER)
 [[ "$(jq '[.Resources[] | select(.Type == "AWS::Cognito::UserPool") | .Properties.AdminCreateUserConfig.AllowAdminCreateUserOnly] == [true]' "$(template auth)")" == true ]] ||
   fail "the user pool would allow self sign-up"
 [[ "$(jq -r '[.Resources[] | select(.Type == "AWS::Cognito::UserPoolUser") | .Properties.Username] | join(",")' "$(template auth)")" == "$owner_email" ]] ||
-  fail "the user pool's only user must be $owner_email"
-info "sign-in: the Cognito user pool, no sign-up, and $owner_email its only user"
+  fail "the user pool's only user the stack creates must be $owner_email"
+# Everyone else joins only through an invite the owner made (docs/features/invites.md).
+[[ "$(container_env api SIGN_UP)" == invite && "$(container_env api SIGN_UP_OWNER_EMAIL)" == "$owner_email" ]] ||
+  fail "the api container must allow sign-up only through invites, with $owner_email the owner"
+info "sign-in: the Cognito user pool, no self sign-up, $owner_email the owner, others by invite only"
 [[ "$ai_provider" != fake && -n "$ai_provider" ]] || fail "the api container would run the fake AI provider"
 [[ "$(container_env worker AI_PROVIDER)" == "$ai_provider" ]] || fail "the worker's AI_PROVIDER differs from the api's"
 info "api: AUTH_DRIVER=$auth_driver, AI_PROVIDER=$ai_provider (the fake AI is off)"

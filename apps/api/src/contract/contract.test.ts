@@ -101,7 +101,7 @@ describe('compileContract', () => {
 });
 
 describe('the Listora contract', () => {
-  it('compiles every operation, and only health and the OAuth callback are public', () => {
+  it('compiles every operation, and only health, the OAuth callback, and invite redemption are public', () => {
     const operations = contractOperations();
     expect(operations.length).toBeGreaterThan(40);
     expect(
@@ -109,7 +109,7 @@ describe('the Listora contract', () => {
         .filter((op) => !op.secured)
         .map((op) => op.operationId)
         .sort(),
-    ).toEqual(['getLiveness', 'getReadiness', 'handleConnectionCallback']);
+    ).toEqual(['getLiveness', 'getReadiness', 'handleConnectionCallback', 'redeemInvite']);
     expect(operations.filter((op) => op.method === 'POST').every((op) => op.idempotent)).toBe(true);
   });
 
@@ -141,7 +141,7 @@ describe('contractRoute', () => {
       verifyAccessToken: () => Promise.resolve(undefined),
     };
     expect(() => {
-      contractRoute(app, { db, auth }, 'getLiveness', () =>
+      contractRoute(app, { db, auth, signUp: { mode: 'open' } }, 'getLiveness', () =>
         Promise.resolve({ status: 200, body: { status: 'ok' } }),
       );
     }).toThrow(/public in the contract/);

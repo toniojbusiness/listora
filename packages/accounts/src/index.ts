@@ -36,5 +36,17 @@ export type {
   AccountDeletionOutcome,
   AccountDeletionPolicy,
 } from './job.ts';
+export {
+  AwsCognitoInviteeDirectory,
+  AwsSesRecipientVerifier,
+  openInviteeDirectory,
+} from './invitees.ts';
+export type {
+  AwsCognitoInviteeDirectoryOptions,
+  AwsSesRecipientVerifierOptions,
+  InviteeDirectory,
+  InviteeEmailState,
+  RecipientVerifier,
+} from './invitees.ts';
 export { noMarketplaceAccessRevocation } from './marketplace-access.ts';
 export type { GrantToRevoke, MarketplaceAccessRevoker } from './marketplace-access.ts';
