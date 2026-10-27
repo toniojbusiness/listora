@@ -18,6 +18,9 @@ struct ItemDetailView: View {
     @State private var reviewing = false
     @State private var showsActivity = false
     @State private var listEverywhere: BulkActionModel?
+    @State private var printingSticker: StickerRequest?
+    /// Just listed with Pack check on: the screen offers the item's sticker.
+    @State private var offersSticker = false
 
     /// The assisted step whose task is open.
     private struct OpenTask: Identifiable {
@@ -55,9 +58,15 @@ struct ItemDetailView: View {
             .sensoryFeedback(trigger: model.notice) { _, notice in notice == nil ? nil : .error }
             .sheet(
                 item: $listingFlow,
-                onDismiss: { Task { await model.refresh() } },
+                onDismiss: {
+                    offersSticker = environment.stickerScreen != nil && environment.offersStickerAfterListing()
+                    Task { await model.refresh() }
+                },
                 content: { flow in ListingFlowView(model: flow) { listingFlow = nil } },
             )
+            .sheet(item: $printingSticker) { request in
+                environment.stickerScreen?(request)
+            }
             .sheet(
                 item: $markingSold,
                 onDismiss: { Task { await model.refresh() } },
@@ -196,7 +205,24 @@ struct ItemDetailView: View {
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)
+                if offersSticker {
+                    Banner(
+                        "Print its sticker?",
+                        message: "Stick it on the item's bag. Scanning it when you pack makes sure the right item ships.",
+                        tone: .neutral,
+                        systemImage: "qrcode",
+                        action: .init("Print sticker", identifier: "item.stickerNudge") {
+                            offersSticker = false
+                            printingSticker = StickerRequest(
+                                sku: item.sku,
+                                title: item.details.title,
+                                locationCode: item.storageLocation?.code,
+                            )
+                        },
+                    )
+                }
                 markSoldButton(for: item)
+                stickerButton(for: item)
                 DetailsSection(item: item) { editingSize = true }
                 ActivityLink { showsActivity = true }
             }
@@ -228,6 +254,22 @@ struct ItemDetailView: View {
                     openSale = SaleLink(id: summary.saleId)
                 }
             }
+        }
+    }
+
+    /// "Print sticker": the item's SKU sticker for its bag, which Pack check scans at packing.
+    @ViewBuilder
+    private func stickerButton(for item: Item) -> some View {
+        if environment.stickerScreen != nil {
+            Button("Print sticker", systemImage: "qrcode") {
+                printingSticker = StickerRequest(
+                    sku: item.sku,
+                    title: item.details.title,
+                    locationCode: item.storageLocation?.code,
+                )
+            }
+            .buttonStyle(.listoraSecondary)
+            .accessibilityIdentifier("item.printSticker")
         }
     }
 

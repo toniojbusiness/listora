@@ -8,6 +8,7 @@ import {
   type RemoteListingState,
   type RemoteListing,
   type RemoteOrder,
+  type RemoteOrderLabel,
 } from '@listora/marketplaces';
 
 import {
@@ -30,6 +31,7 @@ import {
   type Submitted,
 } from './pages/listing-form.ts';
 import { readListingsPage } from './pages/listings-page.ts';
+import { readOrder } from './pages/order-page.ts';
 import type { MercariListingPayload } from './payload.ts';
 import { type MercariListingTab } from './site.ts';
 
@@ -47,6 +49,8 @@ export const MAX_SOLD_PAGES = 5;
  * show (newest first).
  */
 export const MAX_SOLD_READS = 12;
+/** Order pages one label read opens at most. */
+export const MAX_LABEL_READS = 10;
 
 export interface MercariScriptOptions {
   /** The site the scripts drive: Mercari, or its stand-in in development and tests. */
@@ -325,6 +329,26 @@ export function createMercariScripts(
         }
       }
       return orders;
+    },
+    labels: async (orders, step) => {
+      const labels: RemoteOrderLabel[] = [];
+      for (const order of orders.slice(0, MAX_LABEL_READS)) {
+        // A Mercari order is named by its item's id (the sale check's order id).
+        const read = await step('read the order', { mutates: false }, (page) =>
+          readOrder(page, site, order.externalListingIds[0] ?? order.externalOrderId),
+        );
+        labels.push(
+          read.found
+            ? {
+                externalOrderId: order.externalOrderId,
+                found: true,
+                trackingNumber: read.trackingNumber,
+                buyerFirstName: read.buyerName,
+              }
+            : { externalOrderId: order.externalOrderId, found: false },
+        );
+      }
+      return labels;
     },
     listings: async (step) => {
       // Mercari's tabs show a listing's title and price but not its description or last

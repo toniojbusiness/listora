@@ -63,6 +63,7 @@ public struct SettingsScreens {
     public var marketplaces: (@MainActor () -> AnyView)?
     public var notifications: (@MainActor () -> AnyView)?
     public var saleEmails: (@MainActor () -> AnyView)?
+    public var packCheck: (@MainActor () -> AnyView)?
 
     /// The screen of one of the rows above; nil for every other destination.
     @MainActor
@@ -72,6 +73,7 @@ public struct SettingsScreens {
         case .marketplaces: marketplaces?()
         case .notifications: notifications?()
         case .saleEmails: saleEmails?()
+        case .packCheck: packCheck?()
         case .profile, .help, .legal, .diagnostics, .deleteAccount: nil
         }
     }
@@ -81,11 +83,13 @@ public struct SettingsScreens {
         marketplaces: (@MainActor () -> AnyView)? = nil,
         notifications: (@MainActor () -> AnyView)? = nil,
         saleEmails: (@MainActor () -> AnyView)? = nil,
+        packCheck: (@MainActor () -> AnyView)? = nil,
     ) {
         self.linkAccounts = linkAccounts
         self.marketplaces = marketplaces
         self.notifications = notifications
         self.saleEmails = saleEmails
+        self.packCheck = packCheck
     }
 }
 
@@ -97,6 +101,7 @@ public enum SettingsDestination: Hashable, Sendable {
     case marketplaces
     case notifications
     case saleEmails
+    case packCheck
     case help
     case legal(LegalDocument.Kind)
     case diagnostics
@@ -263,7 +268,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var sellingSection: some View {
-        if screens.notifications != nil || screens.saleEmails != nil {
+        if screens.notifications != nil || screens.saleEmails != nil || screens.packCheck != nil {
             Section {
                 if screens.notifications != nil {
                     NavigationLink(value: SettingsDestination.notifications) {
@@ -284,6 +289,16 @@ public struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.saleEmails")
+                }
+                if screens.packCheck != nil {
+                    NavigationLink(value: SettingsDestination.packCheck) {
+                        ListRow(
+                            "Pack check",
+                            subtitle: "Check each package's label before it ships",
+                            systemImage: "shippingbox",
+                        )
+                    }
+                    .accessibilityIdentifier("settings.packCheck")
                 }
             } header: {
                 SectionHeader("Selling")
@@ -364,7 +379,7 @@ extension SettingsView {
             if let profile {
                 EditProfileView(model: profile)
             }
-        case .linkAccounts, .marketplaces, .notifications, .saleEmails:
+        case .linkAccounts, .marketplaces, .notifications, .saleEmails, .packCheck:
             screens.screen(for: destination)
         case .help:
             HelpView(supportEmail: content.supportEmail, version: content.fullVersion)

@@ -5,6 +5,7 @@ import Foundation
 import InventoryFeature
 import MarketplaceLinkingFeature
 import MarketplacesFeature
+import PackCheckFeature
 import PhoneExecutionFeature
 import PhotoSignalsFeature
 import ReviewFeature
@@ -57,6 +58,8 @@ public struct AppDependencies {
     public let phone: PhoneExecutionEnvironment
     /// The first-run guide, shown once after the first sign-in.
     public let gettingStarted: GettingStartedModel
+    /// Pack check: the to-ship list, label scans, stickers, and slips (docs/features/pack-check.md).
+    public let packCheck: PackCheckEnvironment
 
     public init(
         configuration: AppConfiguration,
@@ -93,8 +96,18 @@ public struct AppDependencies {
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
         phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
+        let packCheck = PackCheckEnvironment(
+            apiClient: apiClient, accessTokens: accessTokens, phoneWork: phone.runner,
+            scannedCodes: launchOptions.scannedCodes, defaults: defaults,
+        )
+        self.packCheck = packCheck
         sales = SalesEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
+            packOrders: PackOrdersEntry(
+                isShown: { packCheck.settings.isEnabled },
+                screen: { AnyView(packCheck.ordersScreen()) },
+                refresh: { await packCheck.refreshSetting() },
+            ),
         )
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
         inventory = InventoryEnvironment(
@@ -103,6 +116,8 @@ public struct AppDependencies {
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
             onSignIn: showSignIn, phoneWork: phone.runner,
         )
+        inventory.stickerScreen = { request in AnyView(packCheck.stickerScreen(request)) }
+        inventory.offersStickerAfterListing = { packCheck.settings.isEnabled }
         inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         inventory.phoneProgress = phone.runner
         self.review = review
@@ -226,6 +241,7 @@ public struct AppDependencies {
         AddItemEnvironment.resetLocalData(defaults: defaults)
         GettingStartedModel.resetLocalData(defaults: defaults)
         InventoryEnvironment.resetLocalData(defaults: defaults)
+        PackCheckEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
     }
 
@@ -313,6 +329,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     /// `LISTORA_SHOW_GETTING_STARTED=1`: show the first-run guide at launch, as after a first
     /// sign-in (the screenshot tour).
     public var showsGettingStarted = false
+    /// `LISTORA_SCANNED_CODES=<code>|<code>...`: Pack check's scanner "reads" these, one per tap
+    /// of Scan, instead of the camera the simulator lacks.
+    public var scannedCodes: [String]?
 
     public static let none = DebugLaunchOptions()
 
@@ -325,6 +344,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         voiceTranscript: String? = nil,
         voicePermission: SpeechAuthorization = .authorized,
         showsGettingStarted: Bool = false,
+        scannedCodes: [String]? = nil,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
@@ -334,6 +354,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         self.voiceTranscript = voiceTranscript
         self.voicePermission = voicePermission
         self.showsGettingStarted = showsGettingStarted
+        self.scannedCodes = scannedCodes
     }
 
     /// The options in this process's environment (debug builds), otherwise ``none``.
@@ -368,6 +389,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
             voiceTranscript: environment["LISTORA_VOICE_TRANSCRIPT"],
             voicePermission: voicePermission(environment["LISTORA_VOICE_PERMISSION"]),
             showsGettingStarted: environment["LISTORA_SHOW_GETTING_STARTED"] == "1",
+            scannedCodes: environment["LISTORA_SCANNED_CODES"].map { $0.split(separator: "|").map(String.init) },
         )
     }
 

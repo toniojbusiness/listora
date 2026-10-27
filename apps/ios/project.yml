@@ -95,7 +95,9 @@ targets:
         ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         ListoraSupportEmail: $(SUPPORT_EMAIL)
         ITSAppUsesNonExemptEncryption: false
-        NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
+        # Pack check reads shipping labels' and item stickers' barcodes, and takes the optional
+        # package photo (docs/features/pack-check.md).
+        NSCameraUsageDescription: Listora uses the camera to photograph the items you sell, and to scan shipping labels and item stickers when you pack an order.
         # Assisted tasks save an item's photos to the camera roll, in posting order, for the
         # marketplace's app to pick up (add-only access).
         NSPhotoLibraryAddUsageDescription: Listora saves your item's photos so you can post them in a marketplace's app.
@@ -256,6 +258,7 @@ schemes:
         - package: Features/ShareLinkFeatureTests
         - package: Features/MarketplaceLinkingFeatureTests
         - package: Features/PhoneExecutionFeatureTests
+        - package: Features/PackCheckFeatureTests
     profile:
       config: Prod-Release
     analyze:
