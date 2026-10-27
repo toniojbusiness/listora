@@ -7818,6 +7818,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	/** Opens the listing's page and reads it. */
 	async function readItem(page, site, id) {
 		await page.goto(itemUrl(site, id));
+		if (page.status() === 410) return {
+			state: {
+				found: false,
+				authoritative: true
+			},
+			sku: null
+		};
 		if (await page.exists(ITEM_PAGE.deleted)) return {
 			state: {
 				found: false,
@@ -7941,6 +7948,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		smartPricingTurnOff: "button[data-testid=\"SmartPricingTurnOffButton\"]",
 		/** Mercari's answer to List from a seller without a card on file: add one first. */
 		paymentWarning: "[data-testid=\"PaymentWarningModal\"]",
+		/** Mercari's page once a new listing is up. */
+		listed: "[data-testid=\"SellAnotherItem\"], [data-testid=\"ShareListing\"]",
 		list: "button[data-testid=\"ListButton\"]",
 		save: "button[data-testid=\"SaveButton\"]",
 		error: "[data-testid=\"FormError\"]"
@@ -8099,6 +8108,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			if (await page.count("[aria-invalid=\"true\"]") > 0) return {
 				type: "refused",
 				message: "Mercari didn't take the listing: it marked a field as needing a fix."
+			};
+			if (button === "list" && await page.exists(LISTING_FORM.listed)) return {
+				type: "listed",
+				itemId: path.split("/").find((segment) => MERCARI_ITEM_ID.test(segment)) ?? null
 			};
 			if (path !== start && !path.startsWith(MERCARI_PATHS.sell)) return {
 				type: "listed",

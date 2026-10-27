@@ -16,7 +16,7 @@ import type { PageDriver, UploadFile } from '../../runner/types.ts';
 import type { MercariListingPayload } from '../payload.ts';
 import { withSkuLine } from '../payload.ts';
 import { sizeOptionMatches } from '../sizes.ts';
-import { itemIdFromPath, MERCARI_PATHS } from '../site.ts';
+import { itemIdFromPath, MERCARI_ITEM_ID, MERCARI_PATHS } from '../site.ts';
 import {
   absolute,
   awaitElement,
@@ -67,6 +67,8 @@ export const LISTING_FORM = {
   smartPricingTurnOff: 'button[data-testid="SmartPricingTurnOffButton"]',
   /** Mercari's answer to List from a seller without a card on file: add one first. */
   paymentWarning: '[data-testid="PaymentWarningModal"]',
+  /** Mercari's page once a new listing is up. */
+  listed: '[data-testid="SellAnotherItem"], [data-testid="ShareListing"]',
   list: 'button[data-testid="ListButton"]',
   save: 'button[data-testid="SaveButton"]',
   error: '[data-testid="FormError"]',
@@ -273,9 +275,16 @@ export async function submitListing(page: PageDriver, button: 'list' | 'save'): 
         message: "Mercari didn't take the listing: it marked a field as needing a fix.",
       };
     }
-    // Left the form for a page that doesn't name the listing (Mercari's own confirmation).
-    if (path !== start && !path.startsWith(MERCARI_PATHS.sell))
+    // Mercari's own page after a listing goes up (read 2026-10-27: under the sell page's path,
+    // with "Sell another item" and "Share your listing"), which may name the item in its path.
+    if (button === 'list' && (await page.exists(LISTING_FORM.listed))) {
+      const named = path.split('/').find((segment) => MERCARI_ITEM_ID.test(segment));
+      return { type: 'listed', itemId: named ?? null };
+    }
+    // Left the form for a page that doesn't name the listing.
+    if (path !== start && !path.startsWith(MERCARI_PATHS.sell)) {
       return { type: 'listed', itemId: null };
+    }
     if (Date.now() >= end) throw changed(FORM, 'showed no listing and no message after the submit');
     await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
     await page.waitFor('body', 'attached');

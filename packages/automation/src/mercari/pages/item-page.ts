@@ -47,6 +47,9 @@ export function itemUrl(site: MercariSite, id: string): string {
 /** Opens the listing's page and reads it. */
 export async function readItem(page: PageDriver, site: MercariSite, id: string): Promise<ItemRead> {
   await page.goto(itemUrl(site, id));
+  // A deleted item's page answers 410 "This item is no longer available" (seen on Listora's own
+  // test listing deleted from the captain's account, 2026-10-27): it is gone.
+  if (page.status() === 410) return { state: { found: false, authoritative: true }, sku: null };
   if (await page.exists(ITEM_PAGE.deleted)) {
     return { state: { found: false, authoritative: true }, sku: null };
   }

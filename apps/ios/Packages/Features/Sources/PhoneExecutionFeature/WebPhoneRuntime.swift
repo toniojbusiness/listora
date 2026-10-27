@@ -306,31 +306,55 @@ struct PageFailure: Error {
     }
 }
 
-/// Keeps the web views in the app's window, out of sight, so WebKit treats their pages as
-/// visible and never throttles their timers; a web view outside any window is.
+/// Keeps the web views in a window of their own, out of sight, so WebKit treats their pages as
+/// visible and never throttles their timers (a web view outside any window is), and so a page
+/// that focuses one of its fields never brings up the keyboard while Listora works in the
+/// background: the shelf's window can never become the key window, which the keyboard follows.
+/// The check hand-off (ChallengeHandOffView) moves a page into a window of its own, where the
+/// seller types as usual.
 @MainActor
 final class WebViewShelf {
     static let shared = WebViewShelf()
     private let shelf = UIView(frame: CGRect(x: -20000, y: 0, width: 1280, height: 900))
+    private var window: UIWindow?
 
     /// Keeps `view` on the shelf at `size` (a marketplace page is desktop-sized).
     func keep(_ view: WKWebView, size: CGSize = CGSize(width: 1280, height: 900)) {
-        if shelf.superview == nil, let window = Self.window() {
+        if shelf.superview == nil {
             shelf.isUserInteractionEnabled = false
             shelf.accessibilityElementsHidden = true
-            window.insertSubview(shelf, at: 0)
+            if let scene = Self.scene() {
+                let window = ShelfWindow(windowScene: scene)
+                window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue - 1)
+                window.backgroundColor = .clear
+                window.isUserInteractionEnabled = false
+                window.accessibilityElementsHidden = true
+                window.isHidden = false
+                window.addSubview(shelf)
+                self.window = window
+            } else if let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).flatMap(\.windows).first
+            {
+                window.insertSubview(shelf, at: 0)
+            }
         }
+        view.endEditing(true)
         view.removeFromSuperview()
         view.translatesAutoresizingMaskIntoConstraints = true
         view.frame = CGRect(origin: .zero, size: size)
         shelf.addSubview(view)
     }
 
-    private static func window() -> UIWindow? {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first
+    private static func scene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    }
+}
+
+/// A window that never becomes key, so nothing in it ever owns the keyboard.
+private final class ShelfWindow: UIWindow {
+    override var canBecomeKey: Bool {
+        false
     }
 }
 
