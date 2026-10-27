@@ -80,7 +80,7 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
         db,
         { accountId: tenant.accountId, deviceId: device.id },
         {
-          maxMs: Math.min(Number(query.waitSeconds), PHONE_WAIT_MAX_SECONDS) * 1000,
+          maxMs: Math.min(query.waitSeconds, PHONE_WAIT_MAX_SECONDS) * 1000,
           signal: gone.signal,
         },
       );
