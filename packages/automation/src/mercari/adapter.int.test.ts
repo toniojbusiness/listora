@@ -24,6 +24,7 @@ import { MemoryScreenshotStore } from '../runner/screenshots.ts';
 import { FakeSiteSessions, QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
 import { createMercariAutomationAdapter } from './adapter.ts';
 import {
+  FAKE_MERCARI_LABEL,
   FakeMercariSite,
   type FakeMercariAction,
   type FakeMercariFault,
@@ -33,9 +34,10 @@ import type { MercariListingPayload } from './payload.ts';
 const connection = { id: 'connection-mercari', mode: 'automation', status: 'connected' } as const;
 /**
  * The step timeout here: the form step (three times it) has room for the form's own wait for a
- * part that never comes (8 seconds), which several checks below run into.
+ * part that never comes (8 seconds), which several checks below run into, and for two brand
+ * searches that find nothing (4 seconds each) before Mercari's "No brand".
  */
-const STEP_TIMEOUT_MS = 4_000;
+const STEP_TIMEOUT_MS = 6_000;
 const ctx = (): AdapterContext => ({ signal: new AbortController().signal, connection });
 
 describe('Mercari automation adapter on the fake Mercari site', () => {
@@ -172,9 +174,9 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
       category: ['Men', 'Coats & jackets'],
       brand: "Levi's",
       conditionId: 2,
-      size: 'M',
+      size: 'M (38-40)',
       shippingPayer: 'Buyer',
-      shippingWeight: 'Up to 3 lb',
+      shippingWeight: FAKE_MERCARI_LABEL,
       // The sample lists its photos out of posting order: tag (2), front (0), back (1).
       photos: ['front.jpg', 'back.jpg', 'tag.jpg'],
     });
@@ -203,19 +205,50 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     expect(site.item(cased.ref.externalListingId)?.brand).toBe('adidas');
   });
 
-  it('gives a create to the user when Mercari lists no such brand', async () => {
-    const ref = newRef();
-    const content = sampleListingContent({ item: { brand: 'Handmade Studio' } });
-    expect(await adapter.execute(request('create', ref, { content }), ctx())).toMatchObject({
-      type: 'pendingUser',
-      task: { kind: 'list_manually' },
-      excerpt: {
-        automation: 'page_changed',
-        failure: { code: 'element_missing', step: 'fill in the listing' },
-      },
-    });
-    expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
-  });
+  it("picks Mercari's own spelling of a brand, and its No brand for one it doesn't list", async () => {
+    const spelled = await create(
+      sampleListingContent({ item: { brand: 'Abercrombie and Fitch' } }),
+    );
+    expect(site.item(spelled.ref.externalListingId)?.brand).toBe('Abercrombie & Fitch');
+    // Mercari needs a brand: its "No brand / Not sure"; the title still names the item's.
+    const unlisted = await create(sampleListingContent({ item: { brand: 'Handmade Studio' } }));
+    expect(site.item(unlisted.ref.externalListingId)?.brand).toBeNull();
+    const none = await create(sampleListingContent({ item: { brand: null } }));
+    expect(site.item(none.ref.externalListingId)?.brand).toBeNull();
+  }, 90_000);
+
+  it('fills every kind of form Mercari has: each size list, and none', async () => {
+    // A category of each of Mercari's size groups (catalog/catalog.json), with a size of the
+    // item's own, and the label the form must get.
+    const shapes = [
+      ['Women > Dresses > Midi', 'women', '8', 'M (8-10)'],
+      ['Men > Tops > T-shirts', 'men', 'XXL', 'XXL (50-52)'],
+      ['Women > Jeans > Skinny Jeans', 'women', 'W29 L30', '29 in.'],
+      ['Men > Suits > Two button', 'men', '40R', '40R'],
+      ['Women > Shoes > Boots', 'women', '8 1/2', '8.5 (39)'],
+      ['Kids > Girls dresses > Girls 2T-5T', 'kids', '3T', '3T'],
+      ['Kids > Boys shoes > Boys (4+)', 'kids', '2.5', '2.5'],
+      ['Men > Shoes > Athletic', 'men', '10', '10 (43)'],
+      ['Women > Underwear > Bras', 'women', '34DD', '34E (DD)'],
+      ['Home > Bedding > Quilts', 'women', null, null],
+      ['Beauty > Makeup > Lips', 'women', null, null],
+    ] as const;
+    for (const [categoryRef, department, sizeLabel, size] of shapes) {
+      const content = sampleListingContent({
+        item: { department, sizeLabel, condition: 'new_with_tags' },
+        variant: { categoryRef },
+      });
+      expect(
+        adapter.validate(adapter.buildPayload(content.item, content.variant)),
+        categoryRef,
+      ).toEqual([]);
+      const { ref } = await create(content);
+      expect(site.item(ref.externalListingId), categoryRef).toMatchObject({
+        category: categoryRef.split(' > '),
+        size,
+      });
+    }
+  }, 240_000);
 
   it('revises every detail on the edit page and keeps the photos', async () => {
     const { ref } = await create();
@@ -227,17 +260,17 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
         condition: 'pre_owned_fair',
         brand: 'Dr. Martens',
       },
-      variant: { title: 'Dr. Martens 1460 Boots', description: 'Worn, resoled.' },
+      variant: { title: 'Dr. Martens 1460 Boots', description: 'Worn and resoled, still sturdy.' },
     });
     const outcome = await adapter.execute(request('revise', ref, { content }), ctx());
     expect(outcome).toMatchObject({ type: 'confirmed', externalListingId: ref.externalListingId });
     expect(site.item(ref.externalListingId)).toMatchObject({
       title: 'Dr. Martens 1460 Boots',
       category: ['Women', 'Shoes', 'Boots'],
-      size: '8.5',
+      size: '8.5 (39)',
       conditionId: 4,
       brand: 'Dr. Martens',
-      shippingWeight: 'Up to 5 lb',
+      shippingWeight: FAKE_MERCARI_LABEL,
       photos: ['front.jpg', 'back.jpg', 'tag.jpg'],
     });
     expect(await adapter.readListing(ref, ctx())).toMatchObject(
@@ -382,14 +415,61 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     }
   });
 
-  it('gives a create to the user when the form offers no such category', async () => {
-    const ref = newRef();
+  it("refuses a category Mercari's catalog doesn't have before anything is sent", () => {
     const content = sampleListingContent({ variant: { categoryRef: 'Men > Hovercraft > Parts' } });
-    expect(await adapter.execute(request('create', ref, { content }), ctx())).toMatchObject({
-      type: 'pendingUser',
-      excerpt: { automation: 'page_changed' },
+    expect(adapter.validate(adapter.buildPayload(content.item, content.variant))).toMatchObject([
+      { field: 'variant.categoryRef', code: 'required' },
+    ]);
+  });
+
+  it('gives a create to the user when the form no longer offers the category', async () => {
+    const shop = await FakeMercariSite.start(0, { withoutCategories: ['Men > Coats & jackets'] });
+    try {
+      const ref = newRef();
+      expect(await adapterOn(shop).execute(request('create', ref), ctx())).toMatchObject({
+        type: 'pendingUser',
+        excerpt: { automation: 'page_changed' },
+      });
+      expect(shop.items()).toHaveLength(0);
+    } finally {
+      await shop.close();
+    }
+  });
+
+  it("stops at Mercari's warning that a listing may be prohibited, and never continues", async () => {
+    const ref = newRef();
+    inject('create', {
+      type: 'item_warning',
+      message: 'This item may violate our Prohibited Items policy.',
+    });
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'rejected',
+      code: 'validation_failed',
+      message: expect.stringContaining(
+        'This item may violate our Prohibited Items policy.',
+      ) as unknown,
     });
     expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+  });
+
+  it('gives a device to the seller when the form asks for its IMEI, sending nothing', async () => {
+    // A category the catalog doesn't know asks for one: the form's field stops the create.
+    const tablets = 'Electronics > Tablets & E-readers > iPad/tablet/ebook readers';
+    const shop = await FakeMercariSite.start(0, { imeiCategories: [tablets] });
+    try {
+      const ref = newRef();
+      const content = sampleListingContent({ variant: { categoryRef: tablets } });
+      const before = shop.requests.length;
+      expect(
+        await adapterOn(shop).execute(request('create', ref, { content }), ctx()),
+      ).toMatchObject({
+        type: 'rejected',
+        code: 'imei_required',
+      });
+      expect(shop.requests.slice(before).filter((entry) => entry.method === 'POST')).toEqual([]);
+    } finally {
+      await shop.close();
+    }
   });
 
   it('fails a read-back of a listing page it no longer understands', async () => {

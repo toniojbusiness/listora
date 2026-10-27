@@ -17,9 +17,9 @@ import { z } from 'zod';
 
 import type { RemoteListingState, RemoteListingStatus } from '@listora/marketplaces';
 
+import { splitSkuLine } from '../../adapter/sku-line.ts';
 import type { PageDriver } from '../../runner/types.ts';
 import { itemIdFromPath, MERCARI_PATHS } from '../site.ts';
-import { splitSkuLine } from '../payload.ts';
 import { absolute, changed, type MercariSite } from './common.ts';
 
 export const ITEM_PAGE = {
