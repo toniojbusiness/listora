@@ -868,7 +868,8 @@ const PICKED_FIELDS = [
  * their validation names, the photo picker, dropdown pickers whose menus are drawn only while
  * they are open, the brand field, the prices (the listing price opens the Listing Price
  * dialog), the SKU in the private details a link shows, and the availability. A new listing has
- * Next and then the share step's List; a change has Update. `EDITOR_SCRIPT` runs it all.
+ * Next and then the share step's List; a change has Update and then the same share step's List.
+ * `EDITOR_SCRIPT` runs it all.
  */
 function listingForm(
   action: string,
@@ -901,9 +902,11 @@ function listingForm(
 <input type="file" id="img-file-input" aria-label="img-file-input" multiple accept="image/jpeg">
 <input type="file" name="photos" multiple hidden>${required('photos')}
 </section>`;
+  // A change's Update opens the same share step a new listing's Next does, whose List This Item
+  // saves it (as Poshmark's edit page does, read 2026-10-27).
   const publish = editing
-    ? '<button type="submit" data-et-name="update">Update</button>'
-    : '<button type="button" data-et-name="next">Next</button><section id="share-step" hidden><h2>Share</h2><button type="submit" data-et-name="list">List</button></section>';
+    ? '<button type="button" data-et-name="update">Update</button><section id="share-step" hidden><h2>Share</h2><button type="submit" data-et-name="list">List This Item</button></section>'
+    : '<button type="button" data-et-name="next">Next</button><section id="share-step" hidden><h2>Share</h2><button type="submit" data-et-name="list">List This Item</button></section>';
   return `<form id="listing-editor" method="post" action="${action}" enctype="multipart/form-data">
 ${errors.map((error) => `<p class="form__error-message">${escape(error)}</p>`).join('')}
 ${editing ? '' : photos}
@@ -1152,6 +1155,13 @@ const EDITOR_SCRIPT = `(() => {
         message.style.display = empty[message.getAttribute('data-field')] ? '' : 'none';
       }
       form.querySelector('#share-step').hidden = Object.values(empty).some(Boolean);
+    });
+  }
+
+  const update = form.querySelector('button[data-et-name="update"]');
+  if (update !== null) {
+    update.addEventListener('click', () => {
+      form.querySelector('#share-step').hidden = false;
     });
   }
 
