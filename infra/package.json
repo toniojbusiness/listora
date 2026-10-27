@@ -9,6 +9,7 @@
     "synth": "node src/synth-check.ts"
   },
   "devDependencies": {
+    "@listora/alerts": "*",
     "@listora/api": "*",
     "@listora/connections": "*",
     "@listora/db": "*",

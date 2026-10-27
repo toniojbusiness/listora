@@ -1,0 +1,21 @@
+{
+  "name": "@listora/alerts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Operator email: the alert emails sent for every alarm and AWS event on the alarm topic, the weekly health summary, the mailer interface with its SES driver and recording fake, and the Lambda handlers infra deploys them as.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bundle": "./src/bundle.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1156.0",
+    "@aws-sdk/client-cost-explorer": "^3.1156.0",
+    "@aws-sdk/client-rds": "^3.1156.0",
+    "@aws-sdk/client-sesv2": "^3.1156.0",
+    "@listora/observability": "*"
+  },
+  "devDependencies": {
+    "rolldown": "~1.2.14"
+  }
+}

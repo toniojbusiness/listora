@@ -16,7 +16,9 @@ Rechecked on 2026-10-25 after the efficiency pass ([performance.md](performance.
 or removed no billed resource and changed no task size, so the estimate stands. The privacy
 hardening ([privacy.md](privacy.md)) then added one trust metric (`OverdueDeletions`) and its
 alarm, $0.40 a month, and sale-check health ([activity.md](activity.md)) another
-(`UnhealthySaleChecks`) and its alarm, $0.40 a month.
+(`UnhealthySaleChecks`) and its alarm, $0.40 a month. Alerts and backups
+([alerts.md](alerts.md)) added the worker's heartbeat alarm ($0.10), the alert and weekly
+summary functions, and the monthly budget, $0.14 a month in all.
 
 Prices were read on 2026-10-24 for US East (N. Virginia), on demand, from the AWS pricing
 pages linked below (the price data behind their tables). A month is 730 hours. Taxes, the
@@ -41,30 +43,32 @@ domain registration, and the Anthropic API bill are not included.
 
 ## Line items
 
-| Item                                 | Usage                                                           |    Monthly |
-| ------------------------------------ | --------------------------------------------------------------- | ---------: |
-| RDS PostgreSQL `db.t4g.micro`        | Single-AZ, $0.016 an hour                                       |     $11.68 |
-| RDS storage                          | 20 GB gp3 at $0.115 per GB                                      |      $2.30 |
-| RDS automated backups                | 7 days; free up to the provisioned storage                      |      $0.00 |
-| Fargate task (API and worker)        | 0.25 vCPU at $0.04048 and 1 GB at $0.004446 an hour (x86)       |     $10.63 |
-| Public IPv4 address of the task      | 1 address at $0.005 an hour                                     |      $3.65 |
-| API Gateway HTTP API                 | 100,000 requests at $1.00 per million; the VPC link is free     |      $0.10 |
-| Cloud Map                            | 1 registered task at $0.10, plus its private DNS zone at $0.50  |      $0.60 |
-| Route 53 public hosted zone          | None without a domain (the API uses its execute-api URL)        |      $0.00 |
-| S3 photo storage and requests        | 8 GB at $0.023 per GB, 15,000 PUTs at $0.005 per 1,000          |      $0.27 |
-| CloudFront                           | Within the always-free 1 TB and 10 million requests             |      $0.00 |
-| SES inbound sale email               | None without a domain (SES receives only for a verified domain) |      $0.00 |
-| Cognito user pool (Essentials plan)  | 1 monthly active user; the first 10,000 are free                |      $0.00 |
-| SES sign-in codes                    | About 60 emails at $0.10 per 1,000: under a cent                |      $0.00 |
-| Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                    |      $0.80 |
-| KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)    |      $1.00 |
-| CloudWatch Logs                      | 1.15 GB ingested at $0.50, kept 7 days at $0.03 per GB          |      $0.59 |
-| CloudWatch custom metrics (EMF)      | About 18 metrics; the first 10 are always free, then $0.30 each |      $2.40 |
-| CloudWatch alarms                    | 22 standard alarms; the first 10 are always free, then $0.10    |      $1.20 |
-| EventBridge task-stopped rule        | AWS service events delivered to SNS have no EventBridge charge  |      $0.00 |
-| ECR image storage                    | About 1 GB at $0.10 per GB                                      |      $0.10 |
-| ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)    |      $0.00 |
-| **Total**                            |                                                                 | **$35.32** |
+| Item                                 | Usage                                                            |    Monthly |
+| ------------------------------------ | ---------------------------------------------------------------- | ---------: |
+| RDS PostgreSQL `db.t4g.micro`        | Single-AZ, $0.016 an hour                                        |     $11.68 |
+| RDS storage                          | 20 GB gp3 at $0.115 per GB                                       |      $2.30 |
+| RDS automated backups                | 7 days; free up to the provisioned storage                       |      $0.00 |
+| Fargate task (API and worker)        | 0.25 vCPU at $0.04048 and 1 GB at $0.004446 an hour (x86)        |     $10.63 |
+| Public IPv4 address of the task      | 1 address at $0.005 an hour                                      |      $3.65 |
+| API Gateway HTTP API                 | 100,000 requests at $1.00 per million; the VPC link is free      |      $0.10 |
+| Cloud Map                            | 1 registered task at $0.10, plus its private DNS zone at $0.50   |      $0.60 |
+| Route 53 public hosted zone          | None without a domain (the API uses its execute-api URL)         |      $0.00 |
+| S3 photo storage and requests        | 8 GB at $0.023 per GB, 15,000 PUTs at $0.005 per 1,000           |      $0.27 |
+| CloudFront                           | Within the always-free 1 TB and 10 million requests              |      $0.00 |
+| SES inbound sale email               | None without a domain (SES receives only for a verified domain)  |      $0.00 |
+| Cognito user pool (Essentials plan)  | 1 monthly active user; the first 10,000 are free                 |      $0.00 |
+| SES sign-in codes                    | About 60 emails at $0.10 per 1,000: under a cent                 |      $0.00 |
+| Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                     |      $0.80 |
+| KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)     |      $1.00 |
+| CloudWatch Logs                      | 1.15 GB ingested at $0.50, kept 7 days at $0.03 per GB           |      $0.59 |
+| CloudWatch custom metrics (EMF)      | About 18 metrics; the first 10 are always free, then $0.30 each  |      $2.40 |
+| CloudWatch alarms                    | 23 standard alarms; the first 10 are always free, then $0.10     |      $1.30 |
+| EventBridge task and deploy rules    | AWS service events delivered to SNS have no EventBridge charge   |      $0.00 |
+| Alert emails and weekly summary      | 2 Lambda functions in the free tier; 4 Cost Explorer reads $0.01 |      $0.04 |
+| AWS Budget                           | 1 budget; an account's first two are free                        |      $0.00 |
+| ECR image storage                    | About 1 GB at $0.10 per GB                                       |      $0.10 |
+| ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)     |      $0.00 |
+| **Total**                            |                                                                  | **$35.46** |
 
 ## With a domain
 
@@ -75,13 +79,13 @@ charge (ACM certificates and alias queries to API Gateway are free):
 | --------------------------- | ---------------------------------------------------------------- | ---------: |
 | Route 53 public hosted zone | 1 zone at $0.50; alias queries to API Gateway are free           |      $0.50 |
 | SES inbound sale email      | 300 emails at $0.10 per 1,000, plus 256 KB chunks at $0.09/1,000 |      $0.06 |
-| **Total with a domain**     | $35.32 plus these                                                | **$35.88** |
+| **Total with a domain**     | $35.46 plus these                                                | **$36.02** |
 
 The sale emails' SNS topic and SQS queue add nothing: SNS delivers to SQS for free, and the
 worker's once-a-minute poll is about 45,000 SQS requests a month, inside the free 1 million
 ([email-sales.md](email-sales.md)).
 
-With browser automation as well, the total is $37.36. The domain's registration is billed by
+With browser automation as well, the total is $37.50. The domain's registration is billed by
 its registrar and is not included.
 
 ## Browser automation
@@ -120,7 +124,7 @@ plus $0.005 an hour for its public address while it runs. Assumptions:
 | Worker dispatch task               | Every minute, inside the always-on worker task |      $0.00 |
 | ECR storage for the Chromium image | About 1.5 GB more at $0.10 per GB              |      $0.15 |
 | **Automation subtotal**            |                                                |  **$1.48** |
-| **Total with browser automation**  | $35.32 plus the automation subtotal            | **$36.80** |
+| **Total with browser automation**  | $35.46 plus the automation subtotal            | **$36.94** |
 
 An always-on runner (one 1 vCPU / 4 GB task 24/7) is the alternative if per-job startup ever
 gets in the way: about $42.56 a month, plus $3.65 for its address. Listing jobs scale with
