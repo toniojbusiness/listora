@@ -706,6 +706,7 @@ async function issueCall(
     call: request.call,
     name: request.script,
     origins: [...profile.origins],
+    apiOrigins: [...profile.apiOrigins],
     cookieDomains: [...profile.cookieDomains],
     pacing: profile.pacing,
     stepTimeoutMs: deps.stepTimeoutMs,

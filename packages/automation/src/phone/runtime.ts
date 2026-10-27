@@ -57,6 +57,8 @@ export interface PhoneCallInput {
   name: string;
   /** The marketplace's profile as the server configured it. */
   origins: string[];
+  /** Its web API's origins (`PageDriver.apiGet`); a server older than them sends none. */
+  apiOrigins?: string[];
   cookieDomains: string[];
   pacing: PacingSettings;
   stepTimeoutMs: number;
@@ -160,13 +162,15 @@ async function runOnce(
 
 /**
  * The marketplace's built-in profile (its challenge signs and private elements) with what the
- * server configured: the site's origins and cookie domains, and the pacing, which the server
- * never sets below `PACING_FLOOR` (settings.ts refuses it at startup).
+ * server configured: the site's origins, API origins, and cookie domains, and the pacing, which
+ * the server never sets below `PACING_FLOOR` (settings.ts refuses it at startup).
  */
 export function phoneProfile(input: PhoneCallInput): AutomationProfile {
+  const builtIn = automationProfile(input.scriptSet.marketplace);
   return {
-    ...automationProfile(input.scriptSet.marketplace),
+    ...builtIn,
     origins: input.origins,
+    apiOrigins: input.apiOrigins ?? builtIn.apiOrigins,
     cookieDomains: input.cookieDomains,
     pacing: input.pacing,
   };

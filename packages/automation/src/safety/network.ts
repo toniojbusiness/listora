@@ -68,12 +68,13 @@ export function isPrivateHost(hostname: string): boolean {
 /**
  * Whether the browser may send a request to `url`. `mainFrameNavigation` is a navigation of a
  * page's main frame (a link, a form, a script setting `location`). The profile's own origins
- * are always allowed (in development they are the local fake site's).
+ * are always allowed (in development they are the local fake site's), and so are its web API's
+ * origins for anything but a main-frame navigation.
  */
 export function requestAllowed(
   url: string,
   mainFrameNavigation: boolean,
-  profile: Pick<AutomationProfile, 'origins'>,
+  profile: Pick<AutomationProfile, 'origins'> & Partial<Pick<AutomationProfile, 'apiOrigins'>>,
 ): boolean {
   if (!URL.canParse(url)) return false;
   const target = new URL(url);
@@ -84,6 +85,7 @@ export function requestAllowed(
       : target.origin;
   if (profile.origins.includes(origin)) return true;
   if (mainFrameNavigation) return false;
+  if (profile.apiOrigins?.includes(origin) === true) return true;
   if (!['https:', 'http:', 'wss:', 'ws:'].includes(target.protocol)) return false;
   return !isPrivateHost(target.hostname);
 }

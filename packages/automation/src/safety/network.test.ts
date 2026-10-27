@@ -76,4 +76,11 @@ describe('requestAllowed', () => {
     expect(requestAllowed('http://localhost:4300/elsewhere', true, local)).toBe(false);
     expect(requestAllowed('http://127.0.0.1:4301/', false, local)).toBe(false);
   });
+
+  it("allows the marketplace's web API, but never as the page itself", () => {
+    const depop = { origins: ['https://www.depop.com'], apiOrigins: ['http://127.0.0.1:4701'] };
+    expect(requestAllowed('http://127.0.0.1:4701/api/v1/shop/products/', false, depop)).toBe(true);
+    expect(requestAllowed('http://127.0.0.1:4701/api/v1/shop/products/', true, depop)).toBe(false);
+    expect(requestAllowed('http://127.0.0.1:4702/api/', false, depop)).toBe(false);
+  });
 });
