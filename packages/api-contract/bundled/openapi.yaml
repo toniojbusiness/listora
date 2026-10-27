@@ -57,6 +57,8 @@ tags:
     description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: invites
+    description: Invites to sign up for Listora, each to a person's own, separate account.
   - name: sale-emails
     description: The forwarding address that catches Poshmark, Mercari, and Depop sale emails.
   - name: usage
@@ -2375,6 +2377,159 @@ paths:
           $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/invites:
+    get:
+      tags:
+        - invites
+      operationId: listInvites
+      summary: List the account's invites and the people who joined through them
+      description: |
+        Every invite the account made, newest first (at most 100), with each one's state and the
+        invitee's email once they redeemed it. `canInvite` says whether this account may invite:
+        only an account created directly may (an invited person's account may not), and for one
+        that may not, `data` is empty.
+      responses:
+        '200':
+          description: The account's invites.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - invites
+      operationId: createInvite
+      summary: Create an invite
+      description: |
+        A new invite with a one-time code. The answer is the only time the code is shown: the
+        server keeps only its hash. `403 forbidden` when this account may not invite
+        (`canInvite`), and `409 invalid_state_transition` when it already has 20 invites nobody has
+        used yet.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteCreate'
+      responses:
+        '201':
+          description: The invite and its code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedInvite'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/invites/{inviteId}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/InviteId'
+    post:
+      tags:
+        - invites
+      operationId: revokeInvite
+      summary: Revoke an invite, or the access of the person who joined through it
+      description: |
+        An invite nobody redeemed can no longer be. Once someone redeemed it, they can no longer
+        sign in: their sessions end and the API refuses them at once. Their account and its data
+        are kept, so `restoreInvite` gives the access back. Revoking a revoked invite changes
+        nothing. A `503` (the sign-in provider did not answer) revoked nothing; retry it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The revoked invite.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/invites/{inviteId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/InviteId'
+    post:
+      tags:
+        - invites
+      operationId: restoreInvite
+      summary: Give a revoked person their access back
+      description: |
+        Only for a revoked invite that someone had redeemed (`restore` is in `availableActions`):
+        they can sign in again, to their own account as they left it. `409
+        invalid_state_transition` otherwise; an invite revoked before anyone redeemed it is
+        replaced by a new one instead.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The restored invite.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/invite-redemptions:
+    post:
+      tags:
+        - invites
+      operationId: redeemInvite
+      summary: Redeem an invite code with the invitee's email (no sign-in yet)
+      description: |
+        The first step of signing up: the invitee, not signed in yet, enters the code they were
+        sent and their own email. No bearer token: the code is the credential. It binds the invite
+        to the email and lets that email sign in; the app then signs in with the emailed one-time
+        code as usual, and the first signed-in request creates the invitee's own, empty account.
+
+        Redeeming is safe to repeat: the same code and email give the same answer (so the
+        `Idempotency-Key` is not stored), and until the invitee has signed in, the same code with
+        another email moves the invite to that address (a typo), a few times at most. While
+        `status` is `email_verification_sent`, the sign-in codes cannot reach the address yet: the
+        invitee opens the verification link emailed to them, then redeems again.
+
+        `404 not_found` for a code that names no invite, `409 invalid_state_transition` for an
+        invite that expired, was revoked, or was already used by someone who signed in, and `409
+        already_exists` for an email that already has a Listora account. Wrong codes are limited
+        (`429 rate_limited`).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRedeem'
+      responses:
+        '200':
+          description: The invite is the email's; the invitee signs in next.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteRedemption'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/sale-emails:
     get:
       tags:
@@ -2916,6 +3071,12 @@ components:
         $ref: '#/components/schemas/Id'
     TaskId:
       name: taskId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    InviteId:
+      name: inviteId
       in: path
       required: true
       schema:
@@ -7554,6 +7715,194 @@ components:
         nextCursor:
           type: string
           description: Present when there are more results.
+    InviteStatus:
+      description: |
+        A `KnownInviteStatus`, or a status added after this client was built. Clients show
+        `statusDisplay` as given.
+      anyOf:
+        - $ref: '#/components/schemas/KnownInviteStatus'
+        - type: string
+          maxLength: 64
+    KnownInviteStatus:
+      type: string
+      description: |
+        - `open`: nobody has redeemed it yet.
+        - `expired`: nobody redeemed it before `expiresAt`.
+        - `redeemed`: the invitee entered the code and their `email`, and has not signed in yet.
+        - `active`: the invitee signed in; their own account exists.
+        - `revoked`: revoked by the account (`revokedAt`); with an `email`, that person can no
+          longer sign in.
+      enum:
+        - open
+        - expired
+        - redeemed
+        - active
+        - revoked
+    InviteAction:
+      description: A `KnownInviteAction`, or an action added after this client was built (hide it).
+      anyOf:
+        - $ref: '#/components/schemas/KnownInviteAction'
+        - type: string
+          maxLength: 64
+    KnownInviteAction:
+      type: string
+      description: |
+        - `revoke`: `revokeInvite`.
+        - `restore`: `restoreInvite`.
+      enum:
+        - revoke
+        - restore
+    Invite:
+      type: object
+      description: |
+        One invite of the account, and the person who joined through it. The code itself is never
+        shown again after `createInvite`; `codeHint` (its last four characters) tells invites apart.
+      required:
+        - id
+        - codeHint
+        - status
+        - statusDisplay
+        - availableActions
+        - createdAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        label:
+          type: string
+          maxLength: 100
+          description: Who it is for, as the inviter wrote it, for example "Maria".
+        codeHint:
+          type: string
+          pattern: ^[0-9A-Z]{4}$
+          description: The code's last four characters.
+        status:
+          $ref: '#/components/schemas/InviteStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        email:
+          type: string
+          maxLength: 320
+          description: The invitee's email, once they redeemed it.
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+        redeemedAt:
+          $ref: '#/components/schemas/Timestamp'
+        joinedAt:
+          $ref: '#/components/schemas/Timestamp'
+        revokedAt:
+          $ref: '#/components/schemas/Timestamp'
+        availableActions:
+          type: array
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/InviteAction'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+    InviteList:
+      type: object
+      required:
+        - canInvite
+        - data
+      properties:
+        canInvite:
+          type: boolean
+          description: Whether this account may create invites.
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Invite'
+    InviteCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Who it is for, to tell invites apart.
+        expiresInDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 90
+          description: Days until an unredeemed invite stops working; absent means it never expires.
+    CreatedInvite:
+      type: object
+      required:
+        - invite
+        - code
+        - link
+        - message
+      properties:
+        invite:
+          $ref: '#/components/schemas/Invite'
+        code:
+          type: string
+          maxLength: 32
+          description: |
+            The one-time code, for example `K7QD-3M9P-XW2T-H8RA`, shown only in this answer.
+            Anyone with it can redeem the invite until it is used, so share it with that person only.
+        link:
+          type: string
+          format: uri
+          maxLength: 256
+          description: Opens the app's sign-up with the code filled in (`listora://invite/<code>`).
+        message:
+          type: string
+          maxLength: 1000
+          description: A message to share with the invitee, with the code and how to use it.
+    InviteRedeem:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - email
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The code as typed; case, spaces, and dashes do not matter.
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: The invitee's own email, which they sign in with.
+    InviteRedemptionStatus:
+      description: |
+        A `KnownInviteRedemptionStatus`, or one added after this client was built (show `message`
+        and let the person redeem again).
+      anyOf:
+        - $ref: '#/components/schemas/KnownInviteRedemptionStatus'
+        - type: string
+          maxLength: 64
+    KnownInviteRedemptionStatus:
+      type: string
+      description: |
+        - `ready`: sign in with `email` now; the one-time code is emailed there.
+        - `email_verification_sent`: the sign-in codes cannot reach `email` yet. A verification
+          email from Amazon Web Services was sent there: open its link, then redeem again.
+      enum:
+        - ready
+        - email_verification_sent
+    InviteRedemption:
+      type: object
+      required:
+        - email
+        - status
+        - message
+      properties:
+        email:
+          type: string
+          maxLength: 320
+          description: The email the invite now belongs to, lowercase; sign in with it.
+        status:
+          $ref: '#/components/schemas/InviteRedemptionStatus'
+        message:
+          type: string
+          maxLength: 500
+          description: What to do next, in words to show as is.
     SaleEmailStatus:
       description: |
         A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show

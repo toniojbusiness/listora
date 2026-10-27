@@ -155,7 +155,7 @@ describe('scripts/deploy-personal.sh', () => {
     expect(run.calls).toEqual([]);
   });
 
-  it('refuses to run without the owner email, the only person who can sign in', () => {
+  it('refuses to run without the owner email, who invites everyone else', () => {
     const run = deploy(['--profile', 'p'], {}, { owner: '' });
     expect(run.status).toBe(1);
     expect(run.output).toContain('set LISTORA_OWNER_EMAIL');
@@ -411,7 +411,7 @@ describe('scripts/deploy-personal.sh --dry-run with the real cdk', () => {
     const output = result.stdout;
     for (const expected of [
       'api: AUTH_DRIVER=cognito, AI_PROVIDER=anthropic (the fake AI is off)',
-      `sign-in: the Cognito user pool, no sign-up, and ${OWNER} its only user`,
+      `sign-in: the Cognito user pool, no self sign-up, ${OWNER} the owner, others by invite only`,
       `aws sesv2 get-email-identity --email-identity <each of ${OWNER}>`,
       'npx cdk deploy --app cdk.out/deploy-personal --require-approval never listora-personal-auth',
       'database: deletion protection on',

@@ -113,6 +113,11 @@ export interface AccountTable {
   sku_prefix: string;
   /** The business the seller sells as, from Settings; null until they enter one. */
   business_name: Nullable<string>;
+  /**
+   * When the account was created from an invite (docs/features/invites.md); null for an account
+   * created directly, and only those may invite.
+   */
+  invited_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -123,6 +128,29 @@ export interface AppUserTable {
   auth_subject: string;
   email: Nullable<string>;
   display_name: Nullable<string>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** An invite of the account (docs/features/invites.md): only its code's SHA-256 is kept. */
+export interface AccountInviteTable {
+  id: Id;
+  account_id: string;
+  code_sha256: Buffer;
+  /** The code's last four characters, to tell invites apart. */
+  code_hint: string;
+  label: Nullable<string>;
+  /** Null: the invite never expires. Only an unredeemed invite expires. */
+  expires_at: NullableTimestamp;
+  /** The invitee's email, lowercase, once they redeemed it. */
+  claimed_email: Nullable<string>;
+  claimed_at: NullableTimestamp;
+  email_changes: Generated<number>;
+  invitee_user_id: Nullable<string>;
+  /** The invitee's own account, from their first sign-in. */
+  invitee_account_id: Nullable<string>;
+  accepted_at: NullableTimestamp;
+  revoked_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -1085,6 +1113,7 @@ export interface Database {
   account: AccountTable;
   app_user: AppUserTable;
   membership: MembershipTable;
+  account_invite: AccountInviteTable;
   sku_sequence: SkuSequenceTable;
   storage_location: StorageLocationTable;
   inventory_item: InventoryItemTable;

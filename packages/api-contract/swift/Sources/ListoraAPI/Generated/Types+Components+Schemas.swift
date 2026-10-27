@@ -9870,6 +9870,470 @@ extension Components {
                 case nextCursor
             }
         }
+        /// A `KnownInviteStatus`, or a status added after this client was built. Clients show
+        /// `statusDisplay` as given.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/InviteStatus`.
+        public struct InviteStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InviteStatus/value1`.
+            public var value1: Components.Schemas.KnownInviteStatus?
+            /// - Remark: Generated from `#/components/schemas/InviteStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `InviteStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownInviteStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `open`: nobody has redeemed it yet.
+        /// - `expired`: nobody redeemed it before `expiresAt`.
+        /// - `redeemed`: the invitee entered the code and their `email`, and has not signed in yet.
+        /// - `active`: the invitee signed in; their own account exists.
+        /// - `revoked`: revoked by the account (`revokedAt`); with an `email`, that person can no
+        ///   longer sign in.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownInviteStatus`.
+        @frozen public enum KnownInviteStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case open = "open"
+            case expired = "expired"
+            case redeemed = "redeemed"
+            case active = "active"
+            case revoked = "revoked"
+        }
+        /// A `KnownInviteAction`, or an action added after this client was built (hide it).
+        ///
+        /// - Remark: Generated from `#/components/schemas/InviteAction`.
+        public struct InviteAction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InviteAction/value1`.
+            public var value1: Components.Schemas.KnownInviteAction?
+            /// - Remark: Generated from `#/components/schemas/InviteAction/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `InviteAction`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownInviteAction? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `revoke`: `revokeInvite`.
+        /// - `restore`: `restoreInvite`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownInviteAction`.
+        @frozen public enum KnownInviteAction: String, Codable, Hashable, Sendable, CaseIterable {
+            case revoke = "revoke"
+            case restore = "restore"
+        }
+        /// One invite of the account, and the person who joined through it. The code itself is never
+        /// shown again after `createInvite`; `codeHint` (its last four characters) tells invites apart.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/Invite`.
+        public struct Invite: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Invite/id`.
+            public var id: Components.Schemas.Id
+            /// Who it is for, as the inviter wrote it, for example "Maria".
+            ///
+            /// - Remark: Generated from `#/components/schemas/Invite/label`.
+            public var label: Swift.String?
+            /// The code's last four characters.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Invite/codeHint`.
+            public var codeHint: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Invite/status`.
+            public var status: Components.Schemas.InviteStatus
+            /// - Remark: Generated from `#/components/schemas/Invite/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// The invitee's email, once they redeemed it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Invite/email`.
+            public var email: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Invite/expiresAt`.
+            public var expiresAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/redeemedAt`.
+            public var redeemedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/joinedAt`.
+            public var joinedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/revokedAt`.
+            public var revokedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/availableActions`.
+            public var availableActions: [Components.Schemas.InviteAction]
+            /// - Remark: Generated from `#/components/schemas/Invite/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// Creates a new `Invite`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - label: Who it is for, as the inviter wrote it, for example "Maria".
+            ///   - codeHint: The code's last four characters.
+            ///   - status:
+            ///   - statusDisplay:
+            ///   - email: The invitee's email, once they redeemed it.
+            ///   - expiresAt:
+            ///   - redeemedAt:
+            ///   - joinedAt:
+            ///   - revokedAt:
+            ///   - availableActions:
+            ///   - createdAt:
+            public init(
+                id: Components.Schemas.Id,
+                label: Swift.String? = nil,
+                codeHint: Swift.String,
+                status: Components.Schemas.InviteStatus,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                email: Swift.String? = nil,
+                expiresAt: Components.Schemas.Timestamp? = nil,
+                redeemedAt: Components.Schemas.Timestamp? = nil,
+                joinedAt: Components.Schemas.Timestamp? = nil,
+                revokedAt: Components.Schemas.Timestamp? = nil,
+                availableActions: [Components.Schemas.InviteAction],
+                createdAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.label = label
+                self.codeHint = codeHint
+                self.status = status
+                self.statusDisplay = statusDisplay
+                self.email = email
+                self.expiresAt = expiresAt
+                self.redeemedAt = redeemedAt
+                self.joinedAt = joinedAt
+                self.revokedAt = revokedAt
+                self.availableActions = availableActions
+                self.createdAt = createdAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case label
+                case codeHint
+                case status
+                case statusDisplay
+                case email
+                case expiresAt
+                case redeemedAt
+                case joinedAt
+                case revokedAt
+                case availableActions
+                case createdAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteList`.
+        public struct InviteList: Codable, Hashable, Sendable {
+            /// Whether this account may create invites.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteList/canInvite`.
+            public var canInvite: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/InviteList/data`.
+            public var data: [Components.Schemas.Invite]
+            /// Creates a new `InviteList`.
+            ///
+            /// - Parameters:
+            ///   - canInvite: Whether this account may create invites.
+            ///   - data:
+            public init(
+                canInvite: Swift.Bool,
+                data: [Components.Schemas.Invite]
+            ) {
+                self.canInvite = canInvite
+                self.data = data
+            }
+            public enum CodingKeys: String, CodingKey {
+                case canInvite
+                case data
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteCreate`.
+        public struct InviteCreate: Codable, Hashable, Sendable {
+            /// Who it is for, to tell invites apart.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteCreate/label`.
+            public var label: Swift.String?
+            /// Days until an unredeemed invite stops working; absent means it never expires.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteCreate/expiresInDays`.
+            public var expiresInDays: Swift.Int32?
+            /// Creates a new `InviteCreate`.
+            ///
+            /// - Parameters:
+            ///   - label: Who it is for, to tell invites apart.
+            ///   - expiresInDays: Days until an unredeemed invite stops working; absent means it never expires.
+            public init(
+                label: Swift.String? = nil,
+                expiresInDays: Swift.Int32? = nil
+            ) {
+                self.label = label
+                self.expiresInDays = expiresInDays
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case expiresInDays
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.label = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                self.expiresInDays = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .expiresInDays
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "label",
+                    "expiresInDays"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CreatedInvite`.
+        public struct CreatedInvite: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/invite`.
+            public var invite: Components.Schemas.Invite
+            /// The one-time code, for example `K7QD-3M9P-XW2T-H8RA`, shown only in this answer.
+            /// Anyone with it can redeem the invite until it is used, so share it with that person only.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/code`.
+            public var code: Swift.String
+            /// Opens the app's sign-up with the code filled in (`listora://invite/<code>`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/link`.
+            public var link: Swift.String
+            /// A message to share with the invitee, with the code and how to use it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/message`.
+            public var message: Swift.String
+            /// Creates a new `CreatedInvite`.
+            ///
+            /// - Parameters:
+            ///   - invite:
+            ///   - code: The one-time code, for example `K7QD-3M9P-XW2T-H8RA`, shown only in this answer.
+            ///   - link: Opens the app's sign-up with the code filled in (`listora://invite/<code>`).
+            ///   - message: A message to share with the invitee, with the code and how to use it.
+            public init(
+                invite: Components.Schemas.Invite,
+                code: Swift.String,
+                link: Swift.String,
+                message: Swift.String
+            ) {
+                self.invite = invite
+                self.code = code
+                self.link = link
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case invite
+                case code
+                case link
+                case message
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteRedeem`.
+        public struct InviteRedeem: Codable, Hashable, Sendable {
+            /// The code as typed; case, spaces, and dashes do not matter.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedeem/code`.
+            public var code: Swift.String
+            /// The invitee's own email, which they sign in with.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedeem/email`.
+            public var email: Swift.String
+            /// Creates a new `InviteRedeem`.
+            ///
+            /// - Parameters:
+            ///   - code: The code as typed; case, spaces, and dashes do not matter.
+            ///   - email: The invitee's own email, which they sign in with.
+            public init(
+                code: Swift.String,
+                email: Swift.String
+            ) {
+                self.code = code
+                self.email = email
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case email
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.code = try container.decode(
+                    Swift.String.self,
+                    forKey: .code
+                )
+                self.email = try container.decode(
+                    Swift.String.self,
+                    forKey: .email
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "code",
+                    "email"
+                ])
+            }
+        }
+        /// A `KnownInviteRedemptionStatus`, or one added after this client was built (show `message`
+        /// and let the person redeem again).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/InviteRedemptionStatus`.
+        public struct InviteRedemptionStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InviteRedemptionStatus/value1`.
+            public var value1: Components.Schemas.KnownInviteRedemptionStatus?
+            /// - Remark: Generated from `#/components/schemas/InviteRedemptionStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `InviteRedemptionStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownInviteRedemptionStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `ready`: sign in with `email` now; the one-time code is emailed there.
+        /// - `email_verification_sent`: the sign-in codes cannot reach `email` yet. A verification
+        ///   email from Amazon Web Services was sent there: open its link, then redeem again.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownInviteRedemptionStatus`.
+        @frozen public enum KnownInviteRedemptionStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case ready = "ready"
+            case emailVerificationSent = "email_verification_sent"
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteRedemption`.
+        public struct InviteRedemption: Codable, Hashable, Sendable {
+            /// The email the invite now belongs to, lowercase; sign in with it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedemption/email`.
+            public var email: Swift.String
+            /// - Remark: Generated from `#/components/schemas/InviteRedemption/status`.
+            public var status: Components.Schemas.InviteRedemptionStatus
+            /// What to do next, in words to show as is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedemption/message`.
+            public var message: Swift.String
+            /// Creates a new `InviteRedemption`.
+            ///
+            /// - Parameters:
+            ///   - email: The email the invite now belongs to, lowercase; sign in with it.
+            ///   - status:
+            ///   - message: What to do next, in words to show as is.
+            public init(
+                email: Swift.String,
+                status: Components.Schemas.InviteRedemptionStatus,
+                message: Swift.String
+            ) {
+                self.email = email
+                self.status = status
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case email
+                case status
+                case message
+            }
+        }
         /// A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
         /// `statusDisplay` as given.
         ///

@@ -1,6 +1,6 @@
 import { lockIdentity, startAccountDeletion, type GrantToKeep } from '@listora/accounts';
 import { SCREENSHOT_PREFIX } from '@listora/automation';
-import type { DbTransaction, Marketplace } from '@listora/db';
+import type { DbExecutor, DbTransaction, Marketplace } from '@listora/db';
 import { storageKeys } from '@listora/photos';
 
 import type { Identity } from '../auth/driver.ts';
@@ -146,4 +146,18 @@ async function otherMemberCount(trx: DbTransaction, tenant: Tenant): Promise<num
     .where('user_id', '<>', tenant.userId)
     .executeTakeFirstOrThrow();
   return Number(row.count);
+}
+
+/**
+ * The email an invited account's person redeemed its invite with; undefined for an account
+ * created directly (the owner's, whose address the deploy manages).
+ */
+export async function invitedEmailOf(db: DbExecutor, tenant: Tenant): Promise<string | undefined> {
+  if (tenant.role !== 'owner') return undefined;
+  const invite = await db
+    .selectFrom('account_invite')
+    .select('claimed_email')
+    .where('invitee_account_id', '=', tenant.accountId)
+    .executeTakeFirst();
+  return invite?.claimed_email ?? undefined;
 }

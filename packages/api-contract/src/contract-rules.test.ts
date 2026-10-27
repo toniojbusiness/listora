@@ -167,13 +167,18 @@ describe('operations', () => {
     expect(doc.components.parameters['IdempotencyKey']?.required).toBe(true);
   });
 
-  it('require bearer auth on /v1 except the browser OAuth callback', () => {
+  it('require bearer auth on /v1 except the browser OAuth callback and invite redemption', () => {
     expect(doc.security).toEqual([{ bearerAuth: [] }]);
     const unauthenticated = operations
       .filter(({ op }) => op.security?.length === 0)
       .map(({ op }) => op.operationId)
       .sort();
-    expect(unauthenticated).toEqual(['getLiveness', 'getReadiness', 'handleConnectionCallback']);
+    expect(unauthenticated).toEqual([
+      'getLiveness',
+      'getReadiness',
+      'handleConnectionCallback',
+      'redeemInvite',
+    ]);
   });
 
   it('use cursor pagination for every page response', () => {

@@ -13,6 +13,7 @@ import {
   type AccountDeletionDependencies,
   type AccountDeletionOutcome,
 } from './job.ts';
+import type { InviteeDirectory, InviteeEmailState } from './invitees.ts';
 import type { GrantToRevoke, MarketplaceAccessRevoker } from './marketplace-access.ts';
 
 /**
@@ -39,6 +40,57 @@ export class FakeCognitoUserAdmin implements CognitoUserAdmin {
     this.#recreated.delete(user.username);
     this.deleted.push(user.username);
     return Promise.resolve();
+  }
+}
+
+/**
+ * Invitee users in memory, like a user pool: `admitted` holds the addresses that can sign in,
+ * `suspended` the ones that cannot right now. Addresses in `unverified` are not deliverable yet
+ * (SES's sandbox); `failWith` makes the next calls throw.
+ */
+export class FakeInviteeDirectory implements InviteeDirectory {
+  readonly admitted = new Set<string>();
+  readonly suspended = new Set<string>();
+  readonly unverified = new Set<string>();
+  readonly calls: string[] = [];
+  failWith: Error | undefined;
+
+  admit(email: string): Promise<InviteeEmailState> {
+    return this.#run(`admit ${email}`, () => {
+      this.admitted.add(email);
+      return this.#state(email);
+    });
+  }
+
+  forget(email: string): Promise<void> {
+    return this.#run(`forget ${email}`, () => {
+      this.admitted.delete(email);
+      this.suspended.delete(email);
+    });
+  }
+
+  suspend(email: string): Promise<void> {
+    return this.#run(`suspend ${email}`, () => {
+      if (this.admitted.has(email)) this.suspended.add(email);
+    });
+  }
+
+  resume(email: string): Promise<InviteeEmailState> {
+    return this.#run(`resume ${email}`, () => {
+      this.admitted.add(email);
+      this.suspended.delete(email);
+      return this.#state(email);
+    });
+  }
+
+  #state(email: string): InviteeEmailState {
+    return this.unverified.has(email) ? 'verification_sent' : 'deliverable';
+  }
+
+  #run<T>(call: string, apply: () => T): Promise<T> {
+    this.calls.push(call);
+    if (this.failWith) return Promise.reject(this.failWith);
+    return Promise.resolve(apply());
   }
 }
 

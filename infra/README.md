@@ -191,21 +191,21 @@ Account ids and domains are never committed, except the personal account that
 context (`-c key=value`) or else an environment variable (all documented in `.env.example`),
 and fails fast, naming the missing or invalid key without printing its value.
 
-| Context key          | Environment variable           | Required | Meaning                                                          |
-| -------------------- | ------------------------------ | -------- | ---------------------------------------------------------------- |
-| `env`                | `LISTORA_ENV`                  | yes      | `staging`, `prod`, or `personal`                                 |
-| `account`            | `LISTORA_AWS_ACCOUNT_ID`       | yes      | The environment's 12-digit AWS account id                        |
-| `region`             | `LISTORA_AWS_REGION`           | no       | Default `us-east-1`; SES must receive email there                |
-| `domain`             | `LISTORA_DOMAIN`               | yes      | For example `staging.listora.app`; optional for personal         |
-| `hostedZoneId`       | `LISTORA_HOSTED_ZONE_ID`       | yes      | Route 53 public hosted zone for `domain`; set with `domain`      |
-| `imageTag`           | `LISTORA_IMAGE_TAG`            | yes      | Image tag to run (the commit SHA); `latest` is refused           |
-| `alarmEmail`         | `LISTORA_ALARM_EMAIL`          | no       | Receives alert emails; defaults to the owner where there is one  |
-| `ownerEmail`         | `LISTORA_OWNER_EMAIL`          | personal | The only person who can sign in (owner pool); refused elsewhere  |
-| `githubRepository`   | `LISTORA_GITHUB_REPOSITORY`    | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
-| `githubOwnerId`      | `LISTORA_GITHUB_OWNER_ID`      | no       | Its owner's numeric id; default the default repository's         |
-| `githubRepositoryId` | `LISTORA_GITHUB_REPOSITORY_ID` | no       | Its numeric id; default the default repository's                 |
-| `githubOidcProvider` | `LISTORA_GITHUB_OIDC_PROVIDER` | no       | `create` (default) or `existing`: the account's GitHub provider  |
-| `availabilityZones`  | `LISTORA_AVAILABILITY_ZONES`   | no       | Two zones of the region, comma-separated; default: the first two |
+| Context key          | Environment variable           | Required | Meaning                                                           |
+| -------------------- | ------------------------------ | -------- | ----------------------------------------------------------------- |
+| `env`                | `LISTORA_ENV`                  | yes      | `staging`, `prod`, or `personal`                                  |
+| `account`            | `LISTORA_AWS_ACCOUNT_ID`       | yes      | The environment's 12-digit AWS account id                         |
+| `region`             | `LISTORA_AWS_REGION`           | no       | Default `us-east-1`; SES must receive email there                 |
+| `domain`             | `LISTORA_DOMAIN`               | yes      | For example `staging.listora.app`; optional for personal          |
+| `hostedZoneId`       | `LISTORA_HOSTED_ZONE_ID`       | yes      | Route 53 public hosted zone for `domain`; set with `domain`       |
+| `imageTag`           | `LISTORA_IMAGE_TAG`            | yes      | Image tag to run (the commit SHA); `latest` is refused            |
+| `alarmEmail`         | `LISTORA_ALARM_EMAIL`          | no       | Receives alert emails; defaults to the owner where there is one   |
+| `ownerEmail`         | `LISTORA_OWNER_EMAIL`          | personal | The owner, who invites the others (owner pool); refused elsewhere |
+| `githubRepository`   | `LISTORA_GITHUB_REPOSITORY`    | no       | Repository allowed to deploy; default `toniojbusiness/listora`    |
+| `githubOwnerId`      | `LISTORA_GITHUB_OWNER_ID`      | no       | Its owner's numeric id; default the default repository's          |
+| `githubRepositoryId` | `LISTORA_GITHUB_REPOSITORY_ID` | no       | Its numeric id; default the default repository's                  |
+| `githubOidcProvider` | `LISTORA_GITHUB_OIDC_PROVIDER` | no       | `create` (default) or `existing`: the account's GitHub provider   |
+| `availabilityZones`  | `LISTORA_AVAILABILITY_ZONES`   | no       | Two zones of the region, comma-separated; default: the first two  |
 
 ## Deploying the personal environment
 
@@ -222,7 +222,7 @@ the profile's credentials from the AWS CLI through `credential_process` in a pri
 script removes on exit, instead of the hour-long SSO token `cdk` cannot renew), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
 instead), and put the Anthropic key in `~/.config/listora/anthropic.env` as one
 `ANTHROPIC_API_KEY=...` line. Export `LISTORA_OWNER_EMAIL`, the address you sign in to the app
-with: the user pool's only user (docs/features/auth.md, The owner pool). Optional settings (`LISTORA_AWS_REGION`,
+with: the user pool's owner, who invites everyone else (docs/features/auth.md, The owner pool). Optional settings (`LISTORA_AWS_REGION`,
 `LISTORA_AVAILABILITY_ZONES`, `LISTORA_ALARM_EMAIL`, `LISTORA_DOMAIN` with
 `LISTORA_HOSTED_ZONE_ID`) come from the environment, as for `cdk` ([Settings](#settings)).
 
@@ -243,8 +243,9 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
 4. **Synthesizes offline** with the real settings into `infra/cdk.out/deploy-personal` and
    deploys exactly that assembly. It checks the templates first: the database has deletion
    protection, the API's `AUTH_DRIVER` is `cognito` (the dev driver is refused), the user pool
-   allows no sign-up and its only user is `LISTORA_OWNER_EMAIL`, and `AI_PROVIDER` is not
-   `fake`.
+   allows no self sign-up, the only user it creates is `LISTORA_OWNER_EMAIL`, the API lets others
+   sign up only by invite with that owner (`SIGN_UP=invite`, docs/features/invites.md), and
+   `AI_PROVIDER` is not `fake`.
 5. **Makes sure Listora's own CDK bootstrap is the restricted one**
    ([Trust boundary](#trust-boundary)). Listora bootstraps separately from any other CDK app
    in the account: qualifier `listora` and toolkit stack `CDKToolkit-listora`
@@ -308,8 +309,8 @@ then it creates a draft item, reads it, deletes it, and checks that it is gone. 
 driver it requests a code, reads it from the API's log group, and finally deletes the
 throwaway account it signed in to. With `cognito` it also checks that the dev sign-in is off
 (`404`), and signs in only with `LISTORA_SMOKE_ID_TOKEN`, an ID token of a user of the pool,
-whose account it keeps. Personal's pool has one user, the owner, so the deploy runs without
-one and skips the signed-in steps; to run them against your own account, pass your ID token:
+whose account it keeps. Personal's pool holds only real people (the owner and those they
+invited), so the deploy runs without one and skips the signed-in steps; to run them against your own account, pass your ID token:
 `LISTORA_SMOKE_ID_TOKEN=<token> node infra/src/deploy/smoke.ts --api-url <url> --auth cognito`.
 It never starts an analysis or touches a marketplace, so it costs no AI usage. A failed step
 fails the deploy with the step's name.

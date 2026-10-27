@@ -27,10 +27,14 @@ const PHOTO_STORAGE: PhotoStorage = {
   publicBaseUrl: 'https://d111111abcdef8.cloudfront.net',
 };
 const TOKEN_KEY_ARN = 'arn:aws:kms:us-east-1:111122223333:key/0b6f7b3e-0000-4000-8000-000000000001';
-const USER_POOL = { userPoolId: 'us-east-1_AbC123xyZ', clientIds: ['1example23456789abcdefghij'] };
+const USER_POOL = {
+  userPoolId: 'us-east-1_AbC123xyZ',
+  clientIds: ['1example23456789abcdefghij'],
+  ownerEmail: 'owner@example.com',
+};
 const RESOURCES: ServiceResources = {
   photoStorage: PHOTO_STORAGE,
-  signIn: { driver: 'cognito', ...USER_POOL },
+  signIn: { driver: 'cognito', ...USER_POOL, inviteEmailVerification: 'ses' },
   runner: { cluster: 'listora-staging', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: TOKEN_KEY_ARN,
 };
@@ -46,10 +50,9 @@ function taskEnvironment(container: ContainerName): NodeJS.ProcessEnv {
 
 describe('the sign-in an environment gets', () => {
   it('is the cognito driver with its user pool in an owner-pool environment', () => {
-    expect(signInResources({ via: 'owner-pool' }, USER_POOL)).toEqual({
-      driver: 'cognito',
-      ...USER_POOL,
-    });
+    expect(
+      signInResources({ via: 'owner-pool', inviteEmailVerification: 'ses' }, USER_POOL),
+    ).toEqual({ driver: 'cognito', ...USER_POOL, inviteEmailVerification: 'ses' });
   });
 
   it('is the dev driver only where the environment signs in with dev', () => {
@@ -57,22 +60,31 @@ describe('the sign-in an environment gets', () => {
   });
 
   it('never falls back to the dev driver when the owner pool is missing, and never mixes the two', () => {
-    expect(() => signInResources({ via: 'owner-pool' }, undefined)).toThrow(
+    const ownerPool = { via: 'owner-pool', inviteEmailVerification: 'none' } as const;
+    expect(() => signInResources(ownerPool, undefined)).toThrow(
       'an owner-pool environment needs its user pool',
     );
-    expect(() =>
-      signInResources({ via: 'owner-pool' }, { userPoolId: USER_POOL.userPoolId, clientIds: [] }),
-    ).toThrow('the user pool needs an app client');
+    expect(() => signInResources(ownerPool, { ...USER_POOL, clientIds: [] })).toThrow(
+      'the user pool needs an app client',
+    );
     expect(() => signInResources({ via: 'dev' }, USER_POOL)).toThrow(
       'a dev sign-in environment has no user pool',
     );
   });
 
   it('gives the API the cognito driver, its pool, and its clients, and the worker the pool', () => {
-    expect(loadApiConfig(taskEnvironment('api')).auth).toEqual({
+    const api = loadApiConfig(taskEnvironment('api'));
+    expect(api.auth).toEqual({
       driver: 'cognito',
-      cognito: { region: 'us-east-1', ...USER_POOL },
+      cognito: {
+        region: 'us-east-1',
+        userPoolId: USER_POOL.userPoolId,
+        clientIds: USER_POOL.clientIds,
+      },
     });
+    // Invite-only, with the pool's owner, verifying invitees' addresses in SES's sandbox.
+    expect(api.signUp).toEqual({ mode: 'invite', ownerEmail: USER_POOL.ownerEmail });
+    expect(api.inviteEmailVerification).toBe('ses');
     expect(containerEnvironment('api', DATABASE_URL, RESOURCES)).not.toHaveProperty(
       'AUTH_DEV_SECRET',
     );

@@ -35,6 +35,7 @@ describe('API feature discovery', () => {
       'batches',
       'connections',
       'imports',
+      'invites',
       'items',
       'listings',
       'marketplace-sessions',
