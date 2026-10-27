@@ -86,7 +86,13 @@ export function buildPoshmarkPayload(
   const size =
     sets === null || catalog === null
       ? null
-      : poshmarkSize(sizeLabel, item.sizeSystem, sets, catalog.department);
+      : // A `Size` aspect is Poshmark's own size (the review's pick), not the tag's to read.
+        poshmarkSize(
+          sizeLabel,
+          aspect('Size') === null ? item.sizeSystem : null,
+          sets,
+          catalog.department,
+        );
   const condition = variant.condition ?? item.condition;
   const originalCents = dollarsToCents(aspect('Original Price'));
   return {

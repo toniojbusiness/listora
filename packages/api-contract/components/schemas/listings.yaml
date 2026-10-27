@@ -66,8 +66,10 @@ ListingVariant:
       $ref: './common.yaml#/Money'
     categoryRef:
       type: string
-      maxLength: 64
-      description: The marketplace's category id.
+      maxLength: 300
+      description: |
+        The marketplace's category: an eBay category id, or a Poshmark, Mercari, or Depop
+        category by its names (`MarketplaceCategory.ref`).
     condition:
       $ref: './items.yaml#/ItemCondition'
     aspects:
@@ -244,7 +246,7 @@ MarketplaceCategory:
   properties:
     ref:
       type: string
-      maxLength: 64
+      maxLength: 300
       description: What `variant.categoryRef` takes for this category.
     path:
       type: array

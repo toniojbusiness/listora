@@ -6,8 +6,13 @@
  * listing and that operation; the listing shows the change as done only once the engine has
  * verified it ("Active (confirmed by eBay)").
  */
+import type { AiClient } from '@listora/ai';
 import type { KnownListingAction, ListingVariant } from '@listora/api-contract';
-import { marketplaceCategories } from '@listora/automation';
+import {
+  isPrefillMarketplace,
+  marketplaceCategories,
+  type PrefillOption,
+} from '@listora/automation';
 import { accountConnections } from '@listora/connections';
 import {
   inTransaction,
@@ -31,6 +36,7 @@ import { engineCommand } from '../operations/routes.ts';
 import { operationView } from '../operations/views.ts';
 import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor } from '../pagination.ts';
 import type { PublicUrls } from '../photos/mapping.ts';
+import { loadPrefill } from '../prefill/service.ts';
 import type { Tenant } from '../tenancy.ts';
 import { listingContent } from './content.ts';
 import {
@@ -57,6 +63,8 @@ import {
 } from './views.ts';
 
 export interface ListingActionDependencies extends RouteDependencies {
+  /** The AI client: the pre-fill's category asks it once for a question Listora can't settle. */
+  ai: AiClient;
   /** Listing photo URLs for the content a publish sends. */
   storage: PublicUrls;
   /** Each marketplace's adapter: its capabilities, and the validation a publish runs first. */
@@ -76,20 +84,54 @@ export function registerListingActionRoutes(
     return { status: 200, body: { data: await listingViews(db, tenant, rows, views) } };
   });
 
-  contractRoute(app, deps, 'getItemMarketplaceCategories', async ({ tenant, db, params }) => {
-    const item = await findItem(db, tenant, params.itemId);
-    if (!item) throw notFound('Item');
-    const categories = marketplaceCategories(params.marketplace, item);
-    if (categories === null) throw notFound('Marketplace categories');
-    return {
-      status: 200,
-      body: {
-        ...(categories.suggested === null ? {} : { suggested: categories.suggested }),
-        likely: categories.likely,
-        choices: categories.choices,
-      },
-    };
-  });
+  contractRoute(
+    app,
+    deps,
+    'getItemMarketplaceCategories',
+    async ({ tenant, db, params, request }) => {
+      const item = await findItem(db, tenant, params.itemId);
+      if (!item) throw notFound('Item');
+      const categories = marketplaceCategories(params.marketplace, item);
+      if (categories === null || !isPrefillMarketplace(params.marketplace)) {
+        throw notFound('Marketplace categories');
+      }
+      // The pre-fill's category: the seller's answer on the review, the AI's sure pick, or
+      // Listora's mapping; while it is a question, its ranked short list is the likely ones.
+      const { prefill } = await loadPrefill(
+        db,
+        tenant,
+        item,
+        {},
+        {
+          ai: deps.ai,
+          aiFor: new Set([params.marketplace]),
+          onAiFailure: (error) => {
+            request.log.warn({ err: error, event: 'prefill_ai_failed' }, 'pre-fill AI call failed');
+          },
+        },
+      );
+      const field = prefill.marketplaces
+        .find((entry) => entry.marketplace === params.marketplace)
+        ?.fields.find((entry) => entry.key === 'category');
+      const choice = (option: PrefillOption) => ({
+        ref: option.value,
+        path: [...(option.path ?? [])],
+      });
+      const suggested =
+        field?.value === null || field?.value === undefined ? null : choice(field.value);
+      return {
+        status: 200,
+        body: {
+          ...(suggested === null ? {} : { suggested }),
+          likely:
+            field === undefined || field.options.length === 0
+              ? categories.likely
+              : field.options.map(choice),
+          choices: categories.choices,
+        },
+      };
+    },
+  );
 
   contractRoute(app, deps, 'listListings', async ({ tenant, db, query }) => {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
@@ -129,7 +171,13 @@ export function registerListingActionRoutes(
         throw new ApiError('already_exists', `${item.sku} already has a ${name} listing.`);
       }
       const connectionId = await listingConnection(trx, tenant, marketplace, deps);
-      const variant = checkedVariant(body.variant);
+      const variant = await withPrefill(
+        trx,
+        tenant,
+        item,
+        marketplace,
+        checkedVariant(body.variant),
+      );
       let row: ListingRow;
       try {
         row = await insertDraftListing(trx, tenant, {
@@ -166,7 +214,16 @@ export function registerListingActionRoutes(
           'This listing was already sent to the marketplace. Change it with a price change or an update.',
         );
       }
-      const updated = await updateVariant(trx, tenant, row.id, checkedVariant(body.variant));
+      const item = await findItem(trx, tenant, row.item_id);
+      if (!item) throw notFound('Item');
+      const variant = await withPrefill(
+        trx,
+        tenant,
+        item,
+        row.marketplace,
+        checkedVariant(body.variant),
+      );
+      const updated = await updateVariant(trx, tenant, row.id, variant);
       await writeAudit(trx, tenant, {
         itemId: row.item_id,
         action: 'listing.draft_updated',
@@ -383,6 +440,40 @@ function assertListable(item: InventoryItem, verb: string): void {
 }
 
 /** The variant with blank text refused, which the schema alone allows. */
+/**
+ * The variant with what the pre-fill settled on the review and the payload's own mapping would
+ * not give (docs/features/marketplace-prefill.md): the category the seller picked or the AI chose
+ * when the variant names none, and the marketplace's size when it names no `Size` aspect. Only
+ * stored answers and picks are read; nothing calls the AI here.
+ */
+async function withPrefill(
+  db: DbExecutor,
+  tenant: Tenant,
+  item: InventoryItem,
+  marketplace: Marketplace,
+  variant: ListingVariant,
+): Promise<ListingVariant> {
+  if (!isPrefillMarketplace(marketplace)) return variant;
+  const { prefill } = await loadPrefill(db, tenant, item, {}, { ai: null, aiFor: new Set() });
+  const entry = prefill.marketplaces.find((candidate) => candidate.marketplace === marketplace);
+  if (entry === undefined) return variant;
+  const { listing } = entry;
+  const category = entry.fields.find((field) => field.key === 'category')?.value?.value;
+  const aspects = variant.aspects ?? [];
+  const namesSize = aspects.some((aspect) => aspect.name.toLowerCase() === 'size');
+  // The size goes with the category it was picked for.
+  const sameCategory = variant.categoryRef === undefined || variant.categoryRef === category;
+  return {
+    ...variant,
+    ...(variant.categoryRef === undefined && listing.categoryRef !== null
+      ? { categoryRef: listing.categoryRef }
+      : {}),
+    ...(!namesSize && listing.size !== null && sameCategory
+      ? { aspects: [...aspects, { name: 'Size', values: [listing.size] }] }
+      : {}),
+  };
+}
+
 function checkedVariant(variant: ListingVariant): ListingVariant {
   if (variant.title.trim() === '') {
     throw validationFailed(

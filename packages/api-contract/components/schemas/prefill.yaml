@@ -1,0 +1,176 @@
+PrefillFieldKey:
+  description: |
+    A `KnownPrefillFieldKey`, or a field added after this client was built. Clients show a
+    field they do not know by its `label` and `value`, and never ask it.
+  anyOf:
+    - $ref: '#/KnownPrefillFieldKey'
+    - type: string
+      maxLength: 64
+KnownPrefillFieldKey:
+  type: string
+  description: |
+    `kids_gender` (girls or boys, for a kids' item), `category` and `size` (the
+    marketplace's own), and the details the form shows as Listora fills them: `condition`,
+    `brand`, `colors`, `material`.
+  enum: [kids_gender, category, size, condition, brand, colors, material]
+PrefillSource:
+  description: A `KnownPrefillSource`, or a source added after this client was built.
+  anyOf:
+    - $ref: '#/KnownPrefillSource'
+    - type: string
+      maxLength: 64
+KnownPrefillSource:
+  type: string
+  description: |
+    Where a value comes from: `listora` (Listora's mapping onto the marketplace's own
+    category tree and form), `default` (the marketplace's convention for an in-between item,
+    such as Men for a unisex tee on Depop; the seller can change it), `ai` (the AI picked it
+    from the ranked list and was sure), or `you` (the seller's tap).
+  enum: [listora, default, ai, you]
+PrefillOption:
+  type: object
+  required: [value, label]
+  properties:
+    value:
+      type: string
+      maxLength: 300
+      description: What an answer sends (a category's `variant.categoryRef`, a size's label, `girls`).
+    label:
+      type: string
+      maxLength: 300
+      description: What tells this option apart from the others on its list (`Men`, `Women`).
+    path:
+      type: array
+      items:
+        type: string
+        maxLength: 100
+      maxItems: 4
+      description: A category's names, top level first.
+PrefillField:
+  type: object
+  required: [key, label, options, needsAnswer]
+  properties:
+    key:
+      $ref: '#/PrefillFieldKey'
+    label:
+      type: string
+      maxLength: 64
+      description: The field as the form names it ("Category", "Size", "Girls or boys").
+    value:
+      $ref: '#/PrefillOption'
+    options:
+      type: array
+      description: |
+        The ranked short list, the value first (the AI's best guess first for a question);
+        empty when there is nothing to choose between.
+      items:
+        $ref: '#/PrefillOption'
+      maxItems: 4
+    choices:
+      type: array
+      description: Every value the form offers, when the list is short enough to show whole (sizes).
+      items:
+        $ref: '#/PrefillOption'
+      maxItems: 80
+    source:
+      $ref: '#/PrefillSource'
+    needsAnswer:
+      type: boolean
+      description: |
+        A question: Listora isn't sure, so the seller taps one of `options` (or another of
+        `choices`, or of the marketplace's categories) before listing there.
+    note:
+      type: string
+      maxLength: 300
+      description: Why the value is what it is, when that is not obvious.
+MarketplacePrefill:
+  type: object
+  required: [marketplace, connected, ready, fields]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    connected:
+      type: boolean
+      description: Whether Listora lists there itself (an API connection or a linked session).
+    ready:
+      type: boolean
+      description: Whether every field the form requires has a value, so a listing can go as it is.
+    fields:
+      type: array
+      items:
+        $ref: '#/PrefillField'
+      maxItems: 10
+ItemMarketplacePrefill:
+  type: object
+  required: [itemFields, marketplaces, questions]
+  properties:
+    itemFields:
+      type: array
+      description: Questions about the item that every marketplace follows (girls or boys).
+      items:
+        $ref: '#/PrefillField'
+      maxItems: 4
+    marketplaces:
+      type: array
+      items:
+        $ref: '#/MarketplacePrefill'
+      maxItems: 8
+    questions:
+      type: integer
+      minimum: 0
+      description: |
+        How many fields still need the seller's tap for the marketplaces Listora lists on
+        itself (`connected`).
+PrefillDetails:
+  type: object
+  description: |
+    The review's unsaved details the pre-fill is worked out from. Each property replaces the
+    item's saved value; one left out keeps the saved value, and an empty string means none.
+    `colors` and `materials` are canonical ids separated by commas.
+  properties:
+    category:
+      type: string
+      maxLength: 200
+    department:
+      type: string
+      maxLength: 64
+    sizeLabel:
+      type: string
+      maxLength: 32
+    sizeSystem:
+      type: string
+      maxLength: 16
+    brand:
+      type: string
+      maxLength: 120
+    condition:
+      type: string
+      maxLength: 32
+    colors:
+      type: string
+      maxLength: 300
+    materials:
+      type: string
+      maxLength: 300
+PrefillAnswerField:
+  type: string
+  description: The fields a seller answers.
+  enum: [kids_gender, category, size]
+PrefillAnswer:
+  type: object
+  required: [field, details]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/KnownMarketplace'
+    field:
+      $ref: '#/PrefillAnswerField'
+    value:
+      type: string
+      minLength: 1
+      maxLength: 300
+      description: |
+        The chosen option's `value`; left out, it clears the answer. A `category` takes any
+        category of the marketplace's (`variant.categoryRef`), a `size` one of the category's
+        sizes, `kids_gender` `girls` or `boys`.
+    details:
+      $ref: '#/PrefillDetails'

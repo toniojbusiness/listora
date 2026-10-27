@@ -5699,6 +5699,451 @@ public enum Operations {
             }
         }
     }
+    /// What each marketplace's sell form will get for the item
+    ///
+    /// For Depop, Poshmark, and Mercari: the marketplace's own category, size, condition,
+    /// brand, colours, and material as Listora will fill their real forms, worked out from the
+    /// item analysis and each marketplace's own category tree and form data
+    /// (docs/features/marketplace-prefill.md). An in-between item gets the marketplace's
+    /// default (a unisex tee goes under Men on Depop), which the seller can change. When
+    /// Listora's mapping can't tell, the cheap AI picks from a ranked short list; when it is
+    /// not sure either, the field is a question (`needsAnswer`) with that short list, for the
+    /// review to ask before the seller lists. The AI is asked at most once per question
+    /// (metered, counted in the daily AI budget, no plan quota); when AI is off or over its
+    /// budget, the questions are simply asked. The detail parameters (`PrefillDetails`) carry
+    /// the review's unsaved edits.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/marketplace-prefill`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/get(getItemMarketplacePrefill)`.
+    public enum GetItemMarketplacePrefill {
+        public static let id: Swift.String = "getItemMarketplacePrefill"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/path/itemId`.
+                public var itemId: Components.Parameters.ItemId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - itemId:
+                public init(itemId: Components.Parameters.ItemId) {
+                    self.itemId = itemId
+                }
+            }
+            public var path: Operations.GetItemMarketplacePrefill.Input.Path
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/category`.
+                public var category: Swift.String?
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/department`.
+                public var department: Swift.String?
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/sizeLabel`.
+                public var sizeLabel: Swift.String?
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/sizeSystem`.
+                public var sizeSystem: Swift.String?
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/brand`.
+                public var brand: Swift.String?
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/condition`.
+                public var condition: Swift.String?
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/colors`.
+                public var colors: Swift.String?
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/query/materials`.
+                public var materials: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - category:
+                ///   - department:
+                ///   - sizeLabel:
+                ///   - sizeSystem:
+                ///   - brand:
+                ///   - condition:
+                ///   - colors:
+                ///   - materials:
+                public init(
+                    category: Swift.String? = nil,
+                    department: Swift.String? = nil,
+                    sizeLabel: Swift.String? = nil,
+                    sizeSystem: Swift.String? = nil,
+                    brand: Swift.String? = nil,
+                    condition: Swift.String? = nil,
+                    colors: Swift.String? = nil,
+                    materials: Swift.String? = nil
+                ) {
+                    self.category = category
+                    self.department = department
+                    self.sizeLabel = sizeLabel
+                    self.sizeSystem = sizeSystem
+                    self.brand = brand
+                    self.condition = condition
+                    self.colors = colors
+                    self.materials = materials
+                }
+            }
+            public var query: Operations.GetItemMarketplacePrefill.Input.Query
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetItemMarketplacePrefill.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetItemMarketplacePrefill.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetItemMarketplacePrefill.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - query:
+            ///   - headers:
+            public init(
+                path: Operations.GetItemMarketplacePrefill.Input.Path,
+                query: Operations.GetItemMarketplacePrefill.Input.Query = .init(),
+                headers: Operations.GetItemMarketplacePrefill.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ItemMarketplacePrefill)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ItemMarketplacePrefill {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetItemMarketplacePrefill.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetItemMarketplacePrefill.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The item's pre-fill on each marketplace.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/get(getItemMarketplacePrefill)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetItemMarketplacePrefill.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetItemMarketplacePrefill.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/get(getItemMarketplacePrefill)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/get(getItemMarketplacePrefill)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Answer one of the pre-fill's questions
+    ///
+    /// Records the seller's tap (or clears it) for the item's details as `details` has them,
+    /// and answers the pre-fill worked out again. An answer holds while the item's category,
+    /// department, and size stay as they were; after a change, the question is asked again.
+    /// A listing created later names the answer (`createListing`). `422` for a value the
+    /// marketplace doesn't offer.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/items/{itemId}/marketplace-prefill/answers`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/answers/put(answerItemMarketplacePrefill)`.
+    public enum AnswerItemMarketplacePrefill {
+        public static let id: Swift.String = "answerItemMarketplacePrefill"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/answers/PUT/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/answers/PUT/path/itemId`.
+                public var itemId: Components.Parameters.ItemId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - itemId:
+                public init(itemId: Components.Parameters.ItemId) {
+                    self.itemId = itemId
+                }
+            }
+            public var path: Operations.AnswerItemMarketplacePrefill.Input.Path
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/answers/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnswerItemMarketplacePrefill.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnswerItemMarketplacePrefill.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AnswerItemMarketplacePrefill.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/answers/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/answers/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.PrefillAnswer)
+            }
+            public var body: Operations.AnswerItemMarketplacePrefill.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.AnswerItemMarketplacePrefill.Input.Path,
+                headers: Operations.AnswerItemMarketplacePrefill.Input.Headers = .init(),
+                body: Operations.AnswerItemMarketplacePrefill.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/answers/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-prefill/answers/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ItemMarketplacePrefill)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ItemMarketplacePrefill {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AnswerItemMarketplacePrefill.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AnswerItemMarketplacePrefill.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The item's pre-fill with the answer.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/answers/put(answerItemMarketplacePrefill)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.AnswerItemMarketplacePrefill.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.AnswerItemMarketplacePrefill.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/answers/put(answerItemMarketplacePrefill)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/answers/put(answerItemMarketplacePrefill)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/answers/put(answerItemMarketplacePrefill)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no

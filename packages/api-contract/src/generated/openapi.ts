@@ -598,6 +598,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/items/{itemId}/marketplace-prefill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What each marketplace's sell form will get for the item
+         * @description For Depop, Poshmark, and Mercari: the marketplace's own category, size, condition,
+         *     brand, colours, and material as Listora will fill their real forms, worked out from the
+         *     item analysis and each marketplace's own category tree and form data
+         *     (docs/features/marketplace-prefill.md). An in-between item gets the marketplace's
+         *     default (a unisex tee goes under Men on Depop), which the seller can change. When
+         *     Listora's mapping can't tell, the cheap AI picks from a ranked short list; when it is
+         *     not sure either, the field is a question (`needsAnswer`) with that short list, for the
+         *     review to ask before the seller lists. The AI is asked at most once per question
+         *     (metered, counted in the daily AI budget, no plan quota); when AI is off or over its
+         *     budget, the questions are simply asked. The detail parameters (`PrefillDetails`) carry
+         *     the review's unsaved edits.
+         */
+        get: operations["getItemMarketplacePrefill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/items/{itemId}/marketplace-prefill/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer one of the pre-fill's questions
+         * @description Records the seller's tap (or clears it) for the item's details as `details` has them,
+         *     and answers the pre-fill worked out again. An answer holds while the item's category,
+         *     department, and size stay as they were; after a change, the question is asked again.
+         *     A listing created later names the answer (`createListing`). `422` for a value the
+         *     marketplace doesn't offer.
+         */
+        put: operations["answerItemMarketplacePrefill"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/items/{itemId}/pricing": {
         parameters: {
             query?: never;
@@ -2805,6 +2863,106 @@ export interface components {
          */
         KnownVoiceCorrectionField: "title" | "brand" | "productName" | "category" | "department" | "sizeLabel" | "sizeSystem" | "colors" | "pattern" | "materials" | "keywords" | "styleNumber" | "condition" | "conditionNotes" | "flaws" | "cost" | "purchaseSource" | "listPrice";
         /**
+         * @description A `KnownPrefillFieldKey`, or a field added after this client was built. Clients show a
+         *     field they do not know by its `label` and `value`, and never ask it.
+         */
+        PrefillFieldKey: components["schemas"]["KnownPrefillFieldKey"];
+        /**
+         * @description `kids_gender` (girls or boys, for a kids' item), `category` and `size` (the
+         *     marketplace's own), and the details the form shows as Listora fills them: `condition`,
+         *     `brand`, `colors`, `material`.
+         * @enum {string}
+         */
+        KnownPrefillFieldKey: "kids_gender" | "category" | "size" | "condition" | "brand" | "colors" | "material";
+        /** @description A `KnownPrefillSource`, or a source added after this client was built. */
+        PrefillSource: components["schemas"]["KnownPrefillSource"];
+        /**
+         * @description Where a value comes from: `listora` (Listora's mapping onto the marketplace's own
+         *     category tree and form), `default` (the marketplace's convention for an in-between item,
+         *     such as Men for a unisex tee on Depop; the seller can change it), `ai` (the AI picked it
+         *     from the ranked list and was sure), or `you` (the seller's tap).
+         * @enum {string}
+         */
+        KnownPrefillSource: "listora" | "default" | "ai" | "you";
+        PrefillOption: {
+            /** @description What an answer sends (a category's `variant.categoryRef`, a size's label, `girls`). */
+            value: string;
+            /** @description What tells this option apart from the others on its list (`Men`, `Women`). */
+            label: string;
+            /** @description A category's names, top level first. */
+            path?: string[];
+        };
+        PrefillField: {
+            key: components["schemas"]["PrefillFieldKey"];
+            /** @description The field as the form names it ("Category", "Size", "Girls or boys"). */
+            label: string;
+            value?: components["schemas"]["PrefillOption"];
+            /**
+             * @description The ranked short list, the value first (the AI's best guess first for a question);
+             *     empty when there is nothing to choose between.
+             */
+            options: components["schemas"]["PrefillOption"][];
+            /** @description Every value the form offers, when the list is short enough to show whole (sizes). */
+            choices?: components["schemas"]["PrefillOption"][];
+            source?: components["schemas"]["PrefillSource"];
+            /**
+             * @description A question: Listora isn't sure, so the seller taps one of `options` (or another of
+             *     `choices`, or of the marketplace's categories) before listing there.
+             */
+            needsAnswer: boolean;
+            /** @description Why the value is what it is, when that is not obvious. */
+            note?: string;
+        };
+        MarketplacePrefill: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description Whether Listora lists there itself (an API connection or a linked session). */
+            connected: boolean;
+            /** @description Whether every field the form requires has a value, so a listing can go as it is. */
+            ready: boolean;
+            fields: components["schemas"]["PrefillField"][];
+        };
+        ItemMarketplacePrefill: {
+            /** @description Questions about the item that every marketplace follows (girls or boys). */
+            itemFields: components["schemas"]["PrefillField"][];
+            marketplaces: components["schemas"]["MarketplacePrefill"][];
+            /**
+             * @description How many fields still need the seller's tap for the marketplaces Listora lists on
+             *     itself (`connected`).
+             */
+            questions: number;
+        };
+        /**
+         * @description The review's unsaved details the pre-fill is worked out from. Each property replaces the
+         *     item's saved value; one left out keeps the saved value, and an empty string means none.
+         *     `colors` and `materials` are canonical ids separated by commas.
+         */
+        PrefillDetails: {
+            category?: string;
+            department?: string;
+            sizeLabel?: string;
+            sizeSystem?: string;
+            brand?: string;
+            condition?: string;
+            colors?: string;
+            materials?: string;
+        };
+        /**
+         * @description The fields a seller answers.
+         * @enum {string}
+         */
+        PrefillAnswerField: "kids_gender" | "category" | "size";
+        PrefillAnswer: {
+            marketplace?: components["schemas"]["KnownMarketplace"];
+            field: components["schemas"]["PrefillAnswerField"];
+            /**
+             * @description The chosen option's `value`; left out, it clears the answer. A `category` takes any
+             *     category of the marketplace's (`variant.categoryRef`), a `size` one of the category's
+             *     sizes, `kids_gender` `girls` or `boys`.
+             */
+            value?: string;
+            details: components["schemas"]["PrefillDetails"];
+        };
+        /**
          * @description A `KnownListingStatus`, or a status added after this client was built. Clients show
          *     the listing's `statusDisplay` for an unknown status and never treat it as success.
          */
@@ -2838,7 +2996,10 @@ export interface components {
             title: string;
             description: string;
             price: components["schemas"]["Money"];
-            /** @description The marketplace's category id. */
+            /**
+             * @description The marketplace's category: an eBay category id, or a Poshmark, Mercari, or Depop
+             *     category by its names (`MarketplaceCategory.ref`).
+             */
             categoryRef?: string;
             condition?: components["schemas"]["ItemCondition"];
             aspects?: components["schemas"]["ListingAspect"][];
@@ -4783,6 +4944,17 @@ export type VoiceCorrection = components['schemas']['VoiceCorrection'];
 export type VoiceCorrectionChange = components['schemas']['VoiceCorrectionChange'];
 export type VoiceCorrectionField = components['schemas']['VoiceCorrectionField'];
 export type KnownVoiceCorrectionField = components['schemas']['KnownVoiceCorrectionField'];
+export type PrefillFieldKey = components['schemas']['PrefillFieldKey'];
+export type KnownPrefillFieldKey = components['schemas']['KnownPrefillFieldKey'];
+export type PrefillSource = components['schemas']['PrefillSource'];
+export type KnownPrefillSource = components['schemas']['KnownPrefillSource'];
+export type PrefillOption = components['schemas']['PrefillOption'];
+export type PrefillField = components['schemas']['PrefillField'];
+export type MarketplacePrefill = components['schemas']['MarketplacePrefill'];
+export type ItemMarketplacePrefill = components['schemas']['ItemMarketplacePrefill'];
+export type PrefillDetails = components['schemas']['PrefillDetails'];
+export type PrefillAnswerField = components['schemas']['PrefillAnswerField'];
+export type PrefillAnswer = components['schemas']['PrefillAnswer'];
 export type ListingStatus = components['schemas']['ListingStatus'];
 export type KnownListingStatus = components['schemas']['KnownListingStatus'];
 export type ListingAction = components['schemas']['ListingAction'];
@@ -5888,6 +6060,68 @@ export interface operations {
             422: components["responses"]["ValidationFailed"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getItemMarketplacePrefill: {
+        parameters: {
+            query?: {
+                category?: string;
+                department?: string;
+                sizeLabel?: string;
+                sizeSystem?: string;
+                brand?: string;
+                condition?: string;
+                colors?: string;
+                materials?: string;
+            };
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item's pre-fill on each marketplace. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemMarketplacePrefill"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    answerItemMarketplacePrefill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrefillAnswer"];
+            };
+        };
+        responses: {
+            /** @description The item's pre-fill with the answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemMarketplacePrefill"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -7694,6 +7928,9 @@ export const knownPriceBasisValues: ReadonlyArray<FlattenedDeepRequired<componen
 export const knownFeeEstimateSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeEstimateSource"]> = ["fee_table", "actual_fees"];
 export const knownUsageMetricValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUsageMetric"]> = ["ai_items", "premium_identifications"];
 export const knownVoiceCorrectionFieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVoiceCorrectionField"]> = ["title", "brand", "productName", "category", "department", "sizeLabel", "sizeSystem", "colors", "pattern", "materials", "keywords", "styleNumber", "condition", "conditionNotes", "flaws", "cost", "purchaseSource", "listPrice"];
+export const knownPrefillFieldKeyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPrefillFieldKey"]> = ["kids_gender", "category", "size", "condition", "brand", "colors", "material"];
+export const knownPrefillSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPrefillSource"]> = ["listora", "default", "ai", "you"];
+export const prefillAnswerFieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PrefillAnswerField"]> = ["kids_gender", "category", "size"];
 export const knownListingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
 export const knownListingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
 export const listingEndReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingEndReason"]> = ["sold_elsewhere", "not_available", "other"];

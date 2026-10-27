@@ -95,8 +95,8 @@ packages/
                 metering, budget guards, plan quota counter, fake and Anthropic providers
                 (@listora/ai)
   analysis/     Item analysis: canonical vocabulary, marketplace copy limits, prompt assembly,
-                the strict output schema, provenance, escalation, the analysis job
-                (@listora/analysis)
+                the strict output schema, provenance, escalation, the analysis job, the
+                marketplace pre-fill's AI pick (@listora/analysis)
   batches/      Batch listing: batches and their items' state, the job that starts each submitted
                 item's analysis once its photos are processed (@listora/batches)
   pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
@@ -120,7 +120,8 @@ packages/
                 automation adapter base, sale-check scheduling, records, and health, the runner
                 launcher, the
                 fake marketplace site, and the Poshmark, Mercari, Depop, and eBay adapters with
-                their fake sites (poshmark/, mercari/, depop/, ebay/) (@listora/automation)
+                their fake sites (poshmark/, mercari/, depop/, ebay/); the marketplace pre-fill
+                over their category trees and forms (prefill/) (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
@@ -232,6 +233,8 @@ src/
   today/         The Today summary (getToday) and the morning summary setting
   activity/      An item's and an operation's activity, and a sale's explanation
   voice/         interpretVoiceCorrection: the text model's reading of a spoken correction
+  prefill/       Each marketplace's sell form pre-filled for an item, and the review's questions
+                 (docs/features/marketplace-prefill.md)
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
   perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
@@ -354,7 +357,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [profit.md](features/profit.md#data)); pricing in [pricing.md](features/pricing.md#data);
   deleted identities and account deletion in [auth.md](features/auth.md#data); the morning
   summary setting in [today.md](features/today.md#data); sale email inboxes in
-  [email-sales.md](features/email-sales.md#data). Billing
+  [email-sales.md](features/email-sales.md#data); the marketplace pre-fill's answers and AI picks in
+  [marketplace-prefill.md](features/marketplace-prefill.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -462,6 +466,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule  |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push  |
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"          |
+| [features/marketplace-prefill.md](features/marketplace-prefill.md) | Each marketplace's form pre-filled on the review, and its one-tap questions   |
 | [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups              |
 | [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items    |
 | [features/privacy.md](features/privacy.md)                         | Deletions with completion records, unlinking, retention, photo metadata       |

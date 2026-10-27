@@ -65,6 +65,8 @@ tags:
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
   - name: voice
     description: Spoken corrections on the review screen that the app could not parse itself.
+  - name: prefill
+    description: What each marketplace's sell form will get for an item, and the review's questions.
   - name: phone
     description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
   - name: activity
@@ -117,6 +119,10 @@ paths:
     $ref: './paths/usage.yaml#/~1v1~1usage'
   /v1/items/{itemId}/voice-corrections:
     $ref: './paths/voice.yaml#/~1v1~1items~1{itemId}~1voice-corrections'
+  /v1/items/{itemId}/marketplace-prefill:
+    $ref: './paths/prefill.yaml#/~1v1~1items~1{itemId}~1marketplace-prefill'
+  /v1/items/{itemId}/marketplace-prefill/answers:
+    $ref: './paths/prefill.yaml#/~1v1~1items~1{itemId}~1marketplace-prefill~1answers'
   /v1/items/{itemId}/pricing:
     $ref: './paths/pricing.yaml#/~1v1~1items~1{itemId}~1pricing'
   /v1/items/{itemId}/listings:
@@ -527,6 +533,28 @@ components:
       $ref: './components/schemas/voice.yaml#/VoiceCorrectionField'
     KnownVoiceCorrectionField:
       $ref: './components/schemas/voice.yaml#/KnownVoiceCorrectionField'
+    PrefillFieldKey:
+      $ref: './components/schemas/prefill.yaml#/PrefillFieldKey'
+    KnownPrefillFieldKey:
+      $ref: './components/schemas/prefill.yaml#/KnownPrefillFieldKey'
+    PrefillSource:
+      $ref: './components/schemas/prefill.yaml#/PrefillSource'
+    KnownPrefillSource:
+      $ref: './components/schemas/prefill.yaml#/KnownPrefillSource'
+    PrefillOption:
+      $ref: './components/schemas/prefill.yaml#/PrefillOption'
+    PrefillField:
+      $ref: './components/schemas/prefill.yaml#/PrefillField'
+    MarketplacePrefill:
+      $ref: './components/schemas/prefill.yaml#/MarketplacePrefill'
+    ItemMarketplacePrefill:
+      $ref: './components/schemas/prefill.yaml#/ItemMarketplacePrefill'
+    PrefillDetails:
+      $ref: './components/schemas/prefill.yaml#/PrefillDetails'
+    PrefillAnswerField:
+      $ref: './components/schemas/prefill.yaml#/PrefillAnswerField'
+    PrefillAnswer:
+      $ref: './components/schemas/prefill.yaml#/PrefillAnswer'
     # ---------------------------------------------------------------- listings
     ListingStatus:
       $ref: './components/schemas/listings.yaml#/ListingStatus'

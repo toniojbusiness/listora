@@ -37,3 +37,10 @@ extension Components.Schemas.Marketplace {
         value1?.rawValue ?? value2 ?? ""
     }
 }
+
+extension Components.Schemas.PrefillFieldKey {
+    /// The raw key, known or not.
+    var id: String {
+        value1?.rawValue ?? value2 ?? ""
+    }
+}

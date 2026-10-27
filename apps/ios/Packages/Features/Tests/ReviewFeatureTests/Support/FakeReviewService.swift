@@ -31,7 +31,21 @@ actor FakeReviewService: ReviewService {
     var pricingAnswers: [Result<Schemas.PricingSuggestion, APIFailure>] = [.success(Fixtures.pricing())]
     var usageAnswers: [Result<Schemas.Usage, APIFailure>] = [.success(Fixtures.usage(premiumUsed: 2, limit: 10))]
     var voiceAnswers: [Result<Schemas.VoiceCorrection, APIFailure>] = [.success(.init(changes: []))]
+    /// The pre-fill reads and answers, kept apart from `calls` so the flow's order stays readable.
+    private(set) var prefillReads: [Schemas.PrefillDetails] = []
+    private(set) var prefillAnswers: [Schemas.PrefillAnswer] = []
+    /// Nil answers no marketplace (none connected); otherwise the pre-fill each read gets.
+    var prefillResponses: [Result<Schemas.ItemMarketplacePrefill, APIFailure>]?
+    var prefillAnswerResponses: [Result<Schemas.ItemMarketplacePrefill, APIFailure>] = []
     private var latestItem: Schemas.Item?
+
+    func setPrefill(_ answers: [Result<Schemas.ItemMarketplacePrefill, APIFailure>]?) {
+        prefillResponses = answers
+    }
+
+    func setPrefillAnswers(_ answers: [Result<Schemas.ItemMarketplacePrefill, APIFailure>]) {
+        prefillAnswerResponses = answers
+    }
 
     func setItems(_ answers: [Result<Schemas.Item, APIFailure>]) {
         items = answers
@@ -136,6 +150,30 @@ actor FakeReviewService: ReviewService {
     {
         calls.append(.voice(transcript, key: idempotencyKey))
         return try next(&voiceAnswers)
+    }
+
+    func marketplacePrefill(itemID _: String, details: Schemas.PrefillDetails) async throws(APIFailure)
+        -> Schemas.ItemMarketplacePrefill
+    {
+        prefillReads.append(details)
+        guard var answers = prefillResponses else {
+            return Schemas.ItemMarketplacePrefill(itemFields: [], marketplaces: [], questions: 0)
+        }
+        defer { prefillResponses = answers }
+        return try next(&answers)
+    }
+
+    func answerPrefill(itemID _: String, answer: Schemas.PrefillAnswer) async throws(APIFailure)
+        -> Schemas.ItemMarketplacePrefill
+    {
+        prefillAnswers.append(answer)
+        return try next(&prefillAnswerResponses)
+    }
+
+    func marketplaceCategories(itemID _: String, marketplace _: String) async throws(APIFailure)
+        -> Schemas.MarketplaceCategories
+    {
+        Schemas.MarketplaceCategories(likely: [], choices: [])
     }
 
     private func next<Value>(_ answers: inout [Result<Value, APIFailure>]) throws(APIFailure) -> Value {

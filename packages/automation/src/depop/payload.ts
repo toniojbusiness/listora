@@ -57,6 +57,16 @@ export interface DepopAutomationPayload extends AssistedListingPayload {
   sizes: string[];
 }
 
+/**
+ * The variant's `Size` aspect when it is one of the size list's own labels: for a tag size the list
+ * doesn't have, the size the seller picked (or the AI read) on the review for this category
+ * (docs/features/marketplace-prefill.md). A tag size the list has always wins.
+ */
+function sizeAspect(variant: ListingVariant, sizes: readonly string[]): string | null {
+  const named = variant.aspects.find((aspect) => aspect.name.toLowerCase() === 'size')?.values[0];
+  return named === undefined ? null : (sizes.find((size) => size === named.trim()) ?? null);
+}
+
 /** A hashtag: letters and digits, as the item analysis writes them (without the `#`). */
 const HASHTAG = /^[A-Za-z0-9]{1,30}$/;
 
@@ -88,7 +98,7 @@ export function buildDepopAutomationPayload(
     photos: photosInOrder(item).map(({ photoId, url }) => ({ photoId, url })),
     category: category === null ? null : [...category.path],
     categoryIds: category === null ? null : [...category.ids],
-    size: depopSize(item, sizes),
+    size: depopSize(item, sizes) ?? sizeAspect(variant, sizes),
     sized: sizes.length > 0,
     brand: brand === '' ? null : brand,
     condition: depopFormCondition(variant.condition ?? item.condition),
