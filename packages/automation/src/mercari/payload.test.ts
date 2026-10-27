@@ -43,6 +43,14 @@ describe('Mercari categories', () => {
     });
     expect(mapMercariCategory('shoes/boots', 'women')).toMatchObject({ size: 'shoes' });
     expect(mapMercariCategory('jewelry/rings', 'women')).toMatchObject({ size: 'none' });
+    // Mercari's men's Other, where underwear goes, asks no size: the listing sends none.
+    expect(mapMercariCategory('clothing/intimates', 'men')).toMatchObject({
+      path: ['Men', 'Other'],
+      size: 'none',
+    });
+    expect(
+      payload({ item: { category: 'clothing/intimates', department: 'men', sizeLabel: 'XL' } }),
+    ).toMatchObject({ category: ['Men', 'Other'], size: null, sized: false });
   });
 
   it('maps nothing for kids, unisex, unknown departments, and unmapped categories', () => {
