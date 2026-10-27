@@ -112,7 +112,7 @@ struct MarketplaceRowStateTests {
         #expect(connected.statusLabel == "Not listed")
         #expect(connected.tone == .neutral)
         #expect(connected.actions == [.list])
-        #expect(connected.modeLabel == "Through eBay's API")
+        #expect(connected.modeLabel == "Listora does it for you through eBay")
 
         let reauth = MarketplaceRowState(
             marketplace: .ebay,
@@ -134,7 +134,7 @@ struct MarketplaceRowStateTests {
             connection: Fixtures.connection(.poshmark, mode: "assisted"),
         )
         #expect(poshmark.actions == [.list])
-        #expect(poshmark.modeLabel == "Assisted - you finish each step in the Poshmark app")
+        #expect(poshmark.modeLabel == "You finish each step in the Poshmark app")
         let mercari = MarketplaceRowState(marketplace: .mercari, listing: nil, connection: nil)
         #expect(mercari.actions == [.list])
     }
@@ -144,7 +144,7 @@ struct MarketplaceRowStateTests {
         let automated = Fixtures.connection(.poshmark, mode: "automation")
         let row = MarketplaceRowState(marketplace: .poshmark, listing: nil, connection: automated)
         #expect(row.actions == [.list])
-        #expect(row.modeLabel == "Automated in your Poshmark session")
+        #expect(row.modeLabel == "Listora does it for you in your linked Poshmark account")
         #expect(!MarketplaceRowState.isAssisted(marketplace: .poshmark, connection: automated))
 
         let expired = Fixtures.connection(.poshmark, mode: "automation", status: "reauth_required")

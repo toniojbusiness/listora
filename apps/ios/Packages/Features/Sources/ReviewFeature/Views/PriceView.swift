@@ -27,8 +27,12 @@ struct PriceView: View {
             }
             .navigationDestination(isPresented: $model.showsSaved) {
                 if let saved = model.saved {
-                    SavedItemView(saved: saved) { onFinished(.saved(sku: saved.sku)) }
-                        .navigationBarBackButtonHidden()
+                    SavedItemView(
+                        saved: saved,
+                        onDone: { onFinished(.saved(sku: saved.sku)) },
+                        onListNow: { onFinished(.saved(sku: saved.sku, listNow: true)) },
+                    )
+                    .navigationBarBackButtonHidden()
                 }
             }
     }

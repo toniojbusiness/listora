@@ -29,6 +29,8 @@ final class ItemDetailModel {
     private(set) var busyMarketplace: String?
     /// The last action's failure to reach the server, safe to show.
     var notice: String?
+    /// The screen ran its first load, so a request made on opening it (List everywhere) is done.
+    var hasLoadedOnce = false
 
     private var connections: [Connection] = []
     private let service: any InventoryService

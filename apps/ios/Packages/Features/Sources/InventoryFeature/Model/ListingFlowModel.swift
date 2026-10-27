@@ -21,7 +21,7 @@ final class ListingFlowModel {
     struct Choice: Identifiable, Equatable, Sendable {
         let id: String
         let name: String
-        /// "Through eBay's API", "Connect eBay in Settings first", "Assisted - ...".
+        /// "Listora posts it for you through eBay", "Connect eBay in Settings first", "Assisted - ...".
         let detail: String
         let isAvailable: Bool
         let isAssisted: Bool
@@ -246,8 +246,8 @@ final class ListingFlowModel {
             detail: assisted
                 ? "Assisted - Listora makes a task with everything to copy; you post it in the \(name) app."
                 : connection?.mode.value1 == .automation
-                ? "Automated in your \(name) session"
-                : "Through \(name)'s API",
+                ? "Listora posts it for you in your linked \(name) account"
+                : "Listora posts it for you through \(name)",
             isAvailable: true,
             isAssisted: assisted,
         )
@@ -298,22 +298,14 @@ final class ListingFlowModel {
         if Self.categorized.contains(marketplace) {
             categories = try? await service.marketplaceCategories(itemID: item.id, marketplace: marketplace)
         }
-        if let draftID = draftIDs[marketplace],
-           let variant = item.listings.first(where: { $0.id == draftID })?.variant
-        {
-            title = variant.title
-            description = variant.description
-            priceCents = Int(variant.price.amountCents)
-            return
-        }
-        let edited = listingCopy.edits(itemID: item.id)[marketplace]
-        var suggested: Components.Schemas.VariantSuggestion?
-        if edited == nil, let analysisID = item.details.acceptedAnalysisId {
-            suggested = try? await service.analysisVariants(analysisID: analysisID)
-                .first { $0.marketplace.id == marketplace }
-        }
-        title = edited?.title ?? suggested?.title ?? item.details.title ?? ""
-        description = edited?.description ?? suggested?.description ?? item.details.description ?? ""
-        priceCents = item.details.listPrice.map { Int($0.amountCents) }
+        let copy = await SuggestedCopy.load(
+            for: marketplace,
+            item: item,
+            service: service,
+            listingCopy: listingCopy,
+        )
+        title = copy.title
+        description = copy.description
+        priceCents = copy.priceCents
     }
 }

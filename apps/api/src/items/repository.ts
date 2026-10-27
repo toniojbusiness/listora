@@ -77,6 +77,11 @@ export interface ItemListFilter {
   marketplace: Marketplace | undefined;
   /** Only items of this brand, ignoring case. */
   brand: string | undefined;
+  /**
+   * Only items that need the seller: a listing whose newest operation that was not canceled
+   * failed or waits for the seller (`needs_user_action`).
+   */
+  attention?: boolean | undefined;
   /** Return only items older than this one (keyset pagination). */
   beforeId: string | undefined;
   limit: number;
@@ -124,6 +129,25 @@ export async function listItemRows(
           .where('listing.marketplace', '=', marketplace)
           .where('listing.status', 'not in', ['ended', 'sold']),
       ),
+    );
+  }
+  if (filter.attention === true) {
+    // The same newest operation the listing's status speaks for (`latestOperations`).
+    query = query.where(
+      sql<boolean>`exists (
+        select 1 from marketplace_listing as listing
+        cross join lateral (
+          select operation.status from marketplace_operation as operation
+          where operation.account_id = listing.account_id
+            and operation.listing_id = listing.id
+            and operation.status <> 'canceled'
+          order by operation.created_at desc, operation.id desc
+          limit 1
+        ) as latest
+        where listing.account_id = inventory_item.account_id
+          and listing.item_id = inventory_item.id
+          and latest.status in ('failed', 'needs_user_action')
+      )`,
     );
   }
   if (filter.beforeId !== undefined) query = query.where('id', '<', filter.beforeId);

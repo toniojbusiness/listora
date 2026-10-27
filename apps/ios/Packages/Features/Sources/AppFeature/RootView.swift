@@ -82,6 +82,13 @@ public struct RootView: View {
             }
         }
         .task { await dependencies.signIn.follow() }
+        // List it now, after saving an item: the item in Inventory, with List everywhere open.
+        .onAppear {
+            dependencies.addItem.onListItem = { itemID in
+                dependencies.inventory.listItem(id: itemID)
+                selection = .inventory
+            }
+        }
         .task { dependencies.startBackgroundWork() }
     }
 
@@ -100,6 +107,7 @@ public struct RootView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
+                Task { await dependencies.inventory.attention.refresh() }
             } else if phase == .background {
                 PhoneBackgroundWork.schedule()
             }
@@ -121,11 +129,12 @@ public struct RootView: View {
         }
     }
 
-    /// Settings counts the connections that need the seller, Tasks the open tasks.
+    /// Tasks counts the open tasks, Inventory the items that need the seller.
     private func badgeCount(for tab: AppTab) -> Int {
         switch tab {
         case .tasks: dependencies.tasks.inbox.openCount
-        case .today, .inventory, .addItem, .sales: 0
+        case .inventory: dependencies.inventory.attention.total
+        case .today, .addItem, .sales: 0
         }
     }
 

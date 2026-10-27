@@ -17,6 +17,10 @@ private struct EmptyInventoryService: InventoryService {
         throw .networkUnavailable
     }
 
+    func deleteItem(id _: String) async throws(APIFailure) {
+        throw .networkUnavailable
+    }
+
     func floors(itemID _: String) async throws(APIFailure) -> [Components.Schemas.MarketplaceFloor] {
         []
     }

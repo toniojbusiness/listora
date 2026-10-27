@@ -51,7 +51,11 @@ struct ReviewFlowView: View {
             ReviewFormView(model: model, voice: voice)
         case .alreadySaved:
             if let saved = model.saved {
-                SavedItemView(saved: saved, onDone: { onFinished(.saved(sku: saved.sku)) })
+                SavedItemView(
+                    saved: saved,
+                    onDone: { onFinished(.saved(sku: saved.sku)) },
+                    onListNow: { onFinished(.saved(sku: saved.sku, listNow: true)) },
+                )
             }
         }
     }

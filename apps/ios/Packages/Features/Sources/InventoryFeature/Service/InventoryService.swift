@@ -28,7 +28,7 @@ struct ItemPage: Equatable, Sendable {
 /// The inventory list's filters, as the API applies them.
 struct InventoryQuery: Equatable, Sendable {
     var search = ""
-    var status: Components.Schemas.KnownItemStatus?
+    var filter = InventoryFilter.all
     var marketplace: KnownMarketplace?
     var brand: String?
 }
@@ -42,6 +42,8 @@ protocol InventoryService: Sendable {
     func item(id: String) async throws(APIFailure) -> Item
     /// Replaces the item's details (`expectedVersion` is the version last read; a newer one is `409`).
     func replaceItem(id: String, with replace: Components.Schemas.ItemReplace) async throws(APIFailure) -> Item
+    /// Deletes an item that is on no marketplace (`409` with the reason otherwise).
+    func deleteItem(id: String) async throws(APIFailure)
     func connections() async throws(APIFailure) -> [Connection]
     /// The item's "Don't sell below" price on each marketplace (none without a cost).
     func floors(itemID: String) async throws(APIFailure) -> [Components.Schemas.MarketplaceFloor]
@@ -92,10 +94,11 @@ struct APIInventoryService: InventoryService {
         let search = query.search.trimmingCharacters(in: .whitespacesAndNewlines)
         let output = try await call {
             try await client.listItems(query: .init(
-                status: query.status.map { [$0] },
+                status: query.filter.statuses.isEmpty ? nil : query.filter.statuses,
                 q: search.isEmpty ? nil : String(search.prefix(200)),
                 marketplace: query.marketplace,
                 brand: query.brand,
+                attention: query.filter.needsAttention ? true : nil,
                 cursor: cursor,
                 limit: 50,
             ))
@@ -335,7 +338,7 @@ struct APIInventoryService: InventoryService {
         }
     }
 
-    private func call<Output>(_ request: () async throws -> Output) async throws(APIFailure) -> Output {
+    func call<Output>(_ request: () async throws -> Output) async throws(APIFailure) -> Output {
         do {
             return try await request()
         } catch {
@@ -343,51 +346,11 @@ struct APIInventoryService: InventoryService {
         }
     }
 
-    private func body<Body>(_ read: () throws -> Body) throws(APIFailure) -> Body {
+    func body<Body>(_ read: () throws -> Body) throws(APIFailure) -> Body {
         do {
             return try read()
         } catch {
             throw APIFailure(error)
-        }
-    }
-}
-
-/// The actions on an operation itself: Retry a failed one, Try now a waiting one.
-extension APIInventoryService {
-    func retry(operationID: String, idempotencyKey: String) async throws(APIFailure) -> Operation {
-        let output = try await call {
-            try await client.retryOperation(
-                path: .init(operationId: operationID),
-                headers: .init(idempotencyKey: idempotencyKey),
-            )
-        }
-        switch output {
-        case let .accepted(response):
-            let operation = try body { try response.body.json }
-            await queued()
-            return operation
-        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
-        case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
-        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
-        }
-    }
-
-    func tryNow(operationID: String, idempotencyKey: String) async throws(APIFailure) -> Operation {
-        let output = try await call {
-            try await client.tryOperationNow(
-                path: .init(operationId: operationID),
-                headers: .init(idempotencyKey: idempotencyKey),
-            )
-        }
-        switch output {
-        case let .ok(response):
-            let operation = try body { try response.body.json }
-            // A step that runs on this phone runs now too.
-            await queued()
-            return operation
-        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
-        case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
-        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }
 }

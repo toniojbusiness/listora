@@ -65,8 +65,14 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
     let statusLabel: String
     let statusDetail: String?
     let tone: Tone
-    /// "Through eBay's API" or "Assisted": how Listora works with this marketplace.
+    /// "Listora does it for you through eBay" or "You finish each step in the Poshmark app": how
+    /// Listora works with this marketplace.
     let modeLabel: String
+    /// The listing on the marketplace's own site, to open or share.
+    let externalURL: URL?
+    /// "Last change: Price changed (confirmed by eBay), Oct 24, 3:05 PM", once the newest change
+    /// has settled (while it runs, the status says what is happening).
+    let lastChange: String?
     /// The listing's own price ("$39.00"), which can differ from the item's list price.
     let priceLabel: String?
     /// When the waiting operation tries again ("Waiting to retry at 9:41 PM"), while it waits.
@@ -78,9 +84,19 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         name = Formatting.marketplaceName(marketplace.rawValue)
         self.listing = listing
         modeLabel = switch (listing?.mode ?? connection?.mode)?.value1 {
-        case .api: "Through \(name)'s API"
-        case .automation: "Automated in your \(name) session"
-        case .assisted, nil: "Assisted - you finish each step in the \(name) app"
+        case .api: "Listora does it for you through \(name)"
+        case .automation: "Listora does it for you in your linked \(name) account"
+        case .assisted, nil: "You finish each step in the \(name) app"
+        }
+        externalURL = listing?.externalUrl.flatMap { URL(string: $0) }
+        lastChange = listing?.latestOperation.flatMap { operation in
+            switch operation.status.value1 {
+            case .succeeded, .failed, .needsUserAction:
+                let when = operation.completedAt ?? operation.updatedAt
+                return "Last change: \(operation.statusDisplay.label), \(Formatting.timestamp(when))"
+            default:
+                return nil
+            }
         }
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
         let waiting = Self.waitingAttempt(of: listing, now: now)
