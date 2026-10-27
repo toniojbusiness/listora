@@ -204,10 +204,12 @@ export function createPoshmarkScripts(
       readListing(page, site, id),
     );
     if (!shown.found) {
-      // A listing Poshmark says is gone is ended already: the read-back confirms it.
-      return shown.authoritative && availability === 'not_for_sale'
+      if (!shown.authoritative) return notListed();
+      // A listing Poshmark says is gone is ended already (the read-back confirms it), and
+      // relisting it lists it again, as a new listing with its own id, from the item's details.
+      return availability === 'not_for_sale'
         ? { type: 'applied', externalListingId: id }
-        : notListed();
+        : createListing(op, step);
     }
     if (availability === 'not_for_sale' && shown.status !== 'active') {
       // Already not for sale, or sold: nothing to end. The read-back decides.
@@ -231,42 +233,48 @@ export function createPoshmarkScripts(
     return save(step, 'update');
   }
 
+  /** Lists a new listing from the payload (List, or a relist of a listing Poshmark removed). */
+  async function createListing(
+    op: OperationRequest<PoshmarkListingPayload>,
+    step: StepRunner,
+  ): Promise<WriteResult> {
+    const payload = op.payload;
+    if (payload === null) throw new Error('a create has a payload');
+    const sku = skuOf(op.listing);
+    const existing = await findBySku(step, sku, payload.title);
+    if (existing !== null) return { type: 'applied', externalListingId: existing };
+    const files = await step('get the photos', { mutates: false }, (_page, signal) =>
+      Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
+    );
+    // Poshmark's listing editor is a heavy page: it gets more time than a step's default.
+    const opened = await step('open the listing form', { mutates: false, timeScale: 2 }, (page) =>
+      openForm(page, site.createListing()),
+    );
+    // Poshmark sends a seller to the form, never to a 404, so a missing one is a changed page.
+    if (!opened) throw new PageChangedError("Poshmark's listing form isn't there");
+    await step('add the photos', { mutates: false, timeScale: 2 }, (page) =>
+      addPhotos(page, files),
+    );
+    await fillListing(step, payload);
+    await step('set the SKU and availability', { mutates: false }, async (page) => {
+      await fillSku(page, sku);
+      await setAvailability(page, 'for_sale');
+    });
+    const result = await save(step, 'list');
+    if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
+    // After List, Poshmark shows the closet: the new listing is found by its SKU in the same
+    // run, so it shows as listed at once. Not finding it yet leaves it to the operation's check.
+    try {
+      const id = await findBySku(step, sku, payload.title);
+      if (id !== null) return { ...result, externalListingId: id };
+    } catch {
+      // The check reads it back later.
+    }
+    return result;
+  }
+
   return {
-    create: async (op, step) => {
-      const payload = op.payload;
-      if (payload === null) throw new Error('a create has a payload');
-      const sku = skuOf(op.listing);
-      const existing = await findBySku(step, sku, payload.title);
-      if (existing !== null) return { type: 'applied', externalListingId: existing };
-      const files = await step('get the photos', { mutates: false }, (_page, signal) =>
-        Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
-      );
-      // Poshmark's listing editor is a heavy page: it gets more time than a step's default.
-      const opened = await step('open the listing form', { mutates: false, timeScale: 2 }, (page) =>
-        openForm(page, site.createListing()),
-      );
-      // Poshmark sends a seller to the form, never to a 404, so a missing one is a changed page.
-      if (!opened) throw new PageChangedError("Poshmark's listing form isn't there");
-      await step('add the photos', { mutates: false, timeScale: 2 }, (page) =>
-        addPhotos(page, files),
-      );
-      await fillListing(step, payload);
-      await step('set the SKU and availability', { mutates: false }, async (page) => {
-        await fillSku(page, sku);
-        await setAvailability(page, 'for_sale');
-      });
-      const result = await save(step, 'list');
-      if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
-      // After List, Poshmark shows the closet: the new listing is found by its SKU in the same
-      // run, so it shows as listed at once. Not finding it yet leaves it to the operation's check.
-      try {
-        const id = await findBySku(step, sku, payload.title);
-        if (id !== null) return { ...result, externalListingId: id };
-      } catch {
-        // The check reads it back later.
-      }
-      return result;
-    },
+    create: (op, step) => createListing(op, step),
     revise: async (op, step) => {
       const payload = op.payload;
       if (payload === null) throw new Error('a revise has a payload');

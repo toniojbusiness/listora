@@ -1002,7 +1002,10 @@ async function sendTo(
   }
   const request: OperationRequest = {
     operationId: ctx.op.id,
-    kind,
+    // A relist of a listing whose marketplace listing is gone (a read-back confirmed the
+    // marketplace removed it, as a Depop End does, and cleared its id) has nothing to bring
+    // back: the marketplace's create posts it again as a new listing, after the same checks.
+    kind: kind === 'relist' && ref.externalListingId === null ? 'create' : kind,
     idempotencyKey: ctx.op.idempotency_key,
     attempt: step.attempt,
     desired: ctx.desired,

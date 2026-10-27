@@ -176,6 +176,14 @@ export function readPhoneEvidence(answer: unknown): PageEvidence | null {
   return read.success ? read.data.result.failure.evidence : null;
 }
 
+/** How long each of the call's steps took on the phone, when the phone said (for the log). */
+export function readPhoneTimings(answer: unknown): number[] | null {
+  const read = z
+    .object({ stepMs: z.array(z.number().int().nonnegative()).max(100) })
+    .safeParse(answer);
+  return read.success ? read.data.stepMs : null;
+}
+
 /** An answer the server can't read: the phone's failure, and maybe a change (for a write). */
 function unreadable(call: ScriptCall): SessionRun<unknown> {
   return {

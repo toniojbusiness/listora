@@ -11,6 +11,7 @@ import {
 import {
   describeListingStatus,
   describeOperation,
+  relistMode,
   waitedFor,
   type ListingStatusInput,
 } from './status-display.ts';
@@ -333,6 +334,26 @@ describe('describeOperation', () => {
     expect(retrying(new Date(now.getTime() - 2 * 60_000)).label).toBe(
       'Publishing... waiting on your iPhone (2 min)',
     );
+  });
+
+  it('says whether a relist brings the listing back or posts a new one', () => {
+    const relisting = (
+      marketplace: 'mercari' | 'depop' | 'ebay',
+      externalListingId: string | null,
+    ) =>
+      describeListingStatus({
+        marketplace,
+        listingStatus: 'ended',
+        operation: operation({ kind: 'relist', status: 'running' }),
+        relist: relistMode(marketplace, externalListingId, true),
+      }).label;
+    // Mercari activates the listing it ended; Poshmark puts it back for sale.
+    expect(relisting('mercari', 'm123456789')).toBe('Reactivating...');
+    // A Depop relist posts a new listing, and so does one of a listing the marketplace removed.
+    expect(relisting('depop', 'old-slug')).toBe('Relisting (new listing)...');
+    expect(relisting('mercari', null)).toBe('Relisting (new listing)...');
+    // eBay relists under a new id of its own.
+    expect(relisting('ebay', '110012345678')).toBe('Relisting...');
   });
 
   it('writes how long something waited in plain words', () => {

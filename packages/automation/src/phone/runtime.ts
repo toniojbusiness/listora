@@ -70,6 +70,11 @@ export interface PhoneCallInput {
 export interface PhoneCallOutput {
   type: 'ran';
   result: ScriptResult<unknown>;
+  /**
+   * How long each step of `result.steps` took, in milliseconds, for the server's log (a server
+   * from before it ignores it, as it reads only what it knows).
+   */
+  stepMs?: number[];
 }
 
 /** Hand-offs one call may make before it stops for good. */
@@ -96,8 +101,8 @@ export async function runPhoneCall(
   const photos = phonePhotos(host);
   await pacing.waitFor(input.startDelayMs, new AbortController().signal);
   for (let handOffs = 0; ; handOffs += 1) {
-    const result = await runOnce(input, host, profile, pacing, photos);
-    if (result.ok || result.failure.kind !== 'challenge') return { type: 'ran', result };
+    const { result, stepMs } = await runOnce(input, host, profile, pacing, photos);
+    if (result.ok || result.failure.kind !== 'challenge') return { type: 'ran', result, stepMs };
     const check = result.failure.challenge;
     if (!(SELLER_CHECKS as readonly string[]).includes(check)) return { type: 'ran', result };
     if (handOffs === MAX_HAND_OFFS) return { type: 'ran', result: stoppedForCheck(result) };
@@ -127,7 +132,8 @@ async function runOnce(
   profile: AutomationProfile,
   pacing: Pacing,
   photos: PhotoSource,
-): Promise<ScriptResult<unknown>> {
+): Promise<{ result: ScriptResult<unknown>; stepMs: number[] }> {
+  const started: number[] = [];
   const session = new ScriptSession(new BridgeBackend(host), {
     profile,
     pacing,
@@ -141,6 +147,7 @@ async function runOnce(
     },
     stepTimeoutMs: input.stepTimeoutMs,
     onStep: ({ name, index }) => {
+      started.push(Date.now());
       host.progress({ call: input.name, index, label: stepLabel(name) });
     },
     // The app keeps the seller's cookies itself.
@@ -150,9 +157,12 @@ async function runOnce(
   const script = (step: StepRunner): Promise<unknown> => run(input.call, step);
   const signal = AbortSignal.timeout(input.callTimeoutMs);
   try {
-    return isWriteCall(input.call)
+    const result = isWriteCall(input.call)
       ? await session.run(input.name, script, signal)
       : await session.read(input.name, script, signal);
+    const ended = Date.now();
+    const stepMs = started.map((at, index) => (started[index + 1] ?? ended) - at);
+    return { result, stepMs };
   } finally {
     await session.close();
   }

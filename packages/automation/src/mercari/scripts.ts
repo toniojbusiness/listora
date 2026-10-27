@@ -277,17 +277,21 @@ export function createMercariScripts(
             // Rows come by their last change, newest first, and a sale changes its row: once a
             // row last changed before `since`, it and every row after it sold before then.
             if (since !== null && row.changedBy !== null && row.changedBy < since) break tab;
-            let soldAt = row.soldAt;
-            if (soldAt === null) {
-              // The row shows no sale time: the listing's page has it.
+            let { soldAt, priceCents, title } = row;
+            if (soldAt === null || priceCents === null) {
+              // The row doesn't show when it sold or for how much: the listing's page does.
               if (reads === MAX_SOLD_READS) break tab;
               reads += 1;
-              const read = await step('read the sale time', { mutates: false }, (page) =>
+              const read = await step('read the sale', { mutates: false }, (page) =>
                 readItem(page, site, row.id),
               );
-              soldAt = read.soldAt;
+              soldAt ??= read.soldAt;
+              if (read.state.found) {
+                priceCents ??= read.state.priceCents;
+                title ||= read.state.title ?? '';
+              }
             }
-            if (soldAt === null || row.priceCents === null) continue;
+            if (soldAt === null || priceCents === null) continue;
             if (since !== null && soldAt < since) continue;
             // A Mercari listing sells once, so its id names the order.
             orders.push({
@@ -296,8 +300,8 @@ export function createMercariScripts(
               items: [
                 {
                   externalListingId: row.id,
-                  title: row.title,
-                  priceCents: row.priceCents,
+                  title: title === '' ? null : title,
+                  priceCents,
                   currency: 'USD',
                 },
               ],

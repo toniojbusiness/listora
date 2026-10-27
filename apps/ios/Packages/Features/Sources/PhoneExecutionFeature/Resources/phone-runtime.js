@@ -5945,7 +5945,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 	const ANSWER_MS$1 = 45e3;
-	const LOOK_EVERY_MS$4 = 500;
+	const LOOK_EVERY_MS$5 = 500;
 	/**
 	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
 	* its options while closed and shows them through a style variable (`--display: block`), so
@@ -6045,7 +6045,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				message: "Depop didn't take the listing: it marked a field as needing a fix."
 			};
 			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
-			await lookAgain$1(page, LOOK_EVERY_MS$4);
+			await lookAgain$1(page, LOOK_EVERY_MS$5);
 		}
 	}
 	/** Depop's messages on the form (its alerts with text). */
@@ -6496,7 +6496,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	const APPEAR_MS$1 = 15e3;
 	/** How long the user menu gets to open before its button is clicked again. */
 	const MENU_RETRY_MS = 3e3;
-	const LOOK_EVERY_MS$3 = 500;
+	const LOOK_EVERY_MS$4 = 500;
 	/** The signed-in seller's username, from the profile link in the header's user menu. */
 	async function findSeller(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
@@ -6522,7 +6522,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				await page.click(SHOP_PAGE.userMenu);
 				reopenAt = Date.now() + MENU_RETRY_MS;
 			}
-			await lookAgain$1(page, LOOK_EVERY_MS$3);
+			await lookAgain$1(page, LOOK_EVERY_MS$4);
 		}
 	}
 	/** Opens the menu's "Your profile" and reads the username from the address it opens. */
@@ -6533,7 +6533,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			const shown = usernameOf(new URL(page.url()).pathname);
 			if (shown !== null) return shown;
 			if (Date.now() >= end) throw changed$2("user menu", "profile item opened no seller's shop");
-			await lookAgain$1(page, LOOK_EVERY_MS$3);
+			await lookAgain$1(page, LOOK_EVERY_MS$4);
 		}
 	}
 	/**
@@ -6545,7 +6545,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		await page.goto(absolute$2(site, `/${encodeURIComponent(username)}/`));
 		if (page.status() === 404) throw changed$2("shop page", "is not there for the signed-in seller");
 		const end = Date.now() + APPEAR_MS$1;
-		while (!await page.exists(SHOP_PAGE.productLinks) && Date.now() < end) await lookAgain$1(page, LOOK_EVERY_MS$3);
+		while (!await page.exists(SHOP_PAGE.productLinks) && Date.now() < end) await lookAgain$1(page, LOOK_EVERY_MS$4);
 		const slugs = [];
 		for (const href of await page.attributes(SHOP_PAGE.productLinks, "href")) {
 			const slug = href === null ? null : slugOf(href, site);
@@ -6573,32 +6573,29 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	}
 
 // src/depop/pages/sold-items-page.ts
-/**
-	* The seller's sold items (`/sellinghub/sold-items/`), newest first, a page at a time
-	* (`?page=N`): each sold product, its price, and when it sold. The page also shows the buyer and
-	* where the item ships; Listora never reads those, and failure screenshots black them out.
-	*/
+	const SOLD_ITEMS_PAGE = {
+		/** The note a seller without sales sees. */
+		none: `p:text-is("Once you've made a sale, you'll be able to see your receipt here.")`,
+		/** A sale's row links to its receipt. */
+		receipt: "a[href^=\"/sellinghub/sold-items/\"]"
+	};
 	const PAGE$8 = "sold items page";
-	const soldItemsPageSchema = object({
-		soldItems: array(soldItemSchema),
-		hasMore: boolean()
-	});
-	/** Opens one page of the seller's sold items and reads it. */
+	/** How long the list may take to draw. */
+	const DRAW_MS$1 = 1e4;
+	const LOOK_EVERY_MS$3 = 500;
+	/** Opens the seller's sold items and reads them. */
 	async function readSoldItemsPage(page, site, pageNumber) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.sold(pageNumber)));
-		const props = expectShape$1(soldItemsPageSchema, await readPageProps(page, PAGE$8), PAGE$8);
-		return {
-			items: props.soldItems.map((item) => {
-				const soldAt = new Date(item.soldAt);
-				if (Number.isNaN(soldAt.getTime())) throw changed$2(PAGE$8, "shows a sale time Listora can't read");
-				return {
-					slug: item.slug,
-					priceCents: dollars$1(item.price, PAGE$8),
-					soldAt
-				};
-			}),
-			hasMore: props.hasMore
-		};
+		const end = Date.now() + DRAW_MS$1;
+		for (;;) {
+			if (await page.exists(SOLD_ITEMS_PAGE.none)) return {
+				items: [],
+				hasMore: false
+			};
+			if (await page.exists(SOLD_ITEMS_PAGE.receipt)) throw changed$2(PAGE$8, "lists sales in a way Listora cannot read yet");
+			if (Date.now() >= end) throw changed$2(PAGE$8, "shows neither sales nor its no-sales note");
+			await lookAgain$1(page, LOOK_EVERY_MS$3);
+		}
 	}
 
 // src/depop/scripts.ts
@@ -6764,7 +6761,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				const slug = op.listing.externalListingId;
 				if (slug === null) return notListed();
 				const shown = await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug));
-				if (!shown.state.found) return notListed();
+				if (!shown.state.found) return shown.state.authoritative ? post(op, step) : notListed();
 				if (shown.state.status === "active") return {
 					type: "applied",
 					externalListingId: slug
@@ -8212,14 +8209,19 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* listing's link (`a[data-testid="ItemLink"]`, the title as its text) and price (`ItemPrice`).
 	* A sold row shows no sold time, only the day it last changed, in its "Updated" column
 	* (`11/16/24`): the sale's time is on the listing's page (item-page.ts). An empty tab keeps
-	* Listora's earlier model.
+	* Listora's earlier model. On the phone, Mercari draws the same tabs in its mobile layout (seen
+	* in the phone's evidence, 2026-10-27): rows without the table, which link to their listing
+	* only through its photo (`ProductThumbWrapper`) and show no `ItemLink` or `ItemPrice`; their
+	* title and price are on the listing's page.
 	*/
 	const LISTINGS_PAGE = {
 		/** What an empty tab shows instead of its rows. */
 		empty: "[data-testid=\"ZeroListings\"]",
-		list: "[data-testid=\"Listings\"], [data-testid=\"ListingList\"]",
+		list: "[data-testid=\"Listings\"], [data-testid=\"ListingList\"], [data-testid=\"ListingRow\"]",
 		row: "[data-testid=\"ListingRow\"]",
 		link: "[data-testid=\"ListingRow\"] a[data-testid=\"ItemLink\"], [data-testid=\"ListingRow\"] a[data-testid=\"ListingLink\"]",
+		/** A row's photo, which links to its listing too (the only link in the mobile layout). */
+		photoLink: "[data-testid=\"ListingRow\"] a[data-testid=\"ProductThumbWrapper\"]",
 		name: "[data-testid=\"ListingRow\"] a[data-testid=\"ItemLink\"], [data-testid=\"ListingRow\"] [data-testid=\"ListingName\"]",
 		price: "[data-testid=\"ListingRow\"] [data-testid=\"ItemPrice\"], [data-testid=\"ListingRow\"] [data-testid=\"ListingPrice\"]",
 		soldAt: "[data-testid=\"ListingRow\"] time[data-testid=\"SoldAt\"]",
@@ -8256,14 +8258,18 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			await page.waitFor("body", "attached");
 		}
 		const sold = tab === "in_progress" || tab === "sold";
-		const [links, titles, prices, soldAts, headings] = await Promise.all([
+		const [shownRows, named, titles, prices, soldAts, headings] = await Promise.all([
+			page.count(LISTINGS_PAGE.row),
 			page.attributes(LISTINGS_PAGE.link, "href"),
 			page.texts(LISTINGS_PAGE.name),
 			page.texts(LISTINGS_PAGE.price),
 			sold ? page.attributes(LISTINGS_PAGE.soldAt, "datetime") : Promise.resolve([]),
 			page.texts(LISTINGS_PAGE.headings)
 		]);
-		if (titles.length !== links.length || prices.length !== links.length) throw changed(name, "has rows without a link, title, or price");
+		const links = named.length > 0 ? named : await page.attributes(LISTINGS_PAGE.photoLink, "href");
+		if (links.length !== shownRows) throw changed(name, "has rows that link to no listing");
+		const titled = titles.length === links.length;
+		const priced = prices.length === links.length;
 		const updatedColumn = headings.findIndex((heading) => heading.trim() === "Updated");
 		const updated = updatedColumn < 0 ? [] : await page.texts(`${LISTINGS_PAGE.row} > td:nth-child(${String(updatedColumn + 1)})`);
 		return {
@@ -8274,8 +8280,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed(name, "has a sold row whose sold time Listora cannot read");
 				return {
 					id,
-					title: titles[index] ?? "",
-					priceCents: parsePrice(prices[index] ?? null),
+					title: titled ? titles[index] ?? "" : "",
+					priceCents: priced ? parsePrice(prices[index] ?? null) : null,
 					soldAt,
 					changedBy: updated.length === links.length ? latestEndOfDay(updated[index] ?? "") : null
 				};
@@ -8467,21 +8473,26 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 						const shown = await step(`read the ${tab.replace("_", " ")} sales`, { mutates: false }, (page) => readListingsPage(page, site, tab, number, tab === "sold" ? soldPath : void 0));
 						for (const row of shown.rows) {
 							if (since !== null && row.changedBy !== null && row.changedBy < since) break tab;
-							let soldAt = row.soldAt;
-							if (soldAt === null) {
+							let { soldAt, priceCents, title } = row;
+							if (soldAt === null || priceCents === null) {
 								if (reads === 12) break tab;
 								reads += 1;
-								soldAt = (await step("read the sale time", { mutates: false }, (page) => readItem(page, site, row.id))).soldAt;
+								const read = await step("read the sale", { mutates: false }, (page) => readItem(page, site, row.id));
+								soldAt ??= read.soldAt;
+								if (read.state.found) {
+									priceCents ??= read.state.priceCents;
+									title ||= read.state.title ?? "";
+								}
 							}
-							if (soldAt === null || row.priceCents === null) continue;
+							if (soldAt === null || priceCents === null) continue;
 							if (since !== null && soldAt < since) continue;
 							orders.push({
 								externalOrderId: row.id,
 								soldAt,
 								items: [{
 									externalListingId: row.id,
-									title: row.title,
-									priceCents: row.priceCents,
+									title: title === "" ? null : title,
+									priceCents,
 									currency: "USD"
 								}]
 							});
@@ -9187,10 +9198,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
 			const shown = await step("open the listing", { mutates: false }, (page) => readListing(page, site, id));
-			if (!shown.found) return shown.authoritative && availability === "not_for_sale" ? {
-				type: "applied",
-				externalListingId: id
-			} : notListed();
+			if (!shown.found) {
+				if (!shown.authoritative) return notListed();
+				return availability === "not_for_sale" ? {
+					type: "applied",
+					externalListingId: id
+				} : createListing(op, step);
+			}
 			if (availability === "not_for_sale" && shown.status !== "active") return {
 				type: "applied",
 				externalListingId: id
@@ -9211,41 +9225,43 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			await step("set the availability", { mutates: false }, (page) => setAvailability(page, availability));
 			return save(step, "update");
 		}
-		return {
-			create: async (op, step) => {
-				const payload = op.payload;
-				if (payload === null) throw new Error("a create has a payload");
-				const sku = skuOf(op.listing);
-				const existing = await findBySku(step, sku, payload.title);
-				if (existing !== null) return {
-					type: "applied",
-					externalListingId: existing
+		/** Lists a new listing from the payload (List, or a relist of a listing Poshmark removed). */
+		async function createListing(op, step) {
+			const payload = op.payload;
+			if (payload === null) throw new Error("a create has a payload");
+			const sku = skuOf(op.listing);
+			const existing = await findBySku(step, sku, payload.title);
+			if (existing !== null) return {
+				type: "applied",
+				externalListingId: existing
+			};
+			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
+			if (!await step("open the listing form", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
+			await step("add the photos", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => addPhotos(page, files));
+			await fillListing(step, payload);
+			await step("set the SKU and availability", { mutates: false }, async (page) => {
+				await fillSku(page, sku);
+				await setAvailability(page, "for_sale");
+			});
+			const result = await save(step, "list");
+			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+			try {
+				const id = await findBySku(step, sku, payload.title);
+				if (id !== null) return {
+					...result,
+					externalListingId: id
 				};
-				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-				if (!await step("open the listing form", {
-					mutates: false,
-					timeScale: 2
-				}, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
-				await step("add the photos", {
-					mutates: false,
-					timeScale: 2
-				}, (page) => addPhotos(page, files));
-				await fillListing(step, payload);
-				await step("set the SKU and availability", { mutates: false }, async (page) => {
-					await fillSku(page, sku);
-					await setAvailability(page, "for_sale");
-				});
-				const result = await save(step, "list");
-				if (result.type !== "applied" || result.externalListingId !== void 0) return result;
-				try {
-					const id = await findBySku(step, sku, payload.title);
-					if (id !== null) return {
-						...result,
-						externalListingId: id
-					};
-				} catch {}
-				return result;
-			},
+			} catch {}
+			return result;
+		}
+		return {
+			create: (op, step) => createListing(op, step),
 			revise: async (op, step) => {
 				const payload = op.payload;
 				if (payload === null) throw new Error("a revise has a payload");
@@ -10823,10 +10839,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const photos = phonePhotos(host);
 		await pacing.waitFor(input.startDelayMs, new AbortController().signal);
 		for (let handOffs = 0;; handOffs += 1) {
-			const result = await runOnce(input, host, profile, pacing, photos);
+			const { result, stepMs } = await runOnce(input, host, profile, pacing, photos);
 			if (result.ok || result.failure.kind !== "challenge") return {
 				type: "ran",
-				result
+				result,
+				stepMs
 			};
 			const check = result.failure.challenge;
 			if (!SELLER_CHECKS.includes(check)) return {
@@ -10861,6 +10878,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}
 	}
 	async function runOnce(input, host, profile, pacing, photos) {
+		const started = [];
 		const session = new ScriptSession(new BridgeBackend(host), {
 			profile,
 			pacing,
@@ -10874,6 +10892,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			},
 			stepTimeoutMs: input.stepTimeoutMs,
 			onStep: ({ name, index }) => {
+				started.push(Date.now());
 				host.progress({
 					call: input.name,
 					index,
@@ -10886,7 +10905,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const script = (step) => run(input.call, step);
 		const signal = AbortSignal.timeout(input.callTimeoutMs);
 		try {
-			return isWriteCall(input.call) ? await session.run(input.name, script, signal) : await session.read(input.name, script, signal);
+			const result = isWriteCall(input.call) ? await session.run(input.name, script, signal) : await session.read(input.name, script, signal);
+			const ended = Date.now();
+			return {
+				result,
+				stepMs: started.map((at, index) => (started[index + 1] ?? ended) - at)
+			};
 		} finally {
 			await session.close();
 		}

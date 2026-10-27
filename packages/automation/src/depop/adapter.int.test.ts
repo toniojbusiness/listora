@@ -3,9 +3,9 @@
  * (the shared conformance suite is in adapter.conformance.int.test.ts): every field of the sell
  * form, photos in posting order, the SKU line and hashtags, a new listing found in the seller's
  * shop by its SKU, delete and relist as a new listing, sold listings, a product Depop deleted for
- * good (410 Gone), the seller's listings for imports, sold items for sale checks, and the stops: a
- * bot-check page, a CAPTCHA, a login code, a logged-out session, and a redesigned page. No
- * traffic goes to Depop.
+ * good (410 Gone), the seller's listings for imports, sale checks (no sales, and sales Listora
+ * can't read yet), and the stops: a bot-check page, a CAPTCHA, a login code, a logged-out
+ * session, and a redesigned page. No traffic goes to Depop.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -520,29 +520,19 @@ describe('Depop automation adapter on the fake Depop site', () => {
     });
   });
 
-  it('finds sold items since a time, newest first across pages, for sale checks', async () => {
-    await withSite({ pageSize: 2 }, async (fake, own) => {
-      const at = (hoursAgo: number) => new Date(Date.now() - hoursAgo * 3_600_000);
-      const [, older, recent, fresh] = [
-        ['Old sale.', 72],
-        ['Older sale.', 5],
-        ['Recent sale.', 3],
-        ['Fresh sale.', 1],
-      ].map(([description, hoursAgo]) => {
-        const slug = fake.seed({ description: String(description), priceCents: 3050 });
-        fake.sell(slug, at(Number(hoursAgo)));
-        return slug;
-      });
+  it('finds no sales on the sold items page of a seller without any, for sale checks', async () => {
+    await withSite({}, async (fake, own) => {
       fake.seed({ description: 'Still for sale.', priceCents: 1000 });
+      expect(await own.listOrdersSince(null, ctx())).toEqual([]);
+    });
+  });
 
-      const orders = await own.listOrdersSince(at(24), ctx());
-      expect(orders.map((order) => order.externalOrderId)).toEqual([fresh, recent, older]);
-      expect(orders[0]).toEqual({
-        externalOrderId: fresh,
-        soldAt: expect.any(Date) as unknown,
-        items: [{ externalListingId: fresh, title: null, priceCents: 3050, currency: 'USD' }],
-      });
-      expect(await own.listOrdersSince(null, ctx())).toHaveLength(4);
+  it('fails a sale check when the sold items page lists sales, rather than guess which sold', async () => {
+    await withSite({}, async (fake, own) => {
+      // A sale's row names its receipt, not its listing: a wrong guess would delist that one.
+      fake.sell(fake.seed({ description: 'Tote bag.', priceCents: 5000 }));
+      fake.seed({ description: 'Still for sale.', priceCents: 1000 });
+      await expect(own.listOrdersSince(null, ctx())).rejects.toThrow('element_missing');
     });
   });
 });

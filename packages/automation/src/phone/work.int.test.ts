@@ -6,7 +6,8 @@
  * a delist are confirmed by read-back, a check the seller can't complete now retries, a run
  * the phone abandons is recovered, work that waits too long fails with a Retry, and a
  * connection moved to the cloud takes its waiting work with it. Linking checks the session on
- * the phone, and a sale check there hands sold orders to the sale intake.
+ * the phone, and a sale check there finds no sales, or fails visibly on sales Depop's page
+ * doesn't say the listing of.
  */
 import { randomBytes } from 'node:crypto';
 
@@ -529,7 +530,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     ).toBeNull();
   });
 
-  it('hands sold orders a phone sale check finds to the sale intake', async () => {
+  it('fails a phone sale check visibly when Depop shows a sale, and hands nothing to the sale intake', async () => {
     await runPhone();
     const listingId = await newListing();
     const create = await enqueue(listingId, 'create');
@@ -545,12 +546,31 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       true,
     );
     await runPhone();
+    // Depop's sold items page names a sale's receipt, not its listing: the check fails, and is
+    // tried again, rather than guess which listing sold (a wrong guess would delist it).
+    const schedule = await db
+      .selectFrom('sale_check_schedule')
+      .select(['last_outcome', 'next_reason'])
+      .where('account_id', '=', accountId)
+      .where('connection_id', '=', connectionId)
+      .executeTakeFirstOrThrow();
+    expect(schedule).toEqual({ last_outcome: 'failed', next_reason: 'retry' });
+    const [run] = await db
+      .selectFrom('automation_run')
+      .select(['outcome', 'error_code'])
+      .where('account_id', '=', accountId)
+      .where('host', '=', 'phone')
+      .where('purpose', '=', 'sale_check')
+      .orderBy('started_at', 'desc')
+      .limit(1)
+      .execute();
+    expect(run).toEqual({ outcome: 'failed', error_code: 'element_missing' });
     const events = await db
       .selectFrom('inbound_event')
       .select(['source', 'provider_event_id'])
       .where('account_id', '=', accountId)
       .execute();
-    expect(events).toEqual([{ source: 'poll', provider_event_id: `order:${slug ?? ''}` }]);
+    expect(events).toEqual([]);
   });
 
   it('runs nothing for a runtime that speaks another version, or another device', async () => {

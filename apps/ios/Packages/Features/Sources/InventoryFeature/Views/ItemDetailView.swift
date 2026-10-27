@@ -167,6 +167,18 @@ struct ItemDetailView: View {
                     phoneProgress: environment.phoneProgress?.progress,
                     perform: perform,
                     end: { reason, row in end(row, reason: reason) },
+                    relistAll: { rows in
+                        let requests = rows.compactMap { row -> (request: ListingRequest, marketplace: String)? in
+                            row.listing.map { (.relist(listingID: $0.id), row.id) }
+                        }
+                        Task { await model.performAll(requests) }
+                    },
+                    endAll: { reason, rows in
+                        let requests = rows.compactMap { row -> (request: ListingRequest, marketplace: String)? in
+                            row.listing.map { (.end(listingID: $0.id, reason: reason.contract), row.id) }
+                        }
+                        Task { await model.performAll(requests) }
+                    },
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)

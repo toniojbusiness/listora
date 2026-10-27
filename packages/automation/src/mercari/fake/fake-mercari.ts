@@ -10,11 +10,11 @@
  * rows, a level at a time; brand and size are lists of options; the condition is a radio per
  * Mercari condition id. Shipping starts on "Ship on your own"; Mercari's prepaid label comes
  * with the label Mercari recommends for the category and asks "Offer buyers free shipping?".
- * Smart Pricing starts on, and List refuses it without a lowest price. After List, Mercari shows
- * its own page for the new listing. A listing's page carries the listing in its Next.js page
- * data. The edit page draws the same form with Update, and Deactivate or Activate, which act at
- * once and open the seller's active listings. The seller's tabs draw their rows a moment after
- * the page loads. Mercari's checks (Cloudflare's
+ * Smart Pricing starts on, and List refuses it without a lowest price. The edit page draws the
+ * same form with Update, and Deactivate or Activate, which act at once and open the seller's
+ * active listings. After List or Update, Mercari shows its own page linking to the listing. A
+ * listing's page carries the listing in its Next.js page data, sale time included. The seller's
+ * tabs are tables whose rows draw a moment after the page loads. Mercari's checks (Cloudflare's
  * interstitial and Turnstile widget, a CAPTCHA, a login code, a logged-out session) and its
  * refusals (an account to verify first, a card to add first) each come with fault injection.
  *
@@ -23,9 +23,9 @@
  *   GET  /login/verify/               a login code step
  *   GET  /mypage/                     the seller's account, drawn by its script ([data-testid="EditProfileButton"])
  *   GET  /sell/                       the sell page; POST /sell/ lists (multipart, photos)
- *   GET  /sell/complete/:id/          Mercari's page once a new listing is up (Sell another item)
+ *   GET  /sell/complete/              Mercari's page once a listing is up, after List or Update
  *   GET  /us/item/:id/                a listing's page (its data in `script#__NEXT_DATA__`)
- *   GET  /sell/edit/:id/              the edit form; POST saves it
+ *   GET  /sell/edit/:id/              the edit form; POST saves it (Update)
  *   POST /sell/edit/:id/deactivate    deactivate (the edit page's Deactivate)
  *   POST /sell/edit/:id/activate      activate an inactive listing (its Activate)
  *   GET  /mypage/listings/:tab/       active, inactive, in_progress, and the done sales at the
@@ -35,8 +35,9 @@
  * Every page except the login pages and photos needs the session cookie; without a valid one it
  * redirects to the login page. A listing's last change grows by at least a second with every
  * change (automated changes are seconds apart), so it serves as a revision; a stale read serves
- * the listing as it was before its latest change. A deleted listing's page answers 410, as
- * Mercari's does; an unknown id gets a plain "not found" page.
+ * the listing as it was before its latest change. As Mercari's do, a deleted listing's page
+ * answers 410 without the listing, and a sold one whose sale is done answers 410 with its data;
+ * an unknown id gets a plain "not found" page.
  */
 import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -143,10 +144,10 @@ export interface FakeMercariOptions {
   /** Rows per page of the listing tabs (default 10). */
   pageSize?: number;
   /**
-   * Whether Mercari's page after List names the new listing in its path (default true). Without
-   * it, the scripts find the new listing by its SKU.
+   * Whether Mercari's page after List or Update links to the listing (`LiveListingLink`, default
+   * true, as Mercari's does). Without the link, the scripts find a new listing by its SKU.
    */
-  listedPageNamesItem?: boolean;
+  listedPageLinksItem?: boolean;
 }
 
 /** The brands Mercari's brand search offers (a sample of its list). */
@@ -215,12 +216,14 @@ const DRAW_MS = 300;
 export class FakeMercariSite {
   readonly #server: Server;
   readonly #pageSize: number;
-  readonly #listedPageNamesItem: boolean;
+  readonly #listedPageLinksItem: boolean;
   readonly #items = new Map<string, StoredItem>();
   readonly #deleted = new Set<string>();
   readonly #sessions = new Map<string, Session>();
   /** Sellers who have seen the sell page's tip about listing templates. */
   readonly #tipped = new Set<string>();
+  /** The listing each seller's last List or Update put up, which the page after it shows. */
+  readonly #listed = new Map<string, string>();
   readonly #faults: (FakeMercariFaultRule & { remaining: number })[] = [];
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly requests: FakeMercariRequest[] = [];
@@ -229,7 +232,7 @@ export class FakeMercariSite {
 
   private constructor(options: FakeMercariOptions) {
     this.#pageSize = options.pageSize ?? 10;
-    this.#listedPageNamesItem = options.listedPageNamesItem ?? true;
+    this.#listedPageLinksItem = options.listedPageLinksItem ?? true;
     this.#server = createServer((request, response) => {
       void this.#handle(request, response).catch((error: unknown) => {
         if (!response.headersSent) {
@@ -548,16 +551,14 @@ export class FakeMercariSite {
           },
           previous: null,
         });
-        return redirect(this.#listedPageNamesItem ? `/sell/complete/${id}/` : '/sell/complete/');
+        this.#listed.set(session.seller, id);
+        return redirect('/sell/complete/');
       }
-      case 'listed': {
-        // Without the id in its path, the page is about the seller's newest listing.
-        const id = route.id ?? this.#newest(session.seller)?.id ?? null;
-        return this.#owned(id, session, (stored) => ({
+      case 'listed':
+        return this.#owned(this.#listed.get(session.seller) ?? null, session, (stored) => ({
           status: 200,
-          body: page('Listed | Mercari', listedPage(stored.current)),
+          body: page('Listed | Mercari', listedPage(stored.current, this.#listedPageLinksItem)),
         }));
-      }
       case 'update':
         return this.#owned(route.id, session, (stored) => {
           if (stored.current.status !== 'on_sale' && stored.current.status !== 'inactive') {
@@ -566,7 +567,9 @@ export class FakeMercariSite {
           const fields = listingFields(form, stored.current);
           if (typeof fields === 'string') return refused(fields, stored);
           this.#change(stored, fields);
-          return redirect(`/us/item/${stored.current.id}/`);
+          // The same page as after List (read 2026-10-27).
+          this.#listed.set(session.seller, stored.current.id);
+          return redirect('/sell/complete/');
         });
       // Mercari opens the seller's active listings after Deactivate (read 2026-10-27), and the
       // fake does the same after Activate.
@@ -596,19 +599,25 @@ export class FakeMercariSite {
           fault?.type === 'stale_read' && stored.previous !== null
             ? stored.previous
             : stored.current;
-        return { status: 200, body: page(`${shown.title} | Mercari`, itemPage(shown, session)) };
+        // A sold item's page answers 410 too, with its data (read 2026-10-27).
+        return {
+          status: shown.status === 'sold_out' ? 410 : 200,
+          body: page(`${shown.title} | Mercari`, itemPage(shown, session)),
+        };
       }
       case 'listings': {
         const tab = route.tab ?? 'active';
         const number = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1);
         const status = TAB_STATUS[tab];
+        // The sold tabs by their rows' last change (a sale changes its row), newest first.
         const sold = tab === 'in_progress' || tab === 'sold';
         const rows = this.items()
           .filter((item) => item.seller === session.seller && item.status === status)
-          .sort((a, b) =>
-            sold
-              ? (b.soldAt?.getTime() ?? 0) - (a.soldAt?.getTime() ?? 0)
-              : b.listedAt.getTime() - a.listedAt.getTime() || b.id.localeCompare(a.id),
+          .sort(
+            (a, b) =>
+              (sold
+                ? b.updatedAt.getTime() - a.updatedAt.getTime()
+                : b.listedAt.getTime() - a.listedAt.getTime()) || b.id.localeCompare(a.id),
           );
         const pageRows = rows.slice((number - 1) * this.#pageSize, number * this.#pageSize);
         const more = rows.length > number * this.#pageSize;
@@ -632,13 +641,6 @@ export class FakeMercariSite {
     const stored = this.#items.get(id);
     if (stored === undefined) throw new Error(`no item ${id}`);
     return stored;
-  }
-
-  /** The seller's most recently listed item. */
-  #newest(seller: string): FakeMercariItem | undefined {
-    return this.items()
-      .filter((item) => item.seller === seller)
-      .sort((a, b) => b.listedAt.getTime() - a.listedAt.getTime() || b.id.localeCompare(a.id))[0];
   }
 
   #change(stored: StoredItem, change: Partial<FakeMercariItem>): void {
@@ -686,10 +688,7 @@ function matchRoute(method: string, path: string): Route | null {
   if (method === 'GET' && path === '/mypage/') return { method, action: 'health', id: null };
   if (method === 'GET' && path === '/sell/') return { method, action: 'form', id: null };
   if (method === 'POST' && path === '/sell/') return { method, action: 'create', id: null };
-  const listed = /^\/sell\/complete\/(?:([A-Za-z0-9-]+)\/)?$/.exec(path);
-  if (method === 'GET' && listed !== null) {
-    return { method, action: 'listed', id: listed[1] ?? null };
-  }
+  if (method === 'GET' && path === '/sell/complete/') return { method, action: 'listed', id: null };
   if (method === 'GET' && path === SALES_TAB_PATH) {
     return { method, action: 'listings', id: null, tab: 'sold' };
   }
@@ -952,7 +951,8 @@ ${itemData(item)}`;
 /**
  * The listing in the page's Next.js data, as Mercari's item page carries it (read 2026-10-27):
  * `props.pageProps.serverState["ItemDetail:<id>"]`, with the price in cents, Mercari's status
- * name (`stop` for a listing the seller deactivated), and the last change in seconds.
+ * name (`stop` for a listing the seller deactivated), the last change, and when it last sold
+ * (0 before it ever did), both in seconds.
  */
 function itemData(item: FakeMercariItem): string {
   const data = {
@@ -967,6 +967,7 @@ function itemData(item: FakeMercariItem): string {
             status: item.status === 'inactive' ? 'stop' : item.status,
             created: Math.floor(item.listedAt.getTime() / 1000),
             updated: Math.floor(item.updatedAt.getTime() / 1000),
+            lastSoldAt: item.soldAt === null ? 0 : Math.floor(item.soldAt.getTime() / 1000),
           },
         },
       },
@@ -978,12 +979,16 @@ function itemData(item: FakeMercariItem): string {
 }
 
 /**
- * Mercari's page once a new listing is up (read 2026-10-27: under the sell page's path, with
- * "Sell another item" and "Share your listing"), linking to the listing.
+ * Mercari's page once a listing is up, after List and after an edit's Update alike (read
+ * 2026-10-27: under the sell page's path, with "Sell another item" and "Share your listing"),
+ * with its link to the listing's page (`LiveListingLink`) unless `links` is false.
  */
-function listedPage(item: FakeMercariItem): string {
+function listedPage(item: FakeMercariItem, links: boolean): string {
+  const link = links
+    ? `<a data-testid="LiveListingLink" href="/us/item/${item.id}/">View your listing</a>`
+    : '';
   return `<main data-testid="ListingComplete"><h1>Your item is listed</h1><p>${escape(item.title)}</p>
-<a data-testid="ViewListing" href="/us/item/${item.id}/">View your listing</a>
+${link}
 <button type="button" data-testid="ShareListing">Share your listing</button>
 <a data-testid="SellAnotherItem" href="/sell/">Sell another item</a></main>`;
 }
@@ -1000,12 +1005,20 @@ function verificationRequired(): string {
   return `<main id="sell"></main><script>setTimeout(() => { document.getElementById('sell').innerHTML = ${JSON.stringify(drawn)}; }, ${String(DRAW_MS)});</script>`;
 }
 
+/** A day as the seller's tabs show it (`11/16/24`), in Mercari's US Pacific time. */
+const SHOWN_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles',
+  month: '2-digit',
+  day: '2-digit',
+  year: '2-digit',
+});
+
 /**
  * A tab of the seller's listings, as Mercari's are (read 2026-10-26 and 27): drawn by script
- * once the document is ready, and an empty tab shows `ZeroListings` instead of rows. The active
- * and inactive tabs are a table (`Listings`) whose rows draw a moment after it, once Mercari's
- * own query answers, each with its listing's link (the title as its text) and price. The sold
- * tabs keep Listora's earlier model: a list of rows with the link, title, price, and sold time.
+ * once the document is ready, and an empty tab shows `ZeroListings` instead of rows. A tab is a
+ * table (`Listings`) whose rows draw a moment after it, once Mercari's own query answers, each
+ * with its listing's link (the title as its text), its price, and the day it last changed
+ * ("Updated"). A sold row shows no sale time: that is on the listing's page.
  */
 function listingsPage(
   tab: MercariListingTab,
@@ -1019,28 +1032,19 @@ function listingsPage(
     : '';
   const draw = (into: string, html: string, afterMs: number): string =>
     `setTimeout(() => { document.getElementById(${JSON.stringify(into)}).innerHTML = ${scriptJson(html)}; }, ${String(afterMs)});`;
-  let script: string;
   if (rows.length === 0) {
-    script = draw('tab', '<div data-testid="ZeroListings">No listings yet</div>', DRAW_MS);
-  } else if (tab === 'in_progress' || tab === 'sold') {
-    const items = rows
-      .map(
-        (item) =>
-          `<li data-testid="ListingRow"><a data-testid="ListingLink" href="/us/item/${item.id}/"><span data-testid="ListingName">${escape(item.title)}</span></a><span data-testid="ListingPrice">${dollars(item.priceCents)}</span><time data-testid="SoldAt" datetime="${(item.soldAt ?? item.updatedAt).toISOString()}">sold</time><span data-testid="BuyerName">a buyer</span></li>`,
-      )
-      .join('');
-    script = draw('tab', `<ul data-testid="ListingList">${items}</ul>${next}`, DRAW_MS);
-  } else {
-    const items = rows
-      .map(
-        (item) =>
-          `<tr data-testid="ListingRow"><td><a data-testid="ItemLink" href="/us/item/${item.id}/">${escape(item.title)}</a></td><td data-testid="ItemPrice">${dollars(item.priceCents)}</td></tr>`,
-      )
-      .join('');
-    const table =
-      '<table data-testid="Listings"><thead><tr><th>Item</th><th>Price</th></tr></thead><tbody id="rows"></tbody></table><div id="more"></div>';
-    script = `setTimeout(() => { document.getElementById('tab').innerHTML = ${scriptJson(table)}; ${draw('rows', items, 200)} ${draw('more', next, 200)} }, ${String(DRAW_MS)});`;
+    const empty = draw('tab', '<div data-testid="ZeroListings">No listings yet</div>', DRAW_MS);
+    return `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>${empty}</script>`;
   }
+  const items = rows
+    .map(
+      (item) =>
+        `<tr data-testid="ListingRow"><td><a data-testid="ItemLink" href="/us/item/${item.id}/">${escape(item.title)}</a></td><td data-testid="ItemPrice">${dollars(item.priceCents)}</td><td>${SHOWN_DAY.format(item.updatedAt)}</td></tr>`,
+    )
+    .join('');
+  const table =
+    '<table data-testid="Listings"><thead><tr><th>Item</th><th>Price</th><th>Updated</th></tr></thead><tbody id="rows"></tbody></table><div id="more"></div>';
+  const script = `setTimeout(() => { document.getElementById('tab').innerHTML = ${scriptJson(table)}; ${draw('rows', items, 200)} ${draw('more', next, 200)} }, ${String(DRAW_MS)});`;
   return `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>${script}</script>`;
 }
 

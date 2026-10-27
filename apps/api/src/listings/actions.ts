@@ -313,7 +313,8 @@ async function prepareAction(
 /**
  * Relists an ended or sold listing (the item's screen, and the seller's answer to "Relist it?"
  * after a canceled or returned sale): the same checks as every action, then a `relist`
- * operation with the listing's content, keyed by `key`.
+ * operation with the listing's content, keyed by `key`. A listing whose marketplace listing is
+ * gone is posted again as a new listing (the executor sends its relist as a create).
  */
 export async function relistListing(
   trx: DbTransaction,

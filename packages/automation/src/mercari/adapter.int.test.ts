@@ -23,7 +23,6 @@ import { PlaywrightBrowserRunner } from '../runner/browser-runner.ts';
 import { MemoryScreenshotStore } from '../runner/screenshots.ts';
 import { FakeSiteSessions, QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
 import { createMercariAutomationAdapter } from './adapter.ts';
-import { MERCARI_STEP_TIMEOUT_MS } from './fake/conformance-driver.ts';
 import {
   FakeMercariSite,
   type FakeMercariAction,
@@ -32,6 +31,11 @@ import {
 import type { MercariListingPayload } from './payload.ts';
 
 const connection = { id: 'connection-mercari', mode: 'automation', status: 'connected' } as const;
+/**
+ * The step timeout here: the form step (three times it) has room for the form's own wait for a
+ * part that never comes (8 seconds), which several checks below run into.
+ */
+const STEP_TIMEOUT_MS = 4_000;
 const ctx = (): AdapterContext => ({ signal: new AbortController().signal, connection });
 
 describe('Mercari automation adapter on the fake Mercari site', () => {
@@ -46,7 +50,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     runner = new PlaywrightBrowserRunner({
       logger: silentLogger,
       screenshots: new MemoryScreenshotStore(),
-      stepTimeoutMs: MERCARI_STEP_TIMEOUT_MS,
+      stepTimeoutMs: STEP_TIMEOUT_MS,
     });
     const profile = { ...automationProfile('mercari'), pacing: QUICK_PACING };
     sessions = new FakeSiteSessions(site, runner, {
@@ -365,8 +369,8 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
   });
 
-  it("finds a new listing by its SKU when Mercari's page after List does not name it", async () => {
-    const shop = await FakeMercariSite.start(0, { listedPageNamesItem: false });
+  it("finds a new listing by its SKU when Mercari's page after List does not link to it", async () => {
+    const shop = await FakeMercariSite.start(0, { listedPageLinksItem: false });
     try {
       const ref = newRef();
       const outcome = await adapterOn(shop).execute(request('create', ref), ctx());

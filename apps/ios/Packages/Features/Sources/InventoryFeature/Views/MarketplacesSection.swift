@@ -15,6 +15,10 @@ struct MarketplacesSection: View {
     let perform: (MarketplaceRowState.Action, MarketplaceRowState) -> Void
     /// Ends the row's listing, once the seller confirmed it and said why.
     let end: (EndReason, MarketplaceRowState) -> Void
+    /// Relists every row that can be relisted, at once.
+    var relistAll: (([MarketplaceRowState]) -> Void)?
+    /// Ends every row's listing that can be ended, at once, once the seller said why.
+    var endAll: ((EndReason, [MarketplaceRowState]) -> Void)?
     let loadEvents: (String) async -> Void
 
     var body: some View {
@@ -22,6 +26,13 @@ struct MarketplacesSection: View {
             SectionHeader(
                 "Marketplaces",
                 subtitle: "A change shows as done only once the marketplace confirms it, or you do.",
+            )
+            AllMarketplacesActions(
+                rows: rows,
+                isBusy: busyMarketplace == ItemDetailModel.allMarketplaces,
+                isEnabled: busyMarketplace == nil,
+                relistAll: relistAll,
+                endAll: endAll,
             )
             ForEach(rows) { row in
                 MarketplaceCard(
@@ -121,6 +132,75 @@ private struct MarketplaceCard: View {
         }
         .cardStyle(row.tone == .failed ? .tinted(.failed) : .elevated)
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// Relist all and End all: the same change on every marketplace where it applies, once two or
+/// more can take it. Each listing then shows how its own change goes.
+private struct AllMarketplacesActions: View {
+    let rows: [MarketplaceRowState]
+    let isBusy: Bool
+    let isEnabled: Bool
+    let relistAll: (([MarketplaceRowState]) -> Void)?
+    let endAll: ((EndReason, [MarketplaceRowState]) -> Void)?
+    @State private var isConfirmingEnd = false
+
+    private var relistable: [MarketplaceRowState] {
+        rows.filter { $0.actions.contains(.relist) }
+    }
+
+    private var endable: [MarketplaceRowState] {
+        rows.filter { $0.actions.contains(.end) }
+    }
+
+    var body: some View {
+        let relistable = relistable
+        let endable = endable
+        let showsRelist = relistAll != nil && relistable.count >= 2
+        let showsEnd = endAll != nil && endable.count >= 2
+        if showsRelist || showsEnd {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.xs) { buttons(showsRelist, relistable, showsEnd, endable) }
+                VStack(spacing: Spacing.xs) { buttons(showsRelist, relistable, showsEnd, endable) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func buttons(
+        _ showsRelist: Bool,
+        _ relistable: [MarketplaceRowState],
+        _ showsEnd: Bool,
+        _ endable: [MarketplaceRowState],
+    ) -> some View {
+        if showsRelist, let relistAll {
+            Button("Relist all (\(relistable.count))", systemImage: "arrow.counterclockwise") {
+                relistAll(relistable)
+            }
+            .buttonStyle(.listora(.secondary, size: .compact))
+            .loading(isBusy)
+            .disabled(!isEnabled)
+            .accessibilityIdentifier("marketplaces.relistAll")
+        }
+        if showsEnd, let endAll {
+            Button("End all (\(endable.count))", systemImage: "xmark.circle") { isConfirmingEnd = true }
+                .buttonStyle(.listora(.destructive, size: .compact))
+                .disabled(!isEnabled)
+                .accessibilityIdentifier("marketplaces.endAll")
+                .confirmationDialog(
+                    "End the listing on \(endable.map(\.name).joined(separator: ", "))?",
+                    isPresented: $isConfirmingEnd,
+                    titleVisibility: .visible,
+                ) {
+                    ForEach(EndReason.allCases) { reason in
+                        Button(reason.title, role: .destructive) { endAll(reason, endable) }
+                            .accessibilityIdentifier("endAll.\(reason.rawValue)")
+                    }
+                    Button("Keep them listed", role: .cancel) {}
+                } message: {
+                    Text("Listora ends each one and shows it as delisted once that marketplace confirms.")
+                }
+        }
     }
 }
 

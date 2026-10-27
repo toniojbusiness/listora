@@ -18,14 +18,19 @@ import { absolute, awaitElement, changed, parsePrice, type MercariSite } from '.
  * listing's link (`a[data-testid="ItemLink"]`, the title as its text) and price (`ItemPrice`).
  * A sold row shows no sold time, only the day it last changed, in its "Updated" column
  * (`11/16/24`): the sale's time is on the listing's page (item-page.ts). An empty tab keeps
- * Listora's earlier model.
+ * Listora's earlier model. On the phone, Mercari draws the same tabs in its mobile layout (seen
+ * in the phone's evidence, 2026-10-27): rows without the table, which link to their listing
+ * only through its photo (`ProductThumbWrapper`) and show no `ItemLink` or `ItemPrice`; their
+ * title and price are on the listing's page.
  */
 export const LISTINGS_PAGE = {
   /** What an empty tab shows instead of its rows. */
   empty: '[data-testid="ZeroListings"]',
-  list: '[data-testid="Listings"], [data-testid="ListingList"]',
+  list: '[data-testid="Listings"], [data-testid="ListingList"], [data-testid="ListingRow"]',
   row: '[data-testid="ListingRow"]',
   link: '[data-testid="ListingRow"] a[data-testid="ItemLink"], [data-testid="ListingRow"] a[data-testid="ListingLink"]',
+  /** A row's photo, which links to its listing too (the only link in the mobile layout). */
+  photoLink: '[data-testid="ListingRow"] a[data-testid="ProductThumbWrapper"]',
   name: '[data-testid="ListingRow"] a[data-testid="ItemLink"], [data-testid="ListingRow"] [data-testid="ListingName"]',
   price:
     '[data-testid="ListingRow"] [data-testid="ItemPrice"], [data-testid="ListingRow"] [data-testid="ListingPrice"]',
@@ -40,6 +45,7 @@ const ROWS_MS = 8_000;
 
 export interface ListingRow {
   id: string;
+  /** Empty where the row doesn't show it (the mobile layout). */
   title: string;
   priceCents: number | null;
   /** On the `in_progress` and `sold` tabs, where a row shows it. */
@@ -92,16 +98,19 @@ export async function readListingsPage(
     await page.waitFor('body', 'attached');
   }
   const sold = tab === 'in_progress' || tab === 'sold';
-  const [links, titles, prices, soldAts, headings] = await Promise.all([
+  const [shownRows, named, titles, prices, soldAts, headings] = await Promise.all([
+    page.count(LISTINGS_PAGE.row),
     page.attributes(LISTINGS_PAGE.link, 'href'),
     page.texts(LISTINGS_PAGE.name),
     page.texts(LISTINGS_PAGE.price),
     sold ? page.attributes(LISTINGS_PAGE.soldAt, 'datetime') : Promise.resolve([]),
     page.texts(LISTINGS_PAGE.headings),
   ]);
-  if (titles.length !== links.length || prices.length !== links.length) {
-    throw changed(name, 'has rows without a link, title, or price');
-  }
+  const links = named.length > 0 ? named : await page.attributes(LISTINGS_PAGE.photoLink, 'href');
+  if (links.length !== shownRows) throw changed(name, 'has rows that link to no listing');
+  // Titles and prices count only where every row shows them (the desktop layout).
+  const titled = titles.length === links.length;
+  const priced = prices.length === links.length;
   const updatedColumn = headings.findIndex((heading) => heading.trim() === 'Updated');
   const updated =
     updatedColumn < 0
@@ -116,8 +125,8 @@ export async function readListingsPage(
     }
     return {
       id,
-      title: titles[index] ?? '',
-      priceCents: parsePrice(prices[index] ?? null),
+      title: titled ? (titles[index] ?? '') : '',
+      priceCents: priced ? parsePrice(prices[index] ?? null) : null,
       soldAt,
       changedBy: updated.length === links.length ? latestEndOfDay(updated[index] ?? '') : null,
     };

@@ -79,7 +79,7 @@ import {
 import type { SaleCheckSettings } from '../settings.ts';
 import { prepareSessionCheck, recordSessionCheck } from '../session-checks/job.ts';
 import { queueSessionCheckForPhone } from '../session-checks/schedule.ts';
-import { readPhoneAnswer, readPhoneEvidence } from './answers.ts';
+import { readPhoneAnswer, readPhoneEvidence, readPhoneTimings } from './answers.ts';
 import { PHONE_RUNTIME_VERSION, type PhoneCallInput } from './runtime.ts';
 import {
   callKey,
@@ -263,6 +263,7 @@ export async function answerPhoneCall(
       throw new PhoneCallConflictError();
     }
     const run = readPhoneAnswer(pending.input.call, answer.answer);
+    logAnswered(deps.logger, work, pending, run, readPhoneTimings(answer.answer));
     logStopped(deps.logger, work, pending, run, readPhoneEvidence(answer.answer));
     await finishRun(trx, work, pending.runId, run);
     if (run.type === 'ran' && !run.result.ok && run.result.failure.kind === 'challenge') {
@@ -715,6 +716,35 @@ function profileFor(deps: PhoneWorkDependencies, request: SessionRequest): Autom
   return configured.origins.includes(new URL(siteUrl).origin)
     ? configured
     : standInProfile(configured, siteUrl);
+}
+
+/**
+ * Every call the phone answered, with how long each of its steps took there: what a run spent
+ * its time on, for the operator (`phone call answered`).
+ */
+function logAnswered(
+  logger: Logger,
+  work: WorkRow,
+  pending: PendingState,
+  run: ReturnType<typeof readPhoneAnswer>,
+  stepMs: number[] | null,
+): void {
+  const result = run.type === 'ran' ? run.result : null;
+  logger.info(
+    {
+      host: 'phone',
+      runId: pending.runId,
+      connectionId: work.connection_id,
+      marketplace: work.marketplace,
+      purpose: work.purpose,
+      operationId: work.operation_id,
+      script: pending.input.name,
+      ok: result?.ok ?? false,
+      steps: result?.steps ?? [],
+      ...(stepMs === null ? {} : { stepMs }),
+    },
+    'phone call answered',
+  );
 }
 
 /**

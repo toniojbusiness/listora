@@ -226,9 +226,10 @@ export function createDepopScripts(
       const shown = await step('open the listing', { mutates: false }, (page) =>
         readProduct(page, site, slug),
       );
-      if (!shown.state.found) return notListed();
+      // Gone (Depop says so: End deletes a Depop listing), deleted, or sold: a new listing from
+      // the listing's content, under a new slug.
+      if (!shown.state.found) return shown.state.authoritative ? post(op, step) : notListed();
       if (shown.state.status === 'active') return { type: 'applied', externalListingId: slug };
-      // Deleted or sold: a new listing from the listing's content, under a new slug.
       return post(op, step);
     },
     read: async (ref, step): Promise<RemoteListingState> => {

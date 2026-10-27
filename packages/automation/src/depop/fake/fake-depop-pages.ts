@@ -68,8 +68,9 @@ const FORM_DEPARTMENTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * What Depop fills in from a new listing's photos before the seller does (read on a real
- * session, 2026-10-26): a brand, a condition, and a category it suggests.
+ * What the fake fills in from a new listing's photos before the seller does. On a real session
+ * (2026-10-26) Depop filled in a brand, a condition, and a category it suggested; these values
+ * are the fake's own.
  */
 const ITEM_INFO = {
   brand: 'Nike',
@@ -114,7 +115,7 @@ export function plainPage(title: string, body: string): string {
 
 /**
  * A page that still embeds its data as `script#__NEXT_DATA__` (`props.pageProps`), as the
- * selling hub's lists do in the page modules (page-data.ts).
+ * selling hub's listings do in their page module (selling-page.ts, page-data.ts).
  */
 export function nextDataPage(
   title: string,
@@ -675,14 +676,43 @@ export function sellingPage(rows: readonly FakeDepopProduct[]): string {
   return `<main><h1>Selling</h1><ul data-testid="sellingList">${items}</ul></main>`;
 }
 
-export function soldItemsPage(rows: readonly FakeDepopProduct[]): string {
-  const items = rows
+/** One sale, as the seller's sold items list it. */
+export interface FakeDepopSale {
+  /** Depop's id for the purchase, which its receipt's address names. */
+  purchaseId: number;
+  soldAt: Date;
+}
+
+/** The note a seller without sales sees on their sold items page. */
+export const FAKE_DEPOP_NO_SALES =
+  "Once you've made a sale, you'll be able to see your receipt here.";
+
+/**
+ * The seller's sold items (`/sellinghub/sold-items/`), as Depop's App Router page draws them
+ * after the document (read on the seller's own session, 2026-10-27, sold-items-page.ts): one row
+ * per sale, newest first, a link to its receipt (`/sellinghub/sold-items/<purchase id>/`, no
+ * product slug) with the buyer, where it ships, and when it sold; or, for a seller without
+ * sales, a note.
+ */
+export function soldItemsPage(viewer: string, sales: readonly FakeDepopSale[]): string {
+  const rows = sales
     .map(
-      (product) =>
-        `<li><a href="/products/${escape(product.slug)}/">${escape(product.description.slice(0, 40))}</a> ${dollars(product.priceCents)} <span data-testid="buyerName">a buyer</span> <span data-testid="shippingAddress">1 Buyer Street</span></li>`,
+      (sale) =>
+        `<li><a href="/sellinghub/sold-items/${String(sale.purchaseId)}/"><span data-testid="buyerName">a buyer</span> <span data-testid="shippingAddress">1 Buyer Street</span> <time datetime="${sale.soldAt.toISOString()}">${escape(sale.soldAt.toDateString())}</time></a></li>`,
     )
     .join('');
-  return `<main><h1>Sold items</h1><ul data-testid="soldList">${items}</ul></main>`;
+  const list =
+    sales.length === 0
+      ? `<p>${escape(FAKE_DEPOP_NO_SALES)}</p>`
+      : `<ul data-testid="soldList">${rows}</ul>`;
+  return appPage(
+    'Sold items - Depop',
+    viewer,
+    '<main><h1>Sold items</h1><div id="sold-items"></div></main>',
+    {
+      script: `setTimeout(() => { document.getElementById('sold-items').innerHTML = ${scriptJson(list)}; }, ${String(DRAW_MS)});`,
+    },
+  );
 }
 
 // Sign-in and checks --------------------------------------------------------------------------

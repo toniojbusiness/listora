@@ -9,9 +9,10 @@
  * product's query data) and its schema.org price, the sell form's comboboxes (category groups,
  * the size list, the brand search, the condition) with Depop's own item info from the photos,
  * its validation, and its Done page after a Post, the product page's Delete listing with its
- * dialog, the selling hub's listings and sold items with pagination (still in
- * `script#__NEXT_DATA__`, as their page modules read them), and Depop's checks (a bot-check page,
- * a CAPTCHA, a login code, a logged-out session), with fault injection for each.
+ * dialog, the selling hub's listings with pagination (still in `script#__NEXT_DATA__`, as its
+ * page module reads them), its sold items (receipts drawn after load, or the note a seller
+ * without sales sees), and Depop's checks (a bot-check page, a CAPTCHA, a login code, a
+ * logged-out session), with fault injection for each.
  *
  *   GET  /login/                       the login page (a password field: no session needs it)
  *   POST /login/                       log in by hand: any username and password; sets the session cookie
@@ -26,7 +27,7 @@
  *   GET  /products/edit/:slug/         the edit form; POST saves it
  *   POST /products/edit/:slug/delete   delete (the product page's Delete listing, confirmed)
  *   GET  /sellinghub/selling/          the seller's listings for sale; `?page=N`, 10 a page
- *   GET  /sellinghub/sold-items/       the seller's sold items; `?page=N`, 10 a page
+ *   GET  /sellinghub/sold-items/       the seller's sold items: a receipt link for each sale, or a note
  *   GET  /photos/<name>.jpg            a photo, standing in for Listora's image CDN (no session)
  *
  * Every page except the login pages and photos needs the session cookie; without a valid one it
@@ -34,8 +35,9 @@
  * and a product's slug starts with its seller's username. A product's change time grows by at
  * least a second with every change (automated changes are seconds apart), so the selling page
  * shows it as a revision; a stale read serves the product as it was before its latest change. A
- * deleted product stays readable with the status `STATUS_DELETED`; `gone` makes its page answer
- * 410 Gone, as Depop's did for a listing Listora deleted (2026-10-27); an unknown slug is a plain
+ * product its seller deleted stays readable with the status `STATUS_DELETED` (the shared
+ * conformance suite reads an ended listing back as ended); `gone` makes its page answer 410 Gone
+ * instead, as Depop's did for a listing Listora deleted (2026-10-27). An unknown slug is a plain
  * 404.
  */
 import { randomBytes } from 'node:crypto';
@@ -88,7 +90,7 @@ export { FAKE_DEPOP_BRANDS, FAKE_DEPOP_SHIPPING } from './fake-depop-pages.ts';
  * lookup by SKU starts, to find the seller), `shop` a seller's shop, `read` a product's page
  * (where Delete listing is), `form` the sell and edit forms, `create` and `update` their
  * submissions, `done` the Done page after a Post, `delete` the confirmed Delete listing, and
- * `listings` and `sold` the selling hub's lists.
+ * `listings` and `sold` the selling hub's listings and sold items.
  */
 export type FakeDepopSiteAction =
   | 'create'
@@ -182,6 +184,8 @@ interface StoredProduct {
   previous: FakeDepopProduct | null;
   /** Depop no longer serves it: its page answers 410 Gone. */
   gone: boolean;
+  /** Depop's id for the purchase once it sold. */
+  purchaseId: number | null;
 }
 
 interface Session {
@@ -219,6 +223,7 @@ export class FakeDepopSite {
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly requests: FakeDepopSiteRequest[] = [];
   #sequence = 0;
+  #purchases = 0;
   #url = '';
 
   private constructor(options: FakeDepopSiteOptions) {
@@ -330,13 +335,16 @@ export class FakeDepopSite {
       },
       previous: null,
       gone: false,
+      purchaseId: product.status === 'SOLD' ? this.#newPurchaseId() : null,
     });
     return slug;
   }
 
-  /** A buyer buys the product: it is sold (the sold items page). */
+  /** A buyer buys the product: it is sold (a receipt on the sold items page). */
   sell(slug: string, soldAt = new Date()): void {
-    this.#change(this.#stored(slug), { status: 'SOLD', soldAt });
+    const stored = this.#stored(slug);
+    this.#change(stored, { status: 'SOLD', soldAt });
+    stored.purchaseId = this.#newPurchaseId();
   }
 
   /**
@@ -592,6 +600,7 @@ export class FakeDepopSite {
           },
           previous: null,
           gone: false,
+          purchaseId: null,
         });
         // "Post and add another" opens a new empty form; otherwise Depop's Done page, which
         // doesn't name the new listing.
@@ -646,24 +655,21 @@ export class FakeDepopSite {
         };
       }
       case 'sold': {
-        const { rows, more } = this.#pageOf(
-          url,
-          this.products()
-            .filter((product) => product.seller === session.seller && product.status === 'SOLD')
-            .sort((a, b) => (b.soldAt?.getTime() ?? 0) - (a.soldAt?.getTime() ?? 0)),
-        );
-        return {
-          status: 200,
-          body: nextDataPage('Sold items | Depop', soldItemsPage(rows), {
-            soldItems: rows.map((product) => ({
-              slug: product.slug,
-              description: product.description,
-              price: priceData(product.priceCents),
-              soldAt: (product.soldAt ?? product.updatedAt).toISOString(),
-            })),
-            hasMore: more,
-          }),
-        };
+        const sales = [...this.#products.values()]
+          .flatMap((stored) =>
+            stored.current.seller === session.seller &&
+            stored.current.status === 'SOLD' &&
+            stored.purchaseId !== null
+              ? [
+                  {
+                    purchaseId: stored.purchaseId,
+                    soldAt: stored.current.soldAt ?? stored.current.updatedAt,
+                  },
+                ]
+              : [],
+          )
+          .sort((a, b) => b.soldAt.getTime() - a.soldAt.getTime());
+        return { status: 200, body: soldItemsPage(session.seller, sales) };
       }
     }
   }
@@ -742,6 +748,11 @@ export class FakeDepopSite {
     const slug = [seller, ...words, this.#sequence.toString(36)].join('-');
     if (!DEPOP_SLUG.test(slug)) throw new Error(`the fake made an invalid slug ${slug}`);
     return slug;
+  }
+
+  #newPurchaseId(): number {
+    this.#purchases += 1;
+    return 7_000_000 + this.#purchases;
   }
 
   #takeFault(action: FakeDepopSiteAction): FakeDepopSiteFault | undefined {
