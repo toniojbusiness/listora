@@ -75,20 +75,45 @@ export const FORM_SELECTORS = {
    * a button per size, and Done; the condition dropdown has an item per condition.
    */
   categorySelector: '.listing-editor__category-container .dropdown__selector',
+  /**
+   * Once a category is chosen (an edit form, or a form filled in again), the picker opens on that
+   * category's department, with "All Categories" to go back to the departments (read on the
+   * captain's session, 2026-10-27).
+   */
+  allCategories: '.listing-editor__category-container a.dropdown__menu__item[data-et-name="all"]',
+  /**
+   * A department's item names it in a paragraph inside its link, and a category's (or a display
+   * group's) in a div inside its item, so the name is matched on the element that holds the
+   * text, as both hosts' `:text-is` read it.
+   */
   department: (name: string) =>
-    `.listing-editor__category-container a.dropdown__menu__item:text-is("${quote(name)}")`,
+    `.listing-editor__category-container a.dropdown__menu__item p:text-is("${quote(name)}")`,
   category: (name: string) =>
-    `.listing-editor__category-container li.dropdown__menu__item:text-is("${quote(name)}")`,
+    `.listing-editor__category-container li.dropdown__menu__item > div:text-is("${quote(name)}")`,
   subcategory: (name: string) =>
     `.listing-editor__subcategory-container a[data-et-name="sub_category"]:text-is("${quote(name)}")`,
+  /** The subcategory picker's choice of no subcategory. */
+  noSubcategory:
+    '.listing-editor__subcategory-container a[data-et-name="sub_category"]:text-is("None")',
   sizeSelector: '[data-test="size"]',
   sizeSet: (name: string) =>
     `[data-test="horizontal-list"] li.navigation--horizontal__tab span:text-is("${quote(name)}")`,
-  size: (name: string) => `button.multi-size-selector__button:text-is("${quote(name)}")`,
+  /** A size's button, by the label it shows (`Neck 15.5`, `Waist 32`, `2T`), not its id. */
+  size: (label: string) => `button.multi-size-selector__button:text-is("${quote(label)}")`,
   sizeDone: 'button[data-et-name="apply"][data-et-on-name="multi_item_quantity_tile"]',
   conditionSelector: '.listing-editor__condition-container .dropdown__selector',
   condition: (title: string) =>
     `div[data-et-name="listing_condition"] > div.fw--med:text-is("${quote(title)}")`,
+  /**
+   * The color picker (read on the captain's session, 2026-10-27): its selector, a tile per color
+   * whose circle is the button and holds a checkmark once the color is chosen, and Done.
+   */
+  colorSelector: '[data-et-name="color"]',
+  colorNames: 'li.listing-editor__tile--color span',
+  chosenColors: 'li.listing-editor__tile--color:has(i.checkmark) span',
+  /** The circle of the color tile at `index`, in the picker's order. */
+  color: (index: number) => `li.listing-editor__tile--color >> nth=${String(index)} >> a`,
+  colorDone: 'button[data-et-name="apply"][data-et-on-name="color_tile"]',
   sku: 'input[data-vv-name="sku"]',
   /** "Additional Details (PRIVATE)", which holds the SKU, shown by its "show details" link. */
   privateDetailsToggle:
@@ -203,63 +228,113 @@ async function expectField(page: PageDriver, selector: string, what: string): Pr
   }
 }
 
-/** The department, category, and (when the form offers it) subcategory. */
+/**
+ * The department, category (inside its display group, when it has one), and subcategory. A
+ * catalog without a subcategory takes the picker's "None", so a changed listing keeps none of
+ * the one it had.
+ */
 export async function chooseCatalog(page: PageDriver, catalog: PoshmarkCatalog): Promise<void> {
   await expectField(page, FORM_SELECTORS.categorySelector, 'category picker');
   await page.click(FORM_SELECTORS.categorySelector);
+  if (await appears(page, FORM_SELECTORS.allCategories, SHORT_LOOK_MS)) {
+    await page.click(FORM_SELECTORS.allCategories);
+  }
   await pick(
     page,
     FORM_SELECTORS.department(catalog.department),
     `department "${catalog.department}"`,
   );
-  await pick(page, FORM_SELECTORS.category(catalog.category), `category "${catalog.category}"`);
-  if (catalog.subcategory !== null) {
-    // Poshmark's subcategory is optional: one its form no longer offers is left out.
-    const offered = FORM_SELECTORS.subcategory(catalog.subcategory);
-    if (await appears(page, offered)) await page.click(offered);
+  const category = FORM_SELECTORS.category(catalog.category);
+  if (catalog.group !== null && !(await appears(page, category, SHORT_LOOK_MS))) {
+    await pick(page, FORM_SELECTORS.category(catalog.group), `category group "${catalog.group}"`);
   }
+  await pick(page, category, `category "${catalog.category}"`);
+  const subcategory =
+    catalog.subcategory === null
+      ? FORM_SELECTORS.noSubcategory
+      : FORM_SELECTORS.subcategory(catalog.subcategory);
+  // Poshmark's subcategory is optional, and a category without any has no picker for it.
+  if (await appears(page, subcategory, SHORT_LOOK_MS)) await page.click(subcategory);
 }
 
-/** The size (its size set first) and the condition. */
+/**
+ * The size (its size set first) and the condition. A one-size category's form has chosen its
+ * size by itself, and a form that shows the size already is left as it is.
+ */
 export async function chooseSizeAndCondition(
   page: PageDriver,
   size: PoshmarkSize,
   condition: PoshmarkCondition,
 ): Promise<void> {
   await expectField(page, FORM_SELECTORS.sizeSelector, 'size picker');
-  await page.click(FORM_SELECTORS.sizeSelector);
-  const set = FORM_SELECTORS.sizeSet(size.set);
-  // A category with one size set may show no tabs.
-  if (await appears(page, set)) await page.click(set);
-  await pick(page, FORM_SELECTORS.size(size.size), `size "${size.size}"`);
-  // A single item's size applies on the click and closes the picker; Done is for several sizes.
-  const shown = (await page.text(FORM_SELECTORS.sizeSelector))?.replace(/\s+/g, ' ').trim();
-  if (shown !== size.size) await pick(page, FORM_SELECTORS.sizeDone, 'size Done button');
+  if ((await shownSize(page)) !== size.chosen) {
+    await page.click(FORM_SELECTORS.sizeSelector);
+    const set = FORM_SELECTORS.sizeSet(size.set);
+    // A category with one size set may show no tabs.
+    if (await appears(page, set, SHORT_LOOK_MS)) await page.click(set);
+    await pick(page, FORM_SELECTORS.size(size.label), `size "${size.label}"`);
+    // A single item's size applies on the click and closes the picker; Done is for several sizes.
+    if ((await shownSize(page)) !== size.chosen) {
+      await pick(page, FORM_SELECTORS.sizeDone, 'size Done button');
+    }
+  }
   await expectField(page, FORM_SELECTORS.conditionSelector, 'condition picker');
   await page.click(FORM_SELECTORS.conditionSelector);
-  const title = CONDITION_TITLES[condition.code];
-  await pick(page, FORM_SELECTORS.condition(title), `condition "${title}"`);
+  await pick(page, FORM_SELECTORS.condition(condition.label), `condition "${condition.label}"`);
 }
 
-/** The titles the condition picker shows (Poshmark's `listingEditor.condition.dropdownOptions`). */
-const CONDITION_TITLES = {
-  nwt: 'New With Tags',
-  uln: 'Like New',
-  ug: 'Good',
-  uf: 'Fair',
-} as const satisfies Record<PoshmarkCondition['code'], string>;
+async function shownSize(page: PageDriver): Promise<string | undefined> {
+  return (await page.text(FORM_SELECTORS.sizeSelector))?.replace(/\s+/g, ' ').trim();
+}
 
-/** Waits briefly for a choice the page draws once its picker opens, then clicks it. */
-async function pick(page: PageDriver, selector: string, what: string): Promise<void> {
+/**
+ * The item's colors (up to two, in Poshmark's names): the picker's chosen colors become exactly
+ * these. No colors leaves the picker as it is, since Listora doesn't know them.
+ */
+export async function chooseColors(page: PageDriver, colors: readonly string[]): Promise<void> {
+  if (colors.length === 0) return;
+  await expectField(page, FORM_SELECTORS.colorSelector, 'color picker');
+  await page.click(FORM_SELECTORS.colorSelector);
+  await pick(page, FORM_SELECTORS.colorDone, 'color Done button', true);
+  const names = (await page.texts(FORM_SELECTORS.colorNames)).map((text) => text.trim());
+  const chosen = (await page.texts(FORM_SELECTORS.chosenColors)).map((text) => text.trim());
+  const toggle = async (name: string): Promise<void> => {
+    const index = names.indexOf(name);
+    if (index < 0) throw new PageChangedError(`Poshmark's listing form offers no color "${name}"`);
+    await page.click(FORM_SELECTORS.color(index));
+  };
+  // Unchoosing first keeps the picker within its two colors.
+  for (const name of chosen.filter((color) => !colors.includes(color))) await toggle(name);
+  for (const name of colors.filter((color) => !chosen.includes(color))) await toggle(name);
+  await pick(page, FORM_SELECTORS.colorDone, 'color Done button');
+}
+
+/**
+ * Waits briefly for a choice the page draws once its picker opens, then clicks it (or, with
+ * `onlyWait`, only makes sure it is there).
+ */
+async function pick(
+  page: PageDriver,
+  selector: string,
+  what: string,
+  onlyWait = false,
+): Promise<void> {
   if (!(await appears(page, selector))) {
     throw new PageChangedError(`Poshmark's listing form offers no ${what}`);
   }
-  await page.click(selector);
+  if (!onlyWait) await page.click(selector);
 }
 
+/** How long a choice that may not be there at all is waited for. */
+const SHORT_LOOK_MS = 1_500;
+
 /** Whether `selector` is on the page within a moment (a picker's menu draws itself). */
-async function appears(page: PageDriver, selector: string): Promise<boolean> {
-  const end = Date.now() + EDITOR_OPENS_MS;
+async function appears(
+  page: PageDriver,
+  selector: string,
+  withinMs = EDITOR_OPENS_MS,
+): Promise<boolean> {
+  const end = Date.now() + withinMs;
   for (;;) {
     if (await page.exists(selector)) return true;
     if (Date.now() >= end) return false;

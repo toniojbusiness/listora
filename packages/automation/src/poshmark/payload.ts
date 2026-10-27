@@ -12,8 +12,9 @@
  * most 1,500 (Poshmark's Bulk Upload template, as in @listora/analysis); a price in whole
  * dollars (every price Poshmark's pages showed was) from $3
  * (`app_listing_fee__us.minimum_selling_price`) up to $1,000,000 (`max_listing_price_amount`);
- * at most 16 photos; a department, category, size, and condition, which the form requires; and
- * underwear only new with tags (Poshmark removes used underwear, `adapter/underwear.ts`).
+ * at most 16 photos; a department, category, size, and condition, which the form requires; up to
+ * two of Poshmark's colors; and nothing Poshmark prohibits (`prohibited.ts`: used underwear,
+ * makeup, and personal care, replicas, and what its labels cannot ship).
  */
 import type { JsonObject } from '@listora/db';
 import type {
@@ -23,6 +24,7 @@ import type {
   ValidationIssue,
 } from '@listora/marketplaces';
 import { photosInOrder } from '@listora/marketplaces';
+import { assertNever } from '@listora/shared';
 
 import { isUnderwear } from '../adapter/underwear.ts';
 import {
@@ -31,7 +33,9 @@ import {
   sizeSetsFor,
   type PoshmarkCatalog,
 } from './catalog.ts';
+import { poshmarkColors } from './colors.ts';
 import { poshmarkCondition, type PoshmarkCondition } from './conditions.ts';
+import { prohibitedReason } from './prohibited.ts';
 import { poshmarkSize, type PoshmarkSize } from './sizes.ts';
 
 export interface PoshmarkListingPayload extends AssistedListingPayload {
@@ -40,6 +44,8 @@ export interface PoshmarkListingPayload extends AssistedListingPayload {
   size: (PoshmarkSize & JsonObject) | null;
   condition: (PoshmarkCondition & JsonObject) | null;
   brand: string | null;
+  /** Poshmark's names of the item's colors, at most two (`colors.ts`). */
+  colors: string[];
   /** What the item cost new, which Poshmark shows struck through; only when known. */
   originalPrice: { amountCents: number; currency: 'USD' } | null;
   /**
@@ -77,7 +83,10 @@ export function buildPoshmarkPayload(
       : parseCatalogRef(variant.categoryRef);
   const sizeLabel = aspect('Size') ?? item.sizeLabel;
   const sets = catalog === null ? null : sizeSetsFor(catalog.department, catalog.category);
-  const size = sets === null ? null : poshmarkSize(sizeLabel, item.sizeSystem, sets);
+  const size =
+    sets === null || catalog === null
+      ? null
+      : poshmarkSize(sizeLabel, item.sizeSystem, sets, catalog.department);
   const condition = variant.condition ?? item.condition;
   const originalCents = dollarsToCents(aspect('Original Price'));
   return {
@@ -89,6 +98,7 @@ export function buildPoshmarkPayload(
     size: size === null ? null : { ...size },
     condition: condition === null ? null : { ...poshmarkCondition(condition) },
     brand: aspect('Brand') ?? item.brand,
+    colors: poshmarkColors(item.colors),
     originalPrice: originalCents === null ? null : { amountCents: originalCents, currency: 'USD' },
     source: {
       category: variant.categoryRef ?? item.category,
@@ -168,7 +178,9 @@ export function validatePoshmarkPayload(payload: PoshmarkListingPayload): Valida
       message:
         source.sizeLabel === null
           ? `Poshmark needs a size for ${catalogName(payload.catalog)}.`
-          : `Poshmark has no size "${source.sizeLabel}" for ${catalogName(payload.catalog)}. Set a size Poshmark offers.`,
+          : payload.catalog.department === 'Kids'
+            ? `Poshmark files kids' sizes under Girls, Boys, or Baby, and "${source.sizeLabel}" doesn't say which one it is for ${catalogName(payload.catalog)}. Write the size as, for example, "Girls 8" or "Boys 8".`
+            : `Poshmark has no size "${source.sizeLabel}" for ${catalogName(payload.catalog)}. Set a size Poshmark offers.`,
     });
   }
   if (payload.condition === null) {
@@ -177,12 +189,16 @@ export function validatePoshmarkPayload(payload: PoshmarkListingPayload): Valida
       code: 'required',
       message: "Poshmark needs the item's condition.",
     });
-  } else if (isUnderwear(source.itemCategory) && payload.condition.code !== 'nwt') {
-    issues.push({
-      field: 'item.condition',
-      code: 'not_allowed',
-      message: "Poshmark doesn't take used underwear: it lists underwear only new with tags.",
-    });
+  }
+  const prohibited = prohibitedReason({
+    catalog: payload.catalog,
+    condition: payload.condition?.code ?? null,
+    title: payload.title,
+    description: payload.description,
+    underwear: isUnderwear(source.itemCategory),
+  });
+  if (prohibited !== null) {
+    issues.push({ field: prohibited.field, code: 'not_allowed', message: prohibited.message });
   }
   return issues;
 }
@@ -193,7 +209,19 @@ function describe(source: PoshmarkListingPayload['source']): string {
 }
 
 function catalogName(catalog: PoshmarkCatalog): string {
-  return `${catalog.department}'s ${catalog.category}`;
+  switch (catalog.department) {
+    case 'Women':
+    case 'Men':
+      return `${catalog.department}'s ${catalog.category}`;
+    case 'Kids':
+      return `Kids' ${catalog.category}`;
+    case 'Home':
+    case 'Pets':
+    case 'Electronics':
+      return `${catalog.department} ${catalog.category}`;
+    default:
+      return assertNever(catalog.department, 'Poshmark department');
+  }
 }
 
 /** `$110`, `110.00`, `110` → cents; `null` for anything else. */

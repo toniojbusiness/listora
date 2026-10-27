@@ -8852,15 +8852,39 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		* a button per size, and Done; the condition dropdown has an item per condition.
 		*/
 		categorySelector: ".listing-editor__category-container .dropdown__selector",
-		department: (name) => `.listing-editor__category-container a.dropdown__menu__item:text-is("${quote(name)}")`,
-		category: (name) => `.listing-editor__category-container li.dropdown__menu__item:text-is("${quote(name)}")`,
+		/**
+		* Once a category is chosen (an edit form, or a form filled in again), the picker opens on that
+		* category's department, with "All Categories" to go back to the departments (read on the
+		* captain's session, 2026-10-27).
+		*/
+		allCategories: ".listing-editor__category-container a.dropdown__menu__item[data-et-name=\"all\"]",
+		/**
+		* A department's item names it in a paragraph inside its link, and a category's (or a display
+		* group's) in a div inside its item, so the name is matched on the element that holds the
+		* text, as both hosts' `:text-is` read it.
+		*/
+		department: (name) => `.listing-editor__category-container a.dropdown__menu__item p:text-is("${quote(name)}")`,
+		category: (name) => `.listing-editor__category-container li.dropdown__menu__item > div:text-is("${quote(name)}")`,
 		subcategory: (name) => `.listing-editor__subcategory-container a[data-et-name="sub_category"]:text-is("${quote(name)}")`,
+		/** The subcategory picker's choice of no subcategory. */
+		noSubcategory: ".listing-editor__subcategory-container a[data-et-name=\"sub_category\"]:text-is(\"None\")",
 		sizeSelector: "[data-test=\"size\"]",
 		sizeSet: (name) => `[data-test="horizontal-list"] li.navigation--horizontal__tab span:text-is("${quote(name)}")`,
-		size: (name) => `button.multi-size-selector__button:text-is("${quote(name)}")`,
+		/** A size's button, by the label it shows (`Neck 15.5`, `Waist 32`, `2T`), not its id. */
+		size: (label) => `button.multi-size-selector__button:text-is("${quote(label)}")`,
 		sizeDone: "button[data-et-name=\"apply\"][data-et-on-name=\"multi_item_quantity_tile\"]",
 		conditionSelector: ".listing-editor__condition-container .dropdown__selector",
 		condition: (title) => `div[data-et-name="listing_condition"] > div.fw--med:text-is("${quote(title)}")`,
+		/**
+		* The color picker (read on the captain's session, 2026-10-27): its selector, a tile per color
+		* whose circle is the button and holds a checkmark once the color is chosen, and Done.
+		*/
+		colorSelector: "[data-et-name=\"color\"]",
+		colorNames: "li.listing-editor__tile--color span",
+		chosenColors: "li.listing-editor__tile--color:has(i.checkmark) span",
+		/** The circle of the color tile at `index`, in the picker's order. */
+		color: (index) => `li.listing-editor__tile--color >> nth=${String(index)} >> a`,
+		colorDone: "button[data-et-name=\"apply\"][data-et-on-name=\"color_tile\"]",
 		sku: "input[data-vv-name=\"sku\"]",
 		/** "Additional Details (PRIVATE)", which holds the SKU, shown by its "show details" link. */
 		privateDetailsToggle: ".listing-editor__toggle:has([data-vv-name=\"sku\"]) a.listing-editor-toggle-link",
@@ -8955,45 +8979,75 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	async function expectField(page, selector, what) {
 		if (!await page.exists(selector)) throw new PageChangedError(`Poshmark's listing form has no ${what} (${selector})`);
 	}
-	/** The department, category, and (when the form offers it) subcategory. */
+	/**
+	* The department, category (inside its display group, when it has one), and subcategory. A
+	* catalog without a subcategory takes the picker's "None", so a changed listing keeps none of
+	* the one it had.
+	*/
 	async function chooseCatalog(page, catalog) {
 		await expectField(page, FORM_SELECTORS.categorySelector, "category picker");
 		await page.click(FORM_SELECTORS.categorySelector);
+		if (await appears(page, FORM_SELECTORS.allCategories, SHORT_LOOK_MS)) await page.click(FORM_SELECTORS.allCategories);
 		await pick(page, FORM_SELECTORS.department(catalog.department), `department "${catalog.department}"`);
-		await pick(page, FORM_SELECTORS.category(catalog.category), `category "${catalog.category}"`);
-		if (catalog.subcategory !== null) {
-			const offered = FORM_SELECTORS.subcategory(catalog.subcategory);
-			if (await appears(page, offered)) await page.click(offered);
-		}
+		const category = FORM_SELECTORS.category(catalog.category);
+		if (catalog.group !== null && !await appears(page, category, SHORT_LOOK_MS)) await pick(page, FORM_SELECTORS.category(catalog.group), `category group "${catalog.group}"`);
+		await pick(page, category, `category "${catalog.category}"`);
+		const subcategory = catalog.subcategory === null ? FORM_SELECTORS.noSubcategory : FORM_SELECTORS.subcategory(catalog.subcategory);
+		if (await appears(page, subcategory, SHORT_LOOK_MS)) await page.click(subcategory);
 	}
-	/** The size (its size set first) and the condition. */
+	/**
+	* The size (its size set first) and the condition. A one-size category's form has chosen its
+	* size by itself, and a form that shows the size already is left as it is.
+	*/
 	async function chooseSizeAndCondition(page, size, condition) {
 		await expectField(page, FORM_SELECTORS.sizeSelector, "size picker");
-		await page.click(FORM_SELECTORS.sizeSelector);
-		const set = FORM_SELECTORS.sizeSet(size.set);
-		if (await appears(page, set)) await page.click(set);
-		await pick(page, FORM_SELECTORS.size(size.size), `size "${size.size}"`);
-		if ((await page.text(FORM_SELECTORS.sizeSelector))?.replace(/\s+/g, " ").trim() !== size.size) await pick(page, FORM_SELECTORS.sizeDone, "size Done button");
+		if (await shownSize(page) !== size.chosen) {
+			await page.click(FORM_SELECTORS.sizeSelector);
+			const set = FORM_SELECTORS.sizeSet(size.set);
+			if (await appears(page, set, SHORT_LOOK_MS)) await page.click(set);
+			await pick(page, FORM_SELECTORS.size(size.label), `size "${size.label}"`);
+			if (await shownSize(page) !== size.chosen) await pick(page, FORM_SELECTORS.sizeDone, "size Done button");
+		}
 		await expectField(page, FORM_SELECTORS.conditionSelector, "condition picker");
 		await page.click(FORM_SELECTORS.conditionSelector);
-		const title = CONDITION_TITLES[condition.code];
-		await pick(page, FORM_SELECTORS.condition(title), `condition "${title}"`);
+		await pick(page, FORM_SELECTORS.condition(condition.label), `condition "${condition.label}"`);
 	}
-	/** The titles the condition picker shows (Poshmark's `listingEditor.condition.dropdownOptions`). */
-	const CONDITION_TITLES = {
-		nwt: "New With Tags",
-		uln: "Like New",
-		ug: "Good",
-		uf: "Fair"
-	};
-	/** Waits briefly for a choice the page draws once its picker opens, then clicks it. */
-	async function pick(page, selector, what) {
+	async function shownSize(page) {
+		return (await page.text(FORM_SELECTORS.sizeSelector))?.replace(/\s+/g, " ").trim();
+	}
+	/**
+	* The item's colors (up to two, in Poshmark's names): the picker's chosen colors become exactly
+	* these. No colors leaves the picker as it is, since Listora doesn't know them.
+	*/
+	async function chooseColors(page, colors) {
+		if (colors.length === 0) return;
+		await expectField(page, FORM_SELECTORS.colorSelector, "color picker");
+		await page.click(FORM_SELECTORS.colorSelector);
+		await pick(page, FORM_SELECTORS.colorDone, "color Done button", true);
+		const names = (await page.texts(FORM_SELECTORS.colorNames)).map((text) => text.trim());
+		const chosen = (await page.texts(FORM_SELECTORS.chosenColors)).map((text) => text.trim());
+		const toggle = async (name) => {
+			const index = names.indexOf(name);
+			if (index < 0) throw new PageChangedError(`Poshmark's listing form offers no color "${name}"`);
+			await page.click(FORM_SELECTORS.color(index));
+		};
+		for (const name of chosen.filter((color) => !colors.includes(color))) await toggle(name);
+		for (const name of colors.filter((color) => !chosen.includes(color))) await toggle(name);
+		await pick(page, FORM_SELECTORS.colorDone, "color Done button");
+	}
+	/**
+	* Waits briefly for a choice the page draws once its picker opens, then clicks it (or, with
+	* `onlyWait`, only makes sure it is there).
+	*/
+	async function pick(page, selector, what, onlyWait = false) {
 		if (!await appears(page, selector)) throw new PageChangedError(`Poshmark's listing form offers no ${what}`);
-		await page.click(selector);
+		if (!onlyWait) await page.click(selector);
 	}
+	/** How long a choice that may not be there at all is waited for. */
+	const SHORT_LOOK_MS = 1500;
 	/** Whether `selector` is on the page within a moment (a picker's menu draws itself). */
-	async function appears(page, selector) {
-		const end = Date.now() + EDITOR_OPENS_MS;
+	async function appears(page, selector, withinMs = EDITOR_OPENS_MS) {
+		const end = Date.now() + withinMs;
 		for (;;) {
 			if (await page.exists(selector)) return true;
 			if (Date.now() >= end) return false;
@@ -9158,6 +9212,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* hides, as it did with a listing it removed under its rules, which is not (Poshmark can show it
 	* again). Any other page without the listing (one without that record, or no longer published)
 	* reads as "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
+	*
+	* After a change Poshmark reviews the listing (`status: "for_review"`, read on the captain's
+	* listings, 2026-10-27: over 20 minutes after a price change). Its page still embeds the
+	* listing, with the change, for its seller, but buyers get the 404 page: the listing is not live
+	* while it is reviewed. So a listing under review is there to change, and as a read-back it is
+	* live only once Poshmark publishes it again (an ended or sold one reads as what it is).
 	*/
 	const PAGE = "listing page";
 	/** Poshmark's record of a listing that isn't on the site, on its 404 page. */
@@ -9188,28 +9248,50 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (info.status === "archived") return { type: "deleted" };
 			return info.status === "hidden" ? { type: "hidden" } : { type: "none" };
 		}
-		if (details.id !== id || details.status !== "published") return { type: "none" };
+		if (details.id !== id) return { type: "none" };
+		if (details.status === "for_review") return {
+			type: "reviewing",
+			record: details
+		};
+		if (details.status !== "published") return { type: "none" };
 		return {
 			type: "listing",
 			record: details
 		};
 	}
-	/** Opens the listing's page and reads it; `null` when the page shows no such listing. */
+	/**
+	* Opens the listing's page and reads its record (one under review too); `null` when the page
+	* shows no such listing.
+	*/
 	async function openListing(page, site, id) {
 		const shown = await openListingPage(page, site, id);
-		return shown.type === "listing" ? shown.record : null;
+		return shown.type === "listing" || shown.type === "reviewing" ? shown.record : null;
 	}
 	/** The listing as a read-back. */
 	async function readListing(page, site, id) {
 		return remoteState(await openListingPage(page, site, id), site);
 	}
-	/** What a listing's page shows, as a read-back: only a deleted listing is definitely gone. */
+	/**
+	* What a listing's page shows, as a read-back: only a deleted listing is definitely gone, and
+	* one under review that is for sale is not live yet.
+	*/
 	function remoteState(shown, site) {
 		if (shown.type === "listing") return remoteListing(shown.record, site, PAGE);
+		if (shown.type === "reviewing") {
+			const listing = remoteListing(shown.record, site, PAGE);
+			return listing.status === "active" ? {
+				found: false,
+				authoritative: false
+			} : listing;
+		}
 		return {
 			found: false,
 			authoritative: shown.type === "deleted"
 		};
+	}
+	/** The listing as its seller has it, whether or not Poshmark is reviewing it. */
+	function sellersListing(shown, site) {
+		return shown.type === "reviewing" ? remoteListing(shown.record, site, PAGE) : remoteState(shown, site);
 	}
 
 // src/poshmark/scripts.ts
@@ -9343,6 +9425,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				mutates: false,
 				timeScale: 2
 			}, (page) => chooseSizeAndCondition(page, size, condition));
+			await step("choose the colors", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => chooseColors(page, payload.colors));
 		}
 		/** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
 		async function save(step, button) {
@@ -9365,7 +9451,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function settledListing(step, id) {
 			for (let look = 1;; look += 1) {
 				const shown = await step("open the listing", { mutates: false }, (page) => openListingPage(page, site, id));
-				if (shown.type === "listing" || shown.type === "deleted" || look === SETTLE_LOOKS) return shown;
+				if (shown.type === "listing" || shown.type === "reviewing" || shown.type === "deleted" || look === SETTLE_LOOKS) return shown;
 				await new Promise((resolve) => setTimeout(resolve, settleWaitMs));
 			}
 		}
@@ -9377,7 +9463,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function newListing(step, id) {
 			for (let look = 1; look <= NEW_LOOKS; look += 1) {
 				const shown = await step("read the new listing", { mutates: false }, (page) => openListingPage(page, site, id));
-				if (shown.type === "listing") return {
+				if (shown.type === "listing" || shown.type === "reviewing") return {
 					type: "applied",
 					externalListingId: id,
 					revision: revision(shown.record, "listing page")
@@ -9400,7 +9486,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (id === null) return notListed();
 			const page = await settledListing(step, id);
 			if (page.type === "hidden") return hiddenListing();
-			const shown = remoteState(page, site);
+			const shown = sellersListing(page, site);
 			if (!shown.found) {
 				if (!shown.authoritative) return notListed();
 				return availability === "not_for_sale" ? {

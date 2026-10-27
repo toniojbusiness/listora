@@ -44,12 +44,15 @@ import {
   type SubmittedForm,
 } from '../../fake-site/http.ts';
 import {
-  mappedPoshmarkCatalogs,
+  POSHMARK_COLORS,
   POSHMARK_DEPARTMENTS,
+  poshmarkCatalog,
   poshmarkCategories,
   sizeSetsFor,
+  subcategoriesOf,
   type PoshmarkDepartment,
 } from '../catalog.ts';
+import { MAX_POSHMARK_COLORS } from '../colors.ts';
 import { POSHMARK_CONDITIONS, type PoshmarkConditionCode } from '../conditions.ts';
 import { POSHMARK_LIMITS } from '../payload.ts';
 
@@ -116,9 +119,16 @@ export interface FakePoshmarkListing {
   sizeSet: string;
   size: string;
   condition: PoshmarkConditionCode;
+  /** Poshmark's names of the listing's colors (up to two). */
+  colors: string[];
   /** The byte sizes of the listing's photos in posting order (the first is the cover). */
   photoSizes: number[];
   inventory: FakeInventoryStatus;
+  /**
+   * Whether Poshmark is reviewing it after a change (`status: "for_review"`): its seller sees it
+   * and can change it, buyers can't buy it (read on the captain's listings, 2026-10-27).
+   */
+  reviewing: boolean;
   createdAt: Date;
   updatedAt: Date;
   inventoryChangedAt: Date;
@@ -160,6 +170,7 @@ const DEFAULT_SELLER = 'listora_closet';
 export class FakePoshmark {
   readonly #server: Server;
   readonly #options: FakePoshmarkOptions;
+  #reviewChanges = false;
   readonly #listings = new Map<string, StoredListing>();
   /** The ids new listings' forms named, each the id of the listing its form lists. */
   readonly #drafts = new Set<string>();
@@ -242,6 +253,21 @@ export class FakePoshmark {
     return stored === undefined ? undefined : { ...stored.current };
   }
 
+  /**
+   * From now on, whether each change puts the listing under Poshmark's review, as Poshmark did
+   * with the captain's listings after every change (2026-10-27).
+   */
+  reviewChanges(on: boolean): void {
+    this.#reviewChanges = on;
+  }
+
+  /** Poshmark finishes reviewing the listing: it is live again. */
+  publish(id: string): void {
+    const stored = this.#listings.get(id);
+    if (stored === undefined) throw new Error(`no listing ${id}`);
+    stored.current = { ...stored.current, reviewing: false };
+  }
+
   /** Lists an item directly, as the seller once did by hand; returns its id. */
   seed(seed: FakePoshmarkSeed): string {
     const at = this.#tick();
@@ -258,8 +284,10 @@ export class FakePoshmark {
       sizeSet: 'Standard',
       size: 'M',
       condition: 'ug',
+      colors: [],
       photoSizes: [4],
       inventory: 'available',
+      reviewing: false,
       createdAt: at,
       updatedAt: at,
       inventoryChangedAt: at,
@@ -490,6 +518,7 @@ export class FakePoshmark {
           ...completeFields(fields),
           photoSizes: form.files('photos'),
           inventory: fields.availability === 'not_for_sale' ? 'not_for_sale' : 'available',
+          reviewing: false,
           createdAt: at,
           updatedAt: at,
           inventoryChangedAt: at,
@@ -518,6 +547,7 @@ export class FakePoshmark {
               : 'available';
         this.#change(stored, {
           ...details,
+          reviewing: this.#reviewChanges || stored.current.reviewing,
           updatedAt: at,
           ...(inventory === stored.current.inventory ? {} : { inventory, inventoryChangedAt: at }),
         });
@@ -719,6 +749,8 @@ interface FormFields {
   sizeSet: string;
   size: string;
   condition: string;
+  /** Comma-separated, as the picker's hidden field holds them. */
+  colors: string;
   originalPrice: string;
   listingPrice: string;
   sku: string;
@@ -736,6 +768,7 @@ function formFields(form: SubmittedForm): FormFields {
     sizeSet: form.text('size_set'),
     size: form.text('size'),
     condition: form.text('condition'),
+    colors: form.text('colors'),
     originalPrice: form.text('originalPrice'),
     listingPrice: form.text('listingPrice'),
     sku: form.text('sku'),
@@ -754,6 +787,7 @@ function fieldsOf(listing: FakePoshmarkListing): FormFields {
     sizeSet: listing.sizeSet,
     size: listing.size,
     condition: listing.condition,
+    colors: listing.colors.join(','),
     originalPrice:
       listing.originalPriceCents === null ? '' : String(listing.originalPriceCents / 100),
     listingPrice: String(listing.priceCents / 100),
@@ -777,9 +811,27 @@ function invalidListing(fields: FormFields, photos: number, creating: boolean): 
   }
   const department = POSHMARK_DEPARTMENTS.find((name) => name === fields.department);
   const sets = department === undefined ? null : sizeSetsFor(department, fields.category);
-  if (sets === null) problems.push('Please select a category.');
-  else if (!(sets[fields.sizeSet] ?? []).includes(fields.size))
+  const subcategory = fields.subcategory === '' ? null : fields.subcategory;
+  if (
+    sets === null ||
+    department === undefined ||
+    poshmarkCatalog(department, fields.category, subcategory) === null
+  ) {
+    problems.push('Please select a category.');
+  } else if (
+    !(sets.find((set) => set.name === fields.sizeSet)?.sizes ?? []).some(
+      ([id]) => id === fields.size,
+    )
+  ) {
     problems.push('Please select a size.');
+  }
+  const colors = colorList(fields.colors);
+  if (
+    colors.length > MAX_POSHMARK_COLORS ||
+    colors.some((color) => !POSHMARK_COLORS.includes(color))
+  ) {
+    problems.push('Please select up to 2 colors.');
+  }
   if (!Object.hasOwn(POSHMARK_CONDITIONS, fields.condition)) {
     problems.push('Please select a condition.');
   }
@@ -811,6 +863,7 @@ function completeFields(
   | 'sizeSet'
   | 'size'
   | 'condition'
+  | 'colors'
   | 'priceCents'
   | 'originalPriceCents'
 > {
@@ -825,45 +878,45 @@ function completeFields(
     sizeSet: fields.sizeSet,
     size: fields.size,
     condition: fields.condition as PoshmarkConditionCode,
+    colors: colorList(fields.colors),
     priceCents: Number(fields.listingPrice) * 100,
     originalPriceCents: fields.originalPrice === '' ? null : Number(fields.originalPrice) * 100,
   };
 }
 
-/** The catalog the form's pickers offer: categories, subcategories, and size sets. */
+function colorList(text: string): string[] {
+  return text === '' ? [] : text.split(',');
+}
+
+/**
+ * The catalog the form's pickers offer, as Poshmark's own form holds it (catalog.json): each
+ * department's categories in order, with their display group, subcategories, and size sets (a
+ * size's id, its button's label, and what the picker shows once it is chosen).
+ */
 function catalogData(): Record<
   string,
-  Record<string, { subcategories: string[]; sets: Record<string, readonly string[]> }>
+  {
+    name: string;
+    group: string | null;
+    subcategories: readonly string[];
+    sets: { name: string; sizes: readonly (readonly string[])[] }[];
+  }[]
 > {
-  const subcategories = new Map<string, Set<string>>();
-  for (const catalog of mappedPoshmarkCatalogs()) {
-    if (catalog.subcategory === null) continue;
-    const key = `${catalog.department}/${catalog.category}`;
-    subcategories.set(key, (subcategories.get(key) ?? new Set()).add(catalog.subcategory));
-  }
   return Object.fromEntries(
     POSHMARK_DEPARTMENTS.map((department) => [
       department,
-      Object.fromEntries(
-        poshmarkCategories(department).map((category) => [
-          category,
-          {
-            subcategories: [...(subcategories.get(`${department}/${category}`) ?? [])],
-            sets: { ...sizeSetsFor(department, category) },
-          },
-        ]),
-      ),
+      poshmarkCategories(department).map((category) => ({
+        name: category,
+        group: poshmarkCatalog(department, category)?.group ?? null,
+        subcategories: subcategoriesOf(department, category) ?? [],
+        sets: (sizeSetsFor(department, category) ?? []).map((set) => ({
+          name: set.name,
+          sizes: set.sizes,
+        })),
+      })),
     ]),
   );
 }
-
-/** The titles the condition picker shows (Poshmark's `listingEditor.condition.dropdownOptions`). */
-const CONDITION_TITLES = {
-  nwt: 'New With Tags',
-  uln: 'Like New',
-  ug: 'Good',
-  uf: 'Fair',
-} as const satisfies Record<PoshmarkConditionCode, string>;
 
 /** The availability picker's items: Poshmark's own codes, with the labels the picker shows. */
 const AVAILABILITIES = [
@@ -890,6 +943,7 @@ const PICKED_FIELDS = [
   'size_set',
   'size',
   'condition',
+  'colors',
   'availability',
 ] as const;
 
@@ -916,7 +970,9 @@ function listingForm(
     `<div ${container}><div class="dropdown__selector"${selector}></div><div class="dropdown__menu" hidden></div></div>`;
   const editor = {
     catalog: catalogData(),
-    conditions: Object.entries(CONDITION_TITLES),
+    colors: POSHMARK_COLORS,
+    // The condition picker shows Poshmark's labels (`New With Tags (NWT)`, read 2026-10-27).
+    conditions: Object.entries(POSHMARK_CONDITIONS),
     availabilities: AVAILABILITIES,
     selection: {
       department: values?.department ?? null,
@@ -925,6 +981,7 @@ function listingForm(
       size_set: values?.sizeSet ?? null,
       size: values?.size ?? null,
       condition: values?.condition ?? null,
+      colors: values?.colors ?? '',
       availability: values?.availability ?? 'available',
       sku: values?.sku ?? '',
     },
@@ -949,6 +1006,7 @@ ${dropdown('class="listing-editor__category-container"')}${required('category')}
 ${dropdown('class="listing-editor__subcategory-container"')}
 ${dropdown('class="listing-editor__size-container"', ' data-test="size"')}${required('size')}
 ${dropdown('class="listing-editor__condition-container"')}${required('condition')}
+<div class="listing-editor__color-container"><div class="dropdown__selector"><div data-et-name="color"></div></div><div class="dropdown__menu" hidden></div></div>
 <div data-et-name="listingEditorBrandSection"><input type="text" name="brand" placeholder="Enter the Brand" value="${value(values?.brand)}"></div>
 </section>
 <section><h2>Pricing</h2>
@@ -987,7 +1045,7 @@ const PRICE_DIALOG = `<div class="modal listing-price-suggestion-modal" style="d
 /** Runs the listing editor in the page, as Poshmark's own scripts do. */
 const EDITOR_SCRIPT = `(() => {
   const data = JSON.parse(document.getElementById('editor-data').textContent);
-  const { catalog, conditions, availabilities } = data;
+  const { catalog, colors, conditions, availabilities } = data;
   const state = data.selection;
   const form = document.getElementById('listing-editor');
   const make = (tag, attributes, children) => {
@@ -1002,7 +1060,7 @@ const EDITOR_SCRIPT = `(() => {
     return node;
   };
   const labelOf = (pairs, code) => (pairs.find((pair) => pair[0] === code) || [])[1];
-  const chosenCategory = () => (catalog[state.department] || {})[state.category] || null;
+  const chosenCategory = () => (catalog[state.department] || []).find((entry) => entry.name === state.category) || null;
 
   // A picker opens on its selector; its menu is drawn only while it is open, and opening one
   // picker closes the others.
@@ -1030,53 +1088,125 @@ const EDITOR_SCRIPT = `(() => {
     return picker;
   };
 
-  // The catalog lists the departments, then the categories of the one clicked; a category with
-  // subcategories opens the subcategory picker.
-  let browsing = state.department;
-  const category = dropdown(form.querySelector('.listing-editor__category-container'), () => [
-    make('nav', {}, Object.keys(catalog).map((name) =>
-      item('a', { class: 'dropdown__menu__item' }, name, () => {
-        browsing = name;
-        category.redraw();
-      }))),
-    make('ul', {}, Object.keys(catalog[browsing] || {}).map((name) =>
-      item('li', { class: 'dropdown__menu__item' }, name, () => {
-        Object.assign(state, { department: browsing, category: name, subcategory: null, size_set: null, size: null });
-        category.close();
-        render();
-        if (chosenCategory().subcategories.length > 0) subcategory.open();
-      }))),
-  ]);
+  // The catalog lists the departments, then the categories of the one clicked (a display group's
+  // categories once the group is clicked); a category with subcategories opens the subcategory
+  // picker. Once a category is chosen, the picker opens on its department, with All Categories
+  // to go back to the departments.
+  let browsing = state.category ? state.department : null;
+  let openGroup = null;
+  const category = dropdown(form.querySelector('.listing-editor__category-container'), () => {
+    if (browsing === null) {
+      return [make('ul', {}, [allCategories(), ...Object.keys(catalog).map((name) =>
+        make('li', {}, [item('a', { class: 'dropdown__menu__item' }, make('div', {}, [make('p', {}, [name])]), () => {
+          browsing = name;
+          openGroup = null;
+          category.redraw();
+        })]))])];
+    }
+    const entries = [];
+    const groups = new Set();
+    for (const entry of catalog[browsing] || []) {
+      if (entry.group === null) {
+        entries.push(categoryItem(entry));
+        continue;
+      }
+      if (!groups.has(entry.group)) {
+        groups.add(entry.group);
+        const group = entry.group;
+        entries.push(item('li', { class: 'dropdown__menu__item' }, make('div', {}, [group]), () => {
+          openGroup = openGroup === group ? null : group;
+          category.redraw();
+        }));
+      }
+      if (openGroup === entry.group) entries.push(categoryItem(entry));
+    }
+    return [
+      make('ul', {}, [
+        allCategories(),
+        make('li', {}, [item('a', { class: 'dropdown__menu__item' }, make('div', {}, [make('p', {}, [browsing])]), () => category.redraw())]),
+      ]),
+      make('ul', {}, entries),
+    ];
+  });
+  const allCategories = () =>
+    make('li', {}, [item('a', { class: 'dropdown__menu__item', 'data-et-name': 'all' }, make('div', {}, [make('p', {}, ['All Categories'])]), () => {
+      browsing = null;
+      category.redraw();
+    })]);
+  // A category's name is in a div inside its item, as on Poshmark.
+  const categoryItem = (entry) =>
+    item('li', { class: 'dropdown__menu__item' }, make('div', {}, [entry.name]), () => {
+      Object.assign(state, { department: browsing, category: entry.name, subcategory: null, size_set: null, size: null });
+      // A one-size category's size is chosen with it.
+      const usable = entry.sets.filter((set) => set.sizes.length > 0);
+      if (usable.length > 0 && usable.every((set) => set.sizes.length === 1)) {
+        Object.assign(state, { size_set: usable[0].name, size: usable[0].sizes[0][0] });
+      }
+      category.close();
+      render();
+      if (entry.subcategories.length > 0) subcategory.open();
+    });
   const subcategory = dropdown(form.querySelector('.listing-editor__subcategory-container'), () =>
-    (chosenCategory() === null ? [] : chosenCategory().subcategories).map((name) =>
+    (chosenCategory() === null || chosenCategory().subcategories.length === 0
+      ? []
+      : [...chosenCategory().subcategories, 'None']
+    ).map((name) =>
       item('a', { 'data-et-name': 'sub_category' }, name, () => {
-        state.subcategory = name;
+        state.subcategory = name === 'None' ? null : name;
         subcategory.close();
         render();
       })));
 
-  // The size picker has a tab per size set and a button per size. One size applies on its
-  // click and closes the picker; Done is for several sizes.
+  // The size picker has a tab per size set and a button per size, which shows the size's label
+  // (Neck 15.5, Waist 32, 2T); once chosen, the picker shows what Poshmark shows for it. One size
+  // applies on its click and closes the picker; Done is for several sizes.
   let tab = null;
+  const setsOf = () => (chosenCategory() === null ? [] : chosenCategory().sets);
   const size = dropdown(form.querySelector('.listing-editor__size-container'), () => {
-    const sets = chosenCategory() === null ? {} : chosenCategory().sets;
-    const names = Object.keys(sets);
+    const sets = setsOf();
+    const names = sets.map((set) => set.name);
     if (!names.includes(tab)) tab = names.includes(state.size_set) ? state.size_set : (names[0] || null);
+    const shown = sets.find((set) => set.name === tab);
     return [
-      make('ul', { 'data-test': 'horizontal-list' }, names.map((name) =>
+      make('ul', { 'data-test': 'horizontal-list' }, [...names, 'Custom'].map((name) =>
         item('li', { class: 'navigation--horizontal__tab' }, make('span', {}, [name]), () => {
           tab = name;
           size.redraw();
         }))),
-      make('div', { class: 'multi-size-selector' }, (sets[tab] || []).map((name) =>
-        item('button', { type: 'button', class: 'multi-size-selector__button' }, name, () => {
-          Object.assign(state, { size_set: tab, size: name });
+      make('div', { class: 'multi-size-selector' }, (shown ? shown.sizes : []).map(([id, label]) =>
+        item('button', { type: 'button', class: 'multi-size-selector__button' }, label, () => {
+          Object.assign(state, { size_set: tab, size: id });
           size.close();
           render();
         }))),
       item('button', { type: 'button', class: 'btn btn--primary', 'data-et-name': 'apply', 'data-et-on-name': 'multi_item_quantity_tile' }, 'Done', () => size.close()),
     ];
   });
+  const chosenSize = () => {
+    const set = setsOf().find((entry) => entry.name === state.size_set);
+    const found = set && set.sizes.find(([id]) => id === state.size);
+    return found ? found[2] : null;
+  };
+
+  // The color picker: a tile per color whose circle holds a checkmark once it is chosen, up to
+  // two, and Done.
+  const chosenColors = () => (state.colors ? state.colors.split(',') : []);
+  const colorContainer = form.querySelector('.listing-editor__color-container');
+  const color = dropdown(colorContainer, () => [
+    make('ul', {}, colors.map((name) => {
+      const chosen = chosenColors().includes(name);
+      const circle = make('a', { class: 'color__circle--large', style: 'display: inline-block; width: 24px; height: 24px;' }, chosen ? [make('i', { class: 'checkmark checkmark--white' }, [])] : []);
+      circle.addEventListener('click', () => {
+        const now = chosenColors();
+        if (now.includes(name)) state.colors = now.filter((entry) => entry !== name).join(',');
+        else if (now.length < ${String(MAX_POSHMARK_COLORS)}) state.colors = [...now, name].join(',');
+        color.redraw();
+        render();
+      });
+      return make('li', { class: 'listing-editor__tile--color' }, [make('div', {}, [circle, make('span', {}, [name])])]);
+    })),
+    item('button', { type: 'button', class: 'btn btn--primary', 'data-et-name': 'apply', 'data-et-on-name': 'color_tile' }, 'Done', () => color.close()),
+  ]);
 
   const condition = dropdown(form.querySelector('.listing-editor__condition-container'), () =>
     conditions.map(([code, title]) =>
@@ -1100,7 +1230,8 @@ const EDITOR_SCRIPT = `(() => {
     }
     category.show(state.category ? state.department + ' / ' + state.category : 'Select Category');
     subcategory.show(state.subcategory || 'Select Subcategory');
-    size.show(state.size || 'Select Size');
+    size.show(chosenSize() || 'Select Size');
+    colorContainer.querySelector('[data-et-name="color"]').textContent = chosenColors().join('') || 'Select up to 2 colors';
     condition.show(labelOf(conditions, state.condition) || 'Select Condition');
     availability.show(labelOf(availabilities, state.availability) || 'Select Availability');
   };
@@ -1211,7 +1342,7 @@ function listingRecord(listing: FakePoshmarkListing): Record<string, unknown> {
   });
   return {
     id: listing.id,
-    status: 'published',
+    status: listing.reviewing ? 'for_review' : 'published',
     status_changed_at: poshmarkTime(listing.createdAt),
     created_at: poshmarkTime(listing.createdAt),
     updated_at: poshmarkTime(listing.updatedAt),

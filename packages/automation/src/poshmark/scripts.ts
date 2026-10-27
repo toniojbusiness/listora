@@ -14,6 +14,7 @@ import { readClosetPage } from './pages/closet-page.ts';
 import {
   addPhotos,
   chooseCatalog,
+  chooseColors,
   chooseSizeAndCondition,
   fillSku,
   fillBrand,
@@ -31,7 +32,7 @@ import {
   openListing,
   openListingPage,
   readListing,
-  remoteState,
+  sellersListing,
   type ListingPage,
 } from './pages/listing-page.ts';
 import { cents, remoteListing, revision, type ListingRecord } from './pages/state.ts';
@@ -207,6 +208,9 @@ export function createPoshmarkScripts(
     await step('choose the size and condition', { mutates: false, timeScale: 2 }, (page) =>
       chooseSizeAndCondition(page, size, condition),
     );
+    await step('choose the colors', { mutates: false, timeScale: 2 }, (page) =>
+      chooseColors(page, payload.colors),
+    );
   }
 
   /** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
@@ -233,7 +237,12 @@ export function createPoshmarkScripts(
       const shown = await step('open the listing', { mutates: false }, (page) =>
         openListingPage(page, site, id),
       );
-      if (shown.type === 'listing' || shown.type === 'deleted' || look === SETTLE_LOOKS) {
+      if (
+        shown.type === 'listing' ||
+        shown.type === 'reviewing' ||
+        shown.type === 'deleted' ||
+        look === SETTLE_LOOKS
+      ) {
         return shown;
       }
       await new Promise((resolve) => setTimeout(resolve, settleWaitMs));
@@ -250,7 +259,7 @@ export function createPoshmarkScripts(
       const shown = await step('read the new listing', { mutates: false }, (page) =>
         openListingPage(page, site, id),
       );
-      if (shown.type === 'listing') {
+      if (shown.type === 'listing' || shown.type === 'reviewing') {
         return {
           type: 'applied',
           externalListingId: id,
@@ -280,7 +289,8 @@ export function createPoshmarkScripts(
     if (id === null) return notListed();
     const page = await settledListing(step, id);
     if (page.type === 'hidden') return hiddenListing();
-    const shown = remoteState(page, site);
+    // A listing Poshmark is reviewing after a change is there to end or relist all the same.
+    const shown = sellersListing(page, site);
     if (!shown.found) {
       if (!shown.authoritative) return notListed();
       // A listing Poshmark says is gone is ended already (the read-back confirms it), and
