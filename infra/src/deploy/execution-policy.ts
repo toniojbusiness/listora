@@ -20,6 +20,7 @@ export { executionPolicyName } from '../stacks/deploy-access-stack.ts';
 export const SERVICE_PREFIXES: Readonly<Record<string, string>> = {
   ApiGatewayV2: 'apigateway',
   ApplicationAutoScaling: 'application-autoscaling',
+  Budgets: 'budgets',
   CertificateManager: 'acm',
   CloudFront: 'cloudfront',
   CloudWatch: 'cloudwatch',

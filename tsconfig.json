@@ -15,6 +15,7 @@
     { "path": "packages/connections" },
     { "path": "packages/operations" },
     { "path": "packages/observability" },
+    { "path": "packages/alerts" },
     { "path": "packages/push" },
     { "path": "packages/auto-delist" },
     { "path": "packages/sales" },

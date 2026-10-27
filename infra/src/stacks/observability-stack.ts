@@ -1,5 +1,6 @@
 import { assertNever } from '@listora/shared';
 import { Duration } from 'aws-cdk-lib';
+import * as budgets from 'aws-cdk-lib/aws-budgets';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import type * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -8,14 +9,15 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import type { Construct } from 'constructs';
 
 import { METRIC_NAMESPACE, type TrustMetricName } from '@listora/observability/catalog';
 
 import type { EnvironmentSettings } from '../config.ts';
+import { AlertEmails } from './alerts.ts';
 import { ListoraStack, type ListoraStackProps } from './common.ts';
 import type { ApiEndpoint, ListoraService } from './compute-stack.ts';
+import { migrateTaskNames } from './migrate-stack.ts';
 
 export interface ObservabilityStackProps extends ListoraStackProps {
   readonly endpoint: ApiEndpoint;
@@ -65,7 +67,10 @@ function serviceMinimum(settings: EnvironmentSettings, name: string): number {
  * recovers. Database storage has two signals: the free-storage alarm (autoscaling is not
  * keeping up) and RDS's own low-storage events, which include storage autoscaling reaching its
  * ceiling, so the ceiling alerts well before writes stop. Every unplanned task stop (a crash,
- * an exited container, a failed health check) is also sent to the topic. Log groups live next
+ * an exited container, a failed health check) is also sent to the topic, and so is every failed
+ * deploy (`alertOnFailedDeploys`) and the account's monthly AWS cost reaching its budget
+ * (`costBudget`). With an alarm email, every message on the topic is emailed through SES and a
+ * weekly health summary goes out (`AlertEmails`, docs/features/alerts.md). Log groups live next
  * to what writes them (compute, migrate, data, network) with the environment's retention.
  */
 export class ObservabilityStack extends ListoraStack {
@@ -81,7 +86,13 @@ export class ObservabilityStack extends ListoraStack {
       enforceSSL: true,
     });
     if (target.alarmEmail !== undefined) {
-      this.alarmTopic.addSubscription(new subscriptions.EmailSubscription(target.alarmEmail));
+      new AlertEmails(this, 'AlertEmails', {
+        settings,
+        target,
+        recipient: target.alarmEmail,
+        alarmTopic: this.alarmTopic,
+        database: props.database,
+      });
     }
     const notify = new cloudwatchActions.SnsAction(this.alarmTopic);
 
@@ -188,6 +199,8 @@ export class ObservabilityStack extends ListoraStack {
     }
 
     this.alertOnUnplannedTaskStops(prefix, props.services);
+    this.alertOnFailedDeploys(prefix, target.environment, props.services);
+    this.costBudget(prefix, settings);
     this.trustAlarms(alarm, settings);
 
     const db = props.database;
@@ -314,8 +327,9 @@ export class ObservabilityStack extends ListoraStack {
    * an operation unverified for over 30 minutes, any failed delist, an account's AI cost today
    * over the threshold, a connection the seller must link again, and per marketplace, the p95
    * delist latency over an hour above its threshold and a verified-success rate over a day
-   * below 90%. Missing data is not breaching: the worker publishes nothing while it is down,
-   * which the running-tasks alarm covers, and nothing for a marketplace without operations.
+   * below 90%. Missing data is not breaching, except for the worker's heartbeat: the worker
+   * publishes nothing while it is down, which the heartbeat and running-tasks alarms cover, and
+   * nothing for a marketplace without operations.
    */
   private trustAlarms(alarm: AlarmFactory, settings: EnvironmentSettings): void {
     const trust = (
@@ -330,6 +344,20 @@ export class ObservabilityStack extends ListoraStack {
         period: options.period ?? Duration.minutes(5),
         ...(options.dimensions === undefined ? {} : { dimensionsMap: options.dimensions }),
       });
+    // The worker publishes OldestUnverifiedOperationAge every minute, whatever the state, so
+    // its samples are the worker's heartbeat. The running-tasks alarm sees a stopped task; this
+    // also sees a worker whose task runs but whose jobs do not (stuck, or no database).
+    alarm(
+      'worker-heartbeat',
+      'The worker published no trust metrics for 15 minutes: it is stopped, stuck, or cannot ' +
+        'reach the database, so operations, sale checks, and delists are not running.',
+      trust('OldestUnverifiedOperationAge', 'SampleCount'),
+      1,
+      {
+        comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+        missingData: cloudwatch.TreatMissingData.BREACHING,
+      },
+    );
     alarm(
       'operation-unverified',
       'A marketplace operation has gone 30 minutes without a verified result (queued, running, ' +
@@ -454,5 +482,146 @@ export class ObservabilityStack extends ListoraStack {
         conditions: { ArnEquals: { 'aws:SourceArn': rule.ruleArn } },
       }),
     );
+  }
+
+  /**
+   * Sends every failed deploy to the alarm topic: a stack of the environment that failed or
+   * rolled back, an ECS deployment the circuit breaker rolled back (code-only deploys too), and
+   * a schema migration task a deploy started that did not exit 0. AWS service events reach SNS
+   * at no EventBridge charge.
+   */
+  private alertOnFailedDeploys(
+    prefix: string,
+    environment: string,
+    services: readonly ListoraService[],
+  ): void {
+    const cluster = services[0]?.service.cluster;
+    if (cluster === undefined) throw new Error('no service to watch');
+    const field = (path: string): string => events.EventField.fromPath(`$.${path}`);
+    const migrate = migrateTaskNames(environment);
+    const rules: { id: string; description: string; pattern: events.EventPattern; text: string }[] =
+      [
+        {
+          id: 'StackFailed',
+          description: 'A Listora stack failed to deploy or rolled back.',
+          pattern: {
+            source: ['aws.cloudformation'],
+            detailType: ['CloudFormation Stack Status Change'],
+            detail: {
+              'stack-id': events.Match.prefix(
+                `arn:${this.partition}:cloudformation:${this.region}:${this.account}:stack/${prefix}-`,
+              ),
+              'status-details': {
+                status: [
+                  'CREATE_FAILED',
+                  'ROLLBACK_COMPLETE',
+                  'ROLLBACK_FAILED',
+                  'UPDATE_FAILED',
+                  'UPDATE_ROLLBACK_COMPLETE',
+                  'UPDATE_ROLLBACK_FAILED',
+                  'DELETE_FAILED',
+                ],
+              },
+            },
+          },
+          text:
+            `Deploy failed in ${prefix}: CloudFormation stack ${field('detail.stack-id')} is ` +
+            `${field('detail.status-details.status')} (${field('detail.status-details.status-reason')}).`,
+        },
+        {
+          id: 'ServiceDeploymentFailed',
+          description: 'ECS rolled back a deployment of a Listora service.',
+          pattern: {
+            source: ['aws.ecs'],
+            detailType: ['ECS Deployment State Change'],
+            resources: events.Match.prefix(
+              `arn:${this.partition}:ecs:${this.region}:${this.account}:service/${cluster.clusterName}/`,
+            ),
+            detail: { eventName: ['SERVICE_DEPLOYMENT_FAILED'] },
+          },
+          text:
+            `Deploy failed in ${prefix}: ECS rolled back the deployment of ${field('resources[0]')} ` +
+            `(${field('detail.reason')}). The previous release is still serving.`,
+        },
+        {
+          id: 'MigrationFailed',
+          description: 'A schema migration task a deploy started did not exit 0.',
+          pattern: {
+            source: ['aws.ecs'],
+            detailType: ['ECS Task State Change'],
+            detail: {
+              group: [`family:${migrate.family}`],
+              lastStatus: ['STOPPED'],
+              // scripts/run-migrations.sh starts them as deploy-<run>; admin tasks are not deploys.
+              startedBy: events.Match.prefix('deploy-'),
+              containers: { exitCode: events.Match.anythingBut(0) },
+            },
+          },
+          text:
+            `Deploy failed in ${prefix}: the schema migrations failed (${field('detail.stoppedReason')}, ` +
+            `task ${field('detail.taskArn')}); no new release started. Logs: ${migrate.logGroup}.`,
+        },
+      ];
+    const topic = this.alarmTopic;
+    for (const { id, description, pattern, text } of rules) {
+      const rule = new events.Rule(this, id, {
+        ruleName: `${prefix}-${id.replace(/[A-Z]/g, (letter, at: number) => `${at === 0 ? '' : '-'}${letter.toLowerCase()}`)}`,
+        description,
+        eventPattern: pattern,
+      });
+      rule.addTarget({
+        bind: () => ({
+          arn: topic.topicArn,
+          input: events.RuleTargetInput.fromText(text),
+        }),
+      });
+      topic.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: `${id}Events`,
+          actions: ['sns:Publish'],
+          principals: [new iam.ServicePrincipal('events.amazonaws.com')],
+          resources: [topic.topicArn],
+          conditions: { ArnEquals: { 'aws:SourceArn': rule.ruleArn } },
+        }),
+      );
+    }
+  }
+
+  /**
+   * The account's monthly AWS Budget (`monthlyCostAlarmUsd`): the alarm topic hears when the
+   * month's actual cost reaches it and when AWS forecasts that it will. It covers the whole
+   * account, every app in it, since Listora's cost allocation tags are not activated (and a
+   * budget filtered on an inactive tag would read $0 and never fire).
+   */
+  private costBudget(prefix: string, settings: EnvironmentSettings): void {
+    const topic = this.alarmTopic;
+    const { policyDependable } = topic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'BudgetNotifications',
+        actions: ['sns:Publish'],
+        principals: [new iam.ServicePrincipal('budgets.amazonaws.com')],
+        resources: [topic.topicArn],
+        conditions: { StringEquals: { 'aws:SourceAccount': this.account } },
+      }),
+    );
+    const notify = (notificationType: 'ACTUAL' | 'FORECASTED') => ({
+      notification: {
+        notificationType,
+        comparisonOperator: 'GREATER_THAN',
+        threshold: 100,
+        thresholdType: 'PERCENTAGE',
+      },
+      subscribers: [{ subscriptionType: 'SNS', address: topic.topicArn }],
+    });
+    const budget = new budgets.CfnBudget(this, 'MonthlyCost', {
+      budget: {
+        budgetName: `${prefix}-monthly-cost`,
+        budgetType: 'COST',
+        timeUnit: 'MONTHLY',
+        budgetLimit: { amount: settings.monthlyCostAlarmUsd, unit: 'USD' },
+      },
+      notificationsWithSubscribers: [notify('ACTUAL'), notify('FORECASTED')],
+    });
+    if (policyDependable !== undefined) budget.node.addDependency(policyDependable);
   }
 }

@@ -283,6 +283,16 @@ describe('loadDeployTarget', () => {
     ).toBe('owner@example.com');
   });
 
+  it('emails alerts to the owner unless another address is given', () => {
+    const personal = { ...NO_DOMAIN, ...PERSONAL };
+    expect(loadDeployTarget(fromRecord(personal), {}).alarmEmail).toBe('owner@example.com');
+    expect(
+      loadDeployTarget(fromRecord({ ...personal, alarmEmail: 'Ops@Example.com' }), {}).alarmEmail,
+    ).toBe('ops@example.com');
+    // Without an owner there is no one to default to.
+    expect(loadDeployTarget(fromRecord(VALID), {}).alarmEmail).toBeUndefined();
+  });
+
   it('creates the owner email identity unless told it already exists, and only with an owner pool', () => {
     const personal = { ...NO_DOMAIN, ...PERSONAL };
     expect(loadDeployTarget(fromRecord(personal), {}).ownerEmailIdentity).toBe('create');

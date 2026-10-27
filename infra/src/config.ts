@@ -140,6 +140,11 @@ export interface EnvironmentSettings {
    * item's listing there) exceeds this many minutes: the item may stay for sale after selling.
    */
   readonly delistLatencyAlarmMinutes: Readonly<Record<Marketplace, number>>;
+  /**
+   * The monthly AWS Budget of the whole account, in US dollars: the alarm topic hears when the
+   * month's actual cost reaches it and when AWS forecasts the month will (docs/features/alerts.md).
+   */
+  readonly monthlyCostAlarmUsd: number;
 }
 
 /** Most of the default $1 daily AI budget per account (packages/ai). */
@@ -188,6 +193,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     containerInsights: false,
     aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
+    monthlyCostAlarmUsd: 150,
   },
   prod: {
     protectData: true,
@@ -216,6 +222,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     containerInsights: true,
     aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
+    monthlyCostAlarmUsd: 600,
   },
   // One reseller, around 500 items, light traffic, every service running 24/7, at the lowest
   // monthly cost (docs/features/costs.md has the estimate and the alternatives it beat). The data is
@@ -256,6 +263,8 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     containerInsights: false,
     aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
+    // About $37 a month is expected (docs/features/costs.md); this is well past a normal month.
+    monthlyCostAlarmUsd: 50,
   },
 };
 
@@ -321,7 +330,10 @@ export interface DeployTarget {
    * have only one provider per URL, and another app's provider is used, never changed.
    */
   readonly githubOidcProvider: GithubOidcProvider;
-  /** Optional address subscribed to the alarm topic. */
+  /**
+   * Where alerts and the weekly health summary are emailed (docs/features/alerts.md). Defaults to
+   * `ownerEmail` where there is one; with neither, alarms only change state in CloudWatch.
+   */
   readonly alarmEmail: string | undefined;
   /**
    * The one person who may sign in, where the environment signs in with an owner pool
@@ -513,8 +525,8 @@ export function loadDeployTarget(
   if (providerValue !== undefined && githubOidcProvider === undefined) {
     issues.push(`${describe(SOURCES.githubOidcProvider)} must be create or existing`);
   }
-  const alarmEmail = read(SOURCES.alarmEmail);
-  if (alarmEmail !== undefined && !EMAIL.test(alarmEmail)) {
+  const alarmEmailValue = read(SOURCES.alarmEmail);
+  if (alarmEmailValue !== undefined && !EMAIL.test(alarmEmailValue)) {
     issues.push(`${describe(SOURCES.alarmEmail)} must be an email address`);
   }
   // Only an owner pool has an owner; anywhere else the setting would silently do nothing.
@@ -550,6 +562,8 @@ export function loadDeployTarget(
   }
 
   if (issues.length > 0) throw new DeployConfigError(issues);
+  // The owner is who runs a personal environment, so its alerts go to them unless told otherwise.
+  const alarmEmail = alarmEmailValue?.toLowerCase() ?? ownerEmail;
   return {
     environment,
     account,

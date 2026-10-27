@@ -51,6 +51,85 @@
               "Action": "sns:Publish",
               "Condition": {
                 "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "StackFailed7B206E9B",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "StackFailedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "ServiceDeploymentFailed18E0E18A",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "ServiceDeploymentFailedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "MigrationFailed9804C545",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "MigrationFailedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "333333333333"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "budgets.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "BudgetNotifications"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
                   "aws:SourceArn": "arn:aws:rds:us-east-1:333333333333:es:listora-personal-database-storage"
                 }
               },
@@ -71,6 +150,359 @@
             "Ref": "Alarms04B5A0BF"
           }
         ]
+      }
+    },
+    "AlertEmailsalertemaillogs4CF4C08A": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/listora-personal-alert-email",
+        "RetentionInDays": 7
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "AlertEmailsalertemailServiceRoleAA496130": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "AlertEmailsalertemailServiceRoleDefaultPolicyF435AB57": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "ses:SendEmail",
+              "Condition": {
+                "StringEquals": {
+                  "ses:FromAddress": "owner@example.com"
+                }
+              },
+              "Effect": "Allow",
+              "Resource": "arn:aws:ses:us-east-1:333333333333:identity/owner@example.com"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "AlertEmailsalertemailServiceRoleDefaultPolicyF435AB57",
+        "Roles": [
+          {
+            "Ref": "AlertEmailsalertemailServiceRoleAA496130"
+          }
+        ]
+      }
+    },
+    "AlertEmailsalertemail4773A400": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Architectures": [
+          "arm64"
+        ],
+        "Code": {
+          "S3Bucket": "cdk-listora-assets-333333333333-us-east-1",
+          "S3Key": "00dfc73f01b78bf1366ccd133f09fb2d808b32b8bdf09cbe7e0f39d88d9c1bb1.zip"
+        },
+        "Description": "Emails every alarm and AWS event on the alarm topic to the operator (SES).",
+        "Environment": {
+          "Variables": {
+            "LISTORA_ENV": "personal",
+            "ALERT_FROM": "owner@example.com",
+            "ALERT_TO": "owner@example.com",
+            "DATABASE_INSTANCE_ID": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            },
+            "MARKETPLACES": "ebay,depop,poshmark,mercari",
+            "MONTHLY_COST_THRESHOLD_USD": "50"
+          }
+        },
+        "FunctionName": "listora-personal-alert-email",
+        "Handler": "index.alert",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AlertEmailsalertemaillogs4CF4C08A"
+          }
+        },
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "AlertEmailsalertemailServiceRoleAA496130",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 30
+      },
+      "DependsOn": [
+        "AlertEmailsalertemailServiceRoleDefaultPolicyF435AB57",
+        "AlertEmailsalertemailServiceRoleAA496130"
+      ]
+    },
+    "AlertEmailsalertemailAllowInvokelistorapersonalobservabilityAlarmsC0AAD75BE7F22736": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "AlertEmailsalertemail4773A400",
+            "Arn"
+          ]
+        },
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "Alarms04B5A0BF"
+        }
+      }
+    },
+    "AlertEmailsalertemailAlarmsE2A92A6D": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "AlertEmailsalertemail4773A400",
+            "Arn"
+          ]
+        },
+        "Protocol": "lambda",
+        "TopicArn": {
+          "Ref": "Alarms04B5A0BF"
+        }
+      }
+    },
+    "AlertEmailsweeklysummarylogs746BA358": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/listora-personal-weekly-summary",
+        "RetentionInDays": 7
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "AlertEmailsweeklysummaryServiceRoleB9E0C280": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "AlertEmailsweeklysummaryServiceRoleDefaultPolicy5EFE245B": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "ses:SendEmail",
+              "Condition": {
+                "StringEquals": {
+                  "ses:FromAddress": "owner@example.com"
+                }
+              },
+              "Effect": "Allow",
+              "Resource": "arn:aws:ses:us-east-1:333333333333:identity/owner@example.com"
+            },
+            {
+              "Action": [
+                "ce:GetCostAndUsage",
+                "cloudwatch:DescribeAlarmHistory",
+                "cloudwatch:DescribeAlarms",
+                "cloudwatch:GetMetricData"
+              ],
+              "Effect": "Allow",
+              "Resource": "*"
+            },
+            {
+              "Action": [
+                "rds:DescribeDBInstances",
+                "rds:DescribeDBSnapshots"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:rds:us-east-1:333333333333:db:",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+                        }
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:rds:us-east-1:333333333333:snapshot:rds:",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+                        }
+                      },
+                      "-*"
+                    ]
+                  ]
+                }
+              ]
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "AlertEmailsweeklysummaryServiceRoleDefaultPolicy5EFE245B",
+        "Roles": [
+          {
+            "Ref": "AlertEmailsweeklysummaryServiceRoleB9E0C280"
+          }
+        ]
+      }
+    },
+    "AlertEmailsweeklysummary1E003DAA": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Architectures": [
+          "arm64"
+        ],
+        "Code": {
+          "S3Bucket": "cdk-listora-assets-333333333333-us-east-1",
+          "S3Key": "00dfc73f01b78bf1366ccd133f09fb2d808b32b8bdf09cbe7e0f39d88d9c1bb1.zip"
+        },
+        "Description": "Emails the operator the week's health: alarms, operations, worker, cost, and backups.",
+        "Environment": {
+          "Variables": {
+            "LISTORA_ENV": "personal",
+            "ALERT_FROM": "owner@example.com",
+            "ALERT_TO": "owner@example.com",
+            "DATABASE_INSTANCE_ID": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            },
+            "MARKETPLACES": "ebay,depop,poshmark,mercari",
+            "MONTHLY_COST_THRESHOLD_USD": "50"
+          }
+        },
+        "FunctionName": "listora-personal-weekly-summary",
+        "Handler": "index.weeklySummary",
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AlertEmailsweeklysummarylogs746BA358"
+          }
+        },
+        "MemorySize": 256,
+        "Role": {
+          "Fn::GetAtt": [
+            "AlertEmailsweeklysummaryServiceRoleB9E0C280",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs24.x",
+        "Timeout": 120
+      },
+      "DependsOn": [
+        "AlertEmailsweeklysummaryServiceRoleDefaultPolicy5EFE245B",
+        "AlertEmailsweeklysummaryServiceRoleB9E0C280"
+      ]
+    },
+    "AlertEmailsWeeklySummarySchedule54E8D41B": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Every Monday at 14:00 UTC: the weekly health summary email.",
+        "Name": "listora-personal-weekly-summary",
+        "ScheduleExpression": "cron(0 14 ? * MON *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "AlertEmailsweeklysummary1E003DAA",
+                "Arn"
+              ]
+            },
+            "Id": "Target0",
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 2
+            }
+          }
+        ]
+      }
+    },
+    "AlertEmailsWeeklySummaryScheduleAllowEventRulelistorapersonalobservabilityAlertEmailsweeklysummaryA4ED86B8B3C60EBA": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "AlertEmailsweeklysummary1E003DAA",
+            "Arn"
+          ]
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "AlertEmailsWeeklySummarySchedule54E8D41B",
+            "Arn"
+          ]
+        }
       }
     },
     "api5xx1F762CB3": {
@@ -344,6 +776,241 @@
             }
           }
         ]
+      }
+    },
+    "StackFailed7B206E9B": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "A Listora stack failed to deploy or rolled back.",
+        "EventPattern": {
+          "source": [
+            "aws.cloudformation"
+          ],
+          "detail-type": [
+            "CloudFormation Stack Status Change"
+          ],
+          "detail": {
+            "stack-id": [
+              {
+                "prefix": "arn:aws:cloudformation:us-east-1:333333333333:stack/listora-personal-"
+              }
+            ],
+            "status-details": {
+              "status": [
+                "CREATE_FAILED",
+                "ROLLBACK_COMPLETE",
+                "ROLLBACK_FAILED",
+                "UPDATE_FAILED",
+                "UPDATE_ROLLBACK_COMPLETE",
+                "UPDATE_ROLLBACK_FAILED",
+                "DELETE_FAILED"
+              ]
+            }
+          }
+        },
+        "Name": "listora-personal-stack-failed",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "detail-stack-id": "$.detail.stack-id",
+                "detail-status-details-status": "$.detail.status-details.status",
+                "detail-status-details-status-reason": "$.detail.status-details.status-reason"
+              },
+              "InputTemplate": "\"Deploy failed in listora-personal: CloudFormation stack <detail-stack-id> is <detail-status-details-status> (<detail-status-details-status-reason>).\""
+            }
+          }
+        ]
+      }
+    },
+    "ServiceDeploymentFailed18E0E18A": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "ECS rolled back a deployment of a Listora service.",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Deployment State Change"
+          ],
+          "resources": [
+            {
+              "prefix": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:ecs:us-east-1:333333333333:service/",
+                    {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-personal-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+                      }
+                    },
+                    "/"
+                  ]
+                ]
+              }
+            }
+          ],
+          "detail": {
+            "eventName": [
+              "SERVICE_DEPLOYMENT_FAILED"
+            ]
+          }
+        },
+        "Name": "listora-personal-service-deployment-failed",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "resources-0-": "$.resources[0]",
+                "detail-reason": "$.detail.reason"
+              },
+              "InputTemplate": "\"Deploy failed in listora-personal: ECS rolled back the deployment of <resources-0-> (<detail-reason>). The previous release is still serving.\""
+            }
+          }
+        ]
+      }
+    },
+    "MigrationFailed9804C545": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "A schema migration task a deploy started did not exit 0.",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Task State Change"
+          ],
+          "detail": {
+            "group": [
+              "family:listora-personal-migrate"
+            ],
+            "lastStatus": [
+              "STOPPED"
+            ],
+            "startedBy": [
+              {
+                "prefix": "deploy-"
+              }
+            ],
+            "containers": {
+              "exitCode": [
+                {
+                  "anything-but": [
+                    0
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "Name": "listora-personal-migration-failed",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "detail-stoppedReason": "$.detail.stoppedReason",
+                "detail-taskArn": "$.detail.taskArn"
+              },
+              "InputTemplate": "\"Deploy failed in listora-personal: the schema migrations failed (<detail-stoppedReason>, task <detail-taskArn>); no new release started. Logs: /listora/personal/migrate.\""
+            }
+          }
+        ]
+      }
+    },
+    "MonthlyCost": {
+      "Type": "AWS::Budgets::Budget",
+      "Properties": {
+        "Budget": {
+          "BudgetLimit": {
+            "Amount": 50,
+            "Unit": "USD"
+          },
+          "BudgetName": "listora-personal-monthly-cost",
+          "BudgetType": "COST",
+          "TimeUnit": "MONTHLY"
+        },
+        "NotificationsWithSubscribers": [
+          {
+            "Notification": {
+              "ComparisonOperator": "GREATER_THAN",
+              "NotificationType": "ACTUAL",
+              "Threshold": 100,
+              "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+              {
+                "Address": {
+                  "Ref": "Alarms04B5A0BF"
+                },
+                "SubscriptionType": "SNS"
+              }
+            ]
+          },
+          {
+            "Notification": {
+              "ComparisonOperator": "GREATER_THAN",
+              "NotificationType": "FORECASTED",
+              "Threshold": 100,
+              "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+              {
+                "Address": {
+                  "Ref": "Alarms04B5A0BF"
+                },
+                "SubscriptionType": "SNS"
+              }
+            ]
+          }
+        ]
+      },
+      "DependsOn": [
+        "AlarmsPolicy5C860CFE"
+      ]
+    },
+    "workerheartbeat7D6C5CE4": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The worker published no trust metrics for 15 minutes: it is stopped, stuck, or cannot reach the database, so operations, sale checks, and delists are not running.",
+        "AlarmName": "listora-personal-worker-heartbeat",
+        "ComparisonOperator": "LessThanThreshold",
+        "EvaluationPeriods": 3,
+        "MetricName": "OldestUnverifiedOperationAge",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "SampleCount",
+        "Threshold": 1,
+        "TreatMissingData": "breaching"
       }
     },
     "operationunverified5F6E7766": {

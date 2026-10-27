@@ -142,6 +142,8 @@ packages/
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
                 (@listora/observability)
+  alerts/       Operator email: alert emails for the alarm topic, the weekly health summary, the
+                SES mailer and its fake, the Lambda handlers and their bundle (@listora/alerts)
   retention/    Data retention: how long logs and raw payloads are kept, the daily job that
                 deletes what expired (@listora/retention)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
@@ -454,6 +456,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/infra.md](features/infra.md)                             | Hosting and deploys                                                           |
 | [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                       |
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                  |
+| [features/alerts.md](features/alerts.md)                           | Alert emails, the weekly health summary, backups, and the restore steps       |
 | [features/activity.md](features/activity.md)                       | The activity timeline, sale-check records and health, explaining a sale       |
 | [features/ios.md](features/ios.md)                                 | iOS app conventions                                                           |
 | [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric    |

@@ -38,7 +38,8 @@ describe('offlineSynthEnvironment', () => {
         environment,
         account: context['account'],
         region: context['region'],
-        alarmEmail: undefined,
+        // Only the placeholder owner, never the exported address, receives a personal's alerts.
+        alarmEmail: context['ownerEmail'],
         availabilityZones: undefined,
       });
     },
