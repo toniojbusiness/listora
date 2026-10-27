@@ -135,7 +135,7 @@ struct InvitesModelTests {
         #expect(!model.can(.restore, active))
 
         await model.revoke(active)
-        #expect(model.actionProblem == "Can't reach Listora.")
+        #expect(model.actionProblem == APIFailure.networkUnavailable.message)
         #expect(model.invites == [active])
 
         let revoked = Self.invite("a", .revoked, email: "maria@example.com", actions: [.restore])

@@ -156,6 +156,7 @@ public final class SignInModel {
             self.pending = nil
             self.code = ""
             self.codeSentAt = nil
+            self.showsInvite = false
             self.stage = .signedIn(email: grant.email)
             self.tokens.signIn(grant)
         }
