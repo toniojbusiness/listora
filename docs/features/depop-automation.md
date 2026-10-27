@@ -188,16 +188,37 @@ The mappings are tables in the repository, checked against the taxonomy by `mapp
   - US shoe sizes come in halves (`10 1/2` becomes `US 10.5`); kids' shoe sizes fall in Depop's
     ranges (`9.5` becomes `9-9.5`). UK and EU shoe sizes are not mapped.
   - Bras keep their band and cup (`34B`).
+  - Women's sizes written with their fit or length read as the size itself, the fit being the
+    body fit below: `4P`, `S Petite`, and `PS` are `4`, `S`, and `S`; `16W` is `16`; `1X`, `2X`,
+    and `3X` are `XL`, `XXL`, and `3XL`, and `0X` is `14`; an inseam length is dropped (`0S`,
+    `8 Short`, `10L`). A waist in inches (`27"`, `27 in.`, `W27`) is `27"`, and a tag with the
+    waist and the size (Abercrombie's `27/4`) is the waist where the list has waists and the size
+    where it doesn't (dresses). Women's bottoms list no `00`, so a `00` is their `XXS`, as
+    Mercari's own `XXS (00)` says. `adapter/adult-size.ts` reads these parts, for Poshmark and
+    Mercari too.
 
   A product type with a size list needs a size that maps; validation names a few of the sizes it
   offers otherwise. For a tag size the list doesn't have, a `Size` aspect that is one of the list's
   own labels is the size: the one the seller (or the AI) picked on the review ([marketplace-prefill.md](marketplace-prefill.md)).
 
-- **Colours and material** (`attributes.ts`): the item's colours (up to 2) and, where the product
-  type offers one, its materials (up to 4), as Depop's own values (`gray` is Grey, `beige` Tan,
-  `multicolor` Multi, `spandex` Elastane / Lycra / Spandex). A colour or material Depop has no
-  value for is left out. Depop's other optional details (style, age, source, occasion, fit, and
-  each category's type) are left for the seller.
+- **Item details** (`attributes.ts`), each from Depop's own lists and only where the product type
+  offers it (the live form showed each product type's own, 2026-10-27):
+  - the item's colours (up to 2) and materials (up to 4), as Depop's own values (`gray` is Grey,
+    `beige` Tan, `multicolor` Multi, `spandex` Elastane / Lycra / Spandex); a colour or material
+    Depop has no value for is left out;
+  - the body fit (Petite, Plus size, Tall, Maternity), from the size label (`4P`, `16W`,
+    `XL Tall`) or the listing's name ("Petite", "Plus size", "Maternity");
+  - from the words of the listing's own name (its title and the item's product name, never the
+    photos): a dress's or skirt's length (Maxi, Midi, Mini), a dress's type (A-line, Babydoll,
+    Bodycon, Pencil, Pleated, Shirt, Slip, ...), and a bottom's fit (Bootcut, Flare, High waisted
+    for "high rise", Low rise, Skinny, Slim, Straight leg, Tailored, Wide leg; the form has no
+    "tapered" or "relaxed") and type (Acid-washed, Cargo, Distressed, Ripped, ...);
+  - the style (up to 3), from the listing's hashtags that are Depop styles (`#y2k` is Y2K,
+    `#boho` Boho, `#western` Western).
+
+  A detail Listora has no value for is left as it is on the form. Depop's occasion, source, and
+  age are left for the seller.
+
 - **Brand**: the script types the brand into Depop's brand search and picks the suggestion that
   matches exactly, ignoring case, or else the one brand Depop lists under a longer name (`PSD`
   is `PSD Underwear`). The form takes only brands from Depop's list. When none matches, Listora
@@ -237,19 +258,20 @@ a listing it caught by mistake. It is a floor, not Depop's review: Depop still d
 
 The script fills the sell form in this order: the description, the category (searched for by
 the product type, then by the category for a common name such as "Other", and picked in its
-group), the size, the brand, the condition, the colours and material, and the price, then turns
+group), the size, the brand, the condition, the item details, and the price, then turns
 Boost off and adds the photos **last**. Depop fills in item info from photos (a category, brand,
 condition, and colour: "Item info added"), but only into fields still empty, so Listora's values
 are in place first instead of waiting up to 15 seconds for Depop's fill (as before 2026-10-27).
 Depop then needs a moment to take the photos (it uploads them to its image server; a Post before
 that is refused with "Please insert at least one image"), so the script waits until every photo
 shows as added. A field Depop's fill still took over is put back once, and the form is checked
-to show every pick (product type, size, condition, Listora's brand, colours, material) and Boost
+to show every pick (product type, size, condition, Listora's brand, every item detail) and Boost
 off before the Post step starts.
 
 Each picker is a combobox as Depop draws it: an input that shows the pick, a toggle button, and
-a menu that keeps its options while closed. A multi-value picker (colours, material) shows each
-pick with its own "Remove <value>" button.
+a menu that keeps its options while closed. Every item detail's picker (colours, material, body
+fit, length, fit, type, style), even one that takes a single value, shows each pick with its own
+"Remove <value>" button.
 
 ## Structure
 
@@ -286,7 +308,7 @@ Depop site (`fake/fake-depop-site.ts`, its pages in `fake/fake-depop-pages.ts`).
 Depop's pages and API as the seller's session showed them (2026-10-26 and 27): the selling hub,
 the product page's streamed rows and schema.org price with Delete listing and its dialog, the
 sell and edit form with every product type of the taxonomy (category groups, size lists, the
-brand search, the condition, the colour and material pickers with their Remove buttons, Boost,
+brand search, the condition, every item detail's picker with its Remove buttons, Boost,
 photos that show as added a moment after they are picked, and Depop's item info from them where a
 field is empty), the Done page after Post, a 410 for a product deleted for good, the sold items
 page, and the web API's reads of the seller's own product and listings (with the session's token
@@ -343,6 +365,15 @@ Men's tops, bottoms (`32"`), outerwear, shoes (`US 10.5`), underwear, and unsize
 Women's tops, bottoms (`8`), dresses, outerwear, shoes (`US 8`), underwear (`34B`), and bags; Kids'
 clothing (`8 years`), shoes (`11`), and accessories; and Everything else (Home accessories, and
 Makeup brand new).
+
+**Women's dresses and bottoms** (2026-10-27): the sell form's women's Dresses (`Dresses` and
+`Casual dresses`), Jeans, Skirts, and Shorts were read on the captain's session without posting:
+every picker and its values (sizes `00` to `36` for dresses; numbers, waists `21"` to `68"`, and
+letters for bottoms; Length on dresses and skirts; Type on dresses and jeans, and Fit on jeans;
+Body fit on every one but the specific dress types; Style on every product type). The Length,
+Type, Body fit, and Style pickers each took a pick and showed it with its Remove button. The live
+cycle on real women's items (a dress, jeans, shorts, and a skirt) waits: Depop answered the sell
+page with a Cloudflare check that day, and Listora stops at a check rather than pass it.
 
 Still to verify: a sale check with a sale (the account has none), and a run on the iPhone itself
 (the web API's reads from the app's web view).

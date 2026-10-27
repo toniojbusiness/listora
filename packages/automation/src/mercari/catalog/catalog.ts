@@ -43,6 +43,12 @@ export interface MercariCatalog {
   find(path: readonly string[]): MercariCategory | null;
   /** The labels the form's size list offers, in its order, each once. */
   sizeLabels(sizeGroupId: number): readonly string[];
+  /**
+   * The size list's parts in its order (`Standard`, `Petite`, `Maternity`, `Tall`, ...), each
+   * with its labels; the form heads each part with its name, and the same label can be in
+   * several (`S (4-6)` in Standard and in Petite).
+   */
+  sizeSets(sizeGroupId: number): readonly { name: string; labels: readonly string[] }[];
 }
 
 let loaded: MercariCatalog | undefined;
@@ -111,5 +117,10 @@ export function indexCatalog(
         ),
       ),
     ],
+    sizeSets: (id) =>
+      (sizeGroups.get(id)?.subgroups ?? []).map((subgroup) => ({
+        name: subgroup.title,
+        labels: subgroup.sizes.map((size) => size.label),
+      })),
   };
 }

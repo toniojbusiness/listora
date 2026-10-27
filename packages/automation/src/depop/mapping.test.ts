@@ -237,14 +237,86 @@ describe('Depop details', () => {
       colors: ['gray', 'navy', 'red'],
       materials: ['cotton', 'spandex', 'metal'],
     };
-    expect(depopDetails(tee, ['material'])).toEqual([
+    expect(depopDetails(tee, named('Tee'), ['material'])).toEqual([
       { field: 'colour', values: ['Grey', 'Navy'] },
       { field: 'attributes.material', values: ['Cotton', 'Elastane / Lycra / Spandex'] },
     ]);
-    expect(depopDetails(tee, [])).toEqual([{ field: 'colour', values: ['Grey', 'Navy'] }]);
-    expect(depopDetails({ ...item, colors: [], materials: [] }, ['material'])).toEqual([]);
+    expect(depopDetails(tee, named('Tee'), [])).toEqual([
+      { field: 'colour', values: ['Grey', 'Navy'] },
+    ]);
+    expect(
+      depopDetails({ ...item, colors: [], materials: [] }, named('Tee'), ['material']),
+    ).toEqual([]);
+  });
+
+  const dress = depopProductType('womenswear', 'dresses', 'dresses')?.productType.attributes ?? [];
+  const jeans = depopProductType('womenswear', 'bottoms', 'jeans')?.productType.attributes ?? [];
+  const skirts = depopProductType('womenswear', 'bottoms', 'skirts')?.productType.attributes ?? [];
+  const shorts = depopProductType('womenswear', 'bottoms', 'shorts')?.productType.attributes ?? [];
+  const plain = { ...item, colors: [], materials: [], productName: null };
+  const fields = (picks: ReturnType<typeof depopDetails>) =>
+    Object.fromEntries(picks.map((pick) => [pick.field, pick.values]));
+
+  it("reads a dress's length and type and a skirt's length from the listing's own name", () => {
+    expect(fields(depopDetails(plain, named('Free People Floral Maxi Dress'), dress))).toEqual({
+      'attributes.dress-length': ['Maxi'],
+    });
+    expect(fields(depopDetails(plain, named('Satin slip midi dress, A-line'), dress))).toEqual({
+      'attributes.dress-length': ['Midi'],
+      'attributes.dress-type': ['A-line'],
+    });
+    expect(fields(depopDetails(plain, named('Pleated mini skirt'), skirts))).toEqual({
+      'attributes.dress-length': ['Mini'],
+    });
+    // A slip-on is not a slip dress, and words nobody wrote are never guessed.
+    expect(fields(depopDetails(plain, named('Wrap dress with slip-on belt'), dress))).toEqual({});
+    expect(fields(depopDetails(plain, named('Wrangler long skirt'), skirts))).toEqual({});
+  });
+
+  it("reads a bottom's fit and type, and only for product types that offer them", () => {
+    const name = named("Abercrombie '90s Straight Ultra High Rise ripped jeans");
+    expect(fields(depopDetails(plain, name, jeans))).toEqual({
+      'attributes.bottom-style': ['High waisted', 'Straight leg'],
+      'attributes.bottom-fit': ['Ripped'],
+    });
+    // Depop's Shorts offer no fit or type.
+    expect(
+      fields(depopDetails(plain, named('High waisted distressed denim shorts'), shorts)),
+    ).toEqual({});
+  });
+
+  it('picks the body fit from the size label or the name, where the product type offers one', () => {
+    for (const [sizeLabel, fit] of [
+      ['4P', 'Petite'],
+      ['S Petite', 'Petite'],
+      ['PS', 'Petite'],
+      ['16W', 'Plus size'],
+      ['2X', 'Plus size'],
+      ['XL Tall', 'Tall'],
+    ] as const) {
+      expect(
+        fields(depopDetails({ ...plain, sizeLabel }, named('Jeans'), jeans)),
+        sizeLabel,
+      ).toEqual({ 'attributes.body-fit': [fit] });
+    }
+    expect(fields(depopDetails(plain, named('Maternity wrap dress'), dress))).toEqual({
+      'attributes.body-fit': ['Maternity'],
+    });
+    expect(fields(depopDetails({ ...plain, sizeLabel: '4P' }, named('Tee'), []))).toEqual({});
+  });
+
+  it("picks up to 3 styles from the hashtags that are Depop's own styles", () => {
+    const tags = { ...named('Dress'), hashtags: ['y2k', 'Boho', 'vintage', 'western', 'grunge'] };
+    expect(fields(depopDetails(plain, tags, dress))).toEqual({
+      style: ['Y2K', 'Boho', 'Western'],
+    });
   });
 });
+
+/** A variant's name and hashtags, as `depopDetails` reads them. */
+function named(title: string): { title: string; hashtags: string[] } {
+  return { title, hashtags: [] };
+}
 
 describe('Depop conditions', () => {
   it('gives every Listora condition the Depop grade the API adapter gives it, with its label', () => {
@@ -296,7 +368,8 @@ describe('Depop sizes', () => {
       ['2T', kids, '2 years'],
       ['6-9M', kids, '6-9 months'],
       ['34B', listOf('womenswear', 'underwear', 'bras'), '34B'],
-      ['Large Tall', mensTops, null],
+      // The fit is Depop's body fit, an item specific of its own (attributes.ts).
+      ['Large Tall', mensTops, 'L'],
       ['99', mensBottoms, null],
     ];
     for (const [label, sizes, expected] of cases) {
@@ -305,6 +378,43 @@ describe('Depop sizes', () => {
     expect(depopSize(sized('28', 'waist_inseam'), womensBottoms)).toBe('28"');
     expect(depopSize({ ...sized('anything'), sizeSystem: 'one_size' }, mensTops)).toBe('One size');
     expect(depopSize(sized('M'), [])).toBeNull();
+  });
+
+  it("reads women's dress and bottom sizes in every way their tags write them", () => {
+    const dresses = listOf('womenswear', 'dresses', 'dresses');
+    const jeans = listOf('womenswear', 'bottoms', 'jeans');
+    const cases: [string, typeof item.sizeSystem, readonly string[], string | null][] = [
+      // Letters and numbers, petite and plus (the fit is the body fit).
+      ['M', 'letter', dresses, 'M'],
+      ['6', 'numeric', dresses, '6'],
+      ['00', 'numeric', dresses, '00'],
+      ['4P', 'numeric', dresses, '4'],
+      ['S Petite', 'letter', dresses, 'S'],
+      ['PXS', 'letter', dresses, 'XS'],
+      ['16W', 'numeric', dresses, '16'],
+      ['22W', 'numeric', dresses, '22'],
+      ['1X', 'letter', dresses, 'XL'],
+      ['2X', 'letter', dresses, 'XXL'],
+      ['0X', 'letter', dresses, '14'],
+      // Waists in inches, a waist and a size together, and inseam lengths.
+      ['W27', 'waist_inseam', jeans, '27"'],
+      ['27x30', 'waist_inseam', jeans, '27"'],
+      ['27"', 'waist_inseam', jeans, '27"'],
+      ['27 in.', 'waist_inseam', jeans, '27"'],
+      ['27/4', 'numeric', jeans, '27"'],
+      ['27/4', 'numeric', dresses, '4'],
+      ['0S', 'numeric', jeans, '0'],
+      ['8 Short', 'numeric', jeans, '8'],
+      ['10L', 'numeric', jeans, '10'],
+      // Women's bottoms list no 00: it is XXS, as Mercari's XXS (00) says.
+      ['00', 'numeric', jeans, 'XXS'],
+      ['13', 'numeric', jeans, null],
+    ];
+    for (const [label, system, sizes, expected] of cases) {
+      expect(depopSize(sized(label, system), sizes), label).toBe(expected);
+    }
+    // A kids' list never reads an adult's marks.
+    expect(depopSize(sized('4P', 'numeric'), kids)).toBeNull();
   });
 
   it('spells US shoe sizes in halves, kids shoe sizes in their ranges, and maps no UK or EU size', () => {
@@ -402,7 +512,7 @@ describe('Depop automation payload', () => {
     expect(fields({ variant: { hashtags: ['a', 'b', 'c', 'd', 'e', 'f'] } })).toEqual(['too_many']);
     expect(fields({ item: { department: null } })).toEqual(['required']);
     expect(fields({ item: { condition: null } })).toEqual(['required']);
-    expect(fields({ item: { sizeLabel: 'Large Tall' } })).toEqual(['required']);
+    expect(fields({ item: { sizeLabel: 'Medium-ish' } })).toEqual(['required']);
     expect(
       fields({ item: { department: 'women', category: 'bags/totes', sizeLabel: null } }),
     ).toEqual([]);

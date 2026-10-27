@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 
 import { mercariCatalog } from './catalog/catalog.ts';
-import { mercariSizeLabel } from './sizes.ts';
+import { mercariSize, mercariSizeLabel } from './sizes.ts';
 
 const item = sampleListingContent().item;
 /** Mercari's size groups (catalog/catalog.json). */
@@ -76,5 +76,57 @@ describe('Mercari sizes', () => {
     expect(size('women', 'chest 40')).toBeNull();
     expect(size('men', '3T')).toBeNull();
     expect(mercariSizeLabel({ ...item, sizeLabel: 'M' }, [])).toBeNull();
+  });
+
+  it('never reads a waist as a dress size’s range', () => {
+    expect(size('women', '26', 'waist_inseam')).toBeNull();
+    expect(size('women', '32x30')).toBeNull();
+    expect(size('pants', '26', 'waist_inseam')).toBe('26 in.');
+  });
+});
+
+describe("Mercari's women's sizes, by the size list's parts", () => {
+  const women = (sizeLabel: string, group: keyof typeof GROUP = 'women', sizeSystem = null) =>
+    mercariSize(
+      { ...item, department: 'women', sizeLabel, sizeSystem },
+      mercariCatalog().sizeSets(GROUP[group]),
+    );
+
+  it('picks petite and tall sizes in their own part of the list', () => {
+    expect(women('4P')).toEqual({ label: 'S (4-6)', set: 'Petite' });
+    expect(women('S Petite')).toEqual({ label: 'S (4-6)', set: 'Petite' });
+    expect(women('PXS')).toEqual({ label: 'XS (0-2)', set: 'Petite' });
+    expect(women('XL Tall')).toEqual({ label: 'XL (16-18)', set: 'Tall' });
+    expect(women('M')).toEqual({ label: 'M (8-10)', set: null });
+    // Adult pants have no Petite part: the size itself.
+    expect(women('27P', 'pants')).toBeNull();
+    expect(women('S Petite', 'pants')).toEqual({ label: 'S', set: null });
+  });
+
+  it('reads plus sizes, inseam lengths, and waists with sizes by their parts', () => {
+    expect(women('1X')).toEqual({ label: '1X (16-18)', set: null });
+    expect(women('2X')).toEqual({ label: '2XL (20-22)', set: null });
+    expect(women('0X')).toEqual({ label: 'L (12-14)', set: null });
+    expect(women('16W')).toEqual({ label: 'XL (16-18)', set: null });
+    expect(women('0S')).toEqual({ label: 'XS (0-2)', set: null });
+    expect(women('8 Short')).toEqual({ label: 'M (8-10)', set: null });
+    expect(women('27/4')).toEqual({ label: 'S (4-6)', set: null });
+    expect(women('27/4', 'pants')).toEqual({ label: '27 in.', set: null });
+    expect(women('27"', 'pants')).toEqual({ label: '27 in.', set: null });
+    expect(women('27 in.', 'pants')).toEqual({ label: '27 in.', set: null });
+  });
+
+  it("gives a women's numeric size on adult pants the letter Mercari's own ranges give it", () => {
+    expect(women('4', 'pants')).toEqual({ label: 'S', set: null });
+    expect(women('0S', 'pants')).toEqual({ label: 'XS', set: null });
+    expect(women('00', 'pants')).toEqual({ label: 'XXS and Below', set: null });
+    expect(women('16W', 'pants')).toEqual({ label: 'XL', set: null });
+    expect(women('13', 'pants')).toEqual({ label: 'L', set: null });
+    expect(
+      mercariSize(
+        { ...item, department: 'men', sizeLabel: '4', sizeSystem: null },
+        mercariCatalog().sizeSets(GROUP.pants),
+      ),
+    ).toBeNull();
   });
 });

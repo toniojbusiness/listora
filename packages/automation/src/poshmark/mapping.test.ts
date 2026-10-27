@@ -249,6 +249,27 @@ describe('Poshmark sizes', () => {
     expect(size(label, system, department, category)).toMatchObject(expected);
   });
 
+  it.each([
+    // Petite written other ways, and inseam lengths (a size, not Poshmark's Petite).
+    ['PS', 'Dresses', { set: 'Petite', size: 'SP' }],
+    ['Petite M', 'Skirts', { set: 'Petite', size: 'MP' }],
+    ['6 Petite', 'Dresses', { set: 'Petite', size: '6P' }],
+    ['27P', 'Jeans', { set: 'Petite', size: '27P' }],
+    ['0S', 'Jeans', { set: 'Standard', size: '0' }],
+    ['4 Short', 'Pants & Jumpsuits', { set: 'Standard', size: '4' }],
+    ['L Tall', 'Dresses', { set: 'Standard', size: 'L' }],
+    // Plus sizes, waists in inches, and a waist with its size.
+    ['16 Plus', 'Dresses', { set: 'Plus', size: '16' }],
+    ['0X', 'Shorts', { set: 'Plus', size: '0X' }],
+    ['27"', 'Jeans', { set: 'Standard', size: '27' }],
+    ['W27', 'Shorts', { set: 'Standard', size: '27' }],
+    ['27 in.', 'Pants & Jumpsuits', { set: 'Standard', size: '27' }],
+    ['27/4', 'Jeans', { set: 'Standard', size: '27' }],
+    ['27/4', 'Skirts', { set: 'Standard', size: '4' }],
+  ] as const)("women's %s in %s", (label, category, expected) => {
+    expect(size(label, null, 'Women', category)).toMatchObject(expected);
+  });
+
   it('never guesses: a size the category lacks, a UK or EU size, a kids size for both, or none', () => {
     expect(size('XXS', 'letter', 'Men', 'Shirts')).toBeNull();
     expect(size('42', 'eu', 'Men', 'Shoes')).toBeNull();

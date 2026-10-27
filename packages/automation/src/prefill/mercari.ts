@@ -11,7 +11,7 @@ import {
   parseCategoryRef,
 } from '../mercari/categories.ts';
 import { mercariCondition } from '../mercari/conditions.ts';
-import { mercariSizeLabel } from '../mercari/sizes.ts';
+import { mercariSize } from '../mercari/sizes.ts';
 import { chooseField, infoField, type FieldSpec } from './choose.ts';
 import { namedChild } from './rank.ts';
 import {
@@ -147,7 +147,7 @@ export function mercariPrefill(context: MarketplaceContext): MarketplacePrefill 
   let sizeValue: string | null = null;
   let plainSize: string | null = null;
   if (labels.length > 0) {
-    plainSize = mercariSizeLabel(snapshot(item), labels);
+    plainSize = mercariSize(snapshot(item), catalog.sizeSets(group ?? 0))?.label ?? null;
     const sizeField = chooseField(
       sizeSpec(key('size'), `${NAME} size`, item.sizeLabel, labelOptions(labels), plainSize),
       input,

@@ -150,7 +150,17 @@ Girls (4+)` or the boys' one).
     EU size a label names (`39` is `8.5 (39)`); waist and inseam (`W32 L30`) by the waist;
   - months (`6M`, `6-9 months`, `Newborn`) by Mercari's month ranges;
   - anything else by its exact label (`2T`, `34B`, `One size`), and a bra's US cup by the cup
-    the label names (`34DD` is `34E (DD)`).
+    the label names (`34DD` is `34E (DD)`);
+  - women's sizes written with their fit or length by their parts (`adapter/adult-size.ts`): a
+    petite or tall size in the list's own Petite or Tall part (`4P` is `S (4-6)` under Petite,
+    `XL Tall` is `XL (16-18)` under Tall; each option's label names its part, `Petite S (4-6)`),
+    a plus size by the size it spans (`16W` is `XL (16-18)`, `0X` is `L (12-14)`), an inseam
+    length dropped (`0S` is `XS (0-2)`), and a tag with the waist and the size (Abercrombie's
+    `27/4`) by the waist on adult pants (`27 in.`) and by the size elsewhere (`S (4-6)`);
+  - a waist (`27"`, `27 in.`, `W27`, or a size the item's own size system says is a waist) only
+    as a waist (`27 in.`), never as the range of a dress size;
+  - a women's numeric size on adult pants, whose list has only waists and letters, by Mercari's
+    own women's ranges (a `4` is `S`, as its `S (4-6)` says).
 
   UK shoe sizes are not mapped. A category with sizes needs one that maps; validation asks for
   one otherwise, naming a few of the category's. For a tag size the list doesn't have, a `Size`
@@ -302,7 +312,10 @@ phone (`Electronics > Cell phones & accessories > Cell phones & smartphones`) sh
 field, and is refused before anything is sent. Found on the way, and fixed: Mercari fills a
 brand and a category from the photos (a brand it suggests is kept; the category is picked
 again), Smart Pricing switches off without a confirmation on the Mac, the brand list can take a
-few seconds to load, and the size list can miss a tap while the form redraws.
+few seconds to load, and the size list can miss a tap while the form redraws. The women's size list
+(read again 2026-10-27, nothing listed) heads its parts Standard, Petite, Maternity, and Tall, and
+labels each option with its part (`aria-label="Petite S (4-6)"`), which is how a petite size is
+picked.
 
 When the live site differs, the step stops before it sends anything and the user does it, so a
 change can never cause a false success. The run logs what the page has instead

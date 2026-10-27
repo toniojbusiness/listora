@@ -49,8 +49,9 @@ export interface DepopAutomationPayload extends AssistedListingPayload {
   brand: string | null;
   condition: DepopFormCondition | null;
   /**
-   * The other pickers to fill (colours, material), by the labels to pick; absent from the
-   * payload of a phone call a server issued before them.
+   * The other pickers to fill (colours, material, body fit, length, fit, type, style), by the
+   * labels to pick (attributes.ts); absent from the payload of a phone call a server issued
+   * before them.
    */
   details?: DepopFormPick[];
   /** The size list's labels, for the message when the item's size is not one of them. */
@@ -102,7 +103,7 @@ export function buildDepopAutomationPayload(
     sized: sizes.length > 0,
     brand: brand === '' ? null : brand,
     condition: depopFormCondition(variant.condition ?? item.condition),
-    details: category === null ? [] : depopDetails(item, category.attributes),
+    details: category === null ? [] : depopDetails(item, variant, category.attributes),
     sizes: [...sizes],
   };
 }

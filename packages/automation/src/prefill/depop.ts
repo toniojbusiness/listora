@@ -121,7 +121,11 @@ export function depopPrefill(context: MarketplaceContext): MarketplacePrefill {
       brand === '' ? 'No brand: Depop keeps the one it suggests from the photos, if any.' : null,
     ),
   );
-  const details = depopDetails(snapshot(item), category?.attributes ?? []);
+  const details = depopDetails(
+    snapshot(item),
+    { title: item.title ?? '', hashtags: [] },
+    category?.attributes ?? [],
+  );
   const colours = details.find((pick) => pick.field === 'colour')?.values ?? [];
   if (colours.length > 0) fields.push(infoField('colors', 'Colours', colours.join(', ')));
   const materials = details.find((pick) => pick.field === 'attributes.material')?.values ?? [];

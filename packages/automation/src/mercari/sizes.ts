@@ -19,8 +19,15 @@
  *   the label names (`34DD` is `34E (DD)`).
  *
  * UK shoe sizes are not mapped.
+ *
+ * `mercariSize` adds the list's parts: a petite or tall size (`4P`, `S Petite`, `XL Tall`) is
+ * picked in the list's Petite or Tall part where it has one, and a size the reader above doesn't
+ * read (`0S`, `27"`, `27/4`, `2X`) is read by its parts (adapter/adult-size.ts). A waist is only
+ * ever a waist size (`27 in.`), never a dress size's range.
  */
 import type { ItemSnapshot } from '@listora/marketplaces';
+
+import { readAdultSize, type AdultSize } from '../adapter/adult-size.ts';
 
 const LETTERS: Readonly<Record<string, string>> = {
   xxs: 'XXS',
@@ -61,7 +68,7 @@ const LETTER_NAMES: Readonly<Record<string, readonly string[]>> = {
 
 type TagSize =
   | { kind: 'letter'; letter: string }
-  | { kind: 'number'; value: number; eu: boolean }
+  | { kind: 'number'; value: number; eu: boolean; waist: boolean }
   | { kind: 'months'; months: number }
   | { kind: 'newborn' }
   | { kind: 'one_size' }
@@ -98,6 +105,7 @@ export function mercariSizeLabel(item: ItemSnapshot, labels: readonly string[]):
     case 'number': {
       if (size.eu) return first(({ inside }) => numberOf(inside) === size.value);
       const shown = String(size.value);
+      if (size.waist) return first(({ title }) => title === `${shown} in.`);
       return (
         first(({ title }) => [shown, `${shown} in.`, `${shown}R`].includes(title)) ??
         first(({ title }) => [`${shown} & Up`, `${shown} and below`].includes(title)) ??
@@ -127,6 +135,85 @@ export function mercariSizeLabel(item: ItemSnapshot, labels: readonly string[]):
   }
 }
 
+/** A size to pick: its label, and the list's part it is in when not the first one that has it. */
+export interface MercariSize {
+  label: string;
+  /** The part of the list (`Petite`, `Tall`), or `null` for the first part with the label. */
+  set: string | null;
+}
+
+/** The fits that have a part of their own in Mercari's lists. */
+const FIT_SETS = { petite: 'Petite', tall: 'Tall' } as const;
+
+/**
+ * The size to pick in a size list with these parts (catalog's `sizeSets`), or `null` when the
+ * item has no size or none of them is it.
+ */
+export function mercariSize(
+  item: ItemSnapshot,
+  sets: readonly { name: string; labels: readonly string[] }[],
+): MercariSize | null {
+  const adult = readAdultSize(item.sizeLabel);
+  const fitSet = adult?.fit === 'petite' || adult?.fit === 'tall' ? FIT_SETS[adult.fit] : null;
+  const part = sets.find((set) => set.name === fitSet);
+  if (adult !== null && part !== undefined) {
+    const label = byParts(item, adult, part.labels);
+    if (label !== null) return { label, set: part.name };
+  }
+  const labels = [...new Set(sets.flatMap((set) => set.labels))];
+  const label =
+    mercariSizeLabel(item, labels) ??
+    (adult === null ? null : byParts(item, adult, labels)) ??
+    womensLetter(item, adult, labels);
+  return label === null ? null : { label, set: null };
+}
+
+/**
+ * Mercari's own ranges of women's sizes (its women's list: `XS (0-2)`, `S (4-6)`, ... `4XL
+ * (28-30)`), for a women's numeric size on a list that has only letters and waists (adult pants:
+ * a women's 4 is its `S`).
+ */
+const WOMENS_RANGES: readonly (readonly [low: number, high: number, letter: string])[] = [
+  [0, 2, 'XS'],
+  [4, 6, 'S'],
+  [8, 10, 'M'],
+  [12, 14, 'L'],
+  [16, 18, 'XL'],
+  [20, 22, 'XXL'],
+  [24, 26, '3XL'],
+  [28, 30, '4XL'],
+];
+
+function womensLetter(
+  item: ItemSnapshot,
+  adult: AdultSize | null,
+  labels: readonly string[],
+): string | null {
+  if (item.department !== 'women' || item.sizeSystem === 'waist_inseam') return null;
+  const number = adult?.number ?? /^(00|\d{1,2})$/.exec(item.sizeLabel?.trim() ?? '')?.[1];
+  if (number === undefined) return null;
+  const letter =
+    number === '00'
+      ? 'XXS'
+      : WOMENS_RANGES.find(([low, high]) => Number(number) >= low && Number(number) <= high)?.[2];
+  if (letter === undefined) return null;
+  return mercariSizeLabel({ ...item, sizeLabel: letter, sizeSystem: 'letter' }, labels);
+}
+
+/** The label of `labels` that one of the size's parts is: its waist, number, or letter. */
+function byParts(item: ItemSnapshot, adult: AdultSize, labels: readonly string[]): string | null {
+  const reads: Pick<ItemSnapshot, 'sizeLabel' | 'sizeSystem'>[] = [
+    ...(adult.waist === null ? [] : [{ sizeLabel: adult.waist, sizeSystem: 'waist_inseam' }]),
+    ...(adult.number === null ? [] : [{ sizeLabel: adult.number, sizeSystem: 'numeric' }]),
+    ...(adult.letter === null ? [] : [{ sizeLabel: adult.letter, sizeSystem: 'letter' }]),
+  ];
+  for (const read of reads) {
+    const label = mercariSizeLabel({ ...item, ...read }, labels);
+    if (label !== null) return label;
+  }
+  return null;
+}
+
 /** How a tag reads, as one of the kinds Mercari's lists hold. */
 function tagSize(item: ItemSnapshot): TagSize | null {
   const label = item.sizeLabel?.trim() ?? '';
@@ -141,7 +228,7 @@ function tagSize(item: ItemSnapshot): TagSize | null {
   if (months !== undefined) return { kind: 'months', months: Number(months) };
   // Waist and inseam (`32x30`, `W32 L30`): Mercari's pants sizes are the waist.
   const waist = /^w?\s*(\d{2})\s*(?:x|\/|\s)\s*l?\s*\d{2}$/i.exec(label)?.[1];
-  if (waist !== undefined) return { kind: 'number', value: Number(waist), eu: false };
+  if (waist !== undefined) return { kind: 'number', value: Number(waist), eu: false, waist: true };
   const letter = LETTERS[label.toLowerCase().replace(/[\s.-]+/g, '')];
   if (letter !== undefined) return { kind: 'letter', letter };
   // A number, with a shoe's half (`10 1/2`, `10½`, `10.5`) and the system's own marks.
@@ -151,7 +238,12 @@ function tagSize(item: ItemSnapshot): TagSize | null {
     const value = Number(number[1]) + (number[2] === undefined ? 0 : 0.5);
     // Women's `00` is Mercari's XXS (00).
     if (label === '00') return { kind: 'label', text: 'XXS' };
-    return { kind: 'number', value, eu: item.sizeSystem === 'eu' };
+    return {
+      kind: 'number',
+      value,
+      eu: item.sizeSystem === 'eu',
+      waist: item.sizeSystem === 'waist_inseam',
+    };
   }
   return { kind: 'label', text: label };
 }

@@ -177,6 +177,42 @@ describe('the marketplace pre-fill', () => {
     ).toEqual(['Women', 'Jeans']);
   });
 
+  it("refines women's dresses and skirts by a length or a name's alternative, and petite sizes", () => {
+    const dress = (title: string, sizeLabel = 'S') =>
+      prefill({
+        title,
+        category: 'clothing/dresses/dresses',
+        department: 'women',
+        sizeLabel,
+        sizeSystem: null,
+      });
+    // Mercari's mini dresses are "Above knee, mini": either name says it.
+    expect(field(on(dress('Floral mini dress'), 'mercari'), 'category').value?.path).toEqual([
+      'Women',
+      'Dresses',
+      'Above knee, mini',
+    ]);
+    expect(field(on(dress('Boho maxi dress'), 'poshmark'), 'category').value?.path).toEqual([
+      'Women',
+      'Dresses',
+      'Maxi',
+    ]);
+    const skirt = prefill({
+      title: 'Black pencil skirt',
+      category: 'clothing/bottoms/skirts',
+      department: 'women',
+      sizeLabel: '4',
+      sizeSystem: 'numeric',
+    });
+    expect(field(on(skirt, 'mercari'), 'category').value?.path).toEqual([
+      'Women',
+      'Skirts',
+      'Straight, pencil',
+    ]);
+    // A petite size is the size Mercari's list shows (its Petite part is the payload's pick).
+    expect(field(on(dress('Wrap dress', '4P'), 'mercari'), 'size').value?.value).toBe('S (4-6)');
+  });
+
   it('never refines on a word the item does not say, or one its category already says', () => {
     const women = { department: 'women', sizeLabel: 'M', sizeSystem: 'letter' };
     // A ruffle neck is no V-neck, and "shorts" says nothing more than Mercari's Shorts.

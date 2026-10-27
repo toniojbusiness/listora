@@ -130,7 +130,12 @@ for those the review's pre-fill asks the AI, then the seller, from a ranked shor
 `QUEEN`, `6-9 months` → `6-9MB`) and kept only when one of the category's sets has it. Juniors and
 Maternity sets are never picked, since nothing on an item says it is either. A kids' size that
 Girls and Boys both have (`8`, `4T`) needs the size to name one (`Girls 8`, `Boys 8`); validation
-says so. UK and EU sizes are never converted.
+says so. UK and EU sizes are never converted. A women's size written another way is read by its
+parts (`adapter/adult-size.ts`): petite as Poshmark's Petite (`PS` and `Petite M` are `SP` and
+`MP`, `27P` is the waist `27P`), an inseam length dropped (`0S` is `0`), a waist in inches as the
+waist (`27"`, `27 in.`, `W27` are `27`), and Abercrombie's `27/4` as the waist where the set has
+waists (Jeans) and the size where it doesn't (Skirts). Women's Jeans sets have no letter sizes, so
+a lettered pair of jeans needs its waist or numeric size.
 
 **Colors** (`colors.ts`). Poshmark offers 15 colors and takes two. The item's first two colors
 Poshmark has are chosen (beige as Tan, navy as Blue; multicolor has none); an item without colors
@@ -211,6 +216,15 @@ Listora's own test listings:
   the listing asked for.
 - **Deleting** a listing (by hand, for Listora's test listings): its page's Not For Sale dialog
   has "Delete Listing?" and then Delete, after which the page answers 404 with `archived`.
+- **A women's dress, the whole cycle** (Mac, the captain's session, 2026-10-27, normal pacing):
+  a Free People maxi dress (size `M`, Like New, Orange and Cream) listed as
+  `Women > Dresses > Maxi` in 88 seconds and confirmed in 5; Change price 31 + 5, End 36 + 5,
+  Relist 32 + 4 (the same listing, back For Sale), and End again 29 + 5. Its page showed the
+  category, size, condition, colors, and brand Listora sent. Deleted after (the edit page's Delete
+  Listing, then Yes): the page answers 404 and the read reads it as gone for good. The women's
+  jeans, shorts, and skirt forms were checked against the catalog's size sets only (sizes
+  `23` to `34` and `00` to `12` for jeans, Plus `14W` to `32W`, Petite `23P` and `0P`, letters for
+  pants, shorts, and skirts).
 - **Not yet:** a revise of the other details, and a sale check.
 
 Who is logged in comes from Poshmark's own store, as its app reads it: `auth.isUserLoggedIn`,

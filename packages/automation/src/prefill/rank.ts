@@ -131,28 +131,38 @@ export function rankCandidates<C extends Candidate>(
  * parent's name doesn't have is in the item's title, product name, or keywords (`Skinny Jeans`
  * under Jeans for "Levi's skinny jeans"), and only one child is named that way. A child whose
  * name says no more than its parent's (`Short shorts` under Shorts), or that has a word the item
- * never says (`V-neck` for a ruffle neck), is never chosen. `null` otherwise, so a refinement is
+ * never says (`V-neck` for a ruffle neck), is never chosen. A name with alternatives is named by
+ * any one of them (`Above knee, mini` for a "mini dress"). `null` otherwise, so a refinement is
  * never a guess.
  */
 export function namedChild<C extends Candidate>(children: readonly C[], item: ItemWords): C | null {
-  const own = (child: C): string[] => {
+  // A name can give alternatives, separated by commas (Mercari's `Above knee, mini`,
+  // `Straight, pencil`): each is the child's name on its own.
+  const alternatives = (child: C): string[][] => {
     const parent = new Set(words(child.path.at(-2)));
     // Every word, one letter long too (the `V` of `V-neck`), less the parent's.
-    return (child.path.at(-1) ?? '')
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((word) => word !== '' && !STOP_WORDS.has(word))
-      .map(singular)
-      .filter((word) => !parent.has(word));
+    return (child.path.at(-1) ?? '').split(',').map((part) =>
+      part
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((word) => word !== '' && !STOP_WORDS.has(word))
+        .map(singular)
+        .filter((word) => !parent.has(word)),
+    );
   };
-  const named = children.filter((child) => {
-    const leaf = own(child);
-    return leaf.length > 0 && leaf.every((word) => item.naming.has(word));
-  });
+  /** How many words of the child's name the item says: its longest alternative it says whole. */
+  const said = (child: C): number =>
+    Math.max(
+      0,
+      ...alternatives(child)
+        .filter((leaf) => leaf.length > 0 && leaf.every((word) => item.naming.has(word)))
+        .map((leaf) => leaf.length),
+    );
+  const named = children.filter((child) => said(child) > 0);
   if (named.length === 0) return null;
   // The most specific name wins ("Skinny Jeans" over "Jeans"); two equally specific ones tie.
-  const most = Math.max(...named.map((child) => own(child).length));
-  const best = named.filter((child) => own(child).length === most);
+  const most = Math.max(...named.map(said));
+  const best = named.filter((child) => said(child) === most);
   return best.length === 1 ? (best[0] ?? null) : null;
 }
 
