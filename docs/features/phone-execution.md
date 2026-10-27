@@ -151,7 +151,7 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
 ## When the phone runs
 
 - **While the app is open** it runs the work waiting for this phone at once, without its backoff
-  (`appOpen`), then waits for its next work (`POST /v1/phone-runs/wait`, `waitForPhoneWork`) and
+  (`appOpen`), then waits for its next work (`GET /v1/phone-runs/wait`, `waitForPhoneWork`) and
   claims again as soon as the server answers, and whenever a marketplace's run ends
   (`PhoneRunner.follow`), even while other marketplaces run. The server answers the wait the
   moment work for the phone may be claimable: `phone_work` notifies the `phone_work` channel with
