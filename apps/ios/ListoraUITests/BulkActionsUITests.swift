@@ -96,7 +96,7 @@ final class BulkActionsUITests: XCTestCase {
         try choose([live, spare])
         app.buttons["inventory.bulk.delete"].tap()
         try start()
-        app.buttons["bulk.delete.confirm"].tap()
+        app.buttons["bulk.delete.confirm"].firstMatch.tap()
         try require(waitForLabel(of: outcome(spare, "item"), "Deleted.", timeout: 30, contains: true))
         try require(waitForLabel(of: outcome(live, "item"), "End its listings", timeout: 5, contains: true))
         keepScreenshot("Delete results")

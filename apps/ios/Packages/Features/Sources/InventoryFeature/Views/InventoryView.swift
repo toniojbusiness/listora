@@ -43,7 +43,12 @@ public struct InventoryView<Header: View>: View {
                 .background(Palette.background)
                 .navigationTitle(model.isSelecting ? selectionTitle : "Inventory")
                 .navigationBarTitleDisplayMode(model.isSelecting ? .inline : .automatic)
-                .searchable(text: $model.query.search, prompt: "SKU, title, or brand")
+                // Always shown: the quick filters under it would otherwise collapse it out of sight.
+                .searchable(
+                    text: $model.query.search,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "SKU, title, or brand",
+                )
                 .toolbar { toolbar }
                 // While choosing items the selection bar takes the tab bar's place.
                 .toolbar(model.isSelecting ? .hidden : .automatic, for: .tabBar)
