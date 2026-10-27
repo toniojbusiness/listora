@@ -271,8 +271,14 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
     expect(result).toMatchObject({
       ok: false,
       steps: ['open the account', 'read the seller', 'follow the link'],
-      failure: { step: 'follow the link', screenshotKey: null },
+      failure: { step: 'follow the link' },
     });
+    // Whether the run stops before or after the refused navigation leaves the site's page is a
+    // race, so a screenshot may or may not be kept; one is only ever taken of a page on the
+    // site's own origins (session.ts), never of the other origin.
+    expect(result.ok ? null : result.failure.screenshotKey).toSatisfy(
+      (key: unknown) => key === null || (typeof key === 'string' && key.startsWith('automation/')),
+    );
     const elsewhere = new URL(site.url.replace('127.0.0.1', 'localhost')).host;
     const sent = site.requests.slice(before);
     expect(sent.map((request) => request.path)).toContain('/');
