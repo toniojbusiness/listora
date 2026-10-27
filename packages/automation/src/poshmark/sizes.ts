@@ -1,20 +1,31 @@
 /**
- * An item's size as Poshmark's listing form takes it: one size id from one of the category's
- * size sets (catalog.ts), for example `M` in Standard, `14W` in Plus, `XLT` in Big & Tall.
+ * An item's size as Poshmark's listing form takes it: one size from one of the category's size
+ * sets (catalog.ts), for example `M` in Standard, `14W` in Plus, `XLT` in Big & Tall, `2T` in
+ * Girls.
  *
  * `poshmarkSize` turns the tag's size into Poshmark's spelling deterministically (`Medium` → `M`,
- * `2XL` → `XXL`, `32x30` → `32`, `10 1/2` → `10.5`, `34DD` → `34E (DD)`, `S Petite` → `SP`) and
- * keeps it only when the category's size sets have it, so the form is never asked for a size it
- * lacks. One-size categories (bags, jewelry, accessories) always take `OS`.
+ * `2XL` → `XXL`, `32x30` → `32`, `10 1/2` → `10.5`, `34DD` → `34E (DD)`, `S Petite` → `SP`,
+ * `6-9 months` → `6-9 Months`, `Boys 8` → `8` in Boys) and keeps it only when one of the
+ * category's size sets has it, so the form is never asked for a size it lacks. A one-size
+ * category takes its one size, which the form chooses by itself. Juniors and Maternity are left
+ * out: nothing on an item says it is either. A kids' size that Girls and Boys both have needs
+ * the size to say which (`Girls 8`); without that it is not guessed.
  */
-import type { SizeSets } from './catalog.ts';
+import type { PoshmarkDepartment, SizeSets } from './catalog.ts';
 
 export interface PoshmarkSize {
-  /** The size set's name as the form shows it: `Standard`, `Plus`, `Petite`, `Big & Tall`. */
+  /** The size set's tab in the size picker: `Standard`, `Plus`, `Petite`, `Big & Tall`, `Girls`. */
   set: string;
-  /** The size id as the form shows it: `M`, `14W`, `10.5`, `34E (DD)`. */
+  /** Poshmark's id of the size: `M`, `14W`, `10.5`, `34E (DD)`, `2TG`. */
   size: string;
+  /** What its button in the size picker shows: `M`, `Neck 15.5`, `Waist 32`, `2T`. */
+  label: string;
+  /** What the picker shows once it is chosen: `M`, `2T (Girl)`, `OS`. */
+  chosen: string;
 }
+
+/** The sets Listora never picks: nothing on an item says it is a juniors' or maternity size. */
+const UNTOLD_SETS = new Set(['Juniors', 'Maternity']);
 
 const LETTERS: Readonly<Record<string, string>> = {
   xxs: 'XXS',
@@ -59,26 +70,114 @@ const CUPS: Readonly<Record<string, readonly string[]>> = {
   h: ['H (5D)'],
 };
 
-/** Poshmark's size for the item's size label in a category with these size sets, or `null`. */
+/** Bedding sizes as Poshmark's ids write them. */
+const BEDDING: Readonly<Record<string, string>> = {
+  twin: 'TWIN',
+  twinxl: 'TWINXL',
+  full: 'FULL',
+  double: 'FULL',
+  queen: 'QUEEN',
+  king: 'KING',
+  calking: 'CALKING',
+  californiaking: 'CALKING',
+};
+
+/**
+ * Poshmark's size for the item's size label in a category with these size sets, or `null`. The
+ * department decides how a kids' size is read.
+ */
 export function poshmarkSize(
   label: string | null,
   system: string | null,
   sets: SizeSets,
+  department: PoshmarkDepartment,
 ): PoshmarkSize | null {
-  const all = Object.values(sets).flat();
-  if (all.length > 0 && all.every((size) => size === 'OS')) return find(['OS'], sets);
+  const usable = sets.filter((set) => !UNTOLD_SETS.has(set.name));
+  // A one-size category: the form chooses its size by itself (the first set's, for Kids).
+  const [first] = usable;
+  if (first !== undefined && usable.every((set) => set.sizes.length === 1)) {
+    return sizeOf(first, 0);
+  }
   const text = label?.trim() ?? '';
   if (text === '') return null;
-  if (system === 'one_size' || /^(one\s*size|os|o\/s)$/i.test(text)) return find(['OS'], sets);
+  if (system === 'one_size' || /^(one\s*size|os|o\/s)$/i.test(text)) {
+    return find(usable, (id) => id === 'OS' || /^OS(BB|B|G)$/.test(id));
+  }
   // Poshmark's sizes are US sizes; a UK or EU size is never converted by guesswork.
   if (system === 'uk' || system === 'eu') return null;
-  return find(candidates(text), sets);
+  if (department === 'Kids') return kidsSize(text, usable);
+  for (const candidate of candidates(text)) {
+    const found = find(usable, (id) => id === candidate);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+function sizeOf(set: SizeSets[number], index: number): PoshmarkSize | null {
+  const entry = set.sizes[index];
+  if (entry === undefined) return null;
+  const [size, label, chosen] = entry;
+  return { set: set.name, size, label, chosen };
+}
+
+/** The first size, in set order, whose id passes `matches`. */
+function find(sets: SizeSets, matches: (id: string) => boolean): PoshmarkSize | null {
+  for (const set of sets) {
+    const index = set.sizes.findIndex(([id]) => matches(id));
+    if (index >= 0) return sizeOf(set, index);
+  }
+  return null;
+}
+
+/**
+ * A kids' size. Poshmark's kids' ids carry their set (`2TG`, `8B`, `6-9MB`, `5BB` for a baby's
+ * shoe), so the tag's size is spelled with each set's mark. A size both Girls and Boys have needs
+ * the label to name one (`Girls 8`, `8 Boys`, `Boy's M`).
+ */
+function kidsSize(text: string, sets: SizeSets): PoshmarkSize | null {
+  const lower = text.toLowerCase();
+  const named = /\bgirl'?s?\b/.test(lower) ? 'Girls' : /\bboy'?s?\b/.test(lower) ? 'Boys' : null;
+  const bare = lower
+    .replace(/\b(girl|boy)'?s?\b/g, '')
+    .replace(/\b(toddler|little|big|kids?)\b/g, '')
+    .trim();
+  const months = /^(\d{1,2})(?:\s*-\s*(\d{1,2}))?\s*(?:m|mo|mos|months?)$/.exec(bare);
+  if (months?.[1] !== undefined) {
+    const id = months[2] === undefined ? `${months[1]}M` : `${months[1]}-${months[2]}M`;
+    return find(sets, (candidate) => candidate === `${id}B`);
+  }
+  if (/^newborn$|^nb$/.test(bare)) return find(sets, (id) => id === 'Newborn');
+  if (/^preemie$/.test(bare)) return find(sets, (id) => id === 'Preemie');
+  const toddler = /^(\d)\s*t$/.exec(bare);
+  const spellings = toddler?.[1] !== undefined ? [`${toddler[1]}T`] : candidates(bare);
+  const marks: Readonly<Record<string, readonly string[]>> = {
+    Girls: ['G'],
+    Boys: ['B'],
+    Baby: ['BB'],
+  };
+  const matches = sets.flatMap((set) => {
+    if (named !== null && set.name !== named) return [];
+    const index = set.sizes.findIndex(([id]) =>
+      spellings.some((spelling) => (marks[set.name] ?? []).some((mark) => id === spelling + mark)),
+    );
+    const found = index < 0 ? null : sizeOf(set, index);
+    return found === null ? [] : [found];
+  });
+  const [only, ...others] = matches;
+  // Girls and Boys both have it, and the size doesn't say which: never guessed.
+  return only !== undefined && others.length === 0 ? only : null;
 }
 
 /** The spellings a label may have on Poshmark, most likely first. */
 function candidates(label: string): string[] {
-  const token = label.toLowerCase().replace(/^us\s*/, '');
+  const token = label
+    .toLowerCase()
+    .replace(/^us\s*/, '')
+    .replace(/^(neck|waist)\s+/, '');
   const compact = token.replace(/[\s.-]+/g, '');
+
+  const bedding = BEDDING[compact];
+  if (bedding !== undefined) return [bedding];
 
   // Waist and inseam (`32x30`, `W32 L30`): Poshmark sizes jeans and pants by the waist.
   const waistInseam = /^w?\s*(\d{2})\s*(?:x|\/|\s)\s*l?\s*(\d{2})$/i.exec(token);
@@ -138,7 +237,7 @@ function candidates(label: string): string[] {
     const base = mark === 'T' && suffixedLetter === 'XXL' ? '2XL' : suffixedLetter;
     return [`${base}${mark}`];
   }
-  const numeric = /^(00|0|[1-9]\d?)(w|p)?$/.exec(rest);
+  const numeric = /^(00|0|[1-9]\d?)(w|p|x)?$/.exec(rest);
   if (numeric?.[1] !== undefined) {
     const mark = (numeric[2] ?? '').toUpperCase() || suffix;
     return [`${numeric[1]}${mark}`];
@@ -148,14 +247,4 @@ function candidates(label: string): string[] {
 
 function spellings(letter: string): readonly string[] {
   return ALIASES[letter] ?? [letter];
-}
-
-/** The first candidate one of the size sets has, with its set. */
-function find(candidates: readonly string[], sets: SizeSets): PoshmarkSize | null {
-  for (const size of candidates) {
-    for (const [set, sizes] of Object.entries(sets)) {
-      if (sizes.includes(size)) return { set, size };
-    }
-  }
-  return null;
 }

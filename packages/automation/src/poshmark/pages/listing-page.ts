@@ -9,6 +9,12 @@
  * hides, as it did with a listing it removed under its rules, which is not (Poshmark can show it
  * again). Any other page without the listing (one without that record, or no longer published)
  * reads as "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
+ *
+ * After a change Poshmark reviews the listing (`status: "for_review"`, read on the captain's
+ * listings, 2026-10-27: over 20 minutes after a price change). Its page still embeds the
+ * listing, with the change, for its seller, but buyers get the 404 page: the listing is not live
+ * while it is reviewed. So a listing under review is there to change, and as a read-back it is
+ * live only once Poshmark publishes it again (an ended or sold one reads as what it is).
  */
 import { z } from 'zod';
 
@@ -46,6 +52,8 @@ const listingPageSchema = z.object({
 /** What a listing's page shows of it. */
 export type ListingPage =
   | { type: 'listing'; record: ListingRecord }
+  /** Poshmark is reviewing it after a change: its seller sees it, buyers don't yet. */
+  | { type: 'reviewing'; record: ListingRecord }
   /** Its seller deleted it: it is gone. */
   | { type: 'deleted' }
   /** Poshmark hides it, as it does with a listing it removed under its rules. */
@@ -78,18 +86,23 @@ export async function openListingPage(
     if (info.status === 'archived') return { type: 'deleted' };
     return info.status === 'hidden' ? { type: 'hidden' } : { type: 'none' };
   }
-  if (details.id !== id || details.status !== 'published') return { type: 'none' };
+  if (details.id !== id) return { type: 'none' };
+  if (details.status === 'for_review') return { type: 'reviewing', record: details };
+  if (details.status !== 'published') return { type: 'none' };
   return { type: 'listing', record: details };
 }
 
-/** Opens the listing's page and reads it; `null` when the page shows no such listing. */
+/**
+ * Opens the listing's page and reads its record (one under review too); `null` when the page
+ * shows no such listing.
+ */
 export async function openListing(
   page: PageDriver,
   site: PoshmarkSite,
   id: string,
 ): Promise<ListingRecord | null> {
   const shown = await openListingPage(page, site, id);
-  return shown.type === 'listing' ? shown.record : null;
+  return shown.type === 'listing' || shown.type === 'reviewing' ? shown.record : null;
 }
 
 /** The listing as a read-back. */
@@ -101,8 +114,22 @@ export async function readListing(
   return remoteState(await openListingPage(page, site, id), site);
 }
 
-/** What a listing's page shows, as a read-back: only a deleted listing is definitely gone. */
+/**
+ * What a listing's page shows, as a read-back: only a deleted listing is definitely gone, and
+ * one under review that is for sale is not live yet.
+ */
 export function remoteState(shown: ListingPage, site: PoshmarkSite): RemoteListingState {
   if (shown.type === 'listing') return remoteListing(shown.record, site, PAGE);
+  if (shown.type === 'reviewing') {
+    const listing = remoteListing(shown.record, site, PAGE);
+    return listing.status === 'active' ? { found: false, authoritative: false } : listing;
+  }
   return { found: false, authoritative: shown.type === 'deleted' };
+}
+
+/** The listing as its seller has it, whether or not Poshmark is reviewing it. */
+export function sellersListing(shown: ListingPage, site: PoshmarkSite): RemoteListingState {
+  return shown.type === 'reviewing'
+    ? remoteListing(shown.record, site, PAGE)
+    : remoteState(shown, site);
 }

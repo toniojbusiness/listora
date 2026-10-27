@@ -14,9 +14,13 @@ The code is in `packages/automation/src/poshmark/`:
 | ----------------------- | ------------------------------------------------------------------------------ |
 | `adapter.ts`            | The scripts for every operation, on the automation adapter base                |
 | `payload.ts`            | The pure payload builder and Poshmark's rules (golden files in `__golden__/`)  |
-| `catalog.ts`            | Departments, categories, size sets, and the canonical category map             |
-| `sizes.ts`              | Turning a tag's size into Poshmark's size id                                   |
+| `data/catalog.json`     | Poshmark's whole catalog, read from its own listing form (see "Mapping")       |
+| `data/refresh.ts`       | Rewrites `catalog.json` from the form, and prints what changed                 |
+| `catalog.ts`            | The catalog's lookups and the canonical category map                           |
+| `sizes.ts`              | Turning a tag's size into Poshmark's size                                      |
+| `colors.ts`             | The canonical color map                                                        |
 | `conditions.ts`         | The canonical condition map                                                    |
+| `prohibited.ts`         | What Poshmark prohibits, refused before anything is sent                       |
 | `site.ts`               | Poshmark's URLs                                                                |
 | `pages/`                | One module per page: every selector and every data key the adapter reads       |
 | `fake/fake-poshmark.ts` | The fake Poshmark that tests and development use (`npm run dev:fake-poshmark`) |
@@ -67,29 +71,69 @@ listing's `inventory.status_changed_at`. Buyers' names and addresses are never r
 
 ## Mapping tables
 
-Sources: Poshmark's public pages, read logged out on 2026-10-24 (a search page, a listing page,
-the Men and Women category pages, and one public closet with each `availability` filter).
-Listora reads no logged-in page except through a seller's own session.
+**Source.** Poshmark's listing form holds Poshmark's whole catalog in its page state
+(`$_listing_editor.catalogMeta`, with `catalogDisplayGroupingData` for its display groups, and
+the conditions in `featureSettings.featureSettingsV3.web_resell_v2_guest.conditions`). Listora
+keeps it as versioned data, `data/catalog.json`, read on the captain's session on 2026-10-27
+(Poshmark's catalog says it last changed on 2026-10-12): 6 departments (Women, Men, Kids, Home,
+Pets, Electronics), 114 categories, 633 subcategories, and every category's size sets with their
+US sizes (46 distinct sets). Names are the ones the form shows.
 
-**Catalog** (`catalog.ts`). Women's and men's items map onto Poshmark's department, category,
-and, where Poshmark's pages showed one, subcategory, by the most specific canonical prefix
-(`clothing/tops/blouses` → Women / Tops / Blouses; `clothing/tops/bodysuits` → Women / Tops).
-Unisex items go under Men. Kids' items (whose girls', boys', or baby size set Listora cannot
-tell) and Home items are not mapped; the listing can name its catalog in its `categoryRef` as
-`Department/Category[/Subcategory]` in Poshmark's display names (`Men/Jackets & Coats/Vests`),
-and otherwise its validation asks for one.
+**Refreshing it.** `data/refresh.ts` reads the form read-only (nothing is filled in or saved),
+rewrites `catalog.json`, and prints each category it added, changed, or dropped:
 
-**Sizes** (`catalog.ts`, `sizes.ts`). Each category has Poshmark's size sets with their size
-ids, from the search facets (`sizesGroupedByDepartmentAndCategory`): women's Standard, Plus, and
-Petite, and men's Standard and Big & Tall. Juniors and Maternity are left out, since nothing on
-an item says it is either. A few categories were not in the facets and are marked "assumed" in
-the table (one-size categories take `OS`; men's Swim takes the men's letter sizes). The tag's
-size is normalized (`Medium` → `M`, `2XL` → `XXL`, `XL Tall` → `XLT`, `32x30` → `32`, `10 1/2` →
-`10.5`, `34DD` → `34E (DD)`, `S Petite` → `SP`) and kept only when one of the category's sets
-has it. UK and EU sizes are never converted.
+```sh
+# From a Chrome where a seller is signed in to Poshmark, listening for DevTools on a port:
+node packages/automation/src/poshmark/data/refresh.ts --cdp http://127.0.0.1:9333
+# Or from a dump of the same values (FORM_EXPRESSION in refresh.ts, copied from DevTools):
+node packages/automation/src/poshmark/data/refresh.ts --from dump.json
+```
 
-**Conditions** (`conditions.ts`). Poshmark offers four (its codes and labels from
-`featureSettings.web_resell_v2_guest.conditions`):
+Then run `npx vitest run packages/automation/src/poshmark`: `mapping.test.ts` fails when the
+canonical map names a place the new catalog no longer has, or the counts changed.
+
+**The form.** Every category has the same form (read on the captain's session, 2026-10-27, for
+every category of every department): photos, title, description, the category (department,
+category, optional subcategory with a "None"), the size, the condition, the brand, up to two
+colors, style tags, the original and listing prices (the Listing Price dialog with Automate
+Offers), availability, and the private SKU, cost, and notes. Poshmark's prepaid label covers
+shipping, so the form has no shipping or weight field. What differs by category is the size:
+
+| Form shape                                                  | Example                    | How Listora fills it                                       |
+| ----------------------------------------------------------- | -------------------------- | ---------------------------------------------------------- |
+| Several size sets, a tab each                               | Women's Tops, Men's Shirts | The set's tab, then the size's button                      |
+| Sizes whose button shows a label, not the id                | `Neck 15.5`, `Waist 32`    | The button by its label (`label` in the data)              |
+| One size, chosen by the form with the category              | Bags, Home Accents, Pets   | Nothing: the form shows the size already (`chosen`)        |
+| Kids' Baby, Girls, and Boys sets                            | Kids' Shirts & Tops        | The set the size names (`Boys 8`), never guessed           |
+| A category inside a display group                           | Women's Kurtas             | The group ("Global & Traditional Wear"), then the category |
+| A category without subcategories                            | Men's Other                | No subcategory                                             |
+| A form whose picker opens on a chosen category's department | Any edit form              | "All Categories" first, then the department                |
+
+The pickers show a size by what Poshmark calls it once chosen (`2T (Girl)`, `OS (Baby)`), and
+the condition picker shows Poshmark's own labels (`New With Tags (NWT)`, `Like New`, `Good`,
+`Fair`).
+
+**Catalog** (`catalog.ts`). Each canonical category maps per department (women's, men's, kids')
+onto Poshmark's category and, where one fits, its subcategory, by the most specific canonical
+prefix (`clothing/tops/blouses` → Women / Tops / Blouses). Unisex items go under Men; home items
+(`home/decor`, `home/kitchen`, `home/bedding`) go to Home whatever their department. A few
+canonical categories have no Poshmark place (men's dresses and skirts, matching sets, `other`);
+for those the seller picks one. The seller can pick any of the 747 places in the List flow
+(`categories.ts` offers every category and subcategory), and the listing names it in its
+`categoryRef` as `Department/Category[/Subcategory]` (`Electronics/Headphones/Over-Ear Headphones`).
+
+**Sizes** (`sizes.ts`). The tag's size is normalized (`Medium` → `M`, `2XL` → `XXL`, `XL Tall` →
+`XLT`, `32x30` → `32`, `10 1/2` → `10.5`, `34DD` → `34E (DD)`, `S Petite` → `SP`, `Queen` →
+`QUEEN`, `6-9 months` → `6-9MB`) and kept only when one of the category's sets has it. Juniors and
+Maternity sets are never picked, since nothing on an item says it is either. A kids' size that
+Girls and Boys both have (`8`, `4T`) needs the size to name one (`Girls 8`, `Boys 8`); validation
+says so. UK and EU sizes are never converted.
+
+**Colors** (`colors.ts`). Poshmark offers 15 colors and takes two. The item's first two colors
+Poshmark has are chosen (beige as Tan, navy as Blue; multicolor has none); an item without colors
+leaves the picker as it is.
+
+**Conditions** (`conditions.ts`). Poshmark offers four (its codes and labels from the form):
 
 | Listora               | Poshmark                  |
 | --------------------- | ------------------------- |
@@ -99,6 +143,14 @@ has it. UK and EU sizes are never converted.
 | `pre_owned_excellent` | `uln` Like New            |
 | `pre_owned_good`      | `ug` Good                 |
 | `pre_owned_fair`      | `uf` Fair                 |
+
+**Prohibited items** (`prohibited.ts`). Poshmark deletes listings it prohibits and suspends
+sellers who keep listing them ("What can I sell on Poshmark?", support.poshmark.com, read
+2026-10-27), so Listora refuses them before anything is sent: makeup and personal care
+(Makeup, Skincare, Hair, Bath & Body, Grooming, Kids' Bath, Skin & Hair) and underwear (the
+item's own category, or Poshmark's Panties, Boxer Briefs, Boxers, Briefs, and Kids' Underwear)
+unless new with tags; and a title or description that names a replica, "inspired by" a brand,
+an N95 mask, or what Poshmark's labels can't ship (nail polish, perfume, cologne, aerosols).
 
 **Rules** (`payload.ts`). Titles at most 80 characters and descriptions at most 1,500
 (Poshmark's Bulk Upload template); a description; prices in whole dollars (every price on
@@ -112,9 +164,10 @@ Mapped on the seller's own session (2026-10-26 and 27; Poshmark's own public cod
 the evidence of runs that stopped, then the form on the Mac), and run from the iPhone on
 Listora's own test listings:
 
-- **List** (phone, 51 seconds): photos and Poshmark's cover-photo editor (its Apply), title and
-  description, the listing and original prices (the price field opens a dialog whose Automate
-  Offers Listora turns off), the brand, the category, size, and condition pickers, the private
+- **List** (phone, 51 seconds; Mac, 2026-10-27, about 3 minutes with the profile's pacing):
+  photos and Poshmark's cover-photo editor (its Apply), title and description, the listing and
+  original prices (the price field opens a dialog whose Automate Offers Listora turns off), the
+  brand, the category, size, condition, and color pickers, the private
   SKU behind "show details", and Next then List. After List Poshmark shows the closet, which
   doesn't name the new listing, but the form named it from the moment it opened: its photos
   section carries the new listing's id in `data-et-prop-listing_id`, and a listing keeps that
@@ -137,8 +190,24 @@ Listora's own test listings:
 - **Relist** (phone): a listing Poshmark removed is listed again as a new listing.
 - **Change price, End, and Relist back to For Sale** (Mac, the captain's signed-in browser,
   2026-10-27): Update opens the same share step a new listing's Next does, and its List This
-  Item saves the change. Right after a change the listing page showed no listing for about two
-  minutes, so it is read again (up to four looks, 30 seconds apart) before anything is decided.
+  Item saves the change.
+- **Poshmark's review after a change** (Mac, 2026-10-27): after a change Poshmark reviews the
+  listing (`status: "for_review"` in its record), and on the captain's account the review lasted
+  over 40 minutes after a price change. Its page still embeds the listing with the change for
+  its seller, but a buyer gets the 404 page (`PostRemovedError`, `post_info.status`
+  `for_review`). So a listing under review can still be ended, repriced, revised, and relisted,
+  an ended or sold one reads as what it is, and one for sale reads as not live yet (never as
+  gone) until Poshmark publishes it again. Before this, Listora read a listing under review as
+  absent and refused to end it ("not on Poshmark yet").
+- **Every form shape, on the real form** (Mac, 2026-10-27, filled with Listora's own form code
+  and read back, never submitted): Women's Tops (Standard), Women's Jeans (Plus), Women's Kurtas
+  (in a display group), Men's Shirts in a neck size and new with tags, Men's Jeans in a waist
+  size, Men's Shirts Big & Tall, Men's Other (no subcategory), Kids' Shirts & Tops (Boys), Kids'
+  One Pieces (Baby), Kids' Toys (one size), Home Bedding (Queen), Home Accents (one size),
+  Pets Dog Toys, and Electronics Headphones, with their colors. Each picker showed exactly what
+  the listing asked for.
+- **Deleting** a listing (by hand, for Listora's test listings): its page's Not For Sale dialog
+  has "Delete Listing?" and then Delete, after which the page answers 404 with `archived`.
 - **Not yet:** a revise of the other details, and a sale check.
 
 Who is logged in comes from Poshmark's own store, as its app reads it: `auth.isUserLoggedIn`,
