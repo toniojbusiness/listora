@@ -29,18 +29,17 @@ import {
   submitListing,
   type Submitted,
 } from './pages/listing-form.ts';
+import { onDepop, readOwnListings, type ApiProduct } from './pages/api.ts';
 import { readProduct, type ProductPageRead } from './pages/product-page.ts';
-import { readSellingPage } from './pages/selling-page.ts';
-import { findSeller, newestProducts } from './pages/shop-page.ts';
 import { readSoldItemsPage } from './pages/sold-items-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
 
 /**
- * How many of the newest listings for sale a lookup by SKU looks through. A listing whose slug
- * Listora never learned is one it just posted, so it is among the newest.
+ * Pages of the seller's newest listings for sale (24 each) a lookup by SKU looks through. A
+ * listing whose slug Listora never learned is one it just posted, so it is among the newest.
  */
-export const SKU_LOOKUP_DEPTH = 8;
-/** Pages of the selling page one read goes through at most (newest first). */
+export const SKU_LOOKUP_PAGES = 1;
+/** Pages of the seller's listings for sale (24 each) one read goes through at most. */
 export const MAX_LISTING_PAGES = 25;
 /** Pages of sold items one sale check goes through at most (newest first). */
 export const MAX_SOLD_PAGES = 5;
@@ -75,24 +74,23 @@ export function createDepopScripts(
   });
 
   /**
-   * The listing the seller's newest listings for sale hold under this SKU, if any. Their shop
-   * links to them; each one's SKU is on its own page, so a listing found by SKU reads exactly as
-   * it does by its slug.
+   * The listing the seller's newest listings for sale hold under this SKU, if any: from the
+   * same list of the seller's own listings the selling hub loads (pages/api.ts), each with its
+   * text and last change time, so it reads exactly as it does by its slug.
    */
-  async function findBySku(step: StepRunner, sku: string): Promise<ProductPageRead | null> {
-    const seller = await step('find the seller', { mutates: false }, (page) =>
-      findSeller(page, site),
-    );
-    const slugs = await step('look at the newest listings', { mutates: false }, (page) =>
-      newestProducts(page, site, seller, SKU_LOOKUP_DEPTH),
-    );
-    for (const slug of slugs) {
-      const read = await step('read the listing', { mutates: false }, (page) =>
-        readProduct(page, site, slug),
-      );
-      if (read.sku === sku) return read;
-    }
-    return null;
+  async function findBySku(step: StepRunner, sku: string): Promise<ApiProduct | null> {
+    return step('look for the listing', { mutates: false }, async (page) => {
+      await onDepop(page, site);
+      let cursor: string | null = null;
+      for (let number = 1; number <= SKU_LOOKUP_PAGES; number += 1) {
+        const shown = await readOwnListings(page, site, 'selling', cursor);
+        const found = shown.products.find((product) => product.sku === sku);
+        if (found !== undefined) return found;
+        if (shown.next === null) return null;
+        cursor = shown.next;
+      }
+      return null;
+    });
   }
 
   /**
@@ -123,7 +121,7 @@ export function createDepopScripts(
     if (mayHaveAppliedBefore(op)) {
       // An earlier attempt may have gone through; Depop would take a second copy.
       const earlier = await findBySku(step, sku);
-      if (earlier?.state.found === true) {
+      if (earlier !== null) {
         return { ...revisionOf(earlier), externalListingId: earlier.state.externalListingId };
       }
     }
@@ -143,8 +141,8 @@ export function createDepopScripts(
     // so it shows as listed at once. Not finding it yet leaves it to the operation's check.
     try {
       const found = await findBySku(step, sku);
-      if (found?.state.found === true) {
-        return { ...result, externalListingId: found.state.externalListingId };
+      if (found !== null) {
+        return { ...revisionOf(found), externalListingId: found.state.externalListingId };
       }
     } catch {
       // The check reads it back later.
@@ -285,20 +283,23 @@ export function createDepopScripts(
     },
     listings: async (step) => {
       const listings: RemoteListing[] = [];
+      let cursor: string | null = null;
       for (let number = 1; number <= MAX_LISTING_PAGES; number += 1) {
-        const shown = await step('read the listings for sale', { mutates: false }, (page) =>
-          readSellingPage(page, site, number),
-        );
-        listings.push(...shown.products.map((product) => product.listing));
-        if (!shown.hasMore) return { listings, complete: true };
+        const shown = await step('read the listings for sale', { mutates: false }, async (page) => {
+          await onDepop(page, site);
+          return readOwnListings(page, site, 'selling', cursor);
+        });
+        listings.push(...shown.products.map((product) => product.state));
+        if (shown.next === null) return { listings, complete: true };
+        cursor = shown.next;
       }
       return { listings, complete: false };
     },
   };
 }
 
-/** An applied change, with the revision the product page showed after it. */
-function revisionOf(read: ProductPageRead): Extract<WriteResult, { type: 'applied' }> {
+/** An applied change, with the revision a read showed after it. */
+function revisionOf(read: ProductPageRead | ApiProduct): Extract<WriteResult, { type: 'applied' }> {
   return read.state.found && read.state.revision !== null
     ? { type: 'applied', revision: read.state.revision }
     : { type: 'applied' };

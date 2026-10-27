@@ -55,7 +55,6 @@ import {
   type Reply,
   type SubmittedForm,
 } from '../../fake-site/http.ts';
-import { mappedDepopCategories } from '../categories.ts';
 import { DEPOP_CONDITION_LABELS } from '../conditions.ts';
 import { DEPOP_SLUG } from '../site.ts';
 import {
@@ -67,18 +66,15 @@ import {
   FAKE_DEPOP_BRANDS,
   FAKE_DEPOP_OTHER_BRAND,
   FAKE_DEPOP_SHIPPING,
-  FAKE_DEPOP_SIZES,
+  fakeDepopTree,
   gonePage,
   hubPage,
   listingFormPage,
   loginPage,
-  nextDataPage,
   notFoundPage,
   plainPage,
   priceAmount,
   productPage,
-  sellingPage,
-  shopPage,
   soldItemsPage,
   verifyPage,
 } from './fake-depop-pages.ts';
@@ -86,23 +82,14 @@ import {
 export { FAKE_DEPOP_BRANDS, FAKE_DEPOP_SHIPPING } from './fake-depop-pages.ts';
 
 /**
- * The pages and submissions a fault can be injected into: `health` is the selling hub (where a
- * lookup by SKU starts, to find the seller), `shop` a seller's shop, `read` a product's page
- * (where Delete listing is), `form` the sell and edit forms, `create` and `update` their
- * submissions, `done` the Done page after a Post, `delete` the confirmed Delete listing, and
- * `listings` and `sold` the selling hub's listings and sold items.
+ * The pages, API reads, and submissions a fault can be injected into: `health` is the selling
+ * hub, `read` a product's page (where Delete listing is) and the API's read of the seller's own
+ * product, `form` the sell and edit forms, `create` and `update` their submissions, `done` the
+ * Done page after a Post, `delete` the confirmed Delete listing, `listings` the API's list of
+ * the seller's own listings, and `sold` the selling hub's sold items.
  */
 export type FakeDepopSiteAction =
-  | 'create'
-  | 'update'
-  | 'delete'
-  | 'read'
-  | 'shop'
-  | 'done'
-  | 'listings'
-  | 'sold'
-  | 'health'
-  | 'form';
+  'create' | 'update' | 'delete' | 'read' | 'done' | 'listings' | 'sold' | 'health' | 'form';
 
 export type FakeDepopSiteFault =
   /** A bot-check page ("Please verify you are a human") instead of the page, status 403. */
@@ -148,6 +135,11 @@ export interface FakeDepopProduct {
   size: string | null;
   brand: string | null;
   condition: string;
+  /** The form's colour and material picks, by their labels. */
+  colours: string[];
+  materials: string[];
+  /** Whether "Boost your listing" was on when it was posted or saved. */
+  boosted: boolean;
   shipping: string;
   /** Uploaded photo file names, in the order the form sent them. */
   photos: string[];
@@ -175,6 +167,8 @@ export interface FakeDepopSiteOptions {
   defaultShipping?: string | null;
   /** Called with each sign-in link the site "emails" (the dev CLI prints it). */
   onSignInLink?: (link: string) => void;
+  /** Whether the form starts with "Boost your listing" on (Depop's own default is off). */
+  boostByDefault?: boolean;
 }
 
 interface StoredProduct {
@@ -196,23 +190,26 @@ interface Session {
 interface Route {
   method: 'GET' | 'POST';
   action: FakeDepopSiteAction;
-  /** The product's slug, or the shop's username. */
+  /** The product's slug. */
   slug: string | null;
+  /** A read of Depop's web API (JSON, with the session's token as the bearer token). */
+  api?: boolean;
 }
 
 const SESSION_COOKIE = 'fake_depop_session';
+/** The cookie Depop's pages keep the session's API token in, readable by their scripts. */
+const TOKEN_COOKIE = 'access_token';
 const DEFAULT_SELLER = 'fake_seller';
 const PHOTO_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const LIMITS = { description: 1_000, hashtags: 5, photos: 8, minCents: 100 };
-/** A Depop username (shop-page.ts), lowercase as the fake keeps them. */
+/** A Depop username, lowercase as the fake keeps them. */
 const USERNAME = /^[a-z0-9][a-z0-9._]{1,29}$/;
-/** The newest products a shop shows before the seller scrolls. */
-const SHOP_PAGE_SIZE = 24;
 
 export class FakeDepopSite {
   readonly #server: Server;
   readonly #pageSize: number;
   readonly #defaultShipping: string | null;
+  readonly #boostByDefault: boolean;
   readonly #products = new Map<string, StoredProduct>();
   readonly #sessions = new Map<string, Session>();
   /** Emailed sign-in links not used yet, by token: the seller each one signs in. */
@@ -231,6 +228,7 @@ export class FakeDepopSite {
     this.#defaultShipping =
       options.defaultShipping === undefined ? 'depop_shipping' : options.defaultShipping;
     this.#onSignInLink = options.onSignInLink;
+    this.#boostByDefault = options.boostByDefault ?? false;
     this.#server = createServer((request, response) => {
       void this.#handle(request, response).catch((error: unknown) => {
         if (!response.headersSent) {
@@ -320,10 +318,13 @@ export class FakeDepopSite {
       id: this.#sequence,
       current: {
         status: 'ONSALE',
-        category: ['Womenswear', 'Tops', 'T-shirts'],
+        category: ['Women', 'Tops', 'T-shirts'],
         size: 'M',
         brand: null,
         condition: 'used_good',
+        colours: [],
+        materials: [],
+        boosted: false,
         shipping: 'depop_shipping',
         photos: ['photo.jpg'],
         listedAt: now,
@@ -465,10 +466,23 @@ export class FakeDepopSite {
       return;
     }
 
-    const token = cookieValue(request.headers.cookie, SESSION_COOKIE);
-    const session = token === undefined ? undefined : this.#sessions.get(token);
     const route = matchRoute(method, url.pathname);
     record.action = route?.action ?? null;
+    if (route?.api === true) {
+      // Depop's web API: the session's token as the bearer token, as its pages send it.
+      const bearer = /^Bearer (.+)$/.exec(request.headers.authorization ?? '')?.[1];
+      const apiSession = bearer === undefined ? undefined : this.#sessions.get(bearer);
+      if (apiSession === undefined || bearer === undefined) {
+        send(json(401, { message: 'Unauthorized' }));
+        return;
+      }
+      const fault = this.#takeFault(route.action);
+      record.fault = fault?.type ?? null;
+      send(await this.#route(route, url, request, apiSession, bearer, fault));
+      return;
+    }
+    const token = cookieValue(request.headers.cookie, SESSION_COOKIE);
+    const session = token === undefined ? undefined : this.#sessions.get(token);
     if (session === undefined || token === undefined) {
       send(redirect('/login/'));
       return;
@@ -479,7 +493,12 @@ export class FakeDepopSite {
     }
     const fault = this.#takeFault(route.action);
     record.fault = fault?.type ?? null;
-    send(await this.#route(route, url, request, session, token, fault));
+    const reply = await this.#route(route, url, request, session, token, fault);
+    // Depop's pages keep the session's API token where their own scripts read it.
+    send({
+      ...reply,
+      headers: { ...reply.headers, 'set-cookie': `${TOKEN_COOKIE}=${token}; Path=/; SameSite=Lax` },
+    });
   }
 
   async #route(
@@ -554,8 +573,6 @@ export class FakeDepopSite {
     switch (route.action) {
       case 'health':
         return { status: 200, body: hubPage(session.seller) };
-      case 'shop':
-        return this.#shop(route.slug ?? '', session);
       case 'form':
         if (route.slug === null) {
           return {
@@ -565,6 +582,7 @@ export class FakeDepopSite {
               shipping: this.#defaultShipping,
               message: null,
               viewer: session.seller,
+              boosted: this.#boostByDefault,
             }),
           };
         }
@@ -627,6 +645,20 @@ export class FakeDepopSite {
         });
       case 'read': {
         const stored = this.#products.get(route.slug ?? '');
+        if (route.api === true) {
+          // The seller's own product, as the edit page loads it; Depop answers 404 for one it
+          // deleted for good, and for another seller's.
+          // (The fake keeps a deleted product readable, as the shared suite reads an ended
+          // listing; Depop's own page answers 410 for one, which a read sees first.)
+          if (stored === undefined || stored.gone || stored.current.seller !== session.seller) {
+            return json(404, { message: 'Product not found' });
+          }
+          const shown =
+            fault?.type === 'stale_read' && stored.previous !== null
+              ? stored.previous
+              : stored.current;
+          return json(200, editListingData(shown, stored.id));
+        }
         if (stored === undefined) return notFound();
         if (stored.gone) return { status: 410, body: gonePage() };
         const shown =
@@ -645,14 +677,24 @@ export class FakeDepopSite {
         };
       }
       case 'listings': {
-        const { rows, more } = this.#pageOf(url, this.#forSale(session.seller));
-        return {
-          status: 200,
-          body: nextDataPage('Selling | Depop', sellingPage(rows), {
-            products: rows.map(productData),
-            hasMore: more,
-          }),
-        };
+        // The seller's own listings, newest first, a page at a time with a cursor.
+        const filter = url.searchParams.get('statusFilter');
+        const rows =
+          filter === 'sold'
+            ? [...this.#products.values()]
+                .filter((stored) => stored.current.seller === session.seller)
+                .filter((stored) => stored.current.status === 'SOLD')
+                .map((stored) => copy(stored.current))
+            : this.#forSale(session.seller);
+        const limit = Math.max(1, Number(url.searchParams.get('limit') ?? '24') || 24);
+        const start = Math.max(0, Number(url.searchParams.get('cursor') ?? '0') || 0);
+        const size = Math.min(limit, this.#pageSize);
+        const page = rows.slice(start, start + size);
+        const end = start + size >= rows.length;
+        return json(200, {
+          meta: { cursor: end ? null : String(start + size), end },
+          products: page.map((product) => shopProductData(product, this.#idOf(product.slug))),
+        });
       }
       case 'sold': {
         const sales = [...this.#products.values()]
@@ -674,19 +716,6 @@ export class FakeDepopSite {
     }
   }
 
-  /** A seller's shop; a username nobody signed in or listed with is not a shop. */
-  #shop(username: string, session: Session): Reply {
-    const known =
-      username === session.seller ||
-      [...this.#sessions.values()].some((other) => other.seller === username) ||
-      [...this.#products.values()].some((stored) => stored.current.seller === username);
-    if (!known) return notFound();
-    return {
-      status: 200,
-      body: shopPage(username, session.seller, this.#forSale(username).slice(0, SHOP_PAGE_SIZE)),
-    };
-  }
-
   /** The seller's products for sale, newest first. */
   #forSale(seller: string): FakeDepopProduct[] {
     return [...this.#products.values()]
@@ -695,12 +724,8 @@ export class FakeDepopSite {
       .map((stored) => copy(stored.current));
   }
 
-  #pageOf(url: URL, rows: FakeDepopProduct[]): { rows: FakeDepopProduct[]; more: boolean } {
-    const number = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1);
-    return {
-      rows: rows.slice((number - 1) * this.#pageSize, number * this.#pageSize),
-      more: rows.length > number * this.#pageSize,
-    };
+  #idOf(slug: string): number {
+    return this.#products.get(slug)?.id ?? 0;
   }
 
   #owned(slug: string | null, session: Session, act: (stored: StoredProduct) => Reply): Reply {
@@ -771,7 +796,13 @@ function matchRoute(method: string, path: string): Route | null {
   const get = method === 'GET';
   const post = method === 'POST';
   if (get && path === '/sellinghub/') return { method, action: 'health', slug: null };
-  if (get && path === '/sellinghub/selling/') return { method, action: 'listings', slug: null };
+  if (get && path === '/api/v1/shop/products/') {
+    return { method, action: 'listings', slug: null, api: true };
+  }
+  const own = /^\/presentation\/api\/v1\/products\/by-slug\/([^/]+)\/edit-listing\/$/.exec(
+    path,
+  )?.[1];
+  if (get && own !== undefined) return { method, action: 'read', slug: decoded(own), api: true };
   if (get && path === '/sellinghub/sold-items/') return { method, action: 'sold', slug: null };
   if (path === '/products/create/') {
     if (get) return { method, action: 'form', slug: null };
@@ -788,11 +819,6 @@ function matchRoute(method: string, path: string): Route | null {
   }
   const product = /^\/products\/([^/]+)\/$/.exec(path)?.[1];
   if (get && product !== undefined) return { method, action: 'read', slug: decoded(product) };
-  const shop = /^\/([^/]+)\/$/.exec(path)?.[1];
-  const username = shop === undefined ? undefined : decoded(shop);
-  if (get && username !== undefined && USERNAME.test(username)) {
-    return { method, action: 'shop', slug: username };
-  }
   return null;
 }
 
@@ -829,7 +855,17 @@ function depopUsername(name: string): string {
 
 type ListingFields = Pick<
   FakeDepopProduct,
-  'description' | 'priceCents' | 'category' | 'size' | 'brand' | 'condition' | 'shipping' | 'photos'
+  | 'description'
+  | 'priceCents'
+  | 'category'
+  | 'size'
+  | 'brand'
+  | 'condition'
+  | 'colours'
+  | 'materials'
+  | 'boosted'
+  | 'shipping'
+  | 'photos'
 >;
 
 /** The form's fields, or Depop's message for the first problem. */
@@ -842,13 +878,15 @@ function listingFields(
   const description = text('description').replaceAll('\r\n', '\n');
   const price = text('price');
   const photos = form?.fileNames('photos') ?? [];
-  // The category picker sends the product type's whole path ("Menswear > Tops > T-shirts").
+  // The category picker sends the product type's whole path ("Men > Tops > T-shirts").
   const category = text('category')
     .split(' > ')
     .filter((name) => name !== '');
-  const leaf = mappedDepopCategories().find(
-    (entry) => entry.path.join(' > ') === category.join(' > '),
-  );
+  const leaf = fakeDepopTree().find((entry) => entry.path.join(' > ') === category.join(' > '));
+  const picks = (name: string) =>
+    text(name)
+      .split('|')
+      .filter((value) => value !== '');
   const size = text('size');
   const brand = text('brand');
   const condition = text('condition');
@@ -867,7 +905,7 @@ function listingFields(
     return 'You can add up to 5 hashtags.';
   }
   if (leaf === undefined) return 'Choose a category.';
-  if (leaf.size !== 'none' && !FAKE_DEPOP_SIZES[leaf.size].includes(size)) return 'Choose a size.';
+  if (leaf.sizes.length > 0 && !leaf.sizes.includes(size)) return 'Choose a size.';
   if (
     brand !== '' &&
     brand !== FAKE_DEPOP_OTHER_BRAND &&
@@ -887,9 +925,12 @@ function listingFields(
     description,
     priceCents: cents,
     category,
-    size: leaf.size === 'none' ? null : size,
+    size: leaf.sizes.length === 0 ? null : size,
     brand: brand === '' ? null : brand,
     condition,
+    colours: picks('colour'),
+    materials: leaf.material ? picks('material') : [],
+    boosted: form?.text('boost') === 'on',
     shipping,
     photos: keptPhotos,
   };
@@ -901,18 +942,52 @@ function priceData(cents: number): { priceAmount: string; currencyName: string }
   return { priceAmount: priceAmount(cents), currencyName: 'USD' };
 }
 
-/** A product as the selling hub's list embeds it (page-data.ts). */
-function productData(product: FakeDepopProduct): Record<string, unknown> {
+/** A product as the API's list of the seller's own listings has it (pages/api.ts). */
+function shopProductData(product: FakeDepopProduct, id: number): Record<string, unknown> {
   return {
+    id,
     slug: product.slug,
     status: product.status,
     description: product.description,
-    price: priceData(product.priceCents),
+    price: { ...priceData(product.priceCents), nationalShippingCost: '1.99' },
+    sizes: product.size === null ? [] : [product.size],
+    category: product.category[1],
+    dateCreated: product.listedAt.toISOString(),
     dateUpdated: product.updatedAt.toISOString(),
-    brand: product.brand,
-    size: product.size,
-    condition: product.condition,
+  };
+}
+
+/** The seller's own product as the edit page loads it from the API (pages/api.ts). */
+function editListingData(product: FakeDepopProduct, id: number): Record<string, unknown> {
+  const amount = priceAmount(product.priceCents);
+  return {
+    id,
+    status: `STATUS_${product.status}`,
     categories: product.category,
+    description: product.description,
+    // Depop's own, to the microsecond.
+    updated_at: product.updatedAt.toISOString().replace('Z', '123Z'),
+    created_at: product.listedAt.toISOString(),
+    pricing: {
+      final_price_key: 'original_price',
+      currency: 'USD',
+      currency_name: 'USD',
+      is_reduced: false,
+      original_price: { total_price: amount, price_breakdown: { price: { amount } } },
+    },
+    slug: product.slug,
+    is_boosted: product.boosted,
+    condition: product.condition,
+    colour: product.colours.map((colour) => colour.toLowerCase()),
+    brand: product.brand,
+  };
+}
+
+function json(status: number, body: unknown): Reply {
+  return {
+    status,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
   };
 }
 
@@ -924,6 +999,8 @@ function copy(product: FakeDepopProduct): FakeDepopProduct {
   return {
     ...product,
     category: [...product.category],
+    colours: [...product.colours],
+    materials: [...product.materials],
     photos: [...product.photos],
     listedAt: new Date(product.listedAt),
     updatedAt: new Date(product.updatedAt),

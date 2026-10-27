@@ -143,9 +143,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       .executeTakeFirstOrThrow());
     seller = `seller_${accountId.replaceAll('-', '').slice(-12)}`;
     const cookie = site.issueSession(seller);
-    // The seller already has a listing for sale. A lookup by SKU reads the shop's product links,
-    // and an empty shop is only known as empty after the shop page module's wait for them (15
-    // seconds), longer than these steps get.
+    // The seller already has a listing for sale.
     site.seed({ seller, description: 'Wool scarf.', priceCents: 1500 });
     ({ connectionId } = await linkAutomationSession(
       db,
@@ -188,17 +186,15 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
   }
 
   /**
-   * Runs the phone, then the read-back the engine repeats there: Depop's pages show no revision,
-   * so a read-back that matches confirms a change only once a later read matches too.
+   * Runs the phone, whose read-back confirms the change there at once: Depop's reads carry its
+   * own last change time (depop/pages/api.ts).
    */
   async function runPhoneAndConfirm(
     op: { id: string },
     answers: HandOffAnswer[] = [],
   ): Promise<void> {
     await runPhone(answers);
-    expect(await operation(op.id)).toMatchObject({ status: 'verifying', error_code: 'confirming' });
-    await step(op);
-    await runPhone();
+    expect(await operation(op.id)).toMatchObject({ status: 'succeeded' });
   }
 
   async function newListing(): Promise<string> {

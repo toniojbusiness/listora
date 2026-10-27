@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEPOP_CONDITIONS, depopProductType, ITEM_CONDITIONS } from '@listora/marketplaces';
+import { CATEGORY_TREE, COLORS, MATERIALS } from '@listora/analysis';
+import { DEPOP_CONDITIONS, ITEM_CONDITIONS } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 
-import {
-  categorySizeKind,
-  mapDepopCategory,
-  mappedDepopCategories,
-  parseCategoryRef,
-} from './categories.ts';
+import { marketplaceCategories } from '../categories.ts';
+import { DEPOP_COLOURS, DEPOP_MATERIALS, depopDetails } from './attributes.ts';
+import { allDepopCategories, mapDepopCategory, parseCategoryRef } from './categories.ts';
 import { DEPOP_CONDITION_LABELS, depopFormCondition } from './conditions.ts';
 import { listingCopy } from './pages/page-data.ts';
 import {
@@ -19,6 +17,13 @@ import {
 } from './payload.ts';
 import { DEPOP_PATHS, DEPOP_SLUG, slugFromPath } from './site.ts';
 import { depopSize, sizeOptionMatches } from './sizes.ts';
+import {
+  DEPOP_TAXONOMY,
+  depopAttribute,
+  depopProductType,
+  depopProductTypes,
+  isBannedDepopHashtag,
+} from './taxonomy/taxonomy.ts';
 
 const item = sampleListingContent().item;
 
@@ -27,82 +32,213 @@ function payload(overrides: Parameters<typeof sampleListingContent>[0] = {}) {
   return buildDepopAutomationPayload(content.item, content.variant);
 }
 
+describe("Depop's taxonomy", () => {
+  it('holds every department, category, and product type of the sell form, with its sizes', () => {
+    expect(DEPOP_TAXONOMY.departments.map((department) => department.name)).toEqual([
+      'Men',
+      'Women',
+      'Kids',
+      'Everything else',
+    ]);
+    expect(depopProductTypes().length).toBeGreaterThan(250);
+    const tee = depopProductType('menswear', 'tops', 'tshirts');
+    expect(tee?.sizes).toContain('3XL');
+    expect(tee?.productType.attributes).toContain('material');
+    expect(depopProductType('everything-else', 'home', 'decor-home-accesories')?.sizes).toEqual([]);
+    // Every size list a product type names is there.
+    for (const type of depopProductTypes()) {
+      if (type.productType.sizeSet !== null)
+        expect(type.sizes.length, type.productType.id).toBeGreaterThan(0);
+    }
+    expect(isBannedDepopHashtag('Poshmark')).toBe(true);
+    expect(isBannedDepopHashtag('vintage')).toBe(false);
+  });
+});
+
 describe('Depop categories', () => {
-  it('maps by the most specific canonical path, per department', () => {
-    expect(mapDepopCategory('clothing/tops/t_shirts', 'women')).toEqual({
-      path: ['Womenswear', 'Tops', 'T-shirts'],
-      productType: 'tshirts',
-      size: 'clothing',
-    });
-    expect(mapDepopCategory('clothing/bottoms/joggers', 'men')).toMatchObject({
-      path: ['Menswear', 'Bottoms', 'Sweatpants'],
-      productType: 'joggers-tracksuits',
-    });
-    // An unlisted subcategory falls back to its category.
-    expect(mapDepopCategory('clothing/outerwear/denim_jackets', 'men')).toMatchObject({
-      path: ['Menswear', 'Coats & jackets', 'Jackets'],
-      productType: null,
-    });
-    expect(mapDepopCategory('shoes/boots', 'women')).toMatchObject({ size: 'shoes' });
-    expect(mapDepopCategory('jewelry/rings', 'women')).toMatchObject({ size: 'none' });
+  const departments = ['men', 'women', 'kids', 'unisex'] as const;
+  /** Canonical categories Depop has no product type for in a department. */
+  const NONE: Record<(typeof departments)[number], readonly string[]> = {
+    men: [
+      'clothing/bottoms/skirts',
+      'clothing/dresses',
+      'clothing/dresses/dresses',
+      'clothing/dresses/other',
+      'clothing/activewear/sports_bras',
+      'clothing/swimwear/one_pieces',
+      'clothing/swimwear/bikinis',
+      'clothing/intimates/bras',
+      'clothing/intimates/shapewear',
+      'shoes/heels',
+    ],
+    women: [],
+    kids: [
+      'clothing/activewear/sports_bras',
+      'clothing/intimates',
+      'clothing/intimates/bras',
+      'clothing/intimates/underwear',
+      'clothing/intimates/shapewear',
+      'clothing/intimates/socks',
+      'clothing/intimates/other',
+      'clothing/suits_sets',
+      'clothing/suits_sets/suits',
+      'clothing/suits_sets/matching_sets',
+      'clothing/suits_sets/other',
+    ],
+    unisex: [],
+  };
+  NONE.unisex = NONE.men;
+  const canonical = Object.entries(CATEGORY_TREE).flatMap(([category, subcategories]) => [
+    category,
+    ...subcategories.map((subcategory) => `${category}/${subcategory}`),
+  ]);
+
+  it('maps every canonical category, in every department, to a product type Depop offers there', () => {
+    for (const department of departments) {
+      for (const path of canonical) {
+        if (path === 'other' || path === 'other/other') continue;
+        const mapped = mapDepopCategory(path, department);
+        if (NONE[department].includes(path)) {
+          expect(mapped, `${department} ${path}`).toBeNull();
+          continue;
+        }
+        expect(mapped, `${department} ${path}`).not.toBeNull();
+        const [top = '', group = '', type = ''] = mapped?.ids ?? [];
+        expect(depopProductType(top, group, type), `${department} ${path}`).not.toBeNull();
+      }
+    }
   });
 
-  it('maps nothing for kids, unisex, unknown departments, and unmapped categories', () => {
-    expect(mapDepopCategory('clothing/tops/t_shirts', 'kids')).toBeNull();
-    expect(mapDepopCategory('clothing/tops/t_shirts', 'unisex')).toBeNull();
+  it("puts women's items in Women, men's and unisex ones in Men, kids' in Kids, home in Everything else", () => {
+    expect(mapDepopCategory('clothing/tops/t_shirts', 'women')).toMatchObject({
+      ids: ['womenswear', 'tops', 'tshirts'],
+      path: ['Women', 'Tops', 'T-shirts'],
+    });
+    expect(mapDepopCategory('clothing/tops/t_shirts', 'unisex')?.path).toEqual([
+      'Men',
+      'Tops',
+      'T-shirts',
+    ]);
+    expect(mapDepopCategory('clothing/tops/t_shirts', 'kids')?.path).toEqual([
+      'Kids',
+      'Tops',
+      'T-shirts',
+    ]);
+    expect(mapDepopCategory('home/kitchen', 'women')?.path).toEqual([
+      'Everything else',
+      'Home',
+      'Dinnerware',
+    ]);
+    expect(mapDepopCategory('home/decor', null)?.path).toEqual([
+      'Everything else',
+      'Home',
+      'Home accessories',
+    ]);
+    // The first product type the department offers: men's tops have no Blouses.
+    expect(mapDepopCategory('clothing/tops/blouses', 'men')?.path).toEqual([
+      'Men',
+      'Tops',
+      'Shirts',
+    ]);
+    expect(mapDepopCategory('clothing/intimates/underwear', 'men')?.path).toEqual([
+      'Men',
+      'Underwear',
+      'Boxers and briefs',
+    ]);
+    expect(mapDepopCategory('clothing/intimates/underwear', 'women')?.path).toEqual([
+      'Women',
+      'Underwear',
+      'Panties',
+    ]);
+    // The most specific entry wins, and a path Listora doesn't know falls back to its parent.
+    expect(mapDepopCategory('clothing/outerwear/denim_jackets', 'men')?.path).toEqual([
+      'Men',
+      'Coats and jackets',
+      'Jackets',
+    ]);
     expect(mapDepopCategory('clothing/tops/t_shirts', null)).toBeNull();
-    expect(mapDepopCategory('home/decor', 'women')).toBeNull();
+    expect(mapDepopCategory('other/other', 'women')).toBeNull();
     expect(mapDepopCategory(null, 'women')).toBeNull();
   });
 
-  it("carries only the product type ids Depop's own documentation names, and agrees with the API adapter", () => {
-    const documented = new Set([
-      'tshirts',
-      'jeans',
-      'joggers-tracksuits',
-      'dresses',
-      'swimsuit-one-piece',
-      'boots',
-      'other-accessories',
+  it('reads a category the listing names, by names, by ids, or by product type id', () => {
+    const boots = ['Women', 'Footwear', 'Boots'];
+    expect(parseCategoryRef('Women > Footwear > Boots', null)?.path).toEqual(boots);
+    expect(parseCategoryRef('womenswear > footwear > boots', null)?.path).toEqual(boots);
+    // A listing saved with Depop's former department names still reads.
+    expect(parseCategoryRef('Menswear > Tops > T-shirts', null)?.path).toEqual([
+      'Men',
+      'Tops',
+      'T-shirts',
     ]);
-    for (const category of mappedDepopCategories()) {
-      expect(category.path, category.path.join(' > ')).toHaveLength(3);
-      if (category.productType !== null) expect(documented).toContain(category.productType);
-    }
-    for (const [canonical, department] of [
-      ['clothing/tops/t_shirts', 'men'],
-      ['clothing/bottoms/jeans', 'women'],
-      ['clothing/dresses/dresses', 'women'],
-      ['clothing/swimwear/one_pieces', 'women'],
-      ['shoes/boots', 'men'],
-      ['accessories/other', 'women'],
-    ] as const) {
-      expect(mapDepopCategory(canonical, department)?.productType, canonical).toBe(
-        depopProductType(canonical),
-      );
-    }
-  });
-
-  it('reads a category the listing names itself, by names or by a documented id', () => {
-    expect(parseCategoryRef('Womenswear > Footwear > Boots', null)).toEqual([
-      'Womenswear',
-      'Footwear',
-      'Boots',
+    expect(parseCategoryRef('womenswear/footwear/boots', null)?.path).toEqual(boots);
+    expect(parseCategoryRef('boots', 'women')?.path).toEqual(boots);
+    expect(parseCategoryRef('makeup', 'women')?.path).toEqual([
+      'Everything else',
+      'Beauty',
+      'Makeup',
     ]);
-    expect(parseCategoryRef('boots', 'women')).toEqual(['Womenswear', 'Footwear', 'Boots']);
-    expect(parseCategoryRef('tshirts', 'men')).toEqual(['Menswear', 'Tops', 'T-shirts']);
+    expect(parseCategoryRef('Everything else > Beauty > Makeup', null)?.sizes).toEqual([]);
     for (const [bad, department] of [
-      ['Womenswear > Footwear', 'women'],
-      ['A > > B', 'women'],
+      ['Women > Footwear', null],
+      ['Women > Hovercraft > Parts', null],
+      ['menswear/tops/blouses', null],
       ['boots', null],
-      ['hovercraft', 'men'],
-      ['', 'men'],
+      ['hovercraft', 'women'],
+      ['', 'women'],
     ] as const) {
       expect(parseCategoryRef(bad, department), bad).toBeNull();
     }
-    expect(categorySizeKind(['Womenswear', 'Footwear', 'Boots'], null)).toBe('shoes');
-    expect(categorySizeKind(['Menswear', 'Hovercraft', 'Parts'], 'clothing/tops')).toBe('clothing');
-    expect(categorySizeKind(['Menswear', 'Hovercraft', 'Parts'], null)).toBe('none');
+  });
+
+  it("offers every product type in the List flow's picker, and suggests unisex items' Men category", () => {
+    expect(allDepopCategories()).toHaveLength(depopProductTypes().length);
+    const unisex = marketplaceCategories('depop', {
+      category: 'clothing/tops/t_shirts',
+      department: 'unisex',
+    });
+    expect(unisex?.suggested).toEqual({
+      ref: 'Men > Tops > T-shirts',
+      path: ['Men', 'Tops', 'T-shirts'],
+    });
+    expect(unisex?.choices.map((choice) => choice.ref)).toContain(
+      'Everything else > Beauty > Makeup',
+    );
+    expect(parseCategoryRef(unisex?.suggested?.ref ?? '', 'unisex')?.ids).toEqual([
+      'menswear',
+      'tops',
+      'tshirts',
+    ]);
+  });
+});
+
+describe('Depop details', () => {
+  it("maps every Listora colour, and the materials Depop lists, to Depop's own values", () => {
+    for (const colour of COLORS) {
+      expect(
+        depopAttribute('colour')?.values.map((value) => value.id),
+        colour,
+      ).toContain(DEPOP_COLOURS[colour]);
+    }
+    const materials = depopAttribute('material')?.values.map((value) => value.id) ?? [];
+    for (const [own, id] of Object.entries(DEPOP_MATERIALS)) {
+      expect(MATERIALS as readonly string[], own).toContain(own);
+      expect(materials, own).toContain(id);
+    }
+  });
+
+  it('picks up to 2 colours, and the material where the product type offers one', () => {
+    const tee = {
+      ...item,
+      colors: ['gray', 'navy', 'red'],
+      materials: ['cotton', 'spandex', 'metal'],
+    };
+    expect(depopDetails(tee, ['material'])).toEqual([
+      { field: 'colour', values: ['Grey', 'Navy'] },
+      { field: 'attributes.material', values: ['Cotton', 'Elastane / Lycra / Spandex'] },
+    ]);
+    expect(depopDetails(tee, [])).toEqual([{ field: 'colour', values: ['Grey', 'Navy'] }]);
+    expect(depopDetails({ ...item, colors: [], materials: [] }, ['material'])).toEqual([]);
   });
 });
 
@@ -129,38 +265,54 @@ describe('Depop sizes', () => {
     sizeLabel,
     sizeSystem,
   });
+  const listOf = (department: string, group: string, type: string) =>
+    depopProductType(department, group, type)?.sizes ?? [];
+  const mensTops = listOf('menswear', 'tops', 'tshirts');
+  const mensBottoms = listOf('menswear', 'bottoms', 'jeans');
+  const womensTops = listOf('womenswear', 'tops', 'blouses');
+  const womensBottoms = listOf('womenswear', 'bottoms', 'skirts');
+  const kids = listOf('kidswear', 'tops', 'tshirts');
 
-  it('spells clothing sizes the way Depop lists them', () => {
-    const cases: [string, string | null][] = [
-      ['Small', 'S'],
-      ['md', 'M'],
-      ['2XL', 'XXL'],
-      ['3xl', 'XXXL'],
-      ['8', 'US 8'],
-      ['00', 'US 00'],
-      ['W32 L30', 'W32'],
-      ['32x30', 'W32'],
-      ['W30', 'W30'],
-      ['34', 'W34'],
-      ['One Size', 'One size'],
-      ['Large Tall', null],
-      ['99', null],
+  it("picks the label the product type's own size list has", () => {
+    const cases: [string, readonly string[], string | null][] = [
+      ['Small', mensTops, 'S'],
+      ['md', mensTops, 'M'],
+      ['2XL', mensTops, 'XXL'],
+      ['XXXL', mensTops, '3XL'],
+      ['3xl', mensTops, '3XL'],
+      ['8', womensTops, '8'],
+      ['00', womensTops, '00'],
+      ['8', mensTops, null],
+      ['W32 L30', mensBottoms, '32"'],
+      ['32x30', mensBottoms, '32"'],
+      ['34', mensBottoms, '34"'],
+      ['28', womensBottoms, '28'],
+      ['One Size', mensTops, 'One size'],
+      ['8', kids, '8 years'],
+      ['2T', kids, '2 years'],
+      ['6-9M', kids, '6-9 months'],
+      ['34B', listOf('womenswear', 'underwear', 'bras'), '34B'],
+      ['Large Tall', mensTops, null],
+      ['99', mensBottoms, null],
     ];
-    for (const [label, expected] of cases) {
-      expect(depopSize(sized(label), 'clothing'), label).toBe(expected);
+    for (const [label, sizes, expected] of cases) {
+      expect(depopSize(sized(label), sizes), label).toBe(expected);
     }
-    expect(depopSize({ ...sized('anything'), sizeSystem: 'one_size' }, 'clothing')).toBe(
-      'One size',
-    );
+    expect(depopSize(sized('28', 'waist_inseam'), womensBottoms)).toBe('28"');
+    expect(depopSize({ ...sized('anything'), sizeSystem: 'one_size' }, mensTops)).toBe('One size');
+    expect(depopSize(sized('M'), [])).toBeNull();
   });
 
-  it('spells US shoe sizes in halves, and maps no UK or EU size', () => {
-    expect(depopSize(sized('10 1/2'), 'shoes')).toBe('US 10.5');
-    expect(depopSize(sized('9.5'), 'shoes')).toBe('US 9.5');
-    expect(depopSize(sized('W 8'), 'shoes')).toBe('US 8');
-    expect(depopSize(sized('9', 'uk'), 'shoes')).toBeNull();
-    expect(depopSize(sized('42', 'eu'), 'shoes')).toBeNull();
-    expect(depopSize(sized('M'), 'none')).toBeNull();
+  it('spells US shoe sizes in halves, kids shoe sizes in their ranges, and maps no UK or EU size', () => {
+    const shoes = listOf('menswear', 'footwear', 'trainers');
+    expect(depopSize(sized('10 1/2'), shoes)).toBe('US 10.5');
+    expect(depopSize(sized('9.5'), shoes)).toBe('US 9.5');
+    expect(depopSize(sized('W 8'), listOf('womenswear', 'footwear', 'boots'))).toBe('US 8');
+    expect(depopSize(sized('9', 'uk'), shoes)).toBeNull();
+    expect(depopSize(sized('42', 'eu'), shoes)).toBeNull();
+    const kidsShoes = listOf('kidswear', 'footwear', 'trainers');
+    expect(depopSize(sized('9.5'), kidsShoes)).toBe('9-9.5');
+    expect(depopSize(sized('11'), kidsShoes)).toBe('11');
   });
 
   it('matches a size option that is the size, or the size and more', () => {
@@ -176,7 +328,8 @@ describe('Depop automation payload', () => {
     expect(payload({ variant: { hashtags: ['vintage'] } })).toMatchObject({
       title: "Levi's Trucker Denim Jacket Men's M Blue",
       hashtags: ['vintage'],
-      category: ['Menswear', 'Coats & jackets', 'Jackets'],
+      category: ['Men', 'Coats and jackets', 'Jackets'],
+      categoryIds: ['menswear', 'coats-jackets', 'jackets'],
       size: 'M',
       sized: true,
       brand: "Levi's",
@@ -232,7 +385,7 @@ describe('Depop automation payload', () => {
     expect(fields({ variant: { description: 'Copy\n\n#vintage' } })).toEqual(['invalid']);
     expect(fields({ variant: { hashtags: ['not ok'] } })).toEqual(['invalid']);
     expect(fields({ variant: { hashtags: ['a', 'b', 'c', 'd', 'e', 'f'] } })).toEqual(['too_many']);
-    expect(fields({ item: { department: 'kids' } })).toEqual(['required']);
+    expect(fields({ item: { department: null } })).toEqual(['required']);
     expect(fields({ item: { condition: null } })).toEqual(['required']);
     expect(fields({ item: { sizeLabel: 'Large Tall' } })).toEqual(['required']);
     expect(
@@ -252,7 +405,6 @@ describe("Depop's site", () => {
       expect(slugFromPath(path), path).toBeNull();
     }
     expect(DEPOP_SLUG.test('create')).toBe(false);
-    expect(DEPOP_PATHS.selling(1)).toBe('/sellinghub/selling/');
     expect(DEPOP_PATHS.sold(3)).toBe('/sellinghub/sold-items/?page=3');
   });
 });

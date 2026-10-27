@@ -18,9 +18,10 @@ export const DEPOP_STEP_TIMEOUT_MS = 4_000;
 const LATE_ANSWER_MS = 3 * DEPOP_STEP_TIMEOUT_MS;
 
 /**
- * A relist posts a new listing, so it fails where a create does. A read by SKU opens the selling
- * hub first (to find the seller), then the seller's shop, then the product pages, so a failing
- * read fails whichever opens first.
+ * A relist posts a new listing, so it fails where a create does. A read by slug opens the
+ * product's page, then reads the seller's own product from the API; a read by SKU opens the
+ * selling hub, then reads the seller's listings from the API. So a failing read fails whichever
+ * comes first.
  */
 const SITE_ACTIONS = {
   create: ['create'],
@@ -28,7 +29,7 @@ const SITE_ACTIONS = {
   end: ['delete'],
   relist: ['create'],
   mark_sold: [],
-  read: ['health', 'shop', 'read'],
+  read: ['health', 'listings', 'read'],
   health: ['health'],
 } as const satisfies Record<ConformanceAction, readonly FakeDepopSiteAction[]>;
 
@@ -73,7 +74,8 @@ export function fakeDepopSiteConformance(site: FakeDepopSite): ConformanceMarket
       }
     },
     serveStaleRead() {
-      site.inject({ action: 'read', fault: { type: 'stale_read' } });
+      // The product's page, then the API's read of it: both as before the latest change.
+      site.inject({ action: 'read', fault: { type: 'stale_read' }, times: 2 });
     },
     remove(externalListingId) {
       site.gone(externalListingId);

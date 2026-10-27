@@ -21,9 +21,14 @@
     }
   ],
   "category": [
-    "Menswear",
-    "Coats & jackets",
+    "Men",
+    "Coats and jackets",
     "Jackets"
+  ],
+  "categoryIds": [
+    "menswear",
+    "coats-jackets",
+    "jackets"
   ],
   "size": "M",
   "sized": true,
@@ -31,5 +36,29 @@
   "condition": {
     "value": "used_excellent",
     "label": "Used - Excellent"
-  }
+  },
+  "details": [
+    {
+      "field": "colour",
+      "values": [
+        "Blue"
+      ]
+    }
+  ],
+  "sizes": [
+    "One size",
+    "3XS",
+    "XXS",
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "XXL",
+    "3XL",
+    "4XL",
+    "5XL",
+    "6XL",
+    "Other"
+  ]
 }

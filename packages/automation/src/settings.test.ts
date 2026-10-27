@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEPOP_PACING } from './depop/site.ts';
 import { DEFAULT_LIMITS, DEFAULT_PACING, PACING_FLOOR } from './profiles.ts';
 import { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 
@@ -24,7 +25,10 @@ describe('loadAutomationSettings', () => {
       fakeDepopSiteUrl: undefined,
     });
     for (const profile of Object.values(settings.profiles)) {
-      expect(profile.pacing).toEqual(DEFAULT_PACING);
+      // Depop's own pace is quicker, still a person's (depop/site.ts).
+      expect(profile.pacing).toEqual(
+        profile.marketplace === 'depop' ? DEPOP_PACING : DEFAULT_PACING,
+      );
       expect(profile.limits).toEqual(DEFAULT_LIMITS);
     }
     expect(settings.profiles.poshmark.origins).toContain('https://poshmark.com');
@@ -57,7 +61,7 @@ describe('loadAutomationSettings', () => {
     expect(settings.profiles.poshmark.pacing.sessionGapMs).toEqual([10_000, 30_000]);
     expect(settings.profiles.poshmark.limits).toEqual({ runsPerHour: 10, runsPerDay: 200 });
     expect(settings.profiles.mercari.limits).toEqual({ runsPerHour: 30, runsPerDay: 50 });
-    expect(settings.profiles.depop.pacing).toEqual(DEFAULT_PACING);
+    expect(settings.profiles.depop.pacing).toEqual(DEPOP_PACING);
     expect(settings.saleChecks).toMatchObject({
       defaultIntervalMs: 8 * HOUR,
       minIntervalMs: 1.5 * HOUR,

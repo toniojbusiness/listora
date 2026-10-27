@@ -1,0 +1,4083 @@
+{
+  "source": "Depop's sell form (https://webapi.depop.com/presentation/api/v2/search/filters/category/?lang=en-US, https://webapi.depop.com/presentation/api/v1/attributes/, https://webapi.depop.com/presentation/api/v1/attributes/categories/size-mapping/, https://webapi.depop.com/presentation/api/v1/listing/banned-hashtags/), US English",
+  "fetchedAt": "2026-10-27",
+  "departments": [
+    {
+      "id": "menswear",
+      "name": "Men",
+      "asksGender": false,
+      "groups": [
+        {
+          "id": "tops",
+          "name": "Tops",
+          "productTypes": [
+            {
+              "id": "tshirts",
+              "name": "T-shirts",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jerseys",
+              "name": "Jerseys",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "hoodies",
+              "name": "Hoodies",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "sweatshirts",
+              "name": "Sweatshirts",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jumpers",
+              "name": "Sweaters",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "cardigans",
+              "name": "Cardigans",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "shirts",
+              "name": "Shirts",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "polo-shirts",
+              "name": "Polo shirts",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "vests-tanks-camis",
+              "name": "Tank tops and camis",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-tops",
+              "name": "Other",
+              "sizeSet": 54,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "bottoms",
+          "name": "Bottoms",
+          "productTypes": [
+            {
+              "id": "jeans",
+              "name": "Jeans",
+              "sizeSet": 60,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "joggers-tracksuits",
+              "name": "Sweatpants",
+              "sizeSet": 60,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "trousers",
+              "name": "Pants",
+              "sizeSet": 60,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "shorts",
+              "name": "Shorts",
+              "sizeSet": 60,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-bottoms",
+              "name": "Other",
+              "sizeSet": 60,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "coats-jackets",
+          "name": "Coats and jackets",
+          "productTypes": [
+            {
+              "id": "coats",
+              "name": "Coats",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "coat-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jackets",
+              "name": "Jackets",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "jacket-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "gilets",
+              "name": "Vests",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-coats-jackets",
+              "name": "Other",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "jumpsuit-and-playsuit",
+          "name": "Jumpsuits and rompers",
+          "productTypes": [
+            {
+              "id": "jumpsuit",
+              "name": "Jumpsuits",
+              "sizeSet": 60,
+              "attributes": ["body-fit", "jumpssuit-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "playsuit-romper",
+              "name": "Rompers",
+              "sizeSet": 60,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "dungarees-overalls",
+              "name": "Overalls",
+              "sizeSet": 60,
+              "attributes": ["body-fit", "dungarees-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-jumpsuit-and-playsuit",
+              "name": "Other",
+              "sizeSet": 60,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "suits",
+          "name": "Suits",
+          "productTypes": [
+            {
+              "id": "suits",
+              "name": "Suits",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "tailored-jackets",
+              "name": "Tailored jackets",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "tailored-trousers",
+              "name": "Tailored trousers",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "waistcoats-vests",
+              "name": "Vests",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "tuxedos",
+              "name": "Tuxedos",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-suits",
+              "name": "Other",
+              "sizeSet": 95,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "footwear",
+          "name": "Footwear",
+          "productTypes": [
+            {
+              "id": "trainers",
+              "name": "Sneakers",
+              "sizeSet": 77,
+              "attributes": ["material", "occasion", "size-fit", "trainers-type"]
+            },
+            {
+              "id": "slides",
+              "name": "Slides",
+              "sizeSet": 77,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "sandals",
+              "name": "Sandals",
+              "sizeSet": 77,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "flipflops",
+              "name": "Flip flops",
+              "sizeSet": 77,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "slippers",
+              "name": "Slippers",
+              "sizeSet": 77,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "brogues",
+              "name": "Brogues",
+              "sizeSet": 77,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "oxfords",
+              "name": "Oxfords",
+              "sizeSet": 77,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "loafers",
+              "name": "Loafers",
+              "sizeSet": 77,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "boots",
+              "name": "Boots",
+              "sizeSet": 77,
+              "attributes": ["boot-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "boat-shoes",
+              "name": "Boat shoes",
+              "sizeSet": 77,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "clogs",
+              "name": "Clogs",
+              "sizeSet": 77,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "mules",
+              "name": "Mules",
+              "sizeSet": 77,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "other-footwear",
+              "name": "Other",
+              "sizeSet": 77,
+              "attributes": ["heel-type", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "accessories",
+          "name": "Accessories",
+          "productTypes": [
+            {
+              "id": "bag",
+              "name": "Bags",
+              "sizeSet": null,
+              "attributes": ["bag-type", "material", "occasion"]
+            },
+            {
+              "id": "belt",
+              "name": "Belts",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            },
+            {
+              "id": "hat",
+              "name": "Hats and caps",
+              "sizeSet": null,
+              "attributes": ["hat-type", "material", "occasion"]
+            },
+            {
+              "id": "gloves",
+              "name": "Gloves",
+              "sizeSet": null,
+              "attributes": ["gloves-and-mittens-type", "material", "occasion"]
+            },
+            {
+              "id": "scarf-wraps",
+              "name": "Scarves and wraps",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            },
+            {
+              "id": "sunglasses",
+              "name": "Sunglasses",
+              "sizeSet": null,
+              "attributes": ["material", "occasion", "sunglasses-type"]
+            },
+            {
+              "id": "wallet-purses",
+              "name": "Wallets and cardholders",
+              "sizeSet": null,
+              "attributes": ["material", "occasion", "wallet-type"]
+            },
+            {
+              "id": "jewellery",
+              "name": "Jewelry",
+              "sizeSet": null,
+              "attributes": ["jewellery-type", "occasion"]
+            },
+            {
+              "id": "watch",
+              "name": "Watches",
+              "sizeSet": null,
+              "attributes": ["occasion", "watches-type"]
+            },
+            {
+              "id": "other-accessories",
+              "name": "Other",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            }
+          ]
+        },
+        {
+          "id": "nightwear",
+          "name": "Sleepwear",
+          "productTypes": [
+            {
+              "id": "pajamas",
+              "name": "Pajamas",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "material", "occasion", "pajamas-type", "size-fit"]
+            },
+            {
+              "id": "robes",
+              "name": "Robes",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-nightwear",
+              "name": "Other",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "underwear",
+          "name": "Underwear",
+          "productTypes": [
+            {
+              "id": "boxers-and-briefs",
+              "name": "Boxers and briefs",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "boxers-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "vest-undershirts",
+              "name": "Undershirts",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "material", "occasion", "size-fit", "vest-type"]
+            },
+            {
+              "id": "socks",
+              "name": "Socks",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion"]
+            },
+            {
+              "id": "other-underwear",
+              "name": "Other",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "swim-beach-wear",
+          "name": "Swimwear",
+          "productTypes": [
+            {
+              "id": "swim-briefs-shorts",
+              "name": "Swim briefs and shorts",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-swim-beach-wear",
+              "name": "Other",
+              "sizeSet": 89,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "fancy-dress",
+          "name": "Costume",
+          "productTypes": [
+            {
+              "id": "fancy-dress",
+              "name": "Costume",
+              "sizeSet": null,
+              "attributes": ["body-fit", "fancy-dress-type", "material", "occasion"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "womenswear",
+      "name": "Women",
+      "asksGender": false,
+      "groups": [
+        {
+          "id": "tops",
+          "name": "Tops",
+          "productTypes": [
+            {
+              "id": "tshirts",
+              "name": "T-shirts",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jerseys",
+              "name": "Jerseys",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "hoodies",
+              "name": "Hoodies",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "sweatshirts",
+              "name": "Sweatshirts",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jumpers",
+              "name": "Sweaters",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "cardigans",
+              "name": "Cardigans",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "shirts",
+              "name": "Shirts",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "polo-shirts",
+              "name": "Polo shirts",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "blouses",
+              "name": "Blouses",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "crop-top",
+              "name": "Crop tops",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "vests-tanks-camis",
+              "name": "Tank tops and camis",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "corsets",
+              "name": "Corsets",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion"]
+            },
+            {
+              "id": "bodysuits",
+              "name": "Bodysuits",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-tops",
+              "name": "Other",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "bottoms",
+          "name": "Bottoms",
+          "productTypes": [
+            {
+              "id": "jeans",
+              "name": "Jeans",
+              "sizeSet": 22,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "joggers-tracksuits",
+              "name": "Sweatpants",
+              "sizeSet": 22,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "trousers",
+              "name": "Pants",
+              "sizeSet": 22,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "shorts",
+              "name": "Shorts",
+              "sizeSet": 22,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "leggings",
+              "name": "Leggings",
+              "sizeSet": 22,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "skirts",
+              "name": "Skirts",
+              "sizeSet": 22,
+              "attributes": ["body-fit", "dress-length", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-bottoms",
+              "name": "Other",
+              "sizeSet": 22,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dresses",
+          "name": "Dresses",
+          "productTypes": [
+            {
+              "id": "casual-dresses",
+              "name": "Casual dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "formal-dresses",
+              "name": "Formal dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "going-out-dresses",
+              "name": "Going out dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "prom-dresses",
+              "name": "Prom dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "summer-dresses",
+              "name": "Summer dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "shift-dresses",
+              "name": "Shift dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "shirt-dresses",
+              "name": "Shirt dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "wrap-dresses",
+              "name": "Wrap dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "babydoll-dresses",
+              "name": "Babydoll dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "bodycon-dresses",
+              "name": "Bodycon dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "work-dresses",
+              "name": "Work dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "wedding-dresses",
+              "name": "Wedding dresses",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "other-dresses",
+              "name": "Other",
+              "sizeSet": 84,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "dresses",
+              "name": "Dresses",
+              "sizeSet": 84,
+              "attributes": [
+                "body-fit",
+                "dress-length",
+                "dress-type",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "coats-jackets",
+          "name": "Coats and jackets",
+          "productTypes": [
+            {
+              "id": "coats",
+              "name": "Coats",
+              "sizeSet": 38,
+              "attributes": ["body-fit", "coat-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jackets",
+              "name": "Jackets",
+              "sizeSet": 38,
+              "attributes": ["body-fit", "jacket-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "gilets",
+              "name": "Vests",
+              "sizeSet": 38,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-coats-jackets",
+              "name": "Other",
+              "sizeSet": 38,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "jumpsuit-and-playsuit",
+          "name": "Jumpsuits and rompers",
+          "productTypes": [
+            {
+              "id": "jumpsuit",
+              "name": "Jumpsuits",
+              "sizeSet": 22,
+              "attributes": ["body-fit", "jumpssuit-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "playsuit-romper",
+              "name": "Rompers",
+              "sizeSet": 22,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "dungarees-overalls",
+              "name": "Overalls",
+              "sizeSet": 22,
+              "attributes": ["body-fit", "dungarees-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-jumpsuit-and-playsuit",
+              "name": "Other",
+              "sizeSet": 22,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "suits",
+          "name": "Suits",
+          "productTypes": [
+            {
+              "id": "suits",
+              "name": "Suits",
+              "sizeSet": 84,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "tailored-jackets",
+              "name": "Tailored jackets",
+              "sizeSet": 38,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "tailored-trousers",
+              "name": "Tailored trousers",
+              "sizeSet": 22,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "waistcoats-vests",
+              "name": "Vests",
+              "sizeSet": 4,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "tuxedos",
+              "name": "Tuxedos",
+              "sizeSet": 84,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-suits",
+              "name": "Other",
+              "sizeSet": 84,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "footwear",
+          "name": "Footwear",
+          "productTypes": [
+            {
+              "id": "trainers",
+              "name": "Sneakers",
+              "sizeSet": 46,
+              "attributes": ["material", "occasion", "size-fit", "trainers-type"]
+            },
+            {
+              "id": "slides",
+              "name": "Slides",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "sandals",
+              "name": "Sandals",
+              "sizeSet": 46,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "flipflops",
+              "name": "Flip flops",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "slippers",
+              "name": "Slippers",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "brogues",
+              "name": "Brogues",
+              "sizeSet": 46,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "oxfords",
+              "name": "Oxfords",
+              "sizeSet": 46,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "loafers",
+              "name": "Loafers",
+              "sizeSet": 46,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "boots",
+              "name": "Boots",
+              "sizeSet": 46,
+              "attributes": ["boot-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "boat-shoes",
+              "name": "Boat shoes",
+              "sizeSet": 46,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "espadrilles",
+              "name": "Espadrilles",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "ballet-shoes",
+              "name": "Ballet shoes",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "clogs",
+              "name": "Clogs",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "courts",
+              "name": "Pumps",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "mules",
+              "name": "Mules",
+              "sizeSet": 46,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "other-footwear",
+              "name": "Other",
+              "sizeSet": 46,
+              "attributes": ["heel-type", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "accessories",
+          "name": "Accessories",
+          "productTypes": [
+            {
+              "id": "bag",
+              "name": "Bags",
+              "sizeSet": null,
+              "attributes": ["bag-type", "material", "occasion"]
+            },
+            {
+              "id": "belt",
+              "name": "Belts",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            },
+            {
+              "id": "hat",
+              "name": "Hats and caps",
+              "sizeSet": null,
+              "attributes": ["hat-type", "material", "occasion"]
+            },
+            {
+              "id": "gloves",
+              "name": "Gloves",
+              "sizeSet": null,
+              "attributes": ["gloves-and-mittens-type", "material", "occasion"]
+            },
+            {
+              "id": "scarf-wraps",
+              "name": "Scarves and wraps",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            },
+            {
+              "id": "sunglasses",
+              "name": "Sunglasses",
+              "sizeSet": null,
+              "attributes": ["material", "occasion", "sunglasses-type"]
+            },
+            {
+              "id": "wallet-purses",
+              "name": "Wallets and cardholders",
+              "sizeSet": null,
+              "attributes": ["material", "occasion", "wallet-type"]
+            },
+            {
+              "id": "jewellery",
+              "name": "Jewelry",
+              "sizeSet": null,
+              "attributes": ["jewellery-type", "occasion"]
+            },
+            {
+              "id": "watch",
+              "name": "Watches",
+              "sizeSet": null,
+              "attributes": ["occasion", "watches-type"]
+            },
+            {
+              "id": "hair-accessories",
+              "name": "Hair accessories",
+              "sizeSet": null,
+              "attributes": ["hair-accesories-type", "occasion"]
+            },
+            {
+              "id": "other-accessories",
+              "name": "Other",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            }
+          ]
+        },
+        {
+          "id": "nightwear",
+          "name": "Sleepwear",
+          "productTypes": [
+            {
+              "id": "pajamas",
+              "name": "Pajamas",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "pajamas-type", "size-fit"]
+            },
+            {
+              "id": "robes",
+              "name": "Robes",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-nightwear",
+              "name": "Other",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "underwear",
+          "name": "Underwear",
+          "productTypes": [
+            {
+              "id": "bandeaus",
+              "name": "Bandeaus",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion"]
+            },
+            {
+              "id": "bras",
+              "name": "Bras",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "bra-type", "material", "occasion"]
+            },
+            {
+              "id": "panties",
+              "name": "Panties",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "panties-type", "size-fit"]
+            },
+            {
+              "id": "shapewear",
+              "name": "Shapewear",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "shapewear-type"]
+            },
+            {
+              "id": "vest-undershirts",
+              "name": "Undershirts",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "size-fit", "vest-type"]
+            },
+            {
+              "id": "socks",
+              "name": "Socks",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion"]
+            },
+            {
+              "id": "hosiery-tights",
+              "name": "Tights",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion"]
+            },
+            {
+              "id": "other-underwear",
+              "name": "Other",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "swim-beach-wear",
+          "name": "Swimwear",
+          "productTypes": [
+            {
+              "id": "bikinis-and-tankini-sets",
+              "name": "Bikini and tankini sets",
+              "sizeSet": 30,
+              "attributes": [
+                "body-fit",
+                "bra-type",
+                "material",
+                "occasion",
+                "panties-type",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "bikini-and-tankini-tops",
+              "name": "Bikini and tankini tops",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "bra-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "bikini-and-tankini-bottoms",
+              "name": "Bikini and tankini bottoms",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "panties-type", "size-fit"]
+            },
+            {
+              "id": "swimsuit-one-piece",
+              "name": "Swimsuits",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "cover-ups",
+              "name": "Cover ups",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "dress-length", "material", "occasion"]
+            },
+            {
+              "id": "other-swim-beach-wear",
+              "name": "Other",
+              "sizeSet": 30,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "fancy-dress",
+          "name": "Costume",
+          "productTypes": [
+            {
+              "id": "fancy-dress",
+              "name": "Costume",
+              "sizeSet": null,
+              "attributes": ["body-fit", "fancy-dress-type", "material", "occasion"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kidswear",
+      "name": "Kids",
+      "asksGender": true,
+      "groups": [
+        {
+          "id": "tops",
+          "name": "Tops",
+          "productTypes": [
+            {
+              "id": "tshirts",
+              "name": "T-shirts",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jerseys",
+              "name": "Jerseys",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "hoodies",
+              "name": "Hoodies",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "sweatshirts",
+              "name": "Sweatshirts",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jumpers",
+              "name": "Sweaters",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "cardigans",
+              "name": "Cardigans",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "shirts",
+              "name": "Shirts",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "polo-shirts",
+              "name": "Polo shirts",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "blouses",
+              "name": "Blouses",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "vests-tanks-camis",
+              "name": "Tank tops and camis",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-tops",
+              "name": "Other",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "bottoms",
+          "name": "Bottoms",
+          "productTypes": [
+            {
+              "id": "jeans",
+              "name": "Jeans",
+              "sizeSet": 100,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "joggers-tracksuits",
+              "name": "Sweatpants",
+              "sizeSet": 100,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "trousers",
+              "name": "Pants",
+              "sizeSet": 100,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "shorts",
+              "name": "Shorts",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "leggings",
+              "name": "Leggings",
+              "sizeSet": 100,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "skirts",
+              "name": "Skirts",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "dress-length", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-bottoms",
+              "name": "Other",
+              "sizeSet": 100,
+              "attributes": [
+                "body-fit",
+                "bottom-fit",
+                "bottom-style",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dresses",
+          "name": "Dresses",
+          "productTypes": [
+            {
+              "id": "casual-dresses",
+              "name": "Casual dresses",
+              "sizeSet": 100,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "formal-dresses",
+              "name": "Formal dresses",
+              "sizeSet": 100,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "prom-dresses",
+              "name": "Prom dresses",
+              "sizeSet": 100,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "summer-dresses",
+              "name": "Summer dresses",
+              "sizeSet": 100,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "shift-dresses",
+              "name": "Shift dresses",
+              "sizeSet": 100,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "shirt-dresses",
+              "name": "Shirt dresses",
+              "sizeSet": 100,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "other-dresses",
+              "name": "Other",
+              "sizeSet": 100,
+              "attributes": ["dress-length", "size-fit"]
+            },
+            {
+              "id": "dresses",
+              "name": "Dresses",
+              "sizeSet": 100,
+              "attributes": [
+                "body-fit",
+                "dress-length",
+                "dress-type",
+                "material",
+                "occasion",
+                "size-fit"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "coats-jackets",
+          "name": "Coats and jackets",
+          "productTypes": [
+            {
+              "id": "coats",
+              "name": "Coats",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "coat-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "jackets",
+              "name": "Jackets",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "jacket-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "gilets",
+              "name": "Vests",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-coats-jackets",
+              "name": "Other",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "jumpsuit-and-playsuit",
+          "name": "Jumpsuits and rompers",
+          "productTypes": [
+            {
+              "id": "jumpsuit",
+              "name": "Jumpsuits",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "jumpssuit-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "playsuit-romper",
+              "name": "Rompers",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "dungarees-overalls",
+              "name": "Overalls",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "dungarees-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-jumpsuit-and-playsuit",
+              "name": "Other",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "footwear",
+          "name": "Footwear",
+          "productTypes": [
+            {
+              "id": "trainers",
+              "name": "Sneakers",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion", "size-fit", "trainers-type"]
+            },
+            {
+              "id": "slides",
+              "name": "Slides",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "sandals",
+              "name": "Sandals",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "flipflops",
+              "name": "Flip flops",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "slippers",
+              "name": "Slippers",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "brogues",
+              "name": "Brogues",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "oxfords",
+              "name": "Oxfords",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "loafers",
+              "name": "Loafers",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "boots",
+              "name": "Boots",
+              "sizeSet": 103,
+              "attributes": ["boot-type", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "boat-shoes",
+              "name": "Boat shoes",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "espadrilles",
+              "name": "Espadrilles",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "ballet-shoes",
+              "name": "Ballet shoes",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "clogs",
+              "name": "Clogs",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "courts",
+              "name": "Pumps",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "mules",
+              "name": "Mules",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion", "shoe-type", "size-fit"]
+            },
+            {
+              "id": "first-shoes-baby-shoes",
+              "name": "Baby shoes",
+              "sizeSet": 103,
+              "attributes": ["material", "occasion"]
+            },
+            {
+              "id": "other-footwear",
+              "name": "Other",
+              "sizeSet": 103,
+              "attributes": ["heel-type", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "accessories",
+          "name": "Accessories",
+          "productTypes": [
+            {
+              "id": "bag",
+              "name": "Bags",
+              "sizeSet": null,
+              "attributes": ["bag-type", "material", "occasion"]
+            },
+            {
+              "id": "belt",
+              "name": "Belts",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            },
+            {
+              "id": "hat",
+              "name": "Hats and caps",
+              "sizeSet": null,
+              "attributes": ["hat-type", "material", "occasion"]
+            },
+            {
+              "id": "gloves",
+              "name": "Gloves",
+              "sizeSet": null,
+              "attributes": ["gloves-and-mittens-type", "material", "occasion"]
+            },
+            {
+              "id": "scarf-wraps",
+              "name": "Scarves and wraps",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            },
+            {
+              "id": "sunglasses",
+              "name": "Sunglasses",
+              "sizeSet": null,
+              "attributes": ["material", "occasion", "sunglasses-type"]
+            },
+            {
+              "id": "wallet-purses",
+              "name": "Wallets and cardholders",
+              "sizeSet": null,
+              "attributes": ["material", "occasion", "wallet-type"]
+            },
+            {
+              "id": "jewellery",
+              "name": "Jewelry",
+              "sizeSet": null,
+              "attributes": ["jewellery-type", "occasion"]
+            },
+            {
+              "id": "watch",
+              "name": "Watches",
+              "sizeSet": null,
+              "attributes": ["occasion", "watches-type"]
+            },
+            {
+              "id": "hair-accessories",
+              "name": "Hair accessories",
+              "sizeSet": null,
+              "attributes": ["hair-accesories-type", "occasion"]
+            },
+            {
+              "id": "other-accessories",
+              "name": "Other",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            }
+          ]
+        },
+        {
+          "id": "nightwear",
+          "name": "Sleepwear",
+          "productTypes": [
+            {
+              "id": "pajamas",
+              "name": "Pajamas",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion", "pajamas-type", "size-fit"]
+            },
+            {
+              "id": "robes",
+              "name": "Robes",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "other-nightwear",
+              "name": "Other",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "swim-beach-wear",
+          "name": "Swimwear",
+          "productTypes": [
+            {
+              "id": "bikinis-and-tankini-sets",
+              "name": "Bikini and tankini sets",
+              "sizeSet": null,
+              "attributes": [
+                "body-fit",
+                "bra-type",
+                "material",
+                "occasion",
+                "panties-type",
+                "size-fit"
+              ]
+            },
+            {
+              "id": "swimsuit-one-piece",
+              "name": "Swimsuits",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "swim-briefs-shorts",
+              "name": "Swim briefs and shorts",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            },
+            {
+              "id": "cover-ups",
+              "name": "Cover ups",
+              "sizeSet": null,
+              "attributes": ["body-fit", "dress-length", "material", "occasion"]
+            },
+            {
+              "id": "other-swim-beach-wear",
+              "name": "Other",
+              "sizeSet": null,
+              "attributes": ["body-fit", "material", "occasion", "size-fit"]
+            }
+          ]
+        },
+        {
+          "id": "fancy-dress",
+          "name": "Costume",
+          "productTypes": [
+            {
+              "id": "fancy-dress",
+              "name": "Costume",
+              "sizeSet": null,
+              "attributes": ["body-fit", "fancy-dress-type", "material", "occasion"]
+            }
+          ]
+        },
+        {
+          "id": "sleepsuits-and-bodysuits",
+          "name": "Onesies and sleepers",
+          "productTypes": [
+            {
+              "id": "sleepsuits-babygrows",
+              "name": "Onesies and sleepers",
+              "sizeSet": 100,
+              "attributes": ["body-fit", "material", "occasion", "sleepsuit-type"]
+            }
+          ]
+        },
+        {
+          "id": "bundles",
+          "name": "Clothing bundles",
+          "productTypes": [
+            { "id": "bundles", "name": "Clothing bundles", "sizeSet": 100, "attributes": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "everything-else",
+      "name": "Everything else",
+      "asksGender": false,
+      "groups": [
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "productTypes": [
+            {
+              "id": "bath-and-body",
+              "name": "Bath and body",
+              "sizeSet": null,
+              "attributes": ["bath-body-type"]
+            },
+            {
+              "id": "fragrance",
+              "name": "Fragrance",
+              "sizeSet": null,
+              "attributes": ["fragrance-type"]
+            },
+            {
+              "id": "hair-products",
+              "name": "Haircare",
+              "sizeSet": null,
+              "attributes": ["hair-product-type"]
+            },
+            { "id": "makeup", "name": "Makeup", "sizeSet": null, "attributes": ["makeup-type"] },
+            { "id": "nails", "name": "Nails", "sizeSet": null, "attributes": ["nails-type"] },
+            {
+              "id": "grooming",
+              "name": "Grooming",
+              "sizeSet": null,
+              "attributes": ["grooming-type"]
+            },
+            {
+              "id": "skincare",
+              "name": "Skincare",
+              "sizeSet": null,
+              "attributes": ["skincare-type"]
+            },
+            {
+              "id": "tools-and-brushes",
+              "name": "Tools and brushes",
+              "sizeSet": null,
+              "attributes": ["tools-type"]
+            }
+          ]
+        },
+        {
+          "id": "face-masks",
+          "name": "Face masks and coverings",
+          "productTypes": [
+            {
+              "id": "face-masks",
+              "name": "Face masks and coverings",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            }
+          ]
+        },
+        {
+          "id": "home",
+          "name": "Home",
+          "productTypes": [
+            { "id": "dinnerware", "name": "Dinnerware", "sizeSet": null, "attributes": ["home"] },
+            { "id": "furniture", "name": "Furniture", "sizeSet": null, "attributes": ["home"] },
+            {
+              "id": "decor-home-accesories",
+              "name": "Home accessories",
+              "sizeSet": null,
+              "attributes": ["home"]
+            },
+            {
+              "id": "soft-furnishings-textiles",
+              "name": "Soft furnishings and textiles",
+              "sizeSet": null,
+              "attributes": ["home"]
+            },
+            {
+              "id": "storage-and-organisation",
+              "name": "Storage and organisation",
+              "sizeSet": null,
+              "attributes": ["home"]
+            }
+          ]
+        },
+        {
+          "id": "tech-accessories",
+          "name": "Tech accessories",
+          "productTypes": [
+            {
+              "id": "laptop-cases-bag",
+              "name": "Laptop bags and cases",
+              "sizeSet": null,
+              "attributes": ["material", "occasion"]
+            },
+            { "id": "phone-cases", "name": "Phone cases", "sizeSet": null, "attributes": [] }
+          ]
+        },
+        {
+          "id": "film",
+          "name": "Cameras and film",
+          "productTypes": [
+            {
+              "id": "cameras-and-accessories",
+              "name": "Cameras and film",
+              "sizeSet": null,
+              "attributes": ["cameras-and-accessories-type"]
+            }
+          ]
+        },
+        {
+          "id": "art",
+          "name": "Art",
+          "productTypes": [
+            { "id": "collectibles", "name": "Collectibles", "sizeSet": null, "attributes": [] },
+            {
+              "id": "drawing-and-illustrations",
+              "name": "Drawings and illustrations",
+              "sizeSet": null,
+              "attributes": []
+            },
+            { "id": "mixed-media", "name": "Mixed media", "sizeSet": null, "attributes": [] },
+            { "id": "paintings", "name": "Paintings", "sizeSet": null, "attributes": [] },
+            { "id": "photography", "name": "Photography", "sizeSet": null, "attributes": [] },
+            { "id": "prints", "name": "Prints", "sizeSet": null, "attributes": [] },
+            { "id": "sculptures", "name": "Sculptures", "sizeSet": null, "attributes": [] },
+            { "id": "stickers", "name": "Stickers", "sizeSet": null, "attributes": [] }
+          ]
+        },
+        {
+          "id": "books-and-magazine",
+          "name": "Books and magazines",
+          "productTypes": [
+            { "id": "books", "name": "Books", "sizeSet": null, "attributes": [] },
+            { "id": "magazines", "name": "Magazines", "sizeSet": null, "attributes": [] }
+          ]
+        },
+        {
+          "id": "music",
+          "name": "Music",
+          "productTypes": [
+            {
+              "id": "cds-and-vinyl",
+              "name": "CDs and vinyl",
+              "sizeSet": null,
+              "attributes": ["cds-and-vinyl-type"]
+            },
+            {
+              "id": "musical-instruments-and-dj",
+              "name": "Musical instruments",
+              "sizeSet": null,
+              "attributes": ["musical-instruments-and-dj-type"]
+            }
+          ]
+        },
+        {
+          "id": "party-supplies",
+          "name": "Party supplies",
+          "productTypes": [
+            { "id": "cake-decor", "name": "Cake decorating", "sizeSet": null, "attributes": [] },
+            {
+              "id": "cards-invitations-gift-wrap",
+              "name": "Cards, invitations, gift wrap",
+              "sizeSet": null,
+              "attributes": []
+            },
+            { "id": "decorations", "name": "Decorations", "sizeSet": null, "attributes": [] },
+            { "id": "favours", "name": "Party favors", "sizeSet": null, "attributes": [] },
+            { "id": "party-hats", "name": "Party hats", "sizeSet": null, "attributes": [] }
+          ]
+        },
+        {
+          "id": "sports-equipment-accesories",
+          "name": "Sports equipment",
+          "productTypes": [
+            {
+              "id": "ball-sports",
+              "name": "Ball sports",
+              "sizeSet": null,
+              "attributes": ["occasion"]
+            },
+            {
+              "id": "camping-hiking",
+              "name": "Camping and hiking",
+              "sizeSet": null,
+              "attributes": ["camping-hiking-type", "occasion"]
+            },
+            {
+              "id": "cycling",
+              "name": "Cycling",
+              "sizeSet": null,
+              "attributes": ["cycling-type", "occasion"]
+            },
+            {
+              "id": "fitness",
+              "name": "Fitness",
+              "sizeSet": null,
+              "attributes": ["fitness-type", "occasion"]
+            },
+            {
+              "id": "golf",
+              "name": "Golf",
+              "sizeSet": null,
+              "attributes": ["golf-type", "occasion"]
+            },
+            {
+              "id": "skates-skateboards-scooters",
+              "name": "Skates, skateboards and scooters",
+              "sizeSet": null,
+              "attributes": ["occasion", "skates-skateboards-scooters-type"]
+            },
+            {
+              "id": "raquet-sports",
+              "name": "Racket sports",
+              "sizeSet": null,
+              "attributes": ["occasion"]
+            },
+            {
+              "id": "water-sports",
+              "name": "Water sports",
+              "sizeSet": null,
+              "attributes": ["occasion", "water-sports-type"]
+            },
+            {
+              "id": "winter-sports",
+              "name": "Winter sports",
+              "sizeSet": null,
+              "attributes": ["occasion", "winter-sports-type"]
+            }
+          ]
+        },
+        {
+          "id": "toys",
+          "name": "Toys",
+          "productTypes": [
+            {
+              "id": "action-figures-playsets",
+              "name": "Action figures and playsets",
+              "sizeSet": null,
+              "attributes": []
+            },
+            {
+              "id": "building-sets-blocks",
+              "name": "Building sets and blocks",
+              "sizeSet": null,
+              "attributes": []
+            },
+            {
+              "id": "cars-vehicles",
+              "name": "Cars and vehicles",
+              "sizeSet": null,
+              "attributes": []
+            },
+            {
+              "id": "dolls-accessories",
+              "name": "Dolls and accessories",
+              "sizeSet": null,
+              "attributes": []
+            },
+            { "id": "learning-toys", "name": "Learning toys", "sizeSet": null, "attributes": [] },
+            {
+              "id": "puzzles-games",
+              "name": "Puzzles and games",
+              "sizeSet": null,
+              "attributes": []
+            },
+            {
+              "id": "stuffed-animals",
+              "name": "Stuffed animals",
+              "sizeSet": null,
+              "attributes": []
+            },
+            { "id": "trading-cards", "name": "Trading cards", "sizeSet": null, "attributes": [] }
+          ]
+        },
+        {
+          "id": "umbrella",
+          "name": "Umbrellas",
+          "productTypes": [
+            { "id": "umbrella", "name": "Umbrellas", "sizeSet": null, "attributes": ["occasion"] }
+          ]
+        }
+      ]
+    }
+  ],
+  "sizeSets": {
+    "4": {
+      "name": "wmns-tops-sizes",
+      "sizes": [
+        "One size",
+        "00",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "14",
+        "16",
+        "18",
+        "20",
+        "22",
+        "24",
+        "26",
+        "28",
+        "30",
+        "32",
+        "34",
+        "36",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "Other"
+      ]
+    },
+    "22": {
+      "name": "wmns-bottom-sizes",
+      "sizes": [
+        "One size",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "14",
+        "16",
+        "18",
+        "20",
+        "22",
+        "24",
+        "26",
+        "28",
+        "30",
+        "32",
+        "34",
+        "36",
+        "21\"",
+        "22\"",
+        "23\"",
+        "24\"",
+        "25\"",
+        "26\"",
+        "27\"",
+        "28\"",
+        "29\"",
+        "30\"",
+        "31\"",
+        "32\"",
+        "33\"",
+        "34\"",
+        "35\"",
+        "36\"",
+        "37\"",
+        "38\"",
+        "39\"",
+        "40\"",
+        "42\"",
+        "44\"",
+        "46\"",
+        "48\"",
+        "50\"",
+        "51\"",
+        "52\"",
+        "53\"",
+        "54\"",
+        "55\"",
+        "56\"",
+        "57\"",
+        "58\"",
+        "59\"",
+        "60\"",
+        "61\"",
+        "62\"",
+        "63\"",
+        "64\"",
+        "65\"",
+        "66\"",
+        "67\"",
+        "68\"",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "Other"
+      ]
+    },
+    "30": {
+      "name": "wmns-underwear-sizes",
+      "sizes": [
+        "One size",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "28D",
+        "30A",
+        "30B",
+        "30C",
+        "30D",
+        "30DD",
+        "30E",
+        "32A",
+        "32B",
+        "32C",
+        "32D",
+        "32DD",
+        "32E",
+        "34A",
+        "34B",
+        "34C",
+        "34D",
+        "34DD",
+        "34E",
+        "36A",
+        "36B",
+        "36C",
+        "36D",
+        "36DD",
+        "36E",
+        "36F",
+        "36G",
+        "38A",
+        "38B",
+        "38C",
+        "38D",
+        "38DD",
+        "38E",
+        "38F",
+        "38G",
+        "A cup",
+        "B cup",
+        "C cup",
+        "D cup",
+        "DD cup",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "Other"
+      ]
+    },
+    "38": {
+      "name": "wmns-outerwear-sizes",
+      "sizes": [
+        "One size",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "14",
+        "16",
+        "18",
+        "20",
+        "22",
+        "24",
+        "26",
+        "28",
+        "30",
+        "32",
+        "34",
+        "36",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "Other"
+      ]
+    },
+    "46": {
+      "name": "wmns-shoe-sizes",
+      "sizes": [
+        "One size",
+        "US 3",
+        "US 3.5",
+        "US 4",
+        "US 4.5",
+        "US 5",
+        "US 5.5",
+        "US 6",
+        "US 6.5",
+        "US 7",
+        "US 7.5",
+        "US 8",
+        "US 8.5",
+        "US 9",
+        "US 9.5",
+        "US 10",
+        "US 10.5",
+        "US 11",
+        "US 11.5",
+        "US 12",
+        "US 12.5",
+        "US 13",
+        "US 13.5",
+        "US 14",
+        "Other"
+      ]
+    },
+    "54": {
+      "name": "mens-top-sizes",
+      "sizes": [
+        "One size",
+        "3XS",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "Other"
+      ]
+    },
+    "60": {
+      "name": "mens-bottoms-sizes",
+      "sizes": [
+        "One size",
+        "3XS",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "26\"",
+        "27\"",
+        "28\"",
+        "29\"",
+        "30\"",
+        "31\"",
+        "32\"",
+        "33\"",
+        "34\"",
+        "35\"",
+        "36\"",
+        "37\"",
+        "38\"",
+        "39\"",
+        "40\"",
+        "41\"",
+        "42\"",
+        "43\"",
+        "44\"",
+        "45\"",
+        "46\"",
+        "47\"",
+        "48\"",
+        "49\"",
+        "50\"",
+        "51\"",
+        "52\"",
+        "53\"",
+        "54\"",
+        "55\"",
+        "56\"",
+        "57\"",
+        "58\"",
+        "59\"",
+        "60\"",
+        "61\"",
+        "Other"
+      ]
+    },
+    "77": {
+      "name": "mens-shoe-sizes",
+      "sizes": [
+        "One size",
+        "US 3",
+        "US 4",
+        "US 5",
+        "US 6",
+        "US 6.5",
+        "US 7",
+        "US 7.5",
+        "US 8",
+        "US 8.5",
+        "US 9",
+        "US 9.5",
+        "US 10",
+        "US 10.5",
+        "US 11",
+        "US 11.5",
+        "US 12",
+        "US 12.5",
+        "US 13",
+        "US 13.5",
+        "US 14",
+        "US 14.5",
+        "US 15",
+        "US 15.5",
+        "US 16",
+        "Other"
+      ]
+    },
+    "84": {
+      "name": "wmns-dress-sizes",
+      "sizes": [
+        "One size",
+        "00",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "14",
+        "16",
+        "18",
+        "20",
+        "22",
+        "24",
+        "26",
+        "28",
+        "30",
+        "32",
+        "34",
+        "36",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "Other"
+      ]
+    },
+    "89": {
+      "name": "mens-underwear-sizes",
+      "sizes": [
+        "One size",
+        "3XS",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "Other"
+      ]
+    },
+    "95": {
+      "name": "mens-outerwear-sizes",
+      "sizes": [
+        "One size",
+        "3XS",
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL",
+        "6XL",
+        "Other"
+      ]
+    },
+    "100": {
+      "name": "kids-apparel-sizes",
+      "sizes": [
+        "One size",
+        "0-3 months",
+        "3-6 months",
+        "6-9 months",
+        "9-12 months",
+        "12-18 months",
+        "18-24 months",
+        "2 years",
+        "3 years",
+        "4 years",
+        "5 years",
+        "6 years",
+        "7 years",
+        "8 years",
+        "9 years",
+        "10 years",
+        "11 years",
+        "12 years",
+        "13 years",
+        "14 years",
+        "15 years",
+        "16 years",
+        "Other"
+      ]
+    },
+    "103": {
+      "name": "kids-shoe-sizes",
+      "sizes": [
+        "0-0.5 (newborn)",
+        "1-1.5 (baby)",
+        "2-2.5",
+        "3-3.5",
+        "4-4.5",
+        "5-5.5",
+        "6-6.5",
+        "7-7.5",
+        "8",
+        "8.5",
+        "9-9.5",
+        "10-10.5",
+        "11",
+        "11.5",
+        "12-12.5",
+        "13-13.5",
+        "1-1.5 (adult)",
+        "2-2.5 (adult)",
+        "3 (adult)",
+        "3.5 (adult)",
+        "4 (adult)",
+        "5 (adult)",
+        "6 (adult)",
+        "7 (adult)",
+        "7.5 (adult)",
+        "Other"
+      ]
+    }
+  },
+  "attributes": {
+    "age": {
+      "name": "Age",
+      "max": 1,
+      "values": [
+        { "id": "modern", "name": "Modern" },
+        { "id": "y2k", "name": "00s" },
+        { "id": "90s", "name": "90s" },
+        { "id": "80s", "name": "80s" },
+        { "id": "70s", "name": "70s" },
+        { "id": "60s", "name": "60s" },
+        { "id": "50s", "name": "50s" },
+        { "id": "antique", "name": "Antique" }
+      ]
+    },
+    "bag-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "backpacks-rucksacks",
+          "name": "Backpacks",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "beach-bag", "name": "Beach bags", "departments": ["menswear", "womenswear"] },
+        {
+          "id": "clutch-bag",
+          "name": "Clutch bags",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "crossbody-bag",
+          "name": "Crossbody bags",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "diaper-bag",
+          "name": "Diaper bags",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "bum-bag",
+          "name": "Fanny packs and belt bags",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "luggage-travel",
+          "name": "Luggage and travel",
+          "departments": ["menswear", "womenswear"]
+        },
+        {
+          "id": "makeup-toiletry-bag",
+          "name": "Makeup and toiletry bags",
+          "departments": ["menswear", "womenswear"]
+        },
+        {
+          "id": "pencil-case",
+          "name": "Pencil cases",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "satchel", "name": "Satchels", "departments": ["menswear", "womenswear"] },
+        {
+          "id": "shoulder-bag",
+          "name": "Shoulder bags",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "tote-bag", "name": "Tote bags", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "bath-body-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "bath-soak-bubbles",
+          "name": "Bath salts and bubbles",
+          "departments": ["everything-else"]
+        },
+        { "id": "body-wash", "name": "Body wash", "departments": ["everything-else"] },
+        {
+          "id": "exfoliant-scrub",
+          "name": "Exfoliants and scrubs",
+          "departments": ["everything-else"]
+        },
+        { "id": "hand-foot-care", "name": "Hand and footcare", "departments": ["everything-else"] },
+        { "id": "hand-soap", "name": "Hand soap", "departments": ["everything-else"] },
+        {
+          "id": "moisturizer-body-oil",
+          "name": "Moisturizers and body oils",
+          "departments": ["everything-else"]
+        },
+        {
+          "id": "suncare-tanning",
+          "name": "Suncare and tanning",
+          "departments": ["everything-else"]
+        }
+      ]
+    },
+    "body-fit": {
+      "name": "Size grouping",
+      "max": 2,
+      "values": [
+        {
+          "id": "maternity",
+          "name": "Maternity",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "petite", "name": "Petite", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "plus-size",
+          "name": "Plus size",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "tall", "name": "Tall", "departments": ["kidswear", "menswear", "womenswear"] }
+      ]
+    },
+    "boot-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "ankle", "name": "Ankle", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "biker-military",
+          "name": "Biker",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "chelsea",
+          "name": "Chelsea",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "combat", "name": "Combat", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "knee-high", "name": "Knee high", "departments": ["menswear", "womenswear"] },
+        { "id": "lace-up", "name": "Lace up", "departments": ["menswear", "womenswear"] },
+        { "id": "mid-calf", "name": "Mid calf", "departments": ["menswear", "womenswear"] },
+        {
+          "id": "over-the-knee",
+          "name": "Over the knee",
+          "departments": ["menswear", "womenswear"]
+        },
+        { "id": "platform", "name": "Platform", "departments": ["menswear", "womenswear"] },
+        { "id": "sock", "name": "Sock", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "bottom-fit": {
+      "name": "Type",
+      "max": 3,
+      "values": [
+        { "id": "acid-washed", "name": "Acid-washed", "departments": ["menswear", "womenswear"] },
+        { "id": "bleached", "name": "Bleached", "departments": ["menswear", "womenswear"] },
+        { "id": "capris", "name": "Capri", "departments": ["menswear", "womenswear"] },
+        { "id": "cargo", "name": "Cargo", "departments": ["menswear", "womenswear"] },
+        { "id": "chino", "name": "Chino", "departments": ["menswear", "womenswear"] },
+        { "id": "distressed", "name": "Distressed", "departments": ["menswear", "womenswear"] },
+        { "id": "embellished", "name": "Embellished", "departments": ["menswear", "womenswear"] },
+        { "id": "embroided", "name": "Embroidered", "departments": ["menswear", "womenswear"] },
+        { "id": "faded", "name": "Faded", "departments": ["menswear", "womenswear"] },
+        { "id": "painted", "name": "Painted", "departments": ["menswear", "womenswear"] },
+        { "id": "patched", "name": "Patched", "departments": ["menswear", "womenswear"] },
+        { "id": "printed", "name": "Printed", "departments": ["menswear", "womenswear"] },
+        { "id": "ripped", "name": "Ripped", "departments": ["menswear", "womenswear"] },
+        { "id": "stone-washed", "name": "Stone-washed", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "bottom-style": {
+      "name": "Fit",
+      "max": 2,
+      "values": [
+        {
+          "id": "bootcut",
+          "name": "Bootcut",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "flare", "name": "Flare", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "high-waisted",
+          "name": "High waisted",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "low-rise",
+          "name": "Low rise",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "skinny", "name": "Skinny", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "slim", "name": "Slim", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "straight-leg",
+          "name": "Straight leg",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "tailored",
+          "name": "Tailored",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "wide-leg",
+          "name": "Wide leg",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "tapered",
+          "name": "tapered",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "relaxed",
+          "name": "relaxed",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        }
+      ]
+    },
+    "boxers-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "boxers", "name": "Boxers", "departments": ["menswear"] },
+        { "id": "briefs", "name": "Briefs", "departments": ["menswear"] },
+        { "id": "thongs", "name": "Thongs", "departments": ["menswear"] },
+        { "id": "trunks", "name": "Trunks", "departments": ["menswear"] }
+      ]
+    },
+    "bra-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "balconette", "name": "Balconette", "departments": ["kidswear", "womenswear"] },
+        { "id": "bralette", "name": "Bralette", "departments": ["kidswear", "womenswear"] },
+        { "id": "padded", "name": "Padded", "departments": ["kidswear", "womenswear"] },
+        { "id": "racerback", "name": "Racerback", "departments": ["kidswear", "womenswear"] },
+        { "id": "sports", "name": "Sports", "departments": ["kidswear", "womenswear"] },
+        { "id": "strapless", "name": "Strapless", "departments": ["kidswear", "womenswear"] },
+        { "id": "t-shirt", "name": "T-shirt", "departments": ["kidswear", "womenswear"] },
+        { "id": "wireless", "name": "Wireless", "departments": ["kidswear", "womenswear"] }
+      ]
+    },
+    "cameras-and-accessories-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "accessories", "name": "Accessories", "departments": ["everything-else"] },
+        {
+          "id": "action-cameras-accessories",
+          "name": "Action cameras",
+          "departments": ["everything-else"]
+        },
+        { "id": "binoculars", "name": "Binoculars", "departments": ["everything-else"] },
+        { "id": "camcorders", "name": "Camcorders", "departments": ["everything-else"] },
+        { "id": "dvd", "name": "DVD", "departments": ["everything-else"] },
+        { "id": "digital-cameras", "name": "Digital cameras", "departments": ["everything-else"] },
+        { "id": "dummy-cameras", "name": "Dummy cameras", "departments": ["everything-else"] },
+        { "id": "film-cameras", "name": "Film cameras", "departments": ["everything-else"] },
+        { "id": "instant-cameras", "name": "Instant cameras", "departments": ["everything-else"] },
+        {
+          "id": "telescopes-optics",
+          "name": "Telescopes and optics",
+          "departments": ["everything-else"]
+        },
+        { "id": "vhs", "name": "VHS", "departments": ["everything-else"] }
+      ]
+    },
+    "camping-hiking-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "bags-packs", "name": "Bags and packs", "departments": ["everything-else"] },
+        {
+          "id": "camping-furniture",
+          "name": "Camping furniture",
+          "departments": ["everything-else"]
+        },
+        { "id": "camp-kitchen", "name": "Camping kitchens", "departments": ["everything-else"] },
+        {
+          "id": "camping-shelters",
+          "name": "Camping shelters",
+          "departments": ["everything-else"]
+        },
+        { "id": "child-carriers", "name": "Child carriers", "departments": ["everything-else"] },
+        {
+          "id": "hand-foot-warmers",
+          "name": "Hand and foot warmers",
+          "departments": ["everything-else"]
+        },
+        { "id": "gps-navigation", "name": "Navigation", "departments": ["everything-else"] },
+        { "id": "bivy-bags", "name": "Sleeping bags", "departments": ["everything-else"] }
+      ]
+    },
+    "cds-and-vinyl-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "blues", "name": "Blues", "departments": ["everything-else"] },
+        {
+          "id": "children-s-music",
+          "name": "Children's music",
+          "departments": ["everything-else"]
+        },
+        { "id": "classical", "name": "Classical", "departments": ["everything-else"] },
+        { "id": "country", "name": "Country", "departments": ["everything-else"] },
+        {
+          "id": "dance-electronic",
+          "name": "Dance and electronic",
+          "departments": ["everything-else"]
+        },
+        { "id": "easy-listening", "name": "Easy listening", "departments": ["everything-else"] },
+        { "id": "folk", "name": "Folk", "departments": ["everything-else"] },
+        { "id": "plays-stories", "name": "Plays and stories", "departments": ["everything-else"] }
+      ]
+    },
+    "coat-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "dufflecoat",
+          "name": "Duffle",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "overcoat",
+          "name": "Overcoat",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "parka", "name": "Parka", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "peacoat",
+          "name": "Peacoat",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "puffer", "name": "Puffer", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "raincoat",
+          "name": "Raincoat",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "teddy", "name": "Sherpa", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "trench", "name": "Trench", "departments": ["kidswear", "menswear", "womenswear"] }
+      ]
+    },
+    "colour": {
+      "name": "colour",
+      "max": 2,
+      "values": [
+        { "id": "black", "name": "Black" },
+        { "id": "grey", "name": "Grey" },
+        { "id": "white", "name": "White" },
+        { "id": "brown", "name": "Brown" },
+        { "id": "tan", "name": "Tan" },
+        { "id": "cream", "name": "Cream" },
+        { "id": "yellow", "name": "Yellow" },
+        { "id": "red", "name": "Red" },
+        { "id": "burgundy", "name": "Burgundy" },
+        { "id": "orange", "name": "Orange" },
+        { "id": "pink", "name": "Pink" },
+        { "id": "purple", "name": "Purple" },
+        { "id": "blue", "name": "Blue" },
+        { "id": "navy", "name": "Navy" },
+        { "id": "green", "name": "Green" },
+        { "id": "khaki", "name": "Khaki" },
+        { "id": "multi", "name": "Multi" },
+        { "id": "silver", "name": "Silver" },
+        { "id": "gold", "name": "Gold" }
+      ]
+    },
+    "cycling-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "bike-tools-equipment",
+          "name": "Bike tools and equipment",
+          "departments": ["everything-else"]
+        },
+        { "id": "bikes", "name": "Bikes", "departments": ["everything-else"] },
+        {
+          "id": "components-parts",
+          "name": "Components and parts",
+          "departments": ["everything-else"]
+        },
+        {
+          "id": "helmets-accessories",
+          "name": "Helmets and accessories",
+          "departments": ["everything-else"]
+        },
+        {
+          "id": "kids-bikes-accessories",
+          "name": "Kids' bikes and accessories",
+          "departments": ["everything-else"]
+        },
+        { "id": "protective-gear", "name": "Protective gear", "departments": ["everything-else"] },
+        { "id": "lights-reflectors", "name": "Reflectors", "departments": ["everything-else"] }
+      ]
+    },
+    "dress-length": {
+      "name": "Length",
+      "max": 2,
+      "values": [
+        { "id": "maxi", "name": "Maxi", "departments": ["kidswear", "womenswear"] },
+        { "id": "midi", "name": "Midi", "departments": ["kidswear", "womenswear"] },
+        { "id": "mini", "name": "Mini", "departments": ["kidswear", "womenswear"] }
+      ]
+    },
+    "dress-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "a-line", "name": "A-line", "departments": ["womenswear"] },
+        { "id": "babydoll", "name": "Babydoll", "departments": ["womenswear"] },
+        { "id": "blazer", "name": "Blazer", "departments": ["womenswear"] },
+        { "id": "bodycon", "name": "Bodycon", "departments": ["womenswear"] },
+        { "id": "fishtail", "name": "Fishtail", "departments": ["womenswear"] },
+        { "id": "pencil", "name": "Pencil", "departments": ["womenswear"] },
+        { "id": "pleated", "name": "Pleated", "departments": ["womenswear"] },
+        { "id": "shirt", "name": "Shirt", "departments": ["kidswear", "womenswear"] },
+        { "id": "slip", "name": "Slip", "departments": ["womenswear"] }
+      ]
+    },
+    "dungarees-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "trouser", "name": "Pants", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "shorts", "name": "Shorts", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "skirt", "name": "Skirt", "departments": ["kidswear", "menswear", "womenswear"] }
+      ]
+    },
+    "fancy-dress-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "1960s", "name": "1960s", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "1970s", "name": "1970s", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "2-piece",
+          "name": "2 piece",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "animals-and-nature",
+          "name": "Animals and nature",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "christmas",
+          "name": "Christmas",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "halloween",
+          "name": "Halloween",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "superhero",
+          "name": "Superhero",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "tv-book-and-film",
+          "name": "TV, books and film",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        }
+      ]
+    },
+    "fitness-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        {
+          "id": "balance-training-equipment",
+          "name": "Balance training",
+          "departments": ["everything-else"]
+        },
+        { "id": "pilates", "name": "Pilates", "departments": ["everything-else"] },
+        {
+          "id": "strength-training-equipment",
+          "name": "Strength training",
+          "departments": ["everything-else"]
+        },
+        {
+          "id": "trampolines-accessories",
+          "name": "Trampolines and accessories",
+          "departments": ["everything-else"]
+        }
+      ]
+    },
+    "fragrance-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "body-spray", "name": "Body spray", "departments": ["everything-else"] },
+        { "id": "deodrant", "name": "Deodorant", "departments": ["everything-else"] },
+        { "id": "perfume", "name": "Perfume and cologne", "departments": ["everything-else"] }
+      ]
+    },
+    "gloves-and-mittens-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "gloves", "name": "Gloves", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "mittens",
+          "name": "Mittens",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        }
+      ]
+    },
+    "golf-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "golf-balls", "name": "Golf balls", "departments": ["everything-else"] },
+        {
+          "id": "golf-cart-accessories",
+          "name": "Golf cart accessories",
+          "departments": ["everything-else"]
+        },
+        { "id": "golf-carts", "name": "Golf carts", "departments": ["everything-else"] },
+        {
+          "id": "golf-club-bag-accessories",
+          "name": "Golf club bag accessories",
+          "departments": ["everything-else"]
+        },
+        { "id": "golf-club-bags", "name": "Golf club bags", "departments": ["everything-else"] },
+        {
+          "id": "golf-club-organisers",
+          "name": "Golf club organizers",
+          "departments": ["everything-else"]
+        },
+        { "id": "golf-club-parts", "name": "Golf club parts", "departments": ["everything-else"] },
+        { "id": "golf-clubs", "name": "Golf clubs", "departments": ["everything-else"] }
+      ]
+    },
+    "grooming-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "grooming-products",
+          "name": "Grooming products",
+          "departments": ["everything-else"]
+        },
+        { "id": "grooming-tools", "name": "Grooming tools", "departments": ["everything-else"] },
+        { "id": "hair-removal", "name": "Hair removal", "departments": ["everything-else"] }
+      ]
+    },
+    "hair-accesories-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "hair-accessories", "name": "Hair accessories", "departments": ["womenswear"] },
+        {
+          "id": "hair-extensions-wigs",
+          "name": "Hair extensions and wigs",
+          "departments": ["womenswear"]
+        }
+      ]
+    },
+    "hair-product-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "color", "name": "Color", "departments": ["everything-else"] },
+        { "id": "conditioner", "name": "Conditioner", "departments": ["everything-else"] },
+        { "id": "hairspray", "name": "Hairspray", "departments": ["everything-else"] },
+        { "id": "heat-protectant", "name": "Heat protection", "departments": ["everything-else"] },
+        { "id": "shampoo", "name": "Shampoo", "departments": ["everything-else"] },
+        { "id": "styling", "name": "Styling", "departments": ["everything-else"] },
+        {
+          "id": "treatment-mask",
+          "name": "Treatments and masks",
+          "departments": ["everything-else"]
+        }
+      ]
+    },
+    "hat-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "beanie",
+          "name": "Beanies",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "beret", "name": "Berets", "departments": ["menswear", "womenswear"] },
+        { "id": "bucket-hat", "name": "Bucket hats", "departments": ["menswear", "womenswear"] },
+        {
+          "id": "caps-snapbacks",
+          "name": "Caps",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "panamas-straw", "name": "Straw hats", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "heel-type": {
+      "name": "Heel type",
+      "max": 1,
+      "values": [
+        { "id": "block-heel", "name": "Block", "departments": ["menswear", "womenswear"] },
+        { "id": "flat", "name": "Flat", "departments": ["menswear", "womenswear"] },
+        { "id": "high-heel", "name": "High", "departments": ["menswear", "womenswear"] },
+        { "id": "kitten-heel", "name": "Kitten", "departments": ["menswear", "womenswear"] },
+        { "id": "mid-heel", "name": "Mid", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "home": {
+      "name": "Home",
+      "max": 1,
+      "values": [
+        { "id": "bathroom", "name": "Bathroom", "departments": ["everything-else"] },
+        { "id": "bedroom", "name": "Bedroom", "departments": ["everything-else"] },
+        { "id": "dining", "name": "Dining", "departments": ["everything-else"] },
+        { "id": "garden", "name": "Garden", "departments": ["everything-else"] },
+        { "id": "kitchen", "name": "Kitchen", "departments": ["everything-else"] },
+        { "id": "office", "name": "Office", "departments": ["everything-else"] }
+      ]
+    },
+    "jacket-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "blazer", "name": "Blazer", "departments": ["menswear", "womenswear"] },
+        { "id": "bomber", "name": "Bomber", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "capes", "name": "Cape", "departments": ["kidswear", "menswear", "womenswear"] },
+        { "id": "duster", "name": "Duster", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "lightweight",
+          "name": "Lightweight",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "ponchos",
+          "name": "Poncho",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "puffer", "name": "Puffer", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "shacket",
+          "name": "Shacket",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "varsity",
+          "name": "Varsity",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "windbreaker",
+          "name": "Windbreaker",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        }
+      ]
+    },
+    "jewellery-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "body-jewellery",
+          "name": "Body jewelry",
+          "departments": ["menswear", "womenswear"]
+        },
+        {
+          "id": "bracelet-anklets",
+          "name": "Bracelets and anklets",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "brooches-pins",
+          "name": "Brooches and pins",
+          "departments": ["menswear", "womenswear"]
+        },
+        {
+          "id": "earrings-and-ear-cuffs",
+          "name": "Earrings and ear cuffs",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "necklace",
+          "name": "Necklaces",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "rings", "name": "Rings", "departments": ["kidswear", "menswear", "womenswear"] }
+      ]
+    },
+    "jumpssuit-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "palazzo",
+          "name": "Palazzo",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "skinny", "name": "Skinny", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "straight",
+          "name": "Straight leg",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        }
+      ]
+    },
+    "luggage-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "carry-on", "name": "Carry On", "departments": [] },
+        { "id": "passport-holder", "name": "Passport Holder", "departments": [] },
+        { "id": "suitcase", "name": "Suitcase", "departments": [] }
+      ]
+    },
+    "makeup-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "blush", "name": "Blush", "departments": ["everything-else"] },
+        {
+          "id": "bronzer-contour",
+          "name": "Bronzer and contour",
+          "departments": ["everything-else"]
+        },
+        { "id": "brushes-tools", "name": "Brushes and tools", "departments": ["everything-else"] },
+        { "id": "concealer", "name": "Concealer", "departments": ["everything-else"] },
+        { "id": "eye-primer", "name": "Eye primer", "departments": ["everything-else"] },
+        { "id": "brows", "name": "Eyebrows", "departments": ["everything-else"] },
+        { "id": "eyeliner", "name": "Eyeliner", "departments": ["everything-else"] },
+        { "id": "eyeshadow", "name": "Eyeshadow", "departments": ["everything-else"] },
+        { "id": "foundation", "name": "Foundation", "departments": ["everything-else"] },
+        { "id": "lipstick", "name": "Lipstick", "departments": ["everything-else"] },
+        { "id": "mascara", "name": "Mascara", "departments": ["everything-else"] },
+        { "id": "primer", "name": "Primer", "departments": ["everything-else"] }
+      ]
+    },
+    "material": {
+      "name": "Material",
+      "max": 4,
+      "values": [
+        {
+          "id": "acrylic",
+          "name": "Acrylic",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "canvas",
+          "name": "Canvas",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "cashmere",
+          "name": "Cashmere",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "corduroy",
+          "name": "Corduroy",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "cotton",
+          "name": "Cotton",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "cotton-organic",
+          "name": "Cotton - Organic",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "cotton-recycled",
+          "name": "Cotton - Recycled",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "crochet",
+          "name": "Crochet",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "denim",
+          "name": "Denim",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "elastane-lycra-spandex",
+          "name": "Elastane / Lycra / Spandex",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "sequins-gems",
+          "name": "Embellished",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "faux-fur",
+          "name": "Faux fur",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "faux-leather",
+          "name": "Faux leather",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "fleece",
+          "name": "Fleece",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "hemp",
+          "name": "Hemp",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "jersey",
+          "name": "Jersey",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "knitted",
+          "name": "Knitted",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "lace",
+          "name": "Lace",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "leather",
+          "name": "Leather",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "linen",
+          "name": "Linen",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "lyocell",
+          "name": "Lyocell",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "modal",
+          "name": "Modal",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "nylon",
+          "name": "Nylon",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "polyester",
+          "name": "Polyester",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "polyester-recycled",
+          "name": "Polyester - Recycled",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "rayon",
+          "name": "Rayon",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "rubber",
+          "name": "Rubber",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "silk",
+          "name": "Silk",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "suede",
+          "name": "Suede",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "tweed",
+          "name": "Tweed",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "velvet",
+          "name": "Velvet",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "viscose",
+          "name": "Viscose",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "wool",
+          "name": "Wool",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        }
+      ]
+    },
+    "musical-instruments-and-dj-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "bass-guitars-gear",
+          "name": "Bass guitars and accessories",
+          "departments": ["everything-else"]
+        },
+        {
+          "id": "drums-percussion",
+          "name": "Drums and percussion",
+          "departments": ["everything-else"]
+        },
+        {
+          "id": "guitars-gear",
+          "name": "Guitars and accessories",
+          "departments": ["everything-else"]
+        }
+      ]
+    },
+    "nails-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "false-nails", "name": "False nails", "departments": ["everything-else"] },
+        { "id": "nail-art", "name": "Nail art", "departments": ["everything-else"] },
+        { "id": "nail-brushes", "name": "Nail brushes", "departments": ["everything-else"] },
+        { "id": "nail-clippers", "name": "Nail clippers", "departments": ["everything-else"] },
+        { "id": "nail-files", "name": "Nail files", "departments": ["everything-else"] },
+        { "id": "nail-polishes", "name": "Nail polish", "departments": ["everything-else"] },
+        { "id": "nail-treatments", "name": "Nail treatments", "departments": ["everything-else"] }
+      ]
+    },
+    "occasion": {
+      "name": "Occasion",
+      "max": 3,
+      "values": [
+        {
+          "id": "daytime",
+          "name": "Casual",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "festival",
+          "name": "Festival",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "gifting",
+          "name": "Gifting",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "going-out-evening",
+          "name": "Going out",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "outdoors",
+          "name": "Outdoors",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "celebration",
+          "name": "Party",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "relaxation",
+          "name": "Relaxation",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "school",
+          "name": "School",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "ski",
+          "name": "Ski",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "special-occasion",
+          "name": "Special Occasion",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "summertime",
+          "name": "Summer",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "holiday",
+          "name": "Vacation",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "winter",
+          "name": "Winter",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "work",
+          "name": "Work",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        },
+        {
+          "id": "sport-workout",
+          "name": "Workout",
+          "departments": ["everything-else", "kidswear", "menswear", "womenswear"]
+        }
+      ]
+    },
+    "pajamas-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "2-piece",
+          "name": "2 piece",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "pants", "name": "Bottoms", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "button-up",
+          "name": "Button up",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "cami", "name": "Camis", "departments": ["kidswear", "menswear", "womenswear"] },
+        {
+          "id": "chemises-slips",
+          "name": "Chemises and slips",
+          "departments": ["kidswear", "menswear", "womenswear"]
+        },
+        { "id": "shorts", "name": "Shorts", "departments": ["kidswear", "menswear", "womenswear"] }
+      ]
+    },
+    "panties-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "bikini", "name": "Bikini", "departments": ["kidswear", "womenswear"] },
+        { "id": "boyshorts", "name": "Boyshort", "departments": ["kidswear", "womenswear"] },
+        { "id": "g-string", "name": "G-string", "departments": ["kidswear", "womenswear"] },
+        { "id": "high-waisted", "name": "High waisted", "departments": ["kidswear", "womenswear"] },
+        { "id": "hipster", "name": "Hipster", "departments": ["kidswear", "womenswear"] },
+        { "id": "thong", "name": "Thong", "departments": ["kidswear", "womenswear"] }
+      ]
+    },
+    "shapewear-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "bodysuit", "name": "Bodysuits", "departments": ["womenswear"] },
+        { "id": "shorts-briefs", "name": "Shorts and panties", "departments": ["womenswear"] },
+        { "id": "slips", "name": "Slips", "departments": ["womenswear"] },
+        { "id": "tank-top", "name": "Tops", "departments": ["womenswear"] }
+      ]
+    },
+    "shoe-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "buckle", "name": "Buckle", "departments": ["menswear", "womenswear"] },
+        { "id": "chunky", "name": "Chunky", "departments": ["menswear", "womenswear"] },
+        { "id": "embellished", "name": "Embellished", "departments": ["menswear", "womenswear"] },
+        { "id": "embossed", "name": "Embossed", "departments": ["menswear", "womenswear"] },
+        { "id": "lace-up", "name": "Lace up", "departments": ["menswear", "womenswear"] },
+        {
+          "id": "open-toe-peep-toe",
+          "name": "Open and peep toe",
+          "departments": ["menswear", "womenswear"]
+        },
+        { "id": "plain", "name": "Plain", "departments": ["menswear", "womenswear"] },
+        { "id": "platform", "name": "Platform", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "skates-skateboards-scooters-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        {
+          "id": "inline-roller-skating-and-equipment",
+          "name": "Inline and roller skating",
+          "departments": ["everything-else"]
+        },
+        { "id": "protective-gear", "name": "Protective gear", "departments": ["everything-else"] },
+        { "id": "scooters-equipment", "name": "Scooters", "departments": ["everything-else"] },
+        {
+          "id": "skateboarding-and-equipment",
+          "name": "Skateboarding",
+          "departments": ["everything-else"]
+        }
+      ]
+    },
+    "skincare-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "acne-blemish", "name": "Acne and blemish", "departments": ["everything-else"] },
+        {
+          "id": "cleanser-exfoliant",
+          "name": "Cleanser and exfoliant",
+          "departments": ["everything-else"]
+        },
+        { "id": "eye-cream", "name": "Eye cream", "departments": ["everything-else"] },
+        { "id": "makeup-remover", "name": "Makeup remover", "departments": ["everything-else"] },
+        { "id": "mask", "name": "Masks", "departments": ["everything-else"] },
+        { "id": "moisturizer", "name": "Moisturizers", "departments": ["everything-else"] },
+        { "id": "peel", "name": "Peels", "departments": ["everything-else"] }
+      ]
+    },
+    "sleepsuit-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "bodysuit", "name": "Onesies", "departments": ["kidswear"] },
+        { "id": "sleepsuit", "name": "Sleepers", "departments": ["kidswear"] }
+      ]
+    },
+    "source": {
+      "name": "Source",
+      "max": 2,
+      "values": [
+        { "id": "vintage", "name": "Vintage" },
+        { "id": "preloved", "name": "Preloved" },
+        { "id": "reworked", "name": "Reworked / Upcycled" },
+        { "id": "custom", "name": "Custom" },
+        { "id": "handmade", "name": "Handmade" },
+        { "id": "deadstock", "name": "Deadstock" },
+        { "id": "designer", "name": "Designer" },
+        { "id": "repaired", "name": "Repaired" }
+      ]
+    },
+    "style": {
+      "name": "Style",
+      "max": 3,
+      "values": [
+        { "id": "streetwear", "name": "Streetwear" },
+        { "id": "sportswear", "name": "Sportswear" },
+        { "id": "loungewear", "name": "Loungewear" },
+        { "id": "goth", "name": "Goth" },
+        { "id": "retro", "name": "Retro" },
+        { "id": "boho", "name": "Boho" },
+        { "id": "western", "name": "Western" },
+        { "id": "indie", "name": "Indie" },
+        { "id": "skater", "name": "Skater" },
+        { "id": "rave", "name": "Rave" },
+        { "id": "costume", "name": "Costume" },
+        { "id": "cosplay", "name": "Cosplay" },
+        { "id": "grunge", "name": "Grunge" },
+        { "id": "emo", "name": "Emo" },
+        { "id": "minimalist", "name": "Minimalist" },
+        { "id": "preppy", "name": "Preppy" },
+        { "id": "avant_garde", "name": "Avant Garde" },
+        { "id": "punk", "name": "Punk" },
+        { "id": "glam", "name": "Glam" },
+        { "id": "regency", "name": "Regency" },
+        { "id": "casual", "name": "Casual" },
+        { "id": "techwear", "name": "Utility" },
+        { "id": "futuristic", "name": "Futuristic" },
+        { "id": "cottage", "name": "Cottage" },
+        { "id": "fairy", "name": "Fairy" },
+        { "id": "kidcore", "name": "Kidcore" },
+        { "id": "y2_k", "name": "Y2K" },
+        { "id": "biker", "name": "Biker" },
+        { "id": "gorpcore", "name": "Gorpcore" },
+        { "id": "twee", "name": "Twee" },
+        { "id": "coquette", "name": "Coquette" },
+        { "id": "whimsygoth", "name": "Whimsygoth" }
+      ]
+    },
+    "sunglasses-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "aviator", "name": "Aviator", "departments": ["menswear", "womenswear"] },
+        { "id": "cat-eye", "name": "Cat eye", "departments": ["menswear", "womenswear"] },
+        { "id": "oversized", "name": "Oversized", "departments": ["menswear", "womenswear"] },
+        { "id": "round", "name": "Round", "departments": ["menswear", "womenswear"] },
+        { "id": "square", "name": "Square", "departments": ["menswear", "womenswear"] },
+        { "id": "wayfarer", "name": "Wayfarer", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "tools-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "appliances", "name": "Appliances", "departments": ["everything-else"] },
+        { "id": "brushes", "name": "Brushes", "departments": ["everything-else"] },
+        { "id": "tools", "name": "Tools", "departments": ["everything-else"] }
+      ]
+    },
+    "trainers-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "basketball", "name": "Basketball", "departments": ["menswear", "womenswear"] },
+        { "id": "embellished", "name": "Embellished", "departments": ["menswear", "womenswear"] },
+        { "id": "athletics", "name": "Gym", "departments": ["menswear", "womenswear"] },
+        { "id": "lifestyle", "name": "Lifestyle", "departments": ["menswear", "womenswear"] },
+        { "id": "running", "name": "Running", "departments": ["menswear", "womenswear"] },
+        { "id": "skateboard", "name": "Skateboarding", "departments": ["menswear", "womenswear"] },
+        { "id": "football", "name": "Soccer", "departments": ["menswear", "womenswear"] },
+        { "id": "tennis", "name": "Tennis", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "vest-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "cami", "name": "Cami", "departments": ["menswear", "womenswear"] },
+        { "id": "cropped", "name": "Cropped", "departments": ["menswear", "womenswear"] },
+        { "id": "tank-top", "name": "Tank top", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "wallet-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "cardholder", "name": "Cardholders", "departments": ["menswear", "womenswear"] },
+        {
+          "id": "purse",
+          "name": "Coin purses and pouches",
+          "departments": ["menswear", "womenswear"]
+        },
+        { "id": "moneyclip", "name": "Money clips", "departments": ["menswear", "womenswear"] },
+        { "id": "wallet", "name": "Wallets", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "watches-type": {
+      "name": "Type",
+      "max": 1,
+      "values": [
+        { "id": "analogue", "name": "Analogue", "departments": ["menswear", "womenswear"] },
+        { "id": "digital", "name": "Digital", "departments": ["menswear", "womenswear"] }
+      ]
+    },
+    "water-sports-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "boating", "name": "Boating", "departments": ["everything-else"] },
+        { "id": "canoeing", "name": "Canoeing", "departments": ["everything-else"] },
+        {
+          "id": "diving-snorkelling",
+          "name": "Diving and snorkelling",
+          "departments": ["everything-else"]
+        },
+        { "id": "kayaking", "name": "Kayaking", "departments": ["everything-else"] },
+        { "id": "kitesurfing", "name": "Kitesurfing", "departments": ["everything-else"] },
+        { "id": "rowing-crew", "name": "Rowing", "departments": ["everything-else"] },
+        { "id": "sailing", "name": "Sailing", "departments": ["everything-else"] }
+      ]
+    },
+    "winter-sports-type": {
+      "name": "Type",
+      "max": 2,
+      "values": [
+        { "id": "curling", "name": "Curling", "departments": ["everything-else"] },
+        { "id": "ice-hockey", "name": "Ice hockey", "departments": ["everything-else"] },
+        { "id": "ice-skating", "name": "Ice skating", "departments": ["everything-else"] },
+        { "id": "skiing", "name": "Skiing", "departments": ["everything-else"] },
+        { "id": "sledding", "name": "Sledding", "departments": ["everything-else"] },
+        { "id": "snowboarding", "name": "Snowboarding", "departments": ["everything-else"] },
+        { "id": "snowshoeing", "name": "Snowshoeing", "departments": ["everything-else"] }
+      ]
+    }
+  },
+  "bannedHashtags": [
+    "aaa",
+    "acer",
+    "acerlaptop",
+    "acernotebook",
+    "airgun",
+    "airpodchargingcase",
+    "airpods",
+    "airrifle",
+    "amazonalexa",
+    "androidcable",
+    "apetamin",
+    "apetaminforsale",
+    "appledesktop",
+    "appleearphones",
+    "appleheadphones",
+    "appleimac",
+    "applewatch",
+    "applewatchcharger",
+    "applewatchseries1",
+    "applewatchseries2",
+    "applewatchseries3",
+    "applewatchseries4",
+    "applewatchseries5",
+    "asus",
+    "asuslaptop",
+    "babyliss",
+    "banktransfer",
+    "batterybank",
+    "beardtrimmer",
+    "beats",
+    "beatspill",
+    "bestiality",
+    "bluetoothspeaker",
+    "bluntwrap",
+    "bong",
+    "boob",
+    "boobs",
+    "bose",
+    "boseheadphones",
+    "bosespeaker",
+    "boysid",
+    "boysidforsale",
+    "buyingid",
+    "ca$happ",
+    "cannabis",
+    "cashapp",
+    "cbd",
+    "cdplayer",
+    "charger",
+    "chargingcase",
+    "chromebook",
+    "concertticket",
+    "contactlens",
+    "contactlenses",
+    "controller",
+    "coon",
+    "counterfeit",
+    "creamcharger",
+    "cunt",
+    "curlers",
+    "curlingiron",
+    "curlingtong",
+    "curlingwand",
+    "delllaptop",
+    "dellmonitor",
+    "desktopcomputer",
+    "dirtyunderwear",
+    "drivinglicense",
+    "drug",
+    "drugs",
+    "dvdplayer",
+    "earbuds",
+    "earphones",
+    "ebay",
+    "echodot",
+    "ecig",
+    "ejuice",
+    "electricscooter",
+    "electrictoothbrush",
+    "eliquid",
+    "epilator",
+    "etsy",
+    "fairylights",
+    "fakedesigner",
+    "feetpic",
+    "feetpics",
+    "femaleid",
+    "fifacoin",
+    "fifacoins",
+    "firearm",
+    "firework",
+    "fitbit",
+    "footpic",
+    "footpics",
+    "gameboy",
+    "gamingheadset",
+    "garmin",
+    "garminfenix",
+    "garminforerunner",
+    "garminvivoactive",
+    "garminvivosmart",
+    "garminwatch",
+    "ghd",
+    "giftcard",
+    "girlsid",
+    "girlsidforsale",
+    "googlehome",
+    "googlehomemini",
+    "googlewallet",
+    "gumtree",
+    "hairclippers",
+    "hairdryer",
+    "hairstraighteners",
+    "harddrive",
+    "hash",
+    "hdmi",
+    "headphones",
+    "headset",
+    "heatedrollers",
+    "hoverboard",
+    "hplaptop",
+    "hydroquinone",
+    "ibutamoren",
+    "idcard",
+    "idforsale",
+    "imac",
+    "incest",
+    "iphonecable",
+    "ipl",
+    "ipod",
+    "juicepack",
+    "juul",
+    "juulpod",
+    "kindle",
+    "kindlefire",
+    "knife",
+    "knuckleduster",
+    "kush",
+    "lamp",
+    "laptop",
+    "laptopcharger",
+    "lenovo",
+    "lenovolaptop",
+    "license",
+    "licenseforsale",
+    "lightningadaptor",
+    "lightningcable",
+    "macbook",
+    "macbookair",
+    "macbookcharger",
+    "macbookpro",
+    "maleid",
+    "mandy",
+    "megadrive",
+    "melanotan",
+    "melanotanforsale",
+    "mercari",
+    "meth",
+    "microusb",
+    "mollie",
+    "motherfucker",
+    "murder",
+    "mysterybox",
+    "naked",
+    "nakedphoto",
+    "nakedpics",
+    "necrophilia",
+    "nicotine",
+    "nigger",
+    "nintendoswitch",
+    "nitrous",
+    "nitrouxoxide",
+    "nitrouxoxideforsale",
+    "nos",
+    "noscrackers",
+    "nudephoto",
+    "nudepics",
+    "nvidia",
+    "occulusvr",
+    "paki",
+    "paypal",
+    "paypalonly",
+    "pedopornography",
+    "pelletgun",
+    "pepperspray",
+    "pesticide",
+    "phonecharger",
+    "pill",
+    "poison",
+    "porn",
+    "porno",
+    "pornographic",
+    "pornography",
+    "poshmark",
+    "powerbank",
+    "prick",
+    "provisional",
+    "provisionallicense",
+    "raffle",
+    "rape",
+    "roaccutane",
+    "roids",
+    "saltlamp",
+    "segamegadrive",
+    "sellingid",
+    "sellingmelanotan",
+    "sellingtickets",
+    "sennheiser",
+    "sennheiserheadphones",
+    "shit",
+    "shite",
+    "shpock",
+    "skinbleach",
+    "skinlighten",
+    "sonictoothbrush",
+    "speaker",
+    "spotify",
+    "straighteners",
+    "stringlights",
+    "stylingtool",
+    "suorin",
+    "suorindrop",
+    "surroundsound",
+    "switch",
+    "switchlite",
+    "tanninginjection",
+    "taser",
+    "throwingstar",
+    "ticket",
+    "ticketforsale",
+    "tit",
+    "tits",
+    "tobacco",
+    "toshiba",
+    "twat",
+    "usb",
+    "usbc",
+    "usbcable",
+    "usbdrive",
+    "usedknickers",
+    "usedpants",
+    "usedunderwear",
+    "vape",
+    "vapejuice",
+    "vapeliquid",
+    "venmo",
+    "viagra",
+    "virtualreality",
+    "vrheadset",
+    "wahl",
+    "walkman",
+    "wank",
+    "wanker",
+    "weed",
+    "whatsapp",
+    "wiredheadphones",
+    "wirelessearphones",
+    "wirelessheadphones",
+    "wirelessspeaker",
+    "wirelessticket",
+    "xan",
+    "xanax",
+    "xanny",
+    "xiaomi",
+    "xiaomim365",
+    "xiaomiscooter",
+    "zelle"
+  ]
+}

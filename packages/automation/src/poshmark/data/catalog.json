@@ -1,0 +1,2914 @@
+{
+  "schema": 1,
+  "source": "Poshmark's listing form (/create-listing): $_listing_editor.catalogMeta and catalogDisplayGroupingData, featureSettings.featureSettingsV3.web_resell_v2_guest.conditions",
+  "readAt": "2026-10-27",
+  "catalogUpdatedAt": "2026-10-12T12:33:53-07:00",
+  "conditions": [
+    { "code": "nwt", "label": "New With Tags (NWT)" },
+    { "code": "uln", "label": "Like New" },
+    { "code": "ug", "label": "Good" },
+    { "code": "uf", "label": "Fair" }
+  ],
+  "colors": [
+    "Red",
+    "Pink",
+    "Orange",
+    "Yellow",
+    "Green",
+    "Blue",
+    "Purple",
+    "Gold",
+    "Silver",
+    "Black",
+    "Gray",
+    "White",
+    "Cream",
+    "Brown",
+    "Tan"
+  ],
+  "sizeSets": {
+    "Standard: OS": { "name": "Standard", "sizes": [["OS", "One Size", "OS"]] },
+    "Women/Dresses/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["00", "00", "00"],
+        ["0", "0", "0"],
+        ["2", "2", "2"],
+        ["4", "4", "4"],
+        ["6", "6", "6"],
+        ["8", "8", "8"],
+        ["10", "10", "10"],
+        ["12", "12", "12"],
+        ["XXS", "XXS", "XXS"],
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"]
+      ]
+    },
+    "Women/Dresses/Plus": {
+      "name": "Plus",
+      "sizes": [
+        ["14", "14", "14"],
+        ["14W", "14W", "14W"],
+        ["16", "16", "16"],
+        ["16W", "16W", "16W"],
+        ["18", "18", "18"],
+        ["18W", "18W", "18W"],
+        ["20", "20", "20"],
+        ["20W", "20W", "20W"],
+        ["22", "22", "22"],
+        ["22W", "22W", "22W"],
+        ["24", "24", "24"],
+        ["24W", "24W", "24W"],
+        ["26", "26", "26"],
+        ["26W", "26W", "26W"],
+        ["28", "28", "28"],
+        ["28W", "28W", "28W"],
+        ["30", "30", "30"],
+        ["30W", "30W", "30W"],
+        ["32", "32", "32"],
+        ["32W", "32W", "32W"],
+        ["XXL", "XXL", "XXL"],
+        ["XXXL", "XXXL", "XXXL"],
+        ["0X", "0X", "0X"],
+        ["1X", "1X", "1X"],
+        ["2X", "2X", "2X"],
+        ["3X", "3X", "3X"],
+        ["4X", "4X", "4X"],
+        ["5X", "5X", "5X"]
+      ]
+    },
+    "Women/Dresses/Petite": {
+      "name": "Petite",
+      "sizes": [
+        ["00P", "00P", "00P"],
+        ["0P", "0P", "0P"],
+        ["2P", "2P", "2P"],
+        ["4P", "4P", "4P"],
+        ["6P", "6P", "6P"],
+        ["8P", "8P", "8P"],
+        ["10P", "10P", "10P"],
+        ["12P", "12P", "12P"],
+        ["14P", "14P", "14P"],
+        ["16P", "16P", "16P"],
+        ["18P", "18P", "18P"],
+        ["20P", "20P", "20P"],
+        ["XXSP", "XXSP", "XXSP"],
+        ["XSP", "XSP", "XSP"],
+        ["SP", "SP", "SP"],
+        ["MP", "MP", "MP"],
+        ["LP", "LP", "LP"],
+        ["XLP", "XLP", "XLP"],
+        ["XXLP", "XXLP", "XXLP"]
+      ]
+    },
+    "Women/Dresses/Juniors": {
+      "name": "Juniors",
+      "sizes": [
+        ["00J", "00", "00 (Juniors)"],
+        ["0J", "0", "0 (Juniors)"],
+        ["1J", "1", "1 (Juniors)"],
+        ["3J", "3", "3 (Juniors)"],
+        ["5J", "5", "5 (Juniors)"],
+        ["7J", "7", "7 (Juniors)"],
+        ["9J", "9", "9 (Juniors)"],
+        ["11J", "11", "11 (Juniors)"],
+        ["13J", "13", "13 (Juniors)"],
+        ["15J", "15", "15 (Juniors)"],
+        ["17J", "17", "17 (Juniors)"],
+        ["XXSJ", "XXS", "XXS (Juniors)"],
+        ["XSJ", "XS", "XS (Juniors)"],
+        ["SJ", "S", "S (Juniors)"],
+        ["MJ", "M", "M (Juniors)"],
+        ["LJ", "L", "L (Juniors)"],
+        ["XLJ", "XL", "XL (Juniors)"],
+        ["XXLJ", "XXL", "XXL (Juniors)"]
+      ]
+    },
+    "Women/Dresses/Maternity": {
+      "name": "Maternity",
+      "sizes": [
+        ["00M", "00", "00 (Maternity)"],
+        ["0M", "0", "0 (Maternity)"],
+        ["2M", "2", "2 (Maternity)"],
+        ["4M", "4", "4 (Maternity)"],
+        ["6M", "6", "6 (Maternity)"],
+        ["8M", "8", "8 (Maternity)"],
+        ["10M", "10", "10 (Maternity)"],
+        ["12M", "12", "12 (Maternity)"],
+        ["XXSM", "XXS", "XXS (Maternity)"],
+        ["XSM", "XS", "XS (Maternity)"],
+        ["SM", "S", "S (Maternity)"],
+        ["MM", "M", "M (Maternity)"],
+        ["LM", "L", "L (Maternity)"],
+        ["XLM", "XL", "XL (Maternity)"],
+        ["14M", "14", "14 (Maternity)"],
+        ["14WM", "14W", "14W (Maternity)"],
+        ["16M", "16", "16 (Maternity)"],
+        ["16WM", "16W", "16W (Maternity)"],
+        ["18M", "18", "18 (Maternity)"],
+        ["18WM", "18W", "18W (Maternity)"],
+        ["20M", "20", "20 (Maternity)"],
+        ["20WM", "20W", "20W (Maternity)"],
+        ["22M", "22", "22 (Maternity)"],
+        ["22WM", "22W", "22W (Maternity)"],
+        ["24M", "24", "24 (Maternity)"],
+        ["24WM", "24W", "24W (Maternity)"],
+        ["26M", "26", "26 (Maternity)"],
+        ["26WM", "26W", "26W (Maternity)"],
+        ["28M", "28", "28 (Maternity)"],
+        ["28WM", "28W", "28W (Maternity)"],
+        ["30M", "30", "30 (Maternity)"],
+        ["30WM", "30W", "30W (Maternity)"],
+        ["32M", "32", "32 (Maternity)"],
+        ["32WM", "32W", "32W (Maternity)"],
+        ["XXLM", "XXL", "XXL (Maternity)"],
+        ["XXXLM", "XXXL", "XXXL (Maternity)"],
+        ["0XM", "0X", "0X (Maternity)"],
+        ["1XM", "1X", "1X (Maternity)"],
+        ["2XM", "2X", "2X (Maternity)"],
+        ["3XM", "3X", "3X (Maternity)"],
+        ["4XM", "4X", "4X (Maternity)"],
+        ["5XM", "5X", "5X (Maternity)"]
+      ]
+    },
+    "Women/Intimates & Sleepwear/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["OS", "One Size", "OS"],
+        ["XXS", "XXS", "XXS"],
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"],
+        ["30A", "30A", "30A"],
+        ["30B", "30B", "30B"],
+        ["32AA", "32AA", "32AA"],
+        ["32A", "32A", "32A"],
+        ["32B", "32B", "32B"],
+        ["32C", "32C", "32C"],
+        ["32D", "32D", "32D"],
+        ["32E (DD)", "32E (DD)", "32E (DD)"],
+        ["32F (3D)", "32F (3D)", "32F (3D)"],
+        ["32G (4D)", "32G (4D)", "32G (4D)"],
+        ["32H (5D)", "32H (5D)", "32H (5D)"],
+        ["34AA", "34AA", "34AA"],
+        ["34A", "34A", "34A"],
+        ["34B", "34B", "34B"],
+        ["34C", "34C", "34C"],
+        ["34D", "34D", "34D"],
+        ["34E (DD)", "34E (DD)", "34E (DD)"],
+        ["34F (3D)", "34F (3D)", "34F (3D)"],
+        ["34G (4D)", "34G (4D)", "34G (4D)"],
+        ["34H (5D)", "34H (5D)", "34H (5D)"],
+        ["36AA", "36AA", "36AA"],
+        ["36A", "36A", "36A"],
+        ["36B", "36B", "36B"],
+        ["36C", "36C", "36C"],
+        ["36D", "36D", "36D"],
+        ["36E (DD)", "36E (DD)", "36E (DD)"],
+        ["36F (3D)", "36F (3D)", "36F (3D)"],
+        ["36G (4D)", "36G (4D)", "36G (4D)"],
+        ["36H (5D)", "36H (5D)", "36H (5D)"]
+      ]
+    },
+    "Women/Intimates & Sleepwear/Plus": {
+      "name": "Plus",
+      "sizes": [
+        ["XXL", "XXL", "XXL"],
+        ["XXXL", "XXXL", "XXXL"],
+        ["0X", "0X", "0X"],
+        ["1X", "1X", "1X"],
+        ["2X", "2X", "2X"],
+        ["3X", "3X", "3X"],
+        ["4X", "4X", "4X"],
+        ["5X", "5X", "5X"],
+        ["38A", "38A", "38A"],
+        ["38B", "38B", "38B"],
+        ["38C", "38C", "38C"],
+        ["38D", "38D", "38D"],
+        ["38E (DD)", "38E (DD)", "38E (DD)"],
+        ["38F (3D)", "38F (3D)", "38F (3D)"],
+        ["38G (4D)", "38G (4D)", "38G (4D)"],
+        ["38H (5D)", "38H (5D)", "38H (5D)"],
+        ["40A", "40A", "40A"],
+        ["40B", "40B", "40B"],
+        ["40C", "40C", "40C"],
+        ["40D", "40D", "40D"],
+        ["40E (DD)", "40E (DD)", "40E (DD)"],
+        ["40F (3D)", "40F (3D)", "40F (3D)"],
+        ["40G (4D)", "40G (4D)", "40G (4D)"],
+        ["40H (5D)", "40H (5D)", "40H (5D)"],
+        ["42A", "42A", "42A"],
+        ["42B", "42B", "42B"],
+        ["42C", "42C", "42C"],
+        ["42D", "42D", "42D"],
+        ["42E (DD)", "42E (DD)", "42E (DD)"],
+        ["42F (3D)", "42F (3D)", "42F (3D)"],
+        ["42G (4D)", "42G (4D)", "42G (4D)"],
+        ["42H (5D)", "42H (5D)", "42H (5D)"],
+        ["44A", "44A", "44A"],
+        ["44B", "44B", "44B"],
+        ["44C", "44C", "44C"],
+        ["44D", "44D", "44D"],
+        ["44E (DD)", "44E (DD)", "44E (DD)"],
+        ["44F (3D)", "44F (3D)", "44F (3D)"],
+        ["44G (4D)", "44G (4D)", "44G (4D)"],
+        ["44H (5D)", "44H (5D)", "44H (5D)"],
+        ["46A", "46A", "46A"],
+        ["46B", "46B", "46B"],
+        ["46C", "46C", "46C"],
+        ["46D", "46D", "46D"],
+        ["46DD", "46DD", "46DD"],
+        ["46F (3D)", "46F (3D)", "46F (3D)"],
+        ["46G (4D)", "46G (4D)", "46G (4D)"],
+        ["46H (5D)", "46H (5D)", "46H (5D)"],
+        ["48A", "48A", "48A"],
+        ["48B", "48B", "48B"],
+        ["48C", "48C", "48C"],
+        ["48D", "48D", "48D"],
+        ["48DD", "48DD", "48DD"],
+        ["48F", "48F (3D)", "48F"],
+        ["48G", "48G (4D)", "48G"],
+        ["48H (5D)", "48H (5D)", "48H (5D)"]
+      ]
+    },
+    "Women/Intimates & Sleepwear/Maternity": {
+      "name": "Maternity",
+      "sizes": [
+        ["OSM", "One Size", "OS (Maternity)"],
+        ["XXSM", "XXS", "XXS (Maternity)"],
+        ["XSM", "XS", "XS (Maternity)"],
+        ["SM", "S", "S (Maternity)"],
+        ["MM", "M", "M (Maternity)"],
+        ["LM", "L", "L (Maternity)"],
+        ["XLM", "XL", "XL (Maternity)"],
+        ["30AM", "30A", "30A (Maternity)"],
+        ["30BM", "30B", "30B (Maternity)"],
+        ["32AAM", "32AA", "32AA (Maternity)"],
+        ["32AM", "32A", "32A (Maternity)"],
+        ["32BM", "32B", "32B (Maternity)"],
+        ["32CM", "32C", "32C (Maternity)"],
+        ["32DM", "32D", "32D (Maternity)"],
+        ["32E (DD)M", "32E (DD)", "32E (DD) (Maternity)"],
+        ["32F (3D)M", "32F (3D)", "32F (3D) (Maternity)"],
+        ["32G (4D)M", "32G (4D)", "32G (4D) (Maternity)"],
+        ["32H (5D)M", "32H (5D)", "32H (5D) (Maternity)"],
+        ["34AAM", "34AA", "34AA (Maternity)"],
+        ["34AM", "34A", "34A (Maternity)"],
+        ["34BM", "34B", "34B (Maternity)"],
+        ["34CM", "34C", "34C (Maternity)"],
+        ["34DM", "34D", "34D (Maternity)"],
+        ["34E (DD)M", "34E (DD)", "34E (DD) (Maternity)"],
+        ["34F (3D)M", "34F (3D)", "34F (3D) (Maternity)"],
+        ["34G (4D)M", "34G (4D)", "34G (4D) (Maternity)"],
+        ["34H (5D)M", "34H (5D)", "34H (5D) (Maternity)"],
+        ["36AAM", "36AA", "36AA (Maternity)"],
+        ["36AM", "36A", "36A (Maternity)"],
+        ["36BM", "36B", "36B (Maternity)"],
+        ["36CM", "36C", "36C (Maternity)"],
+        ["36DM", "36D", "36D (Maternity)"],
+        ["36E (DD)M", "36E (DD)", "36E (DD) (Maternity)"],
+        ["36F (3D)M", "36F (3D)", "36F (3D) (Maternity)"],
+        ["36G (4D)M", "36G (4D)", "36G (4D) (Maternity)"],
+        ["36H (5D)M", "36H (5D)", "36H (5D) (Maternity)"],
+        ["XXLM", "XXL", "XXL (Maternity)"],
+        ["XXXLM", "XXXL", "XXXL (Maternity)"],
+        ["0XM", "0X", "0X (Maternity)"],
+        ["1XM", "1X", "1X (Maternity)"],
+        ["2XM", "2X", "2X (Maternity)"],
+        ["3XM", "3X", "3X (Maternity)"],
+        ["4XM", "4X", "4X (Maternity)"],
+        ["5XM", "5X", "5X (Maternity)"],
+        ["38AM", "38A", "38A (Maternity)"],
+        ["38BM", "38B", "38B (Maternity)"],
+        ["38CM", "38C", "38C (Maternity)"],
+        ["38DM", "38D", "38D (Maternity)"],
+        ["38E (DD)M", "38E (DD)", "38E (DD) (Maternity)"],
+        ["38F (3D)M", "38F (3D)", "38F (3D) (Maternity)"],
+        ["38G (4D)M", "38G (4D)", "38G (4D) (Maternity)"],
+        ["38H (5D)M", "38H (5D)", "38H (5D) (Maternity)"],
+        ["40AM", "40A", "40A (Maternity)"],
+        ["40BM", "40B", "40B (Maternity)"],
+        ["40CM", "40C", "40C (Maternity)"],
+        ["40DM", "40D", "40D (Maternity)"],
+        ["40E (DD)M", "40E (DD)", "40E (DD) (Maternity)"],
+        ["40F (3D)M", "40F (3D)", "40F (3D) (Maternity)"],
+        ["40G (4D)M", "40G (4D)", "40G (4D) (Maternity)"],
+        ["40H (5D)M", "40H (5D)", "40H (5D) (Maternity)"],
+        ["42AM", "42A", "42A (Maternity)"],
+        ["42BM", "42B", "42B (Maternity)"],
+        ["42CM", "42C", "42C (Maternity)"],
+        ["42DM", "42D", "42D (Maternity)"],
+        ["42E (DD)M", "42E (DD)", "42E (DD) (Maternity)"],
+        ["42F (3D)M", "42F (3D)", "42F (3D) (Maternity)"],
+        ["42G (4D)M", "42G (4D)", "42G (4D) (Maternity)"],
+        ["42H (5D)M", "42H (5D)", "42H (5D) (Maternity)"],
+        ["44AM", "44A", "44A (Maternity)"],
+        ["44BM", "44B", "44B (Maternity)"],
+        ["44CM", "44C", "44C (Maternity)"],
+        ["44DM", "44D", "44D (Maternity)"],
+        ["44E (DD)M", "44E (DD)", "44E (DD) (Maternity)"],
+        ["44F (3D)M", "44F (3D)", "44F (3D) (Maternity)"],
+        ["44G (4D)M", "44G (4D)", "44G (4D) (Maternity)"],
+        ["44H (5D)M", "44H (5D)", "44H (5D) (Maternity)"],
+        ["46AM", "46A", "46A (Maternity)"],
+        ["46BM", "46B", "46B (Maternity)"],
+        ["46CM", "46C", "46C (Maternity)"],
+        ["46DM", "46D", "46D (Maternity)"],
+        ["46DDM", "46DD", "46DD (Maternity)"],
+        ["46F (3D)M", "46F (3D)", "46F (3D) (Maternity)"],
+        ["46G (4D)M", "46G (4D)", "46G (4D) (Maternity)"],
+        ["46H (5D)M", "46H (5D)", "46H (5D) (Maternity)"],
+        ["48AM", "48A", "48A (Maternity)"],
+        ["48BM", "48B", "48B (Maternity)"],
+        ["48CM", "48C", "48C (Maternity)"],
+        ["48DM", "48D", "48D (Maternity)"],
+        ["48DDM", "48DD", "48DD (Maternity)"],
+        ["48FM", "48F (3D)", "48F (Maternity)"],
+        ["48GM", "48G (4D)", "48G (Maternity)"],
+        ["48H (5D)M", "48H (5D)", "48H (5D) (Maternity)"]
+      ]
+    },
+    "Women/Jeans/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["23", "23", "23"],
+        ["24", "24", "24"],
+        ["25", "25", "25"],
+        ["26", "26", "26"],
+        ["27", "27", "27"],
+        ["28", "28", "28"],
+        ["29", "29", "29"],
+        ["30", "30", "30"],
+        ["31", "31", "31"],
+        ["00", "00", "00"],
+        ["0", "0", "0"],
+        ["2", "2", "2"],
+        ["4", "4", "4"],
+        ["6", "6", "6"],
+        ["8", "8", "8"],
+        ["10", "10", "10"],
+        ["12", "12", "12"]
+      ]
+    },
+    "Women/Jeans/Plus": {
+      "name": "Plus",
+      "sizes": [
+        ["32", "32", "32"],
+        ["33", "33", "33"],
+        ["34", "34", "34"],
+        ["14", "14", "14"],
+        ["14W", "14W", "14W"],
+        ["16", "16", "16"],
+        ["16W", "16W", "16W"],
+        ["18", "18", "18"],
+        ["18W", "18W", "18W"],
+        ["20", "20", "20"],
+        ["20W", "20W", "20W"],
+        ["22", "22", "22"],
+        ["22W", "22W", "22W"],
+        ["24Plus", "24", "24"],
+        ["24W", "24W", "24W"],
+        ["26Plus", "26", "26"],
+        ["26W", "26W", "26W"],
+        ["28Plus", "28", "28"],
+        ["28W", "28W", "28W"],
+        ["30Plus", "30", "30"],
+        ["30W", "30W", "30W"],
+        ["32Plus", "32", "32"],
+        ["32W", "32W", "32W"]
+      ]
+    },
+    "Women/Jeans/Petite": {
+      "name": "Petite",
+      "sizes": [
+        ["23P", "23P", "23P"],
+        ["24P", "24P", "24P"],
+        ["25P", "25P", "25P"],
+        ["26P", "26P", "26P"],
+        ["27P", "27P", "27P"],
+        ["28P", "28P", "28P"],
+        ["29P", "29P", "29P"],
+        ["30P", "30P", "30P"],
+        ["31P", "31P", "31P"],
+        ["32P", "32P", "32P"],
+        ["33P", "33P", "33P"],
+        ["34P", "34P", "34P"],
+        ["00P", "00P", "00P"],
+        ["0P", "0P", "0P"],
+        ["2P", "2P", "2P"],
+        ["4P", "4P", "4P"],
+        ["6P", "6P", "6P"],
+        ["8P", "8P", "8P"],
+        ["10P", "10P", "10P"],
+        ["12P", "12P", "12P"],
+        ["14P", "14P", "14P"],
+        ["16P", "16P", "16P"],
+        ["18P", "18P", "18P"]
+      ]
+    },
+    "Women/Jeans/Juniors": {
+      "name": "Juniors",
+      "sizes": [
+        ["00J", "00", "00 (Juniors)"],
+        ["0J", "0", "0 (Juniors)"],
+        ["1J", "1", "1 (Juniors)"],
+        ["3J", "3", "3 (Juniors)"],
+        ["5J", "5", "5 (Juniors)"],
+        ["7J", "7", "7 (Juniors)"],
+        ["9J", "9", "9 (Juniors)"],
+        ["11J", "11", "11 (Juniors)"],
+        ["13J", "13", "13 (Juniors)"],
+        ["15J", "15", "15 (Juniors)"],
+        ["17J", "17", "17 (Juniors)"]
+      ]
+    },
+    "Women/Jeans/Maternity": {
+      "name": "Maternity",
+      "sizes": [
+        ["23M", "23", "23 (Maternity)"],
+        ["24M", "24", "24 (Maternity)"],
+        ["25M", "25", "25 (Maternity)"],
+        ["26M", "26", "26 (Maternity)"],
+        ["27M", "27", "27 (Maternity)"],
+        ["28M", "28", "28 (Maternity)"],
+        ["29M", "29", "29 (Maternity)"],
+        ["30M", "30", "30 (Maternity)"],
+        ["31M", "31", "31 (Maternity)"],
+        ["00M", "00", "00 (Maternity)"],
+        ["0M", "0", "0 (Maternity)"],
+        ["2M", "2", "2 (Maternity)"],
+        ["4M", "4", "4 (Maternity)"],
+        ["6M", "6", "6 (Maternity)"],
+        ["8M", "8", "8 (Maternity)"],
+        ["10M", "10", "10 (Maternity)"],
+        ["12M", "12", "12 (Maternity)"],
+        ["32M", "32", "32 (Maternity)"],
+        ["33M", "33", "33 (Maternity)"],
+        ["34M", "34", "34 (Maternity)"],
+        ["14M", "14", "14 (Maternity)"],
+        ["14WM", "14W", "14W (Maternity)"],
+        ["16M", "16", "16 (Maternity)"],
+        ["16WM", "16W", "16W (Maternity)"],
+        ["18M", "18", "18 (Maternity)"],
+        ["18WM", "18W", "18W (Maternity)"],
+        ["20M", "20", "20 (Maternity)"],
+        ["20WM", "20W", "20W (Maternity)"],
+        ["22M", "22", "22 (Maternity)"],
+        ["22WM", "22W", "22W (Maternity)"],
+        ["24PlusM", "24", "24 (Maternity)"],
+        ["24WM", "24W", "24W (Maternity)"],
+        ["26PlusM", "26", "26 (Maternity)"],
+        ["26WM", "26W", "26W (Maternity)"],
+        ["28PlusM", "28", "28 (Maternity)"],
+        ["28WM", "28W", "28W (Maternity)"],
+        ["30PlusM", "30", "30 (Maternity)"],
+        ["30WM", "30W", "30W (Maternity)"],
+        ["32PlusM", "32", "32 (Maternity)"],
+        ["32WM", "32W", "32W (Maternity)"]
+      ]
+    },
+    "Women/Pants & Jumpsuits/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["23", "23", "23"],
+        ["24", "24", "24"],
+        ["25", "25", "25"],
+        ["26", "26", "26"],
+        ["27", "27", "27"],
+        ["28", "28", "28"],
+        ["29", "29", "29"],
+        ["30", "30", "30"],
+        ["31", "31", "31"],
+        ["00", "00", "00"],
+        ["0", "0", "0"],
+        ["2", "2", "2"],
+        ["4", "4", "4"],
+        ["6", "6", "6"],
+        ["8", "8", "8"],
+        ["10", "10", "10"],
+        ["12", "12", "12"],
+        ["XXS", "XXS", "XXS"],
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"]
+      ]
+    },
+    "Women/Pants & Jumpsuits/Plus": {
+      "name": "Plus",
+      "sizes": [
+        ["32", "32", "32"],
+        ["33", "33", "33"],
+        ["34", "34", "34"],
+        ["14", "14", "14"],
+        ["14W", "14W", "14W"],
+        ["16", "16", "16"],
+        ["16W", "16W", "16W"],
+        ["18", "18", "18"],
+        ["18W", "18W", "18W"],
+        ["20", "20", "20"],
+        ["20W", "20W", "20W"],
+        ["22", "22", "22"],
+        ["22W", "22W", "22W"],
+        ["24Plus", "24", "24"],
+        ["24W", "24W", "24W"],
+        ["26Plus", "26", "26"],
+        ["26W", "26W", "26W"],
+        ["28Plus", "28", "28"],
+        ["28W", "28W", "28W"],
+        ["30Plus", "30", "30"],
+        ["30W", "30W", "30W"],
+        ["32Plus", "32", "32"],
+        ["32W", "32W", "32W"],
+        ["XXL", "XXL", "XXL"],
+        ["XXXL", "XXXL", "XXXL"],
+        ["0X", "0X", "0X"],
+        ["1X", "1X", "1X"],
+        ["2X", "2X", "2X"],
+        ["3X", "3X", "3X"],
+        ["4X", "4X", "4X"],
+        ["5X", "5X", "5X"]
+      ]
+    },
+    "Women/Pants & Jumpsuits/Petite": {
+      "name": "Petite",
+      "sizes": [
+        ["23P", "23P", "23P"],
+        ["24P", "24P", "24P"],
+        ["25P", "25P", "25P"],
+        ["26P", "26P", "26P"],
+        ["27P", "27P", "27P"],
+        ["28P", "28P", "28P"],
+        ["29P", "29P", "29P"],
+        ["30P", "30P", "30P"],
+        ["31P", "31P", "31P"],
+        ["32P", "32P", "32P"],
+        ["33P", "33P", "33P"],
+        ["34P", "34P", "34P"],
+        ["00P", "00P", "00P"],
+        ["0P", "0P", "0P"],
+        ["2P", "2P", "2P"],
+        ["4P", "4P", "4P"],
+        ["6P", "6P", "6P"],
+        ["8P", "8P", "8P"],
+        ["10P", "10P", "10P"],
+        ["12P", "12P", "12P"],
+        ["14P", "14P", "14P"],
+        ["16P", "16P", "16P"],
+        ["18P", "18P", "18P"],
+        ["20P", "20P", "20P"],
+        ["XXSP", "XXSP", "XXSP"],
+        ["XSP", "XSP", "XSP"],
+        ["SP", "SP", "SP"],
+        ["MP", "MP", "MP"],
+        ["LP", "LP", "LP"],
+        ["XLP", "XLP", "XLP"]
+      ]
+    },
+    "Women/Pants & Jumpsuits/Maternity": {
+      "name": "Maternity",
+      "sizes": [
+        ["23M", "23", "23 (Maternity)"],
+        ["24M", "24", "24 (Maternity)"],
+        ["25M", "25", "25 (Maternity)"],
+        ["26M", "26", "26 (Maternity)"],
+        ["27M", "27", "27 (Maternity)"],
+        ["28M", "28", "28 (Maternity)"],
+        ["29M", "29", "29 (Maternity)"],
+        ["30M", "30", "30 (Maternity)"],
+        ["31M", "31", "31 (Maternity)"],
+        ["00M", "00", "00 (Maternity)"],
+        ["0M", "0", "0 (Maternity)"],
+        ["2M", "2", "2 (Maternity)"],
+        ["4M", "4", "4 (Maternity)"],
+        ["6M", "6", "6 (Maternity)"],
+        ["8M", "8", "8 (Maternity)"],
+        ["10M", "10", "10 (Maternity)"],
+        ["12M", "12", "12 (Maternity)"],
+        ["XXSM", "XXS", "XXS (Maternity)"],
+        ["XSM", "XS", "XS (Maternity)"],
+        ["SM", "S", "S (Maternity)"],
+        ["MM", "M", "M (Maternity)"],
+        ["LM", "L", "L (Maternity)"],
+        ["XLM", "XL", "XL (Maternity)"],
+        ["32M", "32", "32 (Maternity)"],
+        ["33M", "33", "33 (Maternity)"],
+        ["34M", "34", "34 (Maternity)"],
+        ["14M", "14", "14 (Maternity)"],
+        ["14WM", "14W", "14W (Maternity)"],
+        ["16M", "16", "16 (Maternity)"],
+        ["16WM", "16W", "16W (Maternity)"],
+        ["18M", "18", "18 (Maternity)"],
+        ["18WM", "18W", "18W (Maternity)"],
+        ["20M", "20", "20 (Maternity)"],
+        ["20WM", "20W", "20W (Maternity)"],
+        ["22M", "22", "22 (Maternity)"],
+        ["22WM", "22W", "22W (Maternity)"],
+        ["24PlusM", "24", "24 (Maternity)"],
+        ["24WM", "24W", "24W (Maternity)"],
+        ["26PlusM", "26", "26 (Maternity)"],
+        ["26WM", "26W", "26W (Maternity)"],
+        ["28PlusM", "28", "28 (Maternity)"],
+        ["28WM", "28W", "28W (Maternity)"],
+        ["30PlusM", "30", "30 (Maternity)"],
+        ["30WM", "30W", "30W (Maternity)"],
+        ["32PlusM", "32", "32 (Maternity)"],
+        ["32WM", "32W", "32W (Maternity)"],
+        ["XXLM", "XXL", "XXL (Maternity)"],
+        ["XXXLM", "XXXL", "XXXL (Maternity)"],
+        ["0XM", "0X", "0X (Maternity)"],
+        ["1XM", "1X", "1X (Maternity)"],
+        ["2XM", "2X", "2X (Maternity)"],
+        ["3XM", "3X", "3X (Maternity)"],
+        ["4XM", "4X", "4X (Maternity)"],
+        ["5XM", "5X", "5X (Maternity)"]
+      ]
+    },
+    "Women/Shoes/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["5", "5", "5"],
+        ["5.5", "5.5", "5.5"],
+        ["6", "6", "6"],
+        ["6.5", "6.5", "6.5"],
+        ["7", "7", "7"],
+        ["7.5", "7.5", "7.5"],
+        ["8", "8", "8"],
+        ["8.5", "8.5", "8.5"],
+        ["9", "9", "9"],
+        ["9.5", "9.5", "9.5"],
+        ["10", "10", "10"],
+        ["10.5", "10.5", "10.5"],
+        ["11", "11", "11"],
+        ["11.5", "11.5", "11.5"],
+        ["12", "12", "12"],
+        ["12.5", "12.5", "12.5"],
+        ["13", "13", "13"]
+      ]
+    },
+    "Women/Shorts/Petite": {
+      "name": "Petite",
+      "sizes": [
+        ["23P", "23P", "23P"],
+        ["24P", "24P", "24P"],
+        ["25P", "25P", "25P"],
+        ["26P", "26P", "26P"],
+        ["27P", "27P", "27P"],
+        ["28P", "28P", "28P"],
+        ["29P", "29P", "29P"],
+        ["30P", "30P", "30P"],
+        ["31P", "31P", "31P"],
+        ["32P", "32P", "32P"],
+        ["33P", "33P", "33P"],
+        ["34P", "34P", "34P"],
+        ["00P", "00P", "00P"],
+        ["0P", "0P", "0P"],
+        ["2P", "2P", "2P"],
+        ["4P", "4P", "4P"],
+        ["6P", "6P", "6P"],
+        ["8P", "8P", "8P"],
+        ["10P", "10P", "10P"],
+        ["12P", "12P", "12P"],
+        ["14P", "14P", "14P"],
+        ["16P", "16P", "16P"],
+        ["18P", "18P", "18P"],
+        ["20P", "20P", "20P"],
+        ["XXSP", "XXSP", "XXSP"],
+        ["XSP", "XSP", "XSP"],
+        ["SP", "SP", "SP"],
+        ["MP", "MP", "MP"],
+        ["LP", "LP", "LP"],
+        ["XLP", "XLP", "XLP"],
+        ["XXLP", "XXLP", "XXLP"]
+      ]
+    },
+    "Women/Ao Dais/Juniors": {
+      "name": "Juniors",
+      "sizes": [
+        ["00J", "0", "00 (Juniors)"],
+        ["0J", "0", "0 (Juniors)"],
+        ["1J", "1", "1 (Juniors)"],
+        ["3J", "3", "3 (Juniors)"],
+        ["5J", "5", "5 (Juniors)"],
+        ["7J", "7", "7 (Juniors)"],
+        ["9J", "9", "9 (Juniors)"],
+        ["11J", "11", "11 (Juniors)"],
+        ["13J", "13", "13 (Juniors)"],
+        ["15J", "15", "15 (Juniors)"],
+        ["17J", "17", "17 (Juniors)"],
+        ["XXSJ", "XXS", "XXS (Juniors)"],
+        ["XSJ", "XS", "XS (Juniors)"],
+        ["SJ", "S", "S (Juniors)"],
+        ["MJ", "M", "M (Juniors)"],
+        ["LJ", "L", "L (Juniors)"],
+        ["XLJ", "XL", "XL (Juniors)"],
+        ["XXLJ", "XXL", "XXL (Juniors)"]
+      ]
+    },
+    "Men/Jackets & Coats/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"]
+      ]
+    },
+    "Men/Jackets & Coats/Big & Tall": {
+      "name": "Big & Tall",
+      "sizes": [
+        ["XXL", "XXL", "XXL"],
+        ["3XL", "3XL", "3XL"],
+        ["4XL", "4XL", "4XL"],
+        ["5XL", "5XL", "5XL"],
+        ["6XL", "6XL", "6XL"],
+        ["LT", "LT", "LT"],
+        ["XLT", "XLT", "XLT"],
+        ["2XLT", "2XLT", "2XLT"],
+        ["3XLT", "3XLT", "3XLT"],
+        ["4XLT", "4XLT", "4XLT"],
+        ["5XLT", "5XLT", "5XLT"],
+        ["6XLT", "6XLT", "6XLT"]
+      ]
+    },
+    "Men/Jeans/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["28", "Waist 28", "Waist 28"],
+        ["29", "Waist 29", "Waist 29"],
+        ["30", "Waist 30", "Waist 30"],
+        ["31", "Waist 31", "Waist 31"],
+        ["32", "Waist 32", "Waist 32"],
+        ["33", "Waist 33", "Waist 33"],
+        ["34", "Waist 34", "Waist 34"],
+        ["35", "Waist 35", "Waist 35"],
+        ["36", "Waist 36", "Waist 36"],
+        ["37", "Waist 37", "Waist 37"],
+        ["38", "Waist 38", "Waist 38"],
+        ["39", "Waist 39", "Waist 39"],
+        ["40", "Waist 40", "Waist 40"],
+        ["41", "Waist 41", "Waist 41"]
+      ]
+    },
+    "Men/Jeans/Big & Tall": {
+      "name": "Big & Tall",
+      "sizes": [
+        ["36BT", "Waist 36", "Waist 36"],
+        ["37BT", "Waist 37", "Waist 37"],
+        ["38BT", "Waist 38", "Waist 38"],
+        ["39BT", "Waist 39", "Waist 39"],
+        ["40BT", "Waist 40", "Waist 40"],
+        ["41BT", "Waist 41", "Waist 41"],
+        ["42", "Waist 42", "Waist 42"],
+        ["43", "Waist 43", "Waist 43"],
+        ["44", "Waist 44", "Waist 44"],
+        ["46", "Waist 46", "Waist 46"],
+        ["48", "Waist 48", "Waist 48"],
+        ["50", "Waist 50", "Waist 50"],
+        ["52", "Waist 52", "Waist 52"],
+        ["54", "Waist 54", "Waist 54"],
+        ["56", "Waist 56", "Waist 56"],
+        ["58", "Waist 58", "Waist 58"],
+        ["60", "Waist 60", "Waist 60"]
+      ]
+    },
+    "Men/Pants/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"],
+        ["28", "Waist 28", "Waist 28"],
+        ["29", "Waist 29", "Waist 29"],
+        ["30", "Waist 30", "Waist 30"],
+        ["31", "Waist 31", "Waist 31"],
+        ["32", "Waist 32", "Waist 32"],
+        ["33", "Waist 33", "Waist 33"],
+        ["34", "Waist 34", "Waist 34"],
+        ["35", "Waist 35", "Waist 35"],
+        ["36", "Waist 36", "Waist 36"],
+        ["37", "Waist 37", "Waist 37"],
+        ["38", "Waist 38", "Waist 38"],
+        ["39", "Waist 39", "Waist 39"],
+        ["40", "Waist 40", "Waist 40"],
+        ["41", "Waist 41", "Waist 41"]
+      ]
+    },
+    "Men/Pants/Big & Tall": {
+      "name": "Big & Tall",
+      "sizes": [
+        ["36BT", "Waist 36", "Waist 36"],
+        ["37BT", "Waist 37", "Waist 37"],
+        ["38BT", "Waist 38", "Waist 38"],
+        ["39BT", "Waist 39", "Waist 39"],
+        ["40BT", "Waist 40", "Waist 40"],
+        ["42", "Waist 42", "Waist 42"],
+        ["43", "Waist 43", "Waist 43"],
+        ["44", "Waist 44", "Waist 44"],
+        ["46", "Waist 46", "Waist 46"],
+        ["48", "Waist 48", "Waist 48"],
+        ["50", "Waist 50", "Waist 50"],
+        ["52", "Waist 52", "Waist 52"],
+        ["54", "Waist 54", "Waist 54"],
+        ["56", "Waist 56", "Waist 56"],
+        ["58", "Waist 58", "Waist 58"],
+        ["60", "Waist 60", "Waist 60"],
+        ["XXL", "XXL", "XXL"],
+        ["3XL", "3XL", "3XL"],
+        ["4XL", "4XL", "4XL"],
+        ["5XL", "5XL", "5XL"],
+        ["6XL", "6XL", "6XL"],
+        ["LT", "LT", "LT"],
+        ["XLT", "XLT", "XLT"],
+        ["2XLT", "2XLT", "2XLT"],
+        ["3XLT", "3XLT", "3XLT"],
+        ["4XLT", "4XLT", "4XLT"],
+        ["5XLT", "5XLT", "5XLT"],
+        ["6XLT", "6XLT", "6XLT"]
+      ]
+    },
+    "Men/Shirts/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"],
+        ["14.5", "Neck 14.5", "Neck 14.5"],
+        ["15", "Neck 15", "Neck 15"],
+        ["15.5", "Neck 15.5", "Neck 15.5"],
+        ["16", "Neck 16", "Neck 16"],
+        ["16.5", "Neck 16.5", "Neck 16.5"],
+        ["17", "Neck 17", "Neck 17"],
+        ["17.5", "Neck 17.5", "Neck 17.5"],
+        ["18", "Neck 18", "Neck 18"]
+      ]
+    },
+    "Men/Shirts/Big & Tall": {
+      "name": "Big & Tall",
+      "sizes": [
+        ["16.5BT", "Neck 16.5", "Neck 16.5"],
+        ["17BT", "Neck 17", "Neck 17"],
+        ["17.5BT", "Neck 17.5", "Neck 17.5"],
+        ["18BT", "Neck 18", "Neck 18"],
+        ["18.5", "Neck 18.5", "Neck 18.5"],
+        ["19", "Neck 19", "Neck 19"],
+        ["19.5", "Neck 19.5", "Neck 19.5"],
+        ["20", "Neck 20", "Neck 20"],
+        ["20.5", "Neck 20.5", "Neck 20.5"],
+        ["21", "Neck 21", "Neck 21"],
+        ["21.5", "Neck 21.5", "Neck 21.5"],
+        ["22", "Neck 22", "Neck 22"],
+        ["22.5", "Neck 22.5", "Neck 22.5"],
+        ["XXL", "XXL", "XXL"],
+        ["3XL", "3XL", "3XL"],
+        ["4XL", "4XL", "4XL"],
+        ["5XL", "5XL", "5XL"],
+        ["6XL", "6XL", "6XL"],
+        ["LT", "LT", "LT"],
+        ["XLT", "XLT", "XLT"],
+        ["2XLT", "2XLT", "2XLT"],
+        ["3XLT", "3XLT", "3XLT"],
+        ["4XLT", "4XLT", "4XLT"],
+        ["5XLT", "5XLT", "5XLT"],
+        ["6XLT", "6XLT", "6XLT"]
+      ]
+    },
+    "Men/Shoes/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["4", "4", "4"],
+        ["4.5", "4.5", "4.5"],
+        ["5", "5", "5"],
+        ["5.5", "5.5", "5.5"],
+        ["6", "6", "6"],
+        ["6.5", "6.5", "6.5"],
+        ["7", "7", "7"],
+        ["7.5", "7.5", "7.5"],
+        ["8", "8", "8"],
+        ["8.5", "8.5", "8.5"],
+        ["9", "9", "9"],
+        ["9.5", "9.5", "9.5"],
+        ["10", "10", "10"],
+        ["10.5", "10.5", "10.5"],
+        ["11", "11", "11"],
+        ["11.5", "11.5", "11.5"],
+        ["12", "12", "12"],
+        ["12.5", "12.5", "12.5"],
+        ["13", "13", "13"],
+        ["13.5", "13.5", "13.5"],
+        ["14", "14", "14"],
+        ["14.5", "14.5", "14.5"],
+        ["15", "15", "15"],
+        ["15.5", "15.5", "15.5"],
+        ["16", "16", "16"]
+      ]
+    },
+    "Men/Suits & Blazers/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["34S", "34S", "34S"],
+        ["34R", "34R", "34R"],
+        ["34L", "34L", "34L"],
+        ["35S", "35S", "35S"],
+        ["35R", "35R", "35R"],
+        ["35L", "35L", "35L"],
+        ["36S", "36S", "36S"],
+        ["36R", "36R", "36R"],
+        ["36L", "36L", "36L"],
+        ["37S", "37S", "37S"],
+        ["37R", "37R", "37R"],
+        ["37L", "37L", "37L"],
+        ["38S", "38S", "38S"],
+        ["38R", "38R", "38R"],
+        ["38L", "38L", "38L"],
+        ["39S", "39S", "39S"],
+        ["39R", "39R", "39R"],
+        ["39L", "39L", "39L"],
+        ["40S", "40S", "40S"],
+        ["40R", "40R", "40R"],
+        ["40L", "40L", "40L"],
+        ["41S", "41S", "41S"],
+        ["41R", "41R", "41R"],
+        ["41L", "41L", "41L"],
+        ["42S", "42S", "42S"],
+        ["42R", "42R", "42R"],
+        ["42L", "42L", "42L"],
+        ["43S", "43S", "43S"],
+        ["43R", "43R", "43R"],
+        ["43L", "43L", "43L"],
+        ["44S", "44S", "44S"],
+        ["44R", "44R", "44R"],
+        ["44L", "44L", "44L"],
+        ["45S", "45S", "45S"],
+        ["45R", "45R", "45R"],
+        ["45L", "45L", "45L"],
+        ["46S", "46S", "46S"],
+        ["46R", "46R", "46R"],
+        ["46L", "46L", "46L"],
+        ["47S", "47S", "47S"],
+        ["47R", "47R", "47R"],
+        ["47L", "47L", "47L"],
+        ["48S", "48S", "48S"],
+        ["48R", "48R", "48R"],
+        ["48L", "48L", "48L"],
+        ["49S", "49S", "49S"],
+        ["49R", "49R", "49R"],
+        ["49L", "49L", "49L"],
+        ["50S", "50S", "50S"],
+        ["50R", "50R", "50R"],
+        ["50L", "50L", "50L"],
+        ["51S", "51S", "51S"],
+        ["51R", "51R", "51R"],
+        ["51L", "51L", "51L"],
+        ["52S", "52S", "52S"],
+        ["52R", "52R", "52R"],
+        ["52L", "52L", "52L"],
+        ["53S", "53S", "53S"],
+        ["53R", "53R", "53R"],
+        ["53L", "53L", "53L"],
+        ["54S", "54S", "54S"],
+        ["54R", "54R", "54R"],
+        ["54L", "54L", "54L"],
+        ["55S", "55S", "55S"],
+        ["55R", "55R", "55R"],
+        ["55L", "55L", "55L"],
+        ["56S", "56S", "56S"],
+        ["56R", "56R", "56R"],
+        ["56L", "56L", "56L"]
+      ]
+    },
+    "Men/Suits & Blazers/Big & Tall": {
+      "name": "Big & Tall",
+      "sizes": [
+        ["58S", "58S", "58S"],
+        ["58R", "58R", "58R"],
+        ["58L", "58L", "58L"],
+        ["60S", "60S", "60S"],
+        ["60R", "60R", "60R"],
+        ["60L", "60L", "60L"]
+      ]
+    },
+    "Men/Underwear & Socks/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["OS", "One Size", "OS"],
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"]
+      ]
+    },
+    "Men/Kilts/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["XS", "XS", "XS"],
+        ["S", "S", "S"],
+        ["M", "M", "M"],
+        ["L", "L", "L"],
+        ["XL", "XL", "XL"],
+        ["28", "Waist 28", "Waist 28"],
+        ["29", "Waist 29", "Waist 29"],
+        ["30", "Waist 30", "Waist 30"],
+        ["31", "Waist 31", "Waist 31"],
+        ["32", "Waist 32", "Waist 32"],
+        ["33", "Waist 33", "Waist 33"],
+        ["34", "Waist 34", "Waist 34"],
+        ["35", "Waist 35", "Waist 35"],
+        ["36", "Waist 36", "Waist 36"],
+        ["37", "Waist 37", "Waist 37"],
+        ["38", "Waist 38", "Waist 38"],
+        ["39", "Waist 39", "Waist 39"],
+        ["40", "Waist 40", "Waist 40"]
+      ]
+    },
+    "Men/Kilts/Big & Tall": {
+      "name": "Big & Tall",
+      "sizes": [
+        ["XXL", "XXL", "XXL"],
+        ["3XL", "3XL", "3XL"],
+        ["4XL", "4XL", "4XL"],
+        ["5XL", "5XL", "5XL"],
+        ["6XL", "6XL", "6XL"],
+        ["LT", "LT", "LT"],
+        ["XLT", "XLT", "XLT"],
+        ["2XLT", "2XLT", "2XLT"],
+        ["3XLT", "3XLT", "3XLT"],
+        ["4XLT", "4XLT", "4XLT"],
+        ["5XLT", "5XLT", "5XLT"],
+        ["6XLT", "6XLT", "6XLT"],
+        ["36BT", "Waist 36", "Waist 36"],
+        ["37BT", "Waist 37", "Waist 37"],
+        ["38BT", "Waist 38", "Waist 38"],
+        ["39BT", "Waist 39", "Waist 39"],
+        ["40BT", "Waist 40", "Waist 40"],
+        ["41", "Waist 41", "Waist 41"],
+        ["42", "Waist 42", "Waist 42"],
+        ["43", "Waist 43", "Waist 43"],
+        ["44", "Waist 44", "Waist 44"],
+        ["46", "Waist 46", "Waist 46"],
+        ["48", "Waist 48", "Waist 48"],
+        ["50", "Waist 50", "Waist 50"],
+        ["52", "Waist 52", "Waist 52"],
+        ["54", "Waist 54", "Waist 54"],
+        ["56", "Waist 56", "Waist 56"],
+        ["58", "Waist 58", "Waist 58"],
+        ["60", "Waist 60", "Waist 60"]
+      ]
+    },
+    "Baby: OSBB": { "name": "Baby", "sizes": [["OSBB", "One Size", "OS (Baby)"]] },
+    "Boys: OSB": { "name": "Boys", "sizes": [["OSB", "One Size", "OS (Boy)"]] },
+    "Girls: OSG": { "name": "Girls", "sizes": [["OSG", "One Size", "OS (Girl)"]] },
+    "Kids/Bottoms/Baby": {
+      "name": "Baby",
+      "sizes": [
+        ["Preemie", "Preemie", "Preemie"],
+        ["Newborn", "Newborn", "Newborn"],
+        ["0-3MB", "0-3 Months", "0-3M"],
+        ["3-6MB", "3-6 Months", "3-6M"],
+        ["6-9MB", "6-9 Months", "6-9M"],
+        ["9-12MB", "9-12 Months", "9-12M"],
+        ["12-18MB", "12-18 Months", "12-18M"],
+        ["18-24MB", "18-24 Months", "18-24M"],
+        ["3MB", "3 Months", "3M"],
+        ["6MB", "6 Months", "6M"],
+        ["9MB", "9 Months", "9M"],
+        ["12MB", "12 Months", "12M"],
+        ["18MB", "18 Months", "18M"],
+        ["24MB", "24 Months", "24M"]
+      ]
+    },
+    "Kids/Bottoms/Girls": {
+      "name": "Girls",
+      "sizes": [
+        ["2TG", "2T", "2T (Girl)"],
+        ["3TG", "3T", "3T (Girl)"],
+        ["4TG", "4T", "4T (Girl)"],
+        ["5TG", "5T", "5T (Girl)"],
+        ["4G", "4", "4 (Girl)"],
+        ["5G", "5", "5 (Girl)"],
+        ["6G", "6", "6 (Girl)"],
+        ["6XG", "6X", "6X (Girl)"],
+        ["7G", "7", "7 (Girl)"],
+        ["8G", "8", "8 (Girl)"],
+        ["10G", "10", "10 (Girl)"],
+        ["12G", "12", "12 (Girl)"],
+        ["14G", "14", "14 (Girl)"],
+        ["16G", "16", "16 (Girl)"],
+        ["XSG", "XS", "XS (Girl)"],
+        ["SG", "S", "S (Girl)"],
+        ["MG", "M", "M (Girl)"],
+        ["LG", "L", "L (Girl)"],
+        ["XLG", "XL", "XL (Girl)"],
+        ["XXLG", "XXL", "XXL (Girl)"]
+      ]
+    },
+    "Kids/Bottoms/Boys": {
+      "name": "Boys",
+      "sizes": [
+        ["2TB", "2T", "2T (Boy)"],
+        ["3TB", "3T", "3T (Boy)"],
+        ["4TB", "4T", "4T (Boy)"],
+        ["5TB", "5T", "5T (Boy)"],
+        ["4B", "4", "4 (Boy)"],
+        ["5B", "5", "5 (Boy)"],
+        ["6B", "6", "6 (Boy)"],
+        ["7B", "7", "7 (Boy)"],
+        ["7XB", "7X", "7X (Boy)"],
+        ["8B", "8", "8 (Boy)"],
+        ["10B", "10", "10 (Boy)"],
+        ["12B", "12", "12 (Boy)"],
+        ["14B", "14", "14 (Boy)"],
+        ["16B", "16", "16 (Boy)"],
+        ["18B", "18", "18 (Boy)"],
+        ["20B", "20", "20 (Boy)"],
+        ["XSB", "XS", "XS (Boy)"],
+        ["SB", "S", "S (Boy)"],
+        ["MB", "M", "M (Boy)"],
+        ["LB", "L", "L (Boy)"],
+        ["XLB", "XL", "XL (Boy)"],
+        ["XXLB", "XXL", "XXL (Boy)"]
+      ]
+    },
+    "Kids/One Pieces/Baby": {
+      "name": "Baby",
+      "sizes": [
+        ["OSBB", "One Size", "OS (Baby)"],
+        ["Preemie", "Preemie", "Preemie"],
+        ["Newborn", "Newborn", "Newborn"],
+        ["0-3MB", "0-3 Months", "0-3M"],
+        ["3-6MB", "3-6 Months", "3-6M"],
+        ["6-9MB", "6-9 Months", "6-9M"],
+        ["9-12MB", "9-12 Months", "9-12M"],
+        ["12-18MB", "12-18 Months", "12-18M"],
+        ["18-24MB", "18-24 Months", "18-24M"],
+        ["3MB", "3 Months", "3M"],
+        ["6MB", "6 Months", "6M"],
+        ["9MB", "9 Months", "9M"],
+        ["12MB", "12 Months", "12M"],
+        ["18MB", "18 Months", "18M"],
+        ["24MB", "24 Months", "24M"]
+      ]
+    },
+    "Kids/Shoes/Baby": {
+      "name": "Baby",
+      "sizes": [
+        ["0BB", "0", "0"],
+        ["0.5BB", "0.5", "0.5"],
+        ["1BB", "1", "1"],
+        ["1.5BB", "1.5", "1.5"],
+        ["2BB", "2", "2"],
+        ["2.5BB", "2.5", "2.5"],
+        ["3BB", "3", "3"],
+        ["3.5BB", "3.5", "3.5"],
+        ["4BB", "4", "4"],
+        ["4.5BB", "4.5", "4.5"],
+        ["5BB", "5", "5"],
+        ["5.5BB", "5.5", "5.5"],
+        ["6BB", "6", "6"],
+        ["6.5BB", "6.5", "6.5"],
+        ["7BB", "7", "7"]
+      ]
+    },
+    "Kids/Shoes/Girls": {
+      "name": "Girls",
+      "sizes": [
+        ["7.5G", "7.5 (Toddler Girl)", "7.5 (Toddler Girl)"],
+        ["8G", "8 (Toddler Girl)", "8 (Toddler Girl)"],
+        ["8.5G", "8.5 (Toddler Girl)", "8.5 (Toddler Girl)"],
+        ["9G", "9 (Toddler Girl)", "9 (Toddler Girl)"],
+        ["9.5G", "9.5 (Toddler Girl)", "9.5 (Toddler Girl)"],
+        ["10G", "10 (Toddler Girl)", "10 (Toddler Girl)"],
+        ["10.5G", "10.5 (Toddler Girl)", "10.5 (Toddler Girl)"],
+        ["11G", "11 (Toddler Girl)", "11 (Toddler Girl)"],
+        ["11.5G", "11.5 (Toddler Girl)", "11.5 (Toddler Girl)"],
+        ["12G", "12 (Toddler Girl)", "12 (Toddler Girl)"],
+        ["12.5G", "12.5 (Little Girl)", "12.5 (Little Girl)"],
+        ["13G", "13 (Little Girl)", "13 (Little Girl)"],
+        ["13.5G", "13.5 (Little Girl)", "13.5 (Little Girl)"],
+        ["1G", "1 (Little Girl)", "1 (Little Girl)"],
+        ["1.5G", "1.5 (Little Girl)", "1.5 (Little Girl)"],
+        ["2G", "2 (Little Girl)", "2 (Little Girl)"],
+        ["2.5G", "2.5 (Little Girl)", "2.5 (Little Girl)"],
+        ["3G", "3 (Little Girl)", "3 (Little Girl)"],
+        ["3.5G", "3.5 (Big Girl)", "3.5 (Big Girl)"],
+        ["4G", "4 (Big Girl)", "4 (Big Girl)"],
+        ["4.5G", "4.5 (Big Girl)", "4.5 (Big Girl)"],
+        ["5G", "5 (Big Girl)", "5 (Big Girl)"],
+        ["5.5G", "5.5 (Big Girl)", "5.5 (Big Girl)"],
+        ["6G", "6 (Big Girl)", "6 (Big Girl)"],
+        ["6.5G", "6.5 (Big Girl)", "6.5 (Big Girl)"],
+        ["7G", "7 (Big Girl)", "7 (Big Girl)"]
+      ]
+    },
+    "Kids/Shoes/Boys": {
+      "name": "Boys",
+      "sizes": [
+        ["7.5B", "7.5 (Toddler Boy)", "7.5 (Toddler Boy)"],
+        ["8B", "8 (Toddler Boy)", "8 (Toddler Boy)"],
+        ["8.5B", "8.5 (Toddler Boy)", "8.5 (Toddler Boy)"],
+        ["9B", "9 (Toddler Boy)", "9 (Toddler Boy)"],
+        ["9.5B", "9.5 (Toddler Boy)", "9.5 (Toddler Boy)"],
+        ["10B", "10 (Toddler Boy)", "10 (Toddler Boy)"],
+        ["10.5B", "10.5 (Toddler Boy)", "10.5 (Toddler Boy)"],
+        ["11B", "11 (Toddler Boy)", "11 (Toddler Boy)"],
+        ["11.5B", "11.5 (Toddler Boy)", "11.5 (Toddler Boy)"],
+        ["12B", "12 (Toddler Boy)", "12 (Toddler Boy)"],
+        ["12.5B", "12.5 (Little Boy)", "12.5 (Little Boy)"],
+        ["13B", "13 (Little Boy)", "13 (Little Boy)"],
+        ["13.5B", "13.5 (Little Boy)", "13.5 (Little Boy)"],
+        ["1B", "1 (Little Boy)", "1 (Little Boy)"],
+        ["1.5B", "1.5 (Little Boy)", "1.5 (Little Boy)"],
+        ["2B", "2 (Little Boy)", "2 (Little Boy)"],
+        ["2.5B", "2.5 (Little Boy)", "2.5 (Little Boy)"],
+        ["3B", "3 (Little Boy)", "3 (Little Boy)"],
+        ["3.5B", "3.5 (Big Boy)", "3.5 (Big Boy)"],
+        ["4B", "4 (Big Boy)", "4 (Big Boy)"],
+        ["4.5B", "4.5 (Big Boy)", "4.5 (Big Boy)"],
+        ["5B", "5 (Big Boy)", "5 (Big Boy)"],
+        ["5.5B", "5.5 (Big Boy)", "5.5 (Big Boy)"],
+        ["6B", "6 (Big Boy)", "6 (Big Boy)"],
+        ["6.5B", "6.5 (Big Boy)", "6.5 (Big Boy)"],
+        ["7B", "7 (Big Boy)", "7 (Big Boy)"]
+      ]
+    },
+    "Home/Bedding/Standard": {
+      "name": "Standard",
+      "sizes": [
+        ["OS", "One Size", "OS"],
+        ["TWIN", "Twin", "Twin"],
+        ["TWINXL", "Twin XL", "Twin XL"],
+        ["FULL", "Full", "Full"],
+        ["QUEEN", "Queen", "Queen"],
+        ["KING", "King", "King"],
+        ["CALKING", "Cal King", "Cal King"]
+      ]
+    }
+  },
+  "departments": [
+    {
+      "name": "Women",
+      "id": "000e8975d97b4e80ef00a955",
+      "categories": [
+        {
+          "name": "Accessories",
+          "id": "002a8975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Belts",
+            "Face Masks",
+            "Glasses",
+            "Gloves & Mittens",
+            "Hair Accessories",
+            "Hats",
+            "Hosiery & Socks",
+            "Key & Card Holders",
+            "Laptop Cases",
+            "Phone Cases",
+            "Scarves & Wraps",
+            "Sunglasses",
+            "Tablet Cases",
+            "Umbrellas",
+            "Watches"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Bags",
+          "id": "00248975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Baby Bags",
+            "Backpacks",
+            "Clutches & Wristlets",
+            "Cosmetic Bags & Cases",
+            "Crossbody Bags",
+            "Hobos",
+            "Laptop Bags",
+            "Mini Bags",
+            "Satchels",
+            "Shoulder Bags",
+            "Totes",
+            "Travel Bags",
+            "Wallets"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Dresses",
+          "id": "00108975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Asymmetrical",
+            "Backless",
+            "High Low",
+            "Long Sleeve",
+            "Maxi",
+            "Midi",
+            "Mini",
+            "One Shoulder",
+            "Prom",
+            "Strapless",
+            "Wedding"
+          ],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Intimates & Sleepwear",
+          "id": "00208975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Bandeaus",
+            "Bras",
+            "Chemises & Slips",
+            "Pajamas",
+            "Panties",
+            "Robes",
+            "Shapewear",
+            "Sports Bras"
+          ],
+          "sizeSets": [
+            "Women/Intimates & Sleepwear/Standard",
+            "Women/Intimates & Sleepwear/Plus",
+            "Women/Intimates & Sleepwear/Maternity"
+          ]
+        },
+        {
+          "name": "Jackets & Coats",
+          "id": "00148975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Blazers & Suit Jackets",
+            "Bomber Jackets",
+            "Capes",
+            "Jean Jackets",
+            "Leather Jackets",
+            "Pea Coats",
+            "Puffers",
+            "Ski & Snow Jackets",
+            "Teddy Jackets",
+            "Trench Coats",
+            "Utility Jackets",
+            "Varsity Jackets",
+            "Vests"
+          ],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Jeans",
+          "id": "001a8975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Ankle & Cropped",
+            "Boot Cut",
+            "Boyfriend",
+            "Flare & Wide Leg",
+            "High Rise",
+            "Jeggings",
+            "Overalls",
+            "Skinny",
+            "Straight Leg"
+          ],
+          "sizeSets": [
+            "Women/Jeans/Standard",
+            "Women/Jeans/Plus",
+            "Women/Jeans/Petite",
+            "Women/Jeans/Juniors",
+            "Women/Jeans/Maternity"
+          ]
+        },
+        {
+          "name": "Jewelry",
+          "id": "00288975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": ["Bracelets", "Brooches", "Earrings", "Necklaces", "Rings"],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Makeup",
+          "id": "002c8975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Blush",
+            "Bronzer & Contour",
+            "Brows",
+            "Brushes & Tools",
+            "Concealer",
+            "Eye Primer",
+            "Eyeliner",
+            "Eyeshadow",
+            "Foundation",
+            "Highlighter",
+            "Lashes",
+            "Lip Balm & Gloss",
+            "Lip Liner",
+            "Lipstick",
+            "Mascara",
+            "Nail Tools",
+            "Press-On Nails",
+            "Primer",
+            "Setting Powder & Spray"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Pants & Jumpsuits",
+          "id": "001c8975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Ankle & Cropped",
+            "Boot Cut & Flare",
+            "Capris",
+            "Jumpsuits & Rompers",
+            "Leggings",
+            "Pantsuits",
+            "Skinny",
+            "Straight Leg",
+            "Track Pants & Joggers",
+            "Trousers",
+            "Wide Leg"
+          ],
+          "sizeSets": [
+            "Women/Pants & Jumpsuits/Standard",
+            "Women/Pants & Jumpsuits/Plus",
+            "Women/Pants & Jumpsuits/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Pants & Jumpsuits/Maternity"
+          ]
+        },
+        {
+          "name": "Shoes",
+          "id": "00268975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Ankle Boots & Booties",
+            "Athletic Shoes",
+            "Combat & Moto Boots",
+            "Espadrilles",
+            "Flats & Loafers",
+            "Heeled Boots",
+            "Heels",
+            "Lace Up Boots",
+            "Moccasins",
+            "Mules & Clogs",
+            "Over the Knee Boots",
+            "Platforms",
+            "Sandals",
+            "Slippers",
+            "Sneakers",
+            "Wedges",
+            "Winter & Rain Boots"
+          ],
+          "sizeSets": ["Women/Shoes/Standard"]
+        },
+        {
+          "name": "Shorts",
+          "id": "001e8975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Athletic Shorts",
+            "Bermudas",
+            "Bike Shorts",
+            "Cargos",
+            "High Waist",
+            "Jean Shorts",
+            "Skorts"
+          ],
+          "sizeSets": [
+            "Women/Pants & Jumpsuits/Standard",
+            "Women/Pants & Jumpsuits/Plus",
+            "Women/Shorts/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Pants & Jumpsuits/Maternity"
+          ]
+        },
+        {
+          "name": "Skirts",
+          "id": "00128975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "A-Line or Full",
+            "Asymmetrical",
+            "Circle & Skater",
+            "High Low",
+            "Maxi",
+            "Midi",
+            "Mini",
+            "Pencil",
+            "Skirt Sets"
+          ],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Sweaters",
+          "id": "00168975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Cardigans",
+            "Cowl & Turtlenecks",
+            "Crew & Scoop Necks",
+            "Off-the-Shoulder Sweaters",
+            "Shrugs & Ponchos",
+            "V-Necks"
+          ],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Swim",
+          "id": "00228975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": ["Bikinis", "Coverups", "One Pieces", "Sarongs"],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Tops",
+          "id": "00188975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [
+            "Blouses",
+            "Bodysuits",
+            "Button Down Shirts",
+            "Camisoles",
+            "Crop Tops",
+            "Jerseys",
+            "Muscle Tees",
+            "Sweatshirts & Hoodies",
+            "Tank Tops",
+            "Tees - Long Sleeve",
+            "Tees - Short Sleeve",
+            "Tunics"
+          ],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Skincare",
+          "id": "6e7df9aaaabb083120f45ec2",
+          "group": null,
+          "subcategories": [
+            "Acne & Blemish",
+            "Cleanser & Exfoliant",
+            "Eye Cream",
+            "Makeup Remover",
+            "Mask",
+            "Moisturizer",
+            "Peel",
+            "Serum & Face Oil",
+            "Suncare",
+            "Toner",
+            "Tools"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Hair",
+          "id": "6f7df9aaaabb083120f45ec2",
+          "group": null,
+          "subcategories": [
+            "Color",
+            "Conditioner",
+            "Hairspray",
+            "Heat Protectant",
+            "Shampoo",
+            "Styling",
+            "Tools",
+            "Treatment & Mask",
+            "Wigs & Extensions"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Bath & Body",
+          "id": "707df9aaaabb083120f45ec2",
+          "group": null,
+          "subcategories": [
+            "Bath Soak & Bubbles",
+            "Body Wash",
+            "Exfoliant & Scrub",
+            "Hair Removal",
+            "Hand & Foot Care",
+            "Hand Soap",
+            "Moisturizer & Body Oil",
+            "Suncare & Tanning",
+            "Tools"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Ao Dais",
+          "id": "9ab476dc402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Cheongsams & Qipaos",
+          "id": "9bb476dc402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Dirndls",
+          "id": "9db476dc402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Dupattas & Stoles",
+          "id": "a2b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Hanboks",
+          "id": "9cb476dc402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Harem Pants",
+          "id": "a3b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Hijabs",
+          "id": "9eb476dc402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Huipils",
+          "id": "9fb476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Dresses/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Kaftans",
+          "id": "a0b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Kimonos & Yukatas",
+          "id": "a1b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Kurta Bottoms",
+          "id": "a4b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Kurtas",
+          "id": "a5b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Lehengas",
+          "id": "a6b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Palazzo Pants",
+          "id": "a7b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Patiala Pants",
+          "id": "a8b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Salwars",
+          "id": "a9b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Saree Blouses",
+          "id": "aab476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Sarees",
+          "id": "abb476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Treggings",
+          "id": "acb476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": [
+            "Women/Dresses/Standard",
+            "Women/Dresses/Plus",
+            "Women/Dresses/Petite",
+            "Women/Ao Dais/Juniors",
+            "Women/Dresses/Maternity"
+          ]
+        },
+        {
+          "name": "Other",
+          "id": "002e8975d97b4e80ef00a955",
+          "group": null,
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        }
+      ]
+    },
+    {
+      "name": "Men",
+      "id": "01008c10d97b4e1245005764",
+      "categories": [
+        {
+          "name": "Accessories",
+          "id": "02008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Belts",
+            "Cuff Links",
+            "Face Masks",
+            "Glasses",
+            "Gloves",
+            "Hats",
+            "Jewelry",
+            "Key & Card Holders",
+            "Money Clips",
+            "Phone Cases",
+            "Pocket Squares",
+            "Scarves",
+            "Sunglasses",
+            "Suspenders",
+            "Ties",
+            "Watches"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Bags",
+          "id": "03008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Backpacks",
+            "Belt Bags",
+            "Briefcases",
+            "Duffel Bags",
+            "Laptop Bags",
+            "Luggage & Travel Bags",
+            "Messenger Bags",
+            "Toiletry Bags",
+            "Wallets"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Jackets & Coats",
+          "id": "04008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Bomber & Varsity",
+            "Lightweight & Shirt Jackets",
+            "Military & Field",
+            "Pea Coats",
+            "Performance Jackets",
+            "Puffers",
+            "Raincoats",
+            "Ski & Snowboard",
+            "Trench Coats",
+            "Vests",
+            "Windbreakers"
+          ],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Jeans",
+          "id": "05008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Bootcut", "Relaxed", "Skinny", "Slim", "Slim Straight", "Straight"],
+          "sizeSets": ["Men/Jeans/Standard", "Men/Jeans/Big & Tall"]
+        },
+        {
+          "name": "Pants",
+          "id": "06008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Cargo",
+            "Chinos & Khakis",
+            "Corduroy",
+            "Dress",
+            "Sweatpants & Joggers"
+          ],
+          "sizeSets": ["Men/Pants/Standard", "Men/Pants/Big & Tall"]
+        },
+        {
+          "name": "Shirts",
+          "id": "07008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Casual Button Down Shirts",
+            "Dress Shirts",
+            "Jerseys",
+            "Polos",
+            "Sweatshirts & Hoodies",
+            "Tank Tops",
+            "Tees - Long Sleeve",
+            "Tees - Short Sleeve"
+          ],
+          "sizeSets": ["Men/Shirts/Standard", "Men/Shirts/Big & Tall"]
+        },
+        {
+          "name": "Shoes",
+          "id": "08008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Athletic Shoes",
+            "Boat Shoes",
+            "Boots",
+            "Chukka Boots",
+            "Cowboy & Western Boots",
+            "Loafers & Slip-Ons",
+            "Oxfords & Derbys",
+            "Rain & Snow Boots",
+            "Sandals & Flip-Flops",
+            "Sneakers"
+          ],
+          "sizeSets": ["Men/Shoes/Standard"]
+        },
+        {
+          "name": "Shorts",
+          "id": "09008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Athletic", "Cargo", "Flat Front", "Hybrids", "Jean Shorts"],
+          "sizeSets": ["Men/Pants/Standard", "Men/Pants/Big & Tall"]
+        },
+        {
+          "name": "Suits & Blazers",
+          "id": "0a008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Sport Coats & Blazers", "Suits", "Tuxedos", "Vests"],
+          "sizeSets": ["Men/Suits & Blazers/Standard", "Men/Suits & Blazers/Big & Tall"]
+        },
+        {
+          "name": "Sweaters",
+          "id": "0b008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Cardigan", "Crewneck", "Turtleneck", "V-Neck", "Zip Up"],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Swim",
+          "id": "0d008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Board Shorts", "Hybrids", "Rash Guards", "Swim Trunks"],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Underwear & Socks",
+          "id": "0e008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Athletic Socks",
+            "Boxer Briefs",
+            "Boxers",
+            "Briefs",
+            "Casual Socks",
+            "Dress Socks",
+            "Undershirts"
+          ],
+          "sizeSets": ["Men/Underwear & Socks/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Grooming",
+          "id": "717df9aaaabb083120f45ec2",
+          "group": null,
+          "subcategories": [
+            "Cleanser",
+            "Grooming Tools",
+            "Hair Care",
+            "Moisturizer",
+            "Shaving",
+            "Suncare",
+            "Treatments"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Agbadas & Dashikis",
+          "id": "b2b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Ao Dais",
+          "id": "b3b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Changshans",
+          "id": "b4b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Hanboks",
+          "id": "b5b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Kaftans",
+          "id": "b6b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Keffiyehs",
+          "id": "b7b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Kilts",
+          "id": "b8b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Kilts/Standard", "Men/Kilts/Big & Tall"]
+        },
+        {
+          "name": "Kimonos & Yukatas",
+          "id": "b9b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Kurta Bottoms",
+          "id": "aeb476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Kilts/Standard", "Men/Kilts/Big & Tall"]
+        },
+        {
+          "name": "Kurtas",
+          "id": "afb476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Lederhosen",
+          "id": "bab476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Kilts/Standard", "Men/Kilts/Big & Tall"]
+        },
+        {
+          "name": "Nehru Jackets",
+          "id": "b0b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Ponchos & Serapes",
+          "id": "bbb476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Sherwanis",
+          "id": "b1b476dd402403bf28a2606b",
+          "group": "Global & Traditional Wear",
+          "subcategories": [],
+          "sizeSets": ["Men/Jackets & Coats/Standard", "Men/Jackets & Coats/Big & Tall"]
+        },
+        {
+          "name": "Other",
+          "id": "10008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        }
+      ]
+    },
+    {
+      "name": "Kids",
+      "id": "20008c10d97b4e1245005764",
+      "categories": [
+        {
+          "name": "Accessories",
+          "id": "21008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Bags",
+            "Belts",
+            "Bibs",
+            "Diaper Covers",
+            "Face Masks",
+            "Hair Accessories",
+            "Hats",
+            "Jewelry",
+            "Mittens",
+            "Socks & Tights",
+            "Sunglasses",
+            "Suspenders",
+            "Ties",
+            "Underwear",
+            "Watches"
+          ],
+          "sizeSets": ["Baby: OSBB", "Boys: OSB", "Girls: OSG"]
+        },
+        {
+          "name": "Bottoms",
+          "id": "24002b34d97b4efb71005784",
+          "group": null,
+          "subcategories": [
+            "Casual",
+            "Formal",
+            "Jeans",
+            "Jumpsuits & Rompers",
+            "Leggings",
+            "Overalls",
+            "Shorts",
+            "Skirts",
+            "Skorts",
+            "Sweatpants & Joggers"
+          ],
+          "sizeSets": ["Kids/Bottoms/Baby", "Kids/Bottoms/Girls", "Kids/Bottoms/Boys"]
+        },
+        {
+          "name": "Dresses",
+          "id": "22008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Casual", "Formal"],
+          "sizeSets": ["Kids/Bottoms/Baby", "Kids/Bottoms/Girls"]
+        },
+        {
+          "name": "Jackets & Coats",
+          "id": "23008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Blazers",
+            "Capes",
+            "Jean Jackets",
+            "Pea Coats",
+            "Puffers",
+            "Raincoats",
+            "Vests"
+          ],
+          "sizeSets": ["Kids/Bottoms/Baby", "Kids/Bottoms/Girls", "Kids/Bottoms/Boys"]
+        },
+        {
+          "name": "Matching Sets",
+          "id": "26008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [],
+          "sizeSets": ["Kids/Bottoms/Baby", "Kids/Bottoms/Girls", "Kids/Bottoms/Boys"]
+        },
+        {
+          "name": "One Pieces",
+          "id": "25008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Bodysuits", "Footies"],
+          "sizeSets": ["Kids/One Pieces/Baby"]
+        },
+        {
+          "name": "Pajamas",
+          "id": "27008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Nightgowns",
+            "Pajama Bottoms",
+            "Pajama Sets",
+            "Pajama Tops",
+            "Robes",
+            "Sleep Sacks"
+          ],
+          "sizeSets": ["Kids/Bottoms/Baby", "Kids/Bottoms/Girls", "Kids/Bottoms/Boys"]
+        },
+        {
+          "name": "Shirts & Tops",
+          "id": "2e008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Blouses",
+            "Button Down Shirts",
+            "Camisoles",
+            "Jerseys",
+            "Polos",
+            "Sweaters",
+            "Sweatshirts & Hoodies",
+            "Tank Tops",
+            "Tees - Long Sleeve",
+            "Tees - Short Sleeve"
+          ],
+          "sizeSets": ["Kids/Bottoms/Baby", "Kids/Bottoms/Girls", "Kids/Bottoms/Boys"]
+        },
+        {
+          "name": "Shoes",
+          "id": "29008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [
+            "Baby & Walker",
+            "Boots",
+            "Dress Shoes",
+            "Moccasins",
+            "Rain & Snow Boots",
+            "Sandals & Flip Flops",
+            "Slippers",
+            "Sneakers",
+            "Water Shoes"
+          ],
+          "sizeSets": ["Kids/Shoes/Baby", "Kids/Shoes/Girls", "Kids/Shoes/Boys"]
+        },
+        {
+          "name": "Swim",
+          "id": "2d008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Bikinis", "Coverups", "One Piece", "Rashguards", "Swim Trunks"],
+          "sizeSets": ["Kids/Bottoms/Baby", "Kids/Bottoms/Girls", "Kids/Bottoms/Boys"]
+        },
+        {
+          "name": "Costumes",
+          "id": "30008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": ["Dance", "Halloween", "Seasonal", "Superhero", "Theater"],
+          "sizeSets": ["Baby: OSBB", "Boys: OSB", "Girls: OSG"]
+        },
+        {
+          "name": "Bath, Skin & Hair",
+          "id": "727df9aaaabb083120f45ec2",
+          "group": null,
+          "subcategories": ["Bath & Body", "Hair Care", "Moisturizer", "Suncare", "Tools"],
+          "sizeSets": ["Baby: OSBB", "Boys: OSB", "Girls: OSG"]
+        },
+        {
+          "name": "Toys",
+          "id": "737df9aaaabb083120f45ec2",
+          "group": null,
+          "subcategories": [
+            "Action Figures & Playsets",
+            "Building Sets & Blocks",
+            "Cars & Vehicles",
+            "Dolls & Accessories",
+            "Learning Toys",
+            "Puzzles & Games",
+            "Stuffed Animals",
+            "Trading Cards"
+          ],
+          "sizeSets": ["Baby: OSBB", "Boys: OSB", "Girls: OSG"]
+        },
+        {
+          "name": "Other",
+          "id": "31008c10d97b4e1245005764",
+          "group": null,
+          "subcategories": [],
+          "sizeSets": ["Baby: OSBB", "Boys: OSB", "Girls: OSG"]
+        }
+      ]
+    },
+    {
+      "name": "Home",
+      "id": "5b3b13d30640fd0aeb9c5cb6",
+      "categories": [
+        {
+          "name": "Accents",
+          "id": "5c3b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Accent Pillows",
+            "Baskets & Bins",
+            "Candles & Holders",
+            "Coffee Table Books",
+            "Curtains & Drapes",
+            "Decor",
+            "Door Mats",
+            "Faux Florals",
+            "Furniture Covers",
+            "Lanterns",
+            "Picture Frames",
+            "Vases"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Art",
+          "id": "c66f798f402403a7f0016033",
+          "group": null,
+          "subcategories": [
+            "Ceramics",
+            "Drawing & Illustrations",
+            "Fiber Arts",
+            "Glass Art",
+            "Mixed Media",
+            "Painting",
+            "Photography",
+            "Posters",
+            "Prints",
+            "Sculpture"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Bath",
+          "id": "5d3b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Bath Accessories",
+            "Bath Storage",
+            "Bath Towels",
+            "Beach Towels",
+            "Hand Towels",
+            "Mats",
+            "Shower Curtains",
+            "Vanity Mirrors",
+            "Vanity Trays",
+            "Wash Cloths"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Bedding",
+          "id": "5e3b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Blankets & Throws",
+            "Comforters",
+            "Duvet Covers",
+            "Mattress Covers",
+            "Pillows",
+            "Quilts",
+            "Sheets"
+          ],
+          "sizeSets": ["Home/Bedding/Standard"]
+        },
+        {
+          "name": "Design",
+          "id": "c76f798f402403a7f0016033",
+          "group": null,
+          "subcategories": [
+            "Birthday Cards",
+            "Business Cards",
+            "Planners",
+            "Stamps",
+            "Stickers",
+            "Thank You Cards"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Dining",
+          "id": "bc5eb22d0640fd1ab51c5d0b",
+          "group": null,
+          "subcategories": [
+            "Bar Accessories",
+            "Dinnerware",
+            "Drinkware",
+            "Flatware",
+            "Mugs",
+            "Serveware",
+            "Serving Utensils",
+            "Table Linens",
+            "Water Bottles & Thermoses"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Games",
+          "id": "747df9aaaabb083120f45ec2",
+          "group": null,
+          "subcategories": ["Board Games", "Card Games", "Outdoor Games", "Puzzles"],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Holiday",
+          "id": "5f3b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Garland",
+            "Holiday Blankets & Throws",
+            "Holiday Decor",
+            "Holiday Pillows",
+            "Ornaments",
+            "String Lights",
+            "Wreaths"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Kitchen",
+          "id": "bb5eb22d0640fd1ab51c5d0b",
+          "group": null,
+          "subcategories": [
+            "BBQ & Grilling Tools",
+            "Bakeware",
+            "Coffee & Tea Accessories",
+            "Cookbooks",
+            "Cooking Utensils",
+            "Cookware",
+            "Food Storage",
+            "Kitchen Linens",
+            "Kitchen Tools",
+            "Knives & Cutlery"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Office",
+          "id": "603b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Arts & Crafts",
+            "Binders & Folders",
+            "Calendars",
+            "Labels & Label Makers",
+            "Notebooks & Journals",
+            "Pencil Cases",
+            "Planners",
+            "Shipping Supplies",
+            "Stationery"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Party Supplies",
+          "id": "613b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Cake Candles",
+            "Cake Toppers",
+            "Cards & Invitations",
+            "Decorations",
+            "Disposable Tableware",
+            "Favors",
+            "Gift Wrap",
+            "Hats",
+            "Party Lights"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Storage & Organization",
+          "id": "623b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Closet Accessories",
+            "Drawer Liners",
+            "Garment Bags",
+            "Jewelry Organizers",
+            "Makeup Organizers",
+            "Storage"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Wall Decor",
+          "id": "633b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [
+            "Art & Decals",
+            "Clocks",
+            "Display Shelves",
+            "Hooks",
+            "Mirrors",
+            "Tapestries",
+            "Wallpaper"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Other",
+          "id": "a93b13d30640fd0aeb9c5cb6",
+          "group": null,
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        }
+      ]
+    },
+    {
+      "name": "Pets",
+      "id": "af08bf904024037d7a7b5fad",
+      "categories": [
+        {
+          "name": "Dog",
+          "id": "b008bf914024037d7a7b5fad",
+          "group": null,
+          "subcategories": [
+            "Bedding & Blankets",
+            "Bowls & Feeders",
+            "Carriers & Travel",
+            "Clothing & Accessories",
+            "Collars, Leashes & Harnesses",
+            "Grooming",
+            "Housebreaking",
+            "Toys"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Cat",
+          "id": "b108bf914024037d7a7b5fad",
+          "group": null,
+          "subcategories": [
+            "Beds",
+            "Bowls & Feeders",
+            "Carriers & Travel",
+            "Clothing & Accessories",
+            "Collars, Leashes  & Harnesses",
+            "Grooming",
+            "Scratchers",
+            "Toys"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Bird",
+          "id": "b208bf914024037d7a7b5fad",
+          "group": null,
+          "subcategories": ["Cages & Covers", "Feeders & Waterers", "Perches & Swings", "Toys"],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Fish",
+          "id": "b308bf914024037d7a7b5fad",
+          "group": null,
+          "subcategories": ["Aquarium Kits", "Cleaning & Maintenance", "Decor & Accessories"],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Reptile",
+          "id": "b408bf914024037d7a7b5fad",
+          "group": null,
+          "subcategories": [
+            "Cleaning & Maintenance",
+            "Habitats",
+            "Habitat Accessories",
+            "Heating & Lights"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Small Pets",
+          "id": "b508bf914024037d7a7b5fad",
+          "group": null,
+          "subcategories": [
+            "Bedding",
+            "Bowls & Feeders",
+            "Cages & Habitats",
+            "Carriers",
+            "Grooming",
+            "Habitat Accessories",
+            "Toys"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Other",
+          "id": "b608bf914024037d7a7b5fad",
+          "group": null,
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        }
+      ]
+    },
+    {
+      "name": "Electronics",
+      "id": "583c7d134024035188906153",
+      "categories": [
+        {
+          "name": "Cameras, Photo & Video",
+          "id": "428e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Digital Cameras",
+            "Bags & Cases",
+            "Binoculars & Scopes",
+            "Film Photography",
+            "Flashes",
+            "Lenses",
+            "Memory Cards",
+            "Simulated Cameras",
+            "Tripods & Monopods",
+            "Underwater Photography",
+            "Video",
+            "Camera Straps"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Computers, Laptops & Parts",
+          "id": "438e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Laptops",
+            "Cables & Interconnects",
+            "Camera Privacy Covers",
+            "Computer Cable Adapters",
+            "Computer Headsets",
+            "Computer Microphones",
+            "External Components",
+            "Graphics Cards",
+            "Internal Components",
+            "Keyboards",
+            "Memory Card Readers",
+            "Mice",
+            "Mounts & Stands",
+            "Surge Protectors",
+            "Single Board Computers",
+            "USB Hubs",
+            "Webcams"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Cell Phones & Accessories",
+          "id": "448e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Cell Phones",
+            "Holsters & Clips",
+            "Headsets",
+            "Screen Protectors",
+            "Cases",
+            "Covers",
+            "Skins & Bumpers",
+            "Chargers",
+            "Adapters",
+            "Cables"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Car Audio, Video & GPS",
+          "id": "478e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "GPS & Navigation",
+            "Amplifiers",
+            "Car Stereo Receivers",
+            "Changers",
+            "Digital Media Receivers",
+            "Equalizers",
+            "Satellite Radio",
+            "Car Headphones",
+            "In-Mirror Video",
+            "In-Visor Video",
+            "On-Dash Cameras",
+            "Overhead Video",
+            "Surround Processors",
+            "TV Tuners",
+            "Vehicle Backup Cameras"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Wearables",
+          "id": "498e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Smartwatches",
+            "Body Mounted Cameras",
+            "Clips, Arm & Wristbands",
+            "Glasses",
+            "Rings",
+            "Smartwatch Cases",
+            "Wearables Chargers"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Tablets & Accessories",
+          "id": "4e8e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Tablets",
+            "eBook Readers",
+            "Cases",
+            "Chargers",
+            "Covers",
+            "Power Adapters",
+            "Power Cables",
+            "Reading Lights",
+            "Screen Protectors",
+            "Skins",
+            "Sleeves",
+            "Stands",
+            "Tablet Keyboards"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Video Games & Consoles",
+          "id": "468e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Consoles",
+            "Handheld Consoles",
+            "Batteries & Chargers",
+            "Cables",
+            "Controllers",
+            "Headsets",
+            "Gaming Guides",
+            "Keyboards",
+            "Digital Games",
+            "PC Games",
+            "Video Games"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "VR, AR & Accessories",
+          "id": "508e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "PC & Console VR Headsets",
+            "Smartphone VR Headsets",
+            "Standalone VR Headsets",
+            "Cases, Covers & Skins",
+            "Controllers & Sensors",
+            "Parts"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Media",
+          "id": "488e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Blank Media",
+            "CDs",
+            "DVDs & Blu-ray Discs",
+            "Media Streamers",
+            "Media Cases & Organization",
+            "Vinyl Records"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Networking",
+          "id": "518e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Boosters & Antennas",
+            "Mobile Broadband Devices",
+            "Modems",
+            "Modem-Router Combos",
+            "Powerline Networking",
+            "USB Bluetooth Adapters",
+            "USB Wi-Fi Adapters",
+            "VoIP Home Phones",
+            "VoIP Phone Adapters",
+            "Wired Routers",
+            "Wireless Access Points",
+            "Wireless Routers"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Headphones",
+          "id": "4c8e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": ["Earbud Headphones", "On-Ear Headphones", "Over-Ear Headphones"],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Portable Audio & Video",
+          "id": "4d8e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [
+            "Boomboxes",
+            "CB & Two-Way Radios",
+            "Cassette Players",
+            "Digital Voice Recorders",
+            "MP3 & MP4 Players",
+            "Microcassette Recorders",
+            "Minidisc Players",
+            "Portable & Handheld TVs",
+            "Portable CD Players",
+            "Portable DVD Players",
+            "Portable Speakers",
+            "Radios"
+          ],
+          "sizeSets": ["Standard: OS"]
+        },
+        {
+          "name": "Other",
+          "id": "548e4884402403bc7f6c6157",
+          "group": null,
+          "subcategories": [],
+          "sizeSets": ["Standard: OS"]
+        }
+      ]
+    }
+  ]
+}

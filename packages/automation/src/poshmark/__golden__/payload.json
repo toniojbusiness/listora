@@ -22,17 +22,23 @@
   "catalog": {
     "department": "Men",
     "category": "Jackets & Coats",
-    "subcategory": null
+    "subcategory": null,
+    "group": null
   },
   "size": {
     "set": "Standard",
-    "size": "M"
+    "size": "M",
+    "label": "M",
+    "chosen": "M"
   },
   "condition": {
     "code": "uln",
     "label": "Like New"
   },
   "brand": "Levi's",
+  "colors": [
+    "Blue"
+  ],
   "originalPrice": null,
   "source": {
     "category": "clothing/outerwear/denim_jackets",

@@ -10,10 +10,37 @@
  * verification"). A page that differs stops the step before it sends anything, and the user
  * gets the step as a task; fixing it is a change to one page module.
  */
-import type { ChallengeSigns } from '../profiles.ts';
+import type { ChallengeSigns, PacingSettings } from '../profiles.ts';
+import type { DepopSite } from './pages/common.ts';
 
 /** Depop. Products are `/products/<slug>/`; the seller's own pages are under `/sellinghub/`. */
 export const DEPOP_SITE_URL = 'https://www.depop.com';
+
+/**
+ * Depop's web API, which its own pages read their data from (with the session's token, the
+ * `access_token` cookie): the reads Listora makes there are the ones the pages make
+ * (`PageDriver.apiGet`, pages/api.ts). Every change still goes through the pages.
+ */
+export const DEPOP_API_URL = 'https://webapi.depop.com';
+
+/**
+ * Depop's pacing: 0.3 to 0.8 seconds before each action (agreed with the captain, 2026-10-27,
+ * against the default 0.8 to 2.5), still a person's pace and never below `PACING_FLOOR`.
+ */
+export const DEPOP_PACING: PacingSettings = {
+  actionDelayMs: [300, 800],
+  keystrokeDelayMs: [40, 120],
+  sessionGapMs: [5_000, 20_000],
+};
+
+/**
+ * The site a script set drives: Depop and its web API, or a stand-in in development and tests,
+ * which serves the API's reads itself.
+ */
+export function depopSite(siteUrl: string): DepopSite {
+  const origin = new URL(siteUrl).origin;
+  return { origin, api: origin === DEPOP_SITE_URL ? DEPOP_API_URL : origin };
+}
 
 /**
  * A Depop product slug: the seller's username and words of the listing, lowercase and joined by
@@ -31,8 +58,6 @@ export const DEPOP_PATHS = {
   sell: '/products/create/',
   product: (slug: string) => `/products/${encodeURIComponent(slug)}/`,
   edit: (slug: string) => `/products/edit/${encodeURIComponent(slug)}/`,
-  /** The seller's listings for sale, newest first. */
-  selling: (page: number) => `/sellinghub/selling/${page > 1 ? `?page=${String(page)}` : ''}`,
   /** The seller's sold items, newest first. */
   sold: (page: number) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ''}`,
 } as const;

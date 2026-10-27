@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describeAdapterConformance } from '@listora/marketplaces/conformance';
 
-import { automationProfile } from '../profiles.ts';
+import { automationProfile, standInProfile } from '../profiles.ts';
 import { PlaywrightBrowserRunner } from '../runner/browser-runner.ts';
 import { MemoryScreenshotStore } from '../runner/screenshots.ts';
 import { FakeSiteSessions, QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -33,11 +33,7 @@ function adapter(siteUrl: string) {
   return createDepopAutomationAdapter({
     siteUrl,
     profile,
-    sessions: new FakeSiteSessions(site, runner, {
-      ...profile,
-      origins: [new URL(siteUrl).origin],
-      cookieDomains: ['127.0.0.1'],
-    }),
+    sessions: new FakeSiteSessions(site, runner, standInProfile(profile, siteUrl)),
     photos: stubPhotos,
     logger: silentLogger,
   });

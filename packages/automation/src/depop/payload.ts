@@ -21,8 +21,10 @@ import {
 import { DEPOP_EMAIL_ADDRESS, depopDescription, endsWithHashtagLine } from '@listora/shared';
 
 import { SKU_LINE_RESERVE, withSkuLine } from '../adapter/sku-line.ts';
-import { categorySizeKind, mapDepopCategory, parseCategoryRef } from './categories.ts';
+import { depopDetails, type DepopFormPick } from './attributes.ts';
+import { mapDepopCategory, parseCategoryRef } from './categories.ts';
 import { depopFormCondition, type DepopFormCondition } from './conditions.ts';
+import { depopProhibitedIssues } from './prohibited.ts';
 import { depopSize } from './sizes.ts';
 
 const NAME = 'Depop';
@@ -32,15 +34,27 @@ export interface DepopAutomationPayload extends AssistedListingPayload {
   description: string;
   /** Without the `#`, in order. */
   hashtags: string[];
-  /** The names to pick in the form's category levels, department first; `null` when unmapped. */
+  /**
+   * The form's names of the category, department first (`['Men', 'Tops', 'T-shirts']`); `null`
+   * when Listora has none for the item.
+   */
   category: string[] | null;
-  /** Depop's size label for the category's size list; `null` when it takes none or is unknown. */
+  /** Depop's ids of the same (`['menswear', 'tops', 'tshirts']`). */
+  categoryIds: string[] | null;
+  /** The size, exactly as the category's size list labels it; `null` when it takes none. */
   size: string | null;
-  /** Whether the category takes a size (clothing and shoes). */
+  /** Whether the category takes a size. */
   sized: boolean;
   /** The brand to pick from Depop's brand list; posted without one when Depop lists none. */
   brand: string | null;
   condition: DepopFormCondition | null;
+  /**
+   * The other pickers to fill (colours, material), by the labels to pick; absent from the
+   * payload of a phone call a server issued before them.
+   */
+  details?: DepopFormPick[];
+  /** The size list's labels, for the message when the item's size is not one of them. */
+  sizes: string[];
 }
 
 /** A hashtag: letters and digits, as the item analysis writes them (without the `#`). */
@@ -60,23 +74,26 @@ export function buildDepopAutomationPayload(
   item: ItemSnapshot,
   variant: ListingVariant,
 ): DepopAutomationPayload {
-  const named =
-    variant.categoryRef === null ? null : parseCategoryRef(variant.categoryRef, item.department);
-  const mapped = named === null ? mapDepopCategory(item.category, item.department) : null;
-  const path = named ?? mapped?.path ?? null;
-  const sizeKind = mapped?.size ?? categorySizeKind(path ?? [], item.category);
+  const category =
+    variant.categoryRef === null
+      ? mapDepopCategory(item.category, item.department)
+      : parseCategoryRef(variant.categoryRef, item.department);
   const brand = item.brand?.trim() ?? '';
+  const sizes = category?.sizes ?? [];
   return {
     title: variant.title,
     description: variant.description,
     hashtags: [...variant.hashtags],
     price: { amountCents: variant.price.amountCents, currency: variant.price.currency },
     photos: photosInOrder(item).map(({ photoId, url }) => ({ photoId, url })),
-    category: path === null ? null : [...path],
-    size: depopSize(item, sizeKind),
-    sized: sizeKind !== 'none',
+    category: category === null ? null : [...category.path],
+    categoryIds: category === null ? null : [...category.ids],
+    size: depopSize(item, sizes),
+    sized: sizes.length > 0,
     brand: brand === '' ? null : brand,
     condition: depopFormCondition(variant.condition ?? item.condition),
+    details: category === null ? [] : depopDetails(item, category.attributes),
+    sizes: [...sizes],
   };
 }
 
@@ -145,7 +162,7 @@ export function validateDepopAutomationPayload(payload: DepopAutomationPayload):
     issue(
       'variant.categoryRef',
       'required',
-      `Listora has no ${NAME} category for this item. Choose one, for example 'Womenswear > Footwear > Boots'.`,
+      `Listora has no ${NAME} category for this item. Choose one, for example 'Women > Footwear > Boots'.`,
     );
   }
   if (payload.condition === null) {
@@ -155,8 +172,16 @@ export function validateDepopAutomationPayload(payload: DepopAutomationPayload):
     issue(
       'item.sizeLabel',
       'required',
-      `${NAME} needs a size it lists for this category (for example M, US 8, W32, or US 9.5).`,
+      `${NAME} needs one of its sizes for this category: ${sizeExamples(payload.sizes)}.`,
     );
   }
+  issues.push(...depopProhibitedIssues(payload));
   return issues;
+}
+
+/** A few of a size list's labels, for a message: `XS, S, M, L, XL, ... (14 sizes)`. */
+function sizeExamples(sizes: readonly string[]): string {
+  const real = sizes.filter((size) => size !== 'Other');
+  const shown = real.slice(0, 8).join(', ');
+  return real.length > 8 ? `${shown}, ... (${String(real.length)} sizes)` : shown;
 }

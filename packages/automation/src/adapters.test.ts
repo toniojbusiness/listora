@@ -97,7 +97,7 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
       delist: 'automation',
       relist: 'automation',
       verifyRead: 'automation',
-      readFreshness: 'none',
+      readFreshness: 'revision',
       title: 'none',
       externalSkuReusable: false,
       saleDetection: ['poll', 'email', 'manual'],
@@ -110,7 +110,7 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     const mercari = build({ FAKE_MERCARI_SITE_URL: 'http://127.0.0.1:4600' });
     expect(mercari.capabilities('mercari', automated)?.readFreshness).toBe('revision');
     const depop = build({ FAKE_DEPOP_SITE_URL: 'http://127.0.0.1:4700' });
-    expect(depop.capabilities('depop', automated)?.readFreshness).toBe('none');
+    expect(depop.capabilities('depop', automated)?.readFreshness).toBe('revision');
     // And the fake eBay site eBay's.
     const ebay = build({ FAKE_EBAY_SITE_URL: 'http://127.0.0.1:4800' });
     expect(ebay.capabilities('ebay', automated)?.readFreshness).toBe('revision');

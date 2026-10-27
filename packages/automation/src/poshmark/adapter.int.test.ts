@@ -68,6 +68,7 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
 
   afterEach(() => {
     site.clearFaults();
+    site.reviewChanges(false);
   });
 
   afterAll(async () => {
@@ -148,6 +149,108 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     });
     const read = await adapter.readListing(ref, ctx());
     expect(read.found && Number.isSafeInteger(read.revision)).toBe(true);
+  });
+
+  it("fills every shape of Poshmark's form: sizes by their labels, one size, groups, kids, colors", async () => {
+    // A men's shirt in a neck size, whose button reads "Neck 15.5", new with tags.
+    const shirt = await create({
+      item: {
+        department: 'men',
+        category: 'clothing/tops/shirts',
+        sizeLabel: '15.5',
+        condition: 'new_with_tags',
+        colors: ['navy', 'white'],
+      },
+      variant: { aspects: [] },
+    });
+    expect(site.listing(shirt.externalListingId)).toMatchObject({
+      department: 'Men',
+      category: 'Shirts',
+      subcategory: 'Casual Button Down Shirts',
+      sizeSet: 'Standard',
+      size: '15.5',
+      condition: 'nwt',
+      colors: ['Blue', 'White'],
+    });
+    // A one-size category, whose form chooses its size by itself.
+    const lamp = await create({
+      item: { department: null, category: 'home/decor', sizeLabel: null, colors: [] },
+      variant: { aspects: [] },
+    });
+    expect(site.listing(lamp.externalListingId)).toMatchObject({
+      department: 'Home',
+      category: 'Accents',
+      subcategory: 'Decor',
+      size: 'OS',
+    });
+    // A category in a display group, named by the listing.
+    const kurta = await create({
+      item: { department: 'women', sizeLabel: 'M' },
+      variant: { aspects: [], categoryRef: 'Women/Kurtas' },
+    });
+    expect(site.listing(kurta.externalListingId)).toMatchObject({
+      category: 'Kurtas',
+      subcategory: null,
+      size: 'M',
+    });
+    // A kids' size, under the set the size names.
+    const tee = await create({
+      item: { department: 'kids', category: 'clothing/tops/t_shirts', sizeLabel: 'Boys 8' },
+      variant: { aspects: [] },
+    });
+    expect(site.listing(tee.externalListingId)).toMatchObject({
+      department: 'Kids',
+      category: 'Shirts & Tops',
+      subcategory: 'Tees - Short Sleeve',
+      sizeSet: 'Boys',
+      size: '8B',
+    });
+  });
+
+  it('changes a listing Poshmark is reviewing, and reads it live only once Poshmark publishes it', async () => {
+    const ref = await create();
+    site.reviewChanges(true);
+    const price = request('price', ref, {}, { priceCents: 5000, currency: 'USD' });
+    expect(await adapter.execute(price, ctx())).toMatchObject({ type: 'confirmed' });
+    // Under review, buyers can't buy it: not live yet, but not gone either.
+    expect(await adapter.readListing(ref, ctx())).toEqual({ found: false, authoritative: false });
+    // Its seller can still end it, and an ended listing reads as ended, reviewed or not.
+    const end = await adapter.execute(request('end', ref, {}, { status: 'ended' }), ctx());
+    expect(end).toMatchObject({ type: 'confirmed' });
+    expect(site.listing(ref.externalListingId)).toMatchObject({
+      inventory: 'not_for_sale',
+      priceCents: 5000,
+      reviewing: true,
+    });
+    const relist = await adapter.execute(request('relist', ref, {}, { status: 'active' }), ctx());
+    expect(relist.type).not.toBe('rejected');
+    site.publish(ref.externalListingId);
+    expect(await adapter.readListing(ref, ctx())).toMatchObject({
+      found: true,
+      status: 'active',
+      priceCents: 5000,
+    });
+  });
+
+  it('moves a listing to another department, subcategory, size, and colors on revise', async () => {
+    const ref = await create({
+      item: { department: 'women', category: 'clothing/tops/blouses', colors: ['red'] },
+      variant: { aspects: [{ name: 'Size', values: ['S'] }] },
+    });
+    const revise = request('revise', ref, {
+      item: { department: 'men', category: 'clothing/bottoms/jeans', colors: ['blue', 'black'] },
+      variant: { aspects: [{ name: 'Size', values: ['32x30'] }] },
+    });
+    expect(await adapter.execute(revise, ctx())).toMatchObject({ type: 'confirmed' });
+    expect(site.listing(ref.externalListingId)).toMatchObject({
+      department: 'Men',
+      category: 'Jeans',
+      // The picker's "None": the blouse's subcategory is not kept.
+      subcategory: null,
+      sizeSet: 'Standard',
+      size: '32',
+      colors: ['Blue', 'Black'],
+    });
   });
 
   it('confirms a new listing on its own page, by the id its form named, not in the closet', async () => {
