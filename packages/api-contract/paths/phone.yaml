@@ -62,7 +62,7 @@
       default:
         $ref: '../components/responses.yaml#/DefaultError'
 /v1/phone-runs/wait:
-  post:
+  get:
     tags: [phone]
     operationId: waitForPhoneWork
     summary: Wait for this phone's next work
@@ -71,14 +71,24 @@
       looking again on a timer: the answer comes as soon as work for this phone may be
       claimable (the engine handed a change to the phone, a check came due, a run's claim
       ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
-      usual. Nothing is claimed or changed here, so a wait the app gives up on (a trigger in the
-      app, the app leaving) leaves nothing behind.
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: '../components/schemas/phone.yaml#/PhoneWorkWait'
+      usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+      trigger in the app, the app leaving) leaves nothing behind.
+    parameters:
+      - name: installationId
+        in: query
+        required: true
+        description: The app installation's id, which it keeps in its Keychain.
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+      - name: waitSeconds
+        in: query
+        required: true
+        description: The longest the answer may take.
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 20
     responses:
       '200':
         description: Whether work may be ready.

@@ -726,8 +726,6 @@ components:
       $ref: './components/schemas/phone.yaml#/KnownPhoneWorkPurpose'
     PhoneRunClaim:
       $ref: './components/schemas/phone.yaml#/PhoneRunClaim'
-    PhoneWorkWait:
-      $ref: './components/schemas/phone.yaml#/PhoneWorkWait'
     PhoneWorkWaitResult:
       $ref: './components/schemas/phone.yaml#/PhoneWorkWaitResult'
     PhoneCall:

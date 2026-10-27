@@ -16633,16 +16633,40 @@ public enum Operations {
     /// looking again on a timer: the answer comes as soon as work for this phone may be
     /// claimable (the engine handed a change to the phone, a check came due, a run's claim
     /// ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
-    /// usual. Nothing is claimed or changed here, so a wait the app gives up on (a trigger in the
-    /// app, the app leaving) leaves nothing behind.
+    /// usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+    /// trigger in the app, the app leaving) leaves nothing behind.
     ///
     ///
-    /// - Remark: HTTP `POST /v1/phone-runs/wait`.
-    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/post(waitForPhoneWork)`.
+    /// - Remark: HTTP `GET /v1/phone-runs/wait`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)`.
     public enum WaitForPhoneWork {
         public static let id: Swift.String = "waitForPhoneWork"
         public struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/POST/header`.
+            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The app installation's id, which it keeps in its Keychain.
+                ///
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query/installationId`.
+                public var installationId: Components.Schemas.Id
+                /// The longest the answer may take.
+                ///
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query/waitSeconds`.
+                public var waitSeconds: Swift.Int32
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - installationId: The app installation's id, which it keeps in its Keychain.
+                ///   - waitSeconds: The longest the answer may take.
+                public init(
+                    installationId: Components.Schemas.Id,
+                    waitSeconds: Swift.Int32
+                ) {
+                    self.installationId = installationId
+                    self.waitSeconds = waitSeconds
+                }
+            }
+            public var query: Operations.WaitForPhoneWork.Input.Query
+            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/header`.
             public struct Headers: Sendable, Hashable {
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.WaitForPhoneWork.AcceptableContentType>]
                 /// Creates a new `Headers`.
@@ -16654,30 +16678,24 @@ public enum Operations {
                 }
             }
             public var headers: Operations.WaitForPhoneWork.Input.Headers
-            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/POST/requestBody`.
-            @frozen public enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/POST/requestBody/content/application\/json`.
-                case json(Components.Schemas.PhoneWorkWait)
-            }
-            public var body: Operations.WaitForPhoneWork.Input.Body
             /// Creates a new `Input`.
             ///
             /// - Parameters:
+            ///   - query:
             ///   - headers:
-            ///   - body:
             public init(
-                headers: Operations.WaitForPhoneWork.Input.Headers = .init(),
-                body: Operations.WaitForPhoneWork.Input.Body
+                query: Operations.WaitForPhoneWork.Input.Query,
+                headers: Operations.WaitForPhoneWork.Input.Headers = .init()
             ) {
+                self.query = query
                 self.headers = headers
-                self.body = body
             }
         }
         @frozen public enum Output: Sendable, Hashable {
             public struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/POST/responses/200/content`.
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/responses/200/content`.
                 @frozen public enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/v1/phone-runs/wait/POST/responses/200/content/application\/json`.
+                    /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/responses/200/content/application\/json`.
                     case json(Components.Schemas.PhoneWorkWaitResult)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
@@ -16704,7 +16722,7 @@ public enum Operations {
             }
             /// Whether work may be ready.
             ///
-            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/post(waitForPhoneWork)/responses/200`.
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/200`.
             ///
             /// HTTP response code: `200 ok`.
             case ok(Operations.WaitForPhoneWork.Output.Ok)
@@ -16727,7 +16745,7 @@ public enum Operations {
             }
             /// The resource does not exist in this account (`not_found`).
             ///
-            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/post(waitForPhoneWork)/responses/404`.
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/404`.
             ///
             /// HTTP response code: `404 notFound`.
             case notFound(Components.Responses.NotFound)
@@ -16750,7 +16768,7 @@ public enum Operations {
             }
             /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
             ///
-            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/post(waitForPhoneWork)/responses/422`.
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/422`.
             ///
             /// HTTP response code: `422 unprocessableContent`.
             case unprocessableContent(Components.Responses.ValidationFailed)
@@ -16773,7 +16791,7 @@ public enum Operations {
             }
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
-            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/post(waitForPhoneWork)/responses/default`.
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)

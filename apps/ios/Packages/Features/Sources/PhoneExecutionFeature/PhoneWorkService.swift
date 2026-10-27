@@ -153,12 +153,12 @@ public struct APIPhoneWorkService: PhoneWorkService {
     }
 
     public func waitForWork(installationID: String, upTo: Duration) async throws(APIFailure) -> Bool {
-        let body = Components.Schemas.PhoneWorkWait(
+        let query = Operations.WaitForPhoneWork.Input.Query(
             installationId: installationID,
             waitSeconds: Int32(max(1, min(20, upTo.components.seconds))),
         )
         let output = try await call {
-            try await api.client.waitForPhoneWork(body: .json(body))
+            try await api.client.waitForPhoneWork(query: query)
         }
         switch output {
         case let .ok(response):

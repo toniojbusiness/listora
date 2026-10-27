@@ -2543,7 +2543,7 @@ paths:
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/phone-runs/wait:
-    post:
+    get:
       tags:
         - phone
       operationId: waitForPhoneWork
@@ -2553,14 +2553,24 @@ paths:
         looking again on a timer: the answer comes as soon as work for this phone may be
         claimable (the engine handed a change to the phone, a check came due, a run's claim
         ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
-        usual. Nothing is claimed or changed here, so a wait the app gives up on (a trigger in the
-        app, the app leaving) leaves nothing behind.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PhoneWorkWait'
+        usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+        trigger in the app, the app leaving) leaves nothing behind.
+      parameters:
+        - name: installationId
+          in: query
+          required: true
+          description: The app installation's id, which it keeps in its Keychain.
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: waitSeconds
+          in: query
+          required: true
+          description: The longest the answer may take.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 20
       responses:
         '200':
           description: Whether work may be ready.
@@ -6214,21 +6224,6 @@ components:
             (each once its last step is a few seconds behind, as Try now runs it), except a wait the
             marketplace or Listora's pacing asked for, and a claim that finds nothing says to look
             again within seconds.
-    PhoneWorkWait:
-      type: object
-      additionalProperties: false
-      required:
-        - installationId
-        - waitSeconds
-      properties:
-        installationId:
-          $ref: '#/components/schemas/Id'
-        waitSeconds:
-          type: integer
-          format: int32
-          minimum: 1
-          maximum: 20
-          description: The longest the answer may take.
     PhoneWorkWaitResult:
       type: object
       required:

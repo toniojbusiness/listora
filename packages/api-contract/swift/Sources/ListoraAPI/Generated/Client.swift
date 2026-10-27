@@ -10740,12 +10740,12 @@ public struct Client: APIProtocol {
     /// looking again on a timer: the answer comes as soon as work for this phone may be
     /// claimable (the engine handed a change to the phone, a check came due, a run's claim
     /// ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
-    /// usual. Nothing is claimed or changed here, so a wait the app gives up on (a trigger in the
-    /// app, the app leaving) leaves nothing behind.
+    /// usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+    /// trigger in the app, the app leaving) leaves nothing behind.
     ///
     ///
-    /// - Remark: HTTP `POST /v1/phone-runs/wait`.
-    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/post(waitForPhoneWork)`.
+    /// - Remark: HTTP `GET /v1/phone-runs/wait`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)`.
     public func waitForPhoneWork(_ input: Operations.WaitForPhoneWork.Input) async throws -> Operations.WaitForPhoneWork.Output {
         try await client.send(
             input: input,
@@ -10757,23 +10757,28 @@ public struct Client: APIProtocol {
                 )
                 var request: HTTPTypes.HTTPRequest = .init(
                     soar_path: path,
-                    method: .post
+                    method: .get
                 )
                 suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "installationId",
+                    value: input.query.installationId
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "waitSeconds",
+                    value: input.query.waitSeconds
+                )
                 converter.setAcceptHeader(
                     in: &request.headerFields,
                     contentTypes: input.headers.accept
                 )
-                let body: OpenAPIRuntime.HTTPBody?
-                switch input.body {
-                case let .json(value):
-                    body = try converter.setRequiredRequestBodyAsJSON(
-                        value,
-                        headerFields: &request.headerFields,
-                        contentType: "application/json; charset=utf-8"
-                    )
-                }
-                return (request, body)
+                return (request, nil)
             },
             deserializer: { response, responseBody in
                 switch response.status.code {

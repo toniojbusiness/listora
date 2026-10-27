@@ -189,7 +189,7 @@ describe('the phone API (real Postgres)', () => {
     const wait = (waitSeconds: number) =>
       api.call('waitForPhoneWork', {
         token: seller,
-        body: { installationId: phone, waitSeconds },
+        query: { installationId: phone, waitSeconds: String(waitSeconds) },
       });
 
     // Nothing for this phone: the wait runs out.
@@ -224,7 +224,7 @@ describe('the phone API (real Postgres)', () => {
       (
         await api.call('waitForPhoneWork', {
           token: seller,
-          body: { installationId: randomUUID(), waitSeconds: 1 },
+          query: { installationId: randomUUID(), waitSeconds: '1' },
         })
       ).status,
     ).toBe(404);

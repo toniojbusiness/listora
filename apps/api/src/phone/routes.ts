@@ -63,9 +63,9 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
     }
   });
 
-  contractRoute(app, deps, 'waitForPhoneWork', async ({ tenant, db, body, request }) => {
+  contractRoute(app, deps, 'waitForPhoneWork', async ({ tenant, db, query, request }) => {
     const phone = available(deps);
-    const device = await findDevice(db, tenant, body.installationId);
+    const device = await findDevice(db, tenant, query.installationId);
     if (device === undefined) throw notFound('Device');
     // The wait ends when the app gives up on it (its connection closes).
     const gone = new AbortController();
@@ -80,7 +80,7 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
         db,
         { accountId: tenant.accountId, deviceId: device.id },
         {
-          maxMs: Math.min(body.waitSeconds, PHONE_WAIT_MAX_SECONDS) * 1000,
+          maxMs: Math.min(Number(query.waitSeconds), PHONE_WAIT_MAX_SECONDS) * 1000,
           signal: gone.signal,
         },
       );

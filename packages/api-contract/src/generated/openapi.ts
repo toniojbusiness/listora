@@ -1839,18 +1839,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
          * Wait for this phone's next work
          * @description While the app is open and has claimed everything it can, it waits here instead of
          *     looking again on a timer: the answer comes as soon as work for this phone may be
          *     claimable (the engine handed a change to the phone, a check came due, a run's claim
          *     ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
-         *     usual. Nothing is claimed or changed here, so a wait the app gives up on (a trigger in the
-         *     app, the app leaving) leaves nothing behind.
+         *     usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+         *     trigger in the app, the app leaving) leaves nothing behind.
          */
-        post: operations["waitForPhoneWork"];
+        get: operations["waitForPhoneWork"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3626,14 +3626,6 @@ export interface components {
              */
             appOpen?: boolean;
         };
-        PhoneWorkWait: {
-            installationId: components["schemas"]["Id"];
-            /**
-             * Format: int32
-             * @description The longest the answer may take.
-             */
-            waitSeconds: number;
-        };
         PhoneWorkWaitResult: {
             /**
              * @description `true` when work for this phone may be claimable now (claim it), `false` when the wait
@@ -5077,7 +5069,6 @@ export type Device = components['schemas']['Device'];
 export type PhoneWorkPurpose = components['schemas']['PhoneWorkPurpose'];
 export type KnownPhoneWorkPurpose = components['schemas']['KnownPhoneWorkPurpose'];
 export type PhoneRunClaim = components['schemas']['PhoneRunClaim'];
-export type PhoneWorkWait = components['schemas']['PhoneWorkWait'];
 export type PhoneWorkWaitResult = components['schemas']['PhoneWorkWaitResult'];
 export type PhoneCall = components['schemas']['PhoneCall'];
 export type PhoneRun = components['schemas']['PhoneRun'];
@@ -7797,16 +7788,17 @@ export interface operations {
     };
     waitForPhoneWork: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description The app installation's id, which it keeps in its Keychain. */
+                installationId: components["schemas"]["Id"];
+                /** @description The longest the answer may take. */
+                waitSeconds: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PhoneWorkWait"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Whether work may be ready. */
             200: {
