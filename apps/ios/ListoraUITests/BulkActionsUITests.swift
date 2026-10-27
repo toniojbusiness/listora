@@ -127,11 +127,7 @@ final class BulkActionsUITests: XCTestCase {
             try require(row.waitForExistence(timeout: 10), "no row for \(sku)")
             row.tap()
         }
-        try require(waitForLabel(
-            of: app.staticTexts["inventory.selectionCount"],
-            "\(skus.count) items chosen",
-            timeout: 5,
-        ))
+        try require(app.staticTexts["\(skus.count) selected"].waitForExistence(timeout: 5), "not \(skus.count) chosen")
     }
 
     private func start() throws {

@@ -39,6 +39,39 @@ struct MarketplaceRowStateTests {
     }
 
     @Test
+    func `says the last settled change and when, the link to share, and nothing a status already says`() {
+        let row = { (operation: Schemas.Operation?) in
+            var listing = Fixtures.listing(latest: operation)
+            listing.externalUrl = "https://www.ebay.com/itm/123"
+            return MarketplaceRowState(
+                marketplace: .ebay,
+                listing: listing,
+                connection: Fixtures.connection(.ebay, mode: "api"),
+            )
+        }
+        let when = Formatting.timestamp(Fixtures.date)
+        let price = Fixtures.operation(
+            kind: .price,
+            status: .succeeded,
+            label: "Price changed (confirmed by eBay)",
+            tone: .success,
+        )
+        #expect(row(price).lastChange == "Last change: Price changed (confirmed by eBay), \(when)")
+        #expect(row(price).externalURL?.absoluteString == "https://www.ebay.com/itm/123")
+        let published = Fixtures.operation(
+            kind: .create,
+            status: .succeeded,
+            label: "Published (confirmed by eBay)",
+            tone: .success,
+        )
+        #expect(row(published).lastChange == nil, "the status says it went live")
+        let failed = Fixtures.operation(status: .failed, label: "Delist failed - Retry", tone: .failed)
+        #expect(row(failed).lastChange == "Since \(when)")
+        let running = Fixtures.operation(status: .running, label: "Delisting...", tone: .inProgress)
+        #expect(row(running).lastChange == nil)
+    }
+
+    @Test
     func `offers nothing while a change runs, and says it is working`() {
         let running = Fixtures.operation(status: .verifying, label: "Checking...", tone: .checking)
         let row = MarketplaceRowState(

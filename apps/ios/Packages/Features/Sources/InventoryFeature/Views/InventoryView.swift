@@ -42,7 +42,7 @@ public struct InventoryView<Header: View>: View {
                 }
                 .background(Palette.background)
                 .navigationTitle(model.isSelecting ? selectionTitle : "Inventory")
-                .navigationBarTitleDisplayMode(model.isSelecting ? .inline : .automatic)
+                .navigationBarTitleDisplayMode(model.isSelecting ? .inline : .large)
                 // Always shown: the quick filters under it would otherwise collapse it out of sight.
                 .searchable(
                     text: $model.query.search,

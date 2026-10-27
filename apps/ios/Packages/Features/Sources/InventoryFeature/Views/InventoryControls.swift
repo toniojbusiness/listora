@@ -53,10 +53,13 @@ struct SelectionBar: View {
 
     var body: some View {
         BottomActionBar {
-            Text(chosen == 0 ? "Tap items to choose them" : "\(chosen) item\(chosen == 1 ? "" : "s") chosen")
-                .font(Typography.footnote)
-                .foregroundStyle(Palette.textSecondary)
-                .accessibilityIdentifier("inventory.selectionCount")
+            // The title counts the chosen items; until there are some, say how to choose them.
+            if chosen == 0 {
+                Text("Tap items to choose them")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("inventory.selectionHint")
+            }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Spacing.xs) { buttons }
                 VStack(spacing: Spacing.xs) { buttons }
