@@ -84,9 +84,11 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         }
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
         let waiting = Self.waitingAttempt(of: listing, now: now)
-        scheduleLabel = waiting.map { operation, at in
-            let time = at.formatted(date: Calendar.current.isDate(at, inSameDayAs: now) ? .omitted : .abbreviated,
-                                    time: .shortened)
+        scheduleLabel = waiting.map { operation, due in
+            let time = due.formatted(
+                date: Calendar.current.isDate(due, inSameDayAs: now) ? .omitted : .abbreviated,
+                time: .shortened,
+            )
             return operation.status.value1 == .verifying ? "Checking again at \(time)" : "Waiting to retry at \(time)"
         }
         if let listing {
@@ -155,10 +157,10 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
 
     /// The listing's newest operation while it waits for a later attempt (a retry after a
     /// failure, or a check between read-backs), with when that attempt is due.
-    private static func waitingAttempt(of listing: Listing?, now: Date) -> (operation: Operation, at: Date)? {
-        guard let operation = listing?.latestOperation, let at = operation.nextAttemptAt, at > now else { return nil }
+    private static func waitingAttempt(of listing: Listing?, now: Date) -> (operation: Operation, due: Date)? {
+        guard let operation = listing?.latestOperation, let due = operation.nextAttemptAt, due > now else { return nil }
         switch operation.status.value1 {
-        case .retrying, .verifying: return (operation, at)
+        case .retrying, .verifying: return (operation, due)
         default: return nil
         }
     }

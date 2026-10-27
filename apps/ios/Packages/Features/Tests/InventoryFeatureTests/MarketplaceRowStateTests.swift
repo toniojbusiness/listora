@@ -59,7 +59,12 @@ struct MarketplaceRowStateTests {
         retrying.nextAttemptAt = later
         let row = MarketplaceRowState(
             marketplace: .ebay,
-            listing: Fixtures.listing(label: "Delisting... retry 1 of 5", tone: .inProgress, actions: [], latest: retrying),
+            listing: Fixtures.listing(
+                label: "Delisting... retry 1 of 5",
+                tone: .inProgress,
+                actions: [],
+                latest: retrying,
+            ),
             connection: Fixtures.connection(.ebay, mode: "api"),
             now: now,
         )
@@ -84,7 +89,12 @@ struct MarketplaceRowStateTests {
         // Once the attempt is due it runs (or waits on this iPhone): nothing to try now.
         let due = MarketplaceRowState(
             marketplace: .ebay,
-            listing: Fixtures.listing(label: "Delisting... retry 1 of 5", tone: .inProgress, actions: [], latest: retrying),
+            listing: Fixtures.listing(
+                label: "Delisting... retry 1 of 5",
+                tone: .inProgress,
+                actions: [],
+                latest: retrying,
+            ),
             connection: Fixtures.connection(.ebay, mode: "api"),
             now: later.addingTimeInterval(1),
         )

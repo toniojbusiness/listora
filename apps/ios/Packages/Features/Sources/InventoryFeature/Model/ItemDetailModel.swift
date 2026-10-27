@@ -127,7 +127,9 @@ final class ItemDetailModel {
             }
             var failed: [String] = []
             for await failure in group {
-                if let failure { failed.append(failure) }
+                if let failure {
+                    failed.append(failure)
+                }
             }
             return failed.sorted()
         }

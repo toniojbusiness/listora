@@ -167,18 +167,8 @@ struct ItemDetailView: View {
                     phoneProgress: environment.phoneProgress?.progress,
                     perform: perform,
                     end: { reason, row in end(row, reason: reason) },
-                    relistAll: { rows in
-                        let requests = rows.compactMap { row -> (request: ListingRequest, marketplace: String)? in
-                            row.listing.map { (.relist(listingID: $0.id), row.id) }
-                        }
-                        Task { await model.performAll(requests) }
-                    },
-                    endAll: { reason, rows in
-                        let requests = rows.compactMap { row -> (request: ListingRequest, marketplace: String)? in
-                            row.listing.map { (.end(listingID: $0.id, reason: reason.contract), row.id) }
-                        }
-                        Task { await model.performAll(requests) }
-                    },
+                    relistAll: { rows in performAll(rows) { .relist(listingID: $0) } },
+                    endAll: { reason, rows in performAll(rows) { .end(listingID: $0, reason: reason.contract) } },
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)
@@ -265,6 +255,14 @@ struct ItemDetailView: View {
         case let .openTask(operationID):
             openTask = OpenTask(operationID: operationID)
         }
+    }
+
+    /// The same change on each row's listing at once (Relist all, End all).
+    private func performAll(_ rows: [MarketplaceRowState], _ request: (String) -> ListingRequest) {
+        let requests = rows.compactMap { row -> (request: ListingRequest, marketplace: String)? in
+            row.listing.map { (request($0.id), row.id) }
+        }
+        Task { await model.performAll(requests) }
     }
 
     private func end(_ row: MarketplaceRowState, reason: EndReason) {

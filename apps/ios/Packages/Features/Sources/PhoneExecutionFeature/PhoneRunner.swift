@@ -227,53 +227,39 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
                 problem = error.message
                 return
             }
-            guard var run = claimed.run else {
+            guard let run = claimed.run else {
                 problem = nil
                 nextLook = claimed.nextClaimIn
                 return
             }
-            while let call = run.call {
-                activity = .running(marketplace: run.marketplace, purpose: run.purpose)
-                running = (run.marketplace, run.operationID)
-                if progress?.operationID != run.operationID || progress?.marketplace != run.marketplace {
-                    progress = PhoneWorkProgress(
-                        marketplace: run.marketplace,
-                        operationID: run.operationID,
-                        step: nil,
-                        stepNumber: 0,
-                        stepCount: nil,
-                        expectedEnd: nil,
-                    )
-                }
-                timings.begin()
-                let answer: Data
-                do {
-                    answer = try await runtime.run(call.input, marketplace: run.marketplace)
-                } catch {
-                    timings.finish(completed: false)
-                    // The call never ran: the server recovers the work when this phone next asks
-                    // for work, or once its claim lapses.
-                    problem = "Listora couldn't run this on your iPhone."
-                    return
-                }
-                timings.finish(completed: Self.ranToTheEnd(answer))
-                guard let next = await send(answer, for: call, of: run, installationID: id) else { break }
-                run = next
-            }
+            guard await runCalls(of: run, installationID: id) else { return }
             NotificationCenter.default.post(name: .phoneWorkFinished, object: nil)
         }
     }
 
-    /// The runtime started a step of the call running now.
-    private func stepStarted(_ step: PhoneStep) {
-        guard let running else { return }
-        progress = timings.started(step, marketplace: running.marketplace, operationID: running.operationID)
-    }
-
-    /// Whether the runtime's answer says the script ran all its steps (`result.ok`).
-    private static func ranToTheEnd(_ answer: Data) -> Bool {
-        let output = try? JSONSerialization.jsonObject(with: answer) as? [String: Any]
-        return (output?["result"] as? [String: Any])?["ok"] as? Bool ?? false
+    /// Runs each call of the run and answers it, until the run is over; `false` when a call
+    /// could not run on this phone (the run stops; the server recovers the work).
+    private func runCalls(of claimed: PhoneRun, installationID id: String) async -> Bool {
+        var run = claimed
+        while let call = run.call {
+            activity = .running(marketplace: run.marketplace, purpose: run.purpose)
+            follow(run)
+            timings.begin()
+            let answer: Data
+            do {
+                answer = try await runtime.run(call.input, marketplace: run.marketplace)
+            } catch {
+                timings.finish(completed: false)
+                // The call never ran: the server recovers the work when this phone next asks for
+                // work, or once its claim lapses.
+                problem = "Listora couldn't run this on your iPhone."
+                return false
+            }
+            timings.finish(completed: Self.ranToTheEnd(answer))
+            guard let next = await send(answer, for: call, of: run, installationID: id) else { break }
+            run = next
+        }
+        return true
     }
 
     /// Answers a call, trying again a few times while Listora can't be reached (the answer is
@@ -318,5 +304,34 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         guard current != registered else { return }
         try await service.register(installationID: id, current)
         registered = current
+    }
+}
+
+/// The progress of the work running now (`progress`), from the steps the runtime reports.
+extension PhoneRunner {
+    /// The run whose calls start now: its progress starts over unless it is the same work.
+    private func follow(_ run: PhoneRun) {
+        running = (run.marketplace, run.operationID)
+        guard progress?.operationID != run.operationID || progress?.marketplace != run.marketplace else { return }
+        progress = PhoneWorkProgress(
+            marketplace: run.marketplace,
+            operationID: run.operationID,
+            step: nil,
+            stepNumber: 0,
+            stepCount: nil,
+            expectedEnd: nil,
+        )
+    }
+
+    /// The runtime started a step of the call running now.
+    func stepStarted(_ step: PhoneStep) {
+        guard let running else { return }
+        progress = timings.started(step, marketplace: running.marketplace, operationID: running.operationID)
+    }
+
+    /// Whether the runtime's answer says the script ran all its steps (`result.ok`).
+    static func ranToTheEnd(_ answer: Data) -> Bool {
+        let output = try? JSONSerialization.jsonObject(with: answer) as? [String: Any]
+        return (output?["result"] as? [String: Any])?["ok"] as? Bool ?? false
     }
 }

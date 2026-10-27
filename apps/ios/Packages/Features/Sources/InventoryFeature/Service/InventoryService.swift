@@ -312,6 +312,25 @@ struct APIInventoryService: InventoryService {
         }
     }
 
+    private func call<Output>(_ request: () async throws -> Output) async throws(APIFailure) -> Output {
+        do {
+            return try await request()
+        } catch {
+            throw APIFailure(error)
+        }
+    }
+
+    private func body<Body>(_ read: () throws -> Body) throws(APIFailure) -> Body {
+        do {
+            return try read()
+        } catch {
+            throw APIFailure(error)
+        }
+    }
+}
+
+/// The actions on an operation itself: Retry a failed one, Try now a waiting one.
+extension APIInventoryService {
     func retry(operationID: String, idempotencyKey: String) async throws(APIFailure) -> Operation {
         let output = try await call {
             try await client.retryOperation(
@@ -346,22 +365,6 @@ struct APIInventoryService: InventoryService {
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
-        }
-    }
-
-    private func call<Output>(_ request: () async throws -> Output) async throws(APIFailure) -> Output {
-        do {
-            return try await request()
-        } catch {
-            throw APIFailure(error)
-        }
-    }
-
-    private func body<Body>(_ read: () throws -> Body) throws(APIFailure) -> Body {
-        do {
-            return try read()
-        } catch {
-            throw APIFailure(error)
         }
     }
 }
