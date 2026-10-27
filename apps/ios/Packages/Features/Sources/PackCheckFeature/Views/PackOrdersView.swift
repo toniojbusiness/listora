@@ -62,8 +62,8 @@ struct PackOrdersView: View {
                 if model.readingLabels > 0 {
                     Banner(
                         "Reading shipping labels",
-                        message: "Your iPhone is reading \(model.readingLabels == 1 ? "a label" : "\(model.readingLabels) labels") "
-                            + "from the marketplaces. It only reads; nothing changes there.",
+                        message: "Your iPhone is reading \(readingCount) from the marketplaces. "
+                            + "It only reads; nothing changes there.",
                         tone: .inProgress,
                     )
                 }
@@ -98,6 +98,11 @@ struct PackOrdersView: View {
             .frame(maxWidth: Layout.readableWidth)
             .frame(maxWidth: .infinity)
         }
+    }
+
+    /// "a label", "3 labels".
+    private var readingCount: String {
+        model.readingLabels == 1 ? "a label" : "\(model.readingLabels) labels"
     }
 
     private func start(_ orders: [PackOrder]) {
@@ -135,8 +140,16 @@ struct PackOrderCard: View {
                 Text(buyerLine)
                     .font(Typography.subheadline)
                     .foregroundStyle(Palette.textSecondary)
-                StatusBadge(order.labelStatus.label, tone: StatusTone(order.labelStatus.tone))
-                StatusBadge(order.packStatus.label, tone: StatusTone(order.packStatus.tone))
+                StatusBadge(
+                    order.labelStatus.label,
+                    tone: StatusTone(order.labelStatus.tone),
+                    showsIcon: StatusTone(order.labelStatus.tone) != .neutral,
+                )
+                StatusBadge(
+                    order.packStatus.label,
+                    tone: StatusTone(order.packStatus.tone),
+                    showsIcon: StatusTone(order.packStatus.tone) != .neutral,
+                )
             }
             Spacer(minLength: 0)
         }
@@ -149,9 +162,13 @@ struct PackOrderCard: View {
         var parts: [String] = []
         if let item = order.items.first {
             parts.append(item.sku)
-            if let shelf = item.location?.code { parts.append("Shelf \(shelf)") }
+            if let shelf = item.location?.code {
+                parts.append("Shelf \(shelf)")
+            }
         }
-        if order.items.count > 1 { parts.append("+\(order.items.count - 1) more") }
+        if order.items.count > 1 {
+            parts.append("+\(order.items.count - 1) more")
+        }
         return parts.joined(separator: " · ")
     }
 

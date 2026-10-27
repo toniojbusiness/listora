@@ -76,7 +76,12 @@ export function scanVerdict(facts: ScanFacts): ScanVerdict {
     if (stickerSku === null) return { verdict: 'not_a_label' };
     if (facts.stickerOrder === null) return { verdict: 'unknown_label', expected };
     if (expected !== null && facts.stickerOrder.saleId !== expected.saleId) {
-      return { verdict: 'sticker_mismatch', order: expected, sticker: facts.stickerOrder, sku: stickerSku };
+      return {
+        verdict: 'sticker_mismatch',
+        order: expected,
+        sticker: facts.stickerOrder,
+        sku: stickerSku,
+      };
     }
     return expected === null
       ? { verdict: 'found', order: facts.stickerOrder, matchedBy: 'sticker' }
@@ -96,7 +101,12 @@ export function scanVerdict(facts: ScanFacts): ScanVerdict {
     return { verdict: 'unknown_label', expected };
   }
   if (stickerSku !== null && !own.skus.includes(stickerSku)) {
-    return { verdict: 'sticker_mismatch', order: own, sticker: facts.stickerOrder, sku: stickerSku };
+    return {
+      verdict: 'sticker_mismatch',
+      order: own,
+      sticker: facts.stickerOrder,
+      sku: stickerSku,
+    };
   }
   const matchedBy = stickerSku === null ? 'label' : 'sticker';
   return expected === null

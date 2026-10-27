@@ -460,7 +460,9 @@ export function createPoshmarkScripts(
       });
     },
     labels: async (orders, step) => {
-      const sales = await step('read your sales', { mutates: false }, (page) => readSales(page, site));
+      const sales = await step('read your sales', { mutates: false }, (page) =>
+        readSales(page, site),
+      );
       const saleOf = (order: LabelReadRequest): PoshmarkSale | undefined =>
         sales.find(
           (sale) =>
@@ -486,7 +488,12 @@ export function createPoshmarkScripts(
           trackingNumber = shown.trackingNumber;
           buyerFirstName ??= shown.buyerFirstName;
         }
-        labels.push({ externalOrderId: order.externalOrderId, found: true, trackingNumber, buyerFirstName });
+        labels.push({
+          externalOrderId: order.externalOrderId,
+          found: true,
+          trackingNumber,
+          buyerFirstName,
+        });
       }
       return labels;
     },

@@ -165,7 +165,10 @@ export function registerPackCheckRoutes(
         case 'not_found':
           throw notFound('Upload file');
         case 'incomplete':
-          throw new ApiError('upload_incomplete', 'This photo has not finished uploading. Upload it again.');
+          throw new ApiError(
+            'upload_incomplete',
+            'This photo has not finished uploading. Upload it again.',
+          );
         case 'expired':
           throw new ApiError('upload_expired', 'This upload has expired. Take the photo again.');
         case 'attached':
@@ -175,7 +178,10 @@ export function registerPackCheckRoutes(
       }
       const bytes = await deps.storage.get(claim.file.storageKey);
       if (bytes === undefined) {
-        throw new ApiError('upload_incomplete', 'This photo has not finished uploading. Upload it again.');
+        throw new ApiError(
+          'upload_incomplete',
+          'This photo has not finished uploading. Upload it again.',
+        );
       }
       let image;
       try {
@@ -216,7 +222,11 @@ function packPhotoKey(): string {
   return `public/${randomBytes(16).toString('hex')}/package.jpg`;
 }
 
-async function deletePhoto(storage: ObjectStorage, key: string, log: FastifyBaseLogger): Promise<void> {
+async function deletePhoto(
+  storage: ObjectStorage,
+  key: string,
+  log: FastifyBaseLogger,
+): Promise<void> {
   try {
     await storage.delete(key);
   } catch (error) {

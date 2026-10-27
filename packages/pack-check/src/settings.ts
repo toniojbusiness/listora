@@ -27,13 +27,18 @@ export async function savePackCheckSettings(
   const row = await executor
     .insertInto('pack_check_setting')
     .values({ account_id: accountId, enabled: settings.enabled })
-    .onConflict((conflict) => conflict.column('account_id').doUpdateSet({ enabled: settings.enabled }))
+    .onConflict((conflict) =>
+      conflict.column('account_id').doUpdateSet({ enabled: settings.enabled }),
+    )
     .returning('enabled')
     .executeTakeFirstOrThrow();
   return { enabled: row.enabled };
 }
 
 /** Whether Pack check is on: only then does Listora read labels when sales come in. */
-export async function isPackCheckEnabled(executor: DbExecutor, accountId: string): Promise<boolean> {
+export async function isPackCheckEnabled(
+  executor: DbExecutor,
+  accountId: string,
+): Promise<boolean> {
   return (await loadPackCheckSettings(executor, accountId)).enabled;
 }

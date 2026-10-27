@@ -51,11 +51,21 @@ final class PackSessionModel {
         self.service = service
         self.onChange = onChange
         index = orders.firstIndex { $0.pack == nil } ?? 0
-        if orders.isEmpty { stage = .finished }
+        if orders.isEmpty {
+            stage = .finished
+        }
     }
 
     var current: PackOrder? {
         orders.indices.contains(index) ? orders[index] : nil
+    }
+
+    /// Whether the scan's answer shows (a verdict, or the order packed).
+    var isShowingVerdict: Bool {
+        switch stage {
+        case .verdict, .packing, .packed: true
+        case .scanLabel, .checking, .finished: false
+        }
     }
 
     /// "Order 2 of 5", for a batch.
@@ -100,8 +110,8 @@ final class PackSessionModel {
     /// Packs the current order with the scanned label: after a match, or the seller's photo check
     /// of a label Listora doesn't know.
     func pack(photoCheck: Bool = false) async {
-        guard case let .verdict(scan, label) = stage, let order = current else { return }
-        guard scan.canPack || (photoCheck && scan.canPhotoCheck) else { return }
+        guard case let .verdict(scan, label) = stage, let order = current,
+              scan.canPack || (photoCheck && scan.canPhotoCheck) else { return }
         stage = .packing
         error = nil
         let attempt = "\(order.saleId)|\(label)|\(sticker ?? "")|\(photoCheck)"
@@ -162,7 +172,7 @@ final class PackSessionModel {
         guard let order = current else { return }
         error = nil
         do {
-            update(try await service.unpack(saleID: order.saleId))
+            try await update(service.unpack(saleID: order.saleId))
             scanAgain()
         } catch {
             self.error = error.message
@@ -181,7 +191,7 @@ final class PackSessionModel {
         let keys = photoKeys[order.saleId] ?? PackPhotoKeys()
         photoKeys[order.saleId] = keys
         do {
-            update(try await service.addPhoto(saleID: order.saleId, jpeg: jpeg, keys: keys))
+            try await update(service.addPhoto(saleID: order.saleId, jpeg: jpeg, keys: keys))
             photoKeys[order.saleId] = nil
         } catch {
             photoError = error.message
@@ -192,15 +202,15 @@ final class PackSessionModel {
         guard let order = current else { return }
         photoError = nil
         do {
-            update(try await service.removePhoto(saleID: order.saleId))
+            try await update(service.removePhoto(saleID: order.saleId))
         } catch {
             photoError = error.message
         }
     }
 
     private func update(_ order: PackOrder) {
-        if let at = orders.firstIndex(where: { $0.saleId == order.saleId }) {
-            orders[at] = order
+        if let position = orders.firstIndex(where: { $0.saleId == order.saleId }) {
+            orders[position] = order
         }
         onChange(order)
     }

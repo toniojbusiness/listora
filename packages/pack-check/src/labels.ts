@@ -58,7 +58,13 @@ export async function ordersToRead(
             .onRef('listing.account_id', '=', 'sale_item.account_id')
             .onRef('listing.id', '=', 'sale_item.listing_id'),
         )
-        .select(sql<string[]>`coalesce(array_agg(listing.external_listing_id order by listing.id) filter (where listing.external_listing_id is not null), '{}')`.as('ids'))
+        .select(
+          sql<
+            string[]
+          >`coalesce(array_agg(listing.external_listing_id order by listing.id) filter (where listing.external_listing_id is not null), '{}')`.as(
+            'ids',
+          ),
+        )
         .whereRef('sale_item.account_id', '=', 'sale.account_id')
         .whereRef('sale_item.sale_id', '=', 'sale.id')
         .as('listing_ids'),
@@ -73,9 +79,18 @@ export async function ordersToRead(
     .where((eb) =>
       eb.or([
         eb('label.read_at', 'is', null),
-        eb.and([eb('label.read_status', '=', 'no_label'), eb('label.read_at', '<=', retryAfter('no_label'))]),
-        eb.and([eb('label.read_status', '=', 'failed'), eb('label.read_at', '<=', retryAfter('failed'))]),
-        eb.and([eb('label.read_status', '=', 'not_found'), eb('label.read_at', '<=', retryAfter('not_found'))]),
+        eb.and([
+          eb('label.read_status', '=', 'no_label'),
+          eb('label.read_at', '<=', retryAfter('no_label')),
+        ]),
+        eb.and([
+          eb('label.read_status', '=', 'failed'),
+          eb('label.read_at', '<=', retryAfter('failed')),
+        ]),
+        eb.and([
+          eb('label.read_status', '=', 'not_found'),
+          eb('label.read_at', '<=', retryAfter('not_found')),
+        ]),
       ]),
     )
     .orderBy('sale.sold_at', 'desc')
@@ -116,12 +131,17 @@ export async function recordLabelReads(
     const firstName = 'buyerFirstName' in result ? cleanFirstName(result.buyerFirstName) : null;
     const tracking = result.status === 'read' ? canonicalTracking(result.trackingNumber) : null;
     // A page whose label isn't a tracking number Listora can use counts as no label yet.
-    const status: LabelReadStatus = result.status === 'read' && tracking === null ? 'no_label' : result.status;
+    const status: LabelReadStatus =
+      result.status === 'read' && tracking === null ? 'no_label' : result.status;
     const error = result.status === 'failed' ? result.error.slice(0, 200) || 'failed' : null;
     const label =
       tracking === null
         ? {}
-        : { tracking_number: tracking, carrier: carrierOf(tracking), source: 'marketplace' as const };
+        : {
+            tracking_number: tracking,
+            carrier: carrierOf(tracking),
+            source: 'marketplace' as const,
+          };
     const name = firstName === null ? {} : { buyer_first_name: firstName };
     await executor
       .insertInto('sale_label')
@@ -145,7 +165,11 @@ export async function recordLabelReads(
 
 /** The buyer's first name only, as a page shows it ("Sarah M." is "Sarah"). */
 export function cleanFirstName(name: string | null): string | null {
-  const first = name?.trim().split(/\s+/)[0]?.replace(/[^\p{L}\p{M}'-]/gu, '') ?? '';
+  const first =
+    name
+      ?.trim()
+      .split(/\s+/)[0]
+      ?.replace(/[^\p{L}\p{M}'-]/gu, '') ?? '';
   if (first === '') return null;
   return first.slice(0, 40);
 }

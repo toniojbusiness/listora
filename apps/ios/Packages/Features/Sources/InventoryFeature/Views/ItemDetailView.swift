@@ -205,24 +205,7 @@ struct ItemDetailView: View {
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)
-                if offersSticker {
-                    Banner(
-                        "Print its sticker?",
-                        message: "Stick it on the item's bag. Scanning it when you pack makes sure the right item ships.",
-                        tone: .neutral,
-                        systemImage: "qrcode",
-                        action: .init("Print sticker", identifier: "item.stickerNudge") {
-                            offersSticker = false
-                            printingSticker = StickerRequest(
-                                sku: item.sku,
-                                title: item.details.title,
-                                locationCode: item.storageLocation?.code,
-                            )
-                        },
-                    )
-                }
-                markSoldButton(for: item)
-                stickerButton(for: item)
+                itemActions(for: item)
                 DetailsSection(item: item) { editingSize = true }
                 ActivityLink { showsActivity = true }
             }
@@ -257,19 +240,12 @@ struct ItemDetailView: View {
         }
     }
 
-    /// "Print sticker": the item's SKU sticker for its bag, which Pack check scans at packing.
+    /// "Mark as sold", and the item's sticker.
     @ViewBuilder
-    private func stickerButton(for item: Item) -> some View {
+    private func itemActions(for item: Item) -> some View {
+        markSoldButton(for: item)
         if environment.stickerScreen != nil {
-            Button("Print sticker", systemImage: "qrcode") {
-                printingSticker = StickerRequest(
-                    sku: item.sku,
-                    title: item.details.title,
-                    locationCode: item.storageLocation?.code,
-                )
-            }
-            .buttonStyle(.listoraSecondary)
-            .accessibilityIdentifier("item.printSticker")
+            ItemStickerSection(offers: $offersSticker) { printingSticker = StickerRequest(item) }
         }
     }
 

@@ -21,7 +21,10 @@ import { describeOrder, type DescribedItem } from './describe.ts';
 import type { VerdictOrder } from './verdict.ts';
 
 /** Sale statuses that still need a package. */
-export const OPEN_SALE_STATUSES = ['detected', 'confirmed'] as const satisfies readonly SaleStatus[];
+export const OPEN_SALE_STATUSES = [
+  'detected',
+  'confirmed',
+] as const satisfies readonly SaleStatus[];
 /** How long a packed order stays on the list. */
 export const PACKED_SHOWN_MS = 24 * 3_600_000;
 /** How far back the list reaches: an older sale that never shipped is not a package to pack. */
@@ -191,7 +194,10 @@ export async function loadPackOrdersById(
         description: describeOrder(orderItems),
         buyerFirstName: label?.buyer_first_name ?? null,
         label:
-          label?.tracking_number == null || label.carrier === null || label.source === null
+          label === undefined ||
+          label.tracking_number === null ||
+          label.carrier === null ||
+          label.source === null
             ? null
             : {
                 trackingNumber: label.tracking_number,
@@ -199,7 +205,7 @@ export async function loadPackOrdersById(
                 source: label.source,
               },
         read:
-          label?.read_status == null || label.read_at === null
+          label === undefined || label.read_status === null || label.read_at === null
             ? null
             : { status: label.read_status, error: label.read_error, at: label.read_at },
         pack:

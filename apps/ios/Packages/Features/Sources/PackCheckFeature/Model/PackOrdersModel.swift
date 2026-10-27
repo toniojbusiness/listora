@@ -55,7 +55,9 @@ final class PackOrdersModel {
             phase = .signedOut
             return
         }
-        if orders.isEmpty { phase = .loading }
+        if orders.isEmpty {
+            phase = .loading
+        }
         do {
             orders = try await service.orders()
             phase = .loaded
@@ -68,7 +70,7 @@ final class PackOrdersModel {
     func refresh() async {
         await load()
         guard phase == .loaded else { return }
-        let reading = (try? await service.refreshLabels()) ?? 0
+        let reading = await (try? service.refreshLabels()) ?? 0
         guard reading > 0 else { return }
         readingLabels = reading
         runPhoneWork()

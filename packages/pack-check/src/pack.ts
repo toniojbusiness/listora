@@ -54,7 +54,11 @@ export class PackOrderPackedError extends Error {
 }
 
 /** Records the order as packed with the scanned label; throws when the scan doesn't allow it. */
-export async function packOrder(trx: DbTransaction, accountId: string, input: PackInput): Promise<void> {
+export async function packOrder(
+  trx: DbTransaction,
+  accountId: string,
+  input: PackInput,
+): Promise<void> {
   const sale = await trx
     .selectFrom('sale')
     .select(['id', 'status'])
@@ -189,7 +193,7 @@ export async function removePackPhoto(
     .where('sale_id', '=', saleId)
     .where('photo_key', 'is not', null)
     .executeTakeFirst();
-  if (before?.photo_key == null) return undefined;
+  if (before === undefined || before.photo_key === null) return undefined;
   const updated = await executor
     .updateTable('sale_pack')
     .set({ photo_key: null, photo_added_at: null })

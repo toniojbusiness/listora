@@ -368,7 +368,10 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
    * Only adapters that can read order pages have it. Throws when the marketplace cannot be
    * read; an order the pages don't show is `found: false`.
    */
-  readOrderLabels?(orders: readonly LabelReadRequest[], ctx: AdapterContext): Promise<RemoteOrderLabel[]>;
+  readOrderLabels?(
+    orders: readonly LabelReadRequest[],
+    ctx: AdapterContext,
+  ): Promise<RemoteOrderLabel[]>;
 }
 
 /** An order whose label Pack check reads: its marketplace id and the listings that sold in it. */

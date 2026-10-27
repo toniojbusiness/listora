@@ -83,7 +83,10 @@ export async function checkScan(
     stickerSku: sku,
     expected: expectedRecord === undefined ? null : verdictOrder(expectedRecord),
     labelOrders: labelSales.flatMap((saleId) => named(saleId) ?? []),
-    packed: packed === undefined || packedOrder === null ? null : { order: packedOrder, packedAt: packed.packedAt },
+    packed:
+      packed === undefined || packedOrder === null
+        ? null
+        : { order: packedOrder, packedAt: packed.packedAt },
     stickerOrder: named(stickerSale),
   };
   return { verdict: scanVerdict(facts), trackingNumber: tracking, orders };

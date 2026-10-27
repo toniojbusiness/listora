@@ -1,9 +1,4 @@
-import type {
-  PackItem,
-  PackOrder,
-  PackScan,
-  StatusDisplay,
-} from '@listora/api-contract';
+import type { PackItem, PackOrder, PackScan, StatusDisplay } from '@listora/api-contract';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import {
   ago,
@@ -17,7 +12,13 @@ import type { ObjectStorage } from '@listora/storage';
 
 import { photoFromRow, type PhotoRow } from '../photos/mapping.ts';
 
-const CARRIER_NAMES = { usps: 'USPS', ups: 'UPS', fedex: 'FedEx', dhl: 'DHL', other: 'Label' } as const;
+const CARRIER_NAMES = {
+  usps: 'USPS',
+  ups: 'UPS',
+  fedex: 'FedEx',
+  dhl: 'DHL',
+  other: 'Label',
+} as const;
 
 export interface PackViewContext {
   covers: ReadonlyMap<string, PhotoRow>;
@@ -56,7 +57,9 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
   return {
     saleId: order.saleId,
     marketplace: order.marketplace,
-    ...(order.externalOrderId === null ? {} : { orderNumber: displayOrderNumber(order.externalOrderId) }),
+    ...(order.externalOrderId === null
+      ? {}
+      : { orderNumber: displayOrderNumber(order.externalOrderId) }),
     soldAt: order.soldAt.toISOString(),
     ...(order.shipBy === null ? {} : { shipBy: order.shipBy.toISOString() }),
     description: order.description,
@@ -81,8 +84,12 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
             matchedBy: pack.matchedBy,
             ...(pack.stickerSku === null ? {} : { stickerSku: pack.stickerSku }),
             labelMismatch: labelMismatch(order),
-            ...(pack.photoKey === null ? {} : { photoUrl: context.storage.publicUrl(pack.photoKey) }),
-            ...(pack.photoAddedAt === null ? {} : { photoAddedAt: pack.photoAddedAt.toISOString() }),
+            ...(pack.photoKey === null
+              ? {}
+              : { photoUrl: context.storage.publicUrl(pack.photoKey) }),
+            ...(pack.photoAddedAt === null
+              ? {}
+              : { photoAddedAt: pack.photoAddedAt.toISOString() }),
           },
         }),
     packStatus: packStatus(order, context.now),
@@ -98,7 +105,10 @@ function displayOrderNumber(externalOrderId: string): string {
 function labelMismatch(order: PackOrderRecord): boolean {
   const { pack, label } = order;
   if (pack === null || label?.source !== 'marketplace') return false;
-  return !pack.trackingNumber.endsWith(label.trackingNumber) && !label.trackingNumber.endsWith(pack.trackingNumber);
+  return (
+    !pack.trackingNumber.endsWith(label.trackingNumber) &&
+    !label.trackingNumber.endsWith(pack.trackingNumber)
+  );
 }
 
 /** The order's label in words: what Listora has, or where its read stands. */
@@ -107,7 +117,10 @@ function labelStatus(order: PackOrderRecord, context: PackViewContext): StatusDi
   if (order.label !== null) {
     const carrier = CARRIER_NAMES[order.label.carrier];
     const from = order.label.source === 'marketplace' ? `from ${name}` : 'you scanned it';
-    return { tone: 'neutral', label: `${carrier} ${trackingTail(order.label.trackingNumber)} (${from})` };
+    return {
+      tone: 'neutral',
+      label: `${carrier} ${trackingTail(order.label.trackingNumber)} (${from})`,
+    };
   }
   if (context.reading.has(order.marketplace)) {
     return { tone: 'neutral', label: `Reading the label from ${name} on your iPhone...` };
@@ -116,7 +129,10 @@ function labelStatus(order: PackOrderRecord, context: PackViewContext): StatusDi
     case 'no_label':
       return { tone: 'action_needed', label: `No label on ${name} yet` };
     case 'not_found':
-      return { tone: 'action_needed', label: `Listora couldn't find this order on ${name} - scan its label` };
+      return {
+        tone: 'action_needed',
+        label: `Listora couldn't find this order on ${name} - scan its label`,
+      };
     case 'failed':
       return { tone: 'action_needed', label: `Listora couldn't read ${name} - scan the label` };
     case 'read':
@@ -191,6 +207,8 @@ export function packScanView(checked: CheckedScan, context: PackViewContext): Pa
     ...(packed === undefined ? {} : { packedOrder: packed }),
     canPack: verdict.verdict === 'match',
     canPhotoCheck:
-      verdict.verdict === 'unknown_label' && verdict.expected !== null && checked.trackingNumber !== null,
+      verdict.verdict === 'unknown_label' &&
+      verdict.expected !== null &&
+      checked.trackingNumber !== null,
   };
 }

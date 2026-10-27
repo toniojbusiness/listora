@@ -138,6 +138,8 @@ packages/
                 fake, the outbox job (@listora/push)
   today/        The Today screen: card rules, the summary's plain queries, the money summary, the
                 morning summary job and its setting (@listora/today)
+  pack-check/   Pack check: label scans and their verdicts, the to-ship list, packing (one label
+                per package), label reads' records, the setting (@listora/pack-check)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
@@ -233,6 +235,8 @@ src/
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
   today/         The Today summary (getToday) and the morning summary setting
+  pack-check/    Pack check: the to-ship list, label reads, scans, packing, the package photo
+                 (docs/features/pack-check.md)
   activity/      An item's and an operation's activity, and a sale's explanation
   voice/         interpretVoiceCorrection: the text model's reading of a spoken correction
   prefill/       Each marketplace's sell form pre-filled for an item, and the review's questions
@@ -360,7 +364,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   deleted identities and account deletion in [auth.md](features/auth.md#data); the morning
   summary setting in [today.md](features/today.md#data); sale email inboxes in
   [email-sales.md](features/email-sales.md#data); the marketplace pre-fill's answers and AI picks in
-  [marketplace-prefill.md](features/marketplace-prefill.md#data). Billing
+  [marketplace-prefill.md](features/marketplace-prefill.md#data); Pack check's setting, labels, and
+  packages in [pack-check.md](features/pack-check.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -430,52 +435,53 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 
 ## 8. Feature docs
 
-| File                                                               | Covers                                                                        |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| [features/operations.md](features/operations.md)                   | The operation engine, the honest status vocabulary                            |
-| [features/auto-delist.md](features/auto-delist.md)                 | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales     |
-| [features/connections.md](features/connections.md)                 | Connecting accounts, the token vault, health checks, the health dashboard     |
-| [features/push.md](features/push.md)                               | Push notifications: the outbox job and the drivers                            |
-| [features/marketplaces.md](features/marketplaces.md)               | The adapter interface, capabilities, assisted adapters, conformance, listings |
-| [features/ebay.md](features/ebay.md)                               | The eBay adapter, the fake eBay, the sandbox check                            |
-| [features/ebay-notifications.md](features/ebay-notifications.md)   | eBay notifications, the order poll, eBay account deletion                     |
-| [features/depop.md](features/depop.md)                             | Depop: the partner API adapter, dormant until access is granted               |
-| [features/depop-automation.md](features/depop-automation.md)       | The Depop automation adapter until then, its mappings, the fake Depop site    |
-| [features/ebay-automation.md](features/ebay-automation.md)         | The eBay automation adapter until the API keys exist, the fake eBay site      |
-| [features/automation.md](features/automation.md)                   | Browser automation for marketplaces without an API (decision D1)              |
-| [features/poshmark.md](features/poshmark.md)                       | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
-| [features/marketplace-linking.md](features/marketplace-linking.md) | Linking marketplaces from the iPhone by signing in, and each session's check  |
-| [features/phone-execution.md](features/phone-execution.md)         | Running marketplaces' automated steps on the seller's iPhone                  |
-| [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site           |
-| [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                    |
-| [features/pricing.md](features/pricing.md)                         | Pricing data rules, floors, fee tables, tiers, the label guard                |
-| [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                    |
-| [features/items.md](features/items.md)                             | Inventory items, item status, the audit log                                   |
-| [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                      |
-| [features/profile.md](features/profile.md)                         | Profile and settings: the avatar, names, the photo, diagnostics, the API      |
-| [features/infra.md](features/infra.md)                             | Hosting and deploys                                                           |
-| [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                       |
-| [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                  |
-| [features/alerts.md](features/alerts.md)                           | Alert emails, the weekly health summary, backups, and the restore steps       |
-| [features/activity.md](features/activity.md)                       | The activity timeline, sale-check records and health, explaining a sale       |
-| [features/ios.md](features/ios.md)                                 | iOS app conventions                                                           |
-| [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric    |
-| [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review     |
-| [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                     |
-| [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API              |
-| [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
-| [features/email-sales.md](features/email-sales.md)                 | Sale emails: forwarding address, SES ingest, DKIM/SPF, parsers, matching      |
-| [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders          |
-| [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule  |
-| [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push  |
-| [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"          |
-| [features/marketplace-prefill.md](features/marketplace-prefill.md) | Each marketplace's form pre-filled on the review, and its one-tap questions   |
-| [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups              |
-| [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items    |
-| [features/privacy.md](features/privacy.md)                         | Deletions with completion records, unlinking, retention, photo metadata       |
-| [features/threat-model.md](features/threat-model.md)               | Assets, trust boundaries, the main threats, and where each is mitigated       |
-| [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups |
-| [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI             |
+| File                                                               | Covers                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| [features/operations.md](features/operations.md)                   | The operation engine, the honest status vocabulary                             |
+| [features/auto-delist.md](features/auto-delist.md)                 | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales      |
+| [features/connections.md](features/connections.md)                 | Connecting accounts, the token vault, health checks, the health dashboard      |
+| [features/push.md](features/push.md)                               | Push notifications: the outbox job and the drivers                             |
+| [features/marketplaces.md](features/marketplaces.md)               | The adapter interface, capabilities, assisted adapters, conformance, listings  |
+| [features/ebay.md](features/ebay.md)                               | The eBay adapter, the fake eBay, the sandbox check                             |
+| [features/ebay-notifications.md](features/ebay-notifications.md)   | eBay notifications, the order poll, eBay account deletion                      |
+| [features/depop.md](features/depop.md)                             | Depop: the partner API adapter, dormant until access is granted                |
+| [features/depop-automation.md](features/depop-automation.md)       | The Depop automation adapter until then, its mappings, the fake Depop site     |
+| [features/ebay-automation.md](features/ebay-automation.md)         | The eBay automation adapter until the API keys exist, the fake eBay site       |
+| [features/automation.md](features/automation.md)                   | Browser automation for marketplaces without an API (decision D1)               |
+| [features/poshmark.md](features/poshmark.md)                       | The Poshmark automation adapter, its mapping tables, and the fake Poshmark     |
+| [features/marketplace-linking.md](features/marketplace-linking.md) | Linking marketplaces from the iPhone by signing in, and each session's check   |
+| [features/phone-execution.md](features/phone-execution.md)         | Running marketplaces' automated steps on the seller's iPhone                   |
+| [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site            |
+| [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                     |
+| [features/pricing.md](features/pricing.md)                         | Pricing data rules, floors, fee tables, tiers, the label guard                 |
+| [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                     |
+| [features/items.md](features/items.md)                             | Inventory items, item status, the audit log                                    |
+| [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                       |
+| [features/profile.md](features/profile.md)                         | Profile and settings: the avatar, names, the photo, diagnostics, the API       |
+| [features/infra.md](features/infra.md)                             | Hosting and deploys                                                            |
+| [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                        |
+| [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                   |
+| [features/alerts.md](features/alerts.md)                           | Alert emails, the weekly health summary, backups, and the restore steps        |
+| [features/activity.md](features/activity.md)                       | The activity timeline, sale-check records and health, explaining a sale        |
+| [features/ios.md](features/ios.md)                                 | iOS app conventions                                                            |
+| [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric     |
+| [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review      |
+| [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                      |
+| [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API               |
+| [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI    |
+| [features/email-sales.md](features/email-sales.md)                 | Sale emails: forwarding address, SES ingest, DKIM/SPF, parsers, matching       |
+| [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders           |
+| [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule   |
+| [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push   |
+| [features/pack-check.md](features/pack-check.md)                   | Pack check: the to-ship list, label scans, the duplicate-print guard, stickers |
+| [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"           |
+| [features/marketplace-prefill.md](features/marketplace-prefill.md) | Each marketplace's form pre-filled on the review, and its one-tap questions    |
+| [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups               |
+| [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items     |
+| [features/privacy.md](features/privacy.md)                         | Deletions with completion records, unlinking, retention, photo metadata        |
+| [features/threat-model.md](features/threat-model.md)               | Assets, trust boundaries, the main threats, and where each is mitigated        |
+| [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups  |
+| [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI              |
 
 ### Former section numbers
 

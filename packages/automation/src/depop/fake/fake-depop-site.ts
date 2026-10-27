@@ -28,6 +28,9 @@
  *   POST /products/edit/:slug/delete   delete (the product page's Delete listing, confirmed)
  *   GET  /sellinghub/selling/          the seller's listings for sale; `?page=N`, 10 a page
  *   GET  /sellinghub/sold-items/       the seller's sold items: a receipt link for each sale, or a note
+ *   GET  /presentation/api/v1/receipts/ the seller's receipts (web API), as the sold items page loads
+ *                                      them; a receipt's own fields are Listora's assumption until a
+ *                                      real sale shows them (depop/pages/receipts.ts)
  *   GET  /photos/<name>.jpg            a photo, standing in for Listora's image CDN (no session)
  *
  * Every page except the login pages and photos needs the session cookie; without a valid one it
@@ -90,7 +93,16 @@ export { FAKE_DEPOP_BRANDS, FAKE_DEPOP_SHIPPING } from './fake-depop-pages.ts';
  * the seller's own listings, and `sold` the selling hub's sold items.
  */
 export type FakeDepopSiteAction =
-  'create' | 'update' | 'delete' | 'read' | 'done' | 'listings' | 'sold' | 'health' | 'form';
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'read'
+  | 'done'
+  | 'listings'
+  | 'sold'
+  | 'receipts'
+  | 'health'
+  | 'form';
 
 export type FakeDepopSiteFault =
   /** A bot-check page ("Please verify you are a human") instead of the page, status 403. */
@@ -183,6 +195,14 @@ interface StoredProduct {
   gone: boolean;
   /** Depop's id for the purchase once it sold. */
   purchaseId: number | null;
+  /** The sale's shipping label and buyer's first name, once it sold. */
+  shipping?: FakeDepopShipping;
+}
+
+/** A sale's label, as a receipt shows it. */
+export interface FakeDepopShipping {
+  trackingNumber: string | null;
+  buyerFirstName: string | null;
 }
 
 interface Session {
@@ -346,10 +366,16 @@ export class FakeDepopSite {
   }
 
   /** A buyer buys the product: it is sold (a receipt on the sold items page). */
-  sell(slug: string, soldAt = new Date()): void {
+  sell(slug: string, soldAt = new Date(), shipping?: FakeDepopShipping): void {
     const stored = this.#stored(slug);
     this.#change(stored, { status: 'SOLD', soldAt });
     stored.purchaseId = this.#newPurchaseId();
+    if (shipping !== undefined) stored.shipping = shipping;
+  }
+
+  /** The sale's purchase id (its receipt's), once it sold. */
+  purchaseIdOf(slug: string): number | null {
+    return this.#stored(slug).purchaseId;
   }
 
   /**
@@ -700,6 +726,27 @@ export class FakeDepopSite {
           products: page.map((product) => shopProductData(product, this.#idOf(product.slug))),
         });
       }
+      case 'receipts': {
+        const receipts = [...this.#products.values()]
+          .filter(
+            (stored) =>
+              stored.current.seller === session.seller &&
+              stored.current.status === 'SOLD' &&
+              stored.purchaseId !== null,
+          )
+          .sort(
+            (a, b) =>
+              (b.current.soldAt?.getTime() ?? 0) - (a.current.soldAt?.getTime() ?? 0),
+          )
+          .map((stored) => ({
+            id: stored.purchaseId,
+            sold_time: (stored.current.soldAt ?? stored.current.updatedAt).toISOString(),
+            buyer: { first_name: stored.shipping?.buyerFirstName ?? null },
+            products: [{ slug: stored.current.slug }],
+            shipment: { tracking_number: stored.shipping?.trackingNumber ?? null },
+          }));
+        return json(200, { objects: receipts, page_info: { has_more: false } });
+      }
       case 'sold': {
         const sales = [...this.#products.values()]
           .flatMap((stored) =>
@@ -808,6 +855,9 @@ function matchRoute(method: string, path: string): Route | null {
   )?.[1];
   if (get && own !== undefined) return { method, action: 'read', slug: decoded(own), api: true };
   if (get && path === '/sellinghub/sold-items/') return { method, action: 'sold', slug: null };
+  if (get && path === '/presentation/api/v1/receipts/') {
+    return { method, action: 'receipts', slug: null, api: true };
+  }
   if (path === '/products/create/') {
     if (get) return { method, action: 'form', slug: null };
     if (post) return { method, action: 'create', slug: null };

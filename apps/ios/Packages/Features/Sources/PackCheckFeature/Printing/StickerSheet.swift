@@ -69,7 +69,9 @@ enum StickerSheet {
             case .sheet30:
                 for (offset, sticker) in stickers.enumerated() {
                     let slot = offset % 30
-                    if slot == 0 { context.beginPage() }
+                    if slot == 0 {
+                        context.beginPage()
+                    }
                     let origin = CGPoint(
                         x: sheetOrigin.x + CGFloat(slot % 3) * sheetPitch.width,
                         y: sheetOrigin.y + CGFloat(slot / 3) * sheetPitch.height,
@@ -115,7 +117,10 @@ enum StickerSheet {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font, .foregroundColor: UIColor.black, .paragraphStyle: paragraph,
         ]
-        (text as NSString).draw(in: CGRect(x: x, y: y, width: width, height: font.lineHeight), withAttributes: attributes)
+        (text as NSString).draw(
+            in: CGRect(x: x, y: y, width: width, height: font.lineHeight),
+            withAttributes: attributes,
+        )
         return font.lineHeight
     }
 

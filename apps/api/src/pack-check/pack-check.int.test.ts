@@ -40,7 +40,11 @@ describe('pack check (real Postgres)', () => {
     const accountId = options.accountId ?? tenant.accountId;
     const location = await api.db
       .insertInto('storage_location')
-      .values({ account_id: accountId, code: `S-${String(Math.floor(Math.random() * 1e6))}`, label: 'Shelf' })
+      .values({
+        account_id: accountId,
+        code: `S-${String(Math.floor(Math.random() * 1e6))}`,
+        label: 'Shelf',
+      })
       .returning(['id'])
       .executeTakeFirstOrThrow();
     const item = await createInventoryItem(api.db, accountId, {
@@ -163,9 +167,21 @@ describe('pack check (real Postgres)', () => {
     });
   });
 
-  it('is green for the right label and a red stop for the other order\'s label', async () => {
-    const tee = await order({ title: 'Tee', brand: 'Gildan', category: 'clothing/tops/t_shirts', size: 'L', tracking: '9400111899223197421111' });
-    const dress = await order({ title: 'Dress', brand: 'Free People', category: 'clothing/dresses/dresses', size: 'S', tracking: '9400111899223197422222' });
+  it("is green for the right label and a red stop for the other order's label", async () => {
+    const tee = await order({
+      title: 'Tee',
+      brand: 'Gildan',
+      category: 'clothing/tops/t_shirts',
+      size: 'L',
+      tracking: '9400111899223197421111',
+    });
+    const dress = await order({
+      title: 'Dress',
+      brand: 'Free People',
+      category: 'clothing/dresses/dresses',
+      size: 'S',
+      tracking: '9400111899223197422222',
+    });
 
     const right = await scan({ label: '420941079400111899223197421111', saleId: tee.saleId });
     expect(right.body).toMatchObject({
@@ -201,8 +217,14 @@ describe('pack check (real Postgres)', () => {
 
     const packed = await pack(first.saleId, { label: DOUBLE_PRINT.labelA });
     expect(packed.status).toBe(200);
-    expect(packed.body.pack).toMatchObject({ trackingNumber: DOUBLE_PRINT.trackingA, matchedBy: 'label' });
-    expect(packed.body.packStatus).toEqual({ tone: 'success', label: 'Packed just now (label matched)' });
+    expect(packed.body.pack).toMatchObject({
+      trackingNumber: DOUBLE_PRINT.trackingA,
+      matchedBy: 'label',
+    });
+    expect(packed.body.packStatus).toEqual({
+      tone: 'success',
+      label: 'Packed just now (label matched)',
+    });
 
     api.clock.now += 12 * 60_000;
     const copy = await scan({ label: DOUBLE_PRINT.labelACopy, saleId: second.saleId });
@@ -223,7 +245,7 @@ describe('pack check (real Postgres)', () => {
     expect((await pack(second.saleId, { label: DOUBLE_PRINT.labelB })).status).toBe(200);
   });
 
-  it('makes the match exact with the item sticker and stops another item\'s sticker', async () => {
+  it("makes the match exact with the item sticker and stops another item's sticker", async () => {
     const tee = await order({ title: 'Sticker tee', tracking: '9400111899223197423333' });
     const other = await order({ title: 'Other item', tracking: '9400111899223197424444' });
     const mismatch = await scan({
@@ -236,10 +258,16 @@ describe('pack check (real Postgres)', () => {
       tone: 'failed',
       headline: 'This sticker is for the Other item.',
     });
-    const exact = await pack(tee.saleId, { label: '9400111899223197423333', sticker: `LISTORA:${tee.sku}` });
+    const exact = await pack(tee.saleId, {
+      label: '9400111899223197423333',
+      sticker: `LISTORA:${tee.sku}`,
+    });
     expect(exact.body.pack).toMatchObject({ matchedBy: 'sticker', stickerSku: tee.sku });
     const asLabel = await scan({ label: `LISTORA:${tee.sku}` });
-    expect(asLabel.body).toMatchObject({ verdict: 'sticker_scanned', headline: "That's an item sticker." });
+    expect(asLabel.body).toMatchObject({
+      verdict: 'sticker_scanned',
+      headline: "That's an item sticker.",
+    });
   });
 
   it("packs a label Listora doesn't know only after the photo check, then guards it", async () => {
@@ -247,7 +275,11 @@ describe('pack check (real Postgres)', () => {
     const other = await order({ title: 'Mercari cap', marketplace: 'mercari' });
     const label = '9400111899223197425555';
     const checked = await scan({ label, saleId: unknown.saleId });
-    expect(checked.body).toMatchObject({ verdict: 'unknown_label', canPack: false, canPhotoCheck: true });
+    expect(checked.body).toMatchObject({
+      verdict: 'unknown_label',
+      canPack: false,
+      canPhotoCheck: true,
+    });
     expect((await pack(unknown.saleId, { label })).status).toBe(409);
     const photo = await pack(unknown.saleId, { label, photoCheck: true });
     expect(photo.body).toMatchObject({
@@ -285,7 +317,10 @@ describe('pack check (real Postgres)', () => {
     });
     expect(refused.status).toBe(409);
 
-    const explanation = await api.call('getSaleExplanation', { token, params: { saleId: shirt.saleId } });
+    const explanation = await api.call('getSaleExplanation', {
+      token,
+      params: { saleId: shirt.saleId },
+    });
     const kinds = explanation.body.entries.filter((entry) => entry.kind === 'package');
     expect(kinds.map((entry) => entry.title)).toEqual([
       'Package photo added',
@@ -293,10 +328,15 @@ describe('pack check (real Postgres)', () => {
     ]);
     expect(kinds[0]?.photoUrl).toBe(photoUrl);
 
-    expect((await api.call('removePackPhoto', { token, params: { saleId: shirt.saleId } })).body.pack?.photoUrl).toBeUndefined();
+    expect(
+      (await api.call('removePackPhoto', { token, params: { saleId: shirt.saleId } })).body.pack
+        ?.photoUrl,
+    ).toBeUndefined();
     const unpacked = await api.call('unpackOrder', { token, params: { saleId: shirt.saleId } });
     expect(unpacked.body.pack).toBeUndefined();
-    expect((await api.call('unpackOrder', { token, params: { saleId: shirt.saleId } })).status).toBe(404);
+    expect(
+      (await api.call('unpackOrder', { token, params: { saleId: shirt.saleId } })).status,
+    ).toBe(404);
   });
 
   it("asks the seller's iPhone to read the labels of orders that need one", async () => {
@@ -331,8 +371,14 @@ describe('pack check (real Postgres)', () => {
 
   it("never shows or packs another account's order", async () => {
     const other = await api.tenantOf(OTHER);
-    const theirs = await order({ title: 'Not yours', tracking: '9400111899223197427777', accountId: other.accountId });
-    expect((await scan({ label: '9400111899223197427777', saleId: theirs.saleId })).status).toBe(404);
+    const theirs = await order({
+      title: 'Not yours',
+      tracking: '9400111899223197427777',
+      accountId: other.accountId,
+    });
+    expect((await scan({ label: '9400111899223197427777', saleId: theirs.saleId })).status).toBe(
+      404,
+    );
     expect((await scan({ label: '9400111899223197427777' })).body.verdict).toBe('unknown_label');
     expect((await pack(theirs.saleId, { label: '9400111899223197427777' })).status).toBe(404);
     const listed = await api.call('listPackOrders', { token });

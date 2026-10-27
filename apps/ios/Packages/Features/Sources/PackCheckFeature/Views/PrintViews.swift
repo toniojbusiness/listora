@@ -61,7 +61,11 @@ struct StickerPrintView: View {
                     .foregroundStyle(Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     if !Printer.isAvailable {
-                        Banner("Printing isn't available", message: "This iPhone can't print right now.", tone: .actionNeeded)
+                        Banner(
+                            "Printing isn't available",
+                            message: "This iPhone can't print right now.",
+                            tone: .actionNeeded,
+                        )
                     }
                     if printed {
                         Banner("Sent to the printer", message: nil, tone: .success)
@@ -108,10 +112,12 @@ private struct StickerPreview: View {
         Image(uiImage: image)
             .resizable()
             .interpolation(.none)
-            .aspectRatio(contentMode: .fit)
+            .scaledToFit()
             .frame(maxWidth: 280)
             .overlay(RoundedRectangle(cornerRadius: Radius.small).stroke(Palette.separator.color))
-            .accessibilityLabel("Sticker with a QR code, \(sticker.sku)\(sticker.locationCode.map { ", shelf \($0)" } ?? "")")
+            .accessibilityLabel(
+                "Sticker with a QR code, \(sticker.sku)\(sticker.locationCode.map { ", shelf \($0)" } ?? "")",
+            )
             .accessibilityIdentifier("sticker.preview")
     }
 }

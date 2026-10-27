@@ -26,7 +26,8 @@ export const ORDER_PAGE = {
 const PAGE = 'order page';
 
 /** "Tracking number 9400 1118 ..." or "Tracking #: 1Z...": the number after the word. */
-const TRACKING_LINE = /tracking(?:\s*(?:number|no\.?|#))?\s*[:#]?\s*([A-Z0-9][A-Z0-9 -]{8,48}[A-Z0-9])/i;
+const TRACKING_LINE =
+  /tracking(?:\s*(?:number|no\.?|#))?\s*[:#]?\s*([A-Z0-9][A-Z0-9 -]{8,48}[A-Z0-9])/i;
 
 export interface OrderRead {
   found: boolean;
@@ -39,7 +40,11 @@ export function orderUrl(site: MercariSite, itemId: string): string {
 }
 
 /** Opens the order page of the item's sale and reads its buyer and label. */
-export async function readOrder(page: PageDriver, site: MercariSite, itemId: string): Promise<OrderRead> {
+export async function readOrder(
+  page: PageDriver,
+  site: MercariSite,
+  itemId: string,
+): Promise<OrderRead> {
   await page.goto(orderUrl(site, itemId));
   if (page.status() === 404 || (await page.exists(ORDER_PAGE.notFound))) {
     return { found: false, buyerName: null, trackingNumber: null };
@@ -47,7 +52,11 @@ export async function readOrder(page: PageDriver, site: MercariSite, itemId: str
   await awaitElement(page, ORDER_PAGE.summary, PAGE, 'order summary');
   const buyer = (await page.text(ORDER_PAGE.buyer))?.trim() ?? null;
   const shipping = await page.texts(ORDER_PAGE.shipping);
-  return { found: true, buyerName: buyer === '' ? null : buyer, trackingNumber: trackingIn(shipping) };
+  return {
+    found: true,
+    buyerName: buyer === '' ? null : buyer,
+    trackingNumber: trackingIn(shipping),
+  };
 }
 
 /** The tracking number a shipping block's "Tracking" line shows, if any. */

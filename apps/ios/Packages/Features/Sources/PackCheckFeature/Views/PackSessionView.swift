@@ -22,7 +22,7 @@ struct PackSessionView: View {
                     if model.stage == .finished {
                         summary
                     } else if let order = model.current {
-                        OrderHeader(order: order, sticker: model.sticker)
+                        OrderHeader(order: order, sticker: model.sticker, compact: model.isShowingVerdict)
                         if let error = model.error {
                             Banner("Something went wrong", message: error, tone: .failed)
                         }
@@ -39,7 +39,11 @@ struct PackSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(model.stage == .finished ? "Close" : "End") {
-                        if model.stage == .finished { onClose() } else { model.finish() }
+                        if model.stage == .finished {
+                            onClose()
+                        } else {
+                            model.finish()
+                        }
                     }
                     .accessibilityIdentifier("pack.end")
                 }
@@ -106,7 +110,6 @@ struct PackSessionView: View {
         }
     }
 
-    @ViewBuilder
     private func verdictActions(_ scan: PackScan) -> some View {
         VStack(spacing: Spacing.sm) {
             if scan.canPack {
@@ -219,10 +222,12 @@ struct PackSessionView: View {
 private struct OrderHeader: View {
     let order: PackOrder
     let sticker: String?
+    /// A verdict shows below: the photo makes room for it and its buttons.
+    let compact: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            ItemPhoto(url: order.items.first?.photoUrl ?? order.items.first?.thumbnailUrl, side: 220)
+            ItemPhoto(url: order.items.first?.photoUrl ?? order.items.first?.thumbnailUrl, side: compact ? 140 : 220)
                 .frame(maxWidth: .infinity)
             Text(order.description.prefix(1).uppercased() + order.description.dropFirst())
                 .font(Typography.title)
@@ -236,7 +241,11 @@ private struct OrderHeader: View {
             Text(order.buyerFirstName.map { "For \($0) on \(MarketplaceName.of(order.marketplace))" }
                 ?? "Sold on \(MarketplaceName.of(order.marketplace))")
                 .font(Typography.subheadline)
-            StatusBadge(order.labelStatus.label, tone: StatusTone(order.labelStatus.tone))
+            StatusBadge(
+                order.labelStatus.label,
+                tone: StatusTone(order.labelStatus.tone),
+                showsIcon: StatusTone(order.labelStatus.tone) != .neutral,
+            )
             if let sticker {
                 StatusBadge("Sticker \(sticker.replacingOccurrences(of: "LISTORA:", with: ""))", tone: .neutral)
             }
@@ -316,7 +325,9 @@ extension ScanTarget: Identifiable {
 
 extension ScanSource {
     var isScripted: Bool {
-        if case .scripted = self { return true }
+        if case .scripted = self {
+            return true
+        }
         return false
     }
 }

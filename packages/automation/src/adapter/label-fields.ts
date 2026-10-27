@@ -10,8 +10,10 @@
 /** Every value under a key `keys` names, at any depth (arrays included). */
 export function fieldValues(value: unknown, keys: readonly string[], depth = 0): unknown[] {
   if (depth > 6 || typeof value !== 'object' || value === null) return [];
-  if (Array.isArray(value)) return value.flatMap((entry) => fieldValues(entry, keys, depth + 1));
-  return Object.entries(value).flatMap(([key, entry]) => [
+  if (Array.isArray(value)) {
+    return (value as unknown[]).flatMap((entry) => fieldValues(entry, keys, depth + 1));
+  }
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, entry]): unknown[] => [
     ...(keys.includes(key) ? [entry] : []),
     ...fieldValues(entry, keys, depth + 1),
   ]);

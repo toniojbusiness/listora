@@ -37,9 +37,11 @@ public final class PackCheckSettingsModel {
     }
 
     func load() async {
-        if phase != .loaded { phase = .loading }
+        if phase != .loaded {
+            phase = .loading
+        }
         do {
-            apply(try await service.isEnabled())
+            try await apply(service.isEnabled())
             phase = .loaded
         } catch {
             phase = .failed(message: error.message)
@@ -53,8 +55,10 @@ public final class PackCheckSettingsModel {
         saveError = nil
         defer { isSaving = false }
         do {
-            apply(try await service.setEnabled(enabled))
-            if isEnabled { onEnabled() }
+            try await apply(service.setEnabled(enabled))
+            if isEnabled {
+                onEnabled()
+            }
         } catch {
             saveError = error.message
         }

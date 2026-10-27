@@ -26,7 +26,7 @@ export const SCANNED_LABELS = [
   },
   { name: 'a UPS 1Z number', scanned: '1Z999AA10123456784', tracking: '1Z999AA10123456784' },
   {
-    name: "a FedEx barcode, which ends with the 12-digit number",
+    name: 'a FedEx barcode, which ends with the 12-digit number',
     scanned: '9622001900005105596800449781779931',
     tracking: '9622001900005105596800449781779931',
   },

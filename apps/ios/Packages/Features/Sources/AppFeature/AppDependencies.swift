@@ -96,19 +96,8 @@ public struct AppDependencies {
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
         phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
-        let packCheck = PackCheckEnvironment(
-            apiClient: apiClient, accessTokens: accessTokens, phoneWork: phone.runner,
-            scannedCodes: launchOptions.scannedCodes, defaults: defaults,
-        )
-        self.packCheck = packCheck
-        sales = SalesEnvironment(
-            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
-            packOrders: PackOrdersEntry(
-                isShown: { packCheck.settings.isEnabled },
-                screen: { AnyView(packCheck.ordersScreen()) },
-                refresh: { await packCheck.refreshSetting() },
-            ),
-        )
+        packCheck = Self.makePackCheck(apiClient, accessTokens, phone, launchOptions, defaults)
+        sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone, packCheck)
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
         inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
@@ -116,8 +105,7 @@ public struct AppDependencies {
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
             onSignIn: showSignIn, phoneWork: phone.runner,
         )
-        inventory.stickerScreen = { request in AnyView(packCheck.stickerScreen(request)) }
-        inventory.offersStickerAfterListing = { packCheck.settings.isEnabled }
+        packCheck.attach(to: inventory)
         inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         inventory.phoneProgress = phone.runner
         self.review = review

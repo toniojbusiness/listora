@@ -29,7 +29,9 @@ export const MAX_RECEIPT_PAGES = 5;
 
 const receiptsSchema = z.object({
   objects: z.array(z.record(z.string(), z.unknown())),
-  page_info: z.object({ has_more: z.boolean(), end_cursor: z.string().nullish() }).catchall(z.unknown()),
+  page_info: z
+    .object({ has_more: z.boolean(), end_cursor: z.string().nullish() })
+    .catchall(z.unknown()),
 });
 
 /** What Pack check takes from one receipt. */
@@ -48,14 +50,19 @@ export async function readReceipts(
 ): Promise<{ receipts: ReceiptLabel[]; next: string | null }> {
   const query = new URLSearchParams({ role: 'seller', limit: String(PAGE_SIZE) });
   if (cursor !== null) query.set('cursor', cursor);
-  const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, {
-    bearerCookie: TOKEN_COOKIE,
-  });
-  if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for the receipts`);
+  const answer = await page.apiGet(
+    `${site.api}/presentation/api/v1/receipts/?${query.toString()}`,
+    {
+      bearerCookie: TOKEN_COOKIE,
+    },
+  );
+  if (answer.status !== 200)
+    throw changed(API, `answered ${String(answer.status)} for the receipts`);
   const shown = expectShape(receiptsSchema, answer.body, API);
   const receipts = shown.objects.map(receiptLabel);
   const next = shown.page_info.has_more ? (shown.page_info.end_cursor ?? null) : null;
-  if (shown.page_info.has_more && next === null) throw changed(API, 'has more receipts but no cursor');
+  if (shown.page_info.has_more && next === null)
+    throw changed(API, 'has more receipts but no cursor');
   return { receipts, next };
 }
 
@@ -66,11 +73,19 @@ export function receiptLabel(receipt: Readonly<Record<string, unknown>>): Receip
   if (ids.length === 0 && slugs.length === 0) {
     throw changed(API, 'shows a receipt without an id or a product');
   }
-  return { ids, slugs, trackingNumber: trackingField(receipt), buyerFirstName: buyerFirstName(receipt) };
+  return {
+    ids,
+    slugs,
+    trackingNumber: trackingField(receipt),
+    buyerFirstName: buyerFirstName(receipt),
+  };
 }
 
 /** The order's label from the receipts read, or not found. */
-export function orderLabel(order: LabelReadRequest, receipts: readonly ReceiptLabel[]): RemoteOrderLabel {
+export function orderLabel(
+  order: LabelReadRequest,
+  receipts: readonly ReceiptLabel[],
+): RemoteOrderLabel {
   const receipt = receipts.find(
     (shown) =>
       shown.ids.includes(order.externalOrderId) ||

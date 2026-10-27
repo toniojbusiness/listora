@@ -31,7 +31,12 @@ import {
 } from './pages/listing-form.ts';
 import { onDepop, readOwnListings, type ApiProduct } from './pages/api.ts';
 import { readProduct, type ProductPageRead } from './pages/product-page.ts';
-import { MAX_RECEIPT_PAGES, orderLabel, readReceipts, type ReceiptLabel } from './pages/receipts.ts';
+import {
+  MAX_RECEIPT_PAGES,
+  orderLabel,
+  readReceipts,
+  type ReceiptLabel,
+} from './pages/receipts.ts';
 import { readSoldItemsPage } from './pages/sold-items-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
 

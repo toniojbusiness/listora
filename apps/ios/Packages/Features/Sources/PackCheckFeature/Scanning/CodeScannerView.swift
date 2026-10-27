@@ -96,7 +96,9 @@ struct CodeScannerView: View {
                     .foregroundStyle(Palette.onMedia)
                     .accessibilityHidden(true)
                 Button("Scan") {
-                    if let code = scans.next() { deliver(code) }
+                    if let code = scans.next() {
+                        deliver(code)
+                    }
                 }
                 .buttonStyle(ListoraButtonStyle(.primary, size: .compact))
                 .accessibilityIdentifier("scanner.scan")

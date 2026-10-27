@@ -704,7 +704,8 @@ async function replay(
     case 'label_read': {
       const connection = await connectionRef(trx, work);
       const adapter = lookup(work.marketplace);
-      if (connection === undefined || adapter?.readOrderLabels === undefined) return { type: 'gone' };
+      if (connection === undefined || adapter?.readOrderLabels === undefined)
+        return { type: 'gone' };
       let read: { labels: RemoteOrderLabel[] } | { error: unknown };
       try {
         read = {
@@ -749,7 +750,7 @@ function labelResults(
   }
   return orders.map((order): LabelReadResult => {
     const label = read.labels.find((found) => found.externalOrderId === order.externalOrderId);
-    if (label === undefined || !label.found) return { saleId: order.saleId, status: 'not_found' };
+    if (!label?.found) return { saleId: order.saleId, status: 'not_found' };
     return label.trackingNumber === null
       ? { saleId: order.saleId, status: 'no_label', buyerFirstName: label.buyerFirstName }
       : {

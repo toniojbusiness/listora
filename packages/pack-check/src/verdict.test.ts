@@ -61,7 +61,9 @@ describe('scanVerdict', () => {
   it("stops a label with another item's sticker", () => {
     const verdict = scanVerdict(facts({ stickerSku: 'AJ-000185', stickerOrder: dress }));
     expect(verdict).toMatchObject({ verdict: 'sticker_mismatch', order: tee, sticker: dress });
-    expect(verdictWords(verdict, NOW).headline).toBe('This sticker is for the Free People dress, S.');
+    expect(verdictWords(verdict, NOW).headline).toBe(
+      'This sticker is for the Free People dress, S.',
+    );
   });
 
   it('catches the double print: a label already on a package, with when and which', () => {
@@ -69,7 +71,11 @@ describe('scanVerdict', () => {
     const verdict = scanVerdict(
       facts({ expected: dress, labelOrders: [tee], packed: { order: tee, packedAt } }),
     );
-    expect(verdict).toEqual({ verdict: 'already_packed', packed: { order: tee, packedAt }, expected: dress });
+    expect(verdict).toEqual({
+      verdict: 'already_packed',
+      packed: { order: tee, packedAt },
+      expected: dress,
+    });
     expect(verdictWords(verdict, NOW)).toEqual({
       tone: 'failed',
       headline: 'This label was already used.',
@@ -80,7 +86,9 @@ describe('scanVerdict', () => {
 
   it('says so when the same order is scanned again after packing', () => {
     const verdict = scanVerdict(facts({ packed: { order: tee, packedAt: NOW } }));
-    expect(verdictWords(verdict, NOW).headline).toBe('This order is already packed with this label.');
+    expect(verdictWords(verdict, NOW).headline).toBe(
+      'This order is already packed with this label.',
+    );
   });
 
   it("leaves a label Listora doesn't know to the photo check", () => {
@@ -96,7 +104,9 @@ describe('scanVerdict', () => {
       matchedBy: 'label',
     });
     expect(
-      scanVerdict(facts({ expected: null, label: null, stickerSku: 'AJ-000185', stickerOrder: dress })),
+      scanVerdict(
+        facts({ expected: null, label: null, stickerSku: 'AJ-000185', stickerOrder: dress }),
+      ),
     ).toEqual({ verdict: 'found', order: dress, matchedBy: 'sticker' });
   });
 
@@ -105,7 +115,9 @@ describe('scanVerdict', () => {
       verdict: 'sticker_scanned',
       order: tee,
     });
-    expect(scanVerdict(facts({ label: null, labelUnreadable: true }))).toEqual({ verdict: 'not_a_label' });
+    expect(scanVerdict(facts({ label: null, labelUnreadable: true }))).toEqual({
+      verdict: 'not_a_label',
+    });
   });
 });
 
@@ -124,7 +136,14 @@ describe('describeItem', () => {
   });
 
   it('falls back to the title, then the SKU', () => {
-    const item = { title: 'Vintage lamp', sku: 'AJ-000001', brand: null, category: null, sizeLabel: null, colors: [] };
+    const item = {
+      title: 'Vintage lamp',
+      sku: 'AJ-000001',
+      brand: null,
+      category: null,
+      sizeLabel: null,
+      colors: [],
+    };
     expect(describeItem(item)).toBe('Vintage lamp');
     expect(describeItem({ ...item, title: null })).toBe('AJ-000001');
     expect(describeOrder([item, item])).toBe('2 items: Vintage lamp; Vintage lamp');

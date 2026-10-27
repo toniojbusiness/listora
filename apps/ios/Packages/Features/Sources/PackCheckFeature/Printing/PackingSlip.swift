@@ -61,7 +61,10 @@ struct PackingSlip: Sendable {
         for item in items {
             guard y + photoSide <= rect.maxY else { break }
             if let data = item.photo, let image = UIImage(data: data) {
-                image.draw(in: aspectFit(image.size, in: CGRect(x: rect.minX, y: y, width: photoSide, height: photoSide)))
+                image.draw(in: aspectFit(
+                    image.size,
+                    in: CGRect(x: rect.minX, y: y, width: photoSide, height: photoSide),
+                ))
             }
             let textX = rect.minX + photoSide + 10
             let textRect = CGRect(x: textX, y: y, width: rect.maxX - textX, height: photoSide - 14)
@@ -88,7 +91,12 @@ struct PackingSlip: Sendable {
         guard size.width > 0, size.height > 0 else { return box }
         let scale = min(box.width / size.width, box.height / size.height)
         let fitted = CGSize(width: size.width * scale, height: size.height * scale)
-        return CGRect(x: box.minX, y: box.minY + (box.height - fitted.height) / 2, width: fitted.width, height: fitted.height)
+        return CGRect(
+            x: box.minX,
+            y: box.minY + (box.height - fitted.height) / 2,
+            width: fitted.width,
+            height: fitted.height,
+        )
     }
 }
 
