@@ -35,6 +35,7 @@ import { FakeDepopSite } from '../depop/fake/fake-depop-site.ts';
 import { setExecutionLocation } from '../execution.ts';
 import { linkAutomationSession } from '../link.ts';
 import { loadChromium } from '../runner/playwright.ts';
+import { LISTING_IMPORT_APPLY_TASK, queueImportPage } from '../imports/schedule.ts';
 import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
 import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -115,11 +116,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     };
   });
 
+  // Closing Chromium and the scratch database can take a while on a busy machine.
   afterAll(async () => {
     await browser.close();
     await site.close();
     await database.close();
-  });
+  }, 60_000);
 
   beforeEach(async () => {
     site.clearFaults();
@@ -805,5 +807,115 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect((await jobOf(backoff))?.run_at.getTime()).toBeLessThanOrEqual(Date.now());
     await step(backoff);
     expect((await claim(true))?.operationId).toBe(backoff.id);
+  });
+
+  /** An import of the seller's Depop listings, its first page waiting for the phone. */
+  async function startImport(): Promise<string> {
+    const { id } = await db
+      .insertInto('listing_import')
+      .values({
+        account_id: accountId,
+        connection_id: connectionId,
+        marketplace: 'depop',
+        host: 'phone',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await queueImportPage(db, { accountId, importId: id, connectionId, marketplace: 'depop' });
+    return id;
+  }
+
+  it("reads an import's pages on the phone one session each, read-only, with each listing's details", async () => {
+    // The linked session's own check runs first.
+    await runPhone();
+    for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
+      site.seed({
+        seller,
+        description: `Listing ${String(number)}.`,
+        priceCents: 1000 + number,
+        photos: [`photo-${String(number)}.jpg`],
+      });
+    }
+    const importId = await startImport();
+    const before = site.requests.length;
+    expect(await runPhone()).toBe(2);
+    const read = await db
+      .selectFrom('listing_import')
+      .selectAll()
+      .where('id', '=', importId)
+      .executeTakeFirstOrThrow();
+    // The scarf the seller had and the eleven new ones, over two pages of ten.
+    expect(read).toMatchObject({
+      status: 'importing',
+      pages_read: 2,
+      listings_read: 12,
+      error_code: null,
+    });
+    const entries = await db
+      .selectFrom('listing_import_entry')
+      .select(['external_listing_id', 'listing'])
+      .where('import_id', '=', importId)
+      .execute();
+    expect(entries).toHaveLength(12);
+    const first = entries.find((entry) => entry.external_listing_id.includes('listing-1-'));
+    expect(first?.listing).toMatchObject({
+      status: 'active',
+      description: 'Listing 1.',
+      priceCents: 1001,
+      details: { photoUrls: [`${site.url}/media/photo-1.jpg`], size: 'M' },
+    });
+    // Nothing on Depop changed, and the worker is asked to settle what was read.
+    expect(site.requests.slice(before).filter((request) => request.method !== 'GET')).toEqual([]);
+    const runs = await db
+      .selectFrom('automation_run')
+      .select(['purpose', 'host', 'outcome'])
+      .where('account_id', '=', accountId)
+      .where('purpose', '=', 'import')
+      .execute();
+    expect(runs).toEqual([
+      { purpose: 'import', host: 'phone', outcome: 'succeeded' },
+      { purpose: 'import', host: 'phone', outcome: 'succeeded' },
+    ]);
+    const { rows } = await sql<{ task_identifier: string }>`
+      select task_identifier from graphile_worker.jobs where key = ${`listing-import-apply:${importId}`}
+    `.execute(db);
+    expect(rows.map((row) => row.task_identifier)).toEqual([LISTING_IMPORT_APPLY_TASK]);
+  });
+
+  it('stops reading at a check the seller is not there to complete, or a sign-in they declined, with the reason', async () => {
+    await runPhone();
+    const importOf = (id: string) =>
+      db.selectFrom('listing_import').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+    const checked = await startImport();
+    site.inject({ action: 'listings', fault: { type: 'bot_check' } });
+    await runPhone();
+    expect(await importOf(checked)).toMatchObject({
+      status: 'importing',
+      listings_read: 0,
+      error_code: 'stopped_for_check',
+      error_message:
+        "Depop wants you to complete a check in Listora on your iPhone. Import again once it's done to read the rest.",
+    });
+    // Signed out, and the seller won't sign in again now: the connection waits for a relink.
+    await db
+      .updateTable('listing_import')
+      .set({ status: 'finished', finished_at: new Date() })
+      .where('id', '=', checked)
+      .execute();
+    const signedOut = await startImport();
+    site.inject({ action: 'health', fault: { type: 'session_expired' } });
+    await runPhone(['declined']);
+    // The sign-in the seller declined discarded the session, so the import has none to go on.
+    expect(await importOf(signedOut)).toMatchObject({
+      status: 'importing',
+      error_code: 'no_session',
+      error_message: 'Link Depop again in Listora to finish the import.',
+    });
+    const connection = await db
+      .selectFrom('marketplace_connection')
+      .select('status')
+      .where('id', '=', connectionId)
+      .executeTakeFirstOrThrow();
+    expect(connection.status).toBe('reauth_required');
   });
 });

@@ -14,8 +14,8 @@ import type {
   AutomatedMarketplace,
   ListingRef,
   OperationRequest,
+  ListingsPage,
   RemoteListingState,
-  RemoteListings,
   RemoteOrder,
 } from '@listora/marketplaces';
 
@@ -51,8 +51,11 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
   health: (step: StepRunner) => Promise<void>;
   /** The seller's orders sold at or after `since`, for sale checks. Only reads. */
   orders?: (since: Date | null, step: StepRunner) => Promise<RemoteOrder[]>;
-  /** The seller's listings, for imports and drift checks. Only reads. */
-  listings?: (step: StepRunner) => Promise<RemoteListings>;
+  /**
+   * One page of the seller's listings for sale, with what an import needs: the first for a
+   * `null` cursor, else the page the cursor a page returned names. Only reads.
+   */
+  listings?: (cursor: string | null, step: StepRunner) => Promise<ListingsPage>;
 }
 
 /** The script sets: one per automation adapter (the fake site's stands in for any marketplace). */
@@ -77,7 +80,8 @@ export type ScriptCall<P extends AssistedListingPayload = AssistedListingPayload
   | { script: 'health' }
   /** `since` is an ISO time, or `null` for every order the pages show. */
   | { script: 'orders'; since: string | null }
-  | { script: 'listings' };
+  /** `cursor`: `null` for the first page, else the `next` of the page before. */
+  | { script: 'listings'; cursor: string | null };
 
 /**
  * Whether an earlier attempt of the operation may have posted or changed the listing, so a
@@ -124,7 +128,7 @@ export async function runScriptCall<P extends AssistedListingPayload>(
     case 'listings': {
       const listings = scripts.listings;
       if (listings === undefined) throw new Error('these scripts list no listings');
-      return listings(step);
+      return listings(call.cursor, step);
     }
     default:
       return assertNever(call, 'script call');

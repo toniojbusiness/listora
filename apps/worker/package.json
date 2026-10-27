@@ -19,6 +19,7 @@
     "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/email-sales": "*",
+    "@listora/imports": "*",
     "@listora/marketplaces": "*",
     "@listora/observability": "*",
     "@listora/operations": "*",

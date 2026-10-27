@@ -42,7 +42,7 @@ struct MarketplacesSection: View {
                 MarketplaceCard(
                     row: row,
                     // With List everywhere at the top, each card's List is a smaller button.
-                    listIsSecondary: listEverywhere != nil && AllMarketplacesActions.listableCount(rows) >= 2,
+                    listIsSecondary: listEverywhere != nil && AllMarketplacesActions.showsListAll(rows),
                     history: row.listing.flatMap { histories[$0.id] } ?? [],
                     events: events,
                     isBusy: busyMarketplace == row.id,

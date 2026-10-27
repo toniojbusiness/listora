@@ -1,0 +1,27 @@
+{
+  "name": "@listora/imports",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Importing the seller's existing listings: starting an import, turning each listing it read into an item that is already listed there or adding it to the item it is the same as, the photos, the questions for the seller, and the summary.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/analysis": "*",
+    "@listora/automation": "*",
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/operations": "*",
+    "@listora/photos": "*",
+    "@listora/shared": "*",
+    "@listora/storage": "*",
+    "kysely": "^0.29.7",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*",
+    "@listora/connections": "*"
+  }
+}

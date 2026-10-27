@@ -4,9 +4,9 @@
  * iPhone app for a seller whose Mercari runs on their phone (docs/features/phone-execution.md).
  */
 import {
+  type ListedListing,
   type OperationRequest,
   type RemoteListingState,
-  type RemoteListing,
   type RemoteOrder,
 } from '@listora/marketplaces';
 
@@ -21,7 +21,7 @@ import type { StepRunner } from '../runner/types.ts';
 import { openAccount, salesTabPath } from './pages/account-page.ts';
 import { changed, type MercariSite } from './pages/common.ts';
 import { activate, deactivate, openEditor } from './pages/edit-page.ts';
-import { itemUrl, readItem, type ItemRead } from './pages/item-page.ts';
+import { readItem, type ItemRead } from './pages/item-page.ts';
 import {
   fillListing,
   fillPrice,
@@ -29,17 +29,15 @@ import {
   submitListing,
   type Submitted,
 } from './pages/listing-form.ts';
+import { listingDetails } from './pages/listing-details.ts';
 import { readListingsPage } from './pages/listings-page.ts';
 import type { MercariListingPayload } from './payload.ts';
-import { type MercariListingTab } from './site.ts';
 
 /**
  * How many of the newest active listings a lookup by SKU opens. A listing whose id Listora
  * never learned is one it just posted, so it is among the newest.
  */
 export const SKU_LOOKUP_DEPTH = 8;
-/** Pages of a listings tab one read goes through at most (newest first). */
-export const MAX_LISTING_PAGES = 25;
 /** Pages of a sold tab one sale check goes through at most (newest first). */
 export const MAX_SOLD_PAGES = 5;
 /**
@@ -194,7 +192,8 @@ export function createMercariScripts(
       if (payload === null) throw new Error('a revise has a payload');
       const opened = await editor(op, step);
       if (!('id' in opened)) return opened;
-      const filled = await step('fill in the changes', { mutates: false }, (page) =>
+      // The same whole form a create fills in, so the same time.
+      const filled = await step('fill in the changes', { mutates: false, timeScale: 3 }, (page) =>
         fillListing(page, payload, listingSku(op.listing), null),
       );
       if (filled === 'imei_required') return imeiRequired();
@@ -326,40 +325,30 @@ export function createMercariScripts(
       }
       return orders;
     },
-    listings: async (step) => {
-      // Mercari's tabs show a listing's title and price but not its description or last
-      // update, so those are `null`: a listing found here is never a read-back.
-      const listings: RemoteListing[] = [];
-      let complete = true;
-      for (const [tab, status] of [
-        ['active', 'active'],
-        ['inactive', 'ended'],
-      ] as const satisfies readonly (readonly [MercariListingTab, RemoteListing['status']])[]) {
-        for (let number = 1; ; number += 1) {
-          const shown = await step(`read the ${tab} listings`, { mutates: false }, (page) =>
-            readListingsPage(page, site, tab, number),
-          );
-          for (const row of shown.rows) {
-            listings.push({
-              found: true,
-              externalListingId: row.id,
-              externalUrl: itemUrl(site, row.id),
-              status,
-              title: row.title,
-              description: null,
-              priceCents: row.priceCents,
-              currency: row.priceCents === null ? null : 'USD',
-              revision: null,
-            });
-          }
-          if (!shown.hasNext) break;
-          if (number === MAX_LISTING_PAGES) {
-            complete = false;
-            break;
-          }
-        }
+    listings: async (cursor, step) => {
+      // One page of the active tab, then each listing's own page, which holds its description,
+      // photos, and details (the tab's rows show only a title and a price): the cursor is the
+      // tab's page number.
+      const number = cursor === null ? 1 : Number(cursor);
+      if (!Number.isSafeInteger(number) || number < 1) {
+        throw new Error(`a Mercari listings cursor is a page number, not ${String(cursor)}`);
       }
-      return { listings, complete };
+      const shown = await step('read your listings for sale', { mutates: false }, (page) =>
+        readListingsPage(page, site, 'active', number),
+      );
+      const listings: ListedListing[] = [];
+      for (const row of shown.rows) {
+        const read = await step('read a listing', { mutates: false }, (page) =>
+          readItem(page, site, row.id),
+        );
+        // Gone or sold since the tab was read: nothing to import.
+        if (!read.state.found || read.state.status !== 'active') continue;
+        listings.push({
+          ...read.state,
+          details: listingDetails(read.record ?? {}, read.records ?? {}, read.sku),
+        });
+      }
+      return { listings, next: shown.hasNext ? String(number + 1) : null };
     },
   };
 }

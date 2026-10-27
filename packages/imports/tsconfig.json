@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": ".tsbuild",
+    "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../shared" },
+    { "path": "../db" },
+    { "path": "../storage" },
+    { "path": "../photos" },
+    { "path": "../marketplaces" },
+    { "path": "../operations" },
+    { "path": "../analysis" },
+    { "path": "../automation" },
+    { "path": "../connections" },
+    { "path": "../testing" }
+  ]
+}

@@ -18,7 +18,8 @@
  * Imports, webhooks, and emails join this interface with the tasks that first use them (T-17,
  * T-23, T-36), as optional members; orders joined with the browser runner's sale checks
  * (`listOrdersSince`), the seller's listings with the Poshmark and Mercari automation adapters
- * (`listListings`, for imports and drift checks), and an order's fees with the sale lifecycle
+ * (`listListings`, a page at a time with what an import needs, docs/features/imports.md), and an
+ * order's fees with the sale lifecycle
  * (`readOrderFees`, T-26). Credentials are not members: an adapter gets
  * a connection's tokens or browser session at use time from its own source (eBay's
  * `EbaySellerSource`, which `@listora/connections` implements over the token vault; the browser
@@ -35,7 +36,7 @@ import type {
 } from '@listora/db';
 import type { CurrencyCode } from '@listora/shared';
 
-import type { ItemSnapshot, ListingVariant } from './content.ts';
+import type { ItemCondition, ItemSnapshot, ListingVariant } from './content.ts';
 
 /**
  * How a marketplace supports a capability: through its official API, by browser automation in
@@ -357,20 +358,45 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
    */
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>;
   /**
-   * The seller's listings on the marketplace, as read-backs, for imports and drift checks. Only
-   * adapters that can list them have it. Throws when the marketplace cannot be read.
+   * One page of the seller's listings for sale on the marketplace, newest first, each with what
+   * an import needs (`ListedListing`): the first page for a `null` cursor, the next one for the
+   * `next` a page returned. Only reads. Only adapters that can list them have it. Throws when
+   * the marketplace cannot be read.
    */
-  listListings?(ctx: AdapterContext): Promise<RemoteListings>;
+  listListings?(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage>;
 }
 
 /** A listing a read found. */
 export type RemoteListing = Extract<RemoteListingState, { found: true }>;
 
-/** The seller's listings, newest first. */
-export interface RemoteListings {
-  listings: RemoteListing[];
-  /** `false` when the adapter stopped at its page limit before the last listing. */
-  complete: boolean;
+/**
+ * What a listing shows besides its state, as an import takes it into an item: in the
+ * marketplace's own words, except the condition, which is Listora's.
+ */
+export interface ListingDetails {
+  /** Its photos, cover first, as the marketplace's own full-size image URLs (https). */
+  photoUrls: string[];
+  brand: string | null;
+  /** Its size as the listing shows it (`M`, `8`, `32x30`). */
+  size: string | null;
+  /** The marketplace's condition in Listora's terms; `null` when it shows none Listora knows. */
+  condition: ItemCondition | null;
+  /** Its category, in the form a listing's `variant.categoryRef` takes on that marketplace. */
+  categoryRef: string | null;
+  /** Its category's names, top level first (`["Women", "Dresses", "Maxi"]`). */
+  categoryPath: string[];
+  /** The SKU Listora's line at the end of its text names, when it has one (sku-line). */
+  sku: string | null;
+}
+
+/** One of the seller's listings, as an import reads it. */
+export type ListedListing = RemoteListing & { details: ListingDetails };
+
+/** One page of the seller's listings, newest first. */
+export interface ListingsPage {
+  listings: ListedListing[];
+  /** The cursor of the next page; `null` after the last one. */
+  next: string | null;
 }
 
 /** One item of a marketplace order, as a sale check reads it. */
