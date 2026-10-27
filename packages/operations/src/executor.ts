@@ -1203,12 +1203,16 @@ async function checkTarget(
       detail,
     };
   }
-  // A create or relist that a lookup by SKU can't find yet (Listora never learned its id) is no
-  // proof it didn't go through: a marketplace's own search can lag behind a listing it just took
+  // A create or relist the marketplace said it took (its send was confirmed, and its read-back
+  // missed it) that a lookup by SKU still can't find (Listora never learned its id) is no proof
+  // it didn't go through: a marketplace's own search can lag behind a listing it just took
   // (Poshmark's closet, for minutes, 2026-10-27), and sending again would post it twice. It is
-  // read again later instead; when the attempts run out it fails, and the seller checks.
+  // read again later instead; when the attempts run out it fails, and the seller checks. A step
+  // that was interrupted before its send is not this case: its read-back decides as before.
   if (
     comparison.reason === 'not_found' &&
+    ctx.op.status === 'verifying' &&
+    ctx.op.error_code === 'not_applied' &&
     ref.externalListingId === null &&
     (ctx.op.kind === 'create' || ctx.op.kind === 'relist') &&
     !read.remote.found &&
