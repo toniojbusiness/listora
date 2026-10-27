@@ -552,6 +552,7 @@
           ],
           "Version": "2012-10-17"
         },
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary",
         "Tags": [
           {
             "Key": "Name",
@@ -670,7 +671,8 @@
               ]
             }
           }
-        ]
+        ],
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary"
       }
     },
     "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
