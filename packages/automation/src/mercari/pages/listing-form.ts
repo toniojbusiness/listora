@@ -52,6 +52,10 @@ export const LISTING_FORM = {
     `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote(name)}") >> nth=0`,
   brand: 'input[data-testid="Brand"]',
   brandOption: '[data-testid="Brand-option"]',
+  /** The brands Mercari suggests once photos are in, as chips under the field (each a checkbox). */
+  brandChipLabel: '[data-testid="SuggestedBrandChipGroup"] label',
+  brandChipTicked: (name: string) =>
+    `[data-testid="SuggestedBrandChipGroup"] input[type="checkbox"][aria-label="${quote(name)}"]:checked`,
   /** What to type for Mercari's "No brand / Not sure" option, and its label. */
   noBrandSearch: 'No brand',
   noBrand: 'No brand / Not sure',
@@ -72,7 +76,7 @@ export const LISTING_FORM = {
    * drops, so it is switched off.
    */
   smartPricing: 'button[data-testid="SmartPricingButton"]',
-  /** Its switch asks to confirm turning it off. */
+  /** What its switch may ask to confirm turning it off with. */
   smartPricingTurnOff: 'button[data-testid="SmartPricingTurnOffButton"]',
   /** Mercari's answer to List from a seller without a card on file: add one first. */
   paymentWarning: '[data-testid="PaymentWarningModal"]',
@@ -182,10 +186,13 @@ async function smartPricingOff(page: PageDriver): Promise<void> {
   const shown = (await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase();
   if (shown !== 'ON') return;
   await page.click(LISTING_FORM.smartPricing);
-  if (!(await appears(page, LISTING_FORM.smartPricingTurnOff))) {
-    throw changed(FORM, 'asks nothing when Smart Pricing is switched off');
+  // Some sellers' forms ask to confirm (seen on the captain's phone); others switch it off at
+  // once (seen on the Mac, 2026-10-27).
+  const off = async (): Promise<boolean> =>
+    (await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === 'OFF';
+  if (!(await off()) && (await appears(page, LISTING_FORM.smartPricingTurnOff, 2_000))) {
+    await page.click(LISTING_FORM.smartPricingTurnOff);
   }
-  await page.click(LISTING_FORM.smartPricingTurnOff);
   const end = Date.now() + APPEAR_MS;
   while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === 'ON') {
     if (Date.now() >= end) throw changed(FORM, 'kept Smart Pricing on');
@@ -229,29 +236,47 @@ async function pickCategory(page: PageDriver, path: readonly string[]): Promise<
 }
 
 /**
- * Searches Mercari's brand list and picks the brand, matched exactly, then ignoring case and
- * punctuation (`Abercrombie & Fitch` is `Abercrombie and Fitch`). Mercari needs a brand: one it
- * doesn't list, or none, is its "No brand / Not sure" (the title and description still name it).
+ * Picks the item's brand, or Mercari's "No brand / Not sure" when Mercari doesn't list it or the
+ * item has none: Mercari needs one (the title and description still name the item's). Once
+ * photos are in, Mercari suggests brands as chips under the field and may have filled one in
+ * already (read 2026-10-27): a suggestion that is the brand is taken as it is. Otherwise the
+ * field is searched, matching exactly, then ignoring case and punctuation (`Abercrombie and
+ * Fitch` is Mercari's `Abercrombie & Fitch`), and again by the brand's first word.
  */
 async function pickBrand(page: PageDriver, brand: string | null): Promise<void> {
   await expectElement(page, LISTING_FORM.brand, FORM, 'brand search');
   if (brand !== null) {
-    // Mercari's search matches what is typed as it is, so a brand it spells otherwise
-    // (`Abercrombie and Fitch` for its `Abercrombie & Fitch`) is searched again by its first word.
+    if (await pickBrandChip(page, (name) => brandKey(name) === brandKey(brand))) return;
     const first = brand.split(/\s+/)[0] ?? '';
     const searches = [brand, ...(first.length >= 3 && first !== brand ? [first] : [])];
     for (const search of searches) {
       if (await pickBrandOption(page, search, brand)) return;
     }
   }
+  if (await pickBrandChip(page, (name) => name === LISTING_FORM.noBrand)) return;
   if (!(await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand))) {
     throw changed(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
   }
 }
 
+/** Ticks the suggested brand chip whose name passes `wanted` (kept when already ticked). */
+async function pickBrandChip(page: PageDriver, wanted: (name: string) => boolean): Promise<boolean> {
+  const names = (await page.texts(LISTING_FORM.brandChipLabel)).map((name) => name.trim());
+  const name = names.find(wanted);
+  if (name === undefined) return false;
+  if (!(await page.exists(LISTING_FORM.brandChipTicked(name)))) {
+    await page.click(`${LISTING_FORM.brandChipLabel}:text-is("${quote(name)}") >> nth=0`);
+  }
+  return true;
+}
+
 /** Types `search` into the brand field and picks the option that is `wanted`, if it comes. */
 async function pickBrandOption(page: PageDriver, search: string, wanted: string): Promise<boolean> {
-  await page.fill(LISTING_FORM.brand, '');
+  // Tapping the field starts a new search, clearing what it showed.
+  await page.click(LISTING_FORM.brand);
+  if (((await page.attribute(LISTING_FORM.brand, 'value')) ?? '') !== '') {
+    await page.fill(LISTING_FORM.brand, '');
+  }
   await page.type(LISTING_FORM.brand, search);
   // The suggestions follow Mercari's search as it answers each keystroke, so the list read first
   // may still be for the first letters: it is read until it offers the brand, or stays the same
@@ -290,7 +315,12 @@ function brandKey(name: string): string {
 async function pickSize(page: PageDriver, size: string): Promise<void> {
   await expectElement(page, LISTING_FORM.size, FORM, 'size list');
   await page.click(LISTING_FORM.size);
-  if (!(await appears(page, LISTING_FORM.sizeOption))) throw changed(FORM, 'shows no sizes');
+  // A tap while Mercari is still redrawing the form after a photo's suggestions can miss: once
+  // more before the list counts as missing.
+  if (!(await appears(page, LISTING_FORM.sizeOption, 4_000))) {
+    await page.click(LISTING_FORM.size);
+    if (!(await appears(page, LISTING_FORM.sizeOption))) throw changed(FORM, 'shows no sizes');
+  }
   const offered = await page.texts(LISTING_FORM.sizeOption);
   const spaced = (text: string): string => text.replace(/\s+/g, ' ').trim();
   const label = offered.find((option) => spaced(option) === spaced(size));
