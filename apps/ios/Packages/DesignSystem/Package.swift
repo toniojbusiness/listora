@@ -8,7 +8,11 @@ let package = Package(
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
     ],
     targets: [
-        .target(name: "DesignSystem"),
+        .target(
+            name: "DesignSystem",
+            // The wordmark's font (Fraunces, SIL Open Font License) with its license.
+            resources: [.copy("Resources/Fonts")],
+        ),
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
     ],
 )

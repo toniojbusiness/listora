@@ -160,7 +160,7 @@ struct ShutterButton: View {
                     .fill(Palette.onMedia)
                     .padding(isTakingPhoto ? 14 : 9)
                 if isTakingPhoto {
-                    ProgressView().tint(Palette.mediaBackground.color)
+                    BrandSpinner(color: Palette.mediaBackground)
                 }
             }
             .frame(width: Layout.shutterSize, height: Layout.shutterSize)

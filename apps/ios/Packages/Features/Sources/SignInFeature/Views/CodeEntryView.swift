@@ -12,6 +12,9 @@ struct CodeEntryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Wordmark(size: 32)
+                        .padding(.bottom, Spacing.xs)
+                        .accessibilityIdentifier("signIn.codeWordmark")
                     Text(model.kind == .developer ? "Enter the code" : "Check your email")
                         .font(Typography.title)
                         .foregroundStyle(Palette.textPrimary)

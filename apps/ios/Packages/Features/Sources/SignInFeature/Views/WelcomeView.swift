@@ -53,15 +53,11 @@ struct WelcomeView: View {
 
     private var header: some View {
         VStack(spacing: Spacing.md) {
-            // At the accessibility sizes the art gives its room to the words and the email.
-            if !typeSize.isAccessibilitySize {
-                IconTile(systemImage: "tag.fill", size: .hero)
-            }
+            // Smaller at the accessibility sizes, so the words and the email keep their room.
+            Wordmark(size: typeSize.isAccessibilitySize ? 40 : 60)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("signIn.wordmark")
             VStack(spacing: Spacing.xs) {
-                Text("Listora")
-                    .font(Typography.largeTitle)
-                    .foregroundStyle(Palette.brand)
-                    .accessibilityAddTraits(.isHeader)
                 Text("Take photos once, create the item once, and manage it everywhere you sell.")
                     .font(Typography.body)
                     .foregroundStyle(Palette.textSecondary)

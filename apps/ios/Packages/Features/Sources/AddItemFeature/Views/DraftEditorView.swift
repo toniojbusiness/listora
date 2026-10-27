@@ -226,7 +226,7 @@ struct DraftEditorView: View {
         } label: {
             if isWaitingToReview {
                 HStack(spacing: Spacing.xs) {
-                    ProgressView().tint(Palette.onBrand.color)
+                    BrandSpinner(color: Palette.onBrand)
                     Text("Uploading, then review")
                 }
             } else {

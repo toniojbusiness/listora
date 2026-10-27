@@ -54,6 +54,32 @@ review, price, and Settings, in light and dark mode) are in [design/palette/](de
 `textPrimary` on its soft background, the labels on `brand` and `danger`, and that the brand and
 status colors differ from each other, in both modes.
 
+### Brand: Looptag
+
+The logo is **Looptag**: the string of a price tag writes a cursive l, the first letter of the
+name, so one loop ties each item to every marketplace. It was chosen from the second round of
+logo concepts; the concept renders and the generator that made them are outside the repository
+(the firstmate `lstlogo2` report). Forest and clay are unchanged.
+
+| Piece          | Where                                                                                          | What it is                                                                                                                                                                                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The mark       | `apps/ios/Brand/looptag-mark.svg`, `Looptag` in DesignSystem                                   | The source geometry, in a 100-point box. `BrandTests` checks that the app's `Looptag` and every brand SVG draw the same string and tag.                                                                                                               |
+| App icon       | `apps/ios/Brand/app-icon-{light,dark,tinted}.svg`, rendered to `Brand/AppIcon.xcassets`        | Cream string and bright clay tag on a forest tile; mist and light clay on transparent (dark); white and gray on transparent (tinted). The app and the Share Extension both name it (apps/ios/README.md "App icon").                                   |
+| `Wordmark`     | Welcome, the code screen, the first-run welcome                                                | "listora" in Fraunces (below) whose l is the mark: the string at the font's stem weight, the clay tag below the baseline like a descender. VoiceOver reads "Listora".                                                                                 |
+| `BrandSpinner` | Wherever a spinner shows: loading buttons, the analysis steps, searches, a marketplace at work | The l draws itself, the tag lands, the string lifts off, every 1.6 s. With Reduce Motion the whole mark stays still and pulses like the skeletons. Brand colors, or one color (`color:`) on a filled button or a status tone. Sized by `controlSize`. |
+
+**The wordmark's font** is Fraunces (SIL Open Font License 1.1, no reserved font name), bundled
+in DesignSystem with its license (`Resources/Fonts/OFL.txt`) and registered for the app's
+process only on first use (`BrandFont`). It is a static instance of the variable font from
+`github.com/google/fonts` (`ofl/fraunces`), made with fontTools:
+`fonttools varLib.instancer 'Fraunces[SOFT,WONK,opsz,wght].ttf' opsz=72 wght=700 SOFT=100 WONK=0 --update-name-table`.
+Only the wordmark uses it; Apple's fonts are not licensed for a logo, and the type scale below
+stays SF Pro and New York. A wordmark is drawn from the font's glyph outlines (Core Text), so it
+matches the concept's lockup at any size.
+
+Loading a screen still uses skeletons, not a spinner (below); the spinner is for an action in
+progress inside a screen.
+
 ### Type (`Typography`)
 
 One scale, SF Pro on Dynamic Type text styles. Only the two display styles are New York
@@ -98,6 +124,7 @@ looks the same on every screen. The table with each style's use is in `Typograph
 | Component                                  | What it is                                                                                                                                        |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ListoraButtonStyle`                       | `primary`, `secondary`, `destructive`, `tertiary`, `destructiveText`; large or compact; pressed scale; `.loading(_:)` spinner that keeps the size |
+| `Wordmark`, `BrandSpinner`                 | The Looptag wordmark and the brand loading indicator (Brand, above)                                                                               |
 | `cardStyle(_:)`                            | `elevated`, `flat`, or `tinted(tone)` surface; no border in light mode                                                                            |
 | `ListRow`                                  | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                     |
 | `IconTile`                                 | An SF Symbol or monogram on a soft square (rows, cards, empty states)                                                                             |

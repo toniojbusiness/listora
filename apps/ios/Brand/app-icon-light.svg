@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<!-- Default appearance: the mark on a forest tile, full bleed (iOS applies the mask). Opaque. Rendered by make ios-app-icon. -->
+<defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#24432F"/><stop offset="1" stop-color="#142519"/></linearGradient></defs>
+<rect width="1024" height="1024" fill="url(#tile)"/>
+<g transform="translate(163.84 142.95) scale(6.9632)">
+<mask id="hole" maskUnits="userSpaceOnUse" x="-20" y="-30" width="80" height="60"><rect x="-20" y="-30" width="80" height="60" fill="#FFFFFF"/><circle cx="9.5" cy="0" r="4.3" fill="#000000"/></mask>
+<g id="tag" transform="translate(55 68) rotate(50)"><path d="M0 0 L11 -13 H38 Q42 -13 42 -9 V9 Q42 13 38 13 H11 Z" fill="#E0825B" stroke="#E0825B" stroke-width="5" stroke-linejoin="round" mask="url(#hole)"/></g>
+<path id="string" d="M10 66 C20 60 32 48 41 34 C50 20 54 5 44 4 C33 3 27 18 27 36 C27 54 27 68 34 76 C42 83 51 80 57 73" fill="none" stroke="#F7F4EE" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>
