@@ -33,8 +33,10 @@ rolled-back change is never counted and every writer (worker steps, user confirm
 API) is covered. For minute T it publishes the operations that settled in [T - 2 min, T - 1 min):
 `VerifiedSuccess` (1 or 0 per settled operation, so Average is the verified-success rate) per
 marketplace and kind and per marketplace, `OperationFailed` per marketplace and kind,
-`DelistFailed`, and `DelistLatency` from the recorded sale to the verified delist per marketplace
-(p50, p95). Every scheduled tick, however late, also publishes the state at the time it runs (the
+`DelistFailed`, `DelistLatency` from the recorded sale to the verified delist per marketplace
+(p50, p95), and `DelistEverywhereLatency` from the recorded sale to the last of its delists, once
+every one succeeded (one sample per sale; the target is under a minute,
+[auto-delist.md](auto-delist.md#speed)). Every scheduled tick, however late, also publishes the state at the time it runs (the
 job runs ahead of every operation step in the queue, so a backlog cannot silence it):
 `StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying, needs_user_action),
 `OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day), `MarketplaceConnections` per

@@ -14,7 +14,11 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    a step records its result only if the operation is still exactly as the step found it. Jobs run
    one at a time per listing (`queue_name = listing:<id>`, `job_key = operation:<id>`), and a newer
    operation waits until every older one on its listing is finished, so changes apply in order even
-   while an older one waits to retry. A daily job deletes listing queues that have no jobs left.
+   while an older one waits to retry. A delist after a sale doesn't wait out an older operation's
+   backoff: the older one's read-back runs at once (a try-now in its history, `delist_waiting`),
+   never its send or a wait the marketplace or pacing asked for, and the delist looks again every
+   30 seconds instead of 5 minutes until it can go (`hurryOlderChecks` in `executor.ts`). A daily
+   job deletes listing queues that have no jobs left.
    Each step runs in the operation's capability mode under the listing's connection
    (`operationMode`, [marketplaces.md](marketplaces.md#adapter-model)): an `unsupported` operation
    fails without being sent, and a send builds its payload from the stored content and fails without

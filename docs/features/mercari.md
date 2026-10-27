@@ -27,6 +27,11 @@ the cloud browser runner ([automation.md](automation.md)). The code is in
 | Listings   | The seller's "active" and "inactive" tabs, up to 25 pages each (`listListings`, for imports and drift checks) |                                                  |
 | Health     | The account page (`/mypage/`)                                                                                 |                                                  |
 
+End and relist read whether the listing is active from the edit page they act on (its toggle says
+Deactivate or Activate), so they load one page before they act. Only when Mercari shows no editor
+(a sold listing, or one it removed, whose edit page answers an error) is the listing's own page
+read to say what became of it.
+
 - A sold listing cannot be edited or relisted. Listora refuses those steps and tells the user
   to list the item again.
 - `listListings` reports the title, price, and status each tab shows. The tabs show no

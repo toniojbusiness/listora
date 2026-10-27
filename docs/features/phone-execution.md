@@ -17,7 +17,7 @@ Code:
 - `packages/automation/src/phone/`: the phone runtime (`runtime.ts`, bundled for the app by
   `npm run phone:bundle` into the app's `phone-runtime.js`), its page backend (`backend.ts`,
   `dom.ts`), and the server's half of phone runs (`work.ts`, `transcript.ts`, `answers.ts`,
-  `watch.ts`).
+  `watch.ts`, and `signals.ts`, which wakes the open app's wait for work).
 - `packages/operations/src/phone-queue.ts`: operation steps handed to the phone.
 - `apps/api/src/phone/`: device registration and the phone-run routes.
 - `packages/push`: the APNs driver and background pushes ([push.md](push.md)).
@@ -150,13 +150,22 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
 ## When the phone runs
 
 - **While the app is open** it runs the work waiting for this phone at once, without its backoff
-  (`appOpen`), then claims again whenever the server says and whenever a marketplace's run ends
-  (`PhoneRunner.follow`), even while other marketplaces run. So work queued or due meanwhile (a
-  check tried again after a failed attempt, a sale check, a delist after a sale) starts within
-  seconds without a push, which iOS may drop and a build signed with a personal team never gets.
-  A trigger during that wait (linking, a change in the app) ends it, and the next look follows
-  what its last claim said: an app opened before any marketplace ran on it is told 5 minutes,
-  and once the seller links one, 5 seconds or sooner.
+  (`appOpen`), then waits for its next work (`POST /v1/phone-runs/wait`, `waitForPhoneWork`) and
+  claims again as soon as the server answers, and whenever a marketplace's run ends
+  (`PhoneRunner.follow`), even while other marketplaces run. The server answers the wait the
+  moment work for the phone may be claimable: `phone_work` notifies the `phone_work` channel with
+  the account's id when work is handed over, comes due, or its claim ends (a trigger), and the
+  API, listening on its own connection (`listenForNotifications` in `@listora/db`), wakes the
+  account's waits; it also answers when work it knows of comes due, and otherwise after 20
+  seconds (`PHONE_WAIT_MAX_SECONDS`, under the API gateway's 30-second limit). So a delist after a
+  sale starts within a second of the engine handing it to the phone, without a push, which iOS
+  may drop and a build signed with a personal team never gets. The app looks at most once a
+  second; while the API's notification connection is down, a wait looks every 5 seconds
+  (`PHONE_IDLE_CLAIM_SECONDS`), as claims did before, and an app that can't reach the wait (an
+  older server) sleeps what its last claim said: an app opened before any marketplace ran on it
+  is told 5 minutes, and once the seller links one, 5 seconds or sooner. A trigger during a wait
+  (linking, a change in the app) ends it. Nothing is claimed by a wait, so one the app gives up on
+  leaves nothing behind.
 - **After a change in the app**: linking a marketplace, Check again, publishing, changing a
   price, ending, relisting, retrying, recording a sale, and choosing what to relist.
 - **A push.** A sale whose delists run on the phone sends a visible, time-sensitive notification
@@ -219,9 +228,14 @@ side in 11 to 13 s.
   long), a check tried again once due and when the phone is told to claim, one run per
   marketplace side by side and the recovery of runs the app no longer names, no pause inside a
   run, the open app running backoffs at once but not pacing waits, lapsed leases,
-  idempotent answers, the runtime version, and the refused move of a marketplace that blocks
-  the cloud.
-- **App, unit** (`PhoneExecutionFeatureTests`): the runner's loop, marketplaces side by side and
+  idempotent answers, the runtime version, the refused move of a marketplace that blocks
+  the cloud, and the open app's wait: answered within a second of a delist handed to the phone
+  or a claim ending, not by a lease renewal, every few seconds without notifications, and at its
+  end when nothing comes (`db/src/notifications.int.test.ts`: notifications only on commit, and
+  listening again after the connection is cut).
+- **App, unit** (`PhoneExecutionFeatureTests`): the runner's loop, the claim the moment the
+  server answers the wait (at most one look a second, and the claim's own wait from a server
+  without one), marketplaces side by side and
   one run per marketplace, the runs named in each claim, a free marketplace claiming at once,
   each marketplace's progress, warm web views while the app is open, retried answers,
   registration, and claiming again when the server says while the app is open; Link
@@ -239,7 +253,10 @@ side in 11 to 13 s.
 - `marketplace_connection.runs_on` and `phone_device_id`: where a connection's automated steps
   run.
 - `phone_work`: work handed to the phone (an operation step, a session check, a sale check, or a
-  history read), since when it waits, its lease, and the answered calls of the run under way.
+  history read), since when it waits, its lease, and the answered calls of the run under way. A
+  trigger (`phone_work_notify`, migration `20261027195355_phone_work_notify`) notifies the
+  `phone_work` channel with the account's id when work is inserted, or its due time moves or its
+  claim ends; a claim renewing its lease notifies nobody.
 - `automation_run.host`: `runner` or `phone`.
 
 ## Open items

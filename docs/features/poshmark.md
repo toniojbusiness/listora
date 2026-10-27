@@ -40,6 +40,13 @@ The code is in `packages/automation/src/poshmark/`:
 | sale check    | The seller's sold items (`/closet/<username>?availability=sold_out`), up to 5 pages of 48                                    |                  |
 | list listings | The whole closet (`availability=all`, newest first), up to 50 pages of 48, for imports and drift checks (`listListings`)     |                  |
 
+**End and relist start on the edit form**, which shows the listing's availability: a listing it
+shows in the other one is changed there at once, with no read of the listing's page first, and
+Update's landing page is not read again either, since the operation's read-back reads the listing
+next. Only a listing the form doesn't show that way (no form, or already as asked) is read on its
+page first, which is also where a listing Poshmark hides is told apart. A price change or revise
+skips the read after Update the same way.
+
 **Ending is Not For Sale, never a deletion.** The listing can no longer be bought, keeps its
 likes and comments, and comes back with a relist. A deletion cannot be read back (Listora has
 not seen what Poshmark answers for a deleted listing), and Poshmark's guidelines name deleting

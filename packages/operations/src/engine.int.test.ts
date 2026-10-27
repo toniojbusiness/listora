@@ -966,6 +966,59 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     });
   });
 
+  it("runs the check a delist after a sale waits for at once, not after that check's backoff", async () => {
+    await worker?.stop();
+    // Long backoffs: the price change's next check is 15 seconds away (a send's first check).
+    worker = await harness.startWorker({
+      policy: { delaysMs: [600_000], jitter: 0, random: () => 0.5 },
+    });
+    const listing = await liveListing(4500);
+    harness.fake.inject({ action: 'read', sku: listing.id, fault: { type: 'stale_read' } });
+    const price = await harness.enqueue(listing, 'price', { priceCents: 3900 });
+    await harness.waitForStatus(price.id, ['verifying']);
+    expect((await harness.operation(price.id)).next_attempt_at?.getTime()).toBeGreaterThan(
+      Date.now() + 10_000,
+    );
+
+    const delistRunId = await recordSale(harness, listing);
+    const delist = await harness.enqueue(
+      listing,
+      'end',
+      { status: 'ended' },
+      { origin: 'auto_delist', delistRunId },
+    );
+    // The price change is checked now, settles, and wakes the delist behind it.
+    expect(await harness.waitForStatus(price.id, SETTLED, 5_000)).toMatchObject({
+      status: 'succeeded',
+    });
+    expect(await harness.waitForStatus(delist.id, SETTLED, 5_000)).toMatchObject({
+      status: 'succeeded',
+      success_evidence: 'read_back',
+    });
+    expect((await harness.events(price.id)).map((event) => event.detail)).toContainEqual(
+      expect.objectContaining({ action: 'try_now', reason: 'delist_waiting', delist: delist.id }),
+    );
+  });
+
+  it("leaves an older change's backoff alone for a delist the seller asked for", async () => {
+    await worker?.stop();
+    worker = await harness.startWorker({
+      policy: { delaysMs: [600_000], jitter: 0, random: () => 0.5 },
+    });
+    const listing = await liveListing(4500);
+    harness.fake.inject({ action: 'read', sku: listing.id, fault: { type: 'stale_read' } });
+    const price = await harness.enqueue(listing, 'price', { priceCents: 3900 });
+    const waiting = await harness.waitForStatus(price.id, ['verifying']);
+    const end = await harness.enqueue(listing, 'end', { status: 'ended' });
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(await harness.operation(price.id)).toMatchObject({
+      status: 'verifying',
+      next_attempt_at: waiting.next_attempt_at,
+    });
+    expect(await harness.operation(end.id)).toMatchObject({ status: 'queued', attempts: 0 });
+  });
+
   it('runs an auto-delist at once while photo and analysis jobs fill their own pool', async () => {
     await worker?.stop();
     let release: () => void = () => undefined;

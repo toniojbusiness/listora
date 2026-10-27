@@ -5,7 +5,7 @@ import {
   PostgresUsageStore,
 } from '@listora/ai';
 import { graphileAnalysisJobs } from '@listora/analysis';
-import { phoneWorkAdapters } from '@listora/automation';
+import { listenForPhoneWork, phoneWorkAdapters } from '@listora/automation';
 import { createOAuthClients, createTokenVault, sealOnly, SessionVault } from '@listora/connections';
 import { addJob, createDatabase, createPool } from '@listora/db';
 import {
@@ -32,6 +32,8 @@ const config = loadApiConfig();
 const logger = createLogger({ service: 'api', level: config.logLevel });
 const pool = createPool({ connectionString: config.databaseUrl });
 const db = createDatabase(pool);
+// Ends the open app's wait for phone work the moment work is handed to its phone.
+const phoneSignals = listenForPhoneWork({ connectionString: config.databaseUrl, logger });
 
 const ebay = config.marketplaces.ebay;
 const ebayNotifications = ebay?.notifications;
@@ -106,6 +108,7 @@ const app = buildApp({
     stepTimeoutMs: config.automation.stepTimeoutMs,
     callTimeoutMs: config.automation.callTimeoutMs,
     blockedRecheckMs: 5 * 60_000,
+    signals: phoneSignals.signals,
   },
   saleEmails: { ingest: config.emailIngest },
   pingDatabase: () => pingDatabase(pool),
@@ -123,6 +126,7 @@ handleShutdownSignals({
   shutdown: async () => {
     if (drainMs > 0) await new Promise((resolve) => setTimeout(resolve, drainMs));
     await app.close();
+    await phoneSignals.close();
     await db.destroy();
   },
 });

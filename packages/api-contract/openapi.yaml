@@ -219,6 +219,8 @@ paths:
     $ref: './paths/phone.yaml#/~1v1~1devices~1{installationId}'
   /v1/phone-runs:
     $ref: './paths/phone.yaml#/~1v1~1phone-runs'
+  /v1/phone-runs/wait:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runs~1wait'
   /v1/phone-runtime:
     $ref: './paths/phone.yaml#/~1v1~1phone-runtime'
   /v1/phone-runs/{runId}/calls/{index}:
@@ -724,6 +726,10 @@ components:
       $ref: './components/schemas/phone.yaml#/KnownPhoneWorkPurpose'
     PhoneRunClaim:
       $ref: './components/schemas/phone.yaml#/PhoneRunClaim'
+    PhoneWorkWait:
+      $ref: './components/schemas/phone.yaml#/PhoneWorkWait'
+    PhoneWorkWaitResult:
+      $ref: './components/schemas/phone.yaml#/PhoneWorkWaitResult'
     PhoneCall:
       $ref: './components/schemas/phone.yaml#/PhoneCall'
     PhoneRun:

@@ -187,7 +187,7 @@ export const OPEN_APP_GAP_MS = 3_000;
  * (a 429), or Listora paces the seller's runs or another run holds the session. Those waits are
  * kept even while the app is open.
  */
-const PACED_ERROR_CODES = ['rate_limited', 'automation_paced', 'automation_busy'];
+export const PACED_ERROR_CODES = ['rate_limited', 'automation_paced', 'automation_busy'];
 
 /** The device's operations that run on it: their listing's connection runs on this phone. */
 function deviceOperations(executor: DbExecutor, device: PhoneDevice) {

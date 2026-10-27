@@ -61,6 +61,37 @@
         $ref: '../components/responses.yaml#/Conflict'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/phone-runs/wait:
+  post:
+    tags: [phone]
+    operationId: waitForPhoneWork
+    summary: Wait for this phone's next work
+    description: |
+      While the app is open and has claimed everything it can, it waits here instead of
+      looking again on a timer: the answer comes as soon as work for this phone may be
+      claimable (the engine handed a change to the phone, a check came due, a run's claim
+      ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+      usual. Nothing is claimed or changed here, so a wait the app gives up on (a trigger in the
+      app, the app leaving) leaves nothing behind.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/phone.yaml#/PhoneWorkWait'
+    responses:
+      '200':
+        description: Whether work may be ready.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/phone.yaml#/PhoneWorkWaitResult'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
 /v1/phone-runs/{runId}/calls/{index}:
   parameters:
     - $ref: '../components/parameters.yaml#/RunId'

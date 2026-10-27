@@ -51,20 +51,20 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     private var runProblem: String?
     public private(set) var lastRunAt: Date?
     /// How long until the next look while the app is open, as Listora said after its last claim.
-    private var nextLook: Duration?
+    var nextLook: Duration?
     /// The open app's wait until its next look (`follow`), and whether a trigger meanwhile ended
     /// it early: the claim it started says when to look next, which can be much sooner (Listora
     /// answers 5 minutes while no marketplace runs here, seconds once one is linked).
     private var followWait: Task<Void, any Error>?
     private var wokeEarly = false
 
-    private let service: any PhoneWorkService
+    let service: any PhoneWorkService
     private let runtime: any PhoneRuntime
-    private let installationID: @Sendable () -> String
+    let installationID: @Sendable () -> String
     private let isSignedIn: @MainActor () -> Bool
     private let isAppOpen: @MainActor () -> Bool
     private let device: @MainActor () -> DeviceRegistration
-    private let sleep: @Sendable (Duration) async throws -> Void
+    let sleep: @Sendable (Duration) async throws -> Void
     private let keepAwake: @MainActor (Bool) -> Void
     let timings: StepTimings
     private var pushToken: (token: String, environment: String)?
@@ -151,11 +151,12 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         await whenIdle()
     }
 
-    /// While the app is open: runs the waiting work now, then looks again whenever Listora says
-    /// (sooner when work is due then) and as a marketplace's run ends, so work queued or due
-    /// meanwhile starts within seconds with no push (iOS may drop one, and a personal team's build
-    /// gets none), even while another marketplace works. The runtime keeps a web view per
-    /// marketplace ready meanwhile. Returns once the calling task is canceled (the app left).
+    /// While the app is open: runs the waiting work now, then looks again the moment Listora says
+    /// work reached this phone (`waitForWork`; on its own timer when Listora can't say) and as a
+    /// marketplace's run ends, so work queued or due meanwhile (a delist after a sale) starts
+    /// within a second with no push (iOS may drop one, and a personal team's build gets none),
+    /// even while another marketplace works. The runtime keeps a web view per marketplace ready
+    /// meanwhile. Returns once the calling task is canceled (the app left).
     public func follow() async {
         runtime.keepWarm(true)
         defer { runtime.keepWarm(false) }
@@ -167,7 +168,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
             // A trigger meanwhile (linking, a change in the app, a push) started the claims
             // already: wait for them, then look again when their last claim said.
             await whenClaimed()
-            let wait = Task { [sleep, nextLook] in try await sleep(nextLook ?? Self.fallbackLook) }
+            let wait = Task { try await self.waitForWork() }
             followWait = wait
             do {
                 try await withTaskCancellationHandler {

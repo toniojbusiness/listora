@@ -20,7 +20,7 @@ import type { PhotoSource } from '../adapter/photos.ts';
 import type { StepRunner } from '../runner/types.ts';
 import { openAccount, salesTabPath } from './pages/account-page.ts';
 import { changed, type MercariSite } from './pages/common.ts';
-import { activate, deactivate, openEditor } from './pages/edit-page.ts';
+import { activate, deactivate, editorShows, openEditor } from './pages/edit-page.ts';
 import { itemUrl, readItem, type ItemRead } from './pages/item-page.ts';
 import {
   fillListing,
@@ -132,6 +132,20 @@ export function createMercariScripts(
     throw changed('edit page', 'shows no listing form for a listing that has not sold');
   }
 
+  /**
+   * The edit page an end or relist acts on, and whether it shows the listing active or inactive,
+   * so the change takes one page load before it acts (reading the listing's own page first took
+   * another). Mercari shows no editor for a sold or removed listing; its own page then says what
+   * became of it.
+   */
+  async function onEditor(step: StepRunner, id: string): Promise<'active' | 'inactive' | ItemRead> {
+    const shown = await step('open the editor', { mutates: false }, async (page) =>
+      (await openEditor(page, site, id)) === 'editing' ? editorShows(page) : null,
+    );
+    if (shown !== null) return shown;
+    return step('open the listing', { mutates: false }, (page) => readItem(page, site, id));
+  }
+
   /** Posts a new listing from the payload (List, or a relist of a listing Mercari removed). */
   async function createListing(
     op: OperationRequest<MercariListingPayload>,
@@ -224,39 +238,40 @@ export function createMercariScripts(
     end: async (op, step) => {
       const id = op.listing.externalListingId;
       if (id === null) return notListed();
-      const shown = await step('open the listing', { mutates: false }, (page) =>
-        readItem(page, site, id),
-      );
-      if (!shown.state.found) return notListed();
-      // Ended or sold: nothing is live, and the read-back decides.
-      if (shown.state.status !== 'active') return { type: 'applied' };
-      const opened = await editor(op, step);
-      if (!('id' in opened)) return opened;
+      const shown = await onEditor(step, id);
       // Mercari opens the seller's listings once it took it: the read-back confirms it.
-      return step('deactivate', { mutates: true }, async (page) => {
-        await deactivate(page);
-        return { type: 'applied' };
-      });
+      if (shown === 'active') {
+        return step('deactivate', { mutates: true }, async (page) => {
+          await deactivate(page);
+          return { type: 'applied' };
+        });
+      }
+      // Ended already: nothing is live, and the read-back decides.
+      if (shown === 'inactive') return { type: 'applied' };
+      if (!shown.state.found) return notListed();
+      // Sold: nothing is live, and the read-back decides.
+      if (shown.state.status !== 'active') return { type: 'applied' };
+      throw changed('edit page', 'shows no listing form for an active listing');
     },
     relist: async (op, step) => {
       const id = op.listing.externalListingId;
       if (id === null) return notListed();
-      const shown = await step('open the listing', { mutates: false }, (page) =>
-        readItem(page, site, id),
-      );
+      const shown = await onEditor(step, id);
+      if (shown === 'inactive') {
+        return step('activate', { mutates: true }, async (page) => {
+          await activate(page);
+          return { type: 'applied', externalListingId: id };
+        });
+      }
+      if (shown === 'active') return { type: 'applied', externalListingId: id };
       if (!shown.state.found) {
         // Mercari removed it (a listing deleted there): relisting posts it again, as a new
         // listing with its own id, from the item's details.
         return shown.state.authoritative ? createListing(op, step) : notListed();
       }
-      if (shown.state.status === 'active') return { type: 'applied', externalListingId: id };
       if (shown.state.status === 'sold') return sold();
-      const opened = await editor(op, step);
-      if (!('id' in opened)) return opened;
-      return step('activate', { mutates: true }, async (page) => {
-        await activate(page);
-        return { type: 'applied', externalListingId: id };
-      });
+      if (shown.state.status === 'active') return { type: 'applied', externalListingId: id };
+      throw changed('edit page', 'shows no listing form for a listing that has not sold');
     },
     read: async (ref, step): Promise<RemoteListingState> => {
       const id = ref.externalListingId;

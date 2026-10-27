@@ -39,6 +39,31 @@ struct PhoneRunnerTests {
     }
 
     @Test
+    func `while the app is open, it claims the moment Listora says work reached this phone`() async {
+        // A delist after a sale is handed to the phone while the app waits: Listora answers the
+        // wait at once, and the app claims it then, not when the claim's 5 seconds run out.
+        let service = FakeWorkService(claims: [
+            .wait(.seconds(5)),
+            .run(PhoneRun(id: "run-1", purpose: "operation", marketplace: "depop", call: .call(0))),
+            .wait(.seconds(5)),
+        ])
+        await service.script(answers: ["run-1": [.over]])
+        await service.script(waits: [true])
+        let runtime = FakeRuntime()
+        let sleeps = Sleeps(until: 2)
+        let runner = makeRunner(service, runtime, sleep: { try await sleeps.sleep($0) })
+
+        await runner.follow()
+
+        #expect(runtime.ran == ["depop:0"])
+        #expect(await service.waited == [.seconds(20)])
+        // The wait answered at once: the next look kept to one a second, never the claim's 5 s.
+        #expect(sleeps.slept.first.map { $0 <= .seconds(1) } == true)
+        // A server that can't wait (none left here) gets the claim's own wait instead.
+        #expect(sleeps.slept.contains(.seconds(5)))
+    }
+
+    @Test
     func `while the app is open, it looks again when Listora says, so a check tried again later runs`() async {
         // The first attempt of a check failed and the check is due again in 3 seconds: nothing
         // else (no push, no reopening) brings the phone back to it.
