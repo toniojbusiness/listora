@@ -115,14 +115,23 @@ Listora's own test listings:
 - **List** (phone, 51 seconds): photos and Poshmark's cover-photo editor (its Apply), title and
   description, the listing and original prices (the price field opens a dialog whose Automate
   Offers Listora turns off), the brand, the category, size, and condition pickers, the private
-  SKU behind "show details", and Next then List. After List Poshmark shows the closet, so the
-  same run finds the new listing by its SKU (the closet searched by title, each candidate's edit
-  form, whose data holds the SKU at `$_listing_editor.post.seller_private_info.sku`). A new
-  listing can take a moment to show in the closet, so the check then finds it.
+  SKU behind "show details", and Next then List. After List Poshmark shows the closet, which
+  doesn't name the new listing, but the form named it from the moment it opened: its photos
+  section carries the new listing's id in `data-et-prop-listing_id`, and a listing keeps that
+  id once listed (its id dates from the form's opening, not from its List). So the same run
+  reads the new listing on its own page right away. The closet can lag minutes behind a new
+  listing (3 to 20 minutes on the captain's closet, 2026-10-27), so finding it by its SKU there
+  (the closet searched by title, each candidate's edit form, whose data holds the SKU at
+  `$_listing_editor.post.seller_private_info.sku`) is only the fallback when the form named no
+  id or the page never showed it.
 - **Read** and **End** (phone): the listing page, availability Not For Sale; a deleted listing's
   page answers 404, definitive for a well-formed id.
 - **Relist** (phone): a listing Poshmark removed is listed again as a new listing.
-- **Not yet:** a price change, a revise, a relist back to For Sale, and a sale check.
+- **Change price, End, and Relist back to For Sale** (Mac, the captain's signed-in browser,
+  2026-10-27): Update opens the same share step a new listing's Next does, and its List This
+  Item saves the change. Right after a change the listing page showed no listing for about two
+  minutes, so it is read again (up to four looks, 30 seconds apart) before anything is decided.
+- **Not yet:** a revise of the other details, and a sale check.
 
 Who is logged in comes from Poshmark's own store, as its app reads it: `auth.isUserLoggedIn`,
 `auth.identity` (the user's id, not their handle), and the handle in `userCookies.userInfo`

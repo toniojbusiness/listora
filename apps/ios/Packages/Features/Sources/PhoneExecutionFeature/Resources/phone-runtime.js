@@ -8816,6 +8816,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		/** The form is there once its title field is: Poshmark's scripts draw it. */
 		form: "input[data-vv-name=\"title\"]",
 		photos: "input#img-file-input[type=\"file\"]",
+		/**
+		* The photos section of a new listing's form, which names the listing the form makes in
+		* `data-et-prop-listing_id` (read on the captain's session, 2026-10-27).
+		*/
+		newListing: "[data-et-name=\"listingEditorImageSection\"][data-et-prop-listing_id]",
 		title: "input[data-vv-name=\"title\"]",
 		description: "textarea[data-vv-name=\"description\"]",
 		brand: "[data-et-name=\"listingEditorBrandSection\"] input[type=\"text\"]",
@@ -8894,6 +8899,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (!await page.exists(FORM_SELECTORS.form)) throw new PageChangedError("Poshmark's listing form has no title field");
 		}
 		return true;
+	}
+	/**
+	* The id of the listing a new listing's form makes, or `null` when the form doesn't name it.
+	* Poshmark gives the listing its id when the form opens, and the listing keeps it once listed
+	* (read on the captain's session, 2026-10-27: a new listing's id dates from its form's opening,
+	* not from its List). So right after List the new listing is read on its own page, not looked
+	* for in the closet, which can lag minutes behind.
+	*/
+	async function newListingId(page) {
+		const id = await page.attribute(FORM_SELECTORS.newListing, "data-et-prop-listing_id");
+		return id !== null && /^[0-9a-f]{24}$/.test(id) ? id : null;
 	}
 	/** How long the cover-photo editor gets to open after the photos are picked. */
 	const EDITOR_OPENS_MS = 6e3;
@@ -9174,6 +9190,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** How often, and how far apart, a listing page that shows no listing is read again. */
 	const SETTLE_LOOKS = 4;
 	const SETTLE_WAIT_MS = 3e4;
+	/** How often, and how far apart, a new listing's own page is read right after List. */
+	const NEW_LOOKS = 3;
+	const NEW_WAIT_MS = 5e3;
 	/** Closet pages read for a full closet listing (48 listings each). */
 	const CLOSET_PAGES = 50;
 	/** Sold-item pages read per sale check (48 each, the newest sales among them). */
@@ -9308,6 +9327,22 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				await new Promise((resolve) => setTimeout(resolve, SETTLE_WAIT_MS));
 			}
 		}
+		/**
+		* A listing just listed, as its own page shows it, read again for a moment while the page
+		* shows none yet; `null` when it never does.
+		*/
+		async function newListing(step, id) {
+			for (let look = 1; look <= NEW_LOOKS; look += 1) {
+				const record = await step("read the new listing", { mutates: false }, (page) => openListing(page, site, id));
+				if (record !== null) return {
+					type: "applied",
+					externalListingId: id,
+					revision: revision(record, "listing page")
+				};
+				if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
+			}
+			return null;
+		}
 		/** Opens the listing's edit form; `false` when the listing is not there to edit. */
 		async function openEditor(step, id) {
 			return step("open the edit form", { mutates: false }, (page) => openForm(page, site.editListing(id)));
@@ -9355,10 +9390,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				externalListingId: existing
 			};
 			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-			if (!await step("open the listing form", {
+			const opened = await step("open the listing form", {
 				mutates: false,
 				timeScale: 2
-			}, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
+			}, async (page) => await openForm(page, site.createListing()) ? { id: await newListingId(page) } : null);
+			if (opened === null) throw new PageChangedError("Poshmark's listing form isn't there");
 			await step("add the photos", {
 				mutates: false,
 				timeScale: 2
@@ -9371,6 +9407,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const result = await save(step, "list");
 			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
 			try {
+				const listed = opened.id === null ? null : await newListing(step, opened.id);
+				if (listed !== null) return listed;
 				const id = await findBySku(step, sku, payload.title, { search: false });
 				if (id !== null) return {
 					...result,

@@ -24,6 +24,7 @@ import {
   fillBrand,
   fillPrices,
   fillText,
+  newListingId,
   openForm,
   privateSku,
   setAvailability,
@@ -50,6 +51,9 @@ export const SKU_LOOKUP = {
 /** How often, and how far apart, a listing page that shows no listing is read again. */
 const SETTLE_LOOKS = 4;
 const SETTLE_WAIT_MS = 30_000;
+/** How often, and how far apart, a new listing's own page is read right after List. */
+const NEW_LOOKS = 3;
+const NEW_WAIT_MS = 5_000;
 
 /** Closet pages read for a full closet listing (48 listings each). */
 const CLOSET_PAGES = 50;
@@ -218,6 +222,27 @@ export function createPoshmarkScripts(
     }
   }
 
+  /**
+   * A listing just listed, as its own page shows it, read again for a moment while the page
+   * shows none yet; `null` when it never does.
+   */
+  async function newListing(step: StepRunner, id: string): Promise<WriteResult | null> {
+    for (let look = 1; look <= NEW_LOOKS; look += 1) {
+      const record = await step('read the new listing', { mutates: false }, (page) =>
+        openListing(page, site, id),
+      );
+      if (record !== null) {
+        return {
+          type: 'applied',
+          externalListingId: id,
+          revision: revision(record, 'listing page'),
+        };
+      }
+      if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
+    }
+    return null;
+  }
+
   /** Opens the listing's edit form; `false` when the listing is not there to edit. */
   async function openEditor(step: StepRunner, id: string): Promise<boolean> {
     return step('open the edit form', { mutates: false }, (page) =>
@@ -278,11 +303,14 @@ export function createPoshmarkScripts(
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );
     // Poshmark's listing editor is a heavy page: it gets more time than a step's default.
-    const opened = await step('open the listing form', { mutates: false, timeScale: 2 }, (page) =>
-      openForm(page, site.createListing()),
+    const opened = await step(
+      'open the listing form',
+      { mutates: false, timeScale: 2 },
+      async (page) =>
+        (await openForm(page, site.createListing())) ? { id: await newListingId(page) } : null,
     );
     // Poshmark sends a seller to the form, never to a 404, so a missing one is a changed page.
-    if (!opened) throw new PageChangedError("Poshmark's listing form isn't there");
+    if (opened === null) throw new PageChangedError("Poshmark's listing form isn't there");
     await step('add the photos', { mutates: false, timeScale: 2 }, (page) =>
       addPhotos(page, files),
     );
@@ -293,9 +321,12 @@ export function createPoshmarkScripts(
     });
     const result = await save(step, 'list');
     if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
-    // After List, Poshmark shows the closet: the new listing is found by its SKU in the same
-    // run, so it shows as listed at once. Not finding it yet leaves it to the operation's check.
+    // After List, Poshmark shows the closet, which doesn't name the new listing: its own page,
+    // by the id its form named, confirms it at once. Without that, it is looked for by its SKU
+    // in the same run. Not finding it yet leaves it to the operation's check.
     try {
+      const listed = opened.id === null ? null : await newListing(step, opened.id);
+      if (listed !== null) return listed;
       const id = await findBySku(step, sku, payload.title, { search: false });
       if (id !== null) return { ...result, externalListingId: id };
     } catch {

@@ -39,6 +39,11 @@ export const FORM_SELECTORS = {
   /** The form is there once its title field is: Poshmark's scripts draw it. */
   form: 'input[data-vv-name="title"]',
   photos: 'input#img-file-input[type="file"]',
+  /**
+   * The photos section of a new listing's form, which names the listing the form makes in
+   * `data-et-prop-listing_id` (read on the captain's session, 2026-10-27).
+   */
+  newListing: '[data-et-name="listingEditorImageSection"][data-et-prop-listing_id]',
   title: 'input[data-vv-name="title"]',
   description: 'textarea[data-vv-name="description"]',
   brand: '[data-et-name="listingEditorBrandSection"] input[type="text"]',
@@ -128,6 +133,18 @@ export async function openForm(page: PageDriver, url: string): Promise<boolean> 
     }
   }
   return true;
+}
+
+/**
+ * The id of the listing a new listing's form makes, or `null` when the form doesn't name it.
+ * Poshmark gives the listing its id when the form opens, and the listing keeps it once listed
+ * (read on the captain's session, 2026-10-27: a new listing's id dates from its form's opening,
+ * not from its List). So right after List the new listing is read on its own page, not looked
+ * for in the closet, which can lag minutes behind.
+ */
+export async function newListingId(page: PageDriver): Promise<string | null> {
+  const id = await page.attribute(FORM_SELECTORS.newListing, 'data-et-prop-listing_id');
+  return id !== null && /^[0-9a-f]{24}$/.test(id) ? id : null;
 }
 
 /** How long the cover-photo editor gets to open after the photos are picked. */

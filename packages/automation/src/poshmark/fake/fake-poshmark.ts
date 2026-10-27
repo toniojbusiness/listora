@@ -13,7 +13,9 @@
  * 2026-10-26), with Poshmark's form rules: the cover-photo editor whose Apply keeps the photos,
  * the dropdown pickers, the Listing Price dialog with Automate Offers, the SKU in the private
  * details, and a new listing's Next and then List, after which Poshmark shows the seller's closet
- * (which doesn't name the new listing). The edit form's data holds the listing's private SKU, and
+ * (which doesn't name the new listing; its form named the listing's id from the moment it opened,
+ * in its photos section's `data-et-prop-listing_id`). The edit form's data holds the listing's
+ * private SKU, and
  * a deleted listing's page answers 404 (`remove`). It injects every failure the adapter must stop
  * at or recover from.
  *
@@ -159,6 +161,8 @@ export class FakePoshmark {
   readonly #server: Server;
   readonly #options: FakePoshmarkOptions;
   readonly #listings = new Map<string, StoredListing>();
+  /** The ids new listings' forms named, each the id of the listing its form lists. */
+  readonly #drafts = new Set<string>();
   readonly #sessions = new Map<string, Session>();
   readonly #faults: (FakePoshmarkFaultRule & { remaining: number })[] = [];
   readonly #timers = new Set<NodeJS.Timeout>();
@@ -445,8 +449,12 @@ export class FakePoshmark {
     fault: FakePoshmarkFault | undefined,
   ): Reply {
     switch (route.action) {
-      case 'new_form':
-        return { status: 200, body: this.#formPage(route, seller, []) };
+      case 'new_form': {
+        // As on Poshmark: the form gets the id of the listing it makes when it opens.
+        const draft = listingId();
+        this.#drafts.add(draft);
+        return { status: 200, body: this.#formPage(route, seller, [], undefined, draft) };
+      }
       case 'edit_form': {
         const stored = this.#own(route.id, seller);
         if (stored === undefined) return { status: 404, body: notFound(seller) };
@@ -455,13 +463,14 @@ export class FakePoshmark {
       case 'create': {
         if (seller === null || form === null) return { status: 400, body: notFound(seller) };
         const fields = formFields(form);
+        const draft = form.text('listing_id');
         const problems = invalidListing(fields, form.files('photos').length, true);
         if (problems.length > 0) {
-          return { status: 422, body: this.#formPage(route, seller, problems, fields) };
+          return { status: 422, body: this.#formPage(route, seller, problems, fields, draft) };
         }
         const at = this.#tick();
         const listing: FakePoshmarkListing = {
-          id: listingId(),
+          id: this.#drafts.delete(draft) ? draft : listingId(),
           seller,
           ...completeFields(fields),
           photoSizes: form.files('photos'),
@@ -571,6 +580,7 @@ export class FakePoshmark {
     seller: string | null,
     errors: readonly string[],
     submitted?: FormFields,
+    draft?: string,
   ): string {
     const stored = route.id === null ? undefined : this.#listings.get(route.id);
     const values = submitted ?? (stored === undefined ? null : fieldsOf(stored.current));
@@ -582,6 +592,7 @@ export class FakePoshmark {
         values,
         errors,
         editing,
+        draft ?? null,
       ),
       seller,
       // The edit form's data holds the listing's private SKU (its field has no value attribute).
@@ -876,6 +887,7 @@ function listingForm(
   values: FormFields | null,
   errors: readonly string[],
   editing: boolean,
+  draft: string | null,
 ): string {
   const value = (text: string | undefined): string => escape(text ?? '');
   // Every message the form can show is in the page; Vue's v-show hides the ones that don't apply.
@@ -898,7 +910,8 @@ function listingForm(
       sku: values?.sku ?? '',
     },
   };
-  const photos = `<section><h2>Photos</h2>
+  const named = draft === null ? '' : ` data-et-prop-listing_id="${escape(draft)}"`;
+  const photos = `<section id="imagePlaceholder" data-et-name="listingEditorImageSection"${named}><h2>Photos</h2>${draft === null ? '' : `<input type="hidden" name="listing_id" value="${escape(draft)}">`}
 <input type="file" id="img-file-input" aria-label="img-file-input" multiple accept="image/jpeg">
 <input type="file" name="photos" multiple hidden>${required('photos')}
 </section>`;

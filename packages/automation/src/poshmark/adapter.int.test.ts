@@ -149,6 +149,20 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     expect(read.found && Number.isSafeInteger(read.revision)).toBe(true);
   });
 
+  it('confirms a new listing on its own page, by the id its form named, not in the closet', async () => {
+    const ref = newRef();
+    const before = site.requests.length;
+    const outcome = await adapter.execute(request('create', ref), ctx());
+    expect(outcome).toMatchObject({ type: 'confirmed' });
+    const id = outcome.type === 'confirmed' ? (outcome.externalListingId ?? '') : '';
+    expect(site.listing(id)).toMatchObject({ sku: ref.externalSku });
+    // After List (whose answer is the closet), only the new listing's own page is read: the
+    // closet, which can lag, is not searched.
+    const seen = site.requests.slice(before);
+    const listed = seen.findIndex((request) => request.action === 'create');
+    expect(seen.slice(listed + 1).map((request) => request.action)).toEqual(['closet', 'listing']);
+  });
+
   it('edits details and price, ends as not for sale, and relists, each with a newer revision', async () => {
     const ref = await create();
     const read = async () => {
