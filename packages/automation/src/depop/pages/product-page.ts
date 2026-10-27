@@ -12,8 +12,9 @@
  * it twice (`readFreshness: 'none'`).
  *
  * - Status: Depop's product status (on sale, sold, deleted).
- * - Absence: never definitive. A page without a product (a 404) could be a listing not visible
- *   yet, as Depop says of its API too ("A newly created listing can take a short time to become
+ * - Absence: a deleted product's page answers 410 Gone (seen on a real listing Listora deleted,
+ *   2026-10-27), which is definitive. A 404 is not: it could be a listing not visible yet, as
+ *   Depop says of its API too ("A newly created listing can take a short time to become
  *   retrievable").
  */
 import { z } from 'zod';
@@ -75,6 +76,7 @@ export async function readProduct(
   slug: string,
 ): Promise<ProductPageRead> {
   await page.goto(productUrl(site, slug));
+  if (page.status() === 410) return { state: { found: false, authoritative: true }, sku: null };
   if (page.status() === 404) return { state: { found: false, authoritative: false }, sku: null };
   const records = findRecords(
     await flightRows(page),

@@ -209,7 +209,8 @@ export function createDepopScripts(
       const shown = await step('open the listing', { mutates: false }, (page) =>
         readProduct(page, site, slug),
       );
-      if (!shown.state.found) return notListed();
+      // Gone (Depop says so) is ended already: the read-back confirms it.
+      if (!shown.state.found) return shown.state.authoritative ? { type: 'applied' } : notListed();
       // Deleted or sold: nothing is live, and the read-back decides.
       if (shown.state.status !== 'active') return { type: 'applied' };
       // The seller's own product page has Delete listing, which asks to confirm in a dialog.

@@ -8,13 +8,7 @@
  */
 import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_PATHS } from '../site.ts';
-import {
-  absolute,
-  awaitElement,
-  changed,
-  lookAgain,
-  type DepopSite,
-} from './common.ts';
+import { absolute, awaitElement, changed, lookAgain, type DepopSite } from './common.ts';
 import { LISTING_FORM } from './listing-form.ts';
 
 /**

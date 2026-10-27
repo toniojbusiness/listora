@@ -203,7 +203,12 @@ export function createPoshmarkScripts(
     const shown = await step('open the listing', { mutates: false }, (page) =>
       readListing(page, site, id),
     );
-    if (!shown.found) return notListed();
+    if (!shown.found) {
+      // A listing Poshmark says is gone is ended already: the read-back confirms it.
+      return shown.authoritative && availability === 'not_for_sale'
+        ? { type: 'applied', externalListingId: id }
+        : notListed();
+    }
     if (availability === 'not_for_sale' && shown.status !== 'active') {
       // Already not for sale, or sold: nothing to end. The read-back decides.
       return { type: 'applied', externalListingId: id };

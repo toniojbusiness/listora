@@ -6111,8 +6111,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* it twice (`readFreshness: 'none'`).
 	*
 	* - Status: Depop's product status (on sale, sold, deleted).
-	* - Absence: never definitive. A page without a product (a 404) could be a listing not visible
-	*   yet, as Depop says of its API too ("A newly created listing can take a short time to become
+	* - Absence: a deleted product's page answers 410 Gone (seen on a real listing Listora deleted,
+	*   2026-10-27), which is definitive. A 404 is not: it could be a listing not visible yet, as
+	*   Depop says of its API too ("A newly created listing can take a short time to become
 	*   retrievable").
 	*/
 	const PRODUCT_PAGE = { 
@@ -6146,6 +6147,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	/** Opens the product's page and reads it. */
 	async function readProduct(page, site, slug) {
 		await page.goto(productUrl(site, slug));
+		if (page.status() === 410) return {
+			state: {
+				found: false,
+				authoritative: true
+			},
+			sku: null
+		};
 		if (page.status() === 404) return {
 			state: {
 				found: false,
@@ -6485,7 +6493,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				const slug = op.listing.externalListingId;
 				if (slug === null) return notListed();
 				const shown = await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug));
-				if (!shown.state.found) return notListed();
+				if (!shown.state.found) return shown.state.authoritative ? { type: "applied" } : notListed();
 				if (shown.state.status !== "active") return { type: "applied" };
 				await step("find Delete listing", { mutates: false }, (page) => expectDelete(page));
 				return step("delete", {
@@ -8489,9 +8497,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	* A listing's public page (`/listing/<title>-<id>`): the read-back of every change. It reads the
 	* listing record the page embeds (`$_listing_details.listingDetails`).
 	*
-	* Absences are never authoritative: Listora has not seen what Poshmark answers for a deleted
-	* listing, so a page without the listing (a 404, a listing that is no longer published) reads as
-	* "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
+	* A deleted listing's page answers 404 (seen on a real listing deleted from the captain's closet,
+	* 2026-10-27), and that absence is authoritative: the listing is gone. Any other page without the
+	* listing (one that is no longer published) reads as "not found, maybe not yet", never as "gone"
+	* (docs/features/marketplaces.md).
 	*/
 	const PAGE = "listing page";
 	const listingPageSchema = object({ $_listing_details: object({ listingDetails: listingRecordSchema.nullable().optional() }) });
@@ -8507,10 +8516,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	/** The listing as a read-back. */
 	async function readListing(page, site, id) {
 		const record = await openListing(page, site, id);
-		return record === null ? {
+		if (record !== null) return remoteListing(record, site, PAGE);
+		return {
 			found: false,
-			authoritative: false
-		} : remoteListing(record, site, PAGE);
+			authoritative: isListingId(id) && page.status() === 404
+		};
 	}
 
 // src/poshmark/scripts.ts
@@ -8651,7 +8661,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
 			const shown = await step("open the listing", { mutates: false }, (page) => readListing(page, site, id));
-			if (!shown.found) return notListed();
+			if (!shown.found) return shown.authoritative && availability === "not_for_sale" ? {
+				type: "applied",
+				externalListingId: id
+			} : notListed();
 			if (availability === "not_for_sale" && shown.status !== "active") return {
 				type: "applied",
 				externalListingId: id
