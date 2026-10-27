@@ -20,6 +20,8 @@ export {
   SupersededOperationError,
 } from './errors.ts';
 export type { SuccessProof } from './evidence.ts';
+export { remoteSnapshot } from './evidence.ts';
+export { syncItemListedStatus } from './item-status.ts';
 export {
   callOperationStep,
   claimedStepRef,

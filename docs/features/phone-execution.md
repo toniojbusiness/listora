@@ -63,9 +63,10 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
 
 1. **Handing over.** When the engine would enqueue a browser runner step for a connection that
    runs on the phone, it writes a `phone_work` row instead and keeps the operation's status and
-   job. Session checks, sale checks, and read-only reads of the sold history
-   ([activity.md](activity.md)) do the same. A delist after a sale goes first (`priority`), and a
-   history read waits behind routine changes.
+   job. Session checks, sale checks, read-only reads of the sold history
+   ([activity.md](activity.md)), and the pages of a listing import ([imports.md](imports.md)) do
+   the same. A delist after a sale goes first (`priority`), and a history read and an import page
+   wait behind routine changes.
 2. **Claiming.** The app claims the next work for its device (`POST /v1/phone-runs`). The claim
    is a lease (10 minutes, renewed by every answer). One run per connection at a time, so the
    app runs marketplaces side by side: it claims once for every marketplace with no run under
@@ -258,11 +259,12 @@ side in 11 to 13 s.
   APNs token and environment.
 - `marketplace_connection.runs_on` and `phone_device_id`: where a connection's automated steps
   run.
-- `phone_work`: work handed to the phone (an operation step, a session check, a sale check, or a
-  history read), since when it waits, its lease, and the answered calls of the run under way. A
-  trigger (`phone_work_notify`, migration `20261027195355_phone_work_notify`) notifies the
-  `phone_work` channel with the account's id when work is inserted, or its due time moves or its
-  claim ends; a claim renewing its lease notifies nobody.
+- `phone_work`: work handed to the phone (an operation step, a session check, a sale check, a
+  history read, or an import page with its `import_id`), since when it waits, its lease, and the
+  answered calls of the run under way. A trigger (`phone_work_notify`, migration
+  `20261027195355_phone_work_notify`) notifies the `phone_work` channel with the account's id when
+  work is inserted, or its due time moves or its claim ends; a claim renewing its lease notifies
+  nobody.
 - `automation_run.host`: `runner` or `phone`.
 
 ## Open items

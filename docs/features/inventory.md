@@ -54,7 +54,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   - A listing whose last change is still running takes no other (one change at a time), and is
     reported as such, with when to try again.
 - **List everywhere**: on the item screen, once two or more marketplaces can take the item, the
-  same List sheet for that item alone (each card's own List stays, as a smaller button, for
+  same List sheet for that item alone; for an item already live on a marketplace (an imported
+  listing, [imports.md](imports.md)) it is **List on the others**, from one marketplace it is not
+  on yet (each card's own List stays, as a smaller button, for
   reviewing one marketplace's version first). "List it now" on the review flow's Saved screen
   opens the new item in Inventory with it open (`ItemReviewOutcome.saved(listNow:)`,
   `AddItemEnvironment.onListItem`).

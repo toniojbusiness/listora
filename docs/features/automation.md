@@ -161,6 +161,10 @@ from the app
   it failed), its outcome moves the connection's sale-check health, and a check that fails or
   stops running shows on Today and is announced; a read-only **history read** proves a check
   reads the seller's real sold items without acting on any ([activity.md](activity.md)).
+- **Imports** (`imports/`): an import of the seller's listings reads them a page per browser
+  session, read-only, where the connection runs (the runner's `automation_listing_import` task,
+  or `listing_import` phone work), and keeps what each page showed for `@listora/imports` to
+  turn into items ([imports.md](imports.md)).
 - **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the
   cookies the app captured (on the marketplace's domains only), revives the connection, moves the
   marketplace's unconnected listings to it, asks for a read-only **session check**

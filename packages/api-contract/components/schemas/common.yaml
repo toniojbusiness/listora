@@ -111,5 +111,7 @@ Provenance:
       maxLength: 64
 KnownProvenance:
   type: string
-  description: Where a field value came from.
-  enum: [ai, ocr, barcode, user]
+  description: |
+    Where a field value came from: `marketplace` is a listing Listora imported from the
+    seller's marketplace account.
+  enum: [ai, ocr, barcode, user, marketplace]

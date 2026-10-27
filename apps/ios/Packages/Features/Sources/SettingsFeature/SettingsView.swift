@@ -56,53 +56,6 @@ public struct SettingsSummary: Equatable, Sendable {
     }
 }
 
-/// The screens Settings opens that other features own; the caller (AppFeature) builds them, since
-/// a feature never imports another. A nil screen hides its row.
-public struct SettingsScreens {
-    public var linkAccounts: (@MainActor () -> AnyView)?
-    public var marketplaces: (@MainActor () -> AnyView)?
-    public var notifications: (@MainActor () -> AnyView)?
-    public var saleEmails: (@MainActor () -> AnyView)?
-
-    /// The screen of one of the rows above; nil for every other destination.
-    @MainActor
-    func screen(for destination: SettingsDestination) -> AnyView? {
-        switch destination {
-        case .linkAccounts: linkAccounts?()
-        case .marketplaces: marketplaces?()
-        case .notifications: notifications?()
-        case .saleEmails: saleEmails?()
-        case .profile, .help, .legal, .diagnostics, .deleteAccount: nil
-        }
-    }
-
-    public init(
-        linkAccounts: (@MainActor () -> AnyView)? = nil,
-        marketplaces: (@MainActor () -> AnyView)? = nil,
-        notifications: (@MainActor () -> AnyView)? = nil,
-        saleEmails: (@MainActor () -> AnyView)? = nil,
-    ) {
-        self.linkAccounts = linkAccounts
-        self.marketplaces = marketplaces
-        self.notifications = notifications
-        self.saleEmails = saleEmails
-    }
-}
-
-/// A screen Settings opens, also from elsewhere in the app (the connection banner opens
-/// Marketplaces, the first-run guide Link accounts).
-public enum SettingsDestination: Hashable, Sendable {
-    case profile
-    case linkAccounts
-    case marketplaces
-    case notifications
-    case saleEmails
-    case help
-    case legal(LegalDocument.Kind)
-    case diagnostics
-    case deleteAccount
-}
-
 /// Profile and settings, opened over the app from the avatar in the Today and Sales headers: the
 /// seller's profile at the top, then only what a seller needs (their marketplaces, notifications
 /// and delisting, sale emails, help, the legal documents, signing out, and deleting the account,
@@ -227,7 +180,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var marketplacesSection: some View {
-        if screens.linkAccounts != nil || screens.marketplaces != nil {
+        if screens.linkAccounts != nil || screens.marketplaces != nil || screens.imports != nil {
             Section {
                 if screens.linkAccounts != nil {
                     NavigationLink(value: SettingsDestination.linkAccounts) {
@@ -253,6 +206,16 @@ public struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.marketplaces")
+                }
+                if screens.imports != nil {
+                    NavigationLink(value: SettingsDestination.imports) {
+                        ListRow(
+                            "Import your listings",
+                            subtitle: "Bring what you already have for sale on Depop, Poshmark, and Mercari.",
+                            systemImage: "square.and.arrow.down",
+                        )
+                    }
+                    .accessibilityIdentifier("settings.imports")
                 }
             } header: {
                 SectionHeader("Marketplaces")
@@ -364,7 +327,7 @@ extension SettingsView {
             if let profile {
                 EditProfileView(model: profile)
             }
-        case .linkAccounts, .marketplaces, .notifications, .saleEmails:
+        case .linkAccounts, .marketplaces, .imports, .notifications, .saleEmails:
             screens.screen(for: destination)
         case .help:
             HelpView(supportEmail: content.supportEmail, version: content.fullVersion)

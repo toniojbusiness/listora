@@ -512,35 +512,64 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     await expect(adapter.readListing(ref, ctx())).rejects.toThrow('element_missing');
   });
 
-  it("lists the seller's active and inactive listings across pages, for imports", async () => {
+  it("reads the seller's listings for sale a page at a time, with what an import needs", async () => {
     const seller = await FakeMercariSite.start(0, { pageSize: 2 });
     try {
       const own = adapterOn(seller);
-      const ids = ['Tee', 'Jeans', 'Boots'].map((title) =>
-        seller.seed({ title, priceCents: 2000 }),
-      );
-      const inactive = seller.seed({ title: 'Hat', priceCents: 1200, status: 'inactive' });
+      const ids = ['Tee', 'Jeans'].map((title) => seller.seed({ title, priceCents: 2000 }));
+      seller.seed({ title: 'Hat', priceCents: 1200, status: 'inactive' });
       const sold = seller.seed({ title: 'Bag', priceCents: 5000 });
       seller.sell(sold);
       seller.seed({ title: 'Not mine', priceCents: 900, seller: 'someone-else' });
-
-      const { listings, complete } = await own.listListings(ctx());
-      expect(complete).toBe(true);
-      expect(listings).toHaveLength(4);
-      expect(new Set(listings.map((listing) => listing.externalListingId))).toEqual(
-        new Set([...ids, inactive]),
-      );
-      expect(listings.find((listing) => listing.externalListingId === inactive)).toEqual({
-        found: true,
-        externalListingId: inactive,
-        externalUrl: `${seller.url}/us/item/${inactive}/`,
-        status: 'ended',
-        title: 'Hat',
-        description: null,
-        priceCents: 1200,
-        currency: 'USD',
-        revision: null,
+      const dress = seller.seed({
+        title: 'Floral maxi dress',
+        description: 'Worn once.\n\nSKU: AJ-000007',
+        priceCents: 3400,
+        category: ['Women', 'Dresses', 'Maxi'],
+        brand: 'Free People',
+        size: 'S',
+        conditionId: 2,
+        photos: ['front.jpg', 'back.jpg'],
       });
+
+      const listings = [];
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const page = await own.listListings(cursor, ctx());
+        listings.push(...page.listings);
+        cursor = page.next;
+        pages += 1;
+      } while (cursor !== null);
+      expect(pages).toBe(2);
+      // Only listings for sale: not the deactivated one, the sold one, or another seller's.
+      expect(new Set(listings.map((listing) => listing.externalListingId))).toEqual(
+        new Set([...ids, dress]),
+      );
+      expect(listings.find((listing) => listing.externalListingId === dress)).toEqual({
+        found: true,
+        externalListingId: dress,
+        externalUrl: `${seller.url}/us/item/${dress}/`,
+        status: 'active',
+        title: 'Floral maxi dress',
+        description: 'Worn once.',
+        priceCents: 3400,
+        currency: 'USD',
+        revision: expect.any(Number) as number,
+        details: {
+          photoUrls: [
+            `${seller.url}/media/${dress}-0-front.jpg`,
+            `${seller.url}/media/${dress}-1-back.jpg`,
+          ],
+          brand: 'Free People',
+          size: 'S',
+          condition: 'pre_owned_excellent',
+          categoryRef: 'Women > Dresses > Maxi',
+          categoryPath: ['Women', 'Dresses', 'Maxi'],
+          sku: 'AJ-000007',
+        },
+      });
+      expect(seller.requests.filter((request) => request.method !== 'GET')).toEqual([]);
     } finally {
       await seller.close();
     }

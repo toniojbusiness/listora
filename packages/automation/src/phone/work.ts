@@ -1,7 +1,8 @@
 /**
  * Phone runs (docs/features/phone-execution.md): the server's half of running automated work
  * on the seller's iPhone. Work handed to the phone waits in `phone_work`: an operation step the
- * engine handed over (`@listora/operations`, phone-queue.ts), a session check, or a sale check.
+ * engine handed over (`@listora/operations`, phone-queue.ts), a session check, a sale check, or
+ * a page of a listing import (imports/read.ts).
  * The app, signed in on the device that runs the connection, claims one (`claimPhoneRun`), runs
  * the script call the server gives it, and answers (`answerPhoneCall`), until the work is done.
  *
@@ -44,6 +45,7 @@ import {
   type AdapterLookup,
   type ConnectionRef,
   type Health,
+  type ListingsPage,
   type MarketplaceAdapter,
   type RemoteOrder,
 } from '@listora/marketplaces';
@@ -82,6 +84,7 @@ import {
 } from '../sale-checks/job.ts';
 import type { SaleCheckSettings } from '../settings.ts';
 import { prepareSessionCheck, recordSessionCheck } from '../session-checks/job.ts';
+import { prepareImportPage, recordImportPage, recordImportPageFailure } from '../imports/read.ts';
 import { queueSessionCheckForPhone } from '../session-checks/schedule.ts';
 import { readPhoneAnswer, readPhoneEvidence } from './answers.ts';
 import type { PhoneWorkSignals } from './signals.ts';
@@ -177,6 +180,12 @@ type WorkRow = Selectable<PhoneWorkTable>;
 type StepState =
   | { kind: 'operation'; ref: ClaimedStepRef }
   | { kind: 'session_check'; checkId: string; attempt: number }
+  | {
+      kind: 'listing_import';
+      importId: string;
+      /** The page the claim read: an import page recorded meanwhile makes the run diverge. */
+      cursor: string | null;
+    }
   | {
       kind: 'sale_check';
       /** A read of the sold history (`sale_history` work) rather than a sale check. */
@@ -577,6 +586,19 @@ async function claimStepState(
         ? null
         : { kind: 'session_check', checkId: work.check_id, attempt: prepared.attempt };
     }
+    case 'listing_import': {
+      if (work.import_id === null) return null;
+      const prepared = await prepareImportPage(
+        {
+          db: trx,
+          adapters: deps.adapters(new TranscriptSessions([])).lookup,
+          logger: deps.logger,
+        },
+        { accountId: work.account_id, importId: work.import_id },
+      );
+      if (prepared === null) return null;
+      return { kind: 'listing_import', importId: work.import_id, cursor: prepared.cursor };
+    }
     case 'sale_check':
     case 'sale_history': {
       const history = work.purpose === 'sale_history';
@@ -719,6 +741,37 @@ async function replay(
             health,
             (delayMs) => retrySessionCheckOnPhone(trx, work, step, delayMs),
           );
+        },
+      };
+    }
+    case 'listing_import': {
+      const readDeps = { db: trx, adapters: lookup, logger };
+      const prepared = await prepareImportPage(readDeps, {
+        accountId: work.account_id,
+        importId: step.importId,
+      });
+      if (prepared?.cursor !== step.cursor || prepared.runsOn !== 'phone') {
+        return { type: 'gone' };
+      }
+      let read: { page: ListingsPage } | { error: unknown };
+      try {
+        read = {
+          page: await prepared.adapter.listListings(prepared.cursor, {
+            connection: prepared.connection,
+            signal,
+          }),
+        };
+      } catch (error) {
+        read = { error };
+      }
+      return {
+        type: 'ran',
+        pending: sessions.pending,
+        diverged: sessions.diverged,
+        record: async () => {
+          await deleteWork(trx, work);
+          if ('page' in read) await recordImportPage(readDeps, prepared, read.page);
+          else await recordImportPageFailure(readDeps, prepared, read.error);
         },
       };
     }

@@ -429,21 +429,55 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok' });
   });
 
-  it("lists the seller's closet across pages, and finds sold items for sale checks", async () => {
+  it("reads the seller's listings for sale with what an import needs, and finds sold items for sale checks", async () => {
     const before = new Date(Date.now() - 1000);
     const sold = await create({ variant: { title: 'Sold Jacket' } });
     site.sell(sold.externalListingId);
-    const listings = await adapter.listListings(ctx());
-    expect(listings.complete).toBe(true);
-    const mine = site.listings().filter((listing) => listing.seller === 'listora_closet');
-    expect(listings.listings.map((listing) => listing.externalListingId).sort()).toEqual(
-      mine.map((listing) => listing.id).sort(),
+    const dress = site.seed({
+      title: 'Floral maxi dress',
+      description: 'Worn once.\n\nSKU: AJ-000009',
+      priceCents: 3800,
+      seller: 'listora_closet',
+      brand: 'Free People',
+      department: 'Women',
+      category: 'Dresses',
+      subcategory: 'Maxi',
+      size: 'S',
+      condition: 'uln',
+      photoSizes: [4, 4, 4],
+    });
+    const listings = [];
+    let cursor: string | null = null;
+    do {
+      const shown = await adapter.listListings(cursor, ctx());
+      listings.push(...shown.listings);
+      cursor = shown.next;
+    } while (cursor !== null);
+    const page = { listings };
+    const forSale = site
+      .listings()
+      .filter(
+        (listing) => listing.seller === 'listora_closet' && listing.inventory === 'available',
+      );
+    expect(page.listings.map((listing) => listing.externalListingId).sort()).toEqual(
+      forSale.map((listing) => listing.id).sort(),
     );
-    expect(
-      listings.listings.find((listing) => listing.externalListingId === sold.externalListingId),
-    ).toMatchObject({
-      status: 'sold',
-      title: 'Sold Jacket',
+    expect(page.listings.map((listing) => listing.externalListingId)).not.toContain(
+      sold.externalListingId,
+    );
+    expect(page.listings.find((listing) => listing.externalListingId === dress)).toMatchObject({
+      status: 'active',
+      title: 'Floral maxi dress',
+      priceCents: 3800,
+      details: {
+        photoUrls: [0, 1, 2].map((index) => `${site.url}/media/${dress}-${String(index)}.jpg`),
+        brand: 'Free People',
+        size: 'S',
+        condition: 'pre_owned_excellent',
+        categoryRef: 'Women/Dresses/Maxi',
+        categoryPath: ['Women', 'Dresses', 'Maxi'],
+        sku: 'AJ-000009',
+      },
     });
 
     const orders = await adapter.listOrdersSince(before, ctx());

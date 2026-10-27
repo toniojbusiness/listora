@@ -40,6 +40,7 @@ import {
   sellersListing,
   type ListingPage,
 } from './pages/listing-page.ts';
+import { listingDetails } from './pages/listing-details.ts';
 import { cents, remoteListing, revision, type ListingRecord } from './pages/state.ts';
 import { type PoshmarkListingPayload } from './payload.ts';
 import type { PoshmarkSite } from './site.ts';
@@ -62,8 +63,6 @@ const SETTLE_WAIT_MS = 30_000;
 const NEW_LOOKS = 3;
 const NEW_WAIT_MS = 5_000;
 
-/** Closet pages read for a full closet listing (48 listings each). */
-const CLOSET_PAGES = 50;
 /** Sold-item pages read per sale check (48 each, the newest sales among them). */
 const SOLD_PAGES = 5;
 
@@ -479,20 +478,23 @@ export function createPoshmarkScripts(
         ];
       });
     },
-    listings: async (step) => {
+    listings: async (cursor, step) => {
+      // One closet page of the listings for sale (48), newest first: the cursor is its
+      // `max_id`.
       const username = await seller(step);
-      const { listings, complete } = await closet(
-        step,
-        username,
-        { availability: 'all', newestFirst: true },
-        { maxPages: CLOSET_PAGES },
+      const shown = await step('read your listings for sale', { mutates: false }, (page) =>
+        readClosetPage(page, site, username, {
+          availability: 'available',
+          newestFirst: true,
+          ...(cursor === null ? {} : { maxId: cursor }),
+        }),
       );
-      return {
-        listings: listings
-          .filter((listing) => listing.status === 'published')
-          .map((listing) => remoteListing(listing, site, 'closet page')),
-        complete,
-      };
+      const listings = shown.listings.flatMap((record) => {
+        if (record.status !== 'published') return [];
+        const listing = remoteListing(record, site, 'closet page');
+        return listing.status === 'active' ? [{ ...listing, details: listingDetails(record) }] : [];
+      });
+      return { listings, next: shown.next };
     },
   };
 }

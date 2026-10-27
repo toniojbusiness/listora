@@ -124,8 +124,9 @@ KnownPhoneWorkPurpose:
     `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
     or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
     a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
-    history, which changes nothing.
-  enum: [operation, session_check, sale_check, sale_history]
+    history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
+    listings for sale, for an import.
+  enum: [operation, session_check, sale_check, sale_history, listing_import]
 PhoneRunClaim:
   type: object
   additionalProperties: false
