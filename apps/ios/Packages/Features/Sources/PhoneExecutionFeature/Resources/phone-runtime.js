@@ -8451,10 +8451,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 		async #execute(name, script, signal, readOnly) {
 			const steps = [];
+			const stepMs = [];
 			let mutated = false;
 			let current = "start";
-			if (this.#closed !== null) return failed(steps, mutated, error("start", "aborted", "the session is closed"));
-			if (this.#challenge !== null) return failed(steps, mutated, {
+			if (this.#closed !== null) return failed(steps, stepMs, mutated, error("start", "aborted", "the session is closed"));
+			if (this.#challenge !== null) return failed(steps, stepMs, mutated, {
 				kind: "challenge",
 				challenge: this.#challenge,
 				step: "start",
@@ -8465,9 +8466,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				if (readOnly && options.mutates) throw new StepError("script_error", `step ${stepName} would change the listing in a read`);
 				current = stepName;
 				steps.push(stepName);
+				const index = stepMs.push(0) - 1;
 				if (options.mutates) mutated = true;
 				const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs;
-				return this.#runStep(body, timeoutMs, signal, readOnly);
+				const startedAt = Date.now();
+				try {
+					return await this.#runStep(body, timeoutMs, signal, readOnly);
+				} finally {
+					stepMs[index] = Date.now() - startedAt;
+				}
 			};
 			try {
 				const value = await script(runStep);
@@ -8475,13 +8482,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				if (stopped !== null) throw new PageProblemError(stopped);
 				this.#deps.logger.debug({
 					script: name,
-					steps
+					steps,
+					stepMs
 				}, "automation script finished");
 				return {
 					ok: true,
 					value,
 					mutated,
-					steps
+					steps,
+					stepMs
 				};
 			} catch (caught) {
 				const stopped = this.#stop();
@@ -8501,7 +8510,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					mutated,
 					...this.#deps.networkSummary === void 0 ? {} : { network: this.#deps.networkSummary() }
 				}, "automation script stopped");
-				return failed(steps, mutated, failure);
+				return failed(steps, stepMs, mutated, failure);
 			}
 		}
 		async #runStep(body, timeoutMs, outer, readOnly) {
@@ -8850,12 +8859,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (this.#retired || this.#signal.aborted) throw new StepError("aborted", "the step is over");
 		}
 	};
-	function failed(steps, mutated, failure) {
+	function failed(steps, stepMs, mutated, failure) {
 		return {
 			ok: false,
 			failure,
 			mutated,
-			steps
+			steps,
+			stepMs
 		};
 	}
 	function error(step, code, message) {

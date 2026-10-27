@@ -181,8 +181,10 @@ describe('operations', () => {
       ({ op }) => responseSchema(op, '200')?.properties?.['nextCursor'],
     );
     expect(paged.map(({ op }) => op.operationId).sort()).toEqual([
+      'listItemActivity',
       'listItems',
       'listListings',
+      'listOperationActivity',
       'listOperationEvents',
       'listOperations',
       'listSales',

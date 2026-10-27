@@ -6,7 +6,7 @@ page estimates its monthly AWS bill, explains the choices that keep it low, and 
 levers that would cut it further. The design is described in
 [infra/README.md](../../infra/README.md#the-personal-environment).
 
-**Estimate: about $35 a month, or about $36 a month with browser automation**, before any
+**Estimate: about $35 a month, or about $37 a month with browser automation**, before any
 Free Tier credit, deployed as it starts: without a domain
 ([infra/README.md](../../infra/README.md#without-a-domain)). It costs $0.56 more once a domain is
 added (its Route 53 hosted zone and SES inbound sale email), plus the domain's registration.
@@ -15,7 +15,8 @@ A copy of the staging layout (NAT gateway, load balancer, two services) would co
 Rechecked on 2026-10-25 after the efficiency pass ([performance.md](performance.md)): it added
 or removed no billed resource and changed no task size, so the estimate stands. The privacy
 hardening ([privacy.md](privacy.md)) then added one trust metric (`OverdueDeletions`) and its
-alarm, $0.40 a month.
+alarm, $0.40 a month, and sale-check health ([activity.md](activity.md)) another
+(`UnhealthySaleChecks`) and its alarm, $0.40 a month.
 
 Prices were read on 2026-10-24 for US East (N. Virginia), on demand, from the AWS pricing
 pages linked below (the price data behind their tables). A month is 730 hours. Taxes, the
@@ -28,9 +29,9 @@ domain registration, and the Anthropic API bill are not included.
 - The worker's trust metrics (CloudWatch Embedded Metric Format, about ten small log lines a
   minute) add about 0.15 GB of logs. About 15 of them are published every minute (operations
   stuck per status and their ages, the oldest unverified operation, the AI cost of each
-  account active today, the connections per marketplace and status, and overdue deletions),
+  account active today, the connections per marketplace and status, unhealthy sale checks, and overdue deletions),
   and per-marketplace operation results (per kind, and the verified-success rate per
-  marketplace) only in the hours operations settle: about 17 metrics billed for a full month.
+  marketplace) only in the hours operations settle: about 18 metrics billed for a full month.
 - Each photo stores about 2.2 MB (a full-size original plus the listing, AI, and thumbnail
   derivatives), so photos take about 7 GB, about 8 GB with replaced versions kept for 30 days.
 - Marketplaces fetch listing photos well within CloudFront's always-free tier.
@@ -58,12 +59,12 @@ domain registration, and the Anthropic API bill are not included.
 | Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                    |      $0.80 |
 | KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)    |      $1.00 |
 | CloudWatch Logs                      | 1.15 GB ingested at $0.50, kept 7 days at $0.03 per GB          |      $0.59 |
-| CloudWatch custom metrics (EMF)      | About 17 metrics; the first 10 are always free, then $0.30 each |      $2.10 |
-| CloudWatch alarms                    | 21 standard alarms; the first 10 are always free, then $0.10    |      $1.10 |
+| CloudWatch custom metrics (EMF)      | About 18 metrics; the first 10 are always free, then $0.30 each |      $2.40 |
+| CloudWatch alarms                    | 22 standard alarms; the first 10 are always free, then $0.10    |      $1.20 |
 | EventBridge task-stopped rule        | AWS service events delivered to SNS have no EventBridge charge  |      $0.00 |
 | ECR image storage                    | About 1 GB at $0.10 per GB                                      |      $0.10 |
 | ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)    |      $0.00 |
-| **Total**                            |                                                                 | **$34.92** |
+| **Total**                            |                                                                 | **$35.32** |
 
 ## With a domain
 
@@ -74,13 +75,13 @@ charge (ACM certificates and alias queries to API Gateway are free):
 | --------------------------- | ---------------------------------------------------------------- | ---------: |
 | Route 53 public hosted zone | 1 zone at $0.50; alias queries to API Gateway are free           |      $0.50 |
 | SES inbound sale email      | 300 emails at $0.10 per 1,000, plus 256 KB chunks at $0.09/1,000 |      $0.06 |
-| **Total with a domain**     | $34.92 plus these                                                | **$35.48** |
+| **Total with a domain**     | $35.32 plus these                                                | **$35.88** |
 
 The sale emails' SNS topic and SQS queue add nothing: SNS delivers to SQS for free, and the
 worker's once-a-minute poll is about 45,000 SQS requests a month, inside the free 1 million
 ([email-sales.md](email-sales.md)).
 
-With browser automation as well, the total is $36.96. The domain's registration is billed by
+With browser automation as well, the total is $37.36. The domain's registration is billed by
 its registrar and is not included.
 
 ## Browser automation
@@ -119,7 +120,7 @@ plus $0.005 an hour for its public address while it runs. Assumptions:
 | Worker dispatch task               | Every minute, inside the always-on worker task |      $0.00 |
 | ECR storage for the Chromium image | About 1.5 GB more at $0.10 per GB              |      $0.15 |
 | **Automation subtotal**            |                                                |  **$1.48** |
-| **Total with browser automation**  | $34.92 plus the automation subtotal            | **$36.40** |
+| **Total with browser automation**  | $35.32 plus the automation subtotal            | **$36.80** |
 
 An always-on runner (one 1 vCPU / 4 GB task 24/7) is the alternative if per-job startup ever
 gets in the way: about $42.56 a month, plus $3.65 for its address. Listing jobs scale with
@@ -178,8 +179,8 @@ Costs to watch: the `db.t4g.micro` bills $0.075 per vCPU-hour if its average CPU
 its baseline for a day (unlimited burst mode; the `database-cpu` alarm fires first), photo
 storage grows by about $0.02 per 100 items a month, each KMS key rotation adds $1 a month
 for the first two years, alarms beyond the always-free ten cost $0.10 each (the
-environment has 21: the eight platform alarms and the 13 trust alarms, five plus delist
-latency and verified success per marketplace, which are worth more than the $1.10), and each
+environment has 22: the eight platform alarms and the 14 trust alarms, six plus delist
+latency and verified success per marketplace, which are worth more than the $1.20), and each
 custom metric beyond the always-free ten costs $0.30 a month
 for the hours it receives data (each AI-active account adds one, each connected marketplace
 status one).

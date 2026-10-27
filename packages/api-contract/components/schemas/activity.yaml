@@ -1,0 +1,309 @@
+ActivitySource:
+  description: A `KnownActivitySource`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownActivitySource'
+    - type: string
+      maxLength: 64
+KnownActivitySource:
+  type: string
+  description: |
+    Who did it. `listora`: Listora's server (the operation engine, the sale intake, the
+    auto-delist). `cloud_browser`: Listora's cloud browser. `iphone`: the seller's iPhone, in
+    their own marketplace session. `you`: the seller. `marketplace`: the marketplace.
+  enum: [listora, cloud_browser, iphone, you, marketplace]
+ActivityOutcome:
+  description: |
+    A `KnownActivityOutcome`, or one added after this client was built (shown as `info`).
+  anyOf:
+    - $ref: '#/KnownActivityOutcome'
+    - type: string
+      maxLength: 64
+KnownActivityOutcome:
+  type: string
+  description: |
+    How it went. `in_progress`: still running. `waiting`: waits for the seller. `info`: nothing
+    to judge (a change, a sale, a cancellation).
+  enum: [succeeded, failed, in_progress, waiting, info]
+ActivityKind:
+  description: A `KnownActivityKind`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownActivityKind'
+    - type: string
+      maxLength: 64
+KnownActivityKind:
+  type: string
+  description: |
+    Which record it comes from. `item`: an item change. `operation`: a step of a marketplace
+    action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
+    with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
+    an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
+    delist after a sale. `task`: a task for the seller.
+  enum: [item, operation, browser_session, sale_check, order, sale, delist, task]
+ActivityStep:
+  type: object
+  description: One step of a browser session.
+  required: [name]
+  properties:
+    name:
+      type: string
+      maxLength: 100
+    durationMs:
+      type: integer
+      format: int64
+      minimum: 0
+      description: How long it took; absent when the device did not say.
+ActivityError:
+  type: object
+  description: What went wrong, as a code (for support) and in the seller's words.
+  required: [code, message]
+  properties:
+    code:
+      type: string
+      maxLength: 100
+    message:
+      type: string
+      maxLength: 1000
+ActivityReference:
+  type: object
+  description: |
+    Where support finds more: the browser session's run id, which its log lines carry, whether
+    it kept a redacted screenshot, and the sale check's record id.
+  required: [screenshot]
+  properties:
+    runId:
+      $ref: './common.yaml#/Id'
+    saleCheckId:
+      $ref: './common.yaml#/Id'
+    screenshot:
+      type: boolean
+ActivityEntry:
+  type: object
+  description: |
+    One thing that happened, from the record that keeps it (docs/features/activity.md):
+    redacted, with no page content, typed values, or buyer data.
+  required: [id, at, kind, source, outcome, title]
+  properties:
+    id:
+      type: string
+      maxLength: 200
+      description: '`<kind>:<record id>`, stable.'
+    at:
+      $ref: './common.yaml#/Timestamp'
+    kind:
+      $ref: '#/ActivityKind'
+    source:
+      $ref: '#/ActivitySource'
+    outcome:
+      $ref: '#/ActivityOutcome'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    title:
+      type: string
+      maxLength: 300
+    detail:
+      type: string
+      maxLength: 1000
+    itemId:
+      $ref: './common.yaml#/Id'
+    listingId:
+      $ref: './common.yaml#/Id'
+    operationId:
+      $ref: './common.yaml#/Id'
+    saleId:
+      $ref: './common.yaml#/Id'
+    durationMs:
+      type: integer
+      format: int64
+      minimum: 0
+    steps:
+      type: array
+      maxItems: 100
+      items:
+        $ref: '#/ActivityStep'
+    error:
+      $ref: '#/ActivityError'
+    reference:
+      $ref: '#/ActivityReference'
+ActivityPage:
+  type: object
+  description: Newest first.
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/ActivityEntry'
+    nextCursor:
+      type: string
+      description: Present when there are older entries.
+SaleCheckRunKind:
+  description: A `KnownSaleCheckRunKind`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownSaleCheckRunKind'
+    - type: string
+      maxLength: 64
+KnownSaleCheckRunKind:
+  type: string
+  description: |
+    `scheduled`: a sale check, which hands new sold orders to the sale intake. `history`: a
+    read-only read of the seller's sold history, which changes nothing.
+  enum: [scheduled, history]
+ActivityHost:
+  description: A `KnownActivityHost`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownActivityHost'
+    - type: string
+      maxLength: 64
+KnownActivityHost:
+  type: string
+  description: |
+    Where a check ran. `runner`: Listora's cloud browser. `phone`: the seller's iPhone.
+  enum: [runner, phone]
+SaleCheckSummary:
+  type: object
+  description: The sale check that saw a sale.
+  required: [id, kind, host, startedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    kind:
+      $ref: '#/SaleCheckRunKind'
+    host:
+      $ref: '#/ActivityHost'
+    startedAt:
+      $ref: './common.yaml#/Timestamp'
+    finishedAt:
+      $ref: './common.yaml#/Timestamp'
+    ordersSeen:
+      type: integer
+      format: int32
+      minimum: 0
+    newOrders:
+      type: integer
+      format: int32
+      minimum: 0
+    runId:
+      $ref: './common.yaml#/Id'
+SaleDelistStatus:
+  description: A `KnownSaleDelistStatus`, or a value added after this client was built.
+  anyOf:
+    - $ref: '#/KnownSaleDelistStatus'
+    - type: string
+      maxLength: 64
+KnownSaleDelistStatus:
+  type: string
+  description: |
+    An operation's status (`queued` to `canceled`) for a delist Listora runs, or a task's
+    (`open`, `done`, `dismissed`) for one the seller does.
+  enum:
+    [
+      queued,
+      running,
+      retrying,
+      verifying,
+      succeeded,
+      failed,
+      needs_user_action,
+      canceled,
+      open,
+      done,
+      dismissed,
+    ]
+SaleDelist:
+  type: object
+  description: One delist the sale started on another marketplace, and how it ended.
+  required: [itemId, marketplace, status, result, startedAt]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    listingId:
+      $ref: './common.yaml#/Id'
+    operationId:
+      $ref: './common.yaml#/Id'
+    taskId:
+      $ref: './common.yaml#/Id'
+    status:
+      $ref: '#/SaleDelistStatus'
+    result:
+      type: string
+      maxLength: 1000
+      description: What happened, in the seller's words.
+    attempts:
+      type: integer
+      format: int32
+      minimum: 0
+    error:
+      $ref: '#/ActivityError'
+    startedAt:
+      $ref: './common.yaml#/Timestamp'
+    settledAt:
+      $ref: './common.yaml#/Timestamp'
+SaleExplanation:
+  type: object
+  description: |
+    Why a sale went the way it did: how Listora learned of it (which check saw it, where, and
+    when), when it was recorded, each delist it started on the other marketplaces and how each
+    ended, and the whole timeline.
+  required: [saleId, marketplace, soldAt, recordedAt, detectionSource, detection, delists, entries]
+  properties:
+    saleId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    externalOrderId:
+      type: string
+      maxLength: 255
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+    recordedAt:
+      $ref: './common.yaml#/Timestamp'
+    detectionSource:
+      $ref: './sales.yaml#/SaleDetectionSource'
+    detection:
+      type: string
+      maxLength: 300
+      description: How Listora learned of it, in the seller's words.
+    check:
+      $ref: '#/SaleCheckSummary'
+    reportedAt:
+      $ref: './common.yaml#/Timestamp'
+    delists:
+      type: array
+      items:
+        $ref: '#/SaleDelist'
+    entries:
+      type: array
+      description: The sale's timeline, newest first.
+      items:
+        $ref: '#/ActivityEntry'
+SaleCheckHealth:
+  description: A `KnownSaleCheckHealth`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownSaleCheckHealth'
+    - type: string
+      maxLength: 64
+KnownSaleCheckHealth:
+  type: string
+  description: |
+    Whether a connection's sale checks work. `failing`: the last checks failed. `overdue`: the
+    check that was due has not run (on the phone: Listora was not opened there).
+  enum: [healthy, failing, overdue]
+ConnectionSaleChecks:
+  type: object
+  description: |
+    An automation connection's sale checks: whether they work, when one last ran and last
+    worked, when the next is due, and the last failure.
+  required: [health, nextCheckAt]
+  properties:
+    health:
+      $ref: '#/SaleCheckHealth'
+    lastCheckedAt:
+      $ref: './common.yaml#/Timestamp'
+    lastSucceededAt:
+      $ref: './common.yaml#/Timestamp'
+    nextCheckAt:
+      $ref: './common.yaml#/Timestamp'
+    lastError:
+      $ref: '#/ActivityError'

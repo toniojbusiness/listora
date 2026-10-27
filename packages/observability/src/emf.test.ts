@@ -137,6 +137,7 @@ describe('formatEmf', () => {
       MarketplaceConnections: 'Count',
       ConnectionsNeedingRelink: 'Count',
       OverdueDeletions: 'Count',
+      UnhealthySaleChecks: 'Count',
     });
   });
 });

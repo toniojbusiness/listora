@@ -37,6 +37,8 @@ const SETTINGS = {
   defaultIntervalMs: 12 * HOUR,
   minIntervalMs: 2 * HOUR,
   maxIntervalMs: 24 * HOUR,
+  alertAfterFailures: 2,
+  overdueMs: 6 * HOUR,
 };
 
 describe('eBay sale checks (real Postgres, headless Chromium)', () => {

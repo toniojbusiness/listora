@@ -8,6 +8,7 @@ import {
   orderCards,
   reconnectCard,
   reviewDraftsCard,
+  saleChecksCard,
   shipCard,
   shipUrgency,
   staleListingCard,
@@ -322,5 +323,56 @@ describe('formatMoney', () => {
     expect(formatMoney(4000)).toBe('$40');
     expect(formatMoney(4050)).toBe('$40.50');
     expect(formatMoney(123_400)).toBe('$1,234');
+  });
+});
+
+describe('sale-check cards', () => {
+  it("says a marketplace's sales are not being seen, why, and opens its connection", () => {
+    const card = saleChecksCard(
+      {
+        connectionId: 'conn-2',
+        marketplace: 'depop',
+        health: 'failing',
+        failuresInARow: 2,
+        lastErrorMessage: "Depop's sold items page has changed, so Listora couldn't read it.",
+        lastSucceededAt: null,
+        unhealthySince: ago(3 * HOUR),
+        runsOn: 'phone',
+      },
+      NOW,
+    );
+    expect(card).toEqual({
+      kind: 'sale_checks',
+      id: 'sale_checks:conn-2',
+      urgency: 'high',
+      title: "Listora can't check Depop for sales",
+      detail:
+        "The last 2 checks failed: Depop's sold items page has changed, so Listora couldn't " +
+        'read it. Listora keeps trying. Until it can, a sale on Depop is not delisted elsewhere ' +
+        'automatically.',
+      action: {
+        label: 'See marketplaces',
+        destination: 'marketplaces',
+        itemId: null,
+        saleId: null,
+        connectionId: 'conn-2',
+      },
+      connectionId: 'conn-2',
+      marketplace: 'depop',
+      health: 'failing',
+      since: ago(3 * HOUR),
+      lastSucceededAt: null,
+    });
+    // After a reconnect card of the same urgency, before drafts.
+    const reconnect = reconnectCard({
+      id: 'conn-1',
+      marketplace: 'ebay',
+      displayName: null,
+      status: 'revoked',
+    });
+    expect(orderCards([card, reconnect]).map((ordered) => ordered.kind)).toEqual([
+      'reconnect',
+      'sale_checks',
+    ]);
   });
 });

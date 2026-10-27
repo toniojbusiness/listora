@@ -30,8 +30,28 @@ Marketplace data (docs/features/privacy.md):
                        every account, as when the marketplace ends Listora's access (for example
                        Depop's partner API); without --confirm it only counts them
 
+Activity and sale detection (docs/features/activity.md):
+  activity [--account ID] [--item ID | --sku SKU | --operation ID | --sale ID]
+           [--marketplace M] [--since T] [--until T] [--limit N]
+                       one timeline, newest first (default 50): operation steps, browser
+                       sessions with their steps and times, sale checks, orders, sales, delists,
+                       tasks, and item changes; --sku needs --account
+  sale-why <sale-id>   how a sale was found (which check saw it, where, when) and each delist it
+                       started on the other marketplaces, with the sale's timeline
+  sale-checks [--account ID] [--marketplace M] [--limit N]
+                       each automation connection's sale-check health, then the latest checks
+                       (default 20): what each read, how many sold orders it saw, why it failed
+  sale-history read <marketplace> --account ID
+                       ask for a read-only read of the seller's sold history: it records every
+                       sold order the pages show and hands none to the sale intake, so nothing
+                       is delisted or changed (it runs where the connection runs: the phone or
+                       the cloud browser)
+  sale-history show <marketplace> --account ID
+                       the newest history read and every sold order it saw
+
 Options:
   --day YYYY-MM-DD    a UTC day
+  --since, --until    a time (ISO 8601, for example 2026-10-26T18:00:00Z); --until excludes it
   --month YYYY-MM     a UTC calendar month
   --json              print the result as JSON
   --help              show this message
@@ -91,6 +111,35 @@ export type Command =
       readonly json: boolean;
     }
   | {
+      readonly name: 'activity';
+      readonly filter: {
+        readonly accountId?: string;
+        readonly itemId?: string;
+        readonly sku?: string;
+        readonly operationId?: string;
+        readonly saleId?: string;
+        readonly marketplace?: Marketplace;
+        readonly from?: Date;
+        readonly to?: Date;
+      };
+      readonly limit: number;
+      readonly json: boolean;
+    }
+  | { readonly name: 'sale-why'; readonly saleId: string; readonly json: boolean }
+  | {
+      readonly name: 'sale-checks';
+      readonly accountId: string | undefined;
+      readonly marketplace: Marketplace | undefined;
+      readonly limit: number;
+      readonly json: boolean;
+    }
+  | {
+      readonly name: 'sale-history-read' | 'sale-history-show';
+      readonly accountId: string;
+      readonly marketplace: Marketplace;
+      readonly json: boolean;
+    }
+  | {
       readonly name: 'marketplace-purge';
       readonly marketplace: Marketplace;
       readonly mode: 'api' | 'automation';
@@ -107,6 +156,13 @@ const OPTIONS = {
   actor: { type: 'string' },
   reason: { type: 'string' },
   mode: { type: 'string' },
+  item: { type: 'string' },
+  sku: { type: 'string' },
+  operation: { type: 'string' },
+  sale: { type: 'string' },
+  marketplace: { type: 'string' },
+  since: { type: 'string' },
+  until: { type: 'string' },
   confirm: { type: 'boolean' },
   json: { type: 'boolean' },
   help: { type: 'boolean' },
@@ -181,6 +237,89 @@ export function parseCommand(argv: readonly string[], now: Date = new Date()): C
         mode: values.mode,
         change: parseChange(values),
         confirm: values.confirm === true,
+      };
+    }
+    case 'activity': {
+      expectArgs('activity', action === undefined ? rest : [action, ...rest], 0);
+      allowOnly('activity', values, [
+        'account',
+        'item',
+        'sku',
+        'operation',
+        'sale',
+        'marketplace',
+        'since',
+        'until',
+        'limit',
+        'json',
+      ]);
+      const scopes = (['item', 'sku', 'operation', 'sale'] as const).filter(
+        (option) => typeof values[option] === 'string',
+      );
+      if (scopes.length > 1) {
+        throw new UsageError('give at most one of --item, --sku, --operation, --sale');
+      }
+      const accountIdValue = optionalAccount(values);
+      if (typeof values.sku === 'string' && accountIdValue === undefined) {
+        throw new UsageError('--sku needs --account: SKUs are per account');
+      }
+      const marketplace = optionalMarketplace(values);
+      const from = optionalTime(values, 'since');
+      const to = optionalTime(values, 'until');
+      return {
+        name: 'activity',
+        filter: {
+          ...(accountIdValue === undefined ? {} : { accountId: accountIdValue }),
+          ...(typeof values.item === 'string' ? { itemId: uuid('--item', values.item) } : {}),
+          ...(typeof values.sku === 'string' ? { sku: values.sku.toUpperCase() } : {}),
+          ...(typeof values.operation === 'string'
+            ? { operationId: uuid('--operation', values.operation) }
+            : {}),
+          ...(typeof values.sale === 'string' ? { saleId: uuid('--sale', values.sale) } : {}),
+          ...(marketplace === undefined ? {} : { marketplace }),
+          ...(from === undefined ? {} : { from }),
+          ...(to === undefined ? {} : { to }),
+        },
+        limit: parseLimit(values, 50),
+        json: values.json === true,
+      };
+    }
+    case 'sale-why':
+      expectArgs('sale-why', rest, 0);
+      allowOnly('sale-why', values, ['json']);
+      return {
+        name: 'sale-why',
+        saleId: uuid('sale id', action),
+        json: values.json === true,
+      };
+    case 'sale-checks': {
+      expectArgs('sale-checks', action === undefined ? rest : [action, ...rest], 0);
+      allowOnly('sale-checks', values, ['account', 'marketplace', 'limit', 'json']);
+      return {
+        name: 'sale-checks',
+        accountId: optionalAccount(values),
+        marketplace: optionalMarketplace(values),
+        limit: parseLimit(values, 20),
+        json: values.json === true,
+      };
+    }
+    case 'sale-history': {
+      if (action !== 'read' && action !== 'show') {
+        throw new UsageError('sale-history needs read or show');
+      }
+      const command = `sale-history ${action}`;
+      expectArgs(command, rest, 1, 'a marketplace');
+      allowOnly(command, values, action === 'show' ? ['account', 'json'] : ['account']);
+      const marketplace = rest[0];
+      if (!(MARKETPLACES as readonly string[]).includes(marketplace ?? '')) {
+        throw new UsageError(`marketplace must be one of ${MARKETPLACES.join(', ')}`);
+      }
+      if (typeof values.account !== 'string') throw new UsageError(`${command} needs --account`);
+      return {
+        name: action === 'read' ? 'sale-history-read' : 'sale-history-show',
+        accountId: accountId(values.account),
+        marketplace: marketplace as Marketplace,
+        json: values.json === true,
       };
     }
     case undefined:
@@ -324,6 +463,35 @@ function parseChange(values: Values): AiControlChange {
 
 function optionalAccount(values: Values): string | undefined {
   return typeof values.account === 'string' ? accountId(values.account) : undefined;
+}
+
+function optionalMarketplace(values: Values): Marketplace | undefined {
+  const { marketplace } = values;
+  if (typeof marketplace !== 'string') return undefined;
+  if (!(MARKETPLACES as readonly string[]).includes(marketplace)) {
+    throw new UsageError(`--marketplace must be one of ${MARKETPLACES.join(', ')}`);
+  }
+  return marketplace as Marketplace;
+}
+
+function optionalTime(values: Values, option: 'since' | 'until'): Date | undefined {
+  const value = values[option];
+  if (typeof value !== 'string') return undefined;
+  const time = new Date(value);
+  if (
+    !/^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:\d{2}))?$/.test(value) ||
+    Number.isNaN(time.getTime())
+  ) {
+    throw new UsageError(`--${option} must be an ISO 8601 time, for example 2026-10-26T18:00:00Z`);
+  }
+  return time;
+}
+
+function uuid(what: string, value: string | undefined): string {
+  if (value === undefined || !UUID.test(value)) {
+    throw new UsageError(`${what} must be a UUID, got ${value ?? '(none)'}`);
+  }
+  return value.toLowerCase();
 }
 
 function accountId(value: string | undefined): string {

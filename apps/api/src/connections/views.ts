@@ -19,11 +19,20 @@ import {
   type ExecutionView,
   type SessionCheckState,
 } from '@listora/connections';
-import { MARKETPLACES, type Marketplace } from '@listora/db';
+import { MARKETPLACES, type Marketplace, type SaleCheckHealth } from '@listora/db';
 import type { AdapterRegistry, MarketplaceCapabilities } from '@listora/marketplaces';
 
 /** The URL scheme `ASWebAuthenticationSession` waits for; the callback redirects to it. */
 export const APP_CALLBACK_SCHEME = 'listora';
+
+/** An automation connection's sale checks, from its schedule. */
+export interface SaleCheckState {
+  health: SaleCheckHealth;
+  lastCheckedAt: Date | null;
+  lastSucceededAt: Date | null;
+  nextCheckAt: Date;
+  lastError: { code: string; message: string } | null;
+}
 
 export interface ConnectionViewContext {
   adapters: AdapterRegistry;
@@ -31,6 +40,8 @@ export interface ConnectionViewContext {
   canConnect: (marketplace: Marketplace) => boolean;
   /** The account's session checks by connection id: how automation connections are shown. */
   sessionChecks: ReadonlyMap<string, SessionCheckState>;
+  /** The account's sale checks by connection id: whether each sees the seller's sales. */
+  saleChecks: ReadonlyMap<string, SaleCheckState>;
   /** The account's devices and what waits for its phones: where automated steps run. */
   execution: ExecutionState;
   /** Whether each marketplace may run in Listora's cloud (`cloudAccess`). */
@@ -122,6 +133,7 @@ function contractConnection(
     row === undefined
       ? undefined
       : describeExecution(row, context.execution, context.cloudAccess(marketplace));
+  const saleChecks = row?.mode === 'automation' ? context.saleChecks.get(row.id) : undefined;
   return {
     marketplace: view.marketplace,
     mode: view.mode,
@@ -148,6 +160,20 @@ function contractConnection(
           },
         }),
     ...(execution === undefined ? {} : { execution: executionView(execution) }),
+    ...(saleChecks === undefined ? {} : { saleChecks: saleChecksView(saleChecks) }),
+  };
+}
+
+/** The contract's `ConnectionSaleChecks`. */
+function saleChecksView(state: SaleCheckState): NonNullable<Connection['saleChecks']> {
+  return {
+    health: state.health,
+    ...(state.lastCheckedAt === null ? {} : { lastCheckedAt: state.lastCheckedAt.toISOString() }),
+    ...(state.lastSucceededAt === null
+      ? {}
+      : { lastSucceededAt: state.lastSucceededAt.toISOString() }),
+    nextCheckAt: state.nextCheckAt.toISOString(),
+    ...(state.lastError === null ? {} : { lastError: state.lastError }),
   };
 }
 

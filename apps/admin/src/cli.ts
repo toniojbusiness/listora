@@ -1,5 +1,6 @@
-// Operator CLI: AI cost reports, the AI spend check, and the AI kill switch and account
-// blocks. `npm run admin -- --help` lists the commands. Reads DATABASE_URL and the AI alert
+// Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks,
+// marketplace data purges, and the activity search and sale-check health
+// (docs/features/activity.md). `npm run admin -- --help` lists the commands. Reads DATABASE_URL and the AI alert
 // settings from the environment (see `.env.example`). Results go to stdout; structured
 // operational events (spend alerts, control changes) go to stderr as JSON lines.
 //

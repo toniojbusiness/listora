@@ -14,6 +14,7 @@ import type { AiControlAction, Db } from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { assertNever, type Logger } from '@listora/shared';
 
+import { runActivityCommand } from './activity.ts';
 import { USAGE, type Command } from './args.ts';
 import {
   describePeriod,
@@ -383,6 +384,14 @@ export async function runCommand(command: Command, context: CommandContext): Pro
       );
       return;
     }
+
+    case 'activity':
+    case 'sale-why':
+    case 'sale-checks':
+    case 'sale-history-read':
+    case 'sale-history-show':
+      await runActivityCommand(command, context);
+      return;
 
     default:
       assertNever(command);

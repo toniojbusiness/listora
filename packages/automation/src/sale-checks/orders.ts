@@ -31,10 +31,18 @@ export function isSaleOrderJobPayload(value: unknown): value is SaleOrderJobPayl
   return typeof accountId === 'string' && typeof inboundEventId === 'string';
 }
 
-/** What a sale check keeps of an order in its inbound event: no buyer, no address. */
-export function orderEventPayload(connectionId: string, order: RemoteOrder) {
+/**
+ * What a sale check keeps of an order in its inbound event: no buyer, no address. It names the
+ * check that saw it (`sale_check_run`), which the sale then names too.
+ */
+export function orderEventPayload(
+  connectionId: string,
+  order: RemoteOrder,
+  saleCheckRunId: string | null = null,
+) {
   return {
     connectionId,
+    ...(saleCheckRunId === null ? {} : { saleCheckRunId }),
     externalOrderId: order.externalOrderId,
     soldAt: order.soldAt.toISOString(),
     items: order.items.map((item) => ({
@@ -47,6 +55,7 @@ export function orderEventPayload(connectionId: string, order: RemoteOrder) {
 }
 
 const orderEventSchema = z.object({
+  saleCheckRunId: z.uuid().optional(),
   externalOrderId: z.string().min(1),
   soldAt: z.iso.datetime(),
   items: z.array(
@@ -120,6 +129,7 @@ export async function recordSaleOrder(
         shippingChargedCents: 0,
         detectionSource: 'poll',
         inboundEventId: event.id,
+        saleCheckRunId: order.data.saleCheckRunId ?? null,
         shipBy: null,
         lines: order.data.items.map((item) => ({
           externalListingId: item.externalListingId,

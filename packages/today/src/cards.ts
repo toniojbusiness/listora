@@ -11,6 +11,7 @@ import { DONE_STATES, type DelistResultState, type DelistRunView } from '@listor
 import type { Marketplace } from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import type { StatusDisplay } from '@listora/operations';
+import { saleCheckProblemWords, type SaleCheckProblem } from '@listora/automation';
 import type { CurrencyCode } from '@listora/shared';
 
 /** In the order the screen groups cards of equal urgency. */
@@ -18,6 +19,7 @@ export const TODAY_CARD_KINDS = [
   'delist',
   'ship',
   'reconnect',
+  'sale_checks',
   'review_drafts',
   'stale_listing',
 ] as const;
@@ -104,6 +106,17 @@ export interface ReconnectCard extends CardBase {
   status: 'reauth_required' | 'revoked';
 }
 
+export interface SaleChecksCard extends CardBase {
+  kind: 'sale_checks';
+  connectionId: string;
+  marketplace: Marketplace;
+  /** `failing`: the last checks failed; `overdue`: the check that was due has not run. */
+  health: SaleCheckProblem['health'];
+  /** When the problem started. */
+  since: Date;
+  lastSucceededAt: Date | null;
+}
+
 export type StaleSuggestion =
   /** Lower the price to `priceCents`, which is never below the item's floor. */
   | { kind: 'price_drop'; priceCents: number }
@@ -129,7 +142,8 @@ export interface ReviewDraftsCard extends CardBase {
   oldestCreatedAt: Date;
 }
 
-export type TodayCard = ShipCard | DelistCard | ReconnectCard | StaleListingCard | ReviewDraftsCard;
+export type TodayCard =
+  ShipCard | DelistCard | ReconnectCard | SaleChecksCard | StaleListingCard | ReviewDraftsCard;
 
 const LABEL_MAX_LENGTH = 60;
 
@@ -266,6 +280,36 @@ export function reconnectCard(fact: ConnectionFact): ReconnectCard {
     marketplace: fact.marketplace,
     displayName: fact.displayName,
     status: fact.status,
+  };
+}
+
+// Sale checks ---------------------------------------------------------------------------------
+
+/**
+ * A marketplace whose sale checks fail or stopped running (docs/features/activity.md): its
+ * sales are not being seen, so a sale there is not delisted elsewhere until a check works. The
+ * words are the notification's.
+ */
+export function saleChecksCard(problem: SaleCheckProblem, now: Date): SaleChecksCard {
+  const words = saleCheckProblemWords(problem, now);
+  return {
+    kind: 'sale_checks',
+    id: `sale_checks:${problem.connectionId}`,
+    urgency: 'high',
+    title: words.title,
+    detail: words.detail,
+    action: {
+      label: 'See marketplaces',
+      destination: 'marketplaces',
+      itemId: null,
+      saleId: null,
+      connectionId: problem.connectionId,
+    },
+    connectionId: problem.connectionId,
+    marketplace: problem.marketplace,
+    health: problem.health,
+    since: problem.unhealthySince,
+    lastSucceededAt: problem.lastSucceededAt,
   };
 }
 

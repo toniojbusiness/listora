@@ -33,7 +33,7 @@ import { FakeDepopSite } from '../depop/fake/fake-depop-site.ts';
 import { setExecutionLocation } from '../execution.ts';
 import { linkAutomationSession } from '../link.ts';
 import { loadChromium } from '../runner/playwright.ts';
-import { enqueueSaleCheck } from '../sale-checks/schedule.ts';
+import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
 import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
 import { phoneWorkAdapters } from './adapters.ts';
@@ -530,6 +530,83 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       .where('account_id', '=', accountId)
       .execute();
     expect(events).toEqual([{ source: 'poll', provider_event_id: `order:${slug ?? ''}` }]);
+  });
+
+  it("reads the sold history on the phone read-only, and records each check with the phone's step times", async () => {
+    await runPhone();
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    await runPhone();
+    const { external_listing_id: slug } = await db
+      .selectFrom('marketplace_listing')
+      .select('external_listing_id')
+      .where('id', '=', listingId)
+      .executeTakeFirstOrThrow();
+    site.sell(slug ?? '');
+
+    expect(await requestSaleHistoryRead(db, { accountId, marketplace: 'depop' })).toMatchObject({
+      connectionId,
+      runsOn: 'phone',
+      queued: true,
+    });
+    expect(await work()).toEqual([
+      expect.objectContaining({ purpose: 'sale_history', connection_id: connectionId }),
+    ]);
+    await runPhone();
+    // Read, not acted on: no order handed over, no sale.
+    const events = await db
+      .selectFrom('inbound_event')
+      .select('id')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(events).toEqual([]);
+    const checks = await db
+      .selectFrom('sale_check_run')
+      .select([
+        'kind',
+        'host',
+        'outcome',
+        'orders_seen',
+        'new_orders',
+        'orders',
+        'automation_run_id',
+      ])
+      .where('account_id', '=', accountId)
+      .orderBy('started_at')
+      .execute();
+    expect(
+      checks.map(({ kind, host, outcome, orders_seen, new_orders }) => ({
+        kind,
+        host,
+        outcome,
+        orders_seen,
+        new_orders,
+      })),
+    ).toEqual([
+      // The first sale check after linking saw nothing sold yet.
+      { kind: 'scheduled', host: 'phone', outcome: 'succeeded', orders_seen: 0, new_orders: 0 },
+      { kind: 'history', host: 'phone', outcome: 'succeeded', orders_seen: 1, new_orders: 0 },
+    ]);
+    expect(checks[1]?.orders).toEqual([
+      expect.objectContaining({
+        orderId: expect.any(String) as unknown,
+        items: [expect.objectContaining({ listingId: slug })],
+      }),
+    ]);
+    // The phone said how long each step took.
+    const session = await db
+      .selectFrom('automation_run')
+      .select('steps')
+      .where('id', '=', checks[1]?.automation_run_id ?? '')
+      .executeTakeFirstOrThrow();
+    expect(session.steps?.length).toBeGreaterThan(0);
+    for (const recorded of session.steps ?? []) {
+      expect(recorded).toEqual({
+        name: expect.any(String) as unknown,
+        ms: expect.any(Number) as unknown,
+      });
+    }
   });
 
   it('runs nothing for a runtime that speaks another version, or another device', async () => {

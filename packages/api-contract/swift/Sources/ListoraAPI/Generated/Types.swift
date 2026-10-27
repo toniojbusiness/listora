@@ -831,6 +831,36 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/phone-runs/{runId}/calls/{index}`.
     /// - Remark: Generated from `#/paths//v1/phone-runs/{runId}/calls/{index}/put(answerPhoneCall)`.
     func answerPhoneCall(_ input: Operations.AnswerPhoneCall.Input) async throws -> Operations.AnswerPhoneCall.Output
+    /// List an item's activity
+    ///
+    /// Everything that happened to the item, newest first: its changes, every step of every
+    /// marketplace action on its listings, each browser session that ran one (in Listora's cloud
+    /// browser or on the seller's iPhone, with its steps and their times), the tasks it gave the
+    /// seller, its sales, the checks that saw them, and the delists they started.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/activity`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/activity/get(listItemActivity)`.
+    func listItemActivity(_ input: Operations.ListItemActivity.Input) async throws -> Operations.ListItemActivity.Output
+    /// List a marketplace action's activity
+    ///
+    /// One marketplace action, newest first: each of its steps, each browser session that ran
+    /// one with its steps and their times, and the tasks it gave the seller.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/operations/{operationId}/activity`.
+    /// - Remark: Generated from `#/paths//v1/operations/{operationId}/activity/get(listOperationActivity)`.
+    func listOperationActivity(_ input: Operations.ListOperationActivity.Input) async throws -> Operations.ListOperationActivity.Output
+    /// Explain how a sale was found and what it started
+    ///
+    /// How Listora learned of the sale (which sale check saw it, where, and when; or the
+    /// marketplace's notification, a forwarded email, the seller's entry), when it was recorded,
+    /// each delist it started on the other marketplaces and how it ended, and its timeline.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sales/{saleId}/explanation`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/explanation/get(getSaleExplanation)`.
+    func getSaleExplanation(_ input: Operations.GetSaleExplanation.Input) async throws -> Operations.GetSaleExplanation.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -2275,6 +2305,64 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// List an item's activity
+    ///
+    /// Everything that happened to the item, newest first: its changes, every step of every
+    /// marketplace action on its listings, each browser session that ran one (in Listora's cloud
+    /// browser or on the seller's iPhone, with its steps and their times), the tasks it gave the
+    /// seller, its sales, the checks that saw them, and the delists they started.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/activity`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/activity/get(listItemActivity)`.
+    public func listItemActivity(
+        path: Operations.ListItemActivity.Input.Path,
+        query: Operations.ListItemActivity.Input.Query = .init(),
+        headers: Operations.ListItemActivity.Input.Headers = .init()
+    ) async throws -> Operations.ListItemActivity.Output {
+        try await listItemActivity(Operations.ListItemActivity.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// List a marketplace action's activity
+    ///
+    /// One marketplace action, newest first: each of its steps, each browser session that ran
+    /// one with its steps and their times, and the tasks it gave the seller.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/operations/{operationId}/activity`.
+    /// - Remark: Generated from `#/paths//v1/operations/{operationId}/activity/get(listOperationActivity)`.
+    public func listOperationActivity(
+        path: Operations.ListOperationActivity.Input.Path,
+        query: Operations.ListOperationActivity.Input.Query = .init(),
+        headers: Operations.ListOperationActivity.Input.Headers = .init()
+    ) async throws -> Operations.ListOperationActivity.Output {
+        try await listOperationActivity(Operations.ListOperationActivity.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Explain how a sale was found and what it started
+    ///
+    /// How Listora learned of the sale (which sale check saw it, where, and when; or the
+    /// marketplace's notification, a forwarded email, the seller's entry), when it was recorded,
+    /// each delist it started on the other marketplaces and how it ended, and its timeline.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sales/{saleId}/explanation`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/explanation/get(getSaleExplanation)`.
+    public func getSaleExplanation(
+        path: Operations.GetSaleExplanation.Input.Path,
+        headers: Operations.GetSaleExplanation.Input.Headers = .init()
+    ) async throws -> Operations.GetSaleExplanation.Output {
+        try await getSaleExplanation(Operations.GetSaleExplanation.Input(
+            path: path,
+            headers: headers
         ))
     }
 }

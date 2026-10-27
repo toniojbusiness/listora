@@ -7,7 +7,7 @@
  */
 import { sql } from 'kysely';
 
-import type { DbExecutor, Marketplace, SaleCheckReason } from '@listora/db';
+import type { DbExecutor, Marketplace, SaleCheckReason, SaleCheckRunKind } from '@listora/db';
 import { inTransaction } from '@listora/db';
 
 /** The browser runner's task that checks one connection for sales (job.ts). */
@@ -16,16 +16,25 @@ export const SALE_CHECK_TASK = 'automation_sale_check';
 export interface SaleCheckJobPayload {
   accountId: string;
   connectionId: string;
+  /** A read-only read of the seller's sold history (job.ts) instead of a sale check. */
+  history?: boolean;
 }
 
 export function isSaleCheckJobPayload(value: unknown): value is SaleCheckJobPayload {
   if (typeof value !== 'object' || value === null) return false;
-  const { accountId, connectionId } = value as Record<string, unknown>;
-  return typeof accountId === 'string' && typeof connectionId === 'string';
+  const { accountId, connectionId, history } = value as Record<string, unknown>;
+  return (
+    typeof accountId === 'string' &&
+    typeof connectionId === 'string' &&
+    (history === undefined || typeof history === 'boolean')
+  );
 }
 
-export function saleCheckJobKey(connectionId: string): string {
-  return `sale-check:${connectionId}`;
+export function saleCheckJobKey(
+  connectionId: string,
+  kind: SaleCheckRunKind = 'scheduled',
+): string {
+  return kind === 'history' ? `sale-history:${connectionId}` : `sale-check:${connectionId}`;
 }
 
 export interface ScheduledCheck {
@@ -59,12 +68,13 @@ export async function scheduleSaleCheck(
 }
 
 /**
- * Adds the connection's check job unless one is already waiting or running; returns whether it
- * added one.
+ * Adds the connection's check job (or, with `kind` `history`, its read of the sold history)
+ * unless one is already waiting or running; returns whether it added one.
  */
 export async function enqueueSaleCheck(
   executor: DbExecutor,
   check: ScheduledCheck,
+  kind: SaleCheckRunKind = 'scheduled',
 ): Promise<boolean> {
   const connection = await executor
     .selectFrom('marketplace_connection')
@@ -73,8 +83,8 @@ export async function enqueueSaleCheck(
     .where('id', '=', check.connectionId)
     .executeTakeFirst();
   // The connection's automated steps run on the phone, so its sales are checked there too.
-  if (connection?.runs_on === 'phone') return queueSaleCheckForPhone(executor, check);
-  const key = saleCheckJobKey(check.connectionId);
+  if (connection?.runs_on === 'phone') return queueSaleCheckForPhone(executor, check, kind);
+  const key = saleCheckJobKey(check.connectionId, kind);
   const { rows } = await sql<{ id: string }>`
     select id from graphile_worker.jobs where key = ${key} limit 1
   `.execute(executor);
@@ -82,6 +92,7 @@ export async function enqueueSaleCheck(
   const payload: SaleCheckJobPayload = {
     accountId: check.accountId,
     connectionId: check.connectionId,
+    ...(kind === 'history' ? { history: true } : {}),
   };
   await sql`
     select graphile_worker.add_job(
@@ -98,29 +109,32 @@ export async function enqueueSaleCheck(
 /** Phone work runs lowest first, as jobs do (delists after a sale are -10). */
 const PHONE_SALE_CHECK_PRIORITY = -5;
 
+/** A read of the sold history waits behind routine changes: it decides nothing. */
+const PHONE_SALE_HISTORY_PRIORITY = 5;
+
 /**
- * Hands the connection's sale check to the phone (docs/features/phone-execution.md), unless it
- * waits there already; returns whether it added it.
+ * Hands the connection's sale check (or its read of the sold history) to the phone
+ * (docs/features/phone-execution.md), unless it waits there already; returns whether it added
+ * it.
  */
 export async function queueSaleCheckForPhone(
   executor: DbExecutor,
   check: ScheduledCheck,
+  kind: SaleCheckRunKind = 'scheduled',
 ): Promise<boolean> {
+  const purpose = kind === 'history' ? 'sale_history' : 'sale_check';
   const added = await executor
     .insertInto('phone_work')
     .values({
       account_id: check.accountId,
       connection_id: check.connectionId,
       marketplace: check.marketplace,
-      purpose: 'sale_check',
-      // Ahead of routine changes: a sale it finds starts delists.
-      priority: PHONE_SALE_CHECK_PRIORITY,
+      purpose,
+      // A sale check goes ahead of routine changes: a sale it finds starts delists.
+      priority: kind === 'history' ? PHONE_SALE_HISTORY_PRIORITY : PHONE_SALE_CHECK_PRIORITY,
     })
     .onConflict((conflict) =>
-      conflict
-        .columns(['account_id', 'connection_id'])
-        .where('purpose', '=', 'sale_check')
-        .doNothing(),
+      conflict.columns(['account_id', 'connection_id']).where('purpose', '=', purpose).doNothing(),
     )
     .returning('id')
     .executeTakeFirst();
@@ -154,6 +168,44 @@ export async function requestSaleCheck(
     await scheduleSaleCheck(trx, { ...check, at: 'now', reason: 'email' });
     await enqueueSaleCheck(trx, check);
     return true;
+  });
+}
+
+/**
+ * Asks for a read-only read of the seller's sold history on the marketplace
+ * (docs/features/activity.md): it reads every sold order the pages show and records what it
+ * read, without handing any to the sale intake. Returns the connection it will read, or `null`
+ * when the account has no working automation connection there.
+ */
+export async function requestSaleHistoryRead(
+  executor: DbExecutor,
+  request: { accountId: string; marketplace: Marketplace },
+): Promise<{ connectionId: string; runsOn: 'cloud' | 'phone'; queued: boolean } | null> {
+  return inTransaction(executor, async (trx) => {
+    const connection = await trx
+      .selectFrom('marketplace_connection')
+      .innerJoin('sale_check_schedule as schedule', (join) =>
+        join
+          .onRef('schedule.account_id', '=', 'marketplace_connection.account_id')
+          .onRef('schedule.connection_id', '=', 'marketplace_connection.id'),
+      )
+      .select(['marketplace_connection.id', 'marketplace_connection.runs_on'])
+      .where('marketplace_connection.account_id', '=', request.accountId)
+      .where('marketplace_connection.marketplace', '=', request.marketplace)
+      .where('marketplace_connection.mode', '=', 'automation')
+      .where('marketplace_connection.status', 'in', ['connected', 'degraded'])
+      .executeTakeFirst();
+    if (connection === undefined) return null;
+    const queued = await enqueueSaleCheck(
+      trx,
+      {
+        accountId: request.accountId,
+        connectionId: connection.id,
+        marketplace: request.marketplace,
+      },
+      'history',
+    );
+    return { connectionId: connection.id, runsOn: connection.runs_on, queued };
   });
 }
 

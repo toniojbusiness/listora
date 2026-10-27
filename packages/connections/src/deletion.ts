@@ -431,6 +431,7 @@ async function remainingRows(db: Db, connectionId: string): Promise<string[]> {
     union all select 'phone_work' from phone_work where connection_id = ${connectionId}
     union all select 'sale_check_schedule' from sale_check_schedule
       where connection_id = ${connectionId}
+    union all select 'sale_check_run' from sale_check_run where connection_id = ${connectionId}
     union all select 'connection_authorization' from connection_authorization
       where connection_id = ${connectionId}
   `.execute(db);

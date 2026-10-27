@@ -22,15 +22,25 @@ import { openRunnerPresence, type RunnerLauncher } from '../launcher.ts';
 import { linkAutomationSession } from '../link.ts';
 import type { AutomationProfile } from '../profiles.ts';
 import { fakeSiteProfile, silentLogger, stubPhotos, testRunner } from '../test-support.ts';
+import { PUSH_TASK } from '@listora/push';
+
+import { runSaleCheckHealth } from './health.ts';
 import { runSaleCheck } from './job.ts';
 import { recordSaleOrder, SALE_ORDER_TASK, type SaleOrderJobPayload } from './orders.ts';
-import { dueSaleChecks, requestSaleCheck, saleCheckJobKey } from './schedule.ts';
+import {
+  dueSaleChecks,
+  requestSaleCheck,
+  requestSaleHistoryRead,
+  saleCheckJobKey,
+} from './schedule.ts';
 
 const HOUR = 3_600_000;
 const SETTINGS = {
   defaultIntervalMs: 12 * HOUR,
   minIntervalMs: 2 * HOUR,
   maxIntervalMs: 24 * HOUR,
+  alertAfterFailures: 2,
+  overdueMs: 6 * HOUR,
 };
 
 describe('sale checks (real Postgres, headless Chromium)', () => {
@@ -111,12 +121,31 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
 
   const clearJobs = () => sql`delete from graphile_worker._private_jobs`.execute(database.db);
 
-  const check = (connectionId: string) =>
+  const check = (connectionId: string, history = false) =>
     runSaleCheck(
       { db: database.db, adapters, settings: SETTINGS, logger: silentLogger },
-      { accountId, connectionId },
+      { accountId, connectionId, ...(history ? { history: true } : {}) },
       new AbortController().signal,
     );
+
+  /** The connection's recorded checks, oldest first. */
+  const checks = (connectionId: string) =>
+    database.db
+      .selectFrom('sale_check_run')
+      .selectAll()
+      .where('account_id', '=', accountId)
+      .where('connection_id', '=', connectionId)
+      .orderBy('started_at')
+      .execute();
+
+  /** The account's queued push notifications' payloads. */
+  const pushes = async () => {
+    const { rows } = await sql<{ payload: { accountId: string; title: string; body: string } }>`
+      select payload from graphile_worker._private_jobs where task_id =
+        (select id from graphile_worker._private_tasks where identifier = ${PUSH_TASK})
+    `.execute(database.db);
+    return rows.map((row) => row.payload).filter((push) => push.accountId === accountId);
+  };
 
   const events = () =>
     database.db
@@ -250,12 +279,205 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
       .where('account_id', '=', accountId)
       .execute();
     expect(runs).toEqual([{ item_id: item.id }]);
+    // Each check is recorded: where it ran, what it read, and what it handed over.
+    const recorded = await checks(connectionId);
+    expect(recorded).toMatchObject([
+      {
+        kind: 'scheduled',
+        reason: 'linked',
+        host: 'runner',
+        outcome: 'succeeded',
+        since: null,
+        orders_seen: 2,
+        items_seen: 2,
+        new_orders: 2,
+        error_code: null,
+      },
+      { kind: 'scheduled', host: 'runner', outcome: 'succeeded', orders_seen: 2, new_orders: 0 },
+    ]);
+    expect(recorded[1]?.since).toBeInstanceOf(Date);
+    expect(recorded[0]?.orders).toEqual(
+      expect.arrayContaining([
+        {
+          orderId: orders[0],
+          soldAt: expect.any(String) as unknown,
+          // The fake site's sold orders show no title.
+          items: [{ listingId: ours, title: null, priceCents: 3000 }],
+        },
+      ]),
+    );
+    // The browser session that read them, with its steps and their times.
+    const session = await database.db
+      .selectFrom('automation_run')
+      .select(['purpose', 'steps'])
+      .where('id', '=', recorded[0]?.automation_run_id ?? '')
+      .executeTakeFirstOrThrow();
+    expect(session.purpose).toBe('sale_check');
+    expect(session.steps?.length).toBeGreaterThan(0);
+    for (const step of session.steps ?? []) {
+      expect(step).toEqual({
+        name: expect.any(String) as unknown,
+        ms: expect.any(Number) as unknown,
+      });
+    }
+    // The sale names the check that saw it.
+    const seenBy = await database.db
+      .selectFrom('sale')
+      .select('sale_check_run_id')
+      .where('account_id', '=', accountId)
+      .executeTakeFirstOrThrow();
+    expect(seenBy.sale_check_run_id).toBe(recorded[0]?.id);
     const row = await schedule(connectionId);
-    expect(row).toMatchObject({ last_outcome: 'succeeded', next_reason: 'scheduled' });
+    expect(row).toMatchObject({
+      last_outcome: 'succeeded',
+      next_reason: 'scheduled',
+      health: 'healthy',
+      failures_in_a_row: 0,
+    });
+    expect(row.last_succeeded_at).toBeInstanceOf(Date);
     // Too little history to adapt: the default 12 hours.
     const delay = row.next_check_at.getTime() - (row.last_finished_at?.getTime() ?? 0);
     expect(Math.abs(delay - 12 * HOUR)).toBeLessThan(60_000);
     expect(row.checked_through).toBeInstanceOf(Date);
+    await clearJobs();
+  });
+
+  it('records why a check failed; checks failing in a row tell the seller once, until one works', async () => {
+    const { connectionId } = await link();
+    site.inject({ action: 'orders', fault: { type: 'server_error' }, times: 2 });
+
+    await check(connectionId);
+    expect(await schedule(connectionId)).toMatchObject({
+      last_outcome: 'failed',
+      next_reason: 'retry',
+      failures_in_a_row: 1,
+      last_error_code: 'server_error',
+      last_error_message: 'Mercari had a problem showing your sales.',
+      // One failure is not a problem yet.
+      health: 'healthy',
+    });
+    await check(connectionId);
+    const failing = await schedule(connectionId);
+    expect(failing).toMatchObject({ failures_in_a_row: 2, health: 'failing', alerted_at: null });
+    expect(failing.unhealthy_since).toBeInstanceOf(Date);
+    expect(await checks(connectionId)).toMatchObject([
+      { outcome: 'failed', error_code: 'server_error', orders_seen: null },
+      { outcome: 'failed', error_code: 'server_error' },
+    ]);
+
+    const health = { db: database.db, settings: SETTINGS, logger: silentLogger };
+    expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 1 });
+    expect(await pushes()).toEqual([
+      expect.objectContaining({
+        title: "Listora can't check Mercari for sales",
+        body: expect.stringContaining('Mercari had a problem showing your sales.') as unknown,
+      }),
+    ]);
+    // Told once per problem.
+    expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 0 });
+    expect((await schedule(connectionId)).alerted_at).toBeInstanceOf(Date);
+
+    // A check that works ends the problem.
+    await check(connectionId);
+    expect(await schedule(connectionId)).toMatchObject({
+      health: 'healthy',
+      failures_in_a_row: 0,
+      unhealthy_since: null,
+      alerted_at: null,
+      last_error_code: null,
+    });
+    await clearJobs();
+  });
+
+  it('calls a check overdue when it has not run long past due, and says so once', async () => {
+    const { connectionId } = await link();
+    const health = { db: database.db, settings: SETTINGS, logger: silentLogger };
+    // Due now: within the grace.
+    expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 0 });
+    expect((await schedule(connectionId)).health).toBe('healthy');
+    await sql`update sale_check_schedule set next_check_at = now() - interval '7 hours'
+      where connection_id = ${connectionId}`.execute(database.db);
+    await runSaleCheckHealth(health);
+    expect(await schedule(connectionId)).toMatchObject({ health: 'overdue' });
+    expect(await pushes()).toEqual([
+      expect.objectContaining({ title: "Listora hasn't checked Mercari for sales yet" }),
+    ]);
+    // A connection only the seller can fix has its own reconnect card: no second alarm.
+    await sql`update marketplace_connection set status = 'reauth_required', token_ciphertext = null
+      where id = ${connectionId}`.execute(database.db);
+    await sql`update sale_check_schedule set alerted_at = null where connection_id = ${connectionId}`.execute(
+      database.db,
+    );
+    expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 0 });
+    await clearJobs();
+  });
+
+  it('reads the sold history read-only: records every sold order and hands none over', async () => {
+    const { connectionId } = await link();
+    // A sold listing Listora knows: a sale check would record its sale and start its delist.
+    const ours = site.seed({
+      seller: accountId,
+      sku: `SKU-${accountId}-ours`,
+      title: 'Sold jacket',
+      description: 'Blue.',
+      priceCents: 3000,
+    });
+    site.sell(ours, new Date(Date.now() - 2 * HOUR));
+    soldOnSite(2);
+    const item = await createInventoryItem(database.db, accountId, { title: 'Sold jacket' });
+    await database.db
+      .insertInto('marketplace_listing')
+      .values({
+        account_id: accountId,
+        item_id: item.id,
+        marketplace: 'mercari',
+        connection_id: connectionId,
+        external_listing_id: ours,
+        status: 'active',
+      })
+      .execute();
+    await clearJobs();
+    const before = await schedule(connectionId);
+
+    const requested = await requestSaleHistoryRead(database.db, {
+      accountId,
+      marketplace: 'mercari',
+    });
+    expect(requested).toMatchObject({ connectionId, runsOn: 'cloud', queued: true });
+    const { rows } = await sql<{ payload: unknown }>`
+      select payload from graphile_worker._private_jobs where key = ${saleCheckJobKey(connectionId, 'history')}
+    `.execute(database.db);
+    expect(rows).toEqual([{ payload: { accountId, connectionId, history: true } }]);
+    await check(connectionId, true);
+
+    expect(await checks(connectionId)).toMatchObject([
+      {
+        kind: 'history',
+        reason: null,
+        host: 'runner',
+        outcome: 'succeeded',
+        orders_seen: 3,
+        new_orders: 0,
+      },
+    ]);
+    const [read] = await checks(connectionId);
+    expect(read?.orders).toHaveLength(3);
+    // Nothing handed over, nothing changed: no order, no sale, no delist, the schedule as it was.
+    expect(await events()).toEqual([]);
+    const sales = await database.db
+      .selectFrom('sale')
+      .select('id')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(sales).toEqual([]);
+    const after = await schedule(connectionId);
+    expect(after).toEqual({ ...before, updated_at: after.updated_at });
+    const listed = await database.db
+      .selectFrom('inventory_item')
+      .select('status')
+      .where('id', '=', item.id)
+      .executeTakeFirstOrThrow();
+    expect(listed.status).toBe(item.status);
     await clearJobs();
   });
 

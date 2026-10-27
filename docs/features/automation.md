@@ -145,7 +145,10 @@ from the app
   Listora could not act on (an unknown format, an ambiguous or no match) asks for a check at
   once (`requestSaleCheck`, [email-sales.md](email-sales.md)). A check that met a check waits for the relink. A
   marketplace whose adapter reads no orders yet is checked at the longest interval, without
-  starting the runner.
+  starting the runner. Every check is recorded (`sale_check_run`: where it ran, what it read, why
+  it failed), its outcome moves the connection's sale-check health, and a check that fails or
+  stops running shows on Today and is announced; a read-only **history read** proves a check
+  reads the seller's real sold items without acting on any ([activity.md](activity.md)).
 - **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the
   cookies the app captured (on the marketplace's domains only), revives the connection, moves the
   marketplace's unconnected listings to it, asks for a read-only **session check**
@@ -202,9 +205,10 @@ never skips them.
   operation step, a sale check, or a health check: the script, its outcome, the check it met (`challenge_kind`), the
   failed step, an error code, and the key of its redacted screenshot (deleted with the
   account, or with the connection when the seller unlinks it, [privacy.md](privacy.md)). It is the per-seller rate limits' count, and the record of what automation did and
-  where it stopped.
+  where it stopped. `steps` keeps the steps it ran and how long each took.
 - **`sale_check_schedule`**: when each automation connection is next checked for sales and why
   (`scheduled`, `email`, `retry`, or `linked`), the last check's time and outcome, and the
-  newest order time it has seen.
+  newest order time it has seen; and its health ([activity.md](activity.md#data)). Each check is a
+  `sale_check_run`.
 - **`session_check`**: whether the newest session linked on each automation connection works:
   pending, passed, or failed with a reason ([marketplace-linking.md](marketplace-linking.md)).

@@ -1746,6 +1746,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/items/{itemId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List an item's activity
+         * @description Everything that happened to the item, newest first: its changes, every step of every
+         *     marketplace action on its listings, each browser session that ran one (in Listora's cloud
+         *     browser or on the seller's iPhone, with its steps and their times), the tasks it gave the
+         *     seller, its sales, the checks that saw them, and the delists they started.
+         */
+        get: operations["listItemActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operations/{operationId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operationId: components["parameters"]["OperationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List a marketplace action's activity
+         * @description One marketplace action, newest first: each of its steps, each browser session that ran
+         *     one with its steps and their times, and the tasks it gave the seller.
+         */
+        get: operations["listOperationActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sales/{saleId}/explanation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Explain how a sale was found and what it started
+         * @description How Listora learned of the sale (which sale check saw it, where, and when; or the
+         *     marketplace's notification, a forwarded email, the seller's entry), when it was recorded,
+         *     each delist it started on the other marketplaces and how it ended, and its timeline.
+         */
+        get: operations["getSaleExplanation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2999,6 +3071,7 @@ export interface components {
             lastCheckedAt?: components["schemas"]["Timestamp"];
             lastIssue?: components["schemas"]["ConnectionIssue"];
             execution?: components["schemas"]["ConnectionExecution"];
+            saleChecks?: components["schemas"]["ConnectionSaleChecks"];
         };
         ConnectionList: {
             data: components["schemas"]["Connection"][];
@@ -3255,10 +3328,11 @@ export interface components {
         /**
          * @description `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
          *     or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
-         *     a look at the seller's sold orders.
+         *     a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
+         *     history, which changes nothing.
          * @enum {string}
          */
-        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check";
+        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check" | "sale_history";
         PhoneRunClaim: {
             installationId: components["schemas"]["Id"];
             /** Format: int32 */
@@ -3991,10 +4065,11 @@ export interface components {
          *     `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
          *     seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
          *     `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-         *     the item's floor) or a relist suggested.
+         *     the item's floor) or a relist suggested. `sale_checks`: a marketplace whose sale checks fail
+         *     or stopped running, so its sales are not being seen.
          * @enum {string}
          */
-        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "review_drafts" | "stale_listing";
+        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "sale_checks" | "review_drafts" | "stale_listing";
         /**
          * @description A `KnownTodayUrgency`, or a level added after this client was built, which clients show
          *     like `normal`.
@@ -4068,6 +4143,14 @@ export interface components {
             displayName?: string;
             status: components["schemas"]["ConnectionStatus"];
         };
+        /** @description A `sale_checks` card's connection and its problem. */
+        TodaySaleChecks: {
+            connectionId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            health: components["schemas"]["SaleCheckHealth"];
+            since: components["schemas"]["Timestamp"];
+            lastSucceededAt?: components["schemas"]["Timestamp"];
+        };
         /**
          * @description A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
          *     clients show through the card's `detail` and action.
@@ -4102,7 +4185,7 @@ export interface components {
         /**
          * @description One thing that needs the seller. A card exists only while its work is not done, so it is
          *     gone from the next summary once the work is finished. The kind's own property (`shipment`,
-         *     `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+         *     `delist`, `connection`, `saleChecks`, `staleListing`, or `drafts`) carries its facts.
          */
         TodayCard: {
             /** @description Stable while the card's work is the same, for example `ship:<saleItemId>`. */
@@ -4116,6 +4199,7 @@ export interface components {
             shipment?: components["schemas"]["TodayShipment"];
             delist?: components["schemas"]["TodayDelist"];
             connection?: components["schemas"]["TodayConnection"];
+            saleChecks?: components["schemas"]["TodaySaleChecks"];
             staleListing?: components["schemas"]["TodayStaleListing"];
             drafts?: components["schemas"]["TodayDrafts"];
         };
@@ -4170,6 +4254,178 @@ export interface components {
             time: string;
             /** @description An IANA time zone name, for example `America/New_York` (the device's own). */
             timeZone: string;
+        };
+        /** @description A `KnownActivitySource`, or one added after this client was built. */
+        ActivitySource: components["schemas"]["KnownActivitySource"];
+        /**
+         * @description Who did it. `listora`: Listora's server (the operation engine, the sale intake, the
+         *     auto-delist). `cloud_browser`: Listora's cloud browser. `iphone`: the seller's iPhone, in
+         *     their own marketplace session. `you`: the seller. `marketplace`: the marketplace.
+         * @enum {string}
+         */
+        KnownActivitySource: "listora" | "cloud_browser" | "iphone" | "you" | "marketplace";
+        /** @description A `KnownActivityOutcome`, or one added after this client was built (shown as `info`). */
+        ActivityOutcome: components["schemas"]["KnownActivityOutcome"];
+        /**
+         * @description How it went. `in_progress`: still running. `waiting`: waits for the seller. `info`: nothing
+         *     to judge (a change, a sale, a cancellation).
+         * @enum {string}
+         */
+        KnownActivityOutcome: "succeeded" | "failed" | "in_progress" | "waiting" | "info";
+        /** @description A `KnownActivityKind`, or one added after this client was built. */
+        ActivityKind: components["schemas"]["KnownActivityKind"];
+        /**
+         * @description Which record it comes from. `item`: an item change. `operation`: a step of a marketplace
+         *     action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
+         *     with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
+         *     an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
+         *     delist after a sale. `task`: a task for the seller.
+         * @enum {string}
+         */
+        KnownActivityKind: "item" | "operation" | "browser_session" | "sale_check" | "order" | "sale" | "delist" | "task";
+        /** @description One step of a browser session. */
+        ActivityStep: {
+            name: string;
+            /**
+             * Format: int64
+             * @description How long it took; absent when the device did not say.
+             */
+            durationMs?: number;
+        };
+        /** @description What went wrong, as a code (for support) and in the seller's words. */
+        ActivityError: {
+            code: string;
+            message: string;
+        };
+        /**
+         * @description Where support finds more: the browser session's run id, which its log lines carry, whether
+         *     it kept a redacted screenshot, and the sale check's record id.
+         */
+        ActivityReference: {
+            runId?: components["schemas"]["Id"];
+            saleCheckId?: components["schemas"]["Id"];
+            screenshot: boolean;
+        };
+        /**
+         * @description One thing that happened, from the record that keeps it (docs/features/activity.md):
+         *     redacted, with no page content, typed values, or buyer data.
+         */
+        ActivityEntry: {
+            /** @description `<kind>:<record id>`, stable. */
+            id: string;
+            at: components["schemas"]["Timestamp"];
+            kind: components["schemas"]["ActivityKind"];
+            source: components["schemas"]["ActivitySource"];
+            outcome: components["schemas"]["ActivityOutcome"];
+            marketplace?: components["schemas"]["Marketplace"];
+            title: string;
+            detail?: string;
+            itemId?: components["schemas"]["Id"];
+            listingId?: components["schemas"]["Id"];
+            operationId?: components["schemas"]["Id"];
+            saleId?: components["schemas"]["Id"];
+            /** Format: int64 */
+            durationMs?: number;
+            steps?: components["schemas"]["ActivityStep"][];
+            error?: components["schemas"]["ActivityError"];
+            reference?: components["schemas"]["ActivityReference"];
+        };
+        /** @description Newest first. */
+        ActivityPage: {
+            data: components["schemas"]["ActivityEntry"][];
+            /** @description Present when there are older entries. */
+            nextCursor?: string;
+        };
+        /** @description A `KnownSaleCheckRunKind`, or one added after this client was built. */
+        SaleCheckRunKind: components["schemas"]["KnownSaleCheckRunKind"];
+        /**
+         * @description `scheduled`: a sale check, which hands new sold orders to the sale intake. `history`: a
+         *     read-only read of the seller's sold history, which changes nothing.
+         * @enum {string}
+         */
+        KnownSaleCheckRunKind: "scheduled" | "history";
+        /** @description A `KnownActivityHost`, or one added after this client was built. */
+        ActivityHost: components["schemas"]["KnownActivityHost"];
+        /**
+         * @description Where a check ran. `runner`: Listora's cloud browser. `phone`: the seller's iPhone.
+         * @enum {string}
+         */
+        KnownActivityHost: "runner" | "phone";
+        /** @description The sale check that saw a sale. */
+        SaleCheckSummary: {
+            id: components["schemas"]["Id"];
+            kind: components["schemas"]["SaleCheckRunKind"];
+            host: components["schemas"]["ActivityHost"];
+            startedAt: components["schemas"]["Timestamp"];
+            finishedAt?: components["schemas"]["Timestamp"];
+            /** Format: int32 */
+            ordersSeen?: number;
+            /** Format: int32 */
+            newOrders?: number;
+            runId?: components["schemas"]["Id"];
+        };
+        /** @description A `KnownSaleDelistStatus`, or a value added after this client was built. */
+        SaleDelistStatus: components["schemas"]["KnownSaleDelistStatus"];
+        /**
+         * @description An operation's status (`queued` to `canceled`) for a delist Listora runs, or a task's
+         *     (`open`, `done`, `dismissed`) for one the seller does.
+         * @enum {string}
+         */
+        KnownSaleDelistStatus: "queued" | "running" | "retrying" | "verifying" | "succeeded" | "failed" | "needs_user_action" | "canceled" | "open" | "done" | "dismissed";
+        /** @description One delist the sale started on another marketplace, and how it ended. */
+        SaleDelist: {
+            itemId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            listingId?: components["schemas"]["Id"];
+            operationId?: components["schemas"]["Id"];
+            taskId?: components["schemas"]["Id"];
+            status: components["schemas"]["SaleDelistStatus"];
+            /** @description What happened, in the seller's words. */
+            result: string;
+            /** Format: int32 */
+            attempts?: number;
+            error?: components["schemas"]["ActivityError"];
+            startedAt: components["schemas"]["Timestamp"];
+            settledAt?: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description Why a sale went the way it did: how Listora learned of it (which check saw it, where, and
+         *     when), when it was recorded, each delist it started on the other marketplaces and how each
+         *     ended, and the whole timeline.
+         */
+        SaleExplanation: {
+            saleId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            externalOrderId?: string;
+            soldAt: components["schemas"]["Timestamp"];
+            recordedAt: components["schemas"]["Timestamp"];
+            detectionSource: components["schemas"]["SaleDetectionSource"];
+            /** @description How Listora learned of it, in the seller's words. */
+            detection: string;
+            check?: components["schemas"]["SaleCheckSummary"];
+            reportedAt?: components["schemas"]["Timestamp"];
+            delists: components["schemas"]["SaleDelist"][];
+            /** @description The sale's timeline, newest first. */
+            entries: components["schemas"]["ActivityEntry"][];
+        };
+        /** @description A `KnownSaleCheckHealth`, or one added after this client was built. */
+        SaleCheckHealth: components["schemas"]["KnownSaleCheckHealth"];
+        /**
+         * @description Whether a connection's sale checks work. `failing`: the last checks failed. `overdue`: the
+         *     check that was due has not run (on the phone: Listora was not opened there).
+         * @enum {string}
+         */
+        KnownSaleCheckHealth: "healthy" | "failing" | "overdue";
+        /**
+         * @description An automation connection's sale checks: whether they work, when one last ran and last
+         *     worked, when the next is due, and the last failure.
+         */
+        ConnectionSaleChecks: {
+            health: components["schemas"]["SaleCheckHealth"];
+            lastCheckedAt?: components["schemas"]["Timestamp"];
+            lastSucceededAt?: components["schemas"]["Timestamp"];
+            nextCheckAt: components["schemas"]["Timestamp"];
+            lastError?: components["schemas"]["ActivityError"];
         };
     };
     responses: {
@@ -4569,6 +4825,7 @@ export type TodayShipment = components['schemas']['TodayShipment'];
 export type TodayLocation = components['schemas']['TodayLocation'];
 export type TodayDelist = components['schemas']['TodayDelist'];
 export type TodayConnection = components['schemas']['TodayConnection'];
+export type TodaySaleChecks = components['schemas']['TodaySaleChecks'];
 export type TodayStaleSuggestion = components['schemas']['TodayStaleSuggestion'];
 export type KnownTodayStaleSuggestion = components['schemas']['KnownTodayStaleSuggestion'];
 export type TodayStaleListing = components['schemas']['TodayStaleListing'];
@@ -4579,6 +4836,29 @@ export type TodayMoney = components['schemas']['TodayMoney'];
 export type Today = components['schemas']['Today'];
 export type TodaySummarySettings = components['schemas']['TodaySummarySettings'];
 export type TodaySummarySettingsReplace = components['schemas']['TodaySummarySettingsReplace'];
+export type ActivitySource = components['schemas']['ActivitySource'];
+export type KnownActivitySource = components['schemas']['KnownActivitySource'];
+export type ActivityOutcome = components['schemas']['ActivityOutcome'];
+export type KnownActivityOutcome = components['schemas']['KnownActivityOutcome'];
+export type ActivityKind = components['schemas']['ActivityKind'];
+export type KnownActivityKind = components['schemas']['KnownActivityKind'];
+export type ActivityStep = components['schemas']['ActivityStep'];
+export type ActivityError = components['schemas']['ActivityError'];
+export type ActivityReference = components['schemas']['ActivityReference'];
+export type ActivityEntry = components['schemas']['ActivityEntry'];
+export type ActivityPage = components['schemas']['ActivityPage'];
+export type SaleCheckRunKind = components['schemas']['SaleCheckRunKind'];
+export type KnownSaleCheckRunKind = components['schemas']['KnownSaleCheckRunKind'];
+export type ActivityHost = components['schemas']['ActivityHost'];
+export type KnownActivityHost = components['schemas']['KnownActivityHost'];
+export type SaleCheckSummary = components['schemas']['SaleCheckSummary'];
+export type SaleDelistStatus = components['schemas']['SaleDelistStatus'];
+export type KnownSaleDelistStatus = components['schemas']['KnownSaleDelistStatus'];
+export type SaleDelist = components['schemas']['SaleDelist'];
+export type SaleExplanation = components['schemas']['SaleExplanation'];
+export type SaleCheckHealth = components['schemas']['SaleCheckHealth'];
+export type KnownSaleCheckHealth = components['schemas']['KnownSaleCheckHealth'];
+export type ConnectionSaleChecks = components['schemas']['ConnectionSaleChecks'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -7088,6 +7368,90 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listItemActivity: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the item's activity. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listOperationActivity: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                operationId: components["parameters"]["OperationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the operation's activity. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getSaleExplanation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The explanation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleExplanation"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -7146,7 +7510,7 @@ export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<co
 export const knownExecutionLocationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownExecutionLocation"]> = ["cloud", "phone"];
 export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DevicePlatform"]> = ["ios"];
 export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
-export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check"];
+export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
@@ -7161,7 +7525,14 @@ export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<component
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];
 export const knownUserTaskSaleEmailReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskSaleEmailReason"]> = ["ask_before_delist", "ambiguous_match", "unknown_format"];
 export const knownSaleEmailStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleEmailStatus"]> = ["unavailable", "not_set_up", "confirming", "working"];
-export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "review_drafts", "stale_listing"];
+export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "sale_checks", "review_drafts", "stale_listing"];
 export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];
 export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];
 export const knownTodayStaleSuggestionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayStaleSuggestion"]> = ["price_drop", "relist"];
+export const knownActivitySourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivitySource"]> = ["listora", "cloud_browser", "iphone", "you", "marketplace"];
+export const knownActivityOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityOutcome"]> = ["succeeded", "failed", "in_progress", "waiting", "info"];
+export const knownActivityKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityKind"]> = ["item", "operation", "browser_session", "sale_check", "order", "sale", "delist", "task"];
+export const knownSaleCheckRunKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleCheckRunKind"]> = ["scheduled", "history"];
+export const knownActivityHostValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityHost"]> = ["runner", "phone"];
+export const knownSaleDelistStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDelistStatus"]> = ["queued", "running", "retrying", "verifying", "succeeded", "failed", "needs_user_action", "canceled", "open", "done", "dismissed"];
+export const knownSaleCheckHealthValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleCheckHealth"]> = ["healthy", "failing", "overdue"];
