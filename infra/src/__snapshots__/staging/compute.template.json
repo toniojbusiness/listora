@@ -36,7 +36,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary"
       }
     },
     "apitaskTaskRoleDefaultPolicy7338CF46": {
@@ -381,7 +382,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary"
       }
     },
     "apitaskExecutionRoleDefaultPolicy746A101C": {
@@ -473,7 +475,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary"
       }
     },
     "workertaskTaskRoleDefaultPolicy79C6B42A": {
@@ -907,7 +910,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary"
       }
     },
     "workertaskExecutionRoleDefaultPolicy4B95D581": {
@@ -1221,7 +1225,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary"
       }
     },
     "runnertaskTaskRoleDefaultPolicy43ED643D": {
@@ -1538,7 +1543,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::111111111111:policy/listora-staging-role-boundary"
       }
     },
     "runnertaskExecutionRoleDefaultPolicyEBAA887F": {

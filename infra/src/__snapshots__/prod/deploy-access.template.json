@@ -47,7 +47,11 @@
             {
               "Action": "sts:AssumeRole",
               "Effect": "Allow",
-              "Resource": "arn:aws:iam::222222222222:role/cdk-listora-*-222222222222-us-east-1",
+              "Resource": [
+                "arn:aws:iam::222222222222:role/cdk-listora-deploy-role-222222222222-us-east-1",
+                "arn:aws:iam::222222222222:role/cdk-listora-file-publishing-role-222222222222-us-east-1",
+                "arn:aws:iam::222222222222:role/cdk-listora-image-publishing-role-222222222222-us-east-1"
+              ],
               "Sid": "UseCdkBootstrapRoles"
             },
             {
@@ -95,7 +99,10 @@
                 "iam:GetPolicyVersion"
               ],
               "Effect": "Allow",
-              "Resource": "arn:aws:iam::222222222222:policy/listora-prod-cdk-execution",
+              "Resource": [
+                "arn:aws:iam::222222222222:policy/listora-prod-cdk-execution",
+                "arn:aws:iam::222222222222:policy/listora-prod-role-boundary"
+              ],
               "Sid": "CheckExecutionPolicy"
             },
             {

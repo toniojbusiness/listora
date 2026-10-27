@@ -189,7 +189,8 @@
               ]
             ]
           }
-        ]
+        ],
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "AlertEmailsalertemailServiceRoleDefaultPolicyF435AB57": {
@@ -335,7 +336,8 @@
               ]
             ]
           }
-        ]
+        ],
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "AlertEmailsweeklysummaryServiceRoleDefaultPolicy5EFE245B": {

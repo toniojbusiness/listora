@@ -6,9 +6,16 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { listoraBootstrapTemplate } from './bootstrap-template.ts';
+import { roleBoundaryPolicy } from './execution-policy.ts';
+
 const script = fileURLToPath(new URL('../../../scripts/deploy-personal.sh', import.meta.url));
 const ACCOUNT = '976033325938';
 const POLICY_ARN = `arn:aws:iam::${ACCOUNT}:policy/listora-personal-cdk-execution`;
+/** The hash naming the bootstrap template the script deploys. */
+const TEMPLATE = listoraBootstrapTemplate('personal').hash;
+/** The role boundary's current document, as `aws iam get-policy-version` prints it. */
+const BOUNDARY: Answer = { stdout: JSON.stringify(roleBoundaryPolicy()) };
 const OWNER = 'owner@example.com';
 /** The commit the fake `git` checks out. */
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
@@ -27,8 +34,9 @@ afterEach(() => {
 
 /**
  * Runs the script with fake `aws`, `docker`, `git`, `curl`, and `npx` first on PATH. The fake
- * `aws` answers `<service> <operation>` from `answers`, or `<service> <operation> <stack>` for a
- * call naming `--stack-name <stack>` (anything else fails loudly), and records every call, so a
+ * `aws` answers `<service> <operation>` from `answers`, or `<service> <operation> <name>` for a
+ * call naming `--stack-name <name>` or `--policy-arn <arn ending in /name>` (anything else
+ * fails loudly), and records every call, so a
  * test sees exactly what the script asked AWS; `awsScript`, bash run first with the call's
  * words in `args` and its stack in `stack`, answers what depends on more than that. `npx`
  * fails, except `cdk synth` with `realSynth` (offline, as the script runs it), so no test can
@@ -73,6 +81,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile|--region) shift 2 ;;
     --stack-name) stack=$2; args+=("$1"); shift ;;
+    --policy-arn) stack=\${2##*/}; args+=("$1"); shift ;;
     *) args+=("$1"); shift ;;
   esac
 done
@@ -202,7 +211,7 @@ describe('scripts/deploy-personal.sh', () => {
       status: 254,
     },
   };
-  const toolkit = (policies: string): Answer => ({
+  const toolkit = (policies: string, template = TEMPLATE): Answer => ({
     stdout: JSON.stringify({
       Stacks: [
         {
@@ -210,6 +219,10 @@ describe('scripts/deploy-personal.sh', () => {
           Parameters: [
             { ParameterKey: 'CloudFormationExecutionPolicies', ParameterValue: policies },
           ],
+          Outputs:
+            template === ''
+              ? []
+              : [{ OutputKey: 'ListoraBootstrapTemplate', OutputValue: template }],
         },
       ],
     }),
@@ -258,7 +271,7 @@ describe('scripts/deploy-personal.sh', () => {
     expect(run.calls.some((call) => / (create|put|update|delete|run)-/.test(call))).toBe(false);
   }, 120_000);
 
-  it("creates the policy and bootstraps when Listora's bootstrap does not exist yet", () => {
+  it("creates the policies and bootstraps when Listora's bootstrap does not exist yet", () => {
     const run = deploy(
       ['--profile', 'p'],
       {
@@ -273,16 +286,20 @@ describe('scripts/deploy-personal.sh', () => {
     );
     // The fake npx refuses the bootstrap itself, after the policy exists.
     expect(run.output).toContain('cdk bootstrap failed');
-    expect(run.calls).toContainEqual(
+    // The boundary first: the execution policy requires it on every role.
+    const created = run.calls.filter((call) => call.includes('iam create-policy '));
+    expect(created).toEqual([
+      expect.stringMatching(/iam create-policy --policy-name listora-personal-role-boundary /),
       expect.stringMatching(/iam create-policy --policy-name listora-personal-cdk-execution /),
-    );
-    expect(run.calls).toContainEqual(
-      expect.stringMatching(
-        new RegExp(
-          `^npx cdk bootstrap aws://${ACCOUNT}/us-east-1 --app cdk.out/deploy-personal --qualifier listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies ${POLICY_ARN} --termination-protection --profile listora-deploy-cdk `,
-        ),
+    ]);
+    const bootstrap = run.calls.find((call) => call.startsWith('npx cdk bootstrap')) ?? '';
+    expect(bootstrap).toMatch(
+      new RegExp(
+        `^npx cdk bootstrap aws://${ACCOUNT}/us-east-1 --app cdk.out/deploy-personal --template \\S+/bootstrap.yaml --qualifier listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies ${POLICY_ARN} --termination-protection --profile listora-deploy-cdk `,
       ),
     );
+    // A new toolkit stack needs no --force.
+    expect(bootstrap).not.toContain('--force');
     // cdk gets the profile's credentials from the AWS CLI through a private config, which
     // names the CLI command but holds no credentials.
     expect(run.calls).toContain('config: [profile listora-deploy-cdk]');
@@ -294,6 +311,33 @@ describe('scripts/deploy-personal.sh', () => {
     expect(run.calls.filter((call) => call.startsWith('config: '))).not.toContainEqual(
       expect.stringMatching(/aws_access_key_id|aws_secret_access_key|aws_session_token/i),
     );
+  }, 120_000);
+
+  it('re-bootstraps, forced, a restricted bootstrap made from another template', () => {
+    const run = deploy(
+      ['--profile', 'p'],
+      {
+        ...freshAccount,
+        // The CDK's default template, as the toolkit stack was bootstrapped before.
+        'cloudformation describe-stacks CDKToolkit-listora': toolkit(POLICY_ARN, ''),
+        'iam get-policy': { stdout: JSON.stringify({ Policy: { DefaultVersionId: 'v1' } }) },
+        'iam get-policy-version listora-personal-role-boundary': BOUNDARY,
+        'iam get-policy-version': { stdout: '{"Version":"2012-10-17","Statement":[]}' },
+        'iam list-policy-versions': { stdout: '1\n' },
+        'iam create-policy-version': { stdout: '{}' },
+      },
+      { realSynth: true },
+    );
+    expect(run.output).toContain('listora-personal-role-boundary is up to date (v1)');
+    expect(run.output).toContain(
+      'listora-personal-cdk-execution updated to the committed document',
+    );
+    // cdk skips a toolkit stack of another template unless forced; the fake npx refuses it.
+    expect(run.calls).toContainEqual(
+      expect.stringMatching(/^npx cdk bootstrap .*--template \S+\/bootstrap.yaml .* --force /),
+    );
+    expect(run.output).toContain('cdk bootstrap failed');
+    expect(run.calls.some((call) => call.startsWith('npx cdk deploy'))).toBe(false);
   }, 120_000);
 
   it('goes past an existing restricted bootstrap without bootstrapping again', () => {
@@ -309,10 +353,12 @@ describe('scripts/deploy-personal.sh', () => {
       },
       { realSynth: true },
     );
-    expect(run.output).toContain(`CDKToolkit-listora uses ${POLICY_ARN}`);
     expect(run.output).toContain(
-      'listora-personal-cdk-execution updated to the committed document',
+      `CDKToolkit-listora uses ${POLICY_ARN} and Listora's bootstrap template (${TEMPLATE})`,
     );
+    for (const name of ['role-boundary', 'cdk-execution']) {
+      expect(run.output).toContain(`listora-personal-${name} updated to the committed document`);
+    }
     expect(run.calls.some((call) => call.startsWith('npx cdk bootstrap'))).toBe(false);
     // Every cdk command that talks to AWS first renews the sign-in through the CLI.
     const deployCall = run.calls.findIndex((call) => call.startsWith('npx cdk deploy'));
@@ -441,6 +487,7 @@ describe('scripts/deploy-personal.sh on a deployed environment', () => {
             Parameters: [
               { ParameterKey: 'CloudFormationExecutionPolicies', ParameterValue: POLICY_ARN },
             ],
+            Outputs: [{ OutputKey: 'ListoraBootstrapTemplate', OutputValue: TEMPLATE }],
           },
         ],
       }),
@@ -451,6 +498,7 @@ describe('scripts/deploy-personal.sh on a deployed environment', () => {
     },
     'iam get-policy': { stdout: JSON.stringify({ Policy: { DefaultVersionId: 'v2' } }) },
     'iam get-policy-version': { stdout: policy },
+    'iam get-policy-version listora-personal-role-boundary': BOUNDARY,
     'secretsmanager get-secret-value': { stdout: 'not-a-real-test-key\n' },
     'ecr get-login-password': { stdout: 'password\n' },
     'ecr describe-images': { stderr: 'ImageNotFoundException', status: 254 },
@@ -772,8 +820,9 @@ esac`;
       // The key file is never read, and the stored key is neither read nor written.
       expect(run.output).toContain('kept as stored (--ci)');
       expect(run.calls.some((call) => call.includes('secretsmanager'))).toBe(false);
-      // The bootstrap and its policy are checked, never changed.
+      // The bootstrap, its policy, and the role boundary are checked, never changed.
       expect(run.output).toContain(`CDKToolkit-listora uses ${POLICY_ARN}`);
+      expect(run.output).toContain('listora-personal-role-boundary is up to date');
       expect(run.calls.some((call) => / iam (create|delete)-/.test(call))).toBe(false);
       expect(run.calls.some((call) => call.startsWith('npx cdk bootstrap'))).toBe(false);
       const deploys = run.calls.filter((call) => call.startsWith('npx cdk deploy'));
@@ -808,6 +857,51 @@ esac`;
       expect(changes(run.calls)).toEqual([]);
       expect(run.calls.some((call) => call.startsWith('npx cdk deploy'))).toBe(false);
     }, 120_000);
+
+    it('refuses a role boundary or a bootstrap template that is not the committed one, changing nothing', () => {
+      const boundary = deploy(
+        ['--ci'],
+        {
+          ...deployed,
+          'iam get-policy-version listora-personal-role-boundary': {
+            stdout: '{"Version":"2012-10-17","Statement":[]}',
+          },
+        },
+        { realSynth: true, deployOk: true, awsScript: environment() },
+      );
+      expect(boundary.status).toBe(1);
+      expect(boundary.output).toContain(
+        'listora-personal-role-boundary differs from the committed document',
+      );
+      expect(changes(boundary.calls)).toEqual([]);
+
+      const template = deploy(
+        ['--ci'],
+        {
+          ...deployed,
+          'cloudformation describe-stacks CDKToolkit-listora': {
+            stdout: JSON.stringify({
+              Stacks: [
+                {
+                  StackStatus: 'UPDATE_COMPLETE',
+                  Parameters: [
+                    { ParameterKey: 'CloudFormationExecutionPolicies', ParameterValue: POLICY_ARN },
+                  ],
+                },
+              ],
+            }),
+          },
+        },
+        { realSynth: true, deployOk: true, awsScript: environment() },
+      );
+      expect(template.status).toBe(1);
+      expect(template.output).toContain(
+        `CDKToolkit-listora is not Listora's current bootstrap template (${TEMPLATE}; deployed: the CDK default); to update it, deploy from a Mac`,
+      );
+      expect(changes(template.calls)).toEqual([]);
+      expect(template.calls.some((call) => call.startsWith('npx cdk'))).toBe(true);
+      expect(template.calls.some((call) => /^npx cdk (bootstrap|deploy)/.test(call))).toBe(false);
+    }, 240_000);
 
     it('refuses an owner address SES has not verified, without waiting for a click', () => {
       const run = deploy(

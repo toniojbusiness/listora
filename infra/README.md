@@ -250,17 +250,27 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
    in the account: qualifier `listora` and toolkit stack `CDKToolkit-listora`
    (`src/bootstrap.ts`; `cdk.json` makes every `cdk` command use them), so the account's
    default `CDKToolkit` and the apps deploying through it are never touched. The script first
-   checks `CDKToolkit-listora`: one with any other execution policy stops it before it changes
-   anything. Then it creates the managed policy `listora-personal-cdk-execution` from
-   `src/deploy/execution-policy.ts` (or makes the committed document its default version), and
-   bootstraps when `CDKToolkit-listora` does not exist yet with:
+   checks that every role of the synthesized stacks carries the role boundary, then checks
+   `CDKToolkit-listora`: one with any other execution policy stops it before it changes
+   anything. Then it creates the managed policies `listora-personal-role-boundary` and
+   `listora-personal-cdk-execution` from `src/deploy/execution-policy.ts` (or makes the
+   committed documents their default versions), and bootstraps with Listora's template
+   (`src/deploy/bootstrap-template.ts`) when `CDKToolkit-listora` does not exist yet, or was
+   made from another template (its `ListoraBootstrapTemplate` output names the template's
+   hash), with:
 
    ```sh
+   cd infra && node src/deploy/bootstrap-template.ts personal >cdk.out/bootstrap.yaml
    npx cdk bootstrap aws://976033325938/us-east-1 --profile prequal-main \
+     --template cdk.out/bootstrap.yaml \
      --qualifier listora --toolkit-stack-name CDKToolkit-listora \
      --cloudformation-execution-policies arn:aws:iam::976033325938:policy/listora-personal-cdk-execution \
      --termination-protection
    ```
+
+   plus `--force` when the stack exists (the CLI skips a toolkit stack of another template
+   otherwise, with only a warning). It then reads the output again and fails unless it names
+   the new template.
 
 6. **Deploys** the registry, builds the `app` and `runner` images for `linux/amd64` (the
    tasks run on X86_64) and pushes them (reusing an image already pushed for the commit), then
@@ -384,8 +394,9 @@ deploy at a time without ever cancelling one that started. Its one deploy step i
 test, and rollback, using the AWS credentials of the role the job assumes through OIDC (no AWS
 keys exist in GitHub). With `--ci` the script:
 
-- checks Listora's bootstrap and execution policy and refuses when either is not the committed
-  one, without changing them (the role cannot): update them with the deploy from a Mac;
+- checks Listora's bootstrap template, execution policy, and role boundary and refuses when any
+  is not the committed one, without changing them (the role cannot): update them with the
+  deploy from a Mac;
 - needs the owner's address already verified by SES, so the first deploy (which waits for the
   verification link to be clicked) is the one from a Mac;
 - keeps the Anthropic key stored in `listora/personal/anthropic-api-key` (the role can neither
@@ -397,12 +408,14 @@ stack, `src/stacks/deploy-access-stack.ts`) trusts only a GitHub OIDC token whos
 this repository, named by its immutable owner and repository ids (GitHub's immutable subject
 form, `repo:toniojbusiness@266634719/listora@1431894048:environment:personal`), in the
 `personal` GitHub environment, and whose ref is `refs/heads/main`. It may assume Listora's own
-bootstrap roles (`cdk-listora-*`, never the default `CDKToolkit`'s or another app's), push and
-pull the `listora/app` and `listora/runner` images, read the `listora-personal-*` stacks,
-`CDKToolkit-listora`, and the execution policy, run the migration task, and read and roll the
-services of the `listora-personal` cluster. What a deploy can change through the bootstrap is
-bounded by the restricted execution policy ([Trust boundary](#trust-boundary)), which excludes
-the deploy role itself.
+bootstrap deploy and asset publishing roles (`cdk-listora-{deploy,file-publishing,image-publishing}-role-*`;
+never the lookup role, which reads the whole account, nor the default `CDKToolkit`'s or another
+app's), push and pull the `listora/app` and `listora/runner` images, read the
+`listora-personal-*` stacks, `CDKToolkit-listora`, the execution policy, and the role boundary,
+run the migration task, and read and roll the services of the `listora-personal` cluster. What a
+deploy can change through the bootstrap is bounded by Listora's bootstrap template (only
+`listora-personal-*` stacks) and the restricted execution policy with the role boundary
+([Trust boundary](#trust-boundary)), which exclude the deploy role itself.
 
 **One-time setup**, after the workflow is on `main`, with administrator credentials (the
 `prequal-main` profile in the examples):
@@ -514,12 +527,15 @@ account. The examples use staging.
    if either is `use1-az3`, pick two other zones for the `availabilityZones` setting
    (`AVAILABILITY_ZONES` in the GitHub environment). Choose them before the first deploy:
    changing zones later replaces the network and everything in it.
-2. **Bootstrap CDK** in the account and region, with the restricted execution policy: create
+2. **Bootstrap CDK** in the account and region, with Listora's template and the restricted
+   execution policy: create `listora-<env>-role-boundary` from
+   `node src/deploy/execution-policy.ts <env> <account> boundary` and
    `listora-<env>-cdk-execution` from `node src/deploy/execution-policy.ts <env> <account>`
-   (`aws iam create-policy --policy-name listora-<env>-cdk-execution --policy-document
-file://policy.json`), then from `infra/`:
-   `npx cdk bootstrap aws://<account>/us-east-1 --qualifier listora --toolkit-stack-name
-CDKToolkit-listora --cloudformation-execution-policies
+   (`aws iam create-policy --policy-name <name> --policy-document file://policy.json`), write
+   the template with `node src/deploy/bootstrap-template.ts <env> >cdk.out/bootstrap.yaml`,
+   then from `infra/`:
+   `npx cdk bootstrap aws://<account>/us-east-1 --template cdk.out/bootstrap.yaml --qualifier
+listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies
 arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protection`
    (Listora's own bootstrap, beside any other app's; `src/bootstrap.ts`). The
    bootstrap's CloudFormation execution policy is the ceiling on what any deploy can change;
@@ -570,28 +586,49 @@ Later deploys are step 5 only.
 
 ## Trust boundary
 
-The deploy role can assume the CDK bootstrap roles, and the bootstrap's CloudFormation
-execution role can do whatever the bootstrap's execution policy allows (`AdministratorAccess`
-unless the bootstrap restricted it). What actually bounds a deploy:
+The deploy role can assume the CDK bootstrap's deploy and publishing roles, and the bootstrap's
+CloudFormation execution role can do whatever the bootstrap's execution policy allows
+(`AdministratorAccess` unless the bootstrap restricted it). What actually bounds a deploy:
 
 - the deploy role's trust policy (this repository by its immutable ids, the GitHub environment,
   and the `main` ref) and the GitHub environment's protection rules (required reviewers, `main`
-  only), which decide who can run a job that assumes the role, and
-- the bootstrap's CloudFormation execution policy, which decides what that job can change.
+  only), which decide who can run a job that assumes the role,
+- Listora's bootstrap template, which decides which stacks that job can change, and
+- the bootstrap's CloudFormation execution policy and the role boundary, which decide what
+  those stacks can change.
+
+**Listora's bootstrap template** (`src/deploy/bootstrap-template.ts`) is the CDK CLI's own,
+generated from the CLI version in `package-lock.json`, with the deploy role's stack changes
+(create, update, change sets, roll back, delete, and termination protection) limited to
+`listora-<env>-*` stacks and stack refactoring removed. The default allows them on every stack
+in the account, so a deploy could delete or change another app's stack (a stack with a service
+role is deleted with that role's permissions). Generating it throws when a CDK upgrade changes
+those statements, and a test checks that nothing else differs from the CLI's template.
 
 **The restricted execution policy** (`src/deploy/execution-policy.ts`, managed policy
 `listora-<env>-cdk-execution`) replaces `AdministratorAccess`. It grants every action of the
 services the stacks use (`SERVICE_PREFIXES`; a test fails when a stack adds a resource of
 another service), IAM only on roles named `listora-<env>-*` (attaching only the listed AWS
 managed policies) and on service-linked roles, and it denies any change to the GitHub deploy
-role, the bootstrap's roles, and the bootstrap bucket's policy. It grants nothing on IAM
-users, groups, OIDC providers, Organizations, or account settings, so a deploy can no longer
-rewrite the deploy role's own permissions. Every environment bootstraps with it (step 2).
+role, the bootstrap's roles, the bootstrap bucket's policy, and its own and the boundary's
+managed policies. It grants nothing on IAM users, groups, OIDC providers, Organizations, or
+account settings, so a deploy can no longer rewrite the deploy role's own permissions. Every
+environment bootstraps with it (step 2).
 
-**Follow-up (T-33, security hardening):** a permissions boundary on every role the stacks
-create, since a stack's own role can still be given any inline permission, and scoping the
-service grants to Listora's tagged resources: they are service-wide, and the personal account
-also holds another app's stacks.
+**The role boundary** (`roleBoundaryPolicy` in the same file, managed policy
+`listora-<env>-role-boundary`) is the permissions boundary of every role the stacks create
+(`src/app.ts` sets it on every stack but `deploy-access`). It allows the services the stacks
+use, plus Cost Explorer for the cost alert (`ROLE_ONLY_SERVICES`), and nothing on IAM, STS, or
+any other service. The execution policy creates a role, sets its
+boundary, and changes its inline or attached policies only with this boundary
+(`iam:PermissionsBoundary`), and never removes a boundary, so no deploy can make a stack's role
+an administrator, whatever inline policy it gives the role. Tests check that every role carries
+it and that every action a role is given is within it.
+
+**Follow-up (T-33, security hardening):** scoping the service grants to Listora's tagged
+resources. They are service-wide (`ec2:*` on every resource), and the personal account also
+holds another app's stacks, so a reviewed template can still name another app's resource of
+those services.
 
 ## Conventions
 
