@@ -93,9 +93,12 @@ export const FORM_SELECTORS = {
     `[data-et-name="listingEditorAvailabilitySection"] a.dropdown__link[data-et-name="${code}"]`,
   /** Goes on from a new listing's form to its share step. */
   next: 'button[data-et-name="next"]',
-  /** Publishes a new listing, on the share step. */
+  /** Publishes a new listing, on the share step ("List This Item"). */
   list: 'button[data-et-name="list"]',
-  /** Saves a change to a listing. */
+  /**
+   * Saves a change to a listing: it opens the same share step, whose List This Item completes it
+   * (read on the seller's own listing, 2026-10-27).
+   */
   update: 'button[data-et-name="update"]',
   /**
    * Poshmark's own validation messages on the form that show. The form keeps every message in
@@ -335,6 +338,11 @@ export async function submit(
     if (refused !== null) return refused;
   }
   await page.click(FORM_SELECTORS[button]);
+  if (button === 'update') {
+    const refused = await refusal(page);
+    if (refused !== null) return refused;
+    if (await appears(page, FORM_SELECTORS.list)) await page.click(FORM_SELECTORS.list);
+  }
   return (await refusal(page)) ?? saved(page);
 }
 

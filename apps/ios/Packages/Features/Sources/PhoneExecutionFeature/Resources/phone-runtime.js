@@ -5929,7 +5929,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		description: "textarea#description",
 		price: "input#priceAmount__input",
 		post: "button[type=\"submit\"]:text-is(\"Post\")",
-		save: "button[type=\"submit\"]:text-is(\"Save\")",
+		/** The edit page's submit (read on the seller's session, 2026-10-27). */
+		save: "button[type=\"submit\"]:text-is(\"Save changes\")",
 		/** "Post and add another": checked, Depop opens a new empty form instead of the listing. */
 		postAnother: "input#post-another[type=\"checkbox\"]",
 		error: "[role=\"alert\"]",
@@ -7873,6 +7874,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		description: "textarea[data-testid=\"Description\"]",
 		category: "button[data-testid=\"SellCategoryFieldButton\"]",
 		categoryDialog: "[data-testid=\"DialogWrapper\"]",
+		anyCategoryRow: "[data-testid=\"DialogWrapper\"] button[data-testid=\"CategoryRow\"]",
 		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}")`,
 		brand: "input[data-testid=\"Brand\"]",
 		brandOption: "[data-testid=\"Brand-option\"]",
@@ -7908,6 +7910,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		error: "[data-testid=\"FormError\"]"
 	};
 	const FORM = "listing form";
+	/** How long a picked category gets to open its subcategories, or close the dialog. */
+	const SUBCATEGORIES_MS = 3e3;
 	/** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
 	const APPEAR_MS = 8e3;
 	const LOOK_EVERY_MS$2 = 500;
@@ -7979,7 +7983,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!await appears$1(page, row)) throw changed(FORM, `offers no category level ${String(level + 1)} "${name}"`);
 			await page.click(row);
 		}
-		if ((await page.text(LISTING_FORM.category))?.replace(/\s+/g, " ").trim() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
+		const whole = LISTING_FORM.categoryRow(`All ${path.at(-1) ?? ""}`);
+		const shown = async () => (await page.text(LISTING_FORM.category))?.replace(/\s+/g, " ").trim();
+		const end = Date.now() + SUBCATEGORIES_MS;
+		while (Date.now() < end && await shown() !== path.join(" > ")) {
+			if (await page.exists(whole)) {
+				await page.click(whole);
+				break;
+			}
+			if (!await page.exists(LISTING_FORM.anyCategoryRow)) break;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+		}
+		if (await shown() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
 	}
 	/** Searches Mercari's brand list and picks the exact brand; without one, the step stops. */
 	async function pickBrand(page, brand) {
@@ -8830,9 +8845,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		availability: (code) => `[data-et-name="listingEditorAvailabilitySection"] a.dropdown__link[data-et-name="${code}"]`,
 		/** Goes on from a new listing's form to its share step. */
 		next: "button[data-et-name=\"next\"]",
-		/** Publishes a new listing, on the share step. */
+		/** Publishes a new listing, on the share step ("List This Item"). */
 		list: "button[data-et-name=\"list\"]",
-		/** Saves a change to a listing. */
+		/**
+		* Saves a change to a listing: it opens the same share step, whose List This Item completes it
+		* (read on the seller's own listing, 2026-10-27).
+		*/
 		update: "button[data-et-name=\"update\"]",
 		/**
 		* Poshmark's own validation messages on the form that show. The form keeps every message in
@@ -9007,6 +9025,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (refused !== null) return refused;
 		}
 		await page.click(FORM_SELECTORS[button]);
+		if (button === "update") {
+			const refused = await refusal(page);
+			if (refused !== null) return refused;
+			if (await appears(page, FORM_SELECTORS.list)) await page.click(FORM_SELECTORS.list);
+		}
 		return await refusal(page) ?? saved(page);
 	}
 	/** Poshmark's validation messages on the form, when it shows any. */

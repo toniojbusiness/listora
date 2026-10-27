@@ -453,7 +453,7 @@ export function listingFormPage(view: ListingFormView): string {
 <p data-testid="shipping">Shipping: ${escape(shippingLabel)}</p>
 <input type="hidden" name="shipping" value="${escape(shipping ?? '')}">
 ${create ? '<label><input type="checkbox" id="post-another" name="postAnother"> Post and add another</label>' : ''}
-<button type="submit">${create ? 'Post' : 'Save'}</button>
+<button type="submit">${create ? 'Post' : 'Save changes'}</button>
 </form>`;
   const current = {
     category: product?.category.join(' > ') ?? '',

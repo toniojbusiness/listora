@@ -45,7 +45,8 @@ export const LISTING_FORM = {
   description: 'textarea#description',
   price: 'input#priceAmount__input',
   post: 'button[type="submit"]:text-is("Post")',
-  save: 'button[type="submit"]:text-is("Save")',
+  /** The edit page's submit (read on the seller's session, 2026-10-27). */
+  save: 'button[type="submit"]:text-is("Save changes")',
   /** "Post and add another": checked, Depop opens a new empty form instead of the listing. */
   postAnother: 'input#post-another[type="checkbox"]',
   error: '[role="alert"]',
