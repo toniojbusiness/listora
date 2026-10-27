@@ -434,7 +434,10 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         it('replaces the listing details and reads them back', async () => {
           const { ref } = await create();
           const content = sampleListingContent({
-            variant: { title: 'Updated title', description: 'Updated description' },
+            variant: {
+              title: 'Updated title',
+              description: 'Updated description with more detail.',
+            },
           });
           const outcome = await adapter.execute(request('revise', ref, { content }), ctx());
           expect(outcome).toMatchObject({ type: 'confirmed' });

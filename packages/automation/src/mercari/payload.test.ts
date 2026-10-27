@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { ITEM_CONDITIONS } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 
-import { mapMercariCategory, mappedMercariCategories, parseCategoryRef } from './categories.ts';
 import { mercariCondition } from './conditions.ts';
 import { parsePrice } from './pages/common.ts';
 import {
@@ -13,104 +12,17 @@ import {
   validateMercariPayload,
   withSkuLine,
 } from './payload.ts';
-import { SHIPPING_WEIGHTS } from './shipping.ts';
 import { itemIdFromPath, MERCARI_PATHS } from './site.ts';
-import { mercariSize, sizeOptionMatches } from './sizes.ts';
-
-const item = sampleListingContent().item;
 
 function payload(overrides: Parameters<typeof sampleListingContent>[0] = {}) {
   const content = sampleListingContent(overrides);
   return buildMercariPayload(content.item, content.variant);
 }
 
-describe('Mercari categories', () => {
-  it('maps by the most specific canonical path, per department', () => {
-    expect(mapMercariCategory('clothing/tops/t_shirts', 'women')?.path).toEqual([
-      'Women',
-      'Tops & blouses',
-      'T-shirts',
-    ]);
-    expect(mapMercariCategory('clothing/tops/t_shirts', 'men')?.path).toEqual([
-      'Men',
-      'Tops',
-      'T-shirts',
-    ]);
-    // An unlisted subcategory falls back to its category.
-    expect(mapMercariCategory('clothing/outerwear/denim_jackets', 'men')).toMatchObject({
-      path: ['Men', 'Coats & jackets'],
-      size: 'clothing',
-    });
-    expect(mapMercariCategory('shoes/boots', 'women')).toMatchObject({ size: 'shoes' });
-    expect(mapMercariCategory('jewelry/rings', 'women')).toMatchObject({ size: 'none' });
-    // Mercari's men's Other, where underwear goes, asks no size: the listing sends none.
-    expect(mapMercariCategory('clothing/intimates', 'men')).toMatchObject({
-      path: ['Men', 'Other'],
-      size: 'none',
-    });
-    expect(
-      payload({ item: { category: 'clothing/intimates', department: 'men', sizeLabel: 'XL' } }),
-    ).toMatchObject({ category: ['Men', 'Other'], size: null, sized: false });
-  });
-
-  it('maps nothing for kids, unisex, unknown departments, and unmapped categories', () => {
-    expect(mapMercariCategory('clothing/tops/t_shirts', 'kids')).toBeNull();
-    expect(mapMercariCategory('clothing/tops/t_shirts', 'unisex')).toBeNull();
-    expect(mapMercariCategory('clothing/tops/t_shirts', null)).toBeNull();
-    expect(mapMercariCategory('home/decor', 'women')).toBeNull();
-    expect(mapMercariCategory(null, 'women')).toBeNull();
-  });
-
-  it('gives every mapped category two or three levels and a shipping weight Mercari offers', () => {
-    for (const category of mappedMercariCategories()) {
-      expect(category.path.length, category.path.join(' > ')).toBeGreaterThanOrEqual(2);
-      expect(category.path.length).toBeLessThanOrEqual(3);
-      expect(SHIPPING_WEIGHTS).toContain(category.weight);
-    }
-  });
-
-  it('reads a category the listing names itself', () => {
-    expect(parseCategoryRef('Women > Shoes > Boots')).toEqual(['Women', 'Shoes', 'Boots']);
-    expect(parseCategoryRef(' Men>Jeans ')).toEqual(['Men', 'Jeans']);
-    for (const bad of ['Women', 'A > > B', 'A > B > C > D', '']) {
-      expect(parseCategoryRef(bad), bad).toBeNull();
-    }
-  });
-});
-
-describe('Mercari conditions and sizes', () => {
+describe('Mercari conditions', () => {
   it('maps every canonical condition onto one of Mercari’s, never Poor', () => {
     const labels = ITEM_CONDITIONS.map((condition) => mercariCondition(condition).label);
     expect(labels).toEqual(['New', 'Like new', 'Good', 'Like new', 'Good', 'Fair']);
-  });
-
-  it('spells sizes the way Mercari’s size lists do', () => {
-    const size = (sizeLabel: string, kind: 'clothing' | 'shoes', sizeSystem = 'us') =>
-      mercariSize({ ...item, sizeLabel, sizeSystem }, kind);
-    expect(size('Small', 'clothing')).toBe('S');
-    expect(size('2XL', 'clothing')).toBe('XXL');
-    expect(size('xxxl', 'clothing')).toBe('3XL');
-    expect(size('8', 'clothing')).toBe('8');
-    expect(size('W32 L30', 'clothing')).toBe('32');
-    expect(size('32x34', 'clothing')).toBe('32');
-    expect(size('OS', 'clothing')).toBe('One size');
-    expect(size('10 1/2', 'shoes')).toBe('10.5');
-    expect(size('US 9', 'shoes')).toBe('9');
-    expect(size('42', 'shoes', 'eu')).toBeNull();
-    expect(size('chest 40', 'clothing')).toBeNull();
-    expect(mercariSize({ ...item, sizeLabel: 'M' }, 'none')).toBeNull();
-  });
-
-  it('matches a size option by its own label or a label that starts with it', () => {
-    expect(sizeOptionMatches('M', 'M')).toBe(true);
-    expect(sizeOptionMatches('M (8-10)', 'M')).toBe(true);
-    // Mercari's women's sizes name the extended sizes 2XL and 3XL; its men's say XXL.
-    expect(sizeOptionMatches('2XL (20-22)', 'XXL')).toBe(true);
-    expect(sizeOptionMatches('XXL (50-52)', 'XXL')).toBe(true);
-    expect(sizeOptionMatches('3XL (24-26)', 'XXXL')).toBe(true);
-    expect(sizeOptionMatches('XL (16-18)', 'XXL')).toBe(false);
-    expect(sizeOptionMatches('MP', 'M')).toBe(false);
-    expect(sizeOptionMatches('10.5', '10')).toBe(false);
   });
 });
 
@@ -118,11 +30,13 @@ describe('Mercari payload', () => {
   it('builds the form fields purely from the listing content', () => {
     expect(payload()).toMatchObject({
       category: ['Men', 'Coats & jackets'],
-      size: 'M',
+      categoryId: 33,
+      size: 'M (38-40)',
       sized: true,
+      imei: false,
       brand: "Levi's",
       condition: { id: 2, label: 'Like new' },
-      shipping: { payer: 'buyer', method: 'prepaid_label', weight: '3 lb' },
+      shipping: { payer: 'buyer', method: 'prepaid_label' },
       photos: [{ photoId: 'photo-front' }, { photoId: 'photo-back' }, { photoId: 'photo-tag' }],
     });
     // The variant's own condition and category win over the item's.
@@ -131,10 +45,14 @@ describe('Mercari payload', () => {
     ).toMatchObject({
       category: ['Women', 'Shoes', 'Boots'],
       condition: { label: 'New' },
-      shipping: { weight: '5 lb' },
       sized: true,
       size: null,
+      sizeExamples: ['3.5 and below', '4 (35)', '4.5 (35)', '5 (35.5)'],
     });
+    // A category whose form asks no size sends none.
+    expect(
+      payload({ item: { category: 'clothing/intimates', department: 'men', sizeLabel: 'XL' } }),
+    ).toMatchObject({ category: ['Men', 'Other'], size: null, sized: false });
   });
 
   it('accepts a listing Mercari takes', () => {
@@ -172,7 +90,7 @@ describe('Mercari payload', () => {
     }));
     const issues = validateMercariPayload(
       payload({
-        item: { category: 'home/decor', condition: null, photos: many },
+        item: { department: null, condition: null, photos: many },
         variant: {
           title: 'x'.repeat(81),
           description: ' ',
@@ -191,14 +109,71 @@ describe('Mercari payload', () => {
     for (const issue of issues) expect(issue.message).toContain('Mercari');
   });
 
+  it('asks for five words of description, as Mercari’s form does', () => {
+    expect(
+      validateMercariPayload(payload({ variant: { description: 'Great jacket, barely worn' } })),
+    ).toMatchObject([{ field: 'variant.description', code: 'too_short' }]);
+    expect(
+      validateMercariPayload(
+        payload({ variant: { description: 'Great jacket, barely worn twice' } }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses what Mercari prohibits before anything is sent', () => {
+    const refused = (title: string) =>
+      validateMercariPayload(payload({ variant: { title } })).map((issue) => issue.message);
+    expect(refused('Replica designer bag')).toEqual([
+      "Mercari doesn't allow replicas, imitations, or counterfeit items (its Prohibited Items list).",
+    ]);
+    expect(refused('Airsoft rifle with scope')).toMatchObject([expect.stringContaining('weapons')]);
+    expect(refused('Vape pen starter kit')).toMatchObject([expect.stringContaining('vaping')]);
+    // Words that only look alike pass.
+    expect(refused('Bomber jacket with knife pleats')).toEqual([]);
+    expect(refused('Faux leather moto jacket')).toEqual([]);
+  });
+
+  it('sends a phone whose form wants its IMEI to the seller', () => {
+    const phones = 'Electronics > Cell phones & accessories > Cell phones & smartphones';
+    expect(validateMercariPayload(payload({ variant: { categoryRef: phones } }))).toMatchObject([
+      { field: 'variant.categoryRef', code: 'not_supported' },
+    ]);
+    expect(validateMercariPayload({ ...payload(), imei: true })).toMatchObject([
+      { field: 'variant.categoryRef', code: 'not_supported' },
+    ]);
+  });
+
+  it("asks girls' or boys' for a kids' item it can't tell, naming both", () => {
+    const issues = validateMercariPayload(
+      payload({ item: { category: 'clothing/tops/t_shirts', department: 'kids', sizeLabel: '6' } }),
+    );
+    expect(issues).toEqual([
+      {
+        field: 'variant.categoryRef',
+        code: 'required',
+        message:
+          "Mercari files kids' items as girls' or boys'. Choose 'Kids > Girls tops & t-shirts > Girls (4+)' or 'Kids > Boys tops & t-shirts > Boys (4+)'.",
+      },
+    ]);
+    expect(
+      validateMercariPayload(
+        payload({
+          item: { category: 'clothing/tops/t_shirts', department: 'kids', sizeLabel: '6' },
+          variant: { categoryRef: 'Kids > Girls tops & t-shirts > Girls (4+)' },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it('keeps room for the SKU line within Mercari’s description limit', () => {
     const room = MERCARI_LIMITS.descriptionMaxLength - '\n\nSKU: '.length - 64;
-    const fits = payload({ variant: { description: 'd'.repeat(room) } });
+    const words = (length: number) => 'd '.repeat(length).slice(0, length);
+    const fits = payload({ variant: { description: words(room) } });
     expect(validateMercariPayload(fits)).toEqual([]);
     expect(withSkuLine(fits.description, 'S'.repeat(64)).length).toBeLessThanOrEqual(
       MERCARI_LIMITS.descriptionMaxLength,
     );
-    const over = payload({ variant: { description: 'd'.repeat(room + 1) } });
+    const over = payload({ variant: { description: words(room + 1) } });
     expect(validateMercariPayload(over)).toMatchObject([
       { field: 'variant.description', code: 'too_long' },
     ]);

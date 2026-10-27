@@ -5923,7 +5923,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* Whether a size option's label offers `size`: the label is the size, or the size followed by
 	* a space and more (a label such as `M (UK 12)`).
 	*/
-	function sizeOptionMatches$1(optionLabel, size) {
+	function sizeOptionMatches(optionLabel, size) {
 		const label = optionLabel.trim();
 		return label === size || label.startsWith(`${size} `);
 	}
@@ -6239,7 +6239,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (!await page.exists(box.open)) await page.click(box.toggle);
 		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
 		const offered = (await page.texts(box.anyOption)).map((option) => option.trim());
-		const label = offered.includes(size) ? size : offered.find((option) => sizeOptionMatches$1(option, size));
+		const label = offered.includes(size) ? size : offered.find((option) => sizeOptionMatches(option, size));
 		if (label === void 0) throw changed$2(FORM$2, `offers no size "${size}" for this category`);
 		await page.click(box.option(label));
 	}
@@ -7978,30 +7978,25 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return path;
 	}
 
-// src/mercari/sizes.ts
-/**
-	* Mercari's names for the extended letter sizes where they differ by department: its women's
-	* sizes say `2XL (20-22)` and `3XL (24-26)`, its men's `XXL (50-52)` (read 2026-10-27).
-	*/
-	const LETTER_SIZE_ALIASES = {
-		XXL: "2XL",
-		"2XL": "XXL",
-		XXXL: "3XL",
-		"3XL": "XXXL",
-		XXXXL: "4XL",
-		"4XL": "XXXXL"
-	};
-	/**
-	* Whether a size option's label offers `size`: the label is the size, or the size followed by
-	* a space and more (`M (8-10)`), under either of its names (`XXL` is `2XL (20-22)`).
-	*/
-	function sizeOptionMatches(optionLabel, size) {
-		const label = optionLabel.trim();
-		return [size, LETTER_SIZE_ALIASES[size.toUpperCase()]].filter((name) => name !== void 0).some((name) => label === name || label.startsWith(`${name} `));
-	}
-
 // src/mercari/pages/listing-form.ts
 /**
+	* Mercari's listing form: the sell page (`/sell/`) for a new listing, and the same form on a
+	* listing's edit page (`/sell/edit/<id>/`). Filling it changes nothing; only submitting it does.
+	*
+	* The form, in the order the script fills it: photos (one file input, in posting order), title,
+	* description (with Listora's SKU line), the category level by level (each level's options
+	* appear once the one above is picked), brand (typed into Mercari's brand search and picked from
+	* its suggestions; the form takes only brands from its own list and requires one, so a brand it
+	* doesn't list, or none, is its "No brand / Not sure"), condition, size (the payload's label,
+	* from the category's size list), shipping (Mercari's prepaid label, paid by the buyer), and the
+	* whole-dollar price. A category whose form asks for a phone's IMEI stops before anything is
+	* sent: Listora doesn't have it.
+	*
+	* After submitting, the form either shows Mercari's validation message or its warning about a
+	* prohibited item (a rejection in Mercari's own words, never passed with "Continue listing") or
+	* opens the listing's page.
+	*/
+	/**
 	* Read on the captain's verified session (2026-10-27): the sell page is drawn by Mercari's
 	* scripts with no form element; its parts are named by test ids. The category is a dialog of
 	* rows level by level ("Men", "Tops", "T-shirts"); brand and size are searchable lists of
@@ -8020,9 +8015,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		category: "button[data-testid=\"SellCategoryFieldButton\"]",
 		categoryDialog: "[data-testid=\"DialogWrapper\"]",
 		anyCategoryRow: "[data-testid=\"DialogWrapper\"] button[data-testid=\"CategoryRow\"]",
-		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}")`,
+		/** The first row with the name: Mercari lists one name twice under one category at most. */
+		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}") >> nth=0`,
 		brand: "input[data-testid=\"Brand\"]",
 		brandOption: "[data-testid=\"Brand-option\"]",
+		/** The brands Mercari suggests once photos are in, as chips under the field (each a checkbox). */
+		brandChipLabel: "[data-testid=\"SuggestedBrandChipGroup\"] label",
+		brandChipTicked: (name) => `[data-testid="SuggestedBrandChipGroup"] input[type="checkbox"][aria-label="${quote$1(name)}"]:checked`,
+		/** What to type for Mercari's "No brand / Not sure" option, and its label. */
+		noBrandSearch: "No brand",
+		noBrand: "No brand / Not sure",
+		/** The field a category whose form wants a phone's IMEI shows. */
+		imei: "input[data-testid=\"IMEI\"]",
 		condition: (id) => `input[type="radio"][value="${String(id)}"]`,
 		size: "input[data-testid=\"Size\"]",
 		sizeOption: "[data-testid=\"Size-option\"]",
@@ -8038,10 +8042,24 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		* drops, so it is switched off.
 		*/
 		smartPricing: "button[data-testid=\"SmartPricingButton\"]",
-		/** Its switch asks to confirm turning it off. */
+		/** What its switch may ask to confirm turning it off with. */
 		smartPricingTurnOff: "button[data-testid=\"SmartPricingTurnOffButton\"]",
 		/** Mercari's answer to List from a seller without a card on file: add one first. */
 		paymentWarning: "[data-testid=\"PaymentWarningModal\"]",
+		/**
+		* Mercari's warning that a listing may break its rules ("Oops!", the reason, "Continue
+		* listing", and a link to its Prohibited Items list), read from its sell page's code
+		* 2026-10-27. Listora never continues past it: the step stops with Mercari's reason.
+		*/
+		itemWarning: "[data-testid=\"ItemCreationWarningModalContinueButton\"]",
+		/** The parts around it, the innermost of which is the warning with its reason. */
+		itemWarningBody: "div:has([data-testid=\"ItemCreationWarningModalContinueButton\"])",
+		/**
+		* Mercari's notice that the seller's selling is restricted until they confirm their contact
+		* info, a dialog titled by this heading.
+		*/
+		restrictedHeading: "h2",
+		restrictedTitle: "Your ability to sell is restricted",
 		/**
 		* Mercari's page once a listing is up, after List and after an edit's Update alike (read
 		* 2026-10-27: under the sell page's path, "Sell another item", "Share your listing").
@@ -8060,6 +8078,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
 	const APPEAR_MS = 8e3;
 	const LOOK_EVERY_MS$2 = 500;
+	/** How long the brand suggestions stay the same before Listora takes them as Mercari's answer. */
+	const BRAND_SETTLED_MS = 2e3;
+	/** How long an empty brand list gets to fill before the search counts as finding nothing. */
+	const BRAND_EMPTY_MS = 4e3;
 	/**
 	* Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
 	* `VerificationExceptionDialog`, listing the verifications it requires, with a Verify button).
@@ -8078,6 +8100,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/**
 	* Fills the whole form from the payload, ending the description with the SKU line. `photos`
 	* are uploaded in the order given; `null` leaves the listing's photos as they are (an edit).
+	* `imei_required` when the category's form asks for a phone's IMEI, which Listora doesn't have:
+	* nothing is sent.
 	*/
 	async function fillListing(page, payload, sku, photos) {
 		await expectElement(page, LISTING_FORM.form, FORM, FORM);
@@ -8092,6 +8116,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await page.fill(LISTING_FORM.description, withSkuLine(payload.description, sku));
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
 		await pickCategory(page, payload.category);
+		if (payload.imei || await appears$1(page, LISTING_FORM.imei, 1e3)) return "imei_required";
 		await pickBrand(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM, `condition "${payload.condition.label}"`);
@@ -8100,14 +8125,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await chooseShipping(page);
 		await fillPrice(page, payload.price.amountCents);
 		await smartPricingOff(page);
+		if (await page.exists(LISTING_FORM.imei)) return "imei_required";
+		return "filled";
 	}
 	/** Switches Mercari's Smart Pricing off when the form has it on. */
 	async function smartPricingOff(page) {
 		if (!await appears$1(page, LISTING_FORM.smartPricing, 2e3)) return;
 		if ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() !== "ON") return;
 		await page.click(LISTING_FORM.smartPricing);
-		if (!await appears$1(page, LISTING_FORM.smartPricingTurnOff)) throw changed(FORM, "asks nothing when Smart Pricing is switched off");
-		await page.click(LISTING_FORM.smartPricingTurnOff);
+		const off = async () => (await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "OFF";
+		if (!await off() && await appears$1(page, LISTING_FORM.smartPricingTurnOff, 2e3)) await page.click(LISTING_FORM.smartPricingTurnOff);
 		const end = Date.now() + APPEAR_MS;
 		while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "ON") {
 			if (Date.now() >= end) throw changed(FORM, "kept Smart Pricing on");
@@ -8141,28 +8168,71 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		}
 		if (await shown() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
 	}
-	/** Searches Mercari's brand list and picks the exact brand; without one, the step stops. */
+	/**
+	* Picks the item's brand, or Mercari's "No brand / Not sure" when Mercari doesn't list it or the
+	* item has none: Mercari needs one (the title and description still name the item's). Once
+	* photos are in, Mercari suggests brands as chips under the field and may have filled one in
+	* already (read 2026-10-27): a suggestion that is the brand is taken as it is. Otherwise the
+	* field is searched, matching exactly, then ignoring case and punctuation (`Abercrombie and
+	* Fitch` is Mercari's `Abercrombie & Fitch`), and again by the brand's first word.
+	*/
 	async function pickBrand(page, brand) {
 		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
-		if (brand === null) return;
-		await page.type(LISTING_FORM.brand, brand);
+		if (brand !== null) {
+			if (await pickBrandChip(page, (name) => brandKey(name) === brandKey(brand))) return;
+			const first = brand.split(/\s+/)[0] ?? "";
+			const searches = [brand, ...first.length >= 3 && first !== brand ? [first] : []];
+			for (const search of searches) if (await pickBrandOption(page, search, brand)) return;
+		}
+		if (await pickBrandChip(page, (name) => name === LISTING_FORM.noBrand)) return;
+		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
+	}
+	/** Ticks the suggested brand chip whose name passes `wanted` (kept when already ticked). */
+	async function pickBrandChip(page, wanted) {
+		const name = (await page.texts(LISTING_FORM.brandChipLabel)).map((name) => name.trim()).find(wanted);
+		if (name === void 0) return false;
+		if (!await page.exists(LISTING_FORM.brandChipTicked(name))) await page.click(`${LISTING_FORM.brandChipLabel}:text-is("${quote$1(name)}") >> nth=0`);
+		return true;
+	}
+	/** Types `search` into the brand field and picks the option that is `wanted`, if it comes. */
+	async function pickBrandOption(page, search, wanted) {
+		await page.click(LISTING_FORM.brand);
+		if ((await page.value(LISTING_FORM.brand) ?? "") !== "") await page.fill(LISTING_FORM.brand, "");
+		await page.type(LISTING_FORM.brand, search);
 		const end = Date.now() + APPEAR_MS;
+		let previous = null;
+		let settledAt = Date.now();
 		for (;;) {
 			const offered = await page.texts(LISTING_FORM.brandOption);
-			const match = offered.find((option) => option === brand) ?? offered.find((option) => option.toLowerCase() === brand.toLowerCase());
+			const shown = offered.join("\n");
+			if (shown !== previous) {
+				previous = shown;
+				settledAt = Date.now();
+			}
+			const settled = offered.length === 0 ? BRAND_EMPTY_MS : BRAND_SETTLED_MS;
+			const match = offered.find((option) => option === wanted) ?? offered.find((option) => option.toLowerCase() === wanted.toLowerCase()) ?? offered.find((option) => brandKey(option) === brandKey(wanted));
 			if (match !== void 0) {
 				await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
-				return;
+				return true;
 			}
-			if (Date.now() >= end) throw changed(FORM, `lists no brand "${brand}"`);
+			if (Date.now() >= end || Date.now() - settledAt >= settled) return false;
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 		}
+	}
+	/** A brand name without case, punctuation, or spacing: `Levi's` and `LEVIS` are one. */
+	function brandKey(name) {
+		return name.toLowerCase().replaceAll("&", "and").replace(/[^a-z0-9]+/g, "");
 	}
 	async function pickSize(page, size) {
 		await expectElement(page, LISTING_FORM.size, FORM, "size list");
 		await page.click(LISTING_FORM.size);
-		if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed(FORM, "shows no sizes");
-		const label = (await page.texts(LISTING_FORM.sizeOption)).find((option) => sizeOptionMatches(option, size));
+		if (!await appears$1(page, LISTING_FORM.sizeOption, 4e3)) {
+			await page.click(LISTING_FORM.size);
+			if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed(FORM, "shows no sizes");
+		}
+		const offered = await page.texts(LISTING_FORM.sizeOption);
+		const spaced = (text) => text.replace(/\s+/g, " ").trim();
+		const label = offered.find((option) => spaced(option) === spaced(size));
 		if (label === void 0) throw changed(FORM, `offers no size "${size}" for this category`);
 		await page.click(`${LISTING_FORM.sizeOption}:text-is("${quote$1(label)}") >> nth=0`);
 	}
@@ -8221,6 +8291,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (itemId !== null) return {
 				type: "listed",
 				itemId
+			};
+			if (await page.exists(LISTING_FORM.itemWarning)) {
+				const [body] = (await page.texts(LISTING_FORM.itemWarningBody)).sort((a, b) => a.length - b.length);
+				const reason = body?.replace(/Continue (listing|updating)|Learn more|Oops!/g, " ").replace(/\s+/g, " ").trim();
+				return {
+					type: "refused",
+					message: `Mercari warned that this listing may break its rules${reason === void 0 || reason === "" ? "" : `: ${reason}`}. Listora didn't continue; check Mercari's Prohibited Items list and edit the listing.`
+				};
+			}
+			if ((await page.texts(LISTING_FORM.restrictedHeading)).some((heading) => heading.trim() === LISTING_FORM.restrictedTitle)) return {
+				type: "refused",
+				message: "Mercari has restricted selling on this account until you confirm your contact info. Open Mercari and confirm it, then list again."
 			};
 			if (await page.exists(LISTING_FORM.paymentWarning)) return {
 				type: "refused",
@@ -8544,6 +8626,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			message: "This listing sold on Mercari, so it cannot be changed.",
 			fixHint: "List the item again as a new Mercari listing."
 		});
+		const imeiRequired = () => ({
+			type: "rejected",
+			code: "imei_required",
+			message: "Mercari asks for the phone's IMEI in this category, which Listora doesn't have.",
+			fixHint: "List this item in Mercari, where you can enter the IMEI."
+		});
 		/** The listing the newest active listings hold under this SKU, if any. */
 		async function findBySku(step, sku, title) {
 			const recent = await step("look at the newest listings", { mutates: false }, (page) => readListingsPage(page, site, "active", 1));
@@ -8603,10 +8691,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				message: "Mercari asks you to verify your account before you can list.",
 				fixHint: "Open Mercari, start a listing, tap Verify, and finish its steps. Then list again."
 			};
-			await step("fill in the listing", {
+			if (await step("fill in the listing", {
 				mutates: false,
 				timeScale: 3
-			}, (page) => fillListing(page, payload, sku, files));
+			}, (page) => fillListing(page, payload, sku, files)) === "imei_required") return imeiRequired();
 			const result = await step("list", {
 				mutates: true,
 				timeScale: 3
@@ -8628,7 +8716,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editor(op, step);
 				if (!("id" in opened)) return opened;
-				await step("fill in the changes", { mutates: false }, (page) => fillListing(page, payload, listingSku(op.listing), null));
+				if (await step("fill in the changes", { mutates: false }, (page) => fillListing(page, payload, listingSku(op.listing), null)) === "imei_required") return imeiRequired();
 				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			price: async (op, step) => {
