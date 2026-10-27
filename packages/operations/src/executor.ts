@@ -1203,6 +1203,22 @@ async function checkTarget(
       detail,
     };
   }
+  // A create or relist that a lookup by SKU can't find yet (Listora never learned its id) is no
+  // proof it didn't go through: a marketplace's own search can lag behind a listing it just took
+  // (Poshmark's closet, for minutes, 2026-10-27), and sending again would post it twice. It is
+  // read again later instead; when the attempts run out it fails, and the seller checks.
+  if (
+    comparison.reason === 'not_found' &&
+    ref.externalListingId === null &&
+    (ctx.op.kind === 'create' || ctx.op.kind === 'relist') &&
+    !read.remote.found &&
+    !read.remote.authoritative
+  ) {
+    return {
+      resolution: { type: 'verify', error: notShown(ctx.name, fields), unknownResult: false },
+      detail,
+    };
+  }
   // Read back and not applied: sending again is no longer blind.
   return { resolution: { type: 'retry', error: notShown(ctx.name, fields) }, detail };
 }

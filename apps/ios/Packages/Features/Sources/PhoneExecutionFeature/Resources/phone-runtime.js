@@ -7873,6 +7873,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		description: "textarea[data-testid=\"Description\"]",
 		category: "button[data-testid=\"SellCategoryFieldButton\"]",
 		categoryDialog: "[data-testid=\"DialogWrapper\"]",
+		anyCategoryRow: "[data-testid=\"DialogWrapper\"] button[data-testid=\"CategoryRow\"]",
 		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}")`,
 		brand: "input[data-testid=\"Brand\"]",
 		brandOption: "[data-testid=\"Brand-option\"]",
@@ -7908,6 +7909,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		error: "[data-testid=\"FormError\"]"
 	};
 	const FORM = "listing form";
+	/** How long a picked category gets to open its subcategories, or close the dialog. */
+	const SUBCATEGORIES_MS = 3e3;
 	/** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
 	const APPEAR_MS = 8e3;
 	const LOOK_EVERY_MS$2 = 500;
@@ -7979,7 +7982,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!await appears$1(page, row)) throw changed(FORM, `offers no category level ${String(level + 1)} "${name}"`);
 			await page.click(row);
 		}
-		if ((await page.text(LISTING_FORM.category))?.replace(/\s+/g, " ").trim() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
+		const whole = LISTING_FORM.categoryRow(`All ${path.at(-1) ?? ""}`);
+		const shown = async () => (await page.text(LISTING_FORM.category))?.replace(/\s+/g, " ").trim();
+		const end = Date.now() + SUBCATEGORIES_MS;
+		while (Date.now() < end && await shown() !== path.join(" > ")) {
+			if (await page.exists(whole)) {
+				await page.click(whole);
+				break;
+			}
+			if (!await page.exists(LISTING_FORM.anyCategoryRow)) break;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+		}
+		if (await shown() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
 	}
 	/** Searches Mercari's brand list and picks the exact brand; without one, the step stops. */
 	async function pickBrand(page, brand) {

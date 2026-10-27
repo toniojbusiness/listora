@@ -44,6 +44,7 @@ export const LISTING_FORM = {
   description: 'textarea[data-testid="Description"]',
   category: 'button[data-testid="SellCategoryFieldButton"]',
   categoryDialog: '[data-testid="DialogWrapper"]',
+  anyCategoryRow: '[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]',
   categoryRow: (name: string) =>
     `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote(name)}")`,
   brand: 'input[data-testid="Brand"]',
@@ -81,6 +82,8 @@ export const LISTING_FORM = {
 } as const;
 
 const FORM = 'listing form';
+/** How long a picked category gets to open its subcategories, or close the dialog. */
+const SUBCATEGORIES_MS = 3_000;
 /** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
 const APPEAR_MS = 8_000;
 const LOOK_EVERY_MS = 500;
@@ -179,7 +182,21 @@ async function pickCategory(page: PageDriver, path: readonly string[]): Promise<
     }
     await page.click(row);
   }
-  const chosen = (await page.text(LISTING_FORM.category))?.replace(/\s+/g, ' ').trim();
+  // A category with its own subcategories opens them: its "All <category>" row picks it whole
+  // (the field then shows the category itself, read 2026-10-27). A leaf closes the dialog.
+  const whole = LISTING_FORM.categoryRow(`All ${path.at(-1) ?? ''}`);
+  const shown = async (): Promise<string | undefined> =>
+    (await page.text(LISTING_FORM.category))?.replace(/\s+/g, ' ').trim();
+  const end = Date.now() + SUBCATEGORIES_MS;
+  while (Date.now() < end && (await shown()) !== path.join(' > ')) {
+    if (await page.exists(whole)) {
+      await page.click(whole);
+      break;
+    }
+    if (!(await page.exists(LISTING_FORM.anyCategoryRow))) break;
+    await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+  }
+  const chosen = await shown();
   if (chosen !== path.join(' > ')) throw changed(FORM, 'shows a different category than picked');
 }
 
