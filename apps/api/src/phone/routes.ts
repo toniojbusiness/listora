@@ -11,7 +11,9 @@ import {
   nextPhoneClaimSeconds,
   PhoneCallConflictError,
   PhoneRunGoneError,
+  PHONE_RUNTIME_VERSION,
   PhoneRuntimeMismatchError,
+  readPhoneBundle,
   type PhoneRunState,
   type PhoneWorkDependencies,
 } from '@listora/automation';
@@ -54,6 +56,18 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
     } catch (error) {
       throw apiError(error);
     }
+  });
+
+  contractRoute(app, deps, 'getPhoneRuntime', async ({ query }) => {
+    const bundle = await readPhoneBundle();
+    return {
+      status: 200,
+      body: {
+        runtimeVersion: PHONE_RUNTIME_VERSION,
+        digest: bundle.digest,
+        ...(query.have === bundle.digest ? {} : { source: bundle.source }),
+      },
+    };
   });
 
   contractRoute(app, deps, 'answerPhoneCall', async ({ tenant, db, params, body }) => {

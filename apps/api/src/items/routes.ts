@@ -67,6 +67,7 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
       search: query.q,
       marketplace: query.marketplace,
       brand: query.brand,
+      attention: query.attention,
       beforeId: query.cursor === undefined ? undefined : decodeCursor(query.cursor),
       limit,
     });

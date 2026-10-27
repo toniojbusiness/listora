@@ -8,30 +8,74 @@
  */
 import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_PATHS } from '../site.ts';
-import { absolute, expectElement, type DepopSite } from './common.ts';
+import { absolute, awaitElement, changed, lookAgain, type DepopSite } from './common.ts';
 import { LISTING_FORM } from './listing-form.ts';
-import { PRODUCT_PAGE } from './product-page.ts';
 
+/**
+ * Read on the captain's session (2026-10-26): the seller's own product page has "Delete listing",
+ * which opens a dialog ("Are you sure you want to delete this listing? You will lose all the
+ * likes.") with Cancel and its own "Delete listing".
+ */
 export const EDIT_PAGE = {
-  delete: 'button[data-testid="listingForm__delete"]',
+  delete: 'button:text-is("Delete listing")',
+  dialog: 'aside[role="dialog"]',
+  confirm: 'aside[role="dialog"] button:text-is("Delete listing")',
 } as const;
+
+/** How long Depop gets to show its dialog and to close it once the listing is deleted. */
+const DIALOG_MS = 20_000;
 
 export type EditorOpened = 'editing' | 'not_editable';
 
-/** Opens the editor; `not_editable` when Depop showed something else (a sold listing). */
+/** How long the edit page may take to draw its form (Depop's forms are drawn after load). */
+const FORM_MS = 20_000;
+
+/**
+ * Opens the editor; `not_editable` when Depop showed something else (a sold listing's product
+ * page), or no form in time.
+ */
 export async function openEditor(
   page: PageDriver,
   site: DepopSite,
   slug: string,
 ): Promise<EditorOpened> {
   await page.goto(absolute(site, DEPOP_PATHS.edit(slug)));
-  return (await page.exists(LISTING_FORM.form)) ? 'editing' : 'not_editable';
+  const end = Date.now() + FORM_MS;
+  for (;;) {
+    if (await page.exists(LISTING_FORM.form)) return 'editing';
+    if (!new URL(page.url()).pathname.startsWith('/products/edit/') || Date.now() >= end) {
+      return 'not_editable';
+    }
+    await lookAgain(page, 500);
+  }
 }
 
-/** Deletes the listing the editor shows, confirming Depop's prompt, and waits for its page. */
+/** Checks the product page has its Delete listing button, before the step that deletes. */
+export async function expectDelete(page: PageDriver): Promise<void> {
+  // Drawn by the page's scripts for its seller, a moment after the page loads.
+  await awaitElement(page, EDIT_PAGE.delete, 'product page', 'Delete listing button');
+}
+
+/**
+ * Deletes the listing the product page shows: Delete listing, then the dialog's own Delete
+ * listing. The operation's check reads the product afterwards.
+ */
 export async function deleteListing(page: PageDriver): Promise<void> {
-  await expectElement(page, EDIT_PAGE.delete, 'edit page', 'Delete button');
-  page.acceptNextDialog();
   await page.click(EDIT_PAGE.delete);
-  await page.waitFor(PRODUCT_PAGE.root);
+  if (!(await within(page, () => page.exists(EDIT_PAGE.confirm)))) {
+    throw changed('product page', 'shows no Delete listing dialog');
+  }
+  await page.click(EDIT_PAGE.confirm);
+  if (!(await within(page, async () => !(await page.exists(EDIT_PAGE.dialog))))) {
+    throw changed('product page', 'kept its Delete listing dialog open');
+  }
+}
+
+async function within(page: PageDriver, done: () => Promise<boolean>): Promise<boolean> {
+  const end = Date.now() + DIALOG_MS;
+  for (;;) {
+    if (await done()) return true;
+    if (Date.now() >= end) return false;
+    await lookAgain(page, 500);
+  }
 }

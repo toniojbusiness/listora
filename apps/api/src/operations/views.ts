@@ -80,6 +80,7 @@ export function operationView(
         errorCode: op.error_code,
         successEvidence: op.success_evidence,
         phoneWait: phoneWait ?? null,
+        nextAttemptAt: op.next_attempt_at,
       },
       maxAttempts: MAX_ATTEMPTS,
     }),

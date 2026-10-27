@@ -7,6 +7,9 @@ import SwiftUI
 /// the photo goes above the text and the price under the SKU, so nothing breaks mid-word.
 struct InventoryRow: View {
     let item: ItemSummary
+    /// Select mode, and whether the item is chosen.
+    var isSelecting = false
+    var isSelected = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -20,6 +23,11 @@ struct InventoryRow: View {
         outer {
             PhotoView(url: item.coverPhoto?.urls?.thumbnail, cornerRadius: Radius.medium)
                 .frame(width: 72, height: 72)
+                .overlay(alignment: .topTrailing) {
+                    if isSelecting {
+                        SelectionMark(isSelected: isSelected).padding(Spacing.xxs)
+                    }
+                }
             HStack(alignment: .top, spacing: Spacing.xs) {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(item.title ?? "Untitled item")
@@ -39,6 +47,9 @@ struct InventoryRow: View {
                                 .fixedSize()
                         }
                     }
+                    if item.needsYou {
+                        NeedsYouBadge(item: item)
+                    }
                     if !item.listings.isEmpty {
                         FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
                             ForEach(item.listings, id: \.listingId) { listing in
@@ -46,16 +57,28 @@ struct InventoryRow: View {
                             }
                         }
                         .padding(.top, Spacing.xxs)
+                    } else if let note = item.noListingsNote {
+                        Text(note)
+                            .font(Typography.footnote)
+                            .foregroundStyle(Palette.textSecondary)
                     }
                 }
-                Image(systemName: "chevron.right")
-                    .font(Typography.smallEmphasis)
-                    .foregroundStyle(Palette.textSecondary)
-                    .padding(.top, Spacing.xxs)
-                    .accessibilityHidden(true)
+                if !isSelecting {
+                    Image(systemName: "chevron.right")
+                        .font(Typography.smallEmphasis)
+                        .foregroundStyle(Palette.textSecondary)
+                        .padding(.top, Spacing.xxs)
+                        .accessibilityHidden(true)
+                }
             }
         }
         .cardStyle(.flat, padding: Spacing.sm)
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
+                    .strokeBorder(Palette.brand.color, lineWidth: 2)
+            }
+        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
@@ -66,6 +89,9 @@ struct InventoryRow: View {
 /// No card around it: the photo carries the cell.
 struct InventoryGridCell: View {
     let item: ItemSummary
+    /// Select mode, and whether the item is chosen.
+    var isSelecting = false
+    var isSelected = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -81,6 +107,22 @@ struct InventoryGridCell: View {
                 .overlay(alignment: .topLeading) {
                     Chip(item.status.label)
                         .padding(Spacing.xs)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if isSelecting {
+                        SelectionMark(isSelected: isSelected).padding(Spacing.xs)
+                    }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if item.needsYou, !isSelecting {
+                        NeedsYouBadge(item: item).padding(Spacing.xs)
+                    }
+                }
+                .overlay {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
+                            .strokeBorder(Palette.brand.color, lineWidth: 3)
+                    }
                 }
                 .padding(.bottom, Spacing.xxs)
             Text(item.title ?? "Untitled item")
@@ -107,6 +149,11 @@ struct InventoryGridCell: View {
                         MarketplaceStatusLine(listing: listing)
                     }
                 }
+            } else if let note = item.noListingsNote {
+                Text(note)
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .contentShape(Rectangle())
@@ -160,5 +207,50 @@ struct MarketplaceBadge: View {
             StatusBadge(listing.statusDisplay.label, tone: StatusTone(listing.statusDisplay.tone))
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension ItemSummary {
+    /// A listing whose newest change failed or waits for the seller.
+    var needsYou: Bool {
+        listings.contains { listing in
+            switch listing.statusDisplay.tone.value1 {
+            case .failed, .actionNeeded: true
+            default: false
+            }
+        }
+    }
+
+    /// What an item on no marketplace says instead of its listings.
+    var noListingsNote: String? {
+        switch status.value1 {
+        case .ready: "Not listed anywhere yet"
+        case .draft: "Review it, then list it"
+        default: nil
+        }
+    }
+}
+
+/// "Needs you" on an item whose listing failed (red) or waits for the seller (amber).
+private struct NeedsYouBadge: View {
+    let item: ItemSummary
+
+    var body: some View {
+        let failed = item.listings.contains { $0.statusDisplay.tone.value1 == .failed }
+        StatusBadge("Needs you", tone: failed ? .failed : .actionNeeded)
+            .accessibilityIdentifier("inventory.needsYou.\(item.sku)")
+    }
+}
+
+/// The check on a chosen item while selecting; an empty circle on one not chosen.
+private struct SelectionMark: View {
+    let isSelected: Bool
+
+    var body: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(Typography.title3)
+            .foregroundStyle(isSelected ? Palette.brand.color : Palette.onMedia.color)
+            .background(Circle().fill(isSelected ? Palette.onBrand.color : Palette.scrim.color.opacity(0.35)))
+            .accessibilityHidden(true)
     }
 }

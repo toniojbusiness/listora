@@ -2,9 +2,9 @@
  * The Mercari automation adapter's own flows on the fake Mercari site, in a real headless
  * Chromium (the shared conformance suite is in adapter.conformance.int.test.ts): every field of
  * the sell form, photos in posting order, the SKU line, deactivate and activate, sold listings,
- * the seller's listings for imports, sold items for sale checks, and the stops: Cloudflare's
- * interstitial and Turnstile, a CAPTCHA, a login code, a logged-out session, and a redesigned
- * page. No traffic goes to Mercari.
+ * the seller's listings for imports, sold items for sale checks, Mercari's refusals (an account
+ * to verify, a card to add), and the stops: Cloudflare's interstitial and Turnstile, a CAPTCHA,
+ * a login code, a logged-out session, and a redesigned page. No traffic goes to Mercari.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -23,7 +23,6 @@ import { PlaywrightBrowserRunner } from '../runner/browser-runner.ts';
 import { MemoryScreenshotStore } from '../runner/screenshots.ts';
 import { FakeSiteSessions, QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
 import { createMercariAutomationAdapter } from './adapter.ts';
-import { MERCARI_STEP_TIMEOUT_MS } from './fake/conformance-driver.ts';
 import {
   FakeMercariSite,
   type FakeMercariAction,
@@ -32,6 +31,11 @@ import {
 import type { MercariListingPayload } from './payload.ts';
 
 const connection = { id: 'connection-mercari', mode: 'automation', status: 'connected' } as const;
+/**
+ * The step timeout here: the form step (three times it) has room for the form's own wait for a
+ * part that never comes (8 seconds), which several checks below run into.
+ */
+const STEP_TIMEOUT_MS = 4_000;
 const ctx = (): AdapterContext => ({ signal: new AbortController().signal, connection });
 
 describe('Mercari automation adapter on the fake Mercari site', () => {
@@ -46,7 +50,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     runner = new PlaywrightBrowserRunner({
       logger: silentLogger,
       screenshots: new MemoryScreenshotStore(),
-      stepTimeoutMs: MERCARI_STEP_TIMEOUT_MS,
+      stepTimeoutMs: STEP_TIMEOUT_MS,
     });
     const profile = { ...automationProfile('mercari'), pacing: QUICK_PACING };
     sessions = new FakeSiteSessions(site, runner, {
@@ -119,6 +123,22 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     site.inject({ action, fault });
   }
 
+  /** The adapter on a fake Mercari site of a test's own, in the shared browser. */
+  function adapterOn(other: FakeMercariSite) {
+    const profile = { ...automationProfile('mercari'), pacing: QUICK_PACING };
+    return createMercariAutomationAdapter({
+      siteUrl: other.url,
+      profile,
+      sessions: new FakeSiteSessions(other, runner, {
+        ...profile,
+        origins: [other.url],
+        cookieDomains: ['127.0.0.1'],
+      }),
+      photos: stubPhotos,
+      logger: silentLogger,
+    });
+  }
+
   it('signs a seller in by hand, as the app does when linking in development', async () => {
     const login = `${site.url}/login/`;
     const signedIn = await fetch(login, {
@@ -172,16 +192,29 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
       currency: 'USD',
       revision: listed?.updatedAt.getTime(),
     });
-    expect(outcome.revision).toBe(listed?.updatedAt.getTime());
+    // Mercari's page after List is not the listing's, so the read-back gives the revision.
+    expect(outcome).not.toHaveProperty('revision');
     // Found again by its SKU before its id is known, the way a timed-out create is.
     expect(await adapter.readListing({ ...ref, externalListingId: null }, ctx())).toEqual(remote);
   });
 
-  it('posts without a brand Mercari does not list, and picks a brand it does whatever the case', async () => {
-    const unknown = await create(sampleListingContent({ item: { brand: 'Handmade Studio' } }));
-    expect(site.item(unknown.ref.externalListingId)?.brand).toBeNull();
+  it('picks a brand Mercari lists whatever its case', async () => {
     const cased = await create(sampleListingContent({ item: { brand: 'ADIDAS' } }));
     expect(site.item(cased.ref.externalListingId)?.brand).toBe('adidas');
+  });
+
+  it('gives a create to the user when Mercari lists no such brand', async () => {
+    const ref = newRef();
+    const content = sampleListingContent({ item: { brand: 'Handmade Studio' } });
+    expect(await adapter.execute(request('create', ref, { content }), ctx())).toMatchObject({
+      type: 'pendingUser',
+      task: { kind: 'list_manually' },
+      excerpt: {
+        automation: 'page_changed',
+        failure: { code: 'element_missing', step: 'fill in the listing' },
+      },
+    });
+    expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
   });
 
   it('revises every detail on the edit page and keeps the photos', async () => {
@@ -223,6 +256,16 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     });
     expect(site.item(ref.externalListingId)?.status).toBe('on_sale');
     expect(site.items().filter((item) => item.id === ref.externalListingId)).toHaveLength(1);
+  });
+
+  it('relists a listing deleted on Mercari by posting it again, with its own id', async () => {
+    const { ref } = await create();
+    site.remove(ref.externalListingId);
+    const outcome = await adapter.execute(request('relist', ref), ctx());
+    const [posted, ...more] = site.itemsWithSku(ref.externalSku ?? '');
+    expect(more).toEqual([]);
+    expect(posted?.id).not.toBe(ref.externalListingId);
+    expect(outcome).toMatchObject({ type: 'confirmed', externalListingId: posted?.id });
   });
 
   it('refuses to change or relist a listing that sold, and reads it as sold', async () => {
@@ -297,10 +340,46 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
       task: { kind: 'list_manually' },
       excerpt: {
         automation: 'page_changed',
-        failure: { code: 'element_missing', step: 'fill in the listing' },
+        failure: { code: 'element_missing', step: 'open the sell page' },
       },
     });
     expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+  });
+
+  it('refuses a create when Mercari asks the seller to verify their account first', async () => {
+    const ref = newRef();
+    inject('form', { type: 'verification_required' });
+    const before = site.requests.length;
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'rejected',
+      code: 'account_verification_required',
+      message: expect.stringContaining('verify your account') as unknown,
+    });
+    expect(site.requests.slice(before).filter((entry) => entry.method === 'POST')).toEqual([]);
+  });
+
+  it('refuses a create when Mercari asks for a card on file before it lists', async () => {
+    const ref = newRef();
+    inject('create', { type: 'card_required' });
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'rejected',
+      code: 'validation_failed',
+      message: expect.stringContaining('credit or debit card') as unknown,
+    });
+    expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+  });
+
+  it("finds a new listing by its SKU when Mercari's page after List does not link to it", async () => {
+    const shop = await FakeMercariSite.start(0, { listedPageLinksItem: false });
+    try {
+      const ref = newRef();
+      const outcome = await adapterOn(shop).execute(request('create', ref), ctx());
+      const listed = shop.itemsWithSku(ref.externalSku ?? '');
+      expect(listed).toHaveLength(1);
+      expect(outcome).toMatchObject({ type: 'confirmed', externalListingId: listed[0]?.id });
+    } finally {
+      await shop.close();
+    }
   });
 
   it('gives a create to the user when the form offers no such category', async () => {
@@ -322,18 +401,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
   it("lists the seller's active and inactive listings across pages, for imports", async () => {
     const seller = await FakeMercariSite.start(0, { pageSize: 2 });
     try {
-      const profile = { ...automationProfile('mercari'), pacing: QUICK_PACING };
-      const own = createMercariAutomationAdapter({
-        siteUrl: seller.url,
-        profile,
-        sessions: new FakeSiteSessions(seller, runner, {
-          ...profile,
-          origins: [seller.url],
-          cookieDomains: ['127.0.0.1'],
-        }),
-        photos: stubPhotos,
-        logger: silentLogger,
-      });
+      const own = adapterOn(seller);
       const ids = ['Tee', 'Jeans', 'Boots'].map((title) =>
         seller.seed({ title, priceCents: 2000 }),
       );
@@ -367,18 +435,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
   it('finds sold items waiting to ship and done, since a time, for sale checks', async () => {
     const shop = await FakeMercariSite.start(0, { pageSize: 2 });
     try {
-      const profile = { ...automationProfile('mercari'), pacing: QUICK_PACING };
-      const own = createMercariAutomationAdapter({
-        siteUrl: shop.url,
-        profile,
-        sessions: new FakeSiteSessions(shop, runner, {
-          ...profile,
-          origins: [shop.url],
-          cookieDomains: ['127.0.0.1'],
-        }),
-        photos: stubPhotos,
-        logger: silentLogger,
-      });
+      const own = adapterOn(shop);
       const at = (hoursAgo: number) => new Date(Date.now() - hoursAgo * 3_600_000);
       const [old, done, waiting, fresh] = [
         ['Old sale', 72],

@@ -11,6 +11,7 @@ import {
 import {
   describeListingStatus,
   describeOperation,
+  relistMode,
   waitedFor,
   type ListingStatusInput,
 } from './status-display.ts';
@@ -302,6 +303,57 @@ describe('describeOperation', () => {
         now,
       }).label,
     ).toBe('Delisted (confirmed by Depop)');
+  });
+
+  it('says a retry waits for its time, not for the iPhone, until it is due', () => {
+    const now = new Date('2026-10-26T12:00:00.000Z');
+    // Handed to the phone 12 minutes ago; its first attempt failed, and it is tried again later.
+    const since = new Date(now.getTime() - 12 * 60_000);
+    const retrying = (nextAttemptAt: Date) =>
+      describeListingStatus({
+        marketplace: 'depop',
+        listingStatus: 'draft',
+        operation: operation({
+          kind: 'create',
+          status: 'retrying',
+          attempts: 1,
+          errorMessage: 'Depop took too long to answer.',
+          phoneWait: { since, running: false },
+          nextAttemptAt,
+        }),
+        now,
+        maxAttempts: 6,
+      });
+    // The app shows when (the time is the seller's), with Try now.
+    expect(retrying(new Date(now.getTime() + 3 * 60_000))).toEqual({
+      tone: 'in_progress',
+      label: 'Publishing... retry 1 of 5',
+      detail: 'Depop took too long to answer.',
+    });
+    // Due for 2 minutes and the phone hasn't taken it: it waits on the phone since it was due.
+    expect(retrying(new Date(now.getTime() - 2 * 60_000)).label).toBe(
+      'Publishing... waiting on your iPhone (2 min)',
+    );
+  });
+
+  it('says whether a relist brings the listing back or posts a new one', () => {
+    const relisting = (
+      marketplace: 'mercari' | 'depop' | 'ebay',
+      externalListingId: string | null,
+    ) =>
+      describeListingStatus({
+        marketplace,
+        listingStatus: 'ended',
+        operation: operation({ kind: 'relist', status: 'running' }),
+        relist: relistMode(marketplace, externalListingId, true),
+      }).label;
+    // Mercari activates the listing it ended; Poshmark puts it back for sale.
+    expect(relisting('mercari', 'm123456789')).toBe('Reactivating...');
+    // A Depop relist posts a new listing, and so does one of a listing the marketplace removed.
+    expect(relisting('depop', 'old-slug')).toBe('Relisting (new listing)...');
+    expect(relisting('mercari', null)).toBe('Relisting (new listing)...');
+    // eBay relists under a new id of its own.
+    expect(relisting('ebay', '110012345678')).toBe('Relisting...');
   });
 
   it('writes how long something waited in plain words', () => {

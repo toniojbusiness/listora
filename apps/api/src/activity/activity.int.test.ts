@@ -202,7 +202,7 @@ describe('activity (real Postgres)', () => {
     expect(second.body.data[0]).toMatchObject({
       source: 'iphone',
       outcome: 'succeeded',
-      title: 'Your iPhone ran “price” on Mercari',
+      title: 'Your iPhone changed the price on Mercari',
       durationMs: 4_200,
       steps: [
         { name: 'open the editor', durationMs: 2_100 },
@@ -232,7 +232,7 @@ describe('activity (real Postgres)', () => {
     });
     expect(response.status).toBe(200);
     expect(response.body.data.map((entry) => [entry.kind, entry.title])).toEqual([
-      ['browser_session', 'Your iPhone ran “price” on Mercari'],
+      ['browser_session', 'Your iPhone changed the price on Mercari'],
       ['operation', 'Change the price on Mercari'],
     ]);
     const missing = await api.call('listOperationActivity', {

@@ -283,7 +283,7 @@
 		int64: [/* @__PURE__*/ BigInt("-9223372036854775808"), /* @__PURE__*/ BigInt("9223372036854775807")],
 		uint64: [/* @__PURE__*/ BigInt(0), /* @__PURE__*/ BigInt("18446744073709551615")]
 	};
-	function pick(schema, mask) {
+	function pick$2(schema, mask) {
 		const currDef = schema._zod.def;
 		const checks = currDef.checks;
 		if (checks && checks.length > 0) throw new Error(".pick() cannot be used on object schemas containing refinements");
@@ -1111,6 +1111,7 @@
 		return new RegExp(`^${dateSource}T(?:${timeRegex})$`);
 	}
 	const anyString = /^[\s\S]{0,}$/;
+	const integer = /^-?\d+$/;
 	const number$1 = /^-?\d+(?:\.\d+)?$/;
 	const boolean$1 = /^(?:true|false)$/i;
 	const lowercase = /^[^A-Z]*$/;
@@ -2454,6 +2455,246 @@
 		result.value = merged.data;
 		return result;
 	}
+	const $ZodTuple = /*@__PURE__*/ $constructor("$ZodTuple", (inst, def) => {
+		$ZodType.init(inst, def);
+		const items = def.items;
+		const memo = globalConfig.memoizer;
+		memo?.attach(inst);
+		inst._zod.parse = (payload, ctx) => {
+			const input = payload.value;
+			if (!Array.isArray(input)) {
+				payload.issues.push({
+					input,
+					inst,
+					expected: "tuple",
+					code: "invalid_type"
+				});
+				return payload;
+			}
+			payload.value = memo ? memo.alloc(inst, payload, [], ctx) : [];
+			const proms = [];
+			const optinStart = getTupleOptStart(items, "optin");
+			const optoutStart = getTupleOptStart(items, "optout");
+			if (!def.rest) {
+				if (input.length < optinStart) {
+					payload.issues.push({
+						code: "too_small",
+						minimum: optinStart,
+						inclusive: true,
+						input,
+						inst,
+						origin: "array"
+					});
+					return payload;
+				}
+				if (input.length > items.length) payload.issues.push({
+					code: "too_big",
+					maximum: items.length,
+					inclusive: true,
+					input,
+					inst,
+					origin: "array"
+				});
+			}
+			const itemResults = new Array(items.length);
+			const abortEarly = def.rest ? ctx?.abortEarly : void 0;
+			let itemAborted = false;
+			for (let i = 0; i < items.length; i++) {
+				const r = items[i]._zod.run({
+					value: input[i],
+					issues: []
+				}, ctx);
+				if (r instanceof Promise) proms.push(r.then((rr) => {
+					itemResults[i] = rr;
+				}));
+				else {
+					itemResults[i] = r;
+					if (abortEarly && !itemAborted && r.issues.length) itemAborted = aborted(r);
+				}
+			}
+			if (def.rest && !itemAborted) {
+				let i = items.length - 1;
+				const rest = input.slice(items.length);
+				let seen = payload.issues.length;
+				for (const el of rest) {
+					if (abortEarly && payload.issues.length !== seen) {
+						if (aborted(payload, seen)) break;
+						seen = payload.issues.length;
+					}
+					i++;
+					const result = def.rest._zod.run({
+						value: el,
+						issues: []
+					}, ctx);
+					if (result instanceof Promise) proms.push(result.then((r) => handleTupleResult(r, payload, i)));
+					else handleTupleResult(result, payload, i);
+				}
+			}
+			if (proms.length) return Promise.all(proms).then(() => handleTupleResults(itemResults, payload, items, input, optoutStart));
+			return handleTupleResults(itemResults, payload, items, input, optoutStart);
+		};
+	});
+	function getTupleOptStart(items, key) {
+		for (let i = items.length - 1; i >= 0; i--) if (!(key === "optin" ? items[i]._zod.optin !== void 0 : items[i]._zod.optout === "optional")) return i + 1;
+		return 0;
+	}
+	function handleTupleResult(result, final, index) {
+		if (result.issues.length) final.issues.push(...prefixIssues(index, result.issues));
+		final.value[index] = result.value;
+	}
+	function handleTupleResults(itemResults, final, items, input, optoutStart) {
+		for (let i = 0; i < items.length; i++) {
+			const r = itemResults[i];
+			const isPresent = i < input.length;
+			if (!isPresent && i >= optoutStart && items[i]._zod.optin === "optional") {
+				final.value.length = i;
+				break;
+			}
+			if (r.issues.length) {
+				if (!isPresent && i >= optoutStart) {
+					final.value.length = i;
+					break;
+				}
+				final.issues.push(...prefixIssues(i, r.issues));
+			}
+			final.value[i] = r.value;
+		}
+		for (let i = final.value.length - 1; i >= input.length; i--) if (items[i]._zod.optout === "optional" && final.value[i] === void 0) final.value.length = i;
+		else break;
+		return final;
+	}
+	const $ZodRecord = /*@__PURE__*/ $constructor("$ZodRecord", (inst, def) => {
+		$ZodType.init(inst, def);
+		const memo = globalConfig.memoizer;
+		memo?.attach(inst);
+		inst._zod.parse = (payload, ctx) => {
+			const input = payload.value;
+			if (!isPlainObject(input)) {
+				payload.issues.push({
+					expected: "record",
+					code: "invalid_type",
+					input,
+					inst
+				});
+				return payload;
+			}
+			const proms = [];
+			const values = def.keyType._zod.values;
+			if (values && !def.partial) {
+				payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+				const recordKeys = /* @__PURE__ */ new Set();
+				for (const key of values) if (typeof key === "string" || typeof key === "number" || typeof key === "symbol") {
+					recordKeys.add(typeof key === "number" ? key.toString() : key);
+					if (key === "__proto__") continue;
+					const keyResult = def.keyType._zod.run({
+						value: key,
+						issues: []
+					}, ctx);
+					if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+					if (keyResult.issues.length) {
+						payload.issues.push({
+							code: "invalid_key",
+							origin: "record",
+							issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+							input: key,
+							path: [key],
+							inst
+						});
+						continue;
+					}
+					const outKey = keyResult.value;
+					if (outKey === "__proto__") continue;
+					const result = def.valueType._zod.run({
+						value: input[key],
+						issues: []
+					}, ctx);
+					if (result instanceof Promise) proms.push(result.then((result) => {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}));
+					else {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}
+				}
+				let unrecognized;
+				for (const key in input) if (!recordKeys.has(key)) {
+					if (def.mode === "loose") {
+						if (key === "__proto__") continue;
+						payload.value[key] = input[key];
+					} else {
+						unrecognized = unrecognized ?? [];
+						unrecognized.push(key);
+					}
+				}
+				if (unrecognized && unrecognized.length > 0) payload.issues.push({
+					code: "unrecognized_keys",
+					input,
+					inst,
+					keys: unrecognized,
+					continue: true
+				});
+			} else {
+				payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+				let unrecognized;
+				for (const key of Reflect.ownKeys(input)) {
+					if (key === "__proto__") continue;
+					if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
+					let keyResult = def.keyType._zod.run({
+						value: key,
+						issues: []
+					}, ctx);
+					if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+					if (typeof key === "string" && number$1.test(key) && keyResult.issues.length) {
+						const retryResult = def.keyType._zod.run({
+							value: Number(key),
+							issues: []
+						}, ctx);
+						if (retryResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+						if (retryResult.issues.length === 0) keyResult = retryResult;
+					}
+					if (keyResult.issues.length) {
+						if (def.mode === "loose") payload.value[key] = input[key];
+						else if (values) {
+							unrecognized = unrecognized ?? [];
+							unrecognized.push(key);
+						} else payload.issues.push({
+							code: "invalid_key",
+							origin: "record",
+							issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+							input: key,
+							path: [key],
+							inst
+						});
+						continue;
+					}
+					const outKey = keyResult.value;
+					if (outKey === "__proto__") continue;
+					const result = def.valueType._zod.run({
+						value: input[key],
+						issues: []
+					}, ctx);
+					if (result instanceof Promise) proms.push(result.then((result) => {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}));
+					else {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}
+				}
+				if (unrecognized && unrecognized.length > 0) payload.issues.push({
+					code: "unrecognized_keys",
+					input,
+					inst,
+					keys: unrecognized,
+					continue: true
+				});
+			}
+			if (proms.length) return Promise.all(proms).then(() => payload);
+			return payload;
+		};
+	});
 	const $ZodEnum = /*@__PURE__*/ $constructor("$ZodEnum", (inst, def) => {
 		$ZodType.init(inst, def);
 		const values = getEnumValues(def.entries);
@@ -4298,6 +4539,159 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		json.allOf = allOf;
 		ctx.intersections.push(allOf);
 	};
+	const tupleProcessor = (schema, ctx, _json, params) => {
+		const json = _json;
+		const def = schema._zod.def;
+		json.type = "array";
+		const prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
+		const restPath = ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
+		const prefixItems = def.items.map((x, i) => processSchema(x, ctx, {
+			...params,
+			path: [
+				...params.path,
+				prefixPath,
+				i
+			]
+		}));
+		const rest = def.rest ? processSchema(def.rest, ctx, {
+			...params,
+			path: [
+				...params.path,
+				restPath,
+				...ctx.target === "openapi-3.0" ? [def.items.length] : []
+			]
+		}) : null;
+		let minItems = def.items.length;
+		while (minItems > 0) {
+			const item = def.items[minItems - 1];
+			if (!(ctx.io === "input" ? inputOptin(item) !== void 0 : item._zod.optout === "optional")) break;
+			minItems--;
+		}
+		const maxItems = def.items.length;
+		const isClosed = !def.rest;
+		if (ctx.target === "draft-2020-12") {
+			json.prefixItems = prefixItems;
+			if (isClosed) json.items = false;
+			else if (rest) json.items = rest;
+			if (minItems > 0) json.minItems = minItems;
+			if (isClosed) json.maxItems = maxItems;
+		} else if (ctx.target === "openapi-3.0") {
+			json.items = { anyOf: prefixItems };
+			if (rest) json.items.anyOf.push(rest);
+			if (minItems > 0) json.minItems = minItems;
+			if (isClosed) json.maxItems = maxItems;
+		} else {
+			json.items = prefixItems;
+			if (isClosed) json.additionalItems = false;
+			else if (rest) json.additionalItems = rest;
+			if (minItems > 0) json.minItems = minItems;
+			if (isClosed) json.maxItems = maxItems;
+		}
+		const { minimum, maximum } = aggregateChecks(schema);
+		if (typeof minimum === "number") json.minItems = minimum;
+		if (typeof maximum === "number") json.maxItems = maximum;
+	};
+	/** JSON object keys are always strings, so a numeric record key schema is re-expressed over the
+	* numeric-string form the record parser matches. Deferred to `finalize`, after the flatten: a key
+	* behind a wrapper only carries its own `type` before then, and a union key only has its branches.
+	*
+	* A numeric bound cannot apply to a property name, so `minimum` and its siblings are dropped rather
+	* than carried over: keeping them beside `type: "string"` reproduces the match-nothing schema this
+	* exists to fix. A key that carries one therefore emits wider than the record parses — `z.record(z.number().min(5), V)`
+	* accepts `"3"` — which is the deliberate trade, since throwing on it would reject an ordinary schema
+	* outright. */
+	function stringifyKeyNames(bySchema, json, visited) {
+		if (json.$ref) {
+			if (visited.has(json)) return json;
+			visited.add(json);
+			const def = bySchema.get(json)?.def;
+			if (!def) return json;
+			const inlined = stringifyKeyNames(bySchema, def, visited);
+			return inlined === def ? json : inlined;
+		}
+		for (const keyword of ["anyOf", "oneOf"]) {
+			const branches = json[keyword];
+			if (!Array.isArray(branches)) continue;
+			const mapped = branches.map((branch) => stringifyKeyNames(bySchema, branch, visited));
+			if (mapped.some((branch, i) => branch !== branches[i])) json = {
+				...json,
+				[keyword]: mapped
+			};
+		}
+		const types = Array.isArray(json.type) ? json.type : [json.type];
+		const numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+		const values = json.enum ?? (json.const !== void 0 ? [json.const] : void 0);
+		if (!numericType && !values?.some((v) => typeof v === "number")) return json;
+		const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
+		if (rest.enum) rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
+		else if (typeof rest.const === "number") rest.const = String(rest.const);
+		if (!numericType) return rest;
+		rest.type = "string";
+		if (!values) rest.pattern = (types.includes("number") ? number$1 : integer).source;
+		return rest;
+	}
+	/** Every record of one conversion, so the carriers are found in a single pass rather than once per record. */
+	const pendingRecords = /* @__PURE__ */ new WeakMap();
+	function rewriteKeyNames(ctx) {
+		const bySchema = /* @__PURE__ */ new Map();
+		for (const entry of ctx.seen.values()) if (entry.def && !bySchema.has(entry.schema)) bySchema.set(entry.schema, entry);
+		const rewrites = /* @__PURE__ */ new Map();
+		for (const record of pendingRecords.get(ctx) ?? []) {
+			const seen = ctx.seen.get(record);
+			const names = (seen?.def ?? seen?.schema)?.propertyNames;
+			if (!names || names === true || rewrites.has(names)) continue;
+			const rewritten = stringifyKeyNames(bySchema, names, /* @__PURE__ */ new Set());
+			if (rewritten !== names) rewrites.set(names, rewritten);
+		}
+		if (!rewrites.size) return;
+		for (const entry of ctx.seen.values()) for (const carrier of [entry.schema, entry.def]) {
+			const rewritten = carrier && rewrites.get(carrier.propertyNames);
+			if (rewritten) carrier.propertyNames = rewritten;
+		}
+	}
+	const recordProcessor = (schema, ctx, _json, params) => {
+		const json = _json;
+		const def = schema._zod.def;
+		json.type = "object";
+		const keyType = def.keyType;
+		const patterns = aggregateChecks(keyType).patterns;
+		if (def.mode === "loose" && patterns && patterns.size > 0) {
+			const valueSchema = processSchema(def.valueType, ctx, {
+				...params,
+				path: [
+					...params.path,
+					"patternProperties",
+					"*"
+				]
+			});
+			json.patternProperties = {};
+			for (const pattern of patterns) assignProp(json.patternProperties, exactPattern(pattern).source, valueSchema);
+		} else {
+			if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
+				json.propertyNames = processSchema(def.keyType, ctx, {
+					...params,
+					path: [...params.path, "propertyNames"]
+				});
+				let pending = pendingRecords.get(ctx);
+				if (!pending) {
+					pending = [];
+					pendingRecords.set(ctx, pending);
+					ctx.deferred.push(() => rewriteKeyNames(ctx));
+				}
+				pending.push(schema);
+			}
+			json.additionalProperties = processSchema(def.valueType, ctx, {
+				...params,
+				path: [...params.path, "additionalProperties"]
+			});
+		}
+		const keyValues = keyType._zod.values;
+		const omittableOnInput = ctx.io === "input" && inputOptin(def.valueType) !== void 0;
+		if (keyValues && !def.partial && !omittableOnInput) {
+			const validKeyValues = [...keyValues].filter((v) => typeof v === "string" || typeof v === "number");
+			if (validKeyValues.length > 0) json.required = validKeyValues.map(String);
+		}
+	};
 	const nullableProcessor = (schema, ctx, json, params) => {
 		const def = schema._zod.def;
 		const inner = processSchema(def.innerType, ctx, params);
@@ -5025,7 +5419,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			return merge(this, other);
 		},
 		pick(mask) {
-			return pick(this, mask);
+			return pick$2(this, mask);
 		},
 		omit(mask) {
 			return omit(this, mask);
@@ -5071,6 +5465,62 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			type: "intersection",
 			left,
 			right
+		});
+	}
+	const ZodTuple = /*@__PURE__*/ $constructor("ZodTuple", (inst, def) => {
+		_ensureDefaultMemoizer();
+		$ZodTuple.init(inst, def);
+		ZodType.init(inst, def);
+		inst._zod.processJSONSchema = (ctx, json, params) => tupleProcessor(inst, ctx, json, params);
+	}, {
+		rest(rest) {
+			return this.clone({
+				...this._zod.def,
+				rest
+			});
+		},
+		partial() {
+			const def = this._zod.def;
+			if (def.checks?.length) throw new Error(".partial() cannot be used on tuple schemas containing refinements");
+			return this.clone({
+				...def,
+				items: def.items.map((item) => new ZodOptional({
+					type: "optional",
+					innerType: item
+				}))
+			});
+		}
+	});
+	function tuple(items, _paramsOrRest, _params) {
+		const hasRest = _paramsOrRest instanceof $ZodType;
+		const params = hasRest ? _params : _paramsOrRest;
+		return new ZodTuple({
+			type: "tuple",
+			items,
+			rest: hasRest ? _paramsOrRest : null,
+			...normalizeParams(params)
+		});
+	}
+	const ZodRecord = /*@__PURE__*/ $constructor("ZodRecord", (inst, def) => {
+		_ensureDefaultMemoizer();
+		$ZodRecord.init(inst, def);
+		ZodType.init(inst, def);
+		inst._zod.processJSONSchema = (ctx, json, params) => recordProcessor(inst, ctx, json, params);
+		inst.keyType = def.keyType;
+		inst.valueType = def.valueType;
+	});
+	function record(keyType, valueType, params) {
+		if (!valueType || !valueType._zod) return new ZodRecord({
+			type: "record",
+			keyType: string(),
+			valueType: keyType,
+			...normalizeParams(valueType)
+		});
+		return new ZodRecord({
+			type: "record",
+			keyType,
+			valueType,
+			...normalizeParams(params)
 		});
 	}
 	const ZodEnum = /*@__PURE__*/ $constructor("ZodEnum", (inst, def) => {
@@ -5346,11 +5796,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 // src/depop/site.ts
 /**
 	* A Depop product slug: the seller's username and words of the listing, lowercase and joined by
-	* hyphens (`jdoe-levis-trucker-jacket`). The Selling API addresses the same products by it
+	* hyphens (`jdoe-levis-trucker-jacket`); a username may have underscores and periods
+	* (`365_nails-black-and-white-nail-set`). The Selling API addresses the same products by it
 	* (`/api/v1/products/by-slug/{slug}/`), so a listing automated today is still found once the
 	* seller connects the API. At least one hyphen, so `/products/create/` is never a product.
 	*/
-	const DEPOP_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)+$/;
+	const DEPOP_SLUG = /^[a-z0-9][a-z0-9._]*(?:-[a-z0-9_]+)+$/;
 	/** Paths on Depop's site, relative to its origin. */
 	const DEPOP_PATHS = {
 		/** The selling hub's home, which only a logged-in seller sees. */
@@ -5363,9 +5814,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		/** The seller's sold items, newest first. */
 		sold: (page) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ""}`
 	};
-	/** The slug in a path that opens a product (`/products/jdoe-levis-jacket/`), else `null`. */
+	/**
+	* The slug in a path that opens a product (`/products/jdoe-levis-jacket/`, or its seller's own
+	* view, `/products/jdoe-levis-jacket/manage/`, where Depop sends them), else `null`.
+	*/
 	function slugFromPath(path) {
-		const slug = /^\/products\/([^/]+)\/?$/.exec(path)?.[1];
+		const slug = /^\/products\/([^/]+)\/(?:manage\/?)?$/.exec(path)?.[1];
 		if (slug === void 0) return null;
 		const decoded = decodeURIComponent(slug);
 		return DEPOP_SLUG.test(decoded) ? decoded : null;
@@ -5428,6 +5882,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	function changed$2(pageName, problem) {
 		return new PageChangedError(`Depop's ${pageName} ${problem}; the page may have changed.`);
 	}
+	/**
+	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
+	* the run) and learns its address anew, which the page's own scripts may have changed without
+	* loading a page (Depop opens a new listing that way).
+	*/
+	async function lookAgain$1(page, ms) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		await page.waitFor("body", "attached");
+	}
 
 // src/depop/sizes.ts
 /**
@@ -5447,6 +5910,359 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Depop's prices: decimal dollars with cents (`45.00`). */
 	function depopPriceField(cents) {
 		return `${String(Math.floor(cents / 100))}.${String(cents % 100).padStart(2, "0")}`;
+	}
+
+// src/depop/pages/listing-form.ts
+/**
+	* Read on a real session (2026-10-26, from the evidence a stopped run logs): the sell page is
+	* drawn by Depop's scripts, with the photos input `#upload-input__input`, the description
+	* `textarea#description`, the price `#priceAmount__input`, and its pickers as comboboxes, each
+	* an input, a toggle button, and a menu of options (`#group-` for the category, `#brand-`,
+	* `#condition-`, `#colour-`, ...). How the category combobox lists Depop's categories, the size
+	* picker, the Post button's words, and Depop's validation message are confirmed from the
+	* evidence of the next run that reaches them.
+	*/
+	const LISTING_FORM$2 = {
+		/** The form is there once its description field is. */
+		form: "textarea#description",
+		photos: "input#upload-input__input[type=\"file\"]",
+		description: "textarea#description",
+		price: "input#priceAmount__input",
+		post: "button[type=\"submit\"]:text-is(\"Post\")",
+		/** The edit page's submit (read on the seller's session, 2026-10-27). */
+		save: "button[type=\"submit\"]:text-is(\"Save changes\")",
+		/** "Post and add another": checked, Depop opens a new empty form instead of the listing. */
+		postAnother: "input#post-another[type=\"checkbox\"]",
+		error: "[role=\"alert\"]",
+		/** A field Depop marks as needing a fix. */
+		invalid: "[aria-invalid=\"true\"]",
+		/**
+		* Read on the captain's session (2026-10-26): once photos are added, Depop fills in item info
+		* from them itself (a brand, a condition, a suggested category), and says so with this mark.
+		*/
+		itemInfoAdded: "[data-testid=\"Item info added\"]",
+		clearBrand: "button[data-testid=\"brandButton__clear\"]"
+	};
+	/** How long Depop gets to fill in item info from the photos before Listora fills the form. */
+	const ITEM_INFO_MS = 15e3;
+	/** Depop's Done page after a post: under the sell page's path, with one more segment. */
+	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
+	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
+	const ANSWER_MS$1 = 45e3;
+	const LOOK_EVERY_MS$5 = 500;
+	/**
+	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
+	* its options while closed and shows them through a style variable (`--display: block`), so
+	* options are only clicked in an open menu.
+	*/
+	function combo(name) {
+		const open = `ul#${name}-menu[style*="--display: block"]`;
+		return {
+			input: `input#${name}-input`,
+			toggle: `button#${name}-toggle-button`,
+			open,
+			option: (text) => `${open} [role="option"]:text-is("${text.replaceAll("\"", "\\\"")}")`,
+			anyOption: `${open} [role="option"]`
+		};
+	}
+	const FORM$2 = "listing form";
+	/** Opens the sell page's empty form. */
+	async function openSellForm$1(page, site) {
+		await page.goto(absolute$2(site, DEPOP_PATHS.sell));
+		await awaitElement$1(page, LISTING_FORM$2.form, "sell page", FORM$2);
+	}
+	/**
+	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
+	* in the order given; `null` leaves the listing's photos as they are (an edit).
+	*/
+	async function fillListing$2(page, payload, sku, photos) {
+		await awaitElement$1(page, LISTING_FORM$2.form, FORM$2, FORM$2);
+		if (photos !== null) {
+			await awaitElement$1(page, LISTING_FORM$2.photos, FORM$2, "photo input");
+			await page.upload(LISTING_FORM$2.photos, photos);
+			await appears$2(page, LISTING_FORM$2.itemInfoAdded, ITEM_INFO_MS);
+		}
+		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
+		if (payload.category === null) throw new Error("a listing without a category passed validation");
+		await pickCategory$1(page, payload.category);
+		if (payload.size !== null) await pickSize$1(page, payload.size);
+		await pickBrand$1(page, payload.brand);
+		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
+		await pick$1(page, "condition", payload.condition.label, `condition "${payload.condition.label}"`);
+		await fillPrice$2(page, payload.price.amountCents);
+		await expectComplete(page);
+	}
+	/**
+	* The filled form, before anything is submitted: no field marked as needing a fix and no
+	* message, so the submit sends a form Listora understands.
+	*/
+	async function expectComplete(page) {
+		const invalid = await page.count(LISTING_FORM$2.invalid);
+		if (invalid > 0) throw changed$2(FORM$2, `marks ${String(invalid)} filled field(s) as needing a fix`);
+		if ((await messages(page)).length > 0) throw changed$2(FORM$2, "shows a message before posting");
+	}
+	/**
+	* Checks the form has its Post (sell) or Save (edit) button, before the step that submits it
+	* starts: that step counts as one that may have changed the listing.
+	*/
+	async function expectSubmit(page, button) {
+		await expectElement$2(page, LISTING_FORM$2[button], FORM$2, `${button === "post" ? "Post" : "Save"} button`);
+	}
+	/** Fills only the price (a price change on the edit page). */
+	async function fillPrice$2(page, cents) {
+		await expectElement$2(page, LISTING_FORM$2.price, FORM$2, "price field");
+		await page.fill(LISTING_FORM$2.price, depopPriceField(cents));
+	}
+	/**
+	* Submits the form with its Post (sell) or Save (edit) button, and waits for Depop's answer:
+	* the product's page, or the form again with Depop's message or a field marked as needing a
+	* fix. Anything else (a page Listora doesn't know, or no answer in time) leaves the outcome
+	* unknown, so the operation's check reads the listing back.
+	*/
+	async function submitListing$2(page, button) {
+		const selector = LISTING_FORM$2[button];
+		await expectElement$2(page, selector, FORM$2, `${button === "post" ? "Post" : "Save"} button`);
+		if (button === "post" && await page.exists(LISTING_FORM$2.postAnother)) await page.check(LISTING_FORM$2.postAnother, false);
+		await page.click(selector);
+		const end = Date.now() + ANSWER_MS$1;
+		for (;;) {
+			const path = new URL(page.url()).pathname;
+			const slug = slugFromPath(path);
+			if (slug !== null) return {
+				type: "posted",
+				slug
+			};
+			if (button === "post" && DONE_PAGE.test(path)) {
+				const named = DONE_PAGE.exec(path)?.[1];
+				return {
+					type: "posted",
+					slug: (named === void 0 ? null : slugFromPath(`/products/${named}/`)) ?? await linkedProduct(page)
+				};
+			}
+			const shown = await messages(page);
+			if (shown.length > 0) return {
+				type: "refused",
+				message: shown.join(" ")
+			};
+			if (await page.count(LISTING_FORM$2.invalid) > 0) return {
+				type: "refused",
+				message: "Depop didn't take the listing: it marked a field as needing a fix."
+			};
+			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
+			await lookAgain$1(page, LOOK_EVERY_MS$5);
+		}
+	}
+	/** The product a page links to (the Done page's link to the new listing), when it links one. */
+	async function linkedProduct(page) {
+		for (const href of await page.attributes("a[href*=\"/products/\"]", "href")) {
+			if (href === null || !URL.canParse(href, page.url())) continue;
+			const slug = slugFromPath(new URL(href, page.url()).pathname);
+			if (slug !== null) return slug;
+		}
+		return null;
+	}
+	/** Depop's messages on the form (its alerts with text). */
+	async function messages(page) {
+		return (await page.texts(LISTING_FORM$2.error)).filter((text) => text !== "");
+	}
+	/**
+	* Picks the category. Read on the captain's session (2026-10-26): the category picker is one
+	* searchable list (`ul#group-menu`) of groups, each headed by its department and category
+	* ("Men > Tops", "Women > Tops", "Kids > Tops", "Everything else > Home") and holding that
+	* category's product types as options ("T-shirts"). The product type is searched for, then
+	* picked in its group; a group the list doesn't have stops the step before anything is sent.
+	*/
+	async function pickCategory$1(page, path) {
+		const [department, category, type] = path;
+		if (department === void 0 || category === void 0 || type === void 0) throw new Error("a category path has a department, a category, and a product type");
+		const box = combo("group");
+		await expectElement$2(page, box.input, FORM$2, "category search");
+		await page.type(box.input, type);
+		await awaitElement$1(page, box.anyOption, FORM$2, "category options");
+		const group = `${FORM_DEPARTMENTS[department] ?? department} > ${category}`;
+		const index = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) => text.replace(/\s+/g, " ").trim()).indexOf(group);
+		if (index < 0) throw changed$2(FORM$2, `has no category group "${group}"`);
+		const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll("\"", "\\\"")}")`;
+		if (await page.count(option) !== 1) throw changed$2(FORM$2, `has no one "${type}" in the category group "${group}"`);
+		await page.click(option);
+	}
+	/** The category picker's groups and their headers ("Men > Tops"), in the same order. */
+	const CATEGORY_GROUPS = "ul#group-menu > div";
+	const CATEGORY_GROUP_HEADERS = "ul#group-menu > div > div:first-child p";
+	/** Listora's department names as the category picker heads its groups. */
+	const FORM_DEPARTMENTS = {
+		Menswear: "Men",
+		Womenswear: "Women",
+		Kidswear: "Kids"
+	};
+	/** Whether `selector` is on the page within `ms` (a part Depop's scripts draw). */
+	async function appears$2(page, selector, ms) {
+		const end = Date.now() + ms;
+		for (;;) {
+			if (await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await lookAgain$1(page, 500);
+		}
+	}
+	/** Opens one of the form's comboboxes and picks the option with exactly this text. */
+	async function pick$1(page, name, text, what) {
+		const box = combo(name);
+		await expectElement$2(page, box.toggle, FORM$2, `${what} picker`);
+		if (!await page.exists(box.open)) await page.click(box.toggle);
+		await awaitElement$1(page, box.anyOption, FORM$2, `${what} options`);
+		await expectElement$2(page, box.option(text), FORM$2, `${what} "${text}"`);
+		await page.click(box.option(text));
+	}
+	/** How long Depop takes to draw the size picker once a category is picked. */
+	const SIZE_PICKER_MS = 1e4;
+	async function pickSize$1(page, size) {
+		const box = combo("variants");
+		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$2(FORM$2, `has no size picker (${box.toggle})`);
+		if (!await page.exists(box.open)) await page.click(box.toggle);
+		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
+		const label = (await page.texts(box.anyOption)).find((option) => sizeOptionMatches$1(option, size));
+		if (label === void 0) throw changed$2(FORM$2, `offers no size "${size}" for this category`);
+		await page.click(box.option(label));
+	}
+	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
+	async function pickBrand$1(page, brand) {
+		const box = combo("brand");
+		if (await page.exists(LISTING_FORM$2.clearBrand)) await page.click(LISTING_FORM$2.clearBrand);
+		await expectElement$2(page, box.input, FORM$2, "brand search");
+		if (brand === null) return;
+		await page.type(box.input, brand);
+		await awaitElement$1(page, box.anyOption, FORM$2, "brand suggestions");
+		const exact = (await page.texts(box.anyOption)).find((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
+		if (exact === void 0) {
+			await page.fill(box.input, "");
+			return;
+		}
+		await page.click(box.option(exact));
+	}
+
+// src/depop/pages/edit-page.ts
+/**
+	* Read on the captain's session (2026-10-26): the seller's own product page has "Delete listing",
+	* which opens a dialog ("Are you sure you want to delete this listing? You will lose all the
+	* likes.") with Cancel and its own "Delete listing".
+	*/
+	const EDIT_PAGE$1 = {
+		delete: "button:text-is(\"Delete listing\")",
+		dialog: "aside[role=\"dialog\"]",
+		confirm: "aside[role=\"dialog\"] button:text-is(\"Delete listing\")"
+	};
+	/** How long Depop gets to show its dialog and to close it once the listing is deleted. */
+	const DIALOG_MS = 2e4;
+	/** How long the edit page may take to draw its form (Depop's forms are drawn after load). */
+	const FORM_MS = 2e4;
+	/**
+	* Opens the editor; `not_editable` when Depop showed something else (a sold listing's product
+	* page), or no form in time.
+	*/
+	async function openEditor$1(page, site, slug) {
+		await page.goto(absolute$2(site, DEPOP_PATHS.edit(slug)));
+		const end = Date.now() + FORM_MS;
+		for (;;) {
+			if (await page.exists(LISTING_FORM$2.form)) return "editing";
+			if (!new URL(page.url()).pathname.startsWith("/products/edit/") || Date.now() >= end) return "not_editable";
+			await lookAgain$1(page, 500);
+		}
+	}
+	/** Checks the product page has its Delete listing button, before the step that deletes. */
+	async function expectDelete(page) {
+		await awaitElement$1(page, EDIT_PAGE$1.delete, "product page", "Delete listing button");
+	}
+	/**
+	* Deletes the listing the product page shows: Delete listing, then the dialog's own Delete
+	* listing. The operation's check reads the product afterwards.
+	*/
+	async function deleteListing(page) {
+		await page.click(EDIT_PAGE$1.delete);
+		if (!await within(page, () => page.exists(EDIT_PAGE$1.confirm))) throw changed$2("product page", "shows no Delete listing dialog");
+		await page.click(EDIT_PAGE$1.confirm);
+		if (!await within(page, async () => !await page.exists(EDIT_PAGE$1.dialog))) throw changed$2("product page", "kept its Delete listing dialog open");
+	}
+	async function within(page, done) {
+		const end = Date.now() + DIALOG_MS;
+		for (;;) {
+			if (await done()) return true;
+			if (Date.now() >= end) return false;
+			await lookAgain$1(page, 500);
+		}
+	}
+
+// src/depop/pages/hub-page.ts
+	const HUB_PAGE = { signedInUser: "[data-testid=\"avatar\"]" };
+	async function openHub(page, site) {
+		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
+		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
+	}
+
+// src/depop/pages/flight-data.ts
+/** The page's inline scripts, where the payload's chunks are. */
+	const INLINE_SCRIPTS = "script:not([src])";
+	const CHUNK_PREFIX = "self.__next_f.push(";
+	/** A row: its hex id, an optional type tag, then its JSON (`6:[...]`, `a:I[...]`). */
+	const ROW = /^[0-9a-f]+:[A-Z]{0,2}(?=[[{"])/;
+	/** Bounds on the search through a page's rows, which are a few hundred kilobytes. */
+	const MAX_DEPTH$1 = 48;
+	const MAX_NODES = 4e5;
+	const MAX_EMBEDDED = 2e6;
+	/** The JSON values of the page's payload rows, in order; empty for a page without one. */
+	async function flightRows(page) {
+		const stream = (await page.texts(INLINE_SCRIPTS)).flatMap((script) => {
+			const chunk = flightChunk(script);
+			return chunk === null ? [] : [chunk];
+		}).join("");
+		const rows = [];
+		for (const line of stream.split("\n")) {
+			const head = ROW.exec(line);
+			if (head === null) continue;
+			try {
+				rows.push(JSON.parse(line.slice(head[0].length)));
+			} catch {}
+		}
+		return rows;
+	}
+	/** One inline script's chunk of rows (`self.__next_f.push([1, "..."])`), else `null`. */
+	function flightChunk(script) {
+		const text = script.trim();
+		if (!text.startsWith(CHUNK_PREFIX) || !text.endsWith(")")) return null;
+		try {
+			const value = JSON.parse(text.slice(19, -1));
+			return Array.isArray(value) && value[0] === 1 && typeof value[1] === "string" ? value[1] : null;
+		} catch {
+			return null;
+		}
+	}
+	/** A string that holds JSON (an object or an array), parsed; `undefined` for any other string. */
+	function embeddedJson(text) {
+		if (text.length < 2 || text.length > MAX_EMBEDDED || !/^[[{]/.test(text)) return void 0;
+		try {
+			return JSON.parse(text);
+		} catch {
+			return;
+		}
+	}
+	/** Every object in the rows that `matches` says is the one wanted, in the order found. */
+	function findRecords(rows, matches) {
+		const found = [];
+		let nodes = 0;
+		const walk = (node, depth) => {
+			if (typeof node === "string") {
+				const embedded = embeddedJson(node);
+				if (embedded !== void 0) walk(embedded, depth + 1);
+				return;
+			}
+			if (node === null || typeof node !== "object" || depth > MAX_DEPTH$1) return;
+			nodes += 1;
+			if (nodes > MAX_NODES) return;
+			const values = Array.isArray(node) ? node : Object.values(node);
+			if (!Array.isArray(node) && matches(node)) found.push(node);
+			for (const value of values) walk(value, depth + 1);
+		};
+		for (const row of rows) walk(row, 0);
+		return found;
 	}
 
 // src/depop/pages/page-data.ts
@@ -5486,7 +6302,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		currencyName: string()
 	});
 	/** One product, as product pages and the selling hub embed it. */
-	const productRecordSchema = object({
+	const productRecordSchema$1 = object({
 		slug: string().regex(DEPOP_SLUG),
 		/** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
 		status: string(),
@@ -5508,7 +6324,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* and banned products are `ended`, as the Depop API adapter reads them: Depop keeps them, and a
 	* listing Listora ended stays readable as ended.
 	*/
-	const STATUSES = {
+	const STATUSES$2 = {
 		ONSALE: "active",
 		SOLD: "sold",
 		MARKED_AS_SOLD: "sold",
@@ -5520,7 +6336,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* line and hashtags, and a revision.
 	*/
 	function productRead(record, site, page) {
-		const status = STATUSES[record.status];
+		const status = STATUSES$2[record.status];
 		if (status === void 0) throw new PageChangedError(`Depop's ${page} shows a product status Listora doesn't know`);
 		const { description, sku } = listingCopy(record.description);
 		return {
@@ -5564,22 +6380,79 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 // src/depop/pages/product-page.ts
 /**
 	* A product's page (`/products/<slug>/`), as its seller sees it: the read-back every automated
-	* Depop step is verified by. It reads the product the page embeds (page-data.ts).
+	* Depop step is verified by.
 	*
-	* - Status: Depop's product status (on sale, sold, deleted). A product the seller deleted stays
-	*   readable as `ended`, so an end is confirmed by its read-back.
-	* - Freshness: the product's last change time, in milliseconds, is its revision.
-	* - Absence: never definitive. A page without a product (a 404) could be a listing not visible
-	*   yet, as Depop says of its API too ("A newly created listing can take a short time to become
+	* Read on Depop's real product pages (2026, captured copies of public pages): the page is an App
+	* Router page (flight-data.ts) whose rows hold the product as its first query loaded it
+	* (`["product_basic_by_slug", slug]`): `slug`, `status` (`STATUS_ONSALE`, ...), and the whole
+	* listing `description` (copy, Listora's SKU line, hashtags). The price is in the page's
+	* schema.org data (`script[data-testid="meta__jsonLd"]`, a `Product` whose `offers` has the
+	* `price`, its `priceCurrency`, and the product's `url`). The page no longer says when the
+	* product last changed, so a read has no revision, and the adapter confirms a change by reading
+	* it twice (`readFreshness: 'none'`).
+	*
+	* - Status: Depop's product status (on sale, sold, deleted). The seller's own product page
+	*   (Depop opens `/products/<slug>/manage/` for them) does not always carry the record: the
+	*   phone once got it without, a minute after posting (2026-10-27). Its schema.org data then
+	*   speaks for it: the whole description and the offer's availability (`InStock` is on sale,
+	*   `SoldOut` and `OutOfStock` are sold).
+	* - Absence: a deleted product's page answers 410 Gone (seen on a real listing Listora deleted,
+	*   2026-10-27), which is definitive. A 404 is not: it could be a listing not visible yet, as
+	*   Depop says of its API too ("A newly created listing can take a short time to become
 	*   retrievable").
 	*/
-	/** The page's own element, which only a product's page has. */
-	const PRODUCT_PAGE = { root: "[data-testid=\"productPage\"]" };
+	const PRODUCT_PAGE = { 
+	/**
+	* The page's schema.org data: the product, with its offer's price. A page may carry more than
+	* one block (the phone was once given another before the product's), so the product's own is
+	* the one that offers this slug.
+	*/
+structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application/ld+json\"]" };
 	const PAGE$10 = "product page";
-	const productPageSchema = object({ product: productRecordSchema.nullable().optional() });
+	/** The product as the page's first query loaded it. */
+	const productRecordSchema = object({
+		slug: string().regex(DEPOP_SLUG),
+		/** `STATUS_ONSALE`, `STATUS_SOLD`, ... (STATUSES). */
+		status: string(),
+		description: string()
+	});
+	const structuredDataSchema = object({
+		description: string().optional(),
+		offers: object({
+			url: string(),
+			price: union([string(), number()]),
+			priceCurrency: string(),
+			availability: string().optional()
+		})
+	});
+	/** schema.org availability, as the page's structured data names it, by Listora's status. */
+	const AVAILABILITY = {
+		"https://schema.org/InStock": "active",
+		"https://schema.org/SoldOut": "sold",
+		"https://schema.org/OutOfStock": "sold"
+	};
+	/**
+	* Depop's product statuses, as its Selling API names them too. Deleted and banned products are
+	* `ended`, as the Depop API adapter reads them: Depop keeps them, and a listing Listora ended
+	* stays readable as ended.
+	*/
+	const STATUSES$1 = {
+		STATUS_ONSALE: "active",
+		STATUS_SOLD: "sold",
+		STATUS_MARKED_AS_SOLD: "sold",
+		STATUS_DELETED: "ended",
+		STATUS_BANNED: "ended"
+	};
 	/** Opens the product's page and reads it. */
 	async function readProduct(page, site, slug) {
 		await page.goto(productUrl(site, slug));
+		if (page.status() === 410) return {
+			state: {
+				found: false,
+				authoritative: true
+			},
+			sku: null
+		};
 		if (page.status() === 404) return {
 			state: {
 				found: false,
@@ -5587,151 +6460,65 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			},
 			sku: null
 		};
-		const props = expectShape$1(productPageSchema, await readPageProps(page, PAGE$10), PAGE$10);
-		if (props.product === null || props.product === void 0) return {
+		const records = findRecords(await flightRows(page), (record) => record["slug"] === slug && "status" in record && "description" in record);
+		const offer = await structuredOffer(page, slug);
+		let status;
+		let text;
+		if (records.length > 0) {
+			const product = expectShape$1(productRecordSchema, records[0], PAGE$10);
+			status = STATUSES$1[product.status];
+			if (status === void 0) throw changed$2(PAGE$10, "shows a product status Listora does not know");
+			text = product.description;
+		} else {
+			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
+			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$10, "has none of the product data Listora reads");
+			text = offer.description;
+		}
+		const priceCents = offer.priceCents;
+		const { description, sku } = listingCopy(text);
+		return {
 			state: {
-				found: false,
-				authoritative: false
+				found: true,
+				externalListingId: slug,
+				externalUrl: productUrl(site, slug),
+				status,
+				title: null,
+				description,
+				priceCents,
+				currency: "USD",
+				revision: null
 			},
-			sku: null
-		};
-		if (props.product.slug !== slug) throw changed$2(PAGE$10, "shows a different product");
-		const read = productRead(props.product, site, PAGE$10);
-		return {
-			state: read.listing,
-			sku: read.sku
+			sku
 		};
 	}
-	/** Reads the product page the browser shows now (after a form sent it there). */
-	async function readShownProduct(page, site) {
-		const slug = slugFromPath(new URL(page.url()).pathname);
-		if (slug === null) throw changed$2(PAGE$10, "is not at a product address");
-		await expectElement$2(page, PRODUCT_PAGE.root, PAGE$10, "product details");
-		const props = expectShape$1(productPageSchema, await readPageProps(page, PAGE$10), PAGE$10);
-		if (props.product?.slug !== slug) throw changed$2(PAGE$10, "shows no product");
-		const read = productRead(props.product, site, PAGE$10);
-		return {
-			state: read.listing,
-			sku: read.sku
-		};
-	}
-
-// src/depop/pages/listing-form.ts
-	const LISTING_FORM$2 = {
-		form: "form[data-testid=\"listingForm\"]",
-		photos: "input[type=\"file\"][data-testid=\"listingForm__photos\"]",
-		description: "textarea[data-testid=\"listingForm__description\"]",
-		category: (level) => `select[data-testid="listingForm__category${String(level)}"]`,
-		size: "select[data-testid=\"listingForm__size\"]",
-		brand: "input[data-testid=\"listingForm__brand\"]",
-		brandSuggestions: "[data-testid=\"listingForm__brandSuggestions\"]",
-		brandSuggestion: "[data-testid=\"listingForm__brandSuggestion\"]",
-		condition: (value) => `input[name="condition"][value="${value}"]`,
-		price: "input[data-testid=\"listingForm__price\"]",
-		post: "button[data-testid=\"listingForm__post\"]",
-		save: "button[data-testid=\"listingForm__save\"]",
-		error: "[data-testid=\"listingForm__error\"]"
-	};
-	const FORM$2 = "listing form";
-	/** Opens the sell page's empty form. */
-	async function openSellForm$1(page, site) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.sell));
-		await expectElement$2(page, LISTING_FORM$2.form, "sell page", FORM$2);
-	}
-	/**
-	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
-	* in the order given; `null` leaves the listing's photos as they are (an edit).
-	*/
-	async function fillListing$2(page, payload, sku, photos) {
-		await expectElement$2(page, LISTING_FORM$2.form, FORM$2, FORM$2);
-		if (photos !== null) {
-			await expectElement$2(page, LISTING_FORM$2.photos, FORM$2, "photo input");
-			await page.upload(LISTING_FORM$2.photos, photos);
+	/** The page's schema.org data for this product: its price in cents, availability, and text. */
+	async function structuredOffer(page, slug) {
+		const blocks = (await page.texts(PRODUCT_PAGE.structuredData)).flatMap((text) => {
+			try {
+				return [JSON.parse(text)];
+			} catch {
+				return [];
+			}
+		});
+		if (blocks.length === 0) throw changed$2(PAGE$10, "has no product data (structured data)");
+		const own = blocks.find((block) => {
+			const read = structuredDataSchema.safeParse(block);
+			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
+		});
+		if (own === void 0) {
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$10, "offers a different product");
+			expectShape$1(structuredDataSchema, blocks[0], PAGE$10);
+			throw changed$2(PAGE$10, "has none of the product data Listora reads");
 		}
-		await expectElement$2(page, LISTING_FORM$2.description, FORM$2, "description field");
-		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
-		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		for (const [level, name] of payload.category.entries()) await pickOption$1(page, LISTING_FORM$2.category(level), name, `category level ${String(level + 1)}`);
-		if (payload.size !== null) await pickSize$1(page, payload.size);
-		await pickBrand$1(page, payload.brand);
-		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
-		const condition = LISTING_FORM$2.condition(payload.condition.value);
-		await expectElement$2(page, condition, FORM$2, `condition "${payload.condition.label}"`);
-		await page.check(condition, true);
-		await fillPrice$2(page, payload.price.amountCents);
-	}
-	/** Fills only the price (a price change on the edit page). */
-	async function fillPrice$2(page, cents) {
-		await expectElement$2(page, LISTING_FORM$2.price, FORM$2, "price field");
-		await page.fill(LISTING_FORM$2.price, depopPriceField(cents));
-	}
-	/** Submits the form with its Post (sell) or Save (edit) button. */
-	async function submitListing$2(page, button) {
-		const selector = LISTING_FORM$2[button];
-		await expectElement$2(page, selector, FORM$2, `${button === "post" ? "Post" : "Save"} button`);
-		await page.click(selector);
-		await page.waitFor(`${LISTING_FORM$2.error}, ${PRODUCT_PAGE.root}`);
-		const message = await page.text(LISTING_FORM$2.error);
-		if (message !== null) return {
-			type: "refused",
-			message
-		};
-		const slug = slugFromPath(new URL(page.url()).pathname);
-		if (slug === null) throw changed$2(FORM$2, "opened a page that is not a product");
+		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$10);
+		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$10, "shows a price that is not in US dollars");
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
+		if (match?.[1] === void 0) throw changed$2(PAGE$10, "shows a price Listora can't read");
 		return {
-			type: "posted",
-			slug
+			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
+			...offers.availability === void 0 ? {} : { availability: offers.availability },
+			...description === void 0 ? {} : { description }
 		};
-	}
-	/** Picks the option labeled `label` (the options may appear only after an earlier pick). */
-	async function pickOption$1(page, select, label, what) {
-		await expectElement$2(page, select, FORM$2, what);
-		await page.waitFor(`${select} option:not([value=""])`, "attached");
-		if (!(await page.texts(`${select} option`)).includes(label)) throw changed$2(FORM$2, `offers no ${what} "${label}"`);
-		await page.select(select, label);
-	}
-	async function pickSize$1(page, size) {
-		await expectElement$2(page, LISTING_FORM$2.size, FORM$2, "size list");
-		await page.waitFor(`${LISTING_FORM$2.size} option:not([value=""])`, "attached");
-		const label = (await page.texts(`${LISTING_FORM$2.size} option`)).find((option) => sizeOptionMatches$1(option, size));
-		if (label === void 0) throw changed$2(FORM$2, `offers no size "${size}" for this category`);
-		await page.select(LISTING_FORM$2.size, label);
-	}
-	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
-	async function pickBrand$1(page, brand) {
-		await expectElement$2(page, LISTING_FORM$2.brand, FORM$2, "brand search");
-		await page.fill(LISTING_FORM$2.brand, "");
-		if (brand === null) return;
-		await page.type(LISTING_FORM$2.brand, brand);
-		await page.waitFor(LISTING_FORM$2.brandSuggestions);
-		const index = (await page.texts(LISTING_FORM$2.brandSuggestion)).findIndex((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
-		if (index === -1) {
-			await page.fill(LISTING_FORM$2.brand, "");
-			return;
-		}
-		await page.click(`${LISTING_FORM$2.brandSuggestion} >> nth=${String(index)}`);
-	}
-
-// src/depop/pages/edit-page.ts
-	const EDIT_PAGE$1 = { delete: "button[data-testid=\"listingForm__delete\"]" };
-	/** Opens the editor; `not_editable` when Depop showed something else (a sold listing). */
-	async function openEditor$1(page, site, slug) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.edit(slug)));
-		return await page.exists(LISTING_FORM$2.form) ? "editing" : "not_editable";
-	}
-	/** Deletes the listing the editor shows, confirming Depop's prompt, and waits for its page. */
-	async function deleteListing(page) {
-		await expectElement$2(page, EDIT_PAGE$1.delete, "edit page", "Delete button");
-		page.acceptNextDialog();
-		await page.click(EDIT_PAGE$1.delete);
-		await page.waitFor(PRODUCT_PAGE.root);
-	}
-
-// src/depop/pages/hub-page.ts
-	const HUB_PAGE = { signedInUser: "[data-testid=\"avatar\"]" };
-	async function openHub(page, site) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
-		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
 	}
 
 // src/depop/pages/selling-page.ts
@@ -5743,7 +6530,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	const PAGE$9 = "selling page";
 	const sellingPageSchema = object({
-		products: array(productRecordSchema),
+		products: array(productRecordSchema$1),
 		hasMore: boolean()
 	});
 	/** Opens one page of the seller's listings for sale and reads it. */
@@ -5756,33 +6543,123 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 
-// src/depop/pages/sold-items-page.ts
-/**
-	* The seller's sold items (`/sellinghub/sold-items/`), newest first, a page at a time
-	* (`?page=N`): each sold product, its price, and when it sold. The page also shows the buyer and
-	* where the item ships; Listora never reads those, and failure screenshots black them out.
+// src/depop/pages/shop-page.ts
+	const SHOP_PAGE = {
+		userMenu: "button#userNavItem-button",
+		/** The open menu's "Your profile": a link, or a holder of one. */
+		profile: "[data-testid=\"actionMenu__nav-profileLinkButton\"]",
+		profileLink: "a[data-testid=\"actionMenu__nav-profileLinkButton\"], [data-testid=\"actionMenu__nav-profileLinkButton\"] a",
+		/** Links to products, not the header's Sell link (`/products/create/`), which every page has. */
+		productLinks: "a[href*=\"/products/\"]:not([href*=\"/products/create\"])"
+	};
+	/** A Depop username, the one segment of a shop's path. */
+	const USERNAME = /^[a-z0-9][a-z0-9._]{1,29}$/i;
+	/** Depop's own top-level pages, which a single-name path may also be. */
+	const SITE_PATHS = new Set("about app blog brand brands category checkout cookies discover download explore help legal likes login messages news privacy products safety search sell sellinghub settings shop signup sitemap terms".split(" "));
+	/** How long the menu and the shop's product list get to appear, and how often they are looked at. */
+	const APPEAR_MS$1 = 15e3;
+	/** How long the user menu gets to open before its button is clicked again. */
+	const MENU_RETRY_MS = 3e3;
+	const LOOK_EVERY_MS$4 = 500;
+	/** The signed-in seller's username, from the profile link in the header's user menu. */
+	async function findSeller(page, site) {
+		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
+		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
+		await page.click(SHOP_PAGE.userMenu);
+		const end = Date.now() + APPEAR_MS$1;
+		let reopenAt = Date.now() + MENU_RETRY_MS;
+		for (;;) {
+			const shown = usernameOf(new URL(page.url()).pathname);
+			if (shown !== null) return shown;
+			if (await page.exists(SHOP_PAGE.profile)) {
+				const hrefs = (await page.attributes(SHOP_PAGE.profileLink, "href")).flatMap((href) => {
+					const path = href === null ? null : sitePath(href, site);
+					return path === null ? [] : [path];
+				});
+				const names = [...new Set(hrefs.map(usernameOf))];
+				if (names.length === 1 && names[0] !== null && names[0] !== void 0) return names[0];
+				if (names.length > 1) throw changed$2("user menu", `has a profile item with ${String(names.length)} shop links`);
+				return openedProfile(page);
+			}
+			if (Date.now() >= end) throw changed$2("user menu", "has no profile item");
+			if (Date.now() >= reopenAt) {
+				await page.click(SHOP_PAGE.userMenu);
+				reopenAt = Date.now() + MENU_RETRY_MS;
+			}
+			await lookAgain$1(page, LOOK_EVERY_MS$4);
+		}
+	}
+	/** Opens the menu's "Your profile" and reads the username from the address it opens. */
+	async function openedProfile(page) {
+		await page.click(SHOP_PAGE.profile);
+		const end = Date.now() + APPEAR_MS$1;
+		for (;;) {
+			const shown = usernameOf(new URL(page.url()).pathname);
+			if (shown !== null) return shown;
+			if (Date.now() >= end) throw changed$2("user menu", "profile item opened no seller's shop");
+			await lookAgain$1(page, LOOK_EVERY_MS$4);
+		}
+	}
+	/**
+	* The slugs of the newest products the seller's shop shows, newest first, at most `limit`; none
+	* for a shop with nothing for sale (or one whose list didn't come in time, so absence is never
+	* definitive).
 	*/
+	async function newestProducts(page, site, username, limit) {
+		await page.goto(absolute$2(site, `/${encodeURIComponent(username)}/`));
+		if (page.status() === 404) throw changed$2("shop page", "is not there for the signed-in seller");
+		const end = Date.now() + APPEAR_MS$1;
+		while (!await page.exists(SHOP_PAGE.productLinks) && Date.now() < end) await lookAgain$1(page, LOOK_EVERY_MS$4);
+		const slugs = [];
+		for (const href of await page.attributes(SHOP_PAGE.productLinks, "href")) {
+			const slug = href === null ? null : slugOf(href, site);
+			if (slug !== null && !slugs.includes(slug)) slugs.push(slug);
+			if (slugs.length >= limit) break;
+		}
+		return slugs;
+	}
+	/** A link's path when it is on the site, else `null`. */
+	function sitePath(href, site) {
+		if (!URL.canParse(href, site.origin)) return null;
+		const url = new URL(href, site.origin);
+		return url.origin === site.origin ? url.pathname : null;
+	}
+	function usernameOf(path) {
+		const segment = /^\/([^/]+)\/?$/.exec(path)?.[1];
+		if (segment === void 0) return null;
+		const name = decodeURIComponent(segment);
+		return USERNAME.test(name) && !SITE_PATHS.has(name.toLowerCase()) ? name : null;
+	}
+	function slugOf(href, site) {
+		if (!URL.canParse(href, site.origin)) return null;
+		const url = new URL(href, site.origin);
+		return url.origin === site.origin ? slugFromPath(url.pathname) : null;
+	}
+
+// src/depop/pages/sold-items-page.ts
+	const SOLD_ITEMS_PAGE = {
+		/** The note a seller without sales sees. */
+		none: `p:text-is("Once you've made a sale, you'll be able to see your receipt here.")`,
+		/** A sale's row links to its receipt (not the page's own address, which a menu may link). */
+		receipt: "a[href^=\"/sellinghub/sold-items/\"]:not([href=\"/sellinghub/sold-items/\"])"
+	};
 	const PAGE$8 = "sold items page";
-	const soldItemsPageSchema = object({
-		soldItems: array(soldItemSchema),
-		hasMore: boolean()
-	});
-	/** Opens one page of the seller's sold items and reads it. */
+	/** How long the list may take to draw. */
+	const DRAW_MS$1 = 1e4;
+	const LOOK_EVERY_MS$3 = 500;
+	/** Opens the seller's sold items and reads them. */
 	async function readSoldItemsPage(page, site, pageNumber) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.sold(pageNumber)));
-		const props = expectShape$1(soldItemsPageSchema, await readPageProps(page, PAGE$8), PAGE$8);
-		return {
-			items: props.soldItems.map((item) => {
-				const soldAt = new Date(item.soldAt);
-				if (Number.isNaN(soldAt.getTime())) throw changed$2(PAGE$8, "shows a sale time Listora can't read");
-				return {
-					slug: item.slug,
-					priceCents: dollars$1(item.price, PAGE$8),
-					soldAt
-				};
-			}),
-			hasMore: props.hasMore
-		};
+		const end = Date.now() + DRAW_MS$1;
+		for (;;) {
+			if (await page.exists(SOLD_ITEMS_PAGE.none)) return {
+				items: [],
+				hasMore: false
+			};
+			if (await page.exists(SOLD_ITEMS_PAGE.receipt)) throw changed$2(PAGE$8, "lists sales in a way Listora cannot read yet");
+			if (Date.now() >= end) throw changed$2(PAGE$8, "shows neither sales nor its no-sales note");
+			await lookAgain$1(page, LOOK_EVERY_MS$3);
+		}
 	}
 
 // src/depop/scripts.ts
@@ -5814,21 +6691,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			message: "This listing was deleted on Depop, so it cannot be changed.",
 			fixHint: "Relist the item as a new Depop listing."
 		});
-		/** The listing the newest listings for sale hold under this SKU, if any. */
+		/**
+		* The listing the seller's newest listings for sale hold under this SKU, if any. Their shop
+		* links to them; each one's SKU is on its own page, so a listing found by SKU reads exactly as
+		* it does by its slug.
+		*/
 		async function findBySku(step, sku) {
-			const match = (await step("look at the newest listings", { mutates: false }, (page) => readSellingPage(page, site, 1))).products.slice(0, 8).find((product) => product.sku === sku);
-			if (match === void 0) return null;
-			return step("read the listing", { mutates: false }, (page) => readProduct(page, site, match.listing.externalListingId));
+			const seller = await step("find the seller", { mutates: false }, (page) => findSeller(page, site));
+			const slugs = await step("look at the newest listings", { mutates: false }, (page) => newestProducts(page, site, seller, 8));
+			for (const slug of slugs) {
+				const read = await step("read the listing", { mutates: false }, (page) => readProduct(page, site, slug));
+				if (read.sku === sku) return read;
+			}
+			return null;
 		}
-		/** After a submit: Depop's refusal, or the product it opened, with its revision. */
-		async function submitted(page, outcome) {
+		/**
+		* After a submit: Depop's refusal, or the product it opened. The product is read back by the
+		* operation's check, not here: the submit already happened, and its page may not show the
+		* product for a moment.
+		*/
+		function submitted(outcome) {
 			if (outcome.type === "refused") return {
 				type: "rejected",
 				code: "validation_failed",
 				message: outcome.message
 			};
-			return {
-				...revisionOf$2(await readShownProduct(page, site)),
+			return outcome.slug === null ? { type: "applied" } : {
+				type: "applied",
 				externalListingId: outcome.slug
 			};
 		}
@@ -5840,16 +6729,32 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (op.attempt > 1) {
 				const earlier = await findBySku(step, sku);
 				if (earlier?.state.found === true) return {
-					...revisionOf$2(earlier),
+					...revisionOf$1(earlier),
 					externalListingId: earlier.state.externalListingId
 				};
 			}
 			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-			await step("fill in the listing", { mutates: false }, async (page) => {
+			await step("fill in the listing", {
+				mutates: false,
+				timeScale: 4
+			}, async (page) => {
 				await openSellForm$1(page, site);
 				await fillListing$2(page, payload, sku, files);
+				await expectSubmit(page, "post");
 			});
-			return step("post", { mutates: true }, async (page) => submitted(page, await submitListing$2(page, "post")));
+			const result = await step("post", {
+				mutates: true,
+				timeScale: 2
+			}, async (page) => submitted(await submitListing$2(page, "post")));
+			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+			try {
+				const found = await findBySku(step, sku);
+				if (found?.state.found === true) return {
+					...result,
+					externalListingId: found.state.externalListingId
+				};
+			} catch {}
+			return result;
 		}
 		/** Opens the editor of a listing on sale; a result instead when it can't be edited. */
 		async function editor(op, step) {
@@ -5857,7 +6762,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (slug === null) return notListed();
 			if (await step("open the editor", { mutates: false }, (page) => openEditor$1(page, site, slug)) === "editing") return { slug };
 			const shown = await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug));
-			if (!shown.state.found) return notListed();
+			if (!shown.state.found) return shown.state.authoritative ? deleted() : notListed();
 			if (shown.state.status === "sold") return sold();
 			if (shown.state.status === "ended") return deleted();
 			throw changed$2("edit page", "shows no listing form for a listing on sale");
@@ -5869,8 +6774,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editor(op, step);
 				if (!("slug" in opened)) return opened;
-				await step("fill in the changes", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing$2(page, "save")));
+				await step("fill in the changes", { mutates: false }, async (page) => {
+					await fillListing$2(page, payload, listingSku(op.listing), null);
+					await expectSubmit(page, "save");
+				});
+				return step("save", {
+					mutates: true,
+					timeScale: 2
+				}, async (page) => submitted(await submitListing$2(page, "save")));
 			},
 			price: async (op, step) => {
 				const priceCents = op.desired.priceCents;
@@ -5886,27 +6797,35 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				};
 				const opened = await editor(op, step);
 				if (!("slug" in opened)) return opened;
-				await step("fill in the price", { mutates: false }, (page) => fillPrice$2(page, priceCents));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing$2(page, "save")));
+				await step("fill in the price", { mutates: false }, async (page) => {
+					await fillPrice$2(page, priceCents);
+					await expectSubmit(page, "save");
+				});
+				return step("save", {
+					mutates: true,
+					timeScale: 2
+				}, async (page) => submitted(await submitListing$2(page, "save")));
 			},
 			end: async (op, step) => {
 				const slug = op.listing.externalListingId;
 				if (slug === null) return notListed();
 				const shown = await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug));
-				if (!shown.state.found) return notListed();
+				if (!shown.state.found) return shown.state.authoritative ? { type: "applied" } : notListed();
 				if (shown.state.status !== "active") return { type: "applied" };
-				const opened = await editor(op, step);
-				if (!("slug" in opened)) return opened;
-				return step("delete", { mutates: true }, async (page) => {
+				await step("find Delete listing", { mutates: false }, (page) => expectDelete(page));
+				return step("delete", {
+					mutates: true,
+					timeScale: 2
+				}, async (page) => {
 					await deleteListing(page);
-					return revisionOf$2(await readShownProduct(page, site));
+					return { type: "applied" };
 				});
 			},
 			relist: async (op, step) => {
 				const slug = op.listing.externalListingId;
 				if (slug === null) return notListed();
 				const shown = await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug));
-				if (!shown.state.found) return notListed();
+				if (!shown.state.found) return shown.state.authoritative ? post(op, step) : notListed();
 				if (shown.state.status === "active") return {
 					type: "applied",
 					externalListingId: slug
@@ -5962,7 +6881,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 	/** An applied change, with the revision the product page showed after it. */
-	function revisionOf$2(read) {
+	function revisionOf$1(read) {
 		return read.state.found && read.state.revision !== null ? {
 			type: "applied",
 			revision: read.state.revision
@@ -6451,7 +7370,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				message: outcome.message
 			};
 			return {
-				...revisionOf$1(await readShownItem$1(page, site)),
+				...revisionOf(await readShownItem$1(page, site)),
 				externalListingId: outcome.itemId
 			};
 		}
@@ -6460,7 +7379,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (op.attempt <= 1) return null;
 			const found = await findBySku(step, listingSku(op.listing));
 			return found?.status === "active" ? {
-				...revisionOf$1(found),
+				...revisionOf(found),
 				externalListingId: found.externalListingId
 			} : null;
 		}
@@ -6524,7 +7443,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				await step("open the end page", { mutates: false }, (page) => openEndPage(page, site, itemId));
 				return step("end it", { mutates: true }, async (page) => {
 					await endListing(page);
-					return revisionOf$1(await readShownItem$1(page, site));
+					return revisionOf(await readShownItem$1(page, site));
 				});
 			},
 			relist: async (op, step) => {
@@ -6609,7 +7528,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 	/** An applied change, with the revision the listing's page showed after it. */
-	function revisionOf$1(read) {
+	function revisionOf(read) {
 		return read.found && read.revision !== null ? {
 			type: "applied",
 			revision: read.revision
@@ -6880,6 +7799,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
 		}
 	}
+	/**
+	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
+	* the run) and learns its address anew, which Mercari's own scripts change without loading a
+	* page.
+	*/
+	async function lookAgain(page, ms) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		await page.waitFor("body", "attached");
+	}
 	/** The failure for a Mercari page that is not as the script expects. */
 	function changed(pageName, problem) {
 		return new PageChangedError(`Mercari's ${pageName} ${problem}; the page may have changed.`);
@@ -6898,10 +7826,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/mercari/pages/account-page.ts
-	const ACCOUNT_PAGE = { ownAccount: "[data-testid=\"EditProfileButton\"]" };
+	const ACCOUNT_PAGE = {
+		ownAccount: "[data-testid=\"EditProfileButton\"]",
+		/** The link to the seller's done sales (read 2026-10-26: not `/mypage/listings/sold/`). */
+		sales: "a[data-testid=\"Sales\"]"
+	};
 	async function openAccount(page, site) {
 		await page.goto(absolute(site, MERCARI_PATHS.account));
 		await awaitElement(page, ACCOUNT_PAGE.ownAccount, "account page", "edit profile button");
+	}
+	/** The path of the seller's done-sales tab, as the account page's Sales link gives it. */
+	async function salesTabPath(page, site) {
+		await openAccount(page, site);
+		await awaitElement(page, ACCOUNT_PAGE.sales, "account page", "sales link");
+		const href = await page.attribute(ACCOUNT_PAGE.sales, "href");
+		const path = href === null ? null : new URL(href, site.origin).pathname;
+		if (path === null || !/^\/mypage\/listings\/[a-z_]+\/$/.test(path)) throw changed("account page", "has a sales link Listora does not understand");
+		return path;
 	}
 
 // src/mercari/sizes.ts
@@ -6914,7 +7855,310 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return label === size || label.startsWith(`${size} `);
 	}
 
+// src/mercari/pages/listing-form.ts
+/**
+	* Read on the captain's verified session (2026-10-27): the sell page is drawn by Mercari's
+	* scripts with no form element; its parts are named by test ids. The category is a dialog of
+	* rows level by level ("Men", "Tops", "T-shirts"); brand and size are searchable lists of
+	* options; condition is a radio per Mercari condition id (1 New ... 5 Poor). Shipping starts on
+	* "Ship on your own": Listora picks Mercari's prepaid label, keeps the label Mercari recommends
+	* for the category, and answers "Offer buyers free shipping?" with No (the buyer pays).
+	*/
+	const LISTING_FORM = {
+		/** The form is there once its title field is. */
+		form: "input[data-testid=\"Title\"]",
+		photos: "input[type=\"file\"][data-testid=\"SellPhotoInput\"]",
+		/** A one-time tip about listing templates, over the form on a seller's first visits. */
+		templatesTip: "button[data-testid=\"ListingTemplatesEducationGotIt\"]",
+		title: "input[data-testid=\"Title\"]",
+		description: "textarea[data-testid=\"Description\"]",
+		category: "button[data-testid=\"SellCategoryFieldButton\"]",
+		categoryDialog: "[data-testid=\"DialogWrapper\"]",
+		anyCategoryRow: "[data-testid=\"DialogWrapper\"] button[data-testid=\"CategoryRow\"]",
+		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}")`,
+		brand: "input[data-testid=\"Brand\"]",
+		brandOption: "[data-testid=\"Brand-option\"]",
+		condition: (id) => `input[type="radio"][value="${String(id)}"]`,
+		size: "input[data-testid=\"Size\"]",
+		sizeOption: "[data-testid=\"Size-option\"]",
+		prepaidLabel: "button[data-testid=\"MercariShipping\"]",
+		prepaidLabelChosen: "input#MERCARI[type=\"radio\"]",
+		shippingClass: "input[data-testid=\"SelectShipping\"]",
+		freeShipping: "[data-testid=\"ShippingPayerOption\"]",
+		freeShippingNo: "li[data-testid=\"FreeShippingNoButton\"]",
+		price: "input[data-testid=\"Price\"]",
+		/**
+		* Smart Pricing (automatic price drops, which want a lowest price), on by default on some
+		* sellers' forms (seen on the captain's phone, 2026-10-27). Listora sets no automatic price
+		* drops, so it is switched off.
+		*/
+		smartPricing: "button[data-testid=\"SmartPricingButton\"]",
+		/** Its switch asks to confirm turning it off. */
+		smartPricingTurnOff: "button[data-testid=\"SmartPricingTurnOffButton\"]",
+		/** Mercari's answer to List from a seller without a card on file: add one first. */
+		paymentWarning: "[data-testid=\"PaymentWarningModal\"]",
+		/**
+		* Mercari's page once a listing is up, after List and after an edit's Update alike (read
+		* 2026-10-27: under the sell page's path, "Sell another item", "Share your listing").
+		*/
+		listed: "[data-testid=\"SellAnotherItem\"], [data-testid=\"ShareListing\"]",
+		/** Its link to the listing's page. */
+		liveListing: "a[data-testid=\"LiveListingLink\"]",
+		list: "button[data-testid=\"ListButton\"]",
+		/** The edit page's submit: the same button, there named Update (read 2026-10-27). */
+		save: "button[data-testid=\"ListButton\"]",
+		error: "[data-testid=\"FormError\"]"
+	};
+	const FORM = "listing form";
+	/** How long a picked category gets to open its subcategories, or close the dialog. */
+	const SUBCATEGORIES_MS = 3e3;
+	/** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
+	const APPEAR_MS = 8e3;
+	const LOOK_EVERY_MS$2 = 500;
+	/**
+	* Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
+	* `VerificationExceptionDialog`, listing the verifications it requires, with a Verify button).
+	* Only the seller can do that, in Mercari; Listora never clicks it.
+	*/
+	const VERIFICATION_DIALOG = "[data-testid=\"VerificationExceptionDialog\"]";
+	/**
+	* Opens the sell page's empty form; `verification_required` when Mercari asks the seller to
+	* verify their account before they can list.
+	*/
+	async function openSellForm(page, site) {
+		await page.goto(absolute(site, MERCARI_PATHS.sell));
+		await awaitElement(page, `${LISTING_FORM.form}, ${VERIFICATION_DIALOG}`, "sell page", FORM);
+		return await page.exists("[data-testid=\"VerificationExceptionDialog\"]") ? "verification_required" : "form";
+	}
+	/**
+	* Fills the whole form from the payload, ending the description with the SKU line. `photos`
+	* are uploaded in the order given; `null` leaves the listing's photos as they are (an edit).
+	*/
+	async function fillListing(page, payload, sku, photos) {
+		await expectElement(page, LISTING_FORM.form, FORM, FORM);
+		if (await page.exists(LISTING_FORM.templatesTip)) await page.click(LISTING_FORM.templatesTip);
+		if (photos !== null) {
+			await expectElement(page, LISTING_FORM.photos, FORM, "photo input");
+			await page.upload(LISTING_FORM.photos, photos);
+		}
+		await expectElement(page, LISTING_FORM.title, FORM, "title field");
+		await page.fill(LISTING_FORM.title, payload.title);
+		await expectElement(page, LISTING_FORM.description, FORM, "description field");
+		await page.fill(LISTING_FORM.description, withSkuLine(payload.description, sku));
+		if (payload.category === null) throw new Error("a listing without a category passed validation");
+		await pickCategory(page, payload.category);
+		await pickBrand(page, payload.brand);
+		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
+		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM, `condition "${payload.condition.label}"`);
+		await page.click(LISTING_FORM.condition(payload.condition.id));
+		if (payload.size !== null) await pickSize(page, payload.size);
+		await chooseShipping(page);
+		await fillPrice(page, payload.price.amountCents);
+		await smartPricingOff(page);
+	}
+	/** Switches Mercari's Smart Pricing off when the form has it on. */
+	async function smartPricingOff(page) {
+		if (!await appears$1(page, LISTING_FORM.smartPricing, 2e3)) return;
+		if ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() !== "ON") return;
+		await page.click(LISTING_FORM.smartPricing);
+		if (!await appears$1(page, LISTING_FORM.smartPricingTurnOff)) throw changed(FORM, "asks nothing when Smart Pricing is switched off");
+		await page.click(LISTING_FORM.smartPricingTurnOff);
+		const end = Date.now() + APPEAR_MS;
+		while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "ON") {
+			if (Date.now() >= end) throw changed(FORM, "kept Smart Pricing on");
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+		}
+	}
+	/** Fills only the price (a price change on the edit page). */
+	async function fillPrice(page, cents) {
+		await expectElement(page, LISTING_FORM.price, FORM, "price field");
+		await page.fill(LISTING_FORM.price, priceField(cents));
+	}
+	/** The category, a row per level in Mercari's category dialog; it closes on the last one. */
+	async function pickCategory(page, path) {
+		await expectElement(page, LISTING_FORM.category, FORM, "category picker");
+		await page.click(LISTING_FORM.category);
+		for (const [level, name] of path.entries()) {
+			const row = LISTING_FORM.categoryRow(name);
+			if (!await appears$1(page, row)) throw changed(FORM, `offers no category level ${String(level + 1)} "${name}"`);
+			await page.click(row);
+		}
+		const whole = LISTING_FORM.categoryRow(`All ${path.at(-1) ?? ""}`);
+		const shown = async () => (await page.text(LISTING_FORM.category))?.replace(/\s+/g, " ").trim();
+		const end = Date.now() + SUBCATEGORIES_MS;
+		while (Date.now() < end && await shown() !== path.join(" > ")) {
+			if (await page.exists(whole)) {
+				await page.click(whole);
+				break;
+			}
+			if (!await page.exists(LISTING_FORM.anyCategoryRow)) break;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+		}
+		if (await shown() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
+	}
+	/** Searches Mercari's brand list and picks the exact brand; without one, the step stops. */
+	async function pickBrand(page, brand) {
+		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
+		if (brand === null) return;
+		await page.type(LISTING_FORM.brand, brand);
+		if (!await appears$1(page, LISTING_FORM.brandOption)) throw changed(FORM, `lists no brand "${brand}"`);
+		const offered = await page.texts(LISTING_FORM.brandOption);
+		const match = offered.find((option) => option === brand) ?? offered.find((option) => option.toLowerCase() === brand.toLowerCase());
+		if (match === void 0) throw changed(FORM, `lists no brand "${brand}"`);
+		await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
+	}
+	async function pickSize(page, size) {
+		await expectElement(page, LISTING_FORM.size, FORM, "size list");
+		await page.click(LISTING_FORM.size);
+		if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed(FORM, "shows no sizes");
+		const label = (await page.texts(LISTING_FORM.sizeOption)).find((option) => sizeOptionMatches(option, size));
+		if (label === void 0) throw changed(FORM, `offers no size "${size}" for this category`);
+		await page.click(`${LISTING_FORM.sizeOption}:text-is("${quote$1(label)}") >> nth=0`);
+	}
+	/**
+	* Mercari's prepaid label, with the label Mercari recommends for the category, and no free
+	* shipping (the buyer pays).
+	*/
+	async function chooseShipping(page) {
+		await expectElement(page, LISTING_FORM.prepaidLabel, FORM, "prepaid label shipping");
+		await page.click(LISTING_FORM.prepaidLabel);
+		if (!await appears$1(page, LISTING_FORM.freeShipping)) throw changed(FORM, "asks nothing about free shipping for the prepaid label");
+		const label = await page.attribute(LISTING_FORM.shippingClass, "value");
+		if (label === null || label.trim() === "") throw changed(FORM, "recommends no shipping label");
+		await page.click(LISTING_FORM.freeShipping);
+		if (!await appears$1(page, LISTING_FORM.freeShippingNo)) throw changed(FORM, "offers no way to turn free shipping off");
+		await page.click(LISTING_FORM.freeShippingNo);
+	}
+	/** Whether `selector` is on the page within a moment (Mercari's scripts draw it). */
+	async function appears$1(page, selector, ms = APPEAR_MS) {
+		const end = Date.now() + ms;
+		for (;;) {
+			if (await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+		}
+	}
+	function quote$1(text) {
+		return text.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+	}
+	/** How long Mercari gets to answer a submit (its photos upload first). */
+	const ANSWER_MS = 45e3;
+	/**
+	* Submits the form with its List (sell) or Save (edit) button, and waits for Mercari's answer:
+	* the listing's page, or the form again with Mercari's message or a field marked as needing a
+	* fix. Anything else leaves the outcome unknown, so the operation's check reads it back.
+	*/
+	/** The item Mercari's page after a submit links to as the live listing, when it does. */
+	async function linkedItem(page) {
+		const href = await page.attribute(LISTING_FORM.liveListing, "href");
+		if (href === null) return null;
+		try {
+			return itemIdFromPath(new URL(href, page.url()).pathname);
+		} catch {
+			return null;
+		}
+	}
+	async function submitListing(page, button) {
+		const selector = LISTING_FORM[button];
+		await expectElement(page, selector, FORM, `${button === "list" ? "List" : "Save"} button`);
+		const start = new URL(page.url()).pathname;
+		await page.click(selector);
+		const end = Date.now() + ANSWER_MS;
+		for (;;) {
+			const path = new URL(page.url()).pathname;
+			const itemId = itemIdFromPath(path);
+			if (itemId !== null) return {
+				type: "listed",
+				itemId
+			};
+			if (await page.exists(LISTING_FORM.paymentWarning)) return {
+				type: "refused",
+				message: "Mercari asks for a credit or debit card on file before it lists. Add one in Mercari (Account settings > Payment methods), then list again."
+			};
+			const messages = (await page.texts(LISTING_FORM.error)).filter((text) => text !== "");
+			if (messages.length > 0) return {
+				type: "refused",
+				message: messages.join(" ")
+			};
+			if (await page.count("[aria-invalid=\"true\"]") > 0) return {
+				type: "refused",
+				message: "Mercari didn't take the listing: it marked a field as needing a fix."
+			};
+			if (await page.exists(LISTING_FORM.listed)) return {
+				type: "listed",
+				itemId: path.split("/").find((segment) => MERCARI_ITEM_ID.test(segment)) ?? await linkedItem(page)
+			};
+			if (path !== start && !path.startsWith(MERCARI_PATHS.sell)) return {
+				type: "listed",
+				itemId: null
+			};
+			if (Date.now() >= end) throw changed(FORM, "showed no listing and no message after the submit");
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+			await page.waitFor("body", "attached");
+		}
+	}
+
+// src/mercari/pages/edit-page.ts
+	const EDIT_PAGE = { 
+	/** Deactivate on an active listing, Activate on an inactive one. */
+toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
+	const PAGE$3 = "edit page";
+	/** How long the edit page may take to draw its form, or to answer the toggle. */
+	const DRAW_MS = 25e3;
+	const LOOK_EVERY_MS$1 = 500;
+	/** Opens the editor; `not_editable` when Mercari showed something else (a sold listing). */
+	async function openEditor(page, site, id) {
+		await page.goto(absolute(site, MERCARI_PATHS.edit(id)));
+		const end = Date.now() + DRAW_MS;
+		for (;;) {
+			if (await page.exists(LISTING_FORM.form)) return "editing";
+			if (!onEditPage(page) || Date.now() >= end) return "not_editable";
+			await lookAgain(page, LOOK_EVERY_MS$1);
+		}
+	}
+	/** Deactivates the listing the editor shows, and waits for Mercari to take it. */
+	async function deactivate(page) {
+		await toggled(page, "Deactivate");
+	}
+	/** Activates the inactive listing the editor shows, and waits for Mercari to take it. */
+	async function activate(page) {
+		await toggled(page, "Activate");
+	}
+	/**
+	* Clicks the toggle when it says `label`, and waits for the page Mercari opens once it took the
+	* change (it leaves the edit page). A toggle that says something else is a page Listora doesn't
+	* know: nothing is clicked.
+	*/
+	async function toggled(page, label) {
+		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed(PAGE$3, `has no ${label} button (${EDIT_PAGE.toggle})`);
+		await page.click(EDIT_PAGE.toggle);
+		const end = Date.now() + DRAW_MS;
+		while (onEditPage(page)) {
+			if (Date.now() >= end) throw changed(PAGE$3, `stayed open after ${label}`);
+			await lookAgain(page, LOOK_EVERY_MS$1);
+		}
+	}
+	/** Whether the page is still an edit page (`/sell/edit/<id>/`). */
+	function onEditPage(page) {
+		return new URL(page.url()).pathname.startsWith("/sell/edit/");
+	}
+
 // src/mercari/pages/item-page.ts
+/**
+	* A listing's page (`/us/item/<id>/`), as its seller sees it: the read-back every automated
+	* Mercari step is verified by.
+	*
+	* - Status: the item's status in the page's data (STATUSES): `on_sale` is `active`, `trading`
+	*   and `sold_out` are `sold`, and `stop` (what Mercari calls a listing the seller deactivated,
+	*   read 2026-10-27) is `ended`.
+	* - Freshness: the item's last change (`updated`, in the page's data), in milliseconds, is the
+	*   listing's revision. Mercari updates it on every change, and automated changes are seconds
+	*   apart (human pacing), so it grows with every change.
+	* - Absence: only Mercari's own "deleted" notice for the id is a definitive absence. A plain
+	*   "not found" page could be a listing not visible yet, so it is not.
+	* - The description's last line is Listora's SKU line (payload.ts); the read reports the
+	*   description without it, and the SKU separately.
+	*/
 	const ITEM_PAGE = {
 		root: "[data-testid=\"ItemDetail\"]",
 		name: "[data-testid=\"ItemName\"]",
@@ -6924,7 +8168,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		sold: "[data-testid=\"ItemSoldBadge\"]",
 		inactive: "[data-testid=\"ItemInactiveNotice\"]",
 		deleted: "[data-testid=\"ItemDeletedNotice\"]",
-		notFound: "[data-testid=\"NotFound\"]"
+		notFound: "[data-testid=\"NotFound\"]",
+		data: "script#__NEXT_DATA__"
 	};
 	function itemUrl(site, id) {
 		return absolute(site, MERCARI_PATHS.item(id));
@@ -6932,218 +8177,188 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Opens the listing's page and reads it. */
 	async function readItem(page, site, id) {
 		await page.goto(itemUrl(site, id));
+		if (page.status() === 410) {
+			const shown = await page.exists(ITEM_PAGE.data) ? await readShownItem(page, site) : null;
+			return shown?.state.found === true ? shown : {
+				state: {
+					found: false,
+					authoritative: true
+				},
+				sku: null,
+				soldAt: null
+			};
+		}
 		if (await page.exists(ITEM_PAGE.deleted)) return {
 			state: {
 				found: false,
 				authoritative: true
 			},
-			sku: null
+			sku: null,
+			soldAt: null
 		};
 		if (page.status() === 404 || await page.exists(ITEM_PAGE.notFound)) return {
 			state: {
 				found: false,
 				authoritative: false
 			},
-			sku: null
+			sku: null,
+			soldAt: null
 		};
 		return readShownItem(page, site);
 	}
-	/** Reads the listing page the browser shows now (after a form sent it there). */
+	/** Mercari's item statuses, as its pages' data names them. */
+	const STATUSES = {
+		on_sale: "active",
+		trading: "sold",
+		sold_out: "sold",
+		stop: "ended",
+		inactive: "ended",
+		cancelled: "ended",
+		suspended: "ended"
+	};
+	const itemRecordSchema = object({
+		name: string(),
+		/** In cents (`800` is $8.00). */
+		price: number().int().nonnegative(),
+		description: string(),
+		status: string(),
+		/** The last change, in seconds. */
+		updated: number().int().positive(),
+		/** When it last sold, in seconds; absent or 0 before it ever sold. */
+		lastSoldAt: number().int().nonnegative().nullish()
+	});
+	/**
+	* Reads the listing page the browser shows now. Read on real item pages (2026-10-27): the page
+	* is a Next.js page whose data (`__NEXT_DATA__`) holds the item as
+	* `props.pageProps.serverState["ItemDetail:<id>"]`, with its name, price in cents, description,
+	* status (`on_sale`, ...), and last change in seconds (the revision).
+	*/
 	async function readShownItem(page, site) {
 		const id = itemIdFromPath(new URL(page.url()).pathname);
 		if (id === null) throw changed("listing page", "is not at a listing address");
-		await expectElement(page, ITEM_PAGE.root, "listing page", "listing details");
-		const updated = await page.attribute(ITEM_PAGE.updated, "datetime");
-		const revision = updated === null ? NaN : Date.parse(updated);
-		if (!Number.isSafeInteger(revision) || revision < 0) throw changed("listing page", "shows no last-updated time");
-		const shownPrice = await page.text(ITEM_PAGE.price);
-		const priceCents = parsePrice(shownPrice);
-		if (priceCents === null) throw changed("listing page", "shows no price Listora can read");
-		const shownDescription = await page.text(ITEM_PAGE.description);
-		const { description, sku } = splitSkuLine(shownDescription ?? "");
-		const status = await page.exists(ITEM_PAGE.sold) ? "sold" : await page.exists(ITEM_PAGE.inactive) ? "ended" : "active";
+		const text = await page.text(ITEM_PAGE.data);
+		if (text === null) throw changed("listing page", "embeds none of the data Listora reads");
+		let data;
+		try {
+			data = JSON.parse(text);
+		} catch {
+			throw changed("listing page", "embeds data Listora can't parse");
+		}
+		const parsed = object({ props: object({ pageProps: object({ serverState: record(string(), unknown()) }) }) }).safeParse(data);
+		if (!parsed.success) throw changed("listing page", "has none of the listing data Listora reads");
+		const raw = parsed.data.props.pageProps.serverState[`ItemDetail:${id}`];
+		if (raw === void 0 || raw === null) return {
+			state: {
+				found: false,
+				authoritative: false
+			},
+			sku: null,
+			soldAt: null
+		};
+		const record$1 = itemRecordSchema.safeParse(raw);
+		if (!record$1.success) throw changed("listing page", "shows the listing without what Listora reads");
+		const status = STATUSES[record$1.data.status];
+		if (status === void 0) throw changed("listing page", "shows a status Listora does not know");
+		const { description, sku } = splitSkuLine(record$1.data.description);
 		return {
 			state: {
 				found: true,
 				externalListingId: id,
 				externalUrl: itemUrl(site, id),
 				status,
-				title: await page.text(ITEM_PAGE.name),
-				description: shownDescription === null ? null : description,
-				priceCents,
+				title: record$1.data.name,
+				description,
+				priceCents: record$1.data.price,
 				currency: "USD",
-				revision
+				revision: record$1.data.updated * 1e3
 			},
-			sku
+			sku,
+			soldAt: record$1.data.lastSoldAt ? /* @__PURE__ */ new Date(record$1.data.lastSoldAt * 1e3) : null
 		};
-	}
-
-// src/mercari/shipping.ts
-/** The form's label for a weight class. */
-	function weightLabel(weight) {
-		return `Up to ${weight}`;
-	}
-
-// src/mercari/pages/listing-form.ts
-	const LISTING_FORM = {
-		form: "form[data-testid=\"ListingForm\"]",
-		photos: "input[type=\"file\"][data-testid=\"PhotoInput\"]",
-		title: "[data-testid=\"Title\"]",
-		description: "[data-testid=\"Description\"]",
-		category: (level) => `select[data-testid="CategoryL${String(level)}"]`,
-		brand: "input[data-testid=\"Brand\"]",
-		brandSuggestions: "[data-testid=\"BrandSuggestions\"]",
-		brandSuggestion: "[data-testid=\"BrandSuggestion\"]",
-		condition: (id) => `input[name="condition"][value="${String(id)}"]`,
-		size: "select[data-testid=\"Size\"]",
-		shippingPayer: "select[data-testid=\"ShippingPayer\"]",
-		shippingWeight: "select[data-testid=\"ShippingWeight\"]",
-		price: "input[data-testid=\"Price\"]",
-		list: "button[data-testid=\"ListButton\"]",
-		save: "button[data-testid=\"SaveButton\"]",
-		error: "[data-testid=\"FormError\"]"
-	};
-	const FORM = "listing form";
-	/** Opens the sell page's empty form. */
-	async function openSellForm(page, site) {
-		await page.goto(absolute(site, MERCARI_PATHS.sell));
-		await expectElement(page, LISTING_FORM.form, "sell page", FORM);
-	}
-	/**
-	* Fills the whole form from the payload, ending the description with the SKU line. `photos`
-	* are uploaded in the order given; `null` leaves the listing's photos as they are (an edit).
-	*/
-	async function fillListing(page, payload, sku, photos) {
-		await expectElement(page, LISTING_FORM.form, FORM, FORM);
-		if (photos !== null) await page.upload(LISTING_FORM.photos, photos);
-		await page.fill(LISTING_FORM.title, payload.title);
-		await page.fill(LISTING_FORM.description, withSkuLine(payload.description, sku));
-		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		for (const [level, name] of payload.category.entries()) await pickOption(page, LISTING_FORM.category(level), name, `category level ${String(level + 1)}`);
-		await pickBrand(page, payload.brand);
-		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
-		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM, `condition "${payload.condition.label}"`);
-		await page.check(LISTING_FORM.condition(payload.condition.id), true);
-		if (payload.size !== null) await pickSize(page, payload.size);
-		await pickOption(page, LISTING_FORM.shippingPayer, "Buyer", "shipping payer");
-		await pickOption(page, LISTING_FORM.shippingWeight, weightLabel(payload.shipping.weight), "package weight");
-		await page.fill(LISTING_FORM.price, priceField(payload.price.amountCents));
-	}
-	/** Fills only the price (a price change on the edit page). */
-	async function fillPrice(page, cents) {
-		await expectElement(page, LISTING_FORM.price, FORM, "price field");
-		await page.fill(LISTING_FORM.price, priceField(cents));
-	}
-	/** Submits the form with its List (sell) or Save (edit) button. */
-	async function submitListing(page, button) {
-		const selector = LISTING_FORM[button];
-		await expectElement(page, selector, FORM, `${button === "list" ? "List" : "Save"} button`);
-		await page.click(selector);
-		await page.waitFor(`${LISTING_FORM.error}, ${ITEM_PAGE.root}`);
-		const message = await page.text(LISTING_FORM.error);
-		if (message !== null) return {
-			type: "refused",
-			message
-		};
-		const itemId = itemIdFromPath(new URL(page.url()).pathname);
-		if (itemId === null) throw changed(FORM, "opened a page that is not a listing");
-		return {
-			type: "listed",
-			itemId
-		};
-	}
-	/** Picks the option labeled `label` (the options may appear only after an earlier pick). */
-	async function pickOption(page, select, label, what) {
-		await expectElement(page, select, FORM, what);
-		await page.waitFor(`${select} option:not([value=""])`, "attached");
-		if (!(await page.texts(`${select} option`)).includes(label)) throw changed(FORM, `offers no ${what} "${label}"`);
-		await page.select(select, label);
-	}
-	async function pickSize(page, size) {
-		await expectElement(page, LISTING_FORM.size, FORM, "size list");
-		await page.waitFor(`${LISTING_FORM.size} option:not([value=""])`, "attached");
-		const label = (await page.texts(`${LISTING_FORM.size} option`)).find((option) => sizeOptionMatches(option, size));
-		if (label === void 0) throw changed(FORM, `offers no size "${size}" for this category`);
-		await page.select(LISTING_FORM.size, label);
-	}
-	/** Searches Mercari's brand list and picks the exact brand, or leaves the brand empty. */
-	async function pickBrand(page, brand) {
-		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
-		await page.fill(LISTING_FORM.brand, "");
-		if (brand === null) return;
-		await page.type(LISTING_FORM.brand, brand);
-		await page.waitFor(LISTING_FORM.brandSuggestions);
-		const index = (await page.texts(LISTING_FORM.brandSuggestion)).findIndex((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
-		if (index === -1) {
-			await page.fill(LISTING_FORM.brand, "");
-			return;
-		}
-		await page.click(`${LISTING_FORM.brandSuggestion} >> nth=${String(index)}`);
-	}
-
-// src/mercari/pages/edit-page.ts
-	const EDIT_PAGE = {
-		deactivate: "button[data-testid=\"DeactivateButton\"]",
-		activate: "button[data-testid=\"ActivateButton\"]",
-		confirmDialog: "[role=\"dialog\"][data-testid=\"ConfirmModal\"]",
-		confirm: "[role=\"dialog\"][data-testid=\"ConfirmModal\"] button[data-testid=\"ConfirmButton\"]"
-	};
-	const PAGE$3 = "edit page";
-	/** Opens the editor; `not_editable` when Mercari showed something else (a sold listing). */
-	async function openEditor(page, site, id) {
-		await page.goto(absolute(site, MERCARI_PATHS.edit(id)));
-		return await page.exists(LISTING_FORM.form) ? "editing" : "not_editable";
-	}
-	/** Deactivates the listing the editor shows, and waits for its page. */
-	async function deactivate(page) {
-		await confirmed(page, EDIT_PAGE.deactivate, "Deactivate button");
-	}
-	/** Activates the inactive listing the editor shows, and waits for its page. */
-	async function activate(page) {
-		await confirmed(page, EDIT_PAGE.activate, "Activate button");
-	}
-	async function confirmed(page, button, what) {
-		await expectElement(page, button, PAGE$3, what);
-		await page.click(button);
-		await page.waitFor(EDIT_PAGE.confirmDialog);
-		await page.click(EDIT_PAGE.confirm);
-		await page.waitFor(ITEM_PAGE.root);
 	}
 
 // src/mercari/pages/listings-page.ts
+/**
+	* Read on the captain's verified session (2026-10-27, its active and sold tabs): the tab is a
+	* table (`[data-testid="Listings"]`) of `tr[data-testid="ListingRow"]` rows, each with its
+	* listing's link (`a[data-testid="ItemLink"]`, the title as its text) and price (`ItemPrice`).
+	* A sold row shows no sold time, only the day it last changed, in its "Updated" column
+	* (`11/16/24`): the sale's time is on the listing's page (item-page.ts). An empty tab keeps
+	* Listora's earlier model. On the phone, Mercari draws the same tabs in its mobile layout (seen
+	* in the phone's evidence, 2026-10-27): rows without the table, which link to their listing
+	* only through its photo (`ProductThumbWrapper`) and show no `ItemLink` or `ItemPrice`; their
+	* title and price are on the listing's page.
+	*/
 	const LISTINGS_PAGE = {
-		list: "[data-testid=\"ListingList\"]",
-		row: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"]",
-		link: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] a[data-testid=\"ListingLink\"]",
-		name: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] [data-testid=\"ListingName\"]",
-		price: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] [data-testid=\"ListingPrice\"]",
-		soldAt: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] time[data-testid=\"SoldAt\"]",
+		/** What an empty tab shows instead of its rows. */
+		empty: "[data-testid=\"ZeroListings\"]",
+		list: "[data-testid=\"Listings\"], [data-testid=\"ListingList\"], [data-testid=\"ListingRow\"]",
+		row: "[data-testid=\"ListingRow\"]",
+		link: "[data-testid=\"ListingRow\"] a[data-testid=\"ItemLink\"], [data-testid=\"ListingRow\"] a[data-testid=\"ListingLink\"]",
+		/** A row's photo, which links to its listing too (the only link in the mobile layout). */
+		photoLink: "[data-testid=\"ListingRow\"] a[data-testid=\"ProductThumbWrapper\"]",
+		name: "[data-testid=\"ListingRow\"] a[data-testid=\"ItemLink\"], [data-testid=\"ListingRow\"] [data-testid=\"ListingName\"]",
+		price: "[data-testid=\"ListingRow\"] [data-testid=\"ItemPrice\"], [data-testid=\"ListingRow\"] [data-testid=\"ListingPrice\"]",
+		soldAt: "[data-testid=\"ListingRow\"] time[data-testid=\"SoldAt\"]",
+		/** The table's column titles, to find its "Updated" column. */
+		headings: "[data-testid=\"Listings\"] th",
 		next: "a[data-testid=\"NextPage\"]"
 	};
+	/** How long a tab's rows get to draw; a tab without any by then reads as empty. */
+	const ROWS_MS = 8e3;
+	/**
+	* The latest moment a day shown as `11/16/24` (Mercari's US dates) ends in any time zone: noon
+	* UTC of the next day. `null` for anything else.
+	*/
+	function latestEndOfDay(shown) {
+		const match = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(shown.trim());
+		if (match === null) return null;
+		const [, month, day, year] = match.map(Number);
+		if (month === void 0 || day === void 0 || year === void 0) return null;
+		return new Date(Date.UTC(2e3 + year, month - 1, day + 1, 12));
+	}
 	/** Opens one page of a tab and reads its rows. */
-	async function readListingsPage(page, site, tab, pageNumber) {
-		await page.goto(absolute(site, MERCARI_PATHS.listings(tab, pageNumber)));
+	async function readListingsPage(page, site, tab, pageNumber, path) {
+		const url = path === void 0 ? absolute(site, MERCARI_PATHS.listings(tab, pageNumber)) : absolute(site, pageNumber > 1 ? `${path}?page=${String(pageNumber)}` : path);
+		await page.goto(url);
 		const name = `${tab.replace("_", " ")} listings page`;
-		if (!await page.exists(LISTINGS_PAGE.list)) throw changed(name, "has no listing list");
+		await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, "listing list");
+		if (await page.exists(LISTINGS_PAGE.empty)) return {
+			rows: [],
+			hasNext: false
+		};
+		const end = Date.now() + ROWS_MS;
+		while (!await page.exists(LISTINGS_PAGE.row) && Date.now() < end) {
+			await new Promise((resolve) => setTimeout(resolve, 500));
+			await page.waitFor("body", "attached");
+		}
 		const sold = tab === "in_progress" || tab === "sold";
-		const [links, titles, prices, soldAts] = await Promise.all([
+		const [shownRows, named, titles, prices, soldAts, headings] = await Promise.all([
+			page.count(LISTINGS_PAGE.row),
 			page.attributes(LISTINGS_PAGE.link, "href"),
 			page.texts(LISTINGS_PAGE.name),
 			page.texts(LISTINGS_PAGE.price),
-			sold ? page.attributes(LISTINGS_PAGE.soldAt, "datetime") : Promise.resolve([])
+			sold ? page.attributes(LISTINGS_PAGE.soldAt, "datetime") : Promise.resolve([]),
+			page.texts(LISTINGS_PAGE.headings)
 		]);
-		if (titles.length !== links.length || prices.length !== links.length || sold && soldAts.length !== links.length) throw changed(name, "has rows without a link, title, price, or sold time");
+		const links = named.length > 0 ? named : await page.attributes(LISTINGS_PAGE.photoLink, "href");
+		if (links.length !== shownRows) throw changed(name, "has rows that link to no listing");
+		const titled = titles.length === links.length;
+		const priced = prices.length === links.length;
+		const updatedColumn = headings.findIndex((heading) => heading.trim() === "Updated");
+		const updated = updatedColumn < 0 ? [] : await page.texts(`${LISTINGS_PAGE.row} > td:nth-child(${String(updatedColumn + 1)})`);
 		return {
 			rows: links.map((href, index) => {
 				const id = href === null ? null : itemIdFromPath(new URL(href, site.origin).pathname);
 				if (id === null) throw changed(name, "has a row that links to no listing");
-				const soldAt = sold ? new Date(soldAts[index] ?? "") : null;
-				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed(name, "has a sold row without a sold time");
+				const soldAt = sold && soldAts.length === links.length ? new Date(soldAts[index] ?? "") : null;
+				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed(name, "has a sold row whose sold time Listora cannot read");
 				return {
 					id,
-					title: titles[index] ?? "",
-					priceCents: parsePrice(prices[index] ?? null),
-					soldAt
+					title: titled ? titles[index] ?? "" : "",
+					priceCents: priced ? parsePrice(prices[index] ?? null) : null,
+					soldAt,
+					changedBy: updated.length === links.length ? latestEndOfDay(updated[index] ?? "") : null
 				};
 			}),
 			hasNext: await page.exists(LISTINGS_PAGE.next)
@@ -7160,6 +8375,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const MAX_LISTING_PAGES = 25;
 	/** Pages of a sold tab one sale check goes through at most (newest first). */
 	const MAX_SOLD_PAGES = 5;
+	/**
+	* Listing pages one sale check opens at most per tab, for the sale times the sold rows don't
+	* show (newest first).
+	*/
+	const MAX_SOLD_READS = 12;
 	function createMercariScripts(options) {
 		const { site } = options;
 		const notListed = () => ({
@@ -7174,26 +8394,29 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			fixHint: "List the item again as a new Mercari listing."
 		});
 		/** The listing the newest active listings hold under this SKU, if any. */
-		async function findBySku(step, sku) {
+		async function findBySku(step, sku, title) {
 			const recent = await step("look at the newest listings", { mutates: false }, (page) => readListingsPage(page, site, "active", 1));
-			for (const row of recent.rows.slice(0, 8)) {
+			const titled = title === void 0 ? [] : recent.rows.filter((row) => row.title === title);
+			const candidates = titled.length > 0 ? titled : recent.rows.slice(0, 8);
+			for (const row of candidates) {
 				const read = await step("look for the SKU", { mutates: false }, (page) => readItem(page, site, row.id));
 				if (read.state.found && read.sku === sku) return read;
 			}
 			return null;
 		}
-		/** After a submit: Mercari's refusal, or the listing it opened, with its revision. */
-		async function submitted(page, outcome) {
+		/**
+		* After a submit: Mercari's refusal, or the listing it opened. The listing is read back by the
+		* operation's check, not here: the submit already happened.
+		*/
+		function submitted(outcome) {
 			if (outcome.type === "refused") return {
 				type: "rejected",
 				code: "validation_failed",
 				message: outcome.message
 			};
-			const shown = await readShownItem(page, site);
-			return {
+			return outcome.itemId === null ? { type: "applied" } : {
 				type: "applied",
-				externalListingId: outcome.itemId,
-				...shown.state.found && shown.state.revision !== null ? { revision: shown.state.revision } : {}
+				externalListingId: outcome.itemId
 			};
 		}
 		/** Opens the editor of a listed, unsold listing; a result instead when it can't be edited. */
@@ -7206,33 +8429,56 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (shown.state.status === "sold") return sold();
 			throw changed("edit page", "shows no listing form for a listing that has not sold");
 		}
+		/** Posts a new listing from the payload (List, or a relist of a listing Mercari removed). */
+		async function createListing(op, step) {
+			const payload = op.payload;
+			if (payload === null) throw new Error("a create has a payload");
+			const sku = listingSku(op.listing);
+			if (op.attempt > 1) {
+				const earlier = await findBySku(step, sku, payload.title);
+				if (earlier?.state.found === true) return {
+					type: "applied",
+					externalListingId: earlier.state.externalListingId,
+					...earlier.state.revision === null ? {} : { revision: earlier.state.revision }
+				};
+			}
+			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
+			if (await step("open the sell page", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => openSellForm(page, site)) === "verification_required") return {
+				type: "rejected",
+				code: "account_verification_required",
+				message: "Mercari asks you to verify your account before you can list.",
+				fixHint: "Open Mercari, start a listing, tap Verify, and finish its steps. Then list again."
+			};
+			await step("fill in the listing", {
+				mutates: false,
+				timeScale: 3
+			}, (page) => fillListing(page, payload, sku, files));
+			const result = await step("list", {
+				mutates: true,
+				timeScale: 3
+			}, async (page) => submitted(await submitListing(page, "list")));
+			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+			try {
+				const found = await findBySku(step, sku, payload.title);
+				if (found?.state.found === true) return {
+					...result,
+					externalListingId: found.state.externalListingId
+				};
+			} catch {}
+			return result;
+		}
 		return {
-			create: async (op, step) => {
-				const payload = op.payload;
-				if (payload === null) throw new Error("a create has a payload");
-				const sku = listingSku(op.listing);
-				if (op.attempt > 1) {
-					const earlier = await findBySku(step, sku);
-					if (earlier?.state.found === true) return {
-						type: "applied",
-						externalListingId: earlier.state.externalListingId,
-						...earlier.state.revision === null ? {} : { revision: earlier.state.revision }
-					};
-				}
-				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-				await step("fill in the listing", { mutates: false }, async (page) => {
-					await openSellForm(page, site);
-					await fillListing(page, payload, sku, files);
-				});
-				return step("list", { mutates: true }, async (page) => submitted(page, await submitListing(page, "list")));
-			},
+			create: (op, step) => createListing(op, step),
 			revise: async (op, step) => {
 				const payload = op.payload;
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editor(op, step);
 				if (!("id" in opened)) return opened;
 				await step("fill in the changes", { mutates: false }, (page) => fillListing(page, payload, listingSku(op.listing), null));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing(page, "save")));
+				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			price: async (op, step) => {
 				const priceCents = op.desired.priceCents;
@@ -7249,7 +8495,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				const opened = await editor(op, step);
 				if (!("id" in opened)) return opened;
 				await step("fill in the price", { mutates: false }, (page) => fillPrice(page, priceCents));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing(page, "save")));
+				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			end: async (op, step) => {
 				const id = op.listing.externalListingId;
@@ -7261,14 +8507,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				if (!("id" in opened)) return opened;
 				return step("deactivate", { mutates: true }, async (page) => {
 					await deactivate(page);
-					return revisionOf(await readShownItem(page, site));
+					return { type: "applied" };
 				});
 			},
 			relist: async (op, step) => {
 				const id = op.listing.externalListingId;
 				if (id === null) return notListed();
 				const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
-				if (!shown.state.found) return notListed();
+				if (!shown.state.found) return shown.state.authoritative ? createListing(op, step) : notListed();
 				if (shown.state.status === "active") return {
 					type: "applied",
 					externalListingId: id
@@ -7279,7 +8525,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				return step("activate", { mutates: true }, async (page) => {
 					await activate(page);
 					return {
-						...revisionOf(await readShownItem(page, site)),
+						type: "applied",
 						externalListingId: id
 					};
 				});
@@ -7295,24 +8541,39 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			health: (step) => step("open your account", { mutates: false }, (page) => openAccount(page, site)),
 			orders: async (since, step) => {
 				const orders = [];
-				for (const tab of ["in_progress", "sold"]) for (let number = 1; number <= 5; number += 1) {
-					const shown = await step(`read the ${tab.replace("_", " ")} sales`, { mutates: false }, (page) => readListingsPage(page, site, tab, number));
-					for (const row of shown.rows) {
-						if (row.soldAt === null || row.priceCents === null) continue;
-						if (since !== null && row.soldAt < since) continue;
-						orders.push({
-							externalOrderId: row.id,
-							soldAt: row.soldAt,
-							items: [{
-								externalListingId: row.id,
-								title: row.title,
-								priceCents: row.priceCents,
-								currency: "USD"
-							}]
-						});
+				const soldPath = await step("find the sales tab", { mutates: false }, (page) => salesTabPath(page, site));
+				for (const tab of ["in_progress", "sold"]) {
+					let reads = 0;
+					tab: for (let number = 1; number <= 5; number += 1) {
+						const shown = await step(`read the ${tab.replace("_", " ")} sales`, { mutates: false }, (page) => readListingsPage(page, site, tab, number, tab === "sold" ? soldPath : void 0));
+						for (const row of shown.rows) {
+							if (since !== null && row.changedBy !== null && row.changedBy < since) break tab;
+							let { soldAt, priceCents, title } = row;
+							if (soldAt === null || priceCents === null) {
+								if (reads === 12) break tab;
+								reads += 1;
+								const read = await step("read the sale", { mutates: false }, (page) => readItem(page, site, row.id));
+								soldAt ??= read.soldAt;
+								if (read.state.found) {
+									priceCents ??= read.state.priceCents;
+									title ||= read.state.title ?? "";
+								}
+							}
+							if (soldAt === null || priceCents === null) continue;
+							if (since !== null && soldAt < since) continue;
+							orders.push({
+								externalOrderId: row.id,
+								soldAt,
+								items: [{
+									externalListingId: row.id,
+									title: title === "" ? null : title,
+									priceCents,
+									currency: "USD"
+								}]
+							});
+						}
+						if (!shown.hasNext) break;
 					}
-					const oldest = shown.rows.at(-1)?.soldAt ?? null;
-					if (!shown.hasNext || since !== null && oldest !== null && oldest < since) break;
 				}
 				return orders;
 			},
@@ -7344,13 +8605,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				};
 			}
 		};
-	}
-	/** An applied change, with the revision the listing page showed after it. */
-	function revisionOf(read) {
-		return read.state.found && read.state.revision !== null ? {
-			type: "applied",
-			revision: read.state.revision
-		} : { type: "applied" };
 	}
 
 // src/poshmark/pages/state.ts
@@ -7516,84 +8770,282 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/poshmark/pages/listing-form.ts
+/**
+	* Poshmark's listing form: `/create-listing` for a new listing and `/edit-listing/<id>` for a
+	* change (the same form, filled in). Every selector the adapter uses on it is here, so a change
+	* to Poshmark's form is fixed in this one file.
+	*
+	* Read in Poshmark's own public listing-editor code (2026-10-26) and on the captain's real
+	* session (from the evidence of runs that stopped there): the form's text inputs are named by
+	* their validation names (`data-vv-name`: `title`, `description`, `originalPrice`,
+	* `listingPrice`, `sku`), the photos input is `#img-file-input`, and a new listing is published in
+	* two steps, Next (`data-et-name="next"`) and then List on the share step
+	* (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`). Picking
+	* the photos opens Poshmark's cover-photo editor, which keeps them only once its Apply confirms
+	* them; the brand is a text field in the brand section, not a `data-vv-name` field. Poshmark's
+	* validation messages are `.form__error-message`, always in the page and hidden until they apply.
+	* The pickers (catalog, size, condition, availability) are in FORM_SELECTORS. A selector that no
+	* longer matches ends the step as `element_missing` before anything is submitted, so the step
+	* goes to the user. The fake Poshmark (fake/) mirrors exactly what this file expects.
+	*
+	* Only `submit` changes anything: filling the form is not saved until it is submitted.
+	*/
 	const AVAILABILITY_LABELS = {
 		for_sale: "For Sale",
 		not_for_sale: "Not For Sale"
 	};
 	const FORM_SELECTORS = {
-		form: "form[data-test=\"listing-form\"]",
-		photos: "input[type=\"file\"][data-test=\"photo-input\"]",
+		/** The form is there once its title field is: Poshmark's scripts draw it. */
+		form: "input[data-vv-name=\"title\"]",
+		photos: "input#img-file-input[type=\"file\"]",
 		title: "input[data-vv-name=\"title\"]",
 		description: "textarea[data-vv-name=\"description\"]",
-		brand: "input[data-vv-name=\"brand\"]",
+		brand: "[data-et-name=\"listingEditorBrandSection\"] input[type=\"text\"]",
 		originalPrice: "input[data-vv-name=\"originalPrice\"]",
+		/** The listing price, as the form a seller's session shows names it. */
 		listingPrice: "input[data-vv-name=\"listingPrice\"]",
+		/**
+		* The Listing Price dialog the price field opens (read on the captain's session, 2026-10-26):
+		* the price again, Automate Offers (on by default, and then a lowest price is required), the
+		* original price, and Done. Listora sets no automatic offers, so it turns them off. This is the
+		* dialog while it shows (`modal--in`); it stays in the page once closed.
+		*/
+		priceDialog: ".listing-price-suggestion-modal.modal--in",
+		priceDialogPrice: ".listing-price-suggestion-modal #listing-price-modal-listing-price-input",
+		priceDialogOriginal: ".listing-price-suggestion-modal #listing-price-modal-original-price-input",
+		priceDialogLowest: ".listing-price-suggestion-modal [data-vv-name=\"inputPrice\"]",
+		priceDialogOffers: ".listing-price-suggestion-modal label[data-test=\"toggle-switch\"]",
+		priceDialogDone: ".listing-price-suggestion-modal button.btn--primary:text-is(\"Done\")",
+		/**
+		* The cover-photo editor (`.image-edit-modal`, in one of Poshmark's modals) and its Apply, in
+		* the modal's footer; the size picker's Done is an `apply` too.
+		*/
+		photoEditor: ".image-edit-modal",
+		applyPhoto: "[data-test=\"modal-footer\"] button[data-et-name=\"apply\"]:text-is(\"Apply\")",
+		/**
+		* The pickers, from Poshmark's listing-editor code (2026-10-26): each a dropdown opened by its
+		* `.dropdown__selector`. The catalog lists departments, then the chosen department's
+		* categories, then opens the subcategory dropdown; the size dropdown has a tab per size set,
+		* a button per size, and Done; the condition dropdown has an item per condition.
+		*/
+		categorySelector: ".listing-editor__category-container .dropdown__selector",
+		department: (name) => `.listing-editor__category-container a.dropdown__menu__item:text-is("${quote(name)}")`,
+		category: (name) => `.listing-editor__category-container li.dropdown__menu__item:text-is("${quote(name)}")`,
+		subcategory: (name) => `.listing-editor__subcategory-container a[data-et-name="sub_category"]:text-is("${quote(name)}")`,
+		sizeSelector: "[data-test=\"size\"]",
+		sizeSet: (name) => `[data-test="horizontal-list"] li.navigation--horizontal__tab span:text-is("${quote(name)}")`,
+		size: (name) => `button.multi-size-selector__button:text-is("${quote(name)}")`,
+		sizeDone: "button[data-et-name=\"apply\"][data-et-on-name=\"multi_item_quantity_tile\"]",
+		conditionSelector: ".listing-editor__condition-container .dropdown__selector",
+		condition: (title) => `div[data-et-name="listing_condition"] > div.fw--med:text-is("${quote(title)}")`,
 		sku: "input[data-vv-name=\"sku\"]",
-		/** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
-		picker: (name) => `details[data-test="${name}"]`,
-		choice: (list, text) => `[data-test="${list}"] label:text-is("${quote(text)}")`,
-		/** Publishes a new listing. */
-		list: "button[data-et-name=\"list_item\"]",
-		/** Saves a change to a listing. */
+		/** "Additional Details (PRIVATE)", which holds the SKU, shown by its "show details" link. */
+		privateDetailsToggle: ".listing-editor__toggle:has([data-vv-name=\"sku\"]) a.listing-editor-toggle-link",
+		availabilitySelector: "[data-et-name=\"listingEditorAvailabilitySection\"] .dropdown__selector",
+		availability: (code) => `[data-et-name="listingEditorAvailabilitySection"] a.dropdown__link[data-et-name="${code}"]`,
+		/** Goes on from a new listing's form to its share step. */
+		next: "button[data-et-name=\"next\"]",
+		/** Publishes a new listing, on the share step ("List This Item"). */
+		list: "button[data-et-name=\"list\"]",
+		/**
+		* Saves a change to a listing: it opens the same share step, whose List This Item completes it
+		* (read on the seller's own listing, 2026-10-27).
+		*/
 		update: "button[data-et-name=\"update\"]",
-		/** Poshmark's own validation messages on the form. */
-		errors: ".form__error-message"
+		/**
+		* Poshmark's own validation messages on the form that show. The form keeps every message in
+		* the page and hides the ones that don't apply (`style="display: none;"`, Vue's v-show).
+		*/
+		errors: ".form__error-message:not([style*=\"display: none\"])"
 	};
-	/** Opens a form and waits until it is there. */
+	/** Poshmark's own names of the availabilities, which its picker's items carry. */
+	const AVAILABILITY_CODES = {
+		for_sale: "available",
+		not_for_sale: "not_for_sale"
+	};
+	/**
+	* Opens a form and waits until it is there; `false` for a listing Poshmark has no form for (a
+	* 404). A form that never comes is a page Listora no longer understands (`PageChangedError`).
+	*/
 	async function openForm(page, url) {
 		await page.goto(url);
 		if (page.status() === 404) return false;
-		return page.exists(FORM_SELECTORS.form);
+		try {
+			await page.waitFor(FORM_SELECTORS.form, "attached");
+		} catch {
+			if (!await page.exists(FORM_SELECTORS.form)) throw new PageChangedError("Poshmark's listing form has no title field");
+		}
+		return true;
 	}
-	/** Adds the photos in posting order; the first is the cover. */
+	/** How long the cover-photo editor gets to open after the photos are picked. */
+	const EDITOR_OPENS_MS = 6e3;
+	const LOOK_EVERY_MS = 500;
+	/**
+	* Adds the photos in posting order; the first is the cover. Poshmark's cover-photo editor opens
+	* on them, and they are kept once its Apply confirms the cover as it is.
+	*/
 	async function addPhotos(page, photos) {
+		await expectField(page, FORM_SELECTORS.photos, "photo input");
 		await page.upload(FORM_SELECTORS.photos, photos);
+		const end = Date.now() + EDITOR_OPENS_MS;
+		while (!await page.exists(FORM_SELECTORS.photoEditor)) {
+			if (Date.now() >= end) return;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+		}
+		const applies = await page.count(FORM_SELECTORS.applyPhoto);
+		if (applies !== 1) throw new PageChangedError(`Poshmark's cover-photo editor has ${String(applies)} Apply buttons, not one`);
+		await page.click(FORM_SELECTORS.applyPhoto);
+		await page.waitFor(FORM_SELECTORS.photoEditor, "detached");
 	}
-	/** Title, description, brand, and prices. On the edit form this replaces what the listing had. */
+	/** Title and description. On the edit form this replaces what the listing had. */
 	async function fillText(page, payload) {
+		await expectField(page, FORM_SELECTORS.title, "title field");
 		await page.fill(FORM_SELECTORS.title, payload.title);
+		await expectField(page, FORM_SELECTORS.description, "description field");
 		await page.fill(FORM_SELECTORS.description, payload.description);
-		await page.fill(FORM_SELECTORS.brand, payload.brand ?? "");
-		await page.fill(FORM_SELECTORS.originalPrice, payload.originalPrice === null ? "" : wholeDollars(payload.originalPrice.amountCents));
-		await setPrice(page, payload.price.amountCents);
+	}
+	/**
+	* The listing price, and the original price when the listing has one (the form keeps that
+	* field folded away until it is asked for, and it starts empty).
+	*/
+	async function fillPrices(page, payload) {
+		await setPrice(page, payload.price.amountCents, payload.originalPrice?.amountCents ?? null);
+	}
+	/** The brand, typed into the brand field (Poshmark takes a brand its suggestions don't list). */
+	async function fillBrand(page, brand) {
+		if (brand === null) return;
+		await expectField(page, FORM_SELECTORS.brand, "brand field");
+		await page.fill(FORM_SELECTORS.brand, brand);
+	}
+	/** A field the form must have; without it the step ends at once, before anything is sent. */
+	async function expectField(page, selector, what) {
+		if (!await page.exists(selector)) throw new PageChangedError(`Poshmark's listing form has no ${what} (${selector})`);
 	}
 	/** The department, category, and (when the form offers it) subcategory. */
 	async function chooseCatalog(page, catalog) {
-		await choose(page, "catalog", "catalog-departments", catalog.department);
-		await choose(page, "catalog", "catalog-categories", catalog.category);
+		await expectField(page, FORM_SELECTORS.categorySelector, "category picker");
+		await page.click(FORM_SELECTORS.categorySelector);
+		await pick(page, FORM_SELECTORS.department(catalog.department), `department "${catalog.department}"`);
+		await pick(page, FORM_SELECTORS.category(catalog.category), `category "${catalog.category}"`);
 		if (catalog.subcategory !== null) {
-			const offered = FORM_SELECTORS.choice("catalog-subcategories", catalog.subcategory);
-			if (await page.exists(offered)) await page.click(offered);
+			const offered = FORM_SELECTORS.subcategory(catalog.subcategory);
+			if (await appears(page, offered)) await page.click(offered);
 		}
 	}
 	/** The size (its size set first) and the condition. */
 	async function chooseSizeAndCondition(page, size, condition) {
-		await choose(page, "size", "size-sets", size.set);
-		await choose(page, "size", "size-options", size.size);
-		await choose(page, "condition", "condition-options", condition.label);
+		await expectField(page, FORM_SELECTORS.sizeSelector, "size picker");
+		await page.click(FORM_SELECTORS.sizeSelector);
+		const set = FORM_SELECTORS.sizeSet(size.set);
+		if (await appears(page, set)) await page.click(set);
+		await pick(page, FORM_SELECTORS.size(size.size), `size "${size.size}"`);
+		if ((await page.text(FORM_SELECTORS.sizeSelector))?.replace(/\s+/g, " ").trim() !== size.size) await pick(page, FORM_SELECTORS.sizeDone, "size Done button");
+		await expectField(page, FORM_SELECTORS.conditionSelector, "condition picker");
+		await page.click(FORM_SELECTORS.conditionSelector);
+		const title = CONDITION_TITLES[condition.code];
+		await pick(page, FORM_SELECTORS.condition(title), `condition "${title}"`);
+	}
+	/** The titles the condition picker shows (Poshmark's `listingEditor.condition.dropdownOptions`). */
+	const CONDITION_TITLES = {
+		nwt: "New With Tags",
+		uln: "Like New",
+		ug: "Good",
+		uf: "Fair"
+	};
+	/** Waits briefly for a choice the page draws once its picker opens, then clicks it. */
+	async function pick(page, selector, what) {
+		if (!await appears(page, selector)) throw new PageChangedError(`Poshmark's listing form offers no ${what}`);
+		await page.click(selector);
+	}
+	/** Whether `selector` is on the page within a moment (a picker's menu draws itself). */
+	async function appears(page, selector) {
+		const end = Date.now() + EDITOR_OPENS_MS;
+		for (;;) {
+			if (await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+		}
 	}
 	/** The seller's private SKU, which only the seller sees (how Listora finds its listings). */
 	async function fillSku(page, sku) {
+		await expectField(page, FORM_SELECTORS.sku, "SKU field");
+		if ((await page.text(FORM_SELECTORS.privateDetailsToggle))?.trim().toLowerCase() === "show details") await page.click(FORM_SELECTORS.privateDetailsToggle);
 		await page.fill(FORM_SELECTORS.sku, sku);
 	}
-	async function setPrice(page, priceCents) {
+	/**
+	* Sets the listing price (and the original price, when given) through the price field and the
+	* Listing Price dialog it opens: the price, Automate Offers off, the original price, Done.
+	*/
+	async function setPrice(page, priceCents, originalCents = null) {
+		await expectField(page, FORM_SELECTORS.listingPrice, "listing price field");
 		await page.fill(FORM_SELECTORS.listingPrice, wholeDollars(priceCents));
+		if (!await appears(page, FORM_SELECTORS.priceDialog)) {
+			if (originalCents !== null) {
+				await expectField(page, FORM_SELECTORS.originalPrice, "original price field");
+				await page.fill(FORM_SELECTORS.originalPrice, wholeDollars(originalCents));
+			}
+			return;
+		}
+		await expectField(page, FORM_SELECTORS.priceDialogPrice, "Listing Price dialog price");
+		await page.fill(FORM_SELECTORS.priceDialogPrice, wholeDollars(priceCents));
+		if (await page.exists(FORM_SELECTORS.priceDialogLowest)) {
+			await page.click(FORM_SELECTORS.priceDialogOffers);
+			if (!await disappears(page, FORM_SELECTORS.priceDialogLowest)) throw new PageChangedError("Poshmark's Listing Price dialog kept Automate Offers on");
+		}
+		if (originalCents !== null) {
+			await expectField(page, FORM_SELECTORS.priceDialogOriginal, "Listing Price dialog original price");
+			await page.fill(FORM_SELECTORS.priceDialogOriginal, wholeDollars(originalCents));
+		}
+		await pick(page, FORM_SELECTORS.priceDialogDone, "Listing Price dialog Done button");
+		if (!await disappears(page, FORM_SELECTORS.priceDialog)) throw new PageChangedError("Poshmark's Listing Price dialog didn't close on Done");
+	}
+	/** Whether `selector` is gone from the page within a moment. */
+	async function disappears(page, selector) {
+		const end = Date.now() + EDITOR_OPENS_MS;
+		for (;;) {
+			if (!await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+		}
 	}
 	async function setAvailability(page, availability) {
-		await choose(page, "availability", "availability-options", AVAILABILITY_LABELS[availability]);
+		await expectField(page, FORM_SELECTORS.availabilitySelector, "availability picker");
+		if ((await page.text(FORM_SELECTORS.availabilitySelector))?.replace(/\s+/g, " ").trim() === AVAILABILITY_LABELS[availability]) return;
+		await page.click(FORM_SELECTORS.availabilitySelector);
+		await pick(page, FORM_SELECTORS.availability(AVAILABILITY_CODES[availability]), `availability "${AVAILABILITY_LABELS[availability]}"`);
 	}
 	/**
 	* Submits the form (the step that changes the listing) and waits for Poshmark's answer: the
 	* listing's page, or the form again with Poshmark's validation messages.
 	*/
 	async function submit(page, button) {
+		if (button === "list") {
+			await page.click(FORM_SELECTORS.next);
+			const refused = await refusal(page);
+			if (refused !== null) return refused;
+		}
 		await page.click(FORM_SELECTORS[button]);
+		if (button === "update") {
+			const refused = await refusal(page);
+			if (refused !== null) return refused;
+			if (await appears(page, FORM_SELECTORS.list)) await page.click(FORM_SELECTORS.list);
+		}
+		return await refusal(page) ?? saved(page);
+	}
+	/** Poshmark's validation messages on the form, when it shows any. */
+	async function refusal(page) {
 		const message = (await page.texts(FORM_SELECTORS.errors)).filter((text) => text !== "").join(" ");
-		if (message !== "") return {
+		return message === "" ? null : {
 			type: "refused",
 			message
 		};
-		await page.waitForPath(/^\/listing\//);
+	}
+	/**
+	* Waits for where Poshmark goes once it saved the listing: the listing's page, or (read on the
+	* captain's session, 2026-10-26: after List on a new listing) the seller's closet.
+	*/
+	async function saved(page) {
+		await page.waitForPath(/^\/(listing|closet)\//);
 		return {
 			type: "saved",
 			path: new URL(page.url()).pathname
@@ -7601,15 +9053,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The seller's private SKU on the edit form (only its seller sees it). */
 	async function privateSku(page) {
-		const value = await page.attribute(FORM_SELECTORS.sku, "value");
-		return value === null || value.trim() === "" ? null : value.trim();
+		const shown = (await page.value(FORM_SELECTORS.sku))?.trim() ?? "";
+		if (shown !== "") return shown;
+		const state = await page.pageData("__INITIAL_STATE__");
+		const parsed = editorSkuSchema.safeParse(state);
+		const fromState = parsed.success ? parsed.data.$_listing_editor.post.seller_private_info.sku ?? null : null;
+		return fromState === null || fromState.trim() === "" ? null : fromState.trim();
 	}
-	/** Opens a picker unless it is open, then clicks the choice with this text in one of its lists. */
-	async function choose(page, picker, list, text) {
-		const selector = FORM_SELECTORS.picker(picker);
-		if (!await page.exists(`${selector}[open]`)) await page.click(`${selector} > summary`);
-		await page.click(FORM_SELECTORS.choice(list, text));
-	}
+	const editorSkuSchema = object({ $_listing_editor: object({ post: object({ seller_private_info: object({ sku: string().nullable().optional() }) }) }) });
 	function wholeDollars(cents) {
 		return String(Math.round(cents / 100));
 	}
@@ -7666,9 +9117,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* A listing's public page (`/listing/<title>-<id>`): the read-back of every change. It reads the
 	* listing record the page embeds (`$_listing_details.listingDetails`).
 	*
-	* Absences are never authoritative: Listora has not seen what Poshmark answers for a deleted
-	* listing, so a page without the listing (a 404, a listing that is no longer published) reads as
-	* "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
+	* A deleted listing's page answers 404 (seen on a real listing deleted from the captain's closet,
+	* 2026-10-27), and that absence is authoritative: the listing is gone. Any other page without the
+	* listing (one that is no longer published) reads as "not found, maybe not yet", never as "gone"
+	* (docs/features/marketplaces.md).
 	*/
 	const PAGE = "listing page";
 	const listingPageSchema = object({ $_listing_details: object({ listingDetails: listingRecordSchema.nullable().optional() }) });
@@ -7684,10 +9136,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** The listing as a read-back. */
 	async function readListing(page, site, id) {
 		const record = await openListing(page, site, id);
-		return record === null ? {
+		if (record !== null) return remoteListing(record, site, PAGE);
+		return {
 			found: false,
-			authoritative: false
-		} : remoteListing(record, site, PAGE);
+			authoritative: isListingId(id) && page.status() === 404
+		};
 	}
 
 // src/poshmark/scripts.ts
@@ -7717,20 +9170,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		* SKU, so the closet is searched for the title (or, without one, its recent listings are
 		* taken), and each candidate's edit form shows its SKU. Newest first, within `SKU_LOOKUP`.
 		*/
-		async function findBySku(step, sku, title) {
+		async function findBySku(step, sku, title, { search = true } = {}) {
 			const username = await seller(step);
 			const since = Date.now() - SKU_LOOKUP.recentMs;
 			const matches = (listing) => title === void 0 ? Date.parse(listing.created_at) >= since : listing.title === title;
 			const { listings } = await closet(step, username, {
 				availability: "all",
 				newestFirst: true,
-				...title === void 0 ? {} : { query: title }
+				...title === void 0 || !search ? {} : { query: title }
 			}, {
 				maxPages: SKU_LOOKUP.closetPages,
 				enough: (found) => found.filter(matches).length >= SKU_LOOKUP.candidates
 			});
 			const candidates = listings.filter(matches).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).slice(0, SKU_LOOKUP.candidates);
-			for (const [index, candidate] of candidates.entries()) if (await step(`check the SKU of candidate ${String(index + 1)}`, { mutates: false }, async (page) => await openForm(page, site.editListing(candidate.id)) && await privateSku(page) === sku)) return candidate.id;
+			for (const [index, candidate] of candidates.entries()) if (await step(`check the SKU of candidate ${String(index + 1)}`, {
+				mutates: false,
+				timeScale: 2
+			}, async (page) => await openForm(page, site.editListing(candidate.id)) && await privateSku(page) === sku)) return candidate.id;
 			return null;
 		}
 		/** The logged-in seller's username (closets are addressed by it). */
@@ -7768,7 +9224,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		/** The listing page a saved form led to, as an applied write with its id and revision. */
 		async function applied(step, path) {
 			const id = listingIdFromPath(path);
-			if (id === null) throw new Error("Poshmark saved the listing but showed no listing page");
+			if (id === null) return { type: "applied" };
 			return step("read the saved listing", { mutates: false }, async (page) => {
 				const record = await openListing(page, site, id);
 				return record === null ? {
@@ -7785,13 +9241,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		async function fillListing(step, payload) {
 			const { catalog, size, condition } = payload;
 			if (catalog === null || size === null || condition === null) throw new Error("the listing has no Poshmark catalog, size, or condition");
-			await step("fill in the text and prices", { mutates: false }, (page) => fillText(page, payload));
-			await step("choose the category", { mutates: false }, (page) => chooseCatalog(page, catalog));
-			await step("choose the size and condition", { mutates: false }, (page) => chooseSizeAndCondition(page, size, condition));
+			await step("fill in the title and description", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => fillText(page, payload));
+			await step("fill in the prices", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => fillPrices(page, payload));
+			await step("fill in the brand", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => fillBrand(page, payload.brand));
+			await step("choose the category", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => chooseCatalog(page, catalog));
+			await step("choose the size and condition", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => chooseSizeAndCondition(page, size, condition));
 		}
 		/** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
 		async function save(step, button) {
-			const result = await step(button === "list" ? "list" : "update", { mutates: true }, (page) => submit(page, button));
+			const result = await step(button === "list" ? "list" : "update", {
+				mutates: true,
+				timeScale: 4
+			}, (page) => submit(page, button));
 			if (result.type === "refused") return {
 				type: "rejected",
 				code: "validation_failed",
@@ -7808,7 +9284,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
 			const shown = await step("open the listing", { mutates: false }, (page) => readListing(page, site, id));
-			if (!shown.found) return notListed();
+			if (!shown.found) {
+				if (!shown.authoritative) return notListed();
+				return availability === "not_for_sale" ? {
+					type: "applied",
+					externalListingId: id
+				} : createListing(op, step);
+			}
 			if (availability === "not_for_sale" && shown.status !== "active") return {
 				type: "applied",
 				externalListingId: id
@@ -7829,26 +9311,43 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			await step("set the availability", { mutates: false }, (page) => setAvailability(page, availability));
 			return save(step, "update");
 		}
-		return {
-			create: async (op, step) => {
-				const payload = op.payload;
-				if (payload === null) throw new Error("a create has a payload");
-				const sku = skuOf(op.listing);
-				const existing = await findBySku(step, sku, payload.title);
-				if (existing !== null) return {
-					type: "applied",
-					externalListingId: existing
+		/** Lists a new listing from the payload (List, or a relist of a listing Poshmark removed). */
+		async function createListing(op, step) {
+			const payload = op.payload;
+			if (payload === null) throw new Error("a create has a payload");
+			const sku = skuOf(op.listing);
+			const existing = await findBySku(step, sku, payload.title);
+			if (existing !== null) return {
+				type: "applied",
+				externalListingId: existing
+			};
+			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
+			if (!await step("open the listing form", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
+			await step("add the photos", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => addPhotos(page, files));
+			await fillListing(step, payload);
+			await step("set the SKU and availability", { mutates: false }, async (page) => {
+				await fillSku(page, sku);
+				await setAvailability(page, "for_sale");
+			});
+			const result = await save(step, "list");
+			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+			try {
+				const id = await findBySku(step, sku, payload.title, { search: false });
+				if (id !== null) return {
+					...result,
+					externalListingId: id
 				};
-				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-				if (!await step("open the listing form", { mutates: false }, (page) => openForm(page, site.createListing()))) throw new Error("Poshmark showed no listing form");
-				await step("add the photos", { mutates: false }, (page) => addPhotos(page, files));
-				await fillListing(step, payload);
-				await step("set the SKU and availability", { mutates: false }, async (page) => {
-					await fillSku(page, sku);
-					await setAvailability(page, "for_sale");
-				});
-				return save(step, "list");
-			},
+			} catch {}
+			return result;
+		}
+		return {
+			create: (op, step) => createListing(op, step),
 			revise: async (op, step) => {
 				const payload = op.payload;
 				if (payload === null) throw new Error("a revise has a payload");
@@ -8208,10 +9707,45 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   const scripts = [...document.querySelectorAll('script[id], script[type]:not([src])')]
     .map((script) => ({ id: script.id || null, type: script.type || null }))
     .slice(0, 40);
-  return { path: location.pathname, title: document.title, testIds, links, requests, scripts };
+  const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
+  const controls = [...document.querySelectorAll('input, textarea, select, button, summary, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"], [data-et-name]:not(a), [data-test]:not(a)')]
+    .slice(0, 120)
+    .map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      type: element.getAttribute('type'),
+      names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text: element.tagName === 'BUTTON' || element.tagName === 'SUMMARY' || element.getAttribute('role') === 'button' || (element.hasAttribute('data-et-name') && !/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
+    }));
+  const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
+    .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
+    .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
+  const describe = (element) => {
+    const role = element.getAttribute('role');
+    const text = (element.children.length === 0 || role === 'option' || role === 'group' || role === 'presentation' || element.tagName === 'LI') ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : '';
+    return {
+      tag: element.tagName.toLowerCase(),
+      names: ['role', 'id', 'aria-label', 'aria-labelledby', 'aria-selected', 'data-testid'].flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text,
+    };
+  };
+  const lists = [];
+  for (const list of document.querySelectorAll('[role="listbox"], [role="menu"]')) {
+    if (list.children.length === 0) continue;
+    lists.push({ depth: 0, ...describe(list) });
+    const walk = (node, depth) => {
+      for (const child of node.children) {
+        if (lists.length >= 120) return;
+        lists.push({ depth, ...describe(child) });
+        if (depth < 3) walk(child, depth + 1);
+      }
+    };
+    walk(list, 1);
+    if (lists.length >= 120) break;
+  }
+  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices, lists };
 })()`;
 	/** Words of paths, titles, and labels that say what a page is, never whose it is. */
-	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications".split(" "));
+	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications add apply cancel choose color colour condition continue cover department description designer discard done enter next optional photo photos post price quantity required save select single size sizes style subcategory title type update upload".split(" "));
 	/** Keys whose children are keyed by a user, an id, or a name. */
 	const KEYED_BY_RECORD = /^(users|profiles|closets|accounts|byId|entities|people|members)$/i;
 	/** Subtrees of a page's data the skeleton follows down: who is signed in, and Next.js props. */
@@ -8240,8 +9774,31 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		scripts: array(object({
 			id: string().nullable(),
 			type: string().nullable()
-		}))
+		})),
+		controls: array(object({
+			tag: string(),
+			type: string().nullable(),
+			names: array(tuple([string(), string()])),
+			text: string().nullable()
+		})).default([]),
+		choices: array(string()).default([]),
+		lists: array(object({
+			depth: number(),
+			tag: string(),
+			names: array(tuple([string(), string()])),
+			text: string()
+		})).default([])
 	});
+	/** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
+	const CODE_NAMES = /* @__PURE__ */ new Set([
+		"data-testid",
+		"data-test",
+		"data-vv-name",
+		"data-et-name",
+		"name",
+		"id",
+		"role"
+	]);
 	/**
 	* The evidence of what `EVIDENCE_SCRIPT` read and of the page's data globals (`data`, by name),
 	* reduced to structure; `null` when the page answered something else.
@@ -8277,7 +9834,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			links: distinct(links),
 			requests: distinct(requests),
 			scripts: distinct(read.scripts.map((script) => clean([script.id === null ? null : `#${reducedId(script.id)}`, script.type].filter((part) => part !== null).join(" ")))),
-			data: Object.entries(data).flatMap(([name, value]) => dataSkeleton(name, value)).slice(0, MAX_DATA_LINES).map(clean)
+			data: Object.entries(data).flatMap(([name, value]) => dataSkeleton(name, value)).slice(0, MAX_DATA_LINES).map(clean),
+			controls: distinct(read.controls.map((control) => clean([
+				control.type === null ? control.tag : `${control.tag}[${reducedId(control.type)}]`,
+				...control.names.map(([name, value]) => CODE_NAMES.has(name) ? `${name}:${reducedId(value)}` : `${name}:${reducedWords(value)}`),
+				control.text === null || control.text === "" ? null : `text:${reducedWords(control.text)}`
+			].filter((part) => part !== null).join(" ")))),
+			choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean)),
+			lists: read.lists.map((item) => clean([
+				`${"  ".repeat(Math.min(item.depth, 4))}${item.tag}`,
+				...item.names.map(([name, value]) => name === "aria-label" ? `${name}:${reducedWords(value)}` : `${name}:${reducedId(value)}`),
+				item.text === "" ? null : `text:${/[0-9@]/.test(item.text) ? "<x>" : item.text}`
+			].filter((part) => part !== null).join(" ")))
 		};
 	}
 	/** `/closet/janedoe/edit` → `/closet/<x>/edit`: only structural words stay. */
@@ -8358,7 +9926,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		links: array(string().max(MAX_ITEM_LENGTH)).max(40),
 		requests: array(string().max(MAX_ITEM_LENGTH)).max(121),
 		scripts: array(string().max(MAX_ITEM_LENGTH)).max(40),
-		data: array(string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES)
+		data: array(string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
+		controls: array(string().max(MAX_ITEM_LENGTH)).max(120).default([]),
+		choices: array(string().max(MAX_ITEM_LENGTH)).max(150).default([]),
+		lists: array(string().max(MAX_ITEM_LENGTH)).max(121).default([])
 	});
 
 // src/safety/redaction.ts
@@ -8467,8 +10038,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				current = stepName;
 				steps.push(stepName);
 				const index = stepMs.push(0) - 1;
+				this.#deps.onStep?.({
+					name: stepName,
+					index: steps.length
+				});
 				if (options.mutates) mutated = true;
-				const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs;
+				const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs * Math.max(1, options.timeScale ?? 1);
 				const startedAt = Date.now();
 				try {
 					return await this.#runStep(body, timeoutMs, signal, readOnly);
@@ -8505,7 +10080,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						code: failure.code,
 						reason: failure.message
 					} : {},
-					...failure.kind === "error" && failure.evidence !== void 0 ? { evidence: failure.evidence } : {},
+					...(failure.kind === "error" || failure.kind === "timeout") && failure.evidence !== void 0 ? { evidence: failure.evidence } : {},
 					origin: originForLog(this.#safeUrl()),
 					mutated,
 					...this.#deps.networkSummary === void 0 ? {} : { network: this.#deps.networkSummary() }
@@ -8577,7 +10152,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (thrown instanceof StepTimeoutError) return {
 				kind: "timeout",
 				step,
-				screenshotKey: await this.#screenshot()
+				screenshotKey: await this.#screenshot(),
+				...await this.#evidence()
 			};
 			if (thrown instanceof StepError) {
 				const screenshotKey = thrown.code === "aborted" ? null : await this.#screenshot();
@@ -8806,6 +10382,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 		attributes(selector, name) {
 			return this.#query((backend) => backend.attributes(selector, name));
+		}
+		value(selector) {
+			return this.#query((backend) => backend.value(selector));
 		}
 		pageData(name) {
 			return this.#query((backend) => backend.pageData(name));
@@ -9077,7 +10656,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }, selector + ' to be ' + state);
   return true;
 `);
-	/** What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`. */
+	/**
+	* What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`, and
+	* `value` (the first match's current value, which a page's scripts may set without an attribute).
+	*/
 	const QUERY = pageFunction(`
   const elements = resolveAll(selector);
   switch (what) {
@@ -9086,23 +10668,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     case 'texts': return elements.map((element) => (element.textContent || '').trim());
     case 'attribute': return elements.length === 0 ? null : elements[0].getAttribute(name);
     case 'attributes': return elements.map((element) => element.getAttribute(name));
+    case 'value': return elements.length === 0 || typeof elements[0].value !== 'string' ? null : elements[0].value;
     default: throw new Error('unknown query ' + what);
   }
 `);
 
 // src/phone/host.ts
-/**
-	* What the iPhone app gives the phone runtime (docs/features/phone-execution.md): a thin bridge
-	* to the off-screen web view that holds the seller's own marketplace session. The app only
-	* relays: it loads pages, evaluates the runtime's own page functions (dom.ts), reports the main
-	* frame's navigation, answers dialogs, fetches Listora's listing photos, and shows a check the
-	* seller has to complete. Every rule (pacing, inspection, what a step may do, how a run ends)
-	* stays in the runtime, which is the same TypeScript the browser runner runs.
-	*
-	* Every method rejects with an `Error` whose message is one of `HOST_FAILURES` when the bridge
-	* knows why, or a short description otherwise.
-	*/
-	/** Why a host call failed, as the app reports it. */
+/** Why a host call failed, as the app reports it. */
 	const HOST_FAILURES = [
 		"timeout",
 		"unreachable",
@@ -9237,6 +10809,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				name
 			}));
 		}
+		async value(selector) {
+			return expectText(await this.#page(QUERY, {
+				selector,
+				what: "value",
+				name: null
+			}));
+		}
 		async attributes(selector, name) {
 			const values = await this.#page(QUERY, {
 				selector,
@@ -9307,6 +10886,32 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	function sleep(ms) {
 		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+// src/phone/progress.ts
+/** Short verbs whose last letter doubles before "-ing" ("set", "setting"). */
+	const DOUBLED = /* @__PURE__ */ new Set([
+		"get",
+		"set",
+		"put",
+		"cut",
+		"run",
+		"stop",
+		"drop",
+		"tap",
+		"pin",
+		"shop"
+	]);
+	/**
+	* A step's name ("add the photos", scripts name each step with an imperative) as what is happening
+	* ("Adding the photos").
+	*/
+	function stepLabel(name) {
+		const [verb = "", ...rest] = name.trim().split(/\s+/);
+		const lower = verb.toLowerCase();
+		if (!/^[a-z]+$/.test(lower)) return name;
+		const doing = DOUBLED.has(lower) ? `${lower}${lower.slice(-1)}ing` : lower.endsWith("e") && !lower.endsWith("ee") ? `${lower.slice(0, -1)}ing` : `${lower}ing`;
+		return [`${doing.charAt(0).toUpperCase()}${doing.slice(1)}`, ...rest].join(" ");
 	}
 
 // src/phone/runtime.ts
@@ -9394,6 +10999,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				}
 			},
 			stepTimeoutMs: input.stepTimeoutMs,
+			onStep: ({ name, index }) => {
+				host.progress({
+					call: input.name,
+					index,
+					label: stepLabel(name)
+				});
+			},
 			close: () => Promise.resolve([])
 		});
 		const run = scriptRunner(input.scriptSet, photos);
@@ -9533,6 +11145,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					message,
 					fields
 				}).catch(() => void 0);
+			},
+			progress: (step) => {
+				call("progress", { ...step }).catch(() => void 0);
 			}
 		};
 	}

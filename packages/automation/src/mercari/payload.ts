@@ -33,7 +33,7 @@ export interface MercariListingPayload extends AssistedListingPayload {
   size: string | null;
   /** Whether the category takes a size (clothing and shoes). */
   sized: boolean;
-  /** The brand to pick from Mercari's brand list; posted without one when Mercari lists none. */
+  /** The brand to pick from Mercari's brand list (a brand it doesn't list goes to the seller). */
   brand: string | null;
   /** The value and label of Mercari's condition option; `null` when the item has none. */
   condition: { id: number; label: string } | null;

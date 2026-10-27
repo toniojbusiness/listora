@@ -66,7 +66,8 @@ export function createDepopAutomationAdapter(
     assisted: createDepopAssistedAdapter(),
     scripts: createDepopScripts({ site, photos: options.photos }),
     scriptSet: { name: 'depop', marketplace: 'depop', siteUrl },
-    readFreshness: 'revision',
+    // Depop's product pages no longer say when a product last changed (product-page.ts).
+    readFreshness: 'none',
     buildPayload: buildDepopAutomationPayload,
     validate: validateDepopAutomationPayload,
     logger: options.logger,

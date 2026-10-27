@@ -206,7 +206,10 @@ export const WAIT_FOR = pageFunction(`
   return true;
 `);
 
-/** What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`. */
+/**
+ * What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`, and
+ * `value` (the first match's current value, which a page's scripts may set without an attribute).
+ */
 export const QUERY = pageFunction(`
   const elements = resolveAll(selector);
   switch (what) {
@@ -215,6 +218,7 @@ export const QUERY = pageFunction(`
     case 'texts': return elements.map((element) => (element.textContent || '').trim());
     case 'attribute': return elements.length === 0 ? null : elements[0].getAttribute(name);
     case 'attributes': return elements.map((element) => element.getAttribute(name));
+    case 'value': return elements.length === 0 || typeof elements[0].value !== 'string' ? null : elements[0].value;
     default: throw new Error('unknown query ' + what);
   }
 `);

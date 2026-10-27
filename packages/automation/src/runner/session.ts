@@ -217,6 +217,19 @@ class PlaywrightBackend implements PageBackend {
     );
   }
 
+  value(selector: string): Promise<string | null> {
+    const locator = this.#page.locator(selector);
+    return element(
+      (async () => {
+        if ((await locator.count()) === 0) return null;
+        return locator.first().evaluate((node): string | null => {
+          const value: unknown = (node as unknown as { value?: unknown }).value;
+          return typeof value === 'string' ? value : null;
+        });
+      })(),
+    );
+  }
+
   attribute(selector: string, name: string): Promise<string | null> {
     const locator = this.#page.locator(selector);
     return element(

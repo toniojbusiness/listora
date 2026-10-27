@@ -873,6 +873,12 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/brand`.
                 public var brand: Swift.String?
+                /// `true`: only items that need the seller, those with a listing whose newest change
+                /// (not counting canceled ones) failed or waits for the seller to finish a step.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/attention`.
+                public var attention: Swift.Bool?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/cursor`.
@@ -888,6 +894,7 @@ public enum Operations {
                 ///   - q: Free-text search over SKU, title, brand, and keywords.
                 ///   - marketplace: Only items with a listing on this marketplace that is not ended or sold (a draft
                 ///   - brand: Only items of this brand (exact, ignoring case).
+                ///   - attention: `true`: only items that need the seller, those with a listing whose newest change
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
@@ -895,6 +902,7 @@ public enum Operations {
                     q: Swift.String? = nil,
                     marketplace: Components.Schemas.KnownMarketplace? = nil,
                     brand: Swift.String? = nil,
+                    attention: Swift.Bool? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
@@ -902,6 +910,7 @@ public enum Operations {
                     self.q = q
                     self.marketplace = marketplace
                     self.brand = brand
+                    self.attention = attention
                     self.cursor = cursor
                     self.limit = limit
                 }
@@ -6574,6 +6583,190 @@ public enum Operations {
             }
         }
     }
+    /// The categories an item can be listed in on an automated marketplace
+    ///
+    /// For Poshmark, Mercari, and Depop: the category Listora maps the item to (`suggested`),
+    /// or none when the seller has to pick (a unisex or kids' item, or one Listora can't place),
+    /// the likely ones first, and every category in that marketplace's own names. A listing
+    /// names the seller's pick in `variant.categoryRef`, as `ref` gives it.
+    /// `404` for another marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/marketplace-categories/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-categories/{marketplace}/get(getItemMarketplaceCategories)`.
+    public enum GetItemMarketplaceCategories {
+        public static let id: Swift.String = "getItemMarketplaceCategories"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-categories/{marketplace}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-categories/{marketplace}/GET/path/itemId`.
+                public var itemId: Components.Parameters.ItemId
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-categories/{marketplace}/GET/path/marketplace`.
+                public var marketplace: Components.Parameters.MarketplacePath
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - itemId:
+                ///   - marketplace:
+                public init(
+                    itemId: Components.Parameters.ItemId,
+                    marketplace: Components.Parameters.MarketplacePath
+                ) {
+                    self.itemId = itemId
+                    self.marketplace = marketplace
+                }
+            }
+            public var path: Operations.GetItemMarketplaceCategories.Input.Path
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-categories/{marketplace}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetItemMarketplaceCategories.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetItemMarketplaceCategories.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetItemMarketplaceCategories.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetItemMarketplaceCategories.Input.Path,
+                headers: Operations.GetItemMarketplaceCategories.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-categories/{marketplace}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/items/{itemId}/marketplace-categories/{marketplace}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.MarketplaceCategories)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.MarketplaceCategories {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetItemMarketplaceCategories.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetItemMarketplaceCategories.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The item's categories on the marketplace.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-categories/{marketplace}/get(getItemMarketplaceCategories)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetItemMarketplaceCategories.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetItemMarketplaceCategories.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-categories/{marketplace}/get(getItemMarketplaceCategories)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-categories/{marketplace}/get(getItemMarketplaceCategories)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Create an item for a shared listing and link the listing to it
     ///
     /// For a listing the user shared that has no item in Listora yet. Creates an import
@@ -9362,6 +9555,225 @@ public enum Operations {
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
             /// - Remark: Generated from `#/paths//v1/operations/{operationId}/retry/post(retryOperation)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Run a waiting operation's next attempt now
+    ///
+    /// Only while `retrying` (waiting for its next attempt after a transient failure) or
+    /// `verifying` (waiting between read-backs). Moves the next attempt to now: the operation
+    /// keeps its status, attempts, and error, and the attempt runs exactly as it would have later
+    /// (a retry reads the listing back before sending anything). A step that runs on the seller's
+    /// iPhone is taken on the phone's next look. `409 invalid_state_transition` for any other
+    /// status.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/operations/{operationId}/try-now`.
+    /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)`.
+    public enum TryOperationNow {
+        public static let id: Swift.String = "tryOperationNow"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/operations/{operationId}/try-now/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/operations/{operationId}/try-now/POST/path/operationId`.
+                public var operationId: Components.Parameters.OperationId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - operationId:
+                public init(operationId: Components.Parameters.OperationId) {
+                    self.operationId = operationId
+                }
+            }
+            public var path: Operations.TryOperationNow.Input.Path
+            /// - Remark: Generated from `#/paths/v1/operations/{operationId}/try-now/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/operations/{operationId}/try-now/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.TryOperationNow.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.TryOperationNow.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.TryOperationNow.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.TryOperationNow.Input.Path,
+                headers: Operations.TryOperationNow.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/operations/{operationId}/try-now/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/operations/{operationId}/try-now/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Operation)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Operation {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.TryOperationNow.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.TryOperationNow.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The operation, due now.
+            ///
+            /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.TryOperationNow.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.TryOperationNow.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
@@ -15721,6 +16133,161 @@ public enum Operations {
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
             /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Get the phone runtime the server runs its phone work with
+    ///
+    /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the
+    /// app runs exactly the marketplace scripts the server replays its answers through, and a
+    /// fix to a marketplace's pages reaches the phone with the server, without an app update.
+    /// With `have` naming the digest the app already runs, the answer leaves out `source`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runtime`.
+    /// - Remark: Generated from `#/paths//v1/phone-runtime/get(getPhoneRuntime)`.
+    public enum GetPhoneRuntime {
+        public static let id: Swift.String = "getPhoneRuntime"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/phone-runtime/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The digest of the runtime the app already runs.
+                ///
+                /// - Remark: Generated from `#/paths/v1/phone-runtime/GET/query/have`.
+                public var have: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - have: The digest of the runtime the app already runs.
+                public init(have: Swift.String? = nil) {
+                    self.have = have
+                }
+            }
+            public var query: Operations.GetPhoneRuntime.Input.Query
+            /// - Remark: Generated from `#/paths/v1/phone-runtime/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetPhoneRuntime.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetPhoneRuntime.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetPhoneRuntime.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.GetPhoneRuntime.Input.Query = .init(),
+                headers: Operations.GetPhoneRuntime.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/phone-runtime/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/phone-runtime/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PhoneRuntime)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PhoneRuntime {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetPhoneRuntime.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetPhoneRuntime.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The runtime, or only its digest when the app has it.
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runtime/get(getPhoneRuntime)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetPhoneRuntime.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetPhoneRuntime.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runtime/get(getPhoneRuntime)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)

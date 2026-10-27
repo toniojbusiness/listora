@@ -37,7 +37,10 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
      `failed` with a Retry action.
    - `unknown` (timeout after the request may have been sent, a lost connection, an adapter that
      throws or misses its deadline) → `verifying`. `readListing` decides: the desired state
-     holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly.
+     holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly. The
+     read-back after a send with an unknown result, and the second read a `readFreshness: 'none'`
+     match needs, come soon (`CHECK_SOON_MS`, 15 seconds, never later than the backoff): the
+     seller is waiting to see the listing, and nothing is sent again meanwhile.
    - `pendingUser` (assisted, or an automated step that met a check automation must not pass)
      → `needs_user_action` until the user confirms (`confirmOperationByUser`), or `failed` when
      the user dismisses the task (`dismissOperationByUser`, with a Retry that makes a new task;
@@ -48,7 +51,12 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    seven. The delays are the worker's `OPERATION_RETRY_DELAY_SCALE` times the schedule above (1
    in production; the local stack for UI tests uses 0.1). A step whose result is unknown is always followed by a read-back, even after the
    last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
-   is refused once a newer operation exists on the listing, since it would undo that one. A
+   is refused once a newer operation exists on the listing, since it would undo that one. Try
+   now (`tryOperationNow`, also the admin's `operation-try-now`) runs a waiting operation's next
+   attempt at once: only a `retrying` or `verifying` one, which keeps its status, attempts, and
+   error, and whose attempt runs exactly as it would have later (a retry reads the listing back
+   first); only the time moves, and its history records the move. A step that runs on the
+   seller's iPhone is taken on the phone's next look. A
    create, revise, or relist whose content the adapter's own validation refuses fails before
    anything is sent (`validation_failed`, `REFUSED_CONTENT_ERROR`, "Poshmark needs a size for
    Men's Shirts. Fix it, then try again."). Retrying the same content can only fail again, so
@@ -128,7 +136,15 @@ escalates the alert. A second sale opens a double-sale incident.
 **Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
 `Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
 `Done (you confirmed)`, and for a step the phone runs, `Delisting... waiting on your iPhone (12
-minutes)` and `Delisting on your iPhone...`. Assisted listings never show "confirmed by <marketplace>".
+minutes)` and `Delisting on your iPhone...`. The wait on the iPhone counts from when the step was
+due: a retry before its time shows its retry label, and the app adds when it is ("Waiting to
+retry at 9:41 PM", "Checking again at 9:41 PM", from `nextAttemptAt`) with Try now, so a wait
+for a retry is never shown as a wait for the phone. A relist says what it does where Listora
+knows (`relistMode`): `Reactivating...` brings back the listing Listora ended (Mercari activates
+it, Poshmark puts it back for sale), and `Relisting (new listing)...` posts a new one (Depop,
+whose End deletes, and any listing whose id a read-back cleared because the marketplace removed
+it; the executor sends such a relist as the marketplace's create, after the same checks).
+Assisted listings never show "confirmed by <marketplace>".
 `describeListingStatus` (`status-display.ts`) renders these labels from the listing's newest
 operation: "confirmed by <marketplace>" only for a read-back's evidence, "you confirmed" only
 for the user's confirmation, and a listing without a successful operation is never shown as

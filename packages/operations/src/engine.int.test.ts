@@ -10,6 +10,7 @@ import {
   confirmOperationByUser,
   enqueueOperation,
   retryOperation,
+  tryOperationNow,
   type NewOperation,
 } from './commands.ts';
 import {
@@ -25,6 +26,7 @@ import {
   type EngineHarness,
   type ListingRow,
 } from './test-support.ts';
+import { CHECK_SOON_MS } from './executor.ts';
 import { OPERATION_TASK } from './jobs.ts';
 import { MAINTENANCE_TASK } from './maintenance.ts';
 import { maxAttempts } from './policy.ts';
@@ -163,6 +165,50 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     expect(harness.fake.listings('ebay', listing.id)).toHaveLength(1);
   });
 
+  it('runs a waiting retry at once on Try now, through the same read-back first', async () => {
+    // Retries wait a minute here, as a real backoff would leave a seller watching.
+    await worker?.stop();
+    worker = await harness.startWorker({
+      policy: { ...FAST_POLICY, delaysMs: FAST_POLICY.delaysMs.map(() => 60_000) },
+    });
+    const listing = await harness.createListing();
+    harness.fake.inject({ action: 'create', sku: listing.id, fault: { type: 'server_error' } });
+    const op = await harness.enqueue(listing, 'create', {
+      status: 'active',
+      title: 'Linen shirt',
+      priceCents: 2400,
+    });
+    const waiting = await harness.waitForStatus(op.id, ['retrying']);
+    expect(waiting.next_attempt_at?.getTime()).toBeGreaterThan(Date.now() + 30_000);
+    // Only a waiting operation can be tried now: a queued, running, or settled one cannot.
+    const target = { accountId: harness.accountId, operationId: op.id };
+
+    const moved = await tryOperationNow(harness.db, target);
+
+    expect(moved).toMatchObject({ status: 'retrying', attempts: 1, error_code: 'server_error' });
+    expect(moved.next_attempt_at?.getTime()).toBeLessThanOrEqual(Date.now());
+    const done = await harness.waitForStatus(op.id, SETTLED);
+    expect(done).toMatchObject({ status: 'succeeded', success_evidence: 'read_back', attempts: 2 });
+    expect(await transitions(op.id)).toEqual([
+      'new>queued',
+      'queued>running',
+      'running>retrying',
+      'retrying>retrying',
+      'retrying>running',
+      'running>succeeded',
+    ]);
+    expect((await harness.events(op.id))[3]?.detail).toMatchObject({ action: 'try_now' });
+    expect(requests(listing).map((request) => request.action)).toEqual([
+      'create',
+      'read',
+      'create',
+      'read',
+    ]);
+    await expect(tryOperationNow(harness.db, target)).rejects.toBeInstanceOf(
+      InvalidTransitionError,
+    );
+  });
+
   it('reads back instead of resending when a 5xx response hid an applied change', async () => {
     const listing = await harness.createListing();
     harness.fake.inject({
@@ -211,6 +257,36 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     expect(verifying).toMatchObject({ error_code: 'timeout' });
     expect(requests(listing, 'create')).toHaveLength(1);
     expect(harness.fake.listings('ebay', listing.id)).toHaveLength(1);
+  });
+
+  it('checks a send with an unknown result soon, not after the retry backoff', async () => {
+    await worker?.stop();
+    worker = await harness.startWorker({
+      policy: { ...FAST_POLICY, delaysMs: FAST_POLICY.delaysMs.map(() => 60_000) },
+    });
+    const listing = await harness.createListing();
+    harness.fake.inject({
+      action: 'create',
+      sku: listing.id,
+      fault: { type: 'timeout_after_send' },
+    });
+    const op = await harness.enqueue(listing, 'create', {
+      status: 'active',
+      title: 'Merino sweater',
+      priceCents: 4100,
+    });
+
+    const verifying = await harness.waitForStatus(op.id, ['verifying']);
+
+    // The seller waits to see it listed: the read-back is due in CHECK_SOON_MS, not a minute.
+    const dueIn = (verifying.next_attempt_at?.getTime() ?? 0) - Date.now();
+    expect(dueIn).toBeGreaterThan(CHECK_SOON_MS - 5_000);
+    expect(dueIn).toBeLessThanOrEqual(CHECK_SOON_MS);
+    // Try now reads it back at once.
+    await tryOperationNow(harness.db, { accountId: harness.accountId, operationId: op.id });
+    const done = await harness.waitForStatus(op.id, SETTLED);
+    expect(done).toMatchObject({ status: 'succeeded', success_evidence: 'read_back' });
+    expect(requests(listing, 'create')).toHaveLength(1);
   });
 
   it('never succeeds while the read-back disagrees, and succeeds once it agrees', async () => {

@@ -21,6 +21,9 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     private var _replaced: [Schemas.ItemReplace] = []
     private var _floors: [Schemas.MarketplaceFloor] = []
     private var _activityPages: [ActivityPage] = []
+    private var _itemsByID: [String: Schemas.Item] = [:]
+    private var _deleted: [String] = []
+    private var _categories: Schemas.MarketplaceCategories?
 
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -101,9 +104,31 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
         return locked { _pages.isEmpty ? ItemPage(items: [], nextCursor: nil) : _pages.removeFirst() }
     }
 
-    func item(id _: String) async throws(APIFailure) -> Schemas.Item {
+    /// Items by id, for the calls about several items; any other id answers ``item``.
+    var itemsByID: [String: Schemas.Item] {
+        get { locked { _itemsByID } }
+        set { locked { _itemsByID = newValue } }
+    }
+
+    /// The ids of the items deleted, in order.
+    var deleted: [String] {
+        locked { _deleted }
+    }
+
+    /// What `marketplaceCategories` answers; nil maps every item (nothing to pick).
+    var categories: Schemas.MarketplaceCategories? {
+        get { locked { _categories } }
+        set { locked { _categories = newValue } }
+    }
+
+    func item(id: String) async throws(APIFailure) -> Schemas.Item {
         locked { _calls.append("item") }
-        return item
+        return locked { _itemsByID[id] ?? _item }
+    }
+
+    func deleteItem(id: String) async throws(APIFailure) {
+        try record("delete:\(id)")
+        locked { _deleted.append(id) }
     }
 
     /// The details of every replace, in order.
@@ -176,6 +201,18 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
         return Fixtures.listing(status: .draft, label: "Draft", tone: .neutral, actions: [.publish], variant: variant)
     }
 
+    func marketplaceCategories(
+        itemID _: String,
+        marketplace _: String,
+    ) async throws(APIFailure) -> Schemas.MarketplaceCategories {
+        if let categories {
+            return categories
+        }
+        // Listora maps the item, as for most items: nothing to pick.
+        let mapped = Schemas.MarketplaceCategory(ref: "Men > Tops > T-shirts", path: ["Men", "Tops", "T-shirts"])
+        return Schemas.MarketplaceCategories(suggested: mapped, likely: [mapped], choices: [mapped])
+    }
+
     func replaceDraft(listingID _: String, variant: Schemas.ListingVariant) async throws(APIFailure) -> Schemas
         .Listing
     {
@@ -193,5 +230,10 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     func retry(operationID: String, idempotencyKey _: String) async throws(APIFailure) -> Schemas.Operation {
         try record("retry:\(operationID)")
         return Fixtures.operation(status: .queued, label: "Delisting...", tone: .inProgress)
+    }
+
+    func tryNow(operationID: String, idempotencyKey _: String) async throws(APIFailure) -> Schemas.Operation {
+        try record("tryNow:\(operationID)")
+        return Fixtures.operation(status: .retrying, label: "Delisting... retry 1 of 5", tone: .inProgress)
     }
 }

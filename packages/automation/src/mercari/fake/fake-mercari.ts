@@ -1,29 +1,43 @@
 /**
  * The fake Mercari site: a local web app with the pages and flows of Mercari's US site that
- * the Mercari automation adapter uses (docs/mercari.md), for its development and tests. No test
- * sends traffic to Mercari. It mirrors the adapter's model of Mercari: the same paths, the same
- * page elements, the sell form's level-by-level category picker, brand search, size lists,
- * and validation, the edit page's Deactivate and Activate with their confirmation dialogs, the
- * seller's listing tabs, and Mercari's checks (Cloudflare's interstitial and Turnstile widget,
- * a CAPTCHA, a login code, a logged-out session), with fault injection for each.
+ * the Mercari automation adapter uses (docs/features/mercari.md), for its development and tests.
+ * No test sends traffic to Mercari. It mirrors Mercari's pages as the adapter's page modules
+ * read them (`pages/`, mapped on a real signed-in session, 2026-10-26 and 27): the same paths,
+ * test ids, and page data.
+ *
+ * The sell page is drawn by its own script once the document is ready, with no form element. A
+ * tip about listing templates covers it on a seller's first visit. The category is a dialog of
+ * rows, a level at a time; brand and size are lists of options; the condition is a radio per
+ * Mercari condition id. Shipping starts on "Ship on your own"; Mercari's prepaid label comes
+ * with the label Mercari recommends for the category and asks "Offer buyers free shipping?".
+ * Smart Pricing starts on, and List refuses it without a lowest price. The edit page draws the
+ * same form with Update, and Deactivate or Activate, which act at once and open the seller's
+ * active listings. After List or Update, Mercari shows its own page linking to the listing. A
+ * listing's page carries the listing in its Next.js page data, sale time included. The seller's
+ * tabs are tables whose rows draw a moment after the page loads. Mercari's checks (Cloudflare's
+ * interstitial and Turnstile widget, a CAPTCHA, a login code, a logged-out session) and its
+ * refusals (an account to verify first, a card to add first) each come with fault injection.
  *
  *   GET  /login/                      the login page (a password field: no session needs it)
  *   POST /login/                      log in by hand: any email and password; sets the session cookie
  *   GET  /login/verify/               a login code step
  *   GET  /mypage/                     the seller's account, drawn by its script ([data-testid="EditProfileButton"])
- *   GET  /sell/                       the sell form; POST /sell/ lists (multipart, photos)
- *   GET  /us/item/:id/                a listing's page (name, price, description, last update)
- *   GET  /sell/edit/:id/              the edit form; POST saves it
- *   POST /sell/edit/:id/deactivate    deactivate (after the page's confirmation dialog)
- *   POST /sell/edit/:id/activate      activate an inactive listing
- *   GET  /mypage/listings/:tab/       active, inactive, in_progress, sold; `?page=N`, 10 a page
+ *   GET  /sell/                       the sell page; POST /sell/ lists (multipart, photos)
+ *   GET  /sell/complete/              Mercari's page once a listing is up, after List or Update
+ *   GET  /us/item/:id/                a listing's page (its data in `script#__NEXT_DATA__`)
+ *   GET  /sell/edit/:id/              the edit form; POST saves it (Update)
+ *   POST /sell/edit/:id/deactivate    deactivate (the edit page's Deactivate)
+ *   POST /sell/edit/:id/activate      activate an inactive listing (its Activate)
+ *   GET  /mypage/listings/:tab/       active, inactive, in_progress, and the done sales at the
+ *                                     account page's Sales link; `?page=N`, 10 a page
  *   GET  /photos/<name>.jpg           a photo, standing in for Listora's image CDN (no session)
  *
  * Every page except the login pages and photos needs the session cookie; without a valid one it
- * redirects to the login page. A listing's last-updated time grows by at least a second with
- * every change (automated changes are seconds apart), so it serves as a revision; a stale read
- * serves the listing as it was before its latest change. A deleted listing shows Mercari's
- * "deleted" notice; an unknown id a plain "not found" page.
+ * redirects to the login page. A listing's last change grows by at least a second with every
+ * change (automated changes are seconds apart), so it serves as a revision; a stale read serves
+ * the listing as it was before its latest change. As Mercari's do, a deleted listing's page
+ * answers 410 without the listing, and a sold one whose sale is done answers 410 with its data;
+ * an unknown id gets a plain "not found" page.
  */
 import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -37,7 +51,16 @@ import { SHIPPING_WEIGHTS, weightLabel } from '../shipping.ts';
 import type { MercariListingTab } from '../site.ts';
 
 export type FakeMercariAction =
-  'create' | 'update' | 'end' | 'relist' | 'read' | 'listings' | 'health' | 'form';
+  | 'create'
+  | 'update'
+  | 'end'
+  | 'relist'
+  | 'read'
+  | 'listings'
+  | 'health'
+  | 'form'
+  /** Mercari's page once a new listing is up. */
+  | 'listed';
 
 export type FakeMercariFault =
   /** Cloudflare's "Just a moment..." interstitial instead of the page, status 403. */
@@ -55,6 +78,16 @@ export type FakeMercariFault =
   | { type: 'server_error'; afterApply?: boolean }
   /** A form submission comes back with this validation message; nothing is applied. */
   | { type: 'reject'; message: string }
+  /**
+   * On the sell page (`form`): Mercari's dialog asking the seller to verify their account
+   * before they can list, instead of the form.
+   */
+  | { type: 'verification_required' }
+  /**
+   * On List (`create`): Mercari's add-a-card warning, its answer to a seller without a credit or
+   * debit card on file; nothing is listed.
+   */
+  | { type: 'card_required' }
   /** The answer comes after `delayMs`; with `afterApply`, the change is made at once. */
   | { type: 'slow'; delayMs: number; afterApply: boolean }
   /** A read serves the listing as it was before its latest change. */
@@ -69,7 +102,10 @@ export interface FakeMercariFaultRule {
   times?: number;
 }
 
-/** Mercari's states: on sale, deactivated, sold and waiting to ship, sold and done. */
+/**
+ * Mercari's states: on sale, deactivated (its page data names it `stop`), sold and waiting to
+ * ship, sold and done.
+ */
 export type FakeMercariStatus = 'on_sale' | 'inactive' | 'trading' | 'sold_out';
 
 export interface FakeMercariItem {
@@ -84,7 +120,9 @@ export interface FakeMercariItem {
   brand: string | null;
   conditionId: number;
   size: string | null;
+  /** Who pays the prepaid label: `Buyer` (no free shipping) or `Seller` (free shipping). */
   shippingPayer: string;
+  /** The prepaid label, the one Mercari recommends for the category (`Up to 3 lb`). */
   shippingWeight: string;
   /** Uploaded photo file names, in the order the form sent them. */
   photos: string[];
@@ -105,6 +143,11 @@ export interface FakeMercariRequest {
 export interface FakeMercariOptions {
   /** Rows per page of the listing tabs (default 10). */
   pageSize?: number;
+  /**
+   * Whether Mercari's page after List or Update links to the listing (`LiveListingLink`, default
+   * true, as Mercari's does). Without the link, the scripts find a new listing by its SKU.
+   */
+  listedPageLinksItem?: boolean;
 }
 
 /** The brands Mercari's brand search offers (a sample of its list). */
@@ -161,13 +204,26 @@ interface Session {
 const SESSION_COOKIE = 'fake_mercari_session';
 const PHOTO_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const LIMITS = { title: 80, description: 1_000, photos: 12, minDollars: 1, maxDollars: 2_000 };
+/**
+ * The done sales' tab, where the account page's Sales link goes. Mercari's own path for it is
+ * not confirmed, only that it is not `/mypage/listings/sold/`, so the fake serves it elsewhere
+ * and the scripts must follow the link.
+ */
+const SALES_TAB_PATH = '/mypage/listings/complete/';
+/** How long after its document is ready a page's own script draws it (Mercari's are client-drawn). */
+const DRAW_MS = 300;
 
 export class FakeMercariSite {
   readonly #server: Server;
   readonly #pageSize: number;
+  readonly #listedPageLinksItem: boolean;
   readonly #items = new Map<string, StoredItem>();
   readonly #deleted = new Set<string>();
   readonly #sessions = new Map<string, Session>();
+  /** Sellers who have seen the sell page's tip about listing templates. */
+  readonly #tipped = new Set<string>();
+  /** The listing each seller's last List or Update put up, which the page after it shows. */
+  readonly #listed = new Map<string, string>();
   readonly #faults: (FakeMercariFaultRule & { remaining: number })[] = [];
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly requests: FakeMercariRequest[] = [];
@@ -176,6 +232,7 @@ export class FakeMercariSite {
 
   private constructor(options: FakeMercariOptions) {
     this.#pageSize = options.pageSize ?? 10;
+    this.#listedPageLinksItem = options.listedPageLinksItem ?? true;
     this.#server = createServer((request, response) => {
       void this.#handle(request, response).catch((error: unknown) => {
         if (!response.headersSent) {
@@ -284,7 +341,7 @@ export class FakeMercariSite {
     this.#change(this.#stored(id), { status: 'sold_out' });
   }
 
-  /** The seller deletes the listing; its page then shows Mercari's "deleted" notice. */
+  /** The seller deletes the listing; its page then answers 410, as Mercari's does. */
   remove(id: string): void {
     this.#items.delete(id);
     this.#deleted.add(id);
@@ -406,6 +463,8 @@ export class FakeMercariSite {
       case 'turnstile':
       case 'server_error':
       case 'reject':
+      case 'verification_required':
+      case 'card_required':
       case 'slow':
       case 'stale_read':
       case undefined:
@@ -415,6 +474,16 @@ export class FakeMercariSite {
     const form = route.method === 'POST' ? await readForm(request) : null;
     if (fault?.type === 'reject' && form !== null) {
       return refused(fault.message, route.id === null ? null : this.#items.get(route.id));
+    }
+    if (fault?.type === 'verification_required' && route.action === 'form' && route.id === null) {
+      return { status: 200, body: page('Sell | Mercari', verificationRequired()) };
+    }
+    if (fault?.type === 'card_required' && route.action === 'create') {
+      // The form again, with the warning over it.
+      return {
+        status: 200,
+        body: page('Sell | Mercari', listingForm(null, { paymentWarning: true })),
+      };
     }
     const apply = (): Reply => this.#apply(route, url, form, session, fault);
     if (fault?.type === 'server_error') {
@@ -454,8 +523,12 @@ export class FakeMercariSite {
           body: page('My page | Mercari', accountPage()),
         };
       case 'form':
-        if (route.id === null)
-          return { status: 200, body: page('Sell | Mercari', listingForm(null)) };
+        if (route.id === null) {
+          // The tip about listing templates shows on a seller's first visit.
+          const templatesTip = !this.#tipped.has(session.seller);
+          this.#tipped.add(session.seller);
+          return { status: 200, body: page('Sell | Mercari', listingForm(null, { templatesTip })) };
+        }
         return this.#owned(route.id, session, (stored) =>
           stored.current.status === 'on_sale' || stored.current.status === 'inactive'
             ? { status: 200, body: page('Edit listing | Mercari', listingForm(stored.current)) }
@@ -478,8 +551,14 @@ export class FakeMercariSite {
           },
           previous: null,
         });
-        return redirect(`/us/item/${id}/`);
+        this.#listed.set(session.seller, id);
+        return redirect('/sell/complete/');
       }
+      case 'listed':
+        return this.#owned(this.#listed.get(session.seller) ?? null, session, (stored) => ({
+          status: 200,
+          body: page('Listed | Mercari', listedPage(stored.current, this.#listedPageLinksItem)),
+        }));
       case 'update':
         return this.#owned(route.id, session, (stored) => {
           if (stored.current.status !== 'on_sale' && stored.current.status !== 'inactive') {
@@ -488,27 +567,29 @@ export class FakeMercariSite {
           const fields = listingFields(form, stored.current);
           if (typeof fields === 'string') return refused(fields, stored);
           this.#change(stored, fields);
-          return redirect(`/us/item/${stored.current.id}/`);
+          // The same page as after List (read 2026-10-27).
+          this.#listed.set(session.seller, stored.current.id);
+          return redirect('/sell/complete/');
         });
+      // Mercari opens the seller's active listings after Deactivate (read 2026-10-27), and the
+      // fake does the same after Activate.
       case 'end':
         return this.#owned(route.id, session, (stored) => {
           if (stored.current.status === 'on_sale') this.#change(stored, { status: 'inactive' });
-          return redirect(`/us/item/${stored.current.id}/`);
+          return redirect('/mypage/listings/active/');
         });
       case 'relist':
         return this.#owned(route.id, session, (stored) => {
           if (stored.current.status === 'inactive') this.#change(stored, { status: 'on_sale' });
-          return redirect(`/us/item/${stored.current.id}/`);
+          return redirect('/mypage/listings/active/');
         });
       case 'read': {
         const id = route.id ?? '';
         if (this.#deleted.has(id)) {
+          // As Mercari answers for a deleted item (seen 2026-10-27).
           return {
-            status: 404,
-            body: page(
-              'Mercari',
-              '<p data-testid="ItemDeletedNotice">This item has been deleted.</p>',
-            ),
+            status: 410,
+            body: page('Mercari', '<main><h1>This item is no longer available</h1></main>'),
           };
         }
         const stored = this.#items.get(id);
@@ -518,19 +599,25 @@ export class FakeMercariSite {
           fault?.type === 'stale_read' && stored.previous !== null
             ? stored.previous
             : stored.current;
-        return { status: 200, body: page(`${shown.title} | Mercari`, itemPage(shown, session)) };
+        // A sold item's page answers 410 too, with its data (read 2026-10-27).
+        return {
+          status: shown.status === 'sold_out' ? 410 : 200,
+          body: page(`${shown.title} | Mercari`, itemPage(shown, session)),
+        };
       }
       case 'listings': {
         const tab = route.tab ?? 'active';
         const number = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1);
         const status = TAB_STATUS[tab];
+        // The sold tabs by their rows' last change (a sale changes its row), newest first.
         const sold = tab === 'in_progress' || tab === 'sold';
         const rows = this.items()
           .filter((item) => item.seller === session.seller && item.status === status)
-          .sort((a, b) =>
-            sold
-              ? (b.soldAt?.getTime() ?? 0) - (a.soldAt?.getTime() ?? 0)
-              : b.listedAt.getTime() - a.listedAt.getTime() || b.id.localeCompare(a.id),
+          .sort(
+            (a, b) =>
+              (sold
+                ? b.updatedAt.getTime() - a.updatedAt.getTime()
+                : b.listedAt.getTime() - a.listedAt.getTime()) || b.id.localeCompare(a.id),
           );
         const pageRows = rows.slice((number - 1) * this.#pageSize, number * this.#pageSize);
         const more = rows.length > number * this.#pageSize;
@@ -601,7 +688,11 @@ function matchRoute(method: string, path: string): Route | null {
   if (method === 'GET' && path === '/mypage/') return { method, action: 'health', id: null };
   if (method === 'GET' && path === '/sell/') return { method, action: 'form', id: null };
   if (method === 'POST' && path === '/sell/') return { method, action: 'create', id: null };
-  const tab = /^\/mypage\/listings\/(active|inactive|in_progress|sold)\/$/.exec(path)?.[1];
+  if (method === 'GET' && path === '/sell/complete/') return { method, action: 'listed', id: null };
+  if (method === 'GET' && path === SALES_TAB_PATH) {
+    return { method, action: 'listings', id: null, tab: 'sold' };
+  }
+  const tab = /^\/mypage\/listings\/(active|inactive|in_progress)\/$/.exec(path)?.[1];
   if (method === 'GET' && tab !== undefined) {
     return { method, action: 'listings', id: null, tab: tab as MercariListingTab };
   }
@@ -701,7 +792,9 @@ type ListingFields = Pick<
   | 'photos'
 >;
 
-/** The form's fields, or Mercari's message for the first problem. */
+/**
+ * The sell page's fields, as its script sends them, or Mercari's message for the first problem.
+ */
 function listingFields(
   form: SubmittedForm | null,
   existing: FakeMercariItem | null,
@@ -711,16 +804,17 @@ function listingFields(
   const description = text('description');
   const price = text('price');
   const photos = form?.files('photos') ?? [];
-  const category = [text('categoryL0'), text('categoryL1'), text('categoryL2')].filter(
-    (name) => name !== '',
-  );
+  const category = text('category')
+    .split(' > ')
+    .filter((name) => name !== '');
   const leaf = mappedMercariCategories().find(
     (entry) => entry.path.join(' > ') === category.join(' > '),
   );
   const brand = text('brand');
   const condition = Number(text('condition'));
   const size = text('size');
-  const weight = text('shippingWeight');
+  const label = text('shippingLabel');
+  const freeShipping = text('freeShipping');
   const keptPhotos = photos.length === 0 && existing !== null ? existing.photos : photos;
   if (keptPhotos.length === 0) return 'Add at least 1 photo.';
   if (keptPhotos.length > LIMITS.photos) return 'You can add up to 12 photos.';
@@ -738,8 +832,12 @@ function listingFields(
     return 'Select the condition.';
   }
   if (leaf.size !== 'none' && !SIZES[leaf.size].includes(size)) return 'Select a size.';
-  if (!SHIPPING_WEIGHTS.some((option) => weightLabel(option) === weight)) {
-    return 'Select a shipping option.';
+  if (text('shipping') !== 'MERCARI') return 'Enter a shipping price, or choose a prepaid label.';
+  if (!SHIPPING_WEIGHTS.some((option) => weightLabel(option) === label)) {
+    return 'Select a shipping label.';
+  }
+  if (freeShipping !== 'yes' && freeShipping !== 'no') {
+    return 'Choose whether to offer buyers free shipping.';
   }
   if (!/^\d+$/.test(price)) return 'Enter a price in whole dollars.';
   const dollars = Number(price);
@@ -754,8 +852,8 @@ function listingFields(
     brand: brand === '' ? null : brand,
     conditionId: condition,
     size: leaf.size === 'none' ? null : size,
-    shippingPayer: text('shippingPayer'),
-    shippingWeight: weight,
+    shippingPayer: freeShipping === 'yes' ? 'Seller' : 'Buyer',
+    shippingWeight: label,
     photos: keptPhotos,
   };
 }
@@ -776,8 +874,10 @@ function accountPage(): string {
     '<section data-testid="SellerInfo"><h1 data-testid="DisplayName">Your account</h1>' +
     '<a data-testid="EditProfileButton" href="/mypage/profile/">Edit profile</a></section>' +
     '<div data-testid="Balance">$0</div>' +
+    '<a data-testid="My-listings" href="/mypage/listings/active/">Listings</a>' +
+    `<a data-testid="Sales" href="${SALES_TAB_PATH}">Sales</a>` +
     '<form data-testid="LogoutForm" method="post" action="/logout"><button>Log out</button></form>';
-  return `<main id="mypage"></main><script>setTimeout(() => { document.getElementById('mypage').innerHTML = ${JSON.stringify(drawn)}; }, 300);</script>`;
+  return `<main id="mypage"></main><script>setTimeout(() => { document.getElementById('mypage').innerHTML = ${JSON.stringify(drawn)}; }, ${String(DRAW_MS)});</script>`;
 }
 
 function notFound(): string {
@@ -844,134 +944,435 @@ ${badge}${inactive}
 <p>Updated <time data-testid="ItemUpdated" datetime="${item.updatedAt.toISOString()}">${item.updatedAt.toUTCString()}</time></p>
 <p data-testid="UserName">fake seller</p>
 ${edit}
-</main>`;
+</main>
+${itemData(item)}`;
 }
 
+/**
+ * The listing in the page's Next.js data, as Mercari's item page carries it (read 2026-10-27):
+ * `props.pageProps.serverState["ItemDetail:<id>"]`, with the price in cents, Mercari's status
+ * name (`stop` for a listing the seller deactivated), the last change, and when it last sold
+ * (0 before it ever did), both in seconds.
+ */
+function itemData(item: FakeMercariItem): string {
+  const data = {
+    props: {
+      pageProps: {
+        serverState: {
+          [`ItemDetail:${item.id}`]: {
+            id: item.id,
+            name: item.title,
+            price: item.priceCents,
+            description: item.description,
+            status: item.status === 'inactive' ? 'stop' : item.status,
+            created: Math.floor(item.listedAt.getTime() / 1000),
+            updated: Math.floor(item.updatedAt.getTime() / 1000),
+            lastSoldAt: item.soldAt === null ? 0 : Math.floor(item.soldAt.getTime() / 1000),
+          },
+        },
+      },
+    },
+    page: '/us/item/[id]',
+    query: { id: item.id },
+  };
+  return `<script id="__NEXT_DATA__" type="application/json">${scriptJson(data)}</script>`;
+}
+
+/**
+ * Mercari's page once a listing is up, after List and after an edit's Update alike (read
+ * 2026-10-27: under the sell page's path, with "Sell another item" and "Share your listing"),
+ * with its link to the listing's page (`LiveListingLink`) unless `links` is false.
+ */
+function listedPage(item: FakeMercariItem, links: boolean): string {
+  const link = links
+    ? `<a data-testid="LiveListingLink" href="/us/item/${item.id}/">View your listing</a>`
+    : '';
+  return `<main data-testid="ListingComplete"><h1>Your item is listed</h1><p>${escape(item.title)}</p>
+${link}
+<button type="button" data-testid="ShareListing">Share your listing</button>
+<a data-testid="SellAnotherItem" href="/sell/">Sell another item</a></main>`;
+}
+
+/**
+ * Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26),
+ * drawn instead of the form.
+ */
+function verificationRequired(): string {
+  const drawn =
+    '<div data-testid="VerificationExceptionDialog" role="dialog"><h2>Verify your account to start selling</h2>' +
+    '<p>Mercari needs your phone number and your ID before you can list.</p>' +
+    '<button type="button" data-testid="VerifyButton">Verify</button></div>';
+  return `<main id="sell"></main><script>setTimeout(() => { document.getElementById('sell').innerHTML = ${JSON.stringify(drawn)}; }, ${String(DRAW_MS)});</script>`;
+}
+
+/** A day as the seller's tabs show it (`11/16/24`), in Mercari's US Pacific time. */
+const SHOWN_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles',
+  month: '2-digit',
+  day: '2-digit',
+  year: '2-digit',
+});
+
+/**
+ * A tab of the seller's listings, as Mercari's are (read 2026-10-26 and 27): drawn by script
+ * once the document is ready, and an empty tab shows `ZeroListings` instead of rows. A tab is a
+ * table (`Listings`) whose rows draw a moment after it, once Mercari's own query answers, each
+ * with its listing's link (the title as its text), its price, and the day it last changed
+ * ("Updated"). A sold row shows no sale time: that is on the listing's page.
+ */
 function listingsPage(
   tab: MercariListingTab,
   rows: readonly FakeMercariItem[],
   number: number,
   more: boolean,
 ): string {
-  const sold = tab === 'in_progress' || tab === 'sold';
+  const path = tab === 'sold' ? SALES_TAB_PATH : `/mypage/listings/${tab}/`;
+  const next = more
+    ? `<a data-testid="NextPage" href="${path}?page=${String(number + 1)}">Next</a>`
+    : '';
+  const draw = (into: string, html: string, afterMs: number): string =>
+    `setTimeout(() => { document.getElementById(${JSON.stringify(into)}).innerHTML = ${scriptJson(html)}; }, ${String(afterMs)});`;
+  if (rows.length === 0) {
+    const empty = draw('tab', '<div data-testid="ZeroListings">No listings yet</div>', DRAW_MS);
+    return `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>${empty}</script>`;
+  }
   const items = rows
     .map(
       (item) =>
-        `<li data-testid="ListingRow"><a data-testid="ListingLink" href="/us/item/${item.id}/"><span data-testid="ListingName">${escape(item.title)}</span></a><span data-testid="ListingPrice">${dollars(item.priceCents)}</span>${sold ? `<time data-testid="SoldAt" datetime="${(item.soldAt ?? item.updatedAt).toISOString()}">sold</time><span data-testid="BuyerName">a buyer</span>` : ''}</li>`,
+        `<tr data-testid="ListingRow"><td><a data-testid="ItemLink" href="/us/item/${item.id}/">${escape(item.title)}</a></td><td data-testid="ItemPrice">${dollars(item.priceCents)}</td><td>${SHOWN_DAY.format(item.updatedAt)}</td></tr>`,
     )
     .join('');
-  const next = more
-    ? `<a data-testid="NextPage" href="/mypage/listings/${tab}/?page=${String(number + 1)}">Next</a>`
-    : '';
-  return `<main><h1>Listings</h1><ul data-testid="ListingList">${items}</ul>${next}</main>`;
+  const table =
+    '<table data-testid="Listings"><thead><tr><th>Item</th><th>Price</th><th>Updated</th></tr></thead><tbody id="rows"></tbody></table><div id="more"></div>';
+  const script = `setTimeout(() => { document.getElementById('tab').innerHTML = ${scriptJson(table)}; ${draw('rows', items, 200)} ${draw('more', next, 200)} }, ${String(DRAW_MS)});`;
+  return `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>${script}</script>`;
 }
 
+interface SellFormOptions {
+  /** The tip about listing templates, over a new listing's form on a seller's first visit. */
+  templatesTip?: boolean;
+  /** Mercari's add-a-card warning over the form, its answer to List without a card on file. */
+  paymentWarning?: boolean;
+}
+
+/** A dialog over the whole page, as Mercari's tips, confirmations, and warnings are. */
+const OVERLAY =
+  'position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.4)';
+const OVERLAY_BOX = 'background:#fff;padding:16px;border-radius:8px';
+
 /**
- * The listing form, with the small script that makes Mercari's pickers work: each category
- * level's options appear once the level above is picked, the size list follows the category,
- * and the brand search suggests brands from Mercari's list as the seller types.
+ * The listing form as Mercari's sell page draws it (read 2026-10-27), on the sell page for a new
+ * listing and on a listing's edit page. Its script draws it with no form element, its parts
+ * named by test ids:
+ *
+ * - The category button opens a dialog of rows (`DialogWrapper`, `CategoryRow`), a level at a
+ *   time from the top; picking a row that has no rows under it closes the dialog, and the
+ *   button then shows the path (`Men > Tops > T-shirts`). A category Listora maps that has
+ *   subcategories of its own (`Men > Coats & jackets`) is chosen when its row is picked, and
+ *   the dialog stays on its subcategories for a deeper pick.
+ * - Brand is a search: focusing it starts a new one, and typing lists Mercari's matching brands
+ *   (`Brand-option`) to pick from. The size field (for a category with sizes) lists the
+ *   category's sizes (`Size-option`) when tapped.
+ * - Condition is a radio per Mercari condition id. Shipping starts on "Ship on your own";
+ *   Mercari's prepaid label (`MercariShipping`) shows the label Mercari recommends for the
+ *   category (`SelectShipping`) and asks "Offer buyers free shipping?" (`ShippingPayerOption`,
+ *   answered Yes or No).
+ * - Smart Pricing (`SmartPricingButton`, reading ON or OFF) starts on for a new listing; turning
+ *   it off asks to confirm (`SmartPricingTurnOffButton`). List with it on marks the price as
+ *   needing a lowest price, and nothing is sent.
+ *
+ * `ListButton` (List on the sell page, Update on the edit page) sends what the form holds,
+ * photos included, as the page's script would. The edit page also has the listing's
+ * `ActivateDeactivateButton` (Deactivate or Activate), which acts at once, with no confirmation
+ * (read 2026-10-27). Both pages are drawn a moment after their document is ready.
  */
-function listingForm(item: FakeMercariItem | null): string {
-  const action = item === null ? '/sell/' : `/sell/edit/${item.id}/`;
+function listingForm(item: FakeMercariItem | null, options: SellFormOptions = {}): string {
   const value = (text: string | null | undefined): string => escape(text ?? '');
-  const tree = mappedMercariCategories().map((entry) => ({ path: entry.path, size: entry.size }));
   const conditions = Object.values(MERCARI_CONDITIONS)
     .map(
       (option) =>
         `<label><input type="radio" name="condition" value="${String(option.id)}"${item?.conditionId === option.id ? ' checked' : ''}> ${option.label}</label>`,
     )
     .join('');
-  const weights = SHIPPING_WEIGHTS.map((weight) => {
-    const label = weightLabel(weight);
-    return `<option value="${label}"${item?.shippingWeight === label ? ' selected' : ''}>${label}</option>`;
-  }).join('');
-  const buttons =
-    item === null
-      ? '<button type="submit" data-testid="ListButton">List</button>'
-      : `<button type="submit" data-testid="SaveButton">Save changes</button>`;
-  const status =
+  const tip =
+    options.templatesTip === true
+      ? `<div data-testid="ListingTemplatesEducation" role="dialog" aria-modal="true" style="${OVERLAY}"><div style="${OVERLAY_BOX}"><p>New: save a listing as a template and start the next one from it.</p><button type="button" data-testid="ListingTemplatesEducationGotIt">Got it</button></div></div>`
+      : '';
+  const prepaid = item !== null;
+  const smartPricing = item === null;
+  const toggle =
     item === null
       ? ''
       : item.status === 'on_sale'
-        ? confirmation('Deactivate', 'DeactivateButton', `/sell/edit/${item.id}/deactivate`)
-        : confirmation('Activate', 'ActivateButton', `/sell/edit/${item.id}/activate`);
-  const current = {
-    category: item?.category ?? [],
-    size: item?.size ?? null,
+        ? `<button type="button" data-testid="ActivateDeactivateButton" data-action="/sell/edit/${item.id}/deactivate">Deactivate</button>`
+        : `<button type="button" data-testid="ActivateDeactivateButton" data-action="/sell/edit/${item.id}/activate">Activate</button>`;
+  const html = `${tip}<h1>${item === null ? 'List an item' : 'Edit your listing'}</h1>
+<label>Photos <input type="file" data-testid="SellPhotoInput" multiple accept="image/jpeg"></label>
+<label>Title <input data-testid="Title" value="${value(item?.title)}"></label>
+<label>Description <textarea data-testid="Description">${value(item?.description)}</textarea></label>
+<p>Category <button type="button" data-testid="SellCategoryFieldButton">${item === null ? 'Select a category' : escape(item.category.join(' > '))}</button></p>
+<div id="categories"></div>
+<label>Brand <input data-testid="Brand" autocomplete="off" placeholder="Search brands" value="${value(item?.brand)}"></label>
+<ul id="brands" role="listbox"></ul>
+<fieldset><legend>Condition</legend>${conditions}</fieldset>
+<div id="size"></div>
+<ul id="sizes" role="listbox"></ul>
+<fieldset><legend>Shipping</legend>
+<label><input type="radio" id="SHIP_ON_YOUR_OWN" name="shipping" value="SHIP_ON_YOUR_OWN"${prepaid ? '' : ' checked'}> Ship on your own</label>
+<input type="radio" id="MERCARI" name="shipping" value="MERCARI"${prepaid ? ' checked' : ''}> <button type="button" data-testid="MercariShipping">Mercari prepaid label</button>
+<div id="prepaid"></div>
+</fieldset>
+<label>Price $<input data-testid="Price" inputmode="numeric" value="${item === null ? '' : String(item.priceCents / 100)}"></label>
+<p id="price-error" role="alert"></p>
+<p>Smart Pricing <button type="button" data-testid="SmartPricingButton">${smartPricing ? 'ON' : 'OFF'}</button></p>
+<div id="smart-pricing"></div>
+<button type="button" data-testid="ListButton">${item === null ? 'List' : 'Update'}</button>
+${toggle}`;
+  const config = {
+    html,
+    action: item === null ? '/sell/' : `/sell/edit/${item.id}/`,
+    tree: mappedMercariCategories().map((entry) => ({
+      path: entry.path,
+      size: entry.size,
+      label: weightLabel(entry.weight),
+    })),
+    sizes: SIZES,
+    brands: FAKE_MERCARI_BRANDS,
+    state: {
+      category: item?.category ?? [],
+      brand: item?.brand ?? null,
+      size: item?.size ?? null,
+      shipping: prepaid ? 'MERCARI' : 'SHIP_ON_YOUR_OWN',
+      freeShipping: item === null ? null : item.shippingPayer === 'Seller' ? 'yes' : 'no',
+      smartPricing,
+    },
   };
-  return `<form method="post" action="${action}" enctype="multipart/form-data" data-testid="ListingForm">
-<label>Photos <input type="file" name="photos" data-testid="PhotoInput" multiple accept="image/jpeg"></label>
-<label>Title <input name="name" data-testid="Title" value="${value(item?.title)}"></label>
-<label>Description <textarea name="description" data-testid="Description">${value(item?.description)}</textarea></label>
-<select name="categoryL0" data-testid="CategoryL0"><option value="">Category</option></select>
-<select name="categoryL1" data-testid="CategoryL1"><option value="">Subcategory</option></select>
-<select name="categoryL2" data-testid="CategoryL2"><option value="">Type</option></select>
-<label>Brand <input name="brand" data-testid="Brand" autocomplete="off" value="${value(item?.brand)}"></label>
-<ul data-testid="BrandSuggestions" hidden></ul>
-<fieldset>${conditions}</fieldset>
-<select name="size" data-testid="Size"><option value="">Size</option></select>
-<select name="shippingPayer" data-testid="ShippingPayer"><option value="">Who pays</option><option value="Buyer"${item?.shippingPayer === 'Buyer' ? ' selected' : ''}>Buyer</option><option value="Seller"${item?.shippingPayer === 'Seller' ? ' selected' : ''}>Seller</option></select>
-<select name="shippingWeight" data-testid="ShippingWeight"><option value="">Package weight</option>${weights}</select>
-<label>Price $<input name="price" data-testid="Price" inputmode="numeric" value="${item === null ? '' : String(item.priceCents / 100)}"></label>
-${buttons}
-</form>
-${status}
+  const warning =
+    options.paymentWarning === true
+      ? `<div data-testid="PaymentWarningModal" role="dialog" aria-modal="true" style="${OVERLAY}"><div style="${OVERLAY_BOX}"><h2>Add a credit or debit card</h2><p>Mercari needs a payment method on file before you can list.</p><a href="/mypage/payment/">Add credit / debit card</a></div></div>`
+      : '';
+  return `<main id="sell"></main>${warning}
 <script>
 (() => {
-  const tree = ${scriptJson(tree)};
-  const sizes = ${scriptJson(SIZES)};
-  const brands = ${scriptJson(FAKE_MERCARI_BRANDS)};
-  const current = ${scriptJson(current)};
-  const levels = [0, 1, 2].map((level) => document.querySelector('[data-testid="CategoryL' + level + '"]'));
-  const size = document.querySelector('[data-testid="Size"]');
-  const fill = (select, names, placeholder) => {
-    select.replaceChildren(new Option(placeholder, ''), ...names.map((name) => new Option(name, name)));
+  const config = ${scriptJson(config)};
+  const state = config.state;
+  const root = document.getElementById('sell');
+  const make = (tag, attributes, text) => {
+    const node = document.createElement(tag);
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+    if (text !== undefined) node.textContent = text;
+    return node;
   };
-  const picked = (upTo) => levels.slice(0, upTo).map((select) => select.value);
-  const children = (path) => [...new Set(tree
-    .filter((entry) => entry.path.length > path.length && path.every((name, index) => entry.path[index] === name))
-    .map((entry) => entry.path[path.length]))];
-  const leaf = () => tree.find((entry) => entry.path.join('>') === picked(3).filter(Boolean).join('>'));
-  const refresh = (from) => {
-    for (let level = from + 1; level < 3; level += 1) {
-      fill(levels[level], picked(level).every(Boolean) ? children(picked(level)) : [], level === 1 ? 'Subcategory' : 'Type');
-    }
-    const entry = leaf();
-    fill(size, entry && entry.size !== 'none' ? sizes[entry.size] : [], 'Size');
-  };
-  fill(levels[0], children([]), 'Category');
-  levels.forEach((select, level) => select.addEventListener('change', () => refresh(level)));
-  current.category.forEach((name, level) => { levels[level].value = name; refresh(level); });
-  if (current.size) size.value = current.size;
-  const brand = document.querySelector('[data-testid="Brand"]');
-  const list = document.querySelector('[data-testid="BrandSuggestions"]');
-  brand.addEventListener('input', () => {
-    const typed = brand.value.trim().toLowerCase();
-    const found = typed === '' ? [] : brands.filter((name) => name.toLowerCase().includes(typed));
-    list.replaceChildren(...(found.length === 0
-      ? [Object.assign(document.createElement('li'), { textContent: 'No brands found' })]
-      : found.map((name) => {
-          const option = Object.assign(document.createElement('li'), { textContent: name });
-          option.dataset.testid = 'BrandSuggestion';
-          option.addEventListener('click', () => { brand.value = name; list.hidden = true; });
+  const named = (path) => path.join(' > ');
+  const entry = (path) => config.tree.find((candidate) => named(candidate.path) === named(path));
+  const children = (path) => [...new Set(config.tree
+    .filter((candidate) => candidate.path.length > path.length && path.every((name, index) => candidate.path[index] === name))
+    .map((candidate) => candidate.path[path.length]))];
+  const draw = () => {
+    root.innerHTML = config.html;
+    const find = (selector) => root.querySelector(selector);
+
+    const gotIt = find('[data-testid="ListingTemplatesEducationGotIt"]');
+    if (gotIt) gotIt.addEventListener('click', () => find('[data-testid="ListingTemplatesEducation"]').remove());
+
+    // Size: the category's list, shown when the field is tapped.
+    const sizeField = find('#size');
+    const sizes = find('#sizes');
+    const drawSize = () => {
+      sizes.replaceChildren();
+      const chosen = entry(state.category);
+      if (!chosen || chosen.size === 'none') {
+        sizeField.replaceChildren();
+        return;
+      }
+      const input = make('input', { 'data-testid': 'Size', readonly: '', placeholder: 'Select a size' });
+      input.value = state.size || '';
+      input.addEventListener('click', () => {
+        sizes.replaceChildren(...config.sizes[chosen.size].map((label) => {
+          const option = make('li', { role: 'option', 'data-testid': 'Size-option' }, label);
+          option.addEventListener('click', () => {
+            state.size = label;
+            input.value = label;
+            sizes.replaceChildren();
+          });
           return option;
-        })));
-    list.hidden = typed === '';
-  });
-  document.querySelectorAll('[data-confirm]').forEach((button) => {
-    button.addEventListener('click', () => {
-      document.getElementById(button.dataset.confirm).hidden = false;
+        }));
+      });
+      const label = make('label', {}, 'Size ');
+      label.append(input);
+      sizeField.replaceChildren(label);
+    };
+
+    // Shipping: Mercari's prepaid label, with the label it recommends for the category.
+    const prepaid = find('#prepaid');
+    const drawPrepaid = () => {
+      if (state.shipping !== 'MERCARI') {
+        prepaid.replaceChildren();
+        return;
+      }
+      const chosen = entry(state.category);
+      const label = make('label', {}, 'Shipping label ');
+      label.append(make('input', { 'data-testid': 'SelectShipping', readonly: '', value: chosen ? chosen.label : '' }));
+      const answer = state.freeShipping === 'yes' ? 'Yes' : state.freeShipping === 'no' ? 'No' : 'Choose';
+      const question = make('div', { 'data-testid': 'ShippingPayerOption', role: 'button', tabindex: '0' }, 'Offer buyers free shipping? ' + answer);
+      const answers = make('ul', { role: 'listbox' });
+      question.addEventListener('click', () => {
+        answers.replaceChildren(...[['yes', 'Yes', 'FreeShippingYesButton'], ['no', 'No', 'FreeShippingNoButton']].map(([value, text, id]) => {
+          const option = make('li', { role: 'option', 'data-testid': id }, text);
+          option.addEventListener('click', () => {
+            state.freeShipping = value;
+            drawPrepaid();
+          });
+          return option;
+        }));
+      });
+      prepaid.replaceChildren(label, question, answers);
+    };
+    const ship = (method) => {
+      state.shipping = method;
+      find('#' + method).checked = true;
+      drawPrepaid();
+    };
+    find('[data-testid="MercariShipping"]').addEventListener('click', () => ship('MERCARI'));
+    for (const radio of root.querySelectorAll('input[name="shipping"]')) {
+      radio.addEventListener('change', () => ship(radio.value));
+    }
+
+    // Category: a dialog of rows, a level at a time, from the top each time it opens.
+    const categoryButton = find('[data-testid="SellCategoryFieldButton"]');
+    const categories = find('#categories');
+    const showLevel = (path) => {
+      const dialog = make('div', { 'data-testid': 'DialogWrapper', role: 'dialog', 'aria-label': 'Category' });
+      for (const name of children(path)) {
+        const row = make('button', { type: 'button', 'data-testid': 'CategoryRow' }, name);
+        row.addEventListener('click', () => pick([...path, name]));
+        dialog.append(row);
+      }
+      categories.replaceChildren(dialog);
+    };
+    const pick = (path) => {
+      const chosen = entry(path);
+      if (chosen) {
+        state.category = path;
+        categoryButton.textContent = named(path);
+        if (chosen.size === 'none' || !config.sizes[chosen.size].includes(state.size)) state.size = null;
+        drawSize();
+        drawPrepaid();
+      }
+      if (children(path).length > 0) showLevel(path);
+      else categories.replaceChildren();
+    };
+    categoryButton.addEventListener('click', () => showLevel([]));
+
+    // Brand: a search of Mercari's list; focusing it starts a new one.
+    const brand = find('[data-testid="Brand"]');
+    const brands = find('#brands');
+    brand.addEventListener('focus', () => {
+      brand.value = '';
+      brands.replaceChildren();
     });
-  });
+    brand.addEventListener('input', () => {
+      const typed = brand.value.trim().toLowerCase();
+      const found = config.brands.filter((name) => typed !== '' && name.toLowerCase().includes(typed));
+      brands.replaceChildren(...(typed === ''
+        ? []
+        : found.length === 0
+          ? [make('li', { role: 'option', 'aria-disabled': 'true' }, 'No brands found')]
+          : found.map((name) => {
+              const option = make('li', { role: 'option', 'data-testid': 'Brand-option' }, name);
+              option.addEventListener('click', () => {
+                state.brand = name;
+                brand.value = name;
+                brands.replaceChildren();
+              });
+              return option;
+            })));
+    });
+
+    // Smart Pricing: turning it off asks to confirm.
+    const smart = find('[data-testid="SmartPricingButton"]');
+    const smartDialog = find('#smart-pricing');
+    const price = find('[data-testid="Price"]');
+    const priceError = find('#price-error');
+    const showSmart = () => {
+      smart.textContent = state.smartPricing ? 'ON' : 'OFF';
+      if (!state.smartPricing) {
+        price.removeAttribute('aria-invalid');
+        priceError.textContent = '';
+      }
+    };
+    smart.addEventListener('click', () => {
+      if (!state.smartPricing) {
+        state.smartPricing = true;
+        showSmart();
+        return;
+      }
+      const dialog = make('div', { role: 'dialog', 'aria-modal': 'true', style: ${JSON.stringify(OVERLAY)} });
+      const box = make('div', { style: ${JSON.stringify(OVERLAY_BOX)} });
+      box.append(make('p', {}, 'Turn off Smart Pricing? Your price stays as you set it.'));
+      const off = make('button', { type: 'button', 'data-testid': 'SmartPricingTurnOffButton' }, 'Turn off');
+      off.addEventListener('click', () => {
+        state.smartPricing = false;
+        showSmart();
+        dialog.remove();
+      });
+      const keep = make('button', { type: 'button' }, 'Keep it on');
+      keep.addEventListener('click', () => dialog.remove());
+      box.append(off, keep);
+      dialog.append(box);
+      smartDialog.replaceChildren(dialog);
+    });
+
+    // A change sent the way the page's script sends it.
+    const send = (action, fields, photos) => {
+      const form = make('form', { method: 'post', action, enctype: 'multipart/form-data', hidden: '' });
+      for (const [name, value] of Object.entries(fields)) {
+        const input = make('input', { type: 'hidden', name });
+        input.value = value;
+        form.append(input);
+      }
+      if (photos) {
+        photos.name = 'photos';
+        form.append(photos);
+      }
+      document.body.append(form);
+      form.submit();
+    };
+
+    // List (Update on the edit page): what the form holds, photos included.
+    find('[data-testid="ListButton"]').addEventListener('click', () => {
+      if (state.smartPricing) {
+        price.setAttribute('aria-invalid', 'true');
+        priceError.textContent = 'Smart Pricing needs a lowest price. Set one, or turn Smart Pricing off.';
+        return;
+      }
+      const chosen = entry(state.category);
+      const checked = root.querySelector('input[name="condition"]:checked');
+      const fields = {
+        name: find('[data-testid="Title"]').value,
+        description: find('[data-testid="Description"]').value,
+        category: named(state.category),
+        brand: state.brand || '',
+        condition: checked ? checked.value : '',
+        size: state.size || '',
+        shipping: state.shipping,
+        shippingLabel: state.shipping === 'MERCARI' && chosen ? chosen.label : '',
+        freeShipping: state.freeShipping || '',
+        price: price.value,
+      };
+      send(config.action, fields, find('[data-testid="SellPhotoInput"]'));
+    });
+
+    // Deactivate or Activate: at once, with no confirmation.
+    const toggle = find('[data-testid="ActivateDeactivateButton"]');
+    if (toggle) toggle.addEventListener('click', () => send(toggle.dataset.action, {}, null));
+
+    drawSize();
+    drawPrepaid();
+  };
+  setTimeout(draw, ${String(DRAW_MS)});
 })();
 </script>`;
-}
-
-/** A Deactivate or Activate button and the dialog that confirms it. */
-function confirmation(label: string, testId: string, action: string): string {
-  const dialog = `confirm-${testId}`;
-  return `<button type="button" data-testid="${testId}" data-confirm="${dialog}">${label}</button>
-<div role="dialog" data-testid="ConfirmModal" id="${dialog}" hidden><p>${label} this listing?</p><form method="post" action="${action}"><button type="submit" data-testid="ConfirmButton">${label}</button></form></div>`;
 }
 
 /** JSON for an inline script: `<` escaped, so no value can close the script element. */

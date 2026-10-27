@@ -17,6 +17,10 @@ private struct EmptyInventoryService: InventoryService {
         throw .networkUnavailable
     }
 
+    func deleteItem(id _: String) async throws(APIFailure) {
+        throw .networkUnavailable
+    }
+
     func floors(itemID _: String) async throws(APIFailure) -> [Components.Schemas.MarketplaceFloor] {
         []
     }
@@ -50,6 +54,13 @@ private struct EmptyInventoryService: InventoryService {
         throw .networkUnavailable
     }
 
+    func marketplaceCategories(
+        itemID _: String,
+        marketplace _: String,
+    ) async throws(APIFailure) -> Components.Schemas.MarketplaceCategories {
+        Components.Schemas.MarketplaceCategories(likely: [], choices: [])
+    }
+
     func replaceDraft(listingID _: String, variant _: ListingVariant) async throws(APIFailure) -> Listing {
         throw .networkUnavailable
     }
@@ -59,6 +70,10 @@ private struct EmptyInventoryService: InventoryService {
     }
 
     func retry(operationID _: String, idempotencyKey _: String) async throws(APIFailure) -> Operation {
+        throw .networkUnavailable
+    }
+
+    func tryNow(operationID _: String, idempotencyKey _: String) async throws(APIFailure) -> Operation {
         throw .networkUnavailable
     }
 }

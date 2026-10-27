@@ -37,11 +37,11 @@ extension Components.Schemas.Marketplace {
 }
 
 extension Components.Schemas.ItemStatus {
-    /// "Ready", "Sold, delisting"; an unknown status shows as sent.
+    /// "Ready to list", "Sold, delisting"; an unknown status shows as sent.
     var label: String {
         switch value1 {
         case .draft: "Draft"
-        case .ready: "Ready"
+        case .ready: "Ready to list"
         case .listed: "Listed"
         case .soldPendingDelist: "Sold, delisting"
         case .sold: "Sold"

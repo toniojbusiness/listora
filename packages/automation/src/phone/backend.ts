@@ -138,6 +138,10 @@ export class BridgeBackend implements PageBackend {
     return expectText(await this.#page(QUERY, { selector, what: 'attribute', name }));
   }
 
+  async value(selector: string): Promise<string | null> {
+    return expectText(await this.#page(QUERY, { selector, what: 'value', name: null }));
+  }
+
   async attributes(selector: string, name: string): Promise<(string | null)[]> {
     const values = await this.#page(QUERY, { selector, what: 'attributes', name });
     if (!Array.isArray(values)) throw new PageBackendError('other', 'the page sent no list');

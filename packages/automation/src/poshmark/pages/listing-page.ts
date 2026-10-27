@@ -2,9 +2,10 @@
  * A listing's public page (`/listing/<title>-<id>`): the read-back of every change. It reads the
  * listing record the page embeds (`$_listing_details.listingDetails`).
  *
- * Absences are never authoritative: Listora has not seen what Poshmark answers for a deleted
- * listing, so a page without the listing (a 404, a listing that is no longer published) reads as
- * "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
+ * A deleted listing's page answers 404 (seen on a real listing deleted from the captain's closet,
+ * 2026-10-27), and that absence is authoritative: the listing is gone. Any other page without the
+ * listing (one that is no longer published) reads as "not found, maybe not yet", never as "gone"
+ * (docs/features/marketplaces.md).
  */
 import { z } from 'zod';
 
@@ -48,7 +49,6 @@ export async function readListing(
   id: string,
 ): Promise<RemoteListingState> {
   const record = await openListing(page, site, id);
-  return record === null
-    ? { found: false, authoritative: false }
-    : remoteListing(record, site, PAGE);
+  if (record !== null) return remoteListing(record, site, PAGE);
+  return { found: false, authoritative: isListingId(id) && page.status() === 404 };
 }

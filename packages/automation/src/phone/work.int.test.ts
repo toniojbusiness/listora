@@ -6,7 +6,8 @@
  * a delist are confirmed by read-back, a check the seller can't complete now retries, a run
  * the phone abandons is recovered, work that waits too long fails with a Retry, and a
  * connection moved to the cloud takes its waiting work with it. Linking checks the session on
- * the phone, and a sale check there hands sold orders to the sale intake.
+ * the phone, and a sale check there finds no sales, or fails visibly on sales Depop's page
+ * doesn't say the listing of.
  */
 import { randomBytes } from 'node:crypto';
 
@@ -62,6 +63,8 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
   let accountId: string;
   let deviceId: string;
   let connectionId: string;
+  /** The seller's Depop username. */
+  let seller: string;
   /** The phone's own web data: its signed-in Depop session. */
   let webData: BrowserContext;
   const vault = new SessionVault({
@@ -137,7 +140,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       })
       .returning('id')
       .executeTakeFirstOrThrow());
-    const cookie = site.issueSession(`seller-${accountId}`);
+    seller = `seller_${accountId.replaceAll('-', '').slice(-12)}`;
+    const cookie = site.issueSession(seller);
+    // The seller already has a listing for sale. A lookup by SKU reads the shop's product links,
+    // and an empty shop is only known as empty after the shop page module's wait for them (15
+    // seconds), longer than these steps get.
+    site.seed({ seller, description: 'Wool scarf.', priceCents: 1500 });
     ({ connectionId } = await linkAutomationSession(
       db,
       { vault, profile: settings.profiles.depop },
@@ -176,6 +184,20 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
         });
       }
     }
+  }
+
+  /**
+   * Runs the phone, then the read-back the engine repeats there: Depop's pages show no revision,
+   * so a read-back that matches confirms a change only once a later read matches too.
+   */
+  async function runPhoneAndConfirm(
+    op: { id: string },
+    answers: HandOffAnswer[] = [],
+  ): Promise<void> {
+    await runPhone(answers);
+    expect(await operation(op.id)).toMatchObject({ status: 'verifying', error_code: 'confirming' });
+    await step(op);
+    await runPhone();
   }
 
   async function newListing(): Promise<string> {
@@ -331,7 +353,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       marketplace: 'depop',
       evidence: { path: expect.any(String) as string, testIds: expect.any(Array) as string[] },
     });
-    expect(JSON.stringify(lines)).not.toContain(`seller-${accountId}`);
+    expect(JSON.stringify(lines)).not.toContain(seller);
     // Only the log line has it: the run's transcript keeps the answer without it.
     const kept = await db
       .selectFrom('phone_work')
@@ -352,7 +374,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       expect.objectContaining({ purpose: 'operation', operation_id: create.id, claimed_at: null }),
     ]);
     expect(await jobOf(create)).toMatchObject({ task_identifier: 'marketplace_operation' });
-    await runPhone();
+    await runPhoneAndConfirm(create);
     expect(await operation(create.id)).toMatchObject({
       status: 'succeeded',
       success_evidence: 'read_back',
@@ -367,7 +389,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
 
     const end = await enqueue(listingId, 'end');
     await step(end);
-    await runPhone();
+    await runPhoneAndConfirm(end);
     expect(await operation(end.id)).toMatchObject({
       status: 'succeeded',
       success_evidence: 'read_back',
@@ -395,7 +417,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(connection.status).toBe('connected');
     // Once the seller completes it, the next run of the step lists it.
     await step(create);
-    await runPhone(['completed']);
+    await runPhoneAndConfirm(create, ['completed']);
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
@@ -427,7 +449,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     await step(create);
     await runPhone();
     await step(create);
-    await runPhone();
+    await runPhoneAndConfirm(create);
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
@@ -465,7 +487,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     await step(create);
     await runPhone();
     await step(create);
-    await runPhone();
+    await runPhoneAndConfirm(create);
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
@@ -508,12 +530,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     ).toBeNull();
   });
 
-  it('hands sold orders a phone sale check finds to the sale intake', async () => {
+  it('fails a phone sale check visibly when Depop shows a sale, and hands nothing to the sale intake', async () => {
     await runPhone();
     const listingId = await newListing();
     const create = await enqueue(listingId, 'create');
     await step(create);
-    await runPhone();
+    await runPhoneAndConfirm(create);
     const { external_listing_id: slug } = await db
       .selectFrom('marketplace_listing')
       .select('external_listing_id')
@@ -524,20 +546,39 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       true,
     );
     await runPhone();
+    // Depop's sold items page names a sale's receipt, not its listing: the check fails, and is
+    // tried again, rather than guess which listing sold (a wrong guess would delist it).
+    const schedule = await db
+      .selectFrom('sale_check_schedule')
+      .select(['last_outcome', 'next_reason'])
+      .where('account_id', '=', accountId)
+      .where('connection_id', '=', connectionId)
+      .executeTakeFirstOrThrow();
+    expect(schedule).toEqual({ last_outcome: 'failed', next_reason: 'retry' });
+    const [run] = await db
+      .selectFrom('automation_run')
+      .select(['outcome', 'error_code'])
+      .where('account_id', '=', accountId)
+      .where('host', '=', 'phone')
+      .where('purpose', '=', 'sale_check')
+      .orderBy('started_at', 'desc')
+      .limit(1)
+      .execute();
+    expect(run).toEqual({ outcome: 'failed', error_code: 'element_missing' });
     const events = await db
       .selectFrom('inbound_event')
       .select(['source', 'provider_event_id'])
       .where('account_id', '=', accountId)
       .execute();
-    expect(events).toEqual([{ source: 'poll', provider_event_id: `order:${slug ?? ''}` }]);
+    expect(events).toEqual([]);
   });
 
-  it("reads the sold history on the phone read-only, and records each check with the phone's step times", async () => {
+  it("reads the sold history on the phone read-only, and records each check with the phone's step times, failed or not", async () => {
     await runPhone();
     const listingId = await newListing();
     const create = await enqueue(listingId, 'create');
     await step(create);
-    await runPhone();
+    await runPhoneAndConfirm(create);
     const { external_listing_id: slug } = await db
       .selectFrom('marketplace_listing')
       .select('external_listing_id')
@@ -586,13 +627,10 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     ).toEqual([
       // The first sale check after linking saw nothing sold yet.
       { kind: 'scheduled', host: 'phone', outcome: 'succeeded', orders_seen: 0, new_orders: 0 },
-      { kind: 'history', host: 'phone', outcome: 'succeeded', orders_seen: 1, new_orders: 0 },
-    ]);
-    expect(checks[1]?.orders).toEqual([
-      expect.objectContaining({
-        orderId: expect.any(String) as unknown,
-        items: [expect.objectContaining({ listingId: slug })],
-      }),
+      // Depop's sold items page lists sales in a way Listora doesn't read yet
+      // (depop/pages/sold-items-page.ts): the read fails visibly rather than guess which
+      // listing sold, and still hands nothing to the sale intake.
+      { kind: 'history', host: 'phone', outcome: 'failed', orders_seen: null, new_orders: null },
     ]);
     // The phone said how long each step took.
     const session = await db

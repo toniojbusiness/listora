@@ -101,6 +101,44 @@ export async function transitionOperation(
   return updated;
 }
 
+/**
+ * Moves a waiting operation's next attempt to now, keeping its status, attempts, and error
+ * (an operator's try-now, commands.ts), with an event in its history and its job run at once.
+ */
+export async function attemptNow(
+  trx: DbTransaction,
+  op: OperationRow,
+  detail: Record<string, unknown>,
+): Promise<OperationRow> {
+  const moved = await trx
+    .updateTable('marketplace_operation')
+    .set({ next_attempt_at: sql<Date>`now()` })
+    .where('account_id', '=', op.account_id)
+    .where('id', '=', op.id)
+    .returningAll()
+    .executeTakeFirstOrThrow();
+  await trx
+    .insertInto('operation_event')
+    .values({
+      account_id: op.account_id,
+      operation_id: op.id,
+      from_status: op.status,
+      to_status: op.status,
+      attempt: op.attempts,
+      error_code: op.error_code,
+      detail: jsonb(eventDetail(detail)),
+    })
+    .execute();
+  await scheduleOperationJob(trx, {
+    accountId: op.account_id,
+    operationId: op.id,
+    listingId: op.listing_id,
+    priority: operationPriority(op),
+    runAt: moved.next_attempt_at,
+  });
+  return moved;
+}
+
 /** Stores a detail object as JSON with credentials removed (`redactForStorage`). */
 export function eventDetail(detail: Record<string, unknown>): JsonObject {
   const redacted = redactForStorage(detail);

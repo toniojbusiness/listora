@@ -25,6 +25,8 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         case check
         /// Retry the failed operation.
         case retry(operationID: String)
+        /// Run the waiting operation's next attempt now.
+        case tryNow(operationID: String)
         /// Open the task the assisted operation waits on, in the task inbox.
         case openTask(operationID: String)
 
@@ -36,6 +38,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             case .relist: "Relist"
             case .check: "Check status"
             case .retry: "Retry"
+            case .tryNow: "Try now"
             case .openTask: "Open task"
             }
         }
@@ -49,6 +52,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             case .relist: "relist"
             case .check: "check"
             case .retry: "retry"
+            case .tryNow: "tryNow"
             case .openTask: "openTask"
             }
         }
@@ -61,27 +65,58 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
     let statusLabel: String
     let statusDetail: String?
     let tone: Tone
-    /// "Through eBay's API" or "Assisted": how Listora works with this marketplace.
+    /// "Listora does it for you through eBay" or "You finish each step in the Poshmark app": how
+    /// Listora works with this marketplace.
     let modeLabel: String
+    /// The listing on the marketplace's own site, to open or share.
+    let externalURL: URL?
+    /// "Last change: Price changed (confirmed by eBay), Oct 24, 3:05 PM" once a change after the
+    /// first publish has settled, or "Since Oct 24, 3:05 PM" for a failure or a step waiting for
+    /// the seller, whose status already names it (while a change runs, the status says it all).
+    let lastChange: String?
     /// The listing's own price ("$39.00"), which can differ from the item's list price.
     let priceLabel: String?
+    /// When the waiting operation tries again ("Waiting to retry at 9:41 PM"), while it waits.
+    let scheduleLabel: String?
     let actions: [Action]
 
-    init(marketplace: KnownMarketplace, listing: Listing?, connection: Connection?) {
+    init(marketplace: KnownMarketplace, listing: Listing?, connection: Connection?, now: Date = Date()) {
         id = marketplace.rawValue
         name = Formatting.marketplaceName(marketplace.rawValue)
         self.listing = listing
         modeLabel = switch (listing?.mode ?? connection?.mode)?.value1 {
-        case .api: "Through \(name)'s API"
-        case .automation: "Automated in your \(name) session"
-        case .assisted, nil: "Assisted - you finish each step in the \(name) app"
+        case .api: "Listora does it for you through \(name)"
+        case .automation: "Listora does it for you in your linked \(name) account"
+        case .assisted, nil: "You finish each step in the \(name) app"
+        }
+        externalURL = listing?.externalUrl.flatMap { URL(string: $0) }
+        lastChange = listing?.latestOperation.flatMap { operation in
+            let when = Formatting.timestamp(operation.completedAt ?? operation.updatedAt)
+            switch operation.status.value1 {
+            case .succeeded:
+                // The status already says the listing went live.
+                return operation.kind.value1 == .create ? nil
+                    : "Last change: \(operation.statusDisplay.label), \(when)"
+            case .failed, .needsUserAction:
+                return "Since \(when)"
+            default:
+                return nil
+            }
         }
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
+        let waiting = Self.waitingAttempt(of: listing, now: now)
+        scheduleLabel = waiting.map { operation, due in
+            let time = due.formatted(
+                date: Calendar.current.isDate(due, inSameDayAs: now) ? .omitted : .abbreviated,
+                time: .shortened,
+            )
+            return operation.status.value1 == .verifying ? "Checking again at \(time)" : "Waiting to retry at \(time)"
+        }
         if let listing {
             statusLabel = listing.statusDisplay.label
             statusDetail = listing.statusDisplay.detail
             tone = Self.tone(of: listing.statusDisplay.tone)
-            actions = Self.actions(of: listing)
+            actions = Self.actions(of: listing, waiting: waiting?.operation)
         } else {
             statusLabel = "Not listed"
             tone = .neutral
@@ -141,10 +176,23 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// The server's actions, in the order the row shows them, plus Retry for a failed change
-    /// and Open task for a step waiting on the user.
-    private static func actions(of listing: Listing) -> [Action] {
+    /// The listing's newest operation while it waits for a later attempt (a retry after a
+    /// failure, or a check between read-backs), with when that attempt is due.
+    private static func waitingAttempt(of listing: Listing?, now: Date) -> (operation: Operation, due: Date)? {
+        guard let operation = listing?.latestOperation, let due = operation.nextAttemptAt, due > now else { return nil }
+        switch operation.status.value1 {
+        case .retrying, .verifying: return (operation, due)
+        default: return nil
+        }
+    }
+
+    /// The server's actions, in the order the row shows them, plus Try now for a change waiting
+    /// to try again, Retry for a failed change, and Open task for a step waiting on the user.
+    private static func actions(of listing: Listing, waiting: Operation?) -> [Action] {
         var actions: [Action] = []
+        if let waiting {
+            actions.append(.tryNow(operationID: waiting.id))
+        }
         if let operation = listing.latestOperation, operation.status.value1 == .needsUserAction {
             actions.append(.openTask(operationID: operation.id))
         }

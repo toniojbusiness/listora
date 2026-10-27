@@ -13,19 +13,21 @@ import {
 import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import { listingSku } from '../adapter/sku-line.ts';
-import type { PageDriver, StepRunner } from '../runner/types.ts';
+import type { StepRunner } from '../runner/types.ts';
 import { changed, type DepopSite } from './pages/common.ts';
-import { deleteListing, openEditor } from './pages/edit-page.ts';
+import { deleteListing, expectDelete, openEditor } from './pages/edit-page.ts';
 import { openHub } from './pages/hub-page.ts';
 import {
+  expectSubmit,
   fillListing,
   fillPrice,
   openSellForm,
   submitListing,
   type Submitted,
 } from './pages/listing-form.ts';
-import { readProduct, readShownProduct, type ProductPageRead } from './pages/product-page.ts';
+import { readProduct, type ProductPageRead } from './pages/product-page.ts';
 import { readSellingPage } from './pages/selling-page.ts';
+import { findSeller, newestProducts } from './pages/shop-page.ts';
 import { readSoldItemsPage } from './pages/sold-items-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
 
@@ -68,26 +70,39 @@ export function createDepopScripts(
     fixHint: 'Relist the item as a new Depop listing.',
   });
 
-  /** The listing the newest listings for sale hold under this SKU, if any. */
+  /**
+   * The listing the seller's newest listings for sale hold under this SKU, if any. Their shop
+   * links to them; each one's SKU is on its own page, so a listing found by SKU reads exactly as
+   * it does by its slug.
+   */
   async function findBySku(step: StepRunner, sku: string): Promise<ProductPageRead | null> {
-    const recent = await step('look at the newest listings', { mutates: false }, (page) =>
-      readSellingPage(page, site, 1),
+    const seller = await step('find the seller', { mutates: false }, (page) =>
+      findSeller(page, site),
     );
-    const match = recent.products.slice(0, SKU_LOOKUP_DEPTH).find((product) => product.sku === sku);
-    if (match === undefined) return null;
-    // The product's own page, so a listing found by SKU reads exactly as it does by its slug.
-    return step('read the listing', { mutates: false }, (page) =>
-      readProduct(page, site, match.listing.externalListingId),
+    const slugs = await step('look at the newest listings', { mutates: false }, (page) =>
+      newestProducts(page, site, seller, SKU_LOOKUP_DEPTH),
     );
+    for (const slug of slugs) {
+      const read = await step('read the listing', { mutates: false }, (page) =>
+        readProduct(page, site, slug),
+      );
+      if (read.sku === sku) return read;
+    }
+    return null;
   }
 
-  /** After a submit: Depop's refusal, or the product it opened, with its revision. */
-  async function submitted(page: PageDriver, outcome: Submitted): Promise<WriteResult> {
+  /**
+   * After a submit: Depop's refusal, or the product it opened. The product is read back by the
+   * operation's check, not here: the submit already happened, and its page may not show the
+   * product for a moment.
+   */
+  function submitted(outcome: Submitted): WriteResult {
     if (outcome.type === 'refused') {
       return { type: 'rejected', code: 'validation_failed', message: outcome.message };
     }
-    const shown = await readShownProduct(page, site);
-    return { ...revisionOf(shown), externalListingId: outcome.slug };
+    return outcome.slug === null
+      ? { type: 'applied' }
+      : { type: 'applied', externalListingId: outcome.slug };
   }
 
   /** Posts a new listing (a create, or a relist); a later attempt first looks for it. */
@@ -108,13 +123,26 @@ export function createDepopScripts(
     const files = await step('get the photos', { mutates: false }, (_page, signal) =>
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );
-    await step('fill in the listing', { mutates: false }, async (page) => {
+    await step('fill in the listing', { mutates: false, timeScale: 4 }, async (page) => {
       await openSellForm(page, site);
       await fillListing(page, payload, sku, files);
+      await expectSubmit(page, 'post');
     });
-    return step('post', { mutates: true }, async (page) =>
-      submitted(page, await submitListing(page, 'post')),
+    const result = await step('post', { mutates: true, timeScale: 2 }, async (page) =>
+      submitted(await submitListing(page, 'post')),
     );
+    if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
+    // Depop's Done page doesn't name the new listing: it is found by its SKU in the same run,
+    // so it shows as listed at once. Not finding it yet leaves it to the operation's check.
+    try {
+      const found = await findBySku(step, sku);
+      if (found?.state.found === true) {
+        return { ...result, externalListingId: found.state.externalListingId };
+      }
+    } catch {
+      // The check reads it back later.
+    }
+    return result;
   }
 
   /** Opens the editor of a listing on sale; a result instead when it can't be edited. */
@@ -131,7 +159,8 @@ export function createDepopScripts(
     const shown = await step('open the listing', { mutates: false }, (page) =>
       readProduct(page, site, slug),
     );
-    if (!shown.state.found) return notListed();
+    // Gone (Depop says so) is a deleted listing too.
+    if (!shown.state.found) return shown.state.authoritative ? deleted() : notListed();
     if (shown.state.status === 'sold') return sold();
     if (shown.state.status === 'ended') return deleted();
     // A listing on sale whose edit page has no form: the page is not what Listora knows.
@@ -145,11 +174,12 @@ export function createDepopScripts(
       if (payload === null) throw new Error('a revise has a payload');
       const opened = await editor(op, step);
       if (!('slug' in opened)) return opened;
-      await step('fill in the changes', { mutates: false }, (page) =>
-        fillListing(page, payload, listingSku(op.listing), null),
-      );
-      return step('save', { mutates: true }, async (page) =>
-        submitted(page, await submitListing(page, 'save')),
+      await step('fill in the changes', { mutates: false }, async (page) => {
+        await fillListing(page, payload, listingSku(op.listing), null);
+        await expectSubmit(page, 'save');
+      });
+      return step('save', { mutates: true, timeScale: 2 }, async (page) =>
+        submitted(await submitListing(page, 'save')),
       );
     },
     price: async (op, step) => {
@@ -166,9 +196,12 @@ export function createDepopScripts(
       }
       const opened = await editor(op, step);
       if (!('slug' in opened)) return opened;
-      await step('fill in the price', { mutates: false }, (page) => fillPrice(page, priceCents));
-      return step('save', { mutates: true }, async (page) =>
-        submitted(page, await submitListing(page, 'save')),
+      await step('fill in the price', { mutates: false }, async (page) => {
+        await fillPrice(page, priceCents);
+        await expectSubmit(page, 'save');
+      });
+      return step('save', { mutates: true, timeScale: 2 }, async (page) =>
+        submitted(await submitListing(page, 'save')),
       );
     },
     end: async (op, step) => {
@@ -177,14 +210,15 @@ export function createDepopScripts(
       const shown = await step('open the listing', { mutates: false }, (page) =>
         readProduct(page, site, slug),
       );
-      if (!shown.state.found) return notListed();
+      // Gone (Depop says so) is ended already: the read-back confirms it.
+      if (!shown.state.found) return shown.state.authoritative ? { type: 'applied' } : notListed();
       // Deleted or sold: nothing is live, and the read-back decides.
       if (shown.state.status !== 'active') return { type: 'applied' };
-      const opened = await editor(op, step);
-      if (!('slug' in opened)) return opened;
-      return step('delete', { mutates: true }, async (page) => {
+      // The seller's own product page has Delete listing, which asks to confirm in a dialog.
+      await step('find Delete listing', { mutates: false }, (page) => expectDelete(page));
+      return step('delete', { mutates: true, timeScale: 2 }, async (page) => {
         await deleteListing(page);
-        return revisionOf(await readShownProduct(page, site));
+        return { type: 'applied' };
       });
     },
     relist: async (op, step) => {
@@ -193,9 +227,10 @@ export function createDepopScripts(
       const shown = await step('open the listing', { mutates: false }, (page) =>
         readProduct(page, site, slug),
       );
-      if (!shown.state.found) return notListed();
+      // Gone (Depop says so: End deletes a Depop listing), deleted, or sold: a new listing from
+      // the listing's content, under a new slug.
+      if (!shown.state.found) return shown.state.authoritative ? post(op, step) : notListed();
       if (shown.state.status === 'active') return { type: 'applied', externalListingId: slug };
-      // Deleted or sold: a new listing from the listing's content, under a new slug.
       return post(op, step);
     },
     read: async (ref, step): Promise<RemoteListingState> => {

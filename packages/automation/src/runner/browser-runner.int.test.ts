@@ -385,6 +385,9 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
         requests: [],
         scripts: [],
         data: [],
+        controls: [],
+        choices: [],
+        lists: [],
       });
       expect(JSON.stringify(lines)).not.toContain(seller);
     } finally {

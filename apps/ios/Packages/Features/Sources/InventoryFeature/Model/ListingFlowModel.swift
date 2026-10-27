@@ -21,7 +21,7 @@ final class ListingFlowModel {
     struct Choice: Identifiable, Equatable, Sendable {
         let id: String
         let name: String
-        /// "Through eBay's API", "Connect eBay in Settings first", "Assisted - ...".
+        /// "Listora posts it for you through eBay", "Connect eBay in Settings first", "Assisted - ...".
         let detail: String
         let isAvailable: Bool
         let isAssisted: Bool
@@ -29,6 +29,9 @@ final class ListingFlowModel {
 
     /// eBay's title limit (`EBAY_LIMITS.title` on the server).
     static let ebayTitleLimit = 80
+    /// The marketplaces whose listing names one of their categories, which Listora maps or the
+    /// seller picks.
+    static let categorized: Set<String> = ["poshmark", "mercari", "depop"]
 
     private(set) var step: Step = .choose
     private(set) var choices: [Choice] = []
@@ -62,6 +65,11 @@ final class ListingFlowModel {
     /// Why the listing can't be sent as it is, from the server or this screen; it clears once the
     /// seller edits the listing.
     private(set) var problem: String?
+    /// The categories of the marketplace on screen, for Poshmark, Mercari, and Depop: the one
+    /// Listora maps the item to, or none, and then the seller picks (`chooseCategory`).
+    private(set) var categories: Components.Schemas.MarketplaceCategories?
+    /// What the seller picked, by marketplace (a `variant.categoryRef`).
+    private var chosenCategories: [String: Components.Schemas.MarketplaceCategory] = [:]
     private(set) var isPublishing = false
     private(set) var isPreparing = true
     /// The marketplaces being reviewed, in picker order, and the one on screen.
@@ -142,10 +150,31 @@ final class ListingFlowModel {
         title.utf16.count
     }
 
+    /// The category the listing goes in on the marketplace on screen: the seller's pick, else
+    /// the one Listora maps the item to; `nil` while there is neither.
+    var category: Components.Schemas.MarketplaceCategory? {
+        guard let marketplace = current?.id else { return nil }
+        return chosenCategories[marketplace] ?? categories?.suggested
+    }
+
+    /// Whether the seller has to pick the category before this marketplace can take it.
+    var needsCategory: Bool {
+        categories != nil && category == nil
+    }
+
+    func chooseCategory(_ choice: Components.Schemas.MarketplaceCategory) {
+        guard let marketplace = current?.id else { return }
+        chosenCategories[marketplace] = choice
+        problem = nil
+    }
+
     /// What this screen already knows the marketplace would refuse; the server checks again.
     var localProblem: String? {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "Add a title."
+        }
+        if needsCategory {
+            return "Choose a \(current?.name ?? "marketplace") category."
         }
         if let titleLimit, titleCount > titleLimit {
             return "The title is \(titleCount) characters; \(current?.name ?? "the marketplace") allows \(titleLimit)."
@@ -217,8 +246,8 @@ final class ListingFlowModel {
             detail: assisted
                 ? "Assisted - Listora makes a task with everything to copy; you post it in the \(name) app."
                 : connection?.mode.value1 == .automation
-                ? "Automated in your \(name) session"
-                : "Through \(name)'s API",
+                ? "Listora posts it for you in your linked \(name) account"
+                : "Listora posts it for you through \(name)",
             isAvailable: true,
             isAssisted: assisted,
         )
@@ -229,6 +258,7 @@ final class ListingFlowModel {
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description,
             price: Money(amountCents: Int64(priceCents ?? 0), currency: .usd),
+            categoryRef: current.flatMap { chosenCategories[$0.id]?.ref },
             condition: item.details.condition,
         )
     }
@@ -264,22 +294,18 @@ final class ListingFlowModel {
     private func fillCopy() async {
         guard let marketplace = current?.id else { return }
         problem = nil
-        if let draftID = draftIDs[marketplace],
-           let variant = item.listings.first(where: { $0.id == draftID })?.variant
-        {
-            title = variant.title
-            description = variant.description
-            priceCents = Int(variant.price.amountCents)
-            return
+        categories = nil
+        if Self.categorized.contains(marketplace) {
+            categories = try? await service.marketplaceCategories(itemID: item.id, marketplace: marketplace)
         }
-        let edited = listingCopy.edits(itemID: item.id)[marketplace]
-        var suggested: Components.Schemas.VariantSuggestion?
-        if edited == nil, let analysisID = item.details.acceptedAnalysisId {
-            suggested = try? await service.analysisVariants(analysisID: analysisID)
-                .first { $0.marketplace.id == marketplace }
-        }
-        title = edited?.title ?? suggested?.title ?? item.details.title ?? ""
-        description = edited?.description ?? suggested?.description ?? item.details.description ?? ""
-        priceCents = item.details.listPrice.map { Int($0.amountCents) }
+        let copy = await SuggestedCopy.load(
+            for: marketplace,
+            item: item,
+            service: service,
+            listingCopy: listingCopy,
+        )
+        title = copy.title
+        description = copy.description
+        priceCents = copy.priceCents
     }
 }

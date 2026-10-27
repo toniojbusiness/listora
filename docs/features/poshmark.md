@@ -106,24 +106,32 @@ Poshmark's pages was) from $3 (`app_listing_fee__us.minimum_selling_price`) to $
 (`max_listing_price_amount`); at most 16 photos; and a catalog, size, and condition. The
 variant's `Brand`, `Size`, and `Original Price` aspects win over the item's values.
 
-## What is not verified yet
+## What is verified, and what is not yet
 
-The listing form and the edit form are behind Poshmark's login, so their markup in
-`pages/listing-form.ts` is modeled on Poshmark's web form (inputs by `data-vv-name`, buttons by
-`data-et-name`, pickers listing choices by their display text) and is confirmed on the first run
-against a real session. The same goes for the private SKU field, the closet's
-`sort_by=added_desc` and `query` parameters, and the order of sold items. A selector or data key
-that no longer matches ends the step as `element_missing` before anything is submitted
-(`PageChangedError` for data), so the step goes to the user, the run logs what the page has
-instead ([automation.md](automation.md#how-it-works), "When a page changes"), and the fix is in
-the one page module that names it. The fake Poshmark mirrors exactly what those modules expect.
+Mapped on the seller's own session (2026-10-26 and 27; Poshmark's own public code first, then
+the evidence of runs that stopped, then the form on the Mac), and run from the iPhone on
+Listora's own test listings:
 
-Checked against Poshmark itself (2026-10-26, read-only, public pages and Poshmark's own public
-code): who is logged in comes from Poshmark's own store, as its app reads it. That is
-`auth.isUserLoggedIn`, `auth.identity` (the user's id, not their handle), and the handle in
-`userCookies.userInfo` (`username`, else `dh`). A real session's check had failed reading a
-handle from `auth.identity`. A closet page's records (`$_closet.listingsPostData`, its `data`
-and `more`) match what `pages/closet-page.ts` reads.
+- **List** (phone, 51 seconds): photos and Poshmark's cover-photo editor (its Apply), title and
+  description, the listing and original prices (the price field opens a dialog whose Automate
+  Offers Listora turns off), the brand, the category, size, and condition pickers, the private
+  SKU behind "show details", and Next then List. After List Poshmark shows the closet, so the
+  same run finds the new listing by its SKU (the closet searched by title, each candidate's edit
+  form, whose data holds the SKU at `$_listing_editor.post.seller_private_info.sku`). A new
+  listing can take a moment to show in the closet, so the check then finds it.
+- **Read** and **End** (phone): the listing page, availability Not For Sale; a deleted listing's
+  page answers 404, definitive for a well-formed id.
+- **Relist** (phone): a listing Poshmark removed is listed again as a new listing.
+- **Not yet:** a price change, a revise, a relist back to For Sale, and a sale check.
+
+Who is logged in comes from Poshmark's own store, as its app reads it: `auth.isUserLoggedIn`,
+`auth.identity` (the user's id, not their handle), and the handle in `userCookies.userInfo`
+(`username`, else `dh`). A closet page's records (`$_closet.listingsPostData`, its `data` and
+`more`) match what `pages/closet-page.ts` reads. A selector or data key that no longer matches
+ends the step as `element_missing` before anything is submitted (`PageChangedError` for data), so
+the step goes to the user, the run logs what the page has instead
+([automation.md](automation.md#how-it-works), "When a page changes"), and the fix is in the one
+page module that names it. The fake Poshmark mirrors exactly what those modules expect.
 
 ## Development and tests
 

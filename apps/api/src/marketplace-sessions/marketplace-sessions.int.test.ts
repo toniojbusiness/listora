@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { loadAutomationSettings, SESSION_CHECK_TASK } from '@listora/automation';
+import {
+  loadAutomationSettings,
+  SALE_CHECK_TASK,
+  saleCheckJobKey,
+  SESSION_CHECK_TASK,
+} from '@listora/automation';
 import { SESSION_CHECK_DEADLINE_MS } from '@listora/connections';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -536,6 +541,13 @@ describe('a linked session on both screens (real Postgres)', () => {
       where task.identifier = ${SESSION_CHECK_TASK} and job.key = ${`session-check:${after.connection_id}`}
     `.execute(api.db);
     expect(rows.map((row) => row.payload.checkId)).toEqual([after.check_id]);
+    // Its sales are checked again at once too: a failed sale check would wait hours otherwise.
+    const sales = await sql<{ key: string }>`
+      select job.key from graphile_worker._private_jobs job
+      join graphile_worker._private_tasks task on task.id = job.task_id
+      where task.identifier = ${SALE_CHECK_TASK}
+    `.execute(api.db);
+    expect(sales.rows.map((row) => row.key)).toContain(saleCheckJobKey(after.connection_id));
     // The same session: nothing was linked or rewritten.
     expect(
       await api.db

@@ -238,3 +238,32 @@ ListingOperationAccepted:
       $ref: '#/Listing'
     operation:
       $ref: './operations.yaml#/Operation'
+MarketplaceCategory:
+  type: object
+  required: [ref, path]
+  properties:
+    ref:
+      type: string
+      maxLength: 64
+      description: What `variant.categoryRef` takes for this category.
+    path:
+      type: array
+      items:
+        type: string
+        maxLength: 100
+      maxItems: 4
+      description: The marketplace's own names, top level first.
+MarketplaceCategories:
+  type: object
+  required: [likely, choices]
+  properties:
+    suggested:
+      $ref: '#/MarketplaceCategory'
+    likely:
+      type: array
+      items:
+        $ref: '#/MarketplaceCategory'
+    choices:
+      type: array
+      items:
+        $ref: '#/MarketplaceCategory'

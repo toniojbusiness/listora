@@ -7,6 +7,7 @@ import {
   OperationNotFoundError,
   retryOperation,
   SupersededOperationError,
+  tryOperationNow,
 } from '@listora/operations';
 import type { OperationStatus } from '@listora/db';
 import type { FastifyInstance } from 'fastify';
@@ -20,9 +21,10 @@ import { eventView, operationView } from './views.ts';
 
 /**
  * Marketplace operations and their history (docs/features/operations.md): `listOperations`,
- * `getOperation`, `listOperationEvents`, and the Retry and Cancel actions, which go through the
- * operation engine's own commands so its rules (fresh attempts that read back first; never
- * cancel what may have been sent) hold for every client.
+ * `getOperation`, `listOperationEvents`, and the Retry, Try now, and Cancel actions, which go
+ * through the operation engine's own commands so its rules (fresh attempts that read back first;
+ * only a waiting attempt moved to now; never cancel what may have been sent) hold for every
+ * client.
  */
 export function registerOperationRoutes(app: FastifyInstance, deps: RouteDependencies): void {
   contractRoute(app, deps, 'listOperations', async ({ tenant, db, query }) => {
@@ -79,6 +81,15 @@ export function registerOperationRoutes(app: FastifyInstance, deps: RouteDepende
     return { status: 202, body: operationView(row, row) };
   });
 
+  contractRoute(app, deps, 'tryOperationNow', async ({ tenant, db, params }) => {
+    const operation = await engineCommand(() =>
+      tryOperationNow(db, target(tenant, params.operationId)),
+    );
+    const row = await findOperation(db, tenant, operation.id);
+    if (!row) throw notFound('Operation');
+    return { status: 200, body: operationView(row, row) };
+  });
+
   contractRoute(app, deps, 'cancelOperation', async ({ tenant, db, params }) => {
     const operation = await engineCommand(() =>
       cancelOperation(db, target(tenant, params.operationId)),
@@ -120,7 +131,9 @@ export function engineError(error: unknown): ApiError | undefined {
       'invalid_state_transition',
       error.to === 'canceled'
         ? `This change is ${state}, so it can no longer be canceled.`
-        : `Only a failed change can be retried; this one is ${state}.`,
+        : error.to === 'running'
+          ? `Only a change waiting to try again can be tried now; this one is ${state}.`
+          : `Only a failed change can be retried; this one is ${state}.`,
       { cause: error },
     );
   }

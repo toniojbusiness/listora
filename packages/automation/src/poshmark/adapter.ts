@@ -18,8 +18,8 @@
  * - relist: availability "For Sale" again. A sold listing cannot be relisted.
  * - mark sold: not needed; Poshmark marks its own sales sold.
  *
- * Reads carry a revision (the listing's newest change time, pages/state.ts). Absences are never
- * authoritative (pages/listing-page.ts).
+ * Reads carry a revision (the listing's newest change time, pages/state.ts). Only a well-formed
+ * listing id whose page answers 404 is a definitive absence (pages/listing-page.ts).
  */
 import { createPoshmarkAdapter } from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';

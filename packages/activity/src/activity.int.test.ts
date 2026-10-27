@@ -278,7 +278,7 @@ describe('activity timeline (real Postgres)', () => {
     const entries = await loadActivity(db, { accountId, itemId: seeded.itemId, limit: 50 });
     expect(entries.map((entry) => [entry.kind, entry.title])).toEqual([
       ['operation', 'Delist on Depop after the sale'],
-      ['browser_session', 'Your iPhone ran “end” on Depop'],
+      ['browser_session', 'Your iPhone ended the listing on Depop'],
       ['operation', 'Delist on Depop after the sale'],
       ['task', 'Waiting for you: delist it on Poshmark'],
       ['operation', 'Delist on Depop after the sale'],

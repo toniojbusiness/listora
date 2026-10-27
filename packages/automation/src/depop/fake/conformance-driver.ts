@@ -1,20 +1,26 @@
 /**
  * Drives the fake Depop site for the shared adapter conformance suite (test-only): each failure
- * the suite asks for becomes the page Depop would show. Depop keeps a deleted product readable
- * as deleted and never says a product is gone for good, so the driver offers no `remove`: the
- * suite then checks that no absence is authoritative.
+ * the suite asks for becomes the page Depop would show. A product Depop deleted for good answers
+ * 410 Gone, which is definitive (product-page.ts), so `remove` makes the fake answer that.
  */
 import type { ConformanceAction, ConformanceMarketplace } from '@listora/marketplaces/conformance';
 
 import type { FakeDepopSite, FakeDepopSiteAction } from './fake-depop-site.ts';
 
-/** The step timeout of adapters under test; a `timeout_after_send` answer comes far later. */
+/** The step timeout of adapters under test. */
 export const DEPOP_STEP_TIMEOUT_MS = 4_000;
-const LATE_ANSWER_MS = 5 * DEPOP_STEP_TIMEOUT_MS;
+/**
+ * When a `timeout_after_send` answer comes: well after the post step gave up (it has twice the
+ * step timeout), and soon enough for a phone run to end within the suite's test time. The
+ * phone's test host can't evaluate anything in a page whose form submission is still loading,
+ * so its run ends only once the answer comes.
+ */
+const LATE_ANSWER_MS = 3 * DEPOP_STEP_TIMEOUT_MS;
 
 /**
- * A relist posts a new listing, so it fails where a create does. A read by SKU looks at the
- * newest listings first, so a failing read fails whichever opens first.
+ * A relist posts a new listing, so it fails where a create does. A read by SKU opens the selling
+ * hub first (to find the seller), then the seller's shop, then the product pages, so a failing
+ * read fails whichever opens first.
  */
 const SITE_ACTIONS = {
   create: ['create'],
@@ -22,7 +28,7 @@ const SITE_ACTIONS = {
   end: ['delete'],
   relist: ['create'],
   mark_sold: [],
-  read: ['listings', 'read'],
+  read: ['health', 'shop', 'read'],
   health: ['health'],
 } as const satisfies Record<ConformanceAction, readonly FakeDepopSiteAction[]>;
 
@@ -68,6 +74,9 @@ export function fakeDepopSiteConformance(site: FakeDepopSite): ConformanceMarket
     },
     serveStaleRead() {
       site.inject({ action: 'read', fault: { type: 'stale_read' } });
+    },
+    remove(externalListingId) {
+      site.gone(externalListingId);
     },
     countListings: (listing) =>
       site.productsWithSku(listing.externalSku ?? listing.listingId).length,

@@ -125,6 +125,8 @@ export interface PageBackend {
   texts(selector: string): Promise<string[]>;
   attribute(selector: string, name: string): Promise<string | null>;
   attributes(selector: string, name: string): Promise<(string | null)[]>;
+  /** The first match's current value (`PageDriver.value`). */
+  value(selector: string): Promise<string | null>;
   /**
    * The page's global `name` as JSON (`null` when it has none), read in the page's own script
    * world, the only place a page's own data lives.
@@ -156,6 +158,11 @@ export interface ScriptSessionDependencies {
   stepTimeoutMs: number;
   /** What the page's network did, for the log line of a run that stops (the runner's). */
   networkSummary?: () => unknown;
+  /**
+   * Called as each step starts (`index` counts from 1 in the run), so a host can show where the
+   * run is (the phone's progress, docs/features/phone-execution.md). It must not throw.
+   */
+  onStep?: (step: { name: string; index: number }) => void;
   /**
    * Ends the session once: closes the page and returns the cookies the marketplace set on its
    * own domains (for rotation), or none where the host keeps them itself.
@@ -257,8 +264,10 @@ export class ScriptSession implements AutomationSession {
       current = stepName;
       steps.push(stepName);
       const index = stepMs.push(0) - 1;
+      this.#deps.onStep?.({ name: stepName, index: steps.length });
       if (options.mutates) mutated = true;
-      const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs;
+      const timeoutMs =
+        options.timeoutMs ?? this.#deps.stepTimeoutMs * Math.max(1, options.timeScale ?? 1);
       const startedAt = Date.now();
       try {
         return await this.#runStep(body, timeoutMs, signal, readOnly);
@@ -285,7 +294,8 @@ export class ScriptSession implements AutomationSession {
           failure: failure.kind,
           ...(failure.kind === 'challenge' ? { challenge: failure.challenge } : {}),
           ...(failure.kind === 'error' ? { code: failure.code, reason: failure.message } : {}),
-          ...(failure.kind === 'error' && failure.evidence !== undefined
+          ...((failure.kind === 'error' || failure.kind === 'timeout') &&
+          failure.evidence !== undefined
             ? { evidence: failure.evidence }
             : {}),
           origin: originForLog(this.#safeUrl()),
@@ -373,7 +383,12 @@ export class ScriptSession implements AutomationSession {
       }
     }
     if (thrown instanceof StepTimeoutError) {
-      return { kind: 'timeout', step, screenshotKey: await this.#screenshot() };
+      return {
+        kind: 'timeout',
+        step,
+        screenshotKey: await this.#screenshot(),
+        ...(await this.#evidence()),
+      };
     }
     if (thrown instanceof StepError) {
       const screenshotKey = thrown.code === 'aborted' ? null : await this.#screenshot();
@@ -651,6 +666,10 @@ class Driver implements PageDriver {
 
   attributes(selector: string, name: string): Promise<(string | null)[]> {
     return this.#query((backend) => backend.attributes(selector, name));
+  }
+
+  value(selector: string): Promise<string | null> {
+    return this.#query((backend) => backend.value(selector));
   }
 
   pageData(name: string): Promise<unknown> {

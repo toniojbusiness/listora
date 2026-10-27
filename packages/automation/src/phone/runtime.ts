@@ -40,6 +40,7 @@ import { ScriptSession } from '../runner/script-session.ts';
 import type { ScriptFailure, ScriptResult, StepRunner } from '../runner/types.ts';
 import { BridgeBackend, fromBase64 } from './backend.ts';
 import type { PhoneHost } from './host.ts';
+import { stepLabel } from './progress.ts';
 
 /**
  * The version of `PhoneCallInput` and `PhoneCallOutput` this runtime speaks. The server hands a
@@ -139,6 +140,9 @@ async function runOnce(
       },
     },
     stepTimeoutMs: input.stepTimeoutMs,
+    onStep: ({ name, index }) => {
+      host.progress({ call: input.name, index, label: stepLabel(name) });
+    },
     // The app keeps the seller's cookies itself.
     close: () => Promise.resolve([]),
   });
