@@ -139,7 +139,7 @@ struct AnalysisProgressView: View {
                 case .done:
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.success)
                 case .running:
-                    ProgressView().controlSize(.small).tint(Palette.info.color)
+                    BrandSpinner(color: Palette.info).controlSize(.small)
                 case .waiting:
                     Image(systemName: "circle").foregroundStyle(Palette.textSecondary)
                 }

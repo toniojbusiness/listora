@@ -297,7 +297,7 @@ struct IdentifyHarderView: View {
         Button(action: onStart) {
             if escalation == .running {
                 HStack(spacing: Spacing.xs) {
-                    ProgressView().tint(Palette.brand.color)
+                    BrandSpinner(color: Palette.brand)
                     Text("Identifying harder")
                 }
             } else {

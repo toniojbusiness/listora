@@ -126,7 +126,7 @@ struct BatchPriceCard: View {
                 .foregroundStyle(Palette.textSecondary)
             switch model.pricing {
             case .idle, .loading:
-                ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+                BrandSpinner().frame(maxWidth: .infinity, alignment: .leading)
             case let .failed(message):
                 Banner("Couldn't load prices", message: message, tone: .failed, action: .init("Try again") {
                     Task { await model.loadPricing() }

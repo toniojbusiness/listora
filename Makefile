@@ -176,11 +176,13 @@ ios-batch-fixtures:
 	xcrun swiftc -O -parse-as-library -o $(IOS_BUILD_DIR)/tools/record-batch-signals $(IOS_DIR)/Tools/record-batch-signals.swift
 	$(IOS_BUILD_DIR)/tools/record-batch-signals
 
-## Re-render the placeholder app icon PNGs in Listora/Assets.xcassets/AppIcon.appiconset.
+## Render the Looptag app icon PNGs (Brand/AppIcon.xcassets/AppIcon.appiconset) from the SVG
+## sources in apps/ios/Brand.
 ios-app-icon:
+	$(call require,rsvg-convert,librsvg)
 	mkdir -p $(IOS_BUILD_DIR)/tools
-	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-app-icon $(IOS_DIR)/Tools/generate-app-icon.swift
-	$(IOS_BUILD_DIR)/tools/generate-app-icon $(IOS_DIR)/Listora/Assets.xcassets/AppIcon.appiconset
+	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/render-app-icon $(IOS_DIR)/Tools/render-app-icon.swift
+	$(IOS_BUILD_DIR)/tools/render-app-icon $(IOS_DIR)/Brand
 
 ## Archive a release configuration without signing, to prove the archive step works with no
 ## Apple account. Output: .build/ios/archives/Listora-<configuration>-unsigned.xcarchive.

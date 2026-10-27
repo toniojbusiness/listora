@@ -43,7 +43,7 @@ struct MarketplaceSignInView: View {
                 .accessibilityIdentifier("signIn.webView")
                 .overlay(alignment: .top) {
                     if loading {
-                        ProgressView()
+                        BrandSpinner()
                             .padding(Spacing.md)
                     }
                 }

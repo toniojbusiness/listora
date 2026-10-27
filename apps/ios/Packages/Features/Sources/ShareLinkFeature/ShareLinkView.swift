@@ -173,7 +173,7 @@ private struct ChooseItemView: View {
 
     private var searching: some View {
         HStack(spacing: Spacing.xs) {
-            ProgressView()
+            BrandSpinner()
             Text("Searching...").foregroundStyle(Palette.textSecondary)
         }
     }
