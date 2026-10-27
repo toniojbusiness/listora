@@ -62,7 +62,7 @@ struct VoiceTray: View {
                 .accessibilityIdentifier("voice.transcript")
         case .interpreting:
             HStack(spacing: Spacing.xs) {
-                ProgressView().controlSize(.small)
+                BrandSpinner().controlSize(.small)
                 Text("Working out the rest...")
                     .font(Typography.callout)
                     .foregroundStyle(Palette.textSecondary)

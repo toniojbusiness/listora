@@ -105,9 +105,8 @@ struct PhotoTile: View {
     private var statusBadge: some View {
         Group {
             if status == .uploading || status == .readingTag {
-                ProgressView()
+                BrandSpinner(color: status.tone.color)
                     .controlSize(.mini)
-                    .tint(status.tone.color.color)
             } else {
                 Image(systemName: status.systemImage)
                     .font(Typography.label)

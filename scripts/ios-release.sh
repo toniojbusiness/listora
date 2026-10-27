@@ -98,6 +98,8 @@ verify_archive() {
   [[ $(plist_value "$app/Info.plist" CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName) == AppIcon ]] ||
     fail "The app's Info.plist does not name the AppIcon asset."
   [[ -f $app/Assets.car ]] || fail "The app has no compiled asset catalog (Assets.car), so no icon."
+  [[ $(plist_value "$extension/Info.plist" CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName) == AppIcon ]] ||
+    fail "The Share Extension's Info.plist does not name the AppIcon asset."
   if plutil -extract NSAppTransportSecurity xml1 -o /dev/null "$app/Info.plist" 2>/dev/null; then
     fail "The $configuration app must not carry the Dev-only NSAppTransportSecurity exception."
   fi

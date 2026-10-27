@@ -101,9 +101,8 @@ private struct MarketplaceCard: View {
                 StatusBadge(row.statusLabel, tone: StatusTone(row.tone))
                     .accessibilityIdentifier("marketplace.\(row.id).status")
                 if row.isWorking, progress == nil {
-                    ProgressView()
+                    BrandSpinner(color: Palette.info)
                         .controlSize(.small)
-                        .tint(Palette.info.color)
                         .accessibilityLabel("Working on it")
                 }
             }

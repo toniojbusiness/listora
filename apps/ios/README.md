@@ -36,7 +36,7 @@ Run these from the repository root.
 | `make ios-clean`          | Delete the generated project and `.build/ios`                                          |
 | `make ios-tag-fixtures`   | Re-render the tag-reading test photos (see Tag reading)                                |
 | `make ios-batch-fixtures` | Re-render the batch hauls and record their Vision signals (docs/features/batch.md)     |
-| `make ios-app-icon`       | Re-render the placeholder app icon (see App icon)                                      |
+| `make ios-app-icon`       | Render the app icon from its SVG sources (see App icon)                                |
 | `make ios-screenshots`    | Screenshot every screen in four variants (see Design)                                  |
 | `make ios-archive`        | Unsigned release archive; needs no Apple account (Releases)                            |
 | `make ios-testflight`     | Signed release archive uploaded to TestFlight (Releases)                               |
@@ -195,23 +195,25 @@ read; a launch without it removes it. Both are read only by Debug builds and onl
 
 ## App icon
 
-The icon is the `AppIcon` set in `Listora/Assets.xcassets`, named by
-`ASSETCATALOG_COMPILER_APPICON_NAME` in `project.yml`. It holds three 1024 x 1024 PNGs, and
-Xcode derives every smaller size from them:
+The icon is Looptag (docs/features/design.md, "Brand"): the `AppIcon` set in
+`Brand/AppIcon.xcassets`, named by `ASSETCATALOG_COMPILER_APPICON_NAME` in `project.yml`. Both
+the app and the Share Extension include the catalog and name the icon; the share sheet itself
+shows the containing app's icon. The set holds three 1024 x 1024 PNGs, and Xcode derives every
+smaller size from them:
 
-| File                 | Appearance | Requirements                                   |
-| -------------------- | ---------- | ---------------------------------------------- |
-| `AppIcon.png`        | Default    | Opaque (no alpha channel); App Store icon too  |
-| `AppIcon-Dark.png`   | Dark       | Transparent background; iOS draws the backdrop |
-| `AppIcon-Tinted.png` | Tinted     | Grayscale on transparent; iOS applies the tint |
+| File                 | Appearance | Source                      | Requirements                                   |
+| -------------------- | ---------- | --------------------------- | ---------------------------------------------- |
+| `AppIcon.png`        | Default    | `Brand/app-icon-light.svg`  | Opaque (no alpha channel); App Store icon too  |
+| `AppIcon-Dark.png`   | Dark       | `Brand/app-icon-dark.svg`   | Transparent background; iOS draws the backdrop |
+| `AppIcon-Tinted.png` | Tinted     | `Brand/app-icon-tinted.svg` | Grayscale on transparent; iOS applies the tint |
 
-The Share Extension has no icon of its own; the share sheet shows the containing app's icon.
-
-The current icon is a placeholder: a price tag on teal (the first brand color), drawn by
-`Tools/generate-app-icon.swift`. To change it, edit that tool and run `make ios-app-icon`. To
-ship a real design, export the three PNGs above from the design file, replace the files (keep
-the names, or update `Contents.json`), delete the tool and the `ios-app-icon` target, and run
-`make ios-test` and `make ios-archive`. Both check that the built app names the `AppIcon` asset.
+The SVGs are the source and the PNGs are generated: never edit a PNG by hand. To change the
+icon, edit the SVGs (the mark's geometry is `Brand/looptag-mark.svg`, which `BrandTests` keeps in
+step with the app's `Looptag`) and run `make ios-app-icon`, which needs `rsvg-convert` (`brew
+install librsvg`). It renders each SVG with `Tools/render-app-icon.swift` and drops the alpha
+channel from the default icon; the same SVGs always render the same PNGs. Commit the PNGs with
+the SVGs. `make ios-test` and `make ios-archive` check that the built app and Share Extension
+name the `AppIcon` asset.
 
 ## Design
 
@@ -466,7 +468,7 @@ Both take `IOS_RELEASE_CONFIGURATION` (`Prod-Release`, the default, or `Staging-
 `.build/ios/archives/Listora-Staging-Release-unsigned.xcarchive`. After archiving, the script
 checks that the app and the Share Extension have the same version and build number, that the
 extension's bundle id is the app's plus `.share`, that the app is the requested environment, that
-it has the `AppIcon` icon, and that it has no ATS exception. The unsigned archive cannot be installed or uploaded; it proves
+it and the Share Extension name the `AppIcon` icon, and that the app has no ATS exception. The unsigned archive cannot be installed or uploaded; it proves
 that the release configuration compiles and archives without credentials.
 
 `make ios-testflight` reads `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
@@ -545,7 +547,7 @@ the new one everywhere below.
    Apple key and the AWS deploy role never share one.
 
 7. **App icon.** App Store Connect rejects an upload without an app icon. The app ships the
-   placeholder icon (see App icon); replace it with the real design before a public release.
+   Looptag icon (see App icon).
 
 Notes:
 
