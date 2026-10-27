@@ -290,8 +290,11 @@ export function matchMercariCategory(
       });
       const [only] = options;
       if (only === undefined) return { type: 'unmapped' };
-      return options.length === 1 ? { type: 'mapped', category: only } : { type: 'choose', options };
+      return options.length === 1
+        ? { type: 'mapped', category: only }
+        : { type: 'choose', options };
     }
+    case null:
     default:
       return { type: 'unmapped' };
   }

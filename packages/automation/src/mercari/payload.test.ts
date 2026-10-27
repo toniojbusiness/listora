@@ -114,7 +114,9 @@ describe('Mercari payload', () => {
       validateMercariPayload(payload({ variant: { description: 'Great jacket, barely worn' } })),
     ).toMatchObject([{ field: 'variant.description', code: 'too_short' }]);
     expect(
-      validateMercariPayload(payload({ variant: { description: 'Great jacket, barely worn twice' } })),
+      validateMercariPayload(
+        payload({ variant: { description: 'Great jacket, barely worn twice' } }),
+      ),
     ).toEqual([]);
   });
 
@@ -132,6 +134,10 @@ describe('Mercari payload', () => {
   });
 
   it('sends a phone whose form wants its IMEI to the seller', () => {
+    const phones = 'Electronics > Cell phones & accessories > Cell phones & smartphones';
+    expect(validateMercariPayload(payload({ variant: { categoryRef: phones } }))).toMatchObject([
+      { field: 'variant.categoryRef', code: 'not_supported' },
+    ]);
     expect(validateMercariPayload({ ...payload(), imei: true })).toMatchObject([
       { field: 'variant.categoryRef', code: 'not_supported' },
     ]);

@@ -145,9 +145,8 @@ function tagSize(item: ItemSnapshot): TagSize | null {
   const letter = LETTERS[label.toLowerCase().replace(/[\s.-]+/g, '')];
   if (letter !== undefined) return { kind: 'letter', letter };
   // A number, with a shoe's half (`10 1/2`, `10½`, `10.5`) and the system's own marks.
-  const number = /^(?:us|eu)?\s*(?:[mw]\s*)?(\d{1,2})(\s*(?:\.5|1\/2|½))?(?:\s*(?:us|eu|m|w))?$/i.exec(
-    label,
-  );
+  const number =
+    /^(?:us|eu)?\s*(?:[mw]\s*)?(\d{1,2})(\s*(?:\.5|1\/2|½))?(?:\s*(?:us|eu|m|w))?$/i.exec(label);
   if (number?.[1] !== undefined) {
     const value = Number(number[1]) + (number[2] === undefined ? 0 : 0.5);
     // Women's `00` is Mercari's XXS (00).
@@ -160,7 +159,8 @@ function tagSize(item: ItemSnapshot): TagSize | null {
 /** A label's own name and what its parentheses hold: `M (8-10)` is `M` and `8-10`. */
 function parts(label: string): { title: string; inside: string | null } {
   const match = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(label.trim());
-  if (match?.[1] === undefined || match[2] === undefined) return { title: label.trim(), inside: null };
+  if (match?.[1] === undefined || match[2] === undefined)
+    return { title: label.trim(), inside: null };
   return { title: match[1].trim(), inside: match[2].trim() };
 }
 

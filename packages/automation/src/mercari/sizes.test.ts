@@ -19,7 +19,11 @@ const GROUP = {
   bras: 12,
 } as const;
 
-const size = (group: keyof typeof GROUP, sizeLabel: string | null, sizeSystem: string | null = null) =>
+const size = (
+  group: keyof typeof GROUP,
+  sizeLabel: string | null,
+  sizeSystem: string | null = null,
+) =>
   mercariSizeLabel({ ...item, sizeLabel, sizeSystem }, mercariCatalog().sizeLabels(GROUP[group]));
 
 describe('Mercari sizes', () => {

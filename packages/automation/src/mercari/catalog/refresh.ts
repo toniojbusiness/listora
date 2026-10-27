@@ -27,6 +27,13 @@ const CATALOG_FILE = new URL('catalog.json', import.meta.url);
 /** The departments' subtrees whose categories might sell a device with an IMEI. */
 const IMEI_SUBTREES = /^(Cell phones & accessories|Tablets & E-readers|Wearables)$/;
 const SELL_CHECK_EVERY_MS = 2_000;
+/**
+ * Categories whose sell form showed its IMEI field when filled on the seller's session, though
+ * the sell check sent this way said no (2026-10-27): kept whatever the check says.
+ */
+const IMEI_SEEN_ON_FORM = [
+  ['Electronics', 'Cell phones & accessories', 'Cell phones & smartphones'],
+];
 
 const MASTER_QUERY = `query masterQuery {
   master {
@@ -53,18 +60,37 @@ async function main(): Promise<void> {
     const template = await sellCheck;
     const headers = sessionHeaders(template);
     const master = await readMaster(page, headers);
-    const imei = await readImeiCategories(page, template, headers, master);
+    const imei = [
+      ...(await readImeiCategories(page, template, headers, master)),
+      ...seenOnForm(master),
+    ];
     const catalog = buildMercariCatalog(master, imei, new Date().toISOString().slice(0, 10));
     await writeFile(CATALOG_FILE, formatMercariCatalog(catalog));
     // The repository's own formatting, which `npm run format:check` holds every JSON file to.
     execFileSync('npx', ['prettier', '--write', fileURLToPath(CATALOG_FILE)], { stdio: 'ignore' });
     const counted = master.itemCategories.length;
-    console.log(
-      `Wrote ${CATALOG_FILE.pathname}: ${String(counted)} categories, ${String(catalog.sizeGroups.length)} size groups, ${String(imei.length)} asking for an IMEI.`,
+    process.stdout.write(
+      `Wrote ${CATALOG_FILE.pathname}: ${String(counted)} categories, ${String(catalog.sizeGroups.length)} size groups, ${String(imei.length)} asking for an IMEI.\n`,
     );
   } finally {
     await page.close().catch(() => undefined);
   }
+}
+
+/** The ids of `IMEI_SEEN_ON_FORM`'s categories in the master data. */
+function seenOnForm(master: MercariMasterData): number[] {
+  return IMEI_SEEN_ON_FORM.flatMap((path) => {
+    let parentId = 0;
+    let id: number | undefined;
+    for (const name of path) {
+      id = master.itemCategories.find(
+        (category) => category.parentId === parentId && category.name === name,
+      )?.id;
+      if (id === undefined) return [];
+      parentId = id;
+    }
+    return id === undefined ? [] : [id];
+  });
 }
 
 /** A new tab that opens behind the seller's own, so their window never changes. */
@@ -72,10 +98,7 @@ async function backgroundTab(browser: Browser): Promise<Page> {
   const context = browser.contexts()[0];
   if (context === undefined) throw new Error('That Chrome has no window open.');
   const cdp = await browser.newBrowserCDPSession();
-  const created = (await cdp.send('Target.createTarget', {
-    url: 'about:blank',
-    background: true,
-  })) as { targetId: string };
+  const created = await cdp.send('Target.createTarget', { url: 'about:blank', background: true });
   for (let tries = 0; tries < 50; tries += 1) {
     for (const page of context.pages()) {
       const session = await context.newCDPSession(page);
@@ -174,8 +197,7 @@ async function readImeiCategories(
     variables.sellInput = { ...variables.sellInput, categoryId: id };
     url.searchParams.set('variables', JSON.stringify(variables));
     const data = (await api(page, `${url.pathname}${url.search}`, { headers })) as
-      | { sell?: { isImeiRequired?: boolean } }
-      | undefined;
+      { sell?: { isImeiRequired?: boolean } } | undefined;
     if (data?.sell?.isImeiRequired === true) imei.push(id);
     await new Promise((resolve) => setTimeout(resolve, SELL_CHECK_EVERY_MS));
   }
@@ -185,7 +207,7 @@ async function readImeiCategories(
 await main().then(
   () => process.exit(0),
   (error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(1);
   },
 );

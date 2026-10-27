@@ -82,10 +82,8 @@ export function buildMercariPayload(
       : null;
   const category: MercariCategory | null =
     named ?? (match?.type === 'mapped' ? match.category : null);
-  const labels =
-    category === null || category.sizeGroupId === null
-      ? []
-      : mercariCatalog().sizeLabels(category.sizeGroupId);
+  const group = category?.sizeGroupId ?? null;
+  const labels = group === null ? [] : mercariCatalog().sizeLabels(group);
   const condition = variant.condition ?? item.condition;
   const mercari = condition === null ? null : mercariCondition(condition);
   const brand = item.brand?.trim() ?? '';

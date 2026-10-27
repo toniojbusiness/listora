@@ -34,9 +34,10 @@ import type { MercariListingPayload } from './payload.ts';
 const connection = { id: 'connection-mercari', mode: 'automation', status: 'connected' } as const;
 /**
  * The step timeout here: the form step (three times it) has room for the form's own wait for a
- * part that never comes (8 seconds), which several checks below run into.
+ * part that never comes (8 seconds), which several checks below run into, and for two brand
+ * searches that find nothing (4 seconds each) before Mercari's "No brand".
  */
-const STEP_TIMEOUT_MS = 4_000;
+const STEP_TIMEOUT_MS = 6_000;
 const ctx = (): AdapterContext => ({ signal: new AbortController().signal, connection });
 
 describe('Mercari automation adapter on the fake Mercari site', () => {
@@ -205,14 +206,16 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
   });
 
   it("picks Mercari's own spelling of a brand, and its No brand for one it doesn't list", async () => {
-    const spelled = await create(sampleListingContent({ item: { brand: 'Abercrombie and Fitch' } }));
+    const spelled = await create(
+      sampleListingContent({ item: { brand: 'Abercrombie and Fitch' } }),
+    );
     expect(site.item(spelled.ref.externalListingId)?.brand).toBe('Abercrombie & Fitch');
     // Mercari needs a brand: its "No brand / Not sure"; the title still names the item's.
     const unlisted = await create(sampleListingContent({ item: { brand: 'Handmade Studio' } }));
     expect(site.item(unlisted.ref.externalListingId)?.brand).toBeNull();
     const none = await create(sampleListingContent({ item: { brand: null } }));
     expect(site.item(none.ref.externalListingId)?.brand).toBeNull();
-   }, 90_000);
+  }, 90_000);
 
   it('fills every kind of form Mercari has: each size list, and none', async () => {
     // A category of each of Mercari's size groups (catalog/catalog.json), with a size of the
@@ -235,16 +238,17 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
         item: { department, sizeLabel, condition: 'new_with_tags' },
         variant: { categoryRef },
       });
-      expect(adapter.validate(adapter.buildPayload(content.item, content.variant)), categoryRef).toEqual(
-        [],
-      );
+      expect(
+        adapter.validate(adapter.buildPayload(content.item, content.variant)),
+        categoryRef,
+      ).toEqual([]);
       const { ref } = await create(content);
       expect(site.item(ref.externalListingId), categoryRef).toMatchObject({
         category: categoryRef.split(' > '),
         size,
       });
     }
-   }, 240_000);
+  }, 240_000);
 
   it('revises every detail on the edit page and keeps the photos', async () => {
     const { ref } = await create();
@@ -441,19 +445,24 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
       type: 'rejected',
       code: 'validation_failed',
-      message: expect.stringContaining('This item may violate our Prohibited Items policy.') as unknown,
+      message: expect.stringContaining(
+        'This item may violate our Prohibited Items policy.',
+      ) as unknown,
     });
     expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
   });
 
-  it("gives a phone to the seller when the form asks for its IMEI, sending nothing", async () => {
-    const phones = 'Electronics > Cell phones & accessories > Cell phones & smartphones';
-    const shop = await FakeMercariSite.start(0, { imeiCategories: [phones] });
+  it('gives a device to the seller when the form asks for its IMEI, sending nothing', async () => {
+    // A category the catalog doesn't know asks for one: the form's field stops the create.
+    const tablets = 'Electronics > Tablets & E-readers > iPad/tablet/ebook readers';
+    const shop = await FakeMercariSite.start(0, { imeiCategories: [tablets] });
     try {
       const ref = newRef();
-      const content = sampleListingContent({ variant: { categoryRef: phones } });
+      const content = sampleListingContent({ variant: { categoryRef: tablets } });
       const before = shop.requests.length;
-      expect(await adapterOn(shop).execute(request('create', ref, { content }), ctx())).toMatchObject({
+      expect(
+        await adapterOn(shop).execute(request('create', ref, { content }), ctx()),
+      ).toMatchObject({
         type: 'rejected',
         code: 'imei_required',
       });

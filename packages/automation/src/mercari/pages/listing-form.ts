@@ -115,6 +115,8 @@ const APPEAR_MS = 8_000;
 const LOOK_EVERY_MS = 500;
 /** How long the brand suggestions stay the same before Listora takes them as Mercari's answer. */
 const BRAND_SETTLED_MS = 2_000;
+/** How long an empty brand list gets to fill before the search counts as finding nothing. */
+const BRAND_EMPTY_MS = 4_000;
 
 /**
  * Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
@@ -177,6 +179,9 @@ export async function fillListing(
   await chooseShipping(page);
   await fillPrice(page, payload.price.amountCents);
   await smartPricingOff(page);
+  // Mercari draws the IMEI field once its own check of the category answers, which can come
+  // after the rest of the form is filled (read 2026-10-27).
+  if (await page.exists(LISTING_FORM.imei)) return 'imei_required';
   return 'filled';
 }
 
@@ -260,7 +265,10 @@ async function pickBrand(page: PageDriver, brand: string | null): Promise<void> 
 }
 
 /** Ticks the suggested brand chip whose name passes `wanted` (kept when already ticked). */
-async function pickBrandChip(page: PageDriver, wanted: (name: string) => boolean): Promise<boolean> {
+async function pickBrandChip(
+  page: PageDriver,
+  wanted: (name: string) => boolean,
+): Promise<boolean> {
   const names = (await page.texts(LISTING_FORM.brandChipLabel)).map((name) => name.trim());
   const name = names.find(wanted);
   if (name === undefined) return false;
@@ -274,7 +282,7 @@ async function pickBrandChip(page: PageDriver, wanted: (name: string) => boolean
 async function pickBrandOption(page: PageDriver, search: string, wanted: string): Promise<boolean> {
   // Tapping the field starts a new search, clearing what it showed.
   await page.click(LISTING_FORM.brand);
-  if (((await page.attribute(LISTING_FORM.brand, 'value')) ?? '') !== '') {
+  if (((await page.value(LISTING_FORM.brand)) ?? '') !== '') {
     await page.fill(LISTING_FORM.brand, '');
   }
   await page.type(LISTING_FORM.brand, search);
@@ -291,6 +299,8 @@ async function pickBrandOption(page: PageDriver, search: string, wanted: string)
       previous = shown;
       settledAt = Date.now();
     }
+    // An empty list may be Mercari still loading its brands: it gets longer to fill.
+    const settled = offered.length === 0 ? BRAND_EMPTY_MS : BRAND_SETTLED_MS;
     const match =
       offered.find((option) => option === wanted) ??
       offered.find((option) => option.toLowerCase() === wanted.toLowerCase()) ??
@@ -299,7 +309,7 @@ async function pickBrandOption(page: PageDriver, search: string, wanted: string)
       await page.click(`${LISTING_FORM.brandOption}:text-is("${quote(match)}") >> nth=0`);
       return true;
     }
-    if (Date.now() >= end || Date.now() - settledAt >= BRAND_SETTLED_MS) return false;
+    if (Date.now() >= end || Date.now() - settledAt >= settled) return false;
     await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
   }
 }

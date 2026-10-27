@@ -46,9 +46,9 @@ describe('the Mercari category map', () => {
 
   it('places every canonical category for every department', () => {
     const unplaced = VOCABULARY.departments.flatMap((department) =>
-      CANONICAL.filter((canonical) => matchMercariCategory(canonical, department).type === 'unmapped').map(
-        (canonical) => `${department} ${canonical}`,
-      ),
+      CANONICAL.filter(
+        (canonical) => matchMercariCategory(canonical, department).type === 'unmapped',
+      ).map((canonical) => `${department} ${canonical}`),
     );
     expect(unplaced).toEqual([]);
   });
@@ -64,7 +64,7 @@ describe('the Mercari category map', () => {
     expect(mapMercariCategory('clothing/intimates', 'men')?.sizeGroupId).toBeNull();
   });
 
-  it("files unisex items under Men, but under Women what Mercari has only for women", () => {
+  it('files unisex items under Men, but under Women what Mercari has only for women', () => {
     expect(path('clothing/tops/hoodies_sweatshirts', 'unisex')).toBe('Men > Sweats & hoodies');
     expect(path('shoes/sneakers', 'unisex')).toBe('Men > Shoes > Athletic');
     expect(path('clothing/dresses', 'unisex')).toBe('Women > Dresses');
@@ -89,7 +89,9 @@ describe('the Mercari category map', () => {
     expect(path('clothing/dresses/jumpsuits_rompers', 'kids', '10')).toBe('choose');
     const tee = matchMercariCategory('clothing/tops/t_shirts', 'kids', 'M');
     expect(tee).toMatchObject({ type: 'choose' });
-    expect(tee.type === 'choose' ? tee.options.map((option) => option.path.join(' > ')) : []).toEqual([
+    expect(
+      tee.type === 'choose' ? tee.options.map((option) => option.path.join(' > ')) : [],
+    ).toEqual([
       'Kids > Girls tops & t-shirts > Girls (4+)',
       'Kids > Boys tops & t-shirts > Boys (4+)',
     ]);
@@ -123,7 +125,13 @@ describe('the Mercari category map', () => {
       'Electronics',
       'Cameras & photography',
     ]);
-    for (const bad of ['Women', 'A > > B', 'Women > Shoes > Moon boots', 'Women > Tops > T-shirts', '']) {
+    for (const bad of [
+      'Women',
+      'A > > B',
+      'Women > Shoes > Moon boots',
+      'Women > Tops > T-shirts',
+      '',
+    ]) {
       expect(parseCategoryRef(bad), bad).toBeNull();
     }
   });

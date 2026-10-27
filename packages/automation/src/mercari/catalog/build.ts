@@ -161,7 +161,9 @@ function compactJson(value: unknown, depth: number): string {
     const own = entries.slice(0, -1).map(field);
     return `{${[...own, `${JSON.stringify(last[0])}: [`].join(', ')}\n${items.join(',\n')}\n${pad}]}`;
   }
-  const lines = entries.map(([key, entry]) => `${inner}${JSON.stringify(key)}: ${compactJson(entry, depth + 1)}`);
+  const lines = entries.map(
+    ([key, entry]) => `${inner}${JSON.stringify(key)}: ${compactJson(entry, depth + 1)}`,
+  );
   return `{\n${lines.join(',\n')}\n${pad}}`;
 }
 

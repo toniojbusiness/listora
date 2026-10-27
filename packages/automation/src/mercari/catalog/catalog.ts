@@ -50,14 +50,18 @@ let loaded: MercariCatalog | undefined;
 /** The catalog in the repository, read once. */
 export function mercariCatalog(): MercariCatalog {
   loaded ??= indexCatalog(
-    JSON.parse(
-      readFileSync(new URL('catalog.json', import.meta.url), 'utf8'),
-    ) as MercariCatalogFile,
+    JSON.parse(readFileSync(new URL('catalog.json', import.meta.url), 'utf8')) as Omit<
+      MercariCatalogFile,
+      'version'
+    > & { version: number },
   );
   return loaded;
 }
 
-export function indexCatalog(file: MercariCatalogFile): MercariCatalog {
+/** `version` is read as any number, so a file of another version is refused, not misread. */
+export function indexCatalog(
+  file: Omit<MercariCatalogFile, 'version'> & { version: number },
+): MercariCatalog {
   if (file.version !== MERCARI_CATALOG_VERSION) {
     throw new Error(`catalog.json is version ${String(file.version)}; this code reads version 1`);
   }
@@ -73,7 +77,8 @@ export function indexCatalog(file: MercariCatalogFile): MercariCatalog {
       imei: imei.has(record.id),
       hasChildren: (record.children?.length ?? 0) > 0,
     };
-    if (byId.has(record.id)) throw new Error(`catalog.json has category ${String(record.id)} twice`);
+    if (byId.has(record.id))
+      throw new Error(`catalog.json has category ${String(record.id)} twice`);
     byId.set(record.id, category);
     below.set(
       record.id,

@@ -552,10 +552,7 @@ export class FakeMercariSite {
           this.#tipped.add(session.seller);
           return {
             status: 200,
-            body: page(
-              'Sell | Mercari',
-              listingForm(null, { templatesTip, ...this.#formOptions }),
-            ),
+            body: page('Sell | Mercari', listingForm(null, { templatesTip, ...this.#formOptions })),
           };
         }
         return this.#owned(route.id, session, (stored) =>
@@ -844,10 +841,8 @@ function listingFields(
     .split(' > ')
     .filter((name) => name !== '');
   const chosen = mercariCatalog().find(category);
-  const sizes =
-    chosen === null || chosen.sizeGroupId === null
-      ? []
-      : mercariCatalog().sizeLabels(chosen.sizeGroupId);
+  const group = chosen?.sizeGroupId ?? null;
+  const sizes = group === null ? [] : mercariCatalog().sizeLabels(group);
   const brand = text('brand');
   const condition = Number(text('condition'));
   const size = text('size');
@@ -867,7 +862,11 @@ function listingFields(
   }
   // A department alone is not a category a listing can be in.
   const named = category.join(' > ');
-  if (chosen === null || category.length < 2 || options.withoutCategories?.includes(named) === true) {
+  if (
+    chosen === null ||
+    category.length < 2 ||
+    options.withoutCategories?.includes(named) === true
+  ) {
     return 'Select a category to continue';
   }
   if (options.imeiCategories?.includes(named) === true && text('imei') === '') {
@@ -1186,11 +1185,11 @@ ${toggle}`;
     tree: [...mercariCatalog().byId.values()]
       .filter((category) => options.withoutCategories?.includes(category.path.join(' > ')) !== true)
       .map((category) => ({
-      path: category.path,
-      size: category.sizeGroupId,
-      imei: (options.imeiCategories ?? []).includes(category.path.join(' > ')),
-      leaf: !category.hasChildren,
-    })),
+        path: category.path,
+        size: category.sizeGroupId,
+        imei: (options.imeiCategories ?? []).includes(category.path.join(' > ')),
+        leaf: !category.hasChildren,
+      })),
     sizes: Object.fromEntries(
       [...mercariCatalog().sizeGroups.keys()].map((id) => [id, mercariCatalog().sizeLabels(id)]),
     ),

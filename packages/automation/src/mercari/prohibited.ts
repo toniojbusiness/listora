@@ -39,7 +39,8 @@ const RULES: readonly Rule[] = [
   },
   {
     pattern: /\b(cigarettes?|e-?cigs?|e-?cigarettes?|vapes?|vape pens?|vaping|nicotine|cbd)\b/i,
-    message: "Mercari doesn't allow tobacco, nicotine, vaping, or CBD products (its Prohibited Items list).",
+    message:
+      "Mercari doesn't allow tobacco, nicotine, vaping, or CBD products (its Prohibited Items list).",
   },
 ];
 

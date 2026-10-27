@@ -7886,6 +7886,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}") >> nth=0`,
 		brand: "input[data-testid=\"Brand\"]",
 		brandOption: "[data-testid=\"Brand-option\"]",
+		/** The brands Mercari suggests once photos are in, as chips under the field (each a checkbox). */
+		brandChipLabel: "[data-testid=\"SuggestedBrandChipGroup\"] label",
+		brandChipTicked: (name) => `[data-testid="SuggestedBrandChipGroup"] input[type="checkbox"][aria-label="${quote$1(name)}"]:checked`,
 		/** What to type for Mercari's "No brand / Not sure" option, and its label. */
 		noBrandSearch: "No brand",
 		noBrand: "No brand / Not sure",
@@ -7906,7 +7909,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		* drops, so it is switched off.
 		*/
 		smartPricing: "button[data-testid=\"SmartPricingButton\"]",
-		/** Its switch asks to confirm turning it off. */
+		/** What its switch may ask to confirm turning it off with. */
 		smartPricingTurnOff: "button[data-testid=\"SmartPricingTurnOffButton\"]",
 		/** Mercari's answer to List from a seller without a card on file: add one first. */
 		paymentWarning: "[data-testid=\"PaymentWarningModal\"]",
@@ -7944,6 +7947,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const LOOK_EVERY_MS$2 = 500;
 	/** How long the brand suggestions stay the same before Listora takes them as Mercari's answer. */
 	const BRAND_SETTLED_MS = 2e3;
+	/** How long an empty brand list gets to fill before the search counts as finding nothing. */
+	const BRAND_EMPTY_MS = 4e3;
 	/**
 	* Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
 	* `VerificationExceptionDialog`, listing the verifications it requires, with a Verify button).
@@ -7987,6 +7992,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await chooseShipping(page);
 		await fillPrice(page, payload.price.amountCents);
 		await smartPricingOff(page);
+		if (await page.exists(LISTING_FORM.imei)) return "imei_required";
 		return "filled";
 	}
 	/** Switches Mercari's Smart Pricing off when the form has it on. */
@@ -7994,8 +8000,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (!await appears$1(page, LISTING_FORM.smartPricing, 2e3)) return;
 		if ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() !== "ON") return;
 		await page.click(LISTING_FORM.smartPricing);
-		if (!await appears$1(page, LISTING_FORM.smartPricingTurnOff)) throw changed(FORM, "asks nothing when Smart Pricing is switched off");
-		await page.click(LISTING_FORM.smartPricingTurnOff);
+		const off = async () => (await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "OFF";
+		if (!await off() && await appears$1(page, LISTING_FORM.smartPricingTurnOff, 2e3)) await page.click(LISTING_FORM.smartPricingTurnOff);
 		const end = Date.now() + APPEAR_MS;
 		while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "ON") {
 			if (Date.now() >= end) throw changed(FORM, "kept Smart Pricing on");
@@ -8030,22 +8036,35 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (await shown() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
 	}
 	/**
-	* Searches Mercari's brand list and picks the brand, matched exactly, then ignoring case and
-	* punctuation (`Abercrombie & Fitch` is `Abercrombie and Fitch`). Mercari needs a brand: one it
-	* doesn't list, or none, is its "No brand / Not sure" (the title and description still name it).
+	* Picks the item's brand, or Mercari's "No brand / Not sure" when Mercari doesn't list it or the
+	* item has none: Mercari needs one (the title and description still name the item's). Once
+	* photos are in, Mercari suggests brands as chips under the field and may have filled one in
+	* already (read 2026-10-27): a suggestion that is the brand is taken as it is. Otherwise the
+	* field is searched, matching exactly, then ignoring case and punctuation (`Abercrombie and
+	* Fitch` is Mercari's `Abercrombie & Fitch`), and again by the brand's first word.
 	*/
 	async function pickBrand(page, brand) {
 		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
 		if (brand !== null) {
+			if (await pickBrandChip(page, (name) => brandKey(name) === brandKey(brand))) return;
 			const first = brand.split(/\s+/)[0] ?? "";
 			const searches = [brand, ...first.length >= 3 && first !== brand ? [first] : []];
 			for (const search of searches) if (await pickBrandOption(page, search, brand)) return;
 		}
+		if (await pickBrandChip(page, (name) => name === LISTING_FORM.noBrand)) return;
 		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
+	}
+	/** Ticks the suggested brand chip whose name passes `wanted` (kept when already ticked). */
+	async function pickBrandChip(page, wanted) {
+		const name = (await page.texts(LISTING_FORM.brandChipLabel)).map((name) => name.trim()).find(wanted);
+		if (name === void 0) return false;
+		if (!await page.exists(LISTING_FORM.brandChipTicked(name))) await page.click(`${LISTING_FORM.brandChipLabel}:text-is("${quote$1(name)}") >> nth=0`);
+		return true;
 	}
 	/** Types `search` into the brand field and picks the option that is `wanted`, if it comes. */
 	async function pickBrandOption(page, search, wanted) {
-		await page.fill(LISTING_FORM.brand, "");
+		await page.click(LISTING_FORM.brand);
+		if ((await page.value(LISTING_FORM.brand) ?? "") !== "") await page.fill(LISTING_FORM.brand, "");
 		await page.type(LISTING_FORM.brand, search);
 		const end = Date.now() + APPEAR_MS;
 		let previous = null;
@@ -8057,12 +8076,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				previous = shown;
 				settledAt = Date.now();
 			}
+			const settled = offered.length === 0 ? BRAND_EMPTY_MS : BRAND_SETTLED_MS;
 			const match = offered.find((option) => option === wanted) ?? offered.find((option) => option.toLowerCase() === wanted.toLowerCase()) ?? offered.find((option) => brandKey(option) === brandKey(wanted));
 			if (match !== void 0) {
 				await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
 				return true;
 			}
-			if (Date.now() >= end || Date.now() - settledAt >= BRAND_SETTLED_MS) return false;
+			if (Date.now() >= end || Date.now() - settledAt >= settled) return false;
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 		}
 	}
@@ -8073,7 +8093,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function pickSize(page, size) {
 		await expectElement(page, LISTING_FORM.size, FORM, "size list");
 		await page.click(LISTING_FORM.size);
-		if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed(FORM, "shows no sizes");
+		if (!await appears$1(page, LISTING_FORM.sizeOption, 4e3)) {
+			await page.click(LISTING_FORM.size);
+			if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed(FORM, "shows no sizes");
+		}
 		const offered = await page.texts(LISTING_FORM.sizeOption);
 		const spaced = (text) => text.replace(/\s+/g, " ").trim();
 		const label = offered.find((option) => spaced(option) === spaced(size));

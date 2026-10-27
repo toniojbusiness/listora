@@ -31,7 +31,10 @@ describe("Mercari's catalog", () => {
     const catalog = mercariCatalog();
     for (const category of catalog.byId.values()) {
       if (category.sizeGroupId === null) continue;
-      expect(catalog.sizeLabels(category.sizeGroupId).length, category.path.join(' > ')).toBeGreaterThan(0);
+      expect(
+        catalog.sizeLabels(category.sizeGroupId).length,
+        category.path.join(' > '),
+      ).toBeGreaterThan(0);
     }
     expect(catalog.find(['Men', 'Tops', 'T-shirts'])).toMatchObject({ id: 303, sizeGroupId: 2 });
     expect(catalog.find(['Women', 'Shoes', 'Boots'])?.sizeGroupId).toBe(5);
@@ -54,7 +57,9 @@ describe("Mercari's catalog", () => {
         { id: 11, name: 'Dresses', parentId: 1, itemSizeGroupId: 1, displayOrder: 30 },
         { id: 101, name: 'T-shirts', parentId: 12, itemSizeGroupId: 1, displayOrder: 50 },
       ],
-      itemSizeGroups: [{ id: 1, title: 'Clothing', category: 'Women', sizeIds: [7, 8], subGroupIds: [10] }],
+      itemSizeGroups: [
+        { id: 1, title: 'Clothing', category: 'Women', sizeIds: [7, 8], subGroupIds: [10] },
+      ],
       itemSizeSubGroups: [{ id: 10, title: 'Standard', sizeIds: [7, 8] }],
       itemSizes: [
         { id: 7, title: 'S', subtitle: '(4-6)' },
@@ -64,14 +69,23 @@ describe("Mercari's catalog", () => {
     };
     const file = buildMercariCatalog(master, [101, 101], '2026-10-27');
     expect(file.categories.map((category) => category.name)).toEqual(['Women', 'Men']);
-    expect(file.categories[0]?.children?.map((category) => category.name)).toEqual(['Tops', 'Dresses']);
+    expect(file.categories[0]?.children?.map((category) => category.name)).toEqual([
+      'Tops',
+      'Dresses',
+    ]);
     expect(file.imeiCategoryIds).toEqual([101]);
-    expect(file.sizeGroups[0]?.subgroups[0]?.sizes.map((size) => size.label)).toEqual(['S (4-6)', 'One Size']);
+    expect(file.sizeGroups[0]?.subgroups[0]?.sizes.map((size) => size.label)).toEqual([
+      'S (4-6)',
+      'One Size',
+    ]);
     const text = formatMercariCatalog(file);
     expect(text).toContain('\n        {"id": 101, "name": "T-shirts", "sizeGroupId": 1}\n');
     expect(JSON.parse(text)).toEqual(file);
     const indexed = indexCatalog(file);
-    expect(indexed.find(['Women', 'Tops', 'T-shirts'])).toMatchObject({ imei: true, hasChildren: false });
+    expect(indexed.find(['Women', 'Tops', 'T-shirts'])).toMatchObject({
+      imei: true,
+      hasChildren: false,
+    });
     expect(indexed.find(['Women', 'Tops'])?.hasChildren).toBe(true);
   });
 });
