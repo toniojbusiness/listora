@@ -36,6 +36,8 @@ import {
 import { originForLog, sanitizeMessage } from '../safety/redaction.ts';
 import { PageChangedError } from './errors.ts';
 import type {
+  ApiGetOptions,
+  ApiResponse,
   AutomationSession,
   PageDriver,
   Script,
@@ -478,6 +480,13 @@ export class ScriptSession implements AutomationSession {
     }
   }
 
+  /** Stops the run at a problem the page's own API answered with (`PageDriver.apiGet`). */
+  stopFor(problem: PageProblem): never {
+    this.#stoppedBy = problem;
+    if (problem.type === 'challenge') this.#challenge = problem.kind;
+    throw new PageProblemError(problem);
+  }
+
   /** Inspects the page; throws when it shows something the run must stop at. */
   async inspect(): Promise<void> {
     this.ensureGoing();
@@ -515,6 +524,57 @@ export class ScriptSession implements AutomationSession {
     }
     const message = thrown instanceof Error ? thrown.message : String(thrown);
     return new StepError('script_error', sanitizeMessage(message, this.#typed));
+  }
+}
+
+/** The most of an API answer's body a read takes (Depop's largest are about 2 MB). */
+const API_BODY_LIMIT = 4_000_000;
+
+/**
+ * The page script of `PageDriver.apiGet`: a GET from the page, with the site's cookie as the
+ * bearer token when one is named, returning only the status, `Retry-After`, and the body's text.
+ * Source text, so each host evaluates the same script in its own page.
+ */
+export function apiGetScript(url: string, bearerCookie: string | null): string {
+  return `(async () => {
+    const name = ${JSON.stringify(bearerCookie)};
+    const headers = { accept: 'application/json' };
+    if (name !== null) {
+      const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(name + '='));
+      if (pair !== undefined) headers.authorization = 'Bearer ' + decodeURIComponent(pair.slice(name.length + 1));
+    }
+    const response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+    const text = await response.text();
+    return { status: response.status, retryAfter: response.headers.get('retry-after'), text: text.length > ${String(API_BODY_LIMIT)} ? null : text };
+  })()`;
+}
+
+function apiAnswer(answer: unknown): {
+  status: number;
+  text: string | null;
+  retryAfterSeconds: number | null;
+} {
+  const read = answer as { status?: unknown; text?: unknown; retryAfter?: unknown } | null;
+  if (read === null || typeof read !== 'object' || typeof read.status !== 'number') {
+    throw new StepError('script_error', "the marketplace's API sent no answer");
+  }
+  const retryAfter = Number(read.retryAfter);
+  return {
+    status: read.status,
+    text: typeof read.text === 'string' ? read.text : null,
+    retryAfterSeconds:
+      read.retryAfter !== null && Number.isFinite(retryAfter) && retryAfter >= 0
+        ? retryAfter
+        : null,
+  };
+}
+
+function jsonOrNull(text: string | null): unknown {
+  if (text === null) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
   }
 }
 
@@ -674,6 +734,34 @@ class Driver implements PageDriver {
 
   pageData(name: string): Promise<unknown> {
     return this.#query((backend) => backend.pageData(name));
+  }
+
+  async apiGet(url: string, options: ApiGetOptions = {}): Promise<ApiResponse> {
+    const target = URL.canParse(url) ? new URL(url) : null;
+    if (target === null || !this.#session.profile.apiOrigins.includes(target.origin)) {
+      throw new StepError('script_error', "the script asked for an API outside the marketplace's");
+    }
+    this.#active();
+    // A read the page's own scripts would make, paced like the actions around it.
+    await this.#session.pacing.wait('action', this.#signal);
+    const answer = await this.#query((backend) =>
+      backend.read(apiGetScript(target.href, options.bearerCookie ?? null)),
+    );
+    this.#active();
+    const { status, text, retryAfterSeconds } = apiAnswer(answer);
+    const body = jsonOrNull(text);
+    if (status === 429) {
+      this.#session.stopFor({
+        type: 'rate_limited',
+        retryAfterMs: retryAfterSeconds === null ? null : retryAfterSeconds * 1000,
+      });
+    }
+    if (status >= 500) this.#session.stopFor({ type: 'server_error', status });
+    // A bot check answers an API call with its own page, not the API's JSON.
+    if (status === 403 && body === null) {
+      this.#session.stopFor({ type: 'challenge', kind: 'bot_check', sign: 'api' });
+    }
+    return { status, body };
   }
 
   /** A paced action, inspected afterwards. */

@@ -61,6 +61,28 @@ export interface PageDriver {
    * itself once it ran (Poshmark's `window.__INITIAL_STATE__`) has it only there.
    */
   pageData(name: string): Promise<unknown>;
+  /**
+   * A read from the marketplace's own web API, made the way its pages make them: a GET sent from
+   * the page to one of the profile's `apiOrigins` (any other URL ends the run), with the page's
+   * own credentials. `bearerCookie` names the site's cookie whose value its own scripts send as
+   * their bearer token; the value never leaves the page. A 429 or 5xx stops the run as a rate
+   * limit or a marketplace error, and a 403 that is not JSON as a bot check; any other answer is
+   * returned, its body parsed as JSON (`null` when it is not). Reads may use it: a GET changes
+   * nothing.
+   */
+  apiGet(url: string, options?: ApiGetOptions): Promise<ApiResponse>;
+}
+
+export interface ApiGetOptions {
+  /** The site's cookie whose value goes in the `Authorization: Bearer` header. */
+  bearerCookie?: string;
+}
+
+/** A marketplace web API's answer to `PageDriver.apiGet`. */
+export interface ApiResponse {
+  status: number;
+  /** The parsed JSON body, or `null` when the body is not JSON. */
+  body: unknown;
 }
 
 export interface StepOptions {
