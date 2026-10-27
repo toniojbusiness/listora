@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEPOP_PACING } from './depop/site.ts';
-import { DEFAULT_LIMITS, DEFAULT_PACING } from './profiles.ts';
+import { DEFAULT_LIMITS, DEFAULT_PACING, PACING_FLOOR } from './profiles.ts';
 import { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 
 const HOUR = 3_600_000;
@@ -32,6 +32,18 @@ describe('loadAutomationSettings', () => {
       expect(profile.limits).toEqual(DEFAULT_LIMITS);
     }
     expect(settings.profiles.poshmark.origins).toContain('https://poshmark.com');
+  });
+
+  it("paces like a practiced seller by default: quick, never at the floor's speed", () => {
+    const mean = ([min, max]: readonly [number, number]) => (min + max) / 2;
+    for (const kind of ['actionDelayMs', 'keystrokeDelayMs', 'sessionGapMs'] as const) {
+      expect(DEFAULT_PACING[kind][0]).toBeGreaterThanOrEqual(PACING_FLOOR[kind][0]);
+      expect(DEFAULT_PACING[kind][1]).toBeGreaterThan(DEFAULT_PACING[kind][0]);
+    }
+    // About a second per action, and a few seconds between sessions.
+    expect(mean(DEFAULT_PACING.actionDelayMs)).toBeLessThanOrEqual(1_000);
+    expect(mean(DEFAULT_PACING.actionDelayMs)).toBeGreaterThan(PACING_FLOOR.actionDelayMs[0]);
+    expect(DEFAULT_PACING.sessionGapMs[1]).toBeLessThanOrEqual(5_000);
   });
 
   it('sets pacing and limits per marketplace', () => {

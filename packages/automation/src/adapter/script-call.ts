@@ -79,6 +79,17 @@ export type ScriptCall<P extends AssistedListingPayload = AssistedListingPayload
   | { script: 'orders'; since: string | null }
   | { script: 'listings' };
 
+/**
+ * Whether an earlier attempt of the operation may have posted or changed the listing, so a
+ * create or relist looks for that listing before it posts (`OperationRequest.mayHaveApplied`;
+ * a request that doesn't say counts every attempt after the first).
+ */
+export function mayHaveAppliedBefore(
+  op: Pick<OperationRequest<AssistedListingPayload>, 'attempt' | 'mayHaveApplied'>,
+): boolean {
+  return op.mayHaveApplied ?? op.attempt > 1;
+}
+
 /** Whether the call may change anything: only a write script's may. */
 export function isWriteCall(call: ScriptCall): boolean {
   return (WRITE_SCRIPTS as readonly string[]).includes(call.script);

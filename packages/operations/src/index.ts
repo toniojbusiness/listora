@@ -39,12 +39,15 @@ export type {
 } from './executor.ts';
 export {
   DEFAULT_PHONE_QUEUE,
+  nextPhoneOperationDue,
+  OPEN_APP_GAP_MS,
   PHONE_UNAVAILABLE_ERROR,
   phoneWaits,
   releasePhoneOperations,
   removePhoneWork,
+  runWaitingPhoneOperationsNow,
 } from './phone-queue.ts';
-export type { PhoneQueueSettings, PhoneWait } from './phone-queue.ts';
+export type { PhoneDevice, PhoneQueueSettings, PhoneWait } from './phone-queue.ts';
 export {
   AUTOMATION_OPERATION_TASK,
   listingQueueName,

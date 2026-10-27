@@ -44,6 +44,8 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
         accountId: tenant.accountId,
         deviceId: device.id,
         runtimeVersion: body.runtimeVersion,
+        running: body.running ?? [],
+        appOpen: body.appOpen === true,
       });
       const result = runResult(run);
       if (result.run !== undefined) return { status: 200, body: result };
@@ -51,6 +53,7 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
       const nextClaimInSeconds = await nextPhoneClaimSeconds(db, {
         accountId: tenant.accountId,
         deviceId: device.id,
+        appOpen: body.appOpen === true,
       });
       return { status: 200, body: { nextClaimInSeconds } };
     } catch (error) {

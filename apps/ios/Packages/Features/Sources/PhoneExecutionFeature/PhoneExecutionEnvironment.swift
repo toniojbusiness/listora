@@ -49,6 +49,7 @@ public final class PhoneExecutionEnvironment {
             },
             installationID: installationID,
             isSignedIn: isSignedIn,
+            isAppOpen: { UIApplication.shared.applicationState == .active },
             device: {
                 DeviceRegistration(
                     name: UIDevice.current.name,

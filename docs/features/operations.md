@@ -68,10 +68,16 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    that failure is not retryable (`error.retryable: false`, the label has no "- Retry"): the
    seller fixes the item or the listing and sends it again, which a draft that never reached the
    marketplace allows ([inventory.md](inventory.md#the-api-behind-it)).
-4. **Idempotent re-execution.** An operation that was sent before is read back before every
-   later send, and succeeds without sending again when the change already took effect (a 5xx
-   can hide an applied write). Adapters also pass the operation's idempotency key to the
-   marketplace's own duplicate protection where it has one.
+4. **Idempotent re-execution.** An operation that may have been applied before is read back
+   before every later send, and succeeds without sending again when the change already took
+   effect (a 5xx can hide an applied write). "May have" is read from the results its earlier
+   sends recorded (`mayHaveSentBefore`, history.ts): only a send that shows it changed nothing
+   (refused, sent nothing, an automated script that stopped before any step that changes the
+   listing, or a session that never opened) does not count; a confirmed, unknown, or interrupted
+   send, a 5xx, and a task for the user do. The adapter hears the same answer
+   (`OperationRequest.mayHaveApplied`), so a create or relist looks for a listing an earlier
+   attempt may have posted only when one may have. Adapters also pass the operation's
+   idempotency key to the marketplace's own duplicate protection where it has one.
    **Pending listing ids.** A listing id a send returns (eBay's `RelistItem` issues a new one)
    is stored at once, in the transaction that records the step, as the listing's
    `pending_external_listing_id`: unverified, and never linked to another listing of the

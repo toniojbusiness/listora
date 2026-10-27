@@ -23,6 +23,7 @@ import { createMarketplaceAdapters, type AdapterLookup } from '@listora/marketpl
 import { sampleListingContent } from '@listora/marketplaces/testing';
 import {
   enqueueOperation,
+  OPEN_APP_GAP_MS,
   runOperationStep,
   type OperationRow,
   type StepDependencies,
@@ -654,5 +655,155 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
         runtimeVersion: PHONE_RUNTIME_VERSION,
       }),
     ).toBeNull();
+  });
+  it('hands a phone that runs marketplaces side by side one run per marketplace, and recovers only the runs it stopped', async () => {
+    await linkAutomationSession(
+      db,
+      { vault, profile: settings.profiles.mercari },
+      {
+        accountId,
+        marketplace: 'mercari',
+        deviceId,
+        cookies: [
+          {
+            name: 'sid',
+            value: 'mercari-session',
+            domain: '.mercari.com',
+            path: '/',
+            expires: Math.floor(Date.now() / 1000) + 86_400,
+            httpOnly: true,
+            secure: true,
+            sameSite: 'Lax',
+          },
+        ],
+      },
+    );
+    const device = { accountId, deviceId, runtimeVersion: PHONE_RUNTIME_VERSION };
+    const first = await claimPhoneRun(phone, db, device);
+    if (first === null) throw new Error('the first claim found nothing');
+    const second = await claimPhoneRun(phone, db, { ...device, running: [first.id] });
+    if (second === null) throw new Error('the second claim found nothing');
+    expect(new Set([first.marketplace, second.marketplace])).toEqual(new Set(['depop', 'mercari']));
+    // Both marketplaces run: nothing more for this phone until one of them is free.
+    expect(
+      await claimPhoneRun(phone, db, { ...device, running: [first.id, second.id] }),
+    ).toBeNull();
+    const held = async () =>
+      (await work())
+        .filter((row) => row.lease_expires_at !== null && row.lease_expires_at > new Date())
+        .map((row) => row.id)
+        .sort();
+    expect(await held()).toEqual([first.id, second.id].sort());
+    // The app no longer runs the second (it was closed in the middle of the call): a claim
+    // that doesn't name it ends it, and its marketplace is free for its work again.
+    const third = await claimPhoneRun(phone, db, { ...device, running: [first.id] });
+    expect(third?.marketplace).toBe(second.marketplace);
+    expect(await held()).toContain(first.id);
+    const stopped = await db
+      .selectFrom('automation_run')
+      .select(['marketplace', 'outcome'])
+      .where('account_id', '=', accountId)
+      .where('error_code', '=', 'phone_stopped')
+      .execute();
+    expect(stopped).toEqual([{ marketplace: second.marketplace, outcome: 'canceled' }]);
+  });
+
+  it("starts a run's later calls at once: only its first waits out the pause between sessions", async () => {
+    // The link's checks just ran, so a new session would wait out the pause after them.
+    await runPhone();
+    const paced: PhoneWorkDependencies = {
+      ...phone,
+      profiles: {
+        ...phone.profiles,
+        depop: {
+          ...phone.profiles.depop,
+          pacing: { ...QUICK_PACING, sessionGapMs: [60_000, 60_000] },
+        },
+      },
+    };
+    const op = await enqueue(await newListing(), 'create');
+    await step(op);
+    let run = await claimPhoneRun(paced, db, {
+      accountId,
+      deviceId,
+      runtimeVersion: PHONE_RUNTIME_VERSION,
+    });
+    expect(run?.call?.input.startDelayMs).toBeGreaterThan(30_000);
+    const later: number[] = [];
+    while (run?.call) {
+      const host = new PlaywrightPhoneHost(await webData.newPage());
+      // The phone would wait the pause first; the test doesn't.
+      const input = { ...run.call.input, startDelayMs: 0 };
+      const output = await runPhoneCall(input, host, { pacing: { random: () => 0 } });
+      await host.page.close();
+      run = await answerPhoneCall(paced, {
+        accountId,
+        deviceId,
+        runId: run.id,
+        index: run.call.index,
+        answer: JSON.parse(JSON.stringify(output)),
+      });
+      if (run.call !== null) later.push(run.call.input.startDelayMs);
+    }
+    // The create's read-back follows it in the same visit.
+    expect(later.length).toBeGreaterThan(0);
+    expect(later.every((delay) => delay === 0)).toBe(true);
+  });
+
+  it('runs changes waiting out a backoff at once while the app is open, but keeps pacing waits', async () => {
+    await runPhone();
+    const waiting = async (errorCode: string) => {
+      const op = await enqueue(await newListing(), 'create');
+      await db
+        .updateTable('marketplace_operation')
+        .set({
+          status: 'retrying',
+          attempts: 1,
+          next_attempt_at: sql<Date>`now() + interval '10 minutes'`,
+          error_code: errorCode,
+          error_message: 'Depop did not answer.',
+        })
+        .where('id', '=', op.id)
+        .execute();
+      return op;
+    };
+    const backoff = await waiting('step_timeout');
+    const paced = await waiting('rate_limited');
+    const device = { accountId, deviceId };
+    const claim = (appOpen: boolean) =>
+      claimPhoneRun(phone, db, { ...device, runtimeVersion: PHONE_RUNTIME_VERSION, appOpen });
+    // Right after its last step, a change waits a moment even while the app is open.
+    expect(await nextPhoneClaimSeconds(db, { ...device, appOpen: true })).toBeLessThanOrEqual(
+      Math.ceil(OPEN_APP_GAP_MS / 1000) + 1,
+    );
+    await new Promise((resolve) => setTimeout(resolve, OPEN_APP_GAP_MS + 200));
+    // A closed app's phone waits for the retry's time; an open one looks again at once.
+    expect(await nextPhoneClaimSeconds(db, device)).toBe(PHONE_IDLE_CLAIM_SECONDS);
+    expect(await nextPhoneClaimSeconds(db, { ...device, appOpen: true })).toBe(1);
+    expect(await claim(false)).toBeNull();
+    expect((await operation(backoff.id)).next_attempt_at?.getTime()).toBeGreaterThan(Date.now());
+
+    expect(await claim(true)).toBeNull();
+    expect((await operation(backoff.id)).next_attempt_at?.getTime()).toBeLessThanOrEqual(
+      Date.now(),
+    );
+    const moved = await db
+      .selectFrom('operation_event')
+      .select('detail')
+      .where('operation_id', '=', backoff.id)
+      .where('to_status', '=', 'retrying')
+      .execute();
+    expect(moved.map((row) => row.detail)).toContainEqual({
+      action: 'try_now',
+      reason: 'app_open',
+    });
+    // The marketplace asked to slow down: that wait stands.
+    expect((await operation(paced.id)).next_attempt_at?.getTime()).toBeGreaterThan(
+      Date.now() + 60_000,
+    );
+    // The engine hands the change over at once, and the open app's next claim runs it.
+    expect((await jobOf(backoff))?.run_at.getTime()).toBeLessThanOrEqual(Date.now());
+    await step(backoff);
+    expect((await claim(true))?.operationId).toBe(backoff.id);
   });
 });

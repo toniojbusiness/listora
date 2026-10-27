@@ -50,6 +50,7 @@ public struct PhoneWorkProgress: Equatable, Sendable {
 /// What the screens read to show the work running on this phone (the phone runner).
 @MainActor
 public protocol PhoneWorkProgressSource: AnyObject {
-    /// The work running now; `nil` while nothing runs.
-    var progress: PhoneWorkProgress? { get }
+    /// The work running now, one per marketplace (marketplaces run side by side), in
+    /// marketplace order; empty while nothing runs.
+    var progress: [PhoneWorkProgress] { get }
 }

@@ -13,8 +13,9 @@
  *
  * - an `unknown` result (timeout after send, an adapter crash, a lost connection) is followed by
  *   a read-back, never by a blind resend;
- * - an operation that was sent before is read back first on every later attempt, and succeeds
- *   without sending again if the change already took effect;
+ * - an operation that may have been applied before (an earlier send whose recorded result does
+ *   not show it changed nothing, history.ts) is read back first on every later attempt, and
+ *   succeeds without sending again if the change already took effect;
  * - a step found `running` was interrupted, so its result is read back as if it were unknown;
  *   one that nothing can read back fails as unconfirmed if this or any earlier step of the
  *   operation could have gone through the API, and only a purely assisted one runs again;
@@ -91,7 +92,7 @@ import {
 } from './evidence.ts';
 import type { OperationJobPayload } from './jobs.ts';
 import { AUTOMATION_OPERATION_TASK, removeOperationJob, scheduleOperationJob } from './jobs.ts';
-import { wasSentThroughApi } from './history.ts';
+import { mayHaveSentBefore, wasSentThroughApi } from './history.ts';
 import { createdBefore } from './ordering.ts';
 import { syncItemListedStatus } from './item-status.ts';
 import {
@@ -189,8 +190,17 @@ type Targets = readonly [ListingRef, ...ListingRef[]];
 type SeenRevisions = Map<string, number>;
 
 type Step =
-  /** Send the operation (after reading the listing back first, if it was sent before). */
-  | { type: 'send'; ctx: StepContext; precheck: boolean; attempt: number }
+  /**
+   * Send the operation (after reading the listing back first, if it may have been applied
+   * before: `mayHaveApplied`, from the results its earlier sends recorded).
+   */
+  | {
+      type: 'send';
+      ctx: StepContext;
+      precheck: boolean;
+      mayHaveApplied: boolean;
+      attempt: number;
+    }
   /** Read the listing back to learn whether the desired state holds. */
   | { type: 'check'; ctx: StepContext; attempt: number };
 
@@ -208,6 +218,8 @@ export interface ClaimedStepRef {
   type: Step['type'];
   attempt: number;
   precheck: boolean;
+  /** Absent in a ref stored before it existed: every attempt after the first may have. */
+  mayHaveApplied?: boolean;
   status: OperationStatus;
   attempts: number;
   namedListingId: string | null;
@@ -326,6 +338,7 @@ export function claimedStepRef(step: ClaimedStep): ClaimedStepRef {
     type: step.type,
     attempt: step.attempt,
     precheck: step.type === 'send' && step.precheck,
+    ...(step.type === 'send' ? { mayHaveApplied: step.mayHaveApplied } : {}),
     status: step.ctx.op.status,
     attempts: step.ctx.op.attempts,
     namedListingId: step.ctx.namedListingId,
@@ -363,7 +376,13 @@ export async function loadClaimedStep(
       targets: listingTargets(listing, loaded.base.desired),
     };
     return ref.type === 'send'
-      ? { type: 'send', ctx, precheck: ref.precheck, attempt: ref.attempt }
+      ? {
+          type: 'send',
+          ctx,
+          precheck: ref.precheck,
+          mayHaveApplied: ref.mayHaveApplied ?? ref.attempt > 1,
+          attempt: ref.attempt,
+        }
       : { type: 'check', ctx, attempt: ref.attempt };
   });
 }
@@ -693,7 +712,10 @@ async function claimStep(
             targets: listingTargets(named.listing, base.desired),
           }
         : {};
-    const precheck = op.kind !== 'verify' && canReadBack && (await wasSentBefore(trx, op));
+    // A send that may have been applied before is read back first; one whose every earlier
+    // send recorded that it changed nothing goes straight to sending (no lookup to wait for).
+    const mayHaveApplied = op.kind !== 'verify' && (await mayHaveSentBefore(trx, op));
+    const precheck = canReadBack && mayHaveApplied;
     const running = await transitionOperation(
       trx,
       op,
@@ -709,7 +731,7 @@ async function claimStep(
     const ctx = { op: running, ...base, ...naming };
     return op.kind === 'verify'
       ? { type: 'check', ctx, attempt: running.attempts }
-      : { type: 'send', ctx, precheck, attempt: running.attempts };
+      : { type: 'send', ctx, precheck, mayHaveApplied, attempt: running.attempts };
   });
 }
 
@@ -915,19 +937,6 @@ async function supersedeUserSteps(
   log.info({ superseded }, 'a delist superseded operations waiting for the user');
 }
 
-/** Whether any earlier step started sending this operation (its history has a `running`). */
-async function wasSentBefore(trx: DbTransaction, op: OperationRow): Promise<boolean> {
-  const event = await trx
-    .selectFrom('operation_event')
-    .select('id')
-    .where('account_id', '=', op.account_id)
-    .where('operation_id', '=', op.id)
-    .where('to_status', '=', 'running')
-    .limit(1)
-    .executeTakeFirst();
-  return event !== undefined;
-}
-
 // Call ------------------------------------------------------------------------------------
 
 async function performSend(
@@ -1008,6 +1017,7 @@ async function sendTo(
     kind: kind === 'relist' && ref.externalListingId === null ? 'create' : kind,
     idempotencyKey: ctx.op.idempotency_key,
     attempt: step.attempt,
+    mayHaveApplied: step.mayHaveApplied,
     desired: ctx.desired,
     listing: ref,
     payload: prepared.payload,

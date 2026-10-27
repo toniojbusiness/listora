@@ -105,7 +105,7 @@ adapter declares `revision`.
 yet, and eBay drops old ended listings' pages after a while.
 
 **Finding a listing again.** A create whose answer was lost, and every later attempt of a create
-or relist, first looks for the listing's SKU in the Custom label column of the newest 8 active
+or relist after one that may have posted (`mayHaveApplied`), first looks for the listing's SKU in the Custom label column of the newest 8 active
 listings, and reports that listing instead of listing a second one.
 
 ## Mapping Listora's details to eBay's

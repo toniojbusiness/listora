@@ -10,8 +10,9 @@ struct MarketplacesSection: View {
     let histories: [String: [Operation]]
     let events: [String: [OperationEvent]]
     let busyMarketplace: String?
-    /// The work this iPhone runs now, shown on the card of the listing it is for.
-    var phoneProgress: PhoneWorkProgress?
+    /// The work this iPhone runs now (one per marketplace), each shown on the card of the
+    /// listing it is for.
+    var phoneProgress: [PhoneWorkProgress] = []
     let perform: (MarketplaceRowState.Action, MarketplaceRowState) -> Void
     /// Ends the row's listing, once the seller confirmed it and said why.
     let end: (EndReason, MarketplaceRowState) -> Void
@@ -46,9 +47,8 @@ struct MarketplacesSection: View {
                     events: events,
                     isBusy: busyMarketplace == row.id,
                     isEnabled: busyMarketplace == nil,
-                    progress: phoneProgress.flatMap { progress in
+                    progress: phoneProgress.first { progress in
                         progress.operationID != nil && progress.operationID == row.latestOperation?.id
-                            ? progress : nil
                     },
                     perform: { action in perform(action, row) },
                     end: { reason in end(reason, row) },

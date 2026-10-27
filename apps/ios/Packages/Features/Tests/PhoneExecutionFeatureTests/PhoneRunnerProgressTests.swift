@@ -33,7 +33,7 @@ struct PhoneRunnerProgressTests {
             timings: StepTimings(defaults: defaults, clock: { clock.now }),
         )
         var seen: [PhoneWorkProgress?] = []
-        runtime.onStep = { seen.append(runner.progress) }
+        runtime.onStep = { seen.append(runner.progress.first) }
 
         await runner.runUntilDone(.opened)
 
@@ -51,7 +51,7 @@ struct PhoneRunnerProgressTests {
         #expect(second.secondsLeft(at: clock.started[4]) == 16)
         #expect(second.fractionDone == 1.0 / 3)
         // Nothing runs afterwards, and the phone may sleep again.
-        #expect(runner.progress == nil)
+        #expect(runner.progress.isEmpty)
         #expect(awake == [true, false])
     }
 }

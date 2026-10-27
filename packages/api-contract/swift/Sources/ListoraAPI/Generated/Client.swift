@@ -10284,7 +10284,9 @@ public struct Client: APIProtocol {
     /// Claim the next work waiting for this phone
     ///
     /// Claims the next due work waiting for the device (delists after a sale first) and
-    /// returns its first script call; no `run` when nothing waits. The claim holds for a few
+    /// returns its first script call; no `run` when nothing waits. A marketplace with a run
+    /// under way gets no second one, so a phone that runs marketplaces side by side claims
+    /// once per free marketplace, naming the runs it still runs. The claim holds for a few
     /// minutes from each call and answer; a phone that stops answering lets it lapse, and the
     /// work is recovered on the server. `409 app_update_required` when the app's runtime
     /// speaks another version of calls than the server's.

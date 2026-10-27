@@ -510,12 +510,13 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     it('a redesigned page the adapter no longer understands', async () => {
       const ref = newRef();
       site.inject({ action: 'new_form', fault: { type: 'redesign' } });
+      // A first attempt goes straight to the form: nothing before it could have posted.
       const outcome = await adapter.execute(request('create', ref), ctx());
       expect(outcome).toMatchObject({
         type: 'pendingUser',
         excerpt: {
           automation: 'page_changed',
-          failure: { kind: 'error', code: 'element_missing', step: 'find the seller' },
+          failure: { kind: 'error', code: 'element_missing', step: 'open the listing form' },
         },
       });
       expect(site.listings(ref.externalSku ?? '')).toHaveLength(0);

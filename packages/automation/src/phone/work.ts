@@ -54,6 +54,8 @@ import {
   loadClaimedStep,
   recordOperationStep,
   type ClaimedStepRef,
+  nextPhoneOperationDue,
+  runWaitingPhoneOperationsNow,
   type PhoneQueueSettings,
   type RetryPolicy,
   type StepDependencies,
@@ -155,7 +157,11 @@ export class PhoneCallConflictError extends Error {
 
 const DEFAULT_LEASE_MS = 10 * 60_000;
 /** The longest a phone that runs marketplaces waits between looks while the app is open. */
-export const PHONE_IDLE_CLAIM_SECONDS = 10;
+export const PHONE_IDLE_CLAIM_SECONDS = 5;
+/** About how long the engine takes to hand a due change to the phone. */
+const HANDOVER_SECONDS = 1;
+/** A change due this long ago that still isn't the phone's waits for its own job instead. */
+const STALE_HANDOVER_MS = 60_000;
 /** How often a phone that runs no marketplace looks (linking one runs its work at once). */
 export const PHONE_UNUSED_CLAIM_SECONDS = 300;
 /** Candidates one claim looks at before it says there is nothing to run. */
@@ -187,18 +193,38 @@ interface PendingState {
   input: PhoneCallInput;
 }
 
+/** The device asking for work, and what it says about itself. */
+export interface ClaimingDevice {
+  accountId: string;
+  deviceId: string;
+  runtimeVersion: number;
+  /**
+   * The runs the app is still running, one per marketplace (it runs marketplaces side by side);
+   * every other run the device holds stopped. Absent: it runs none.
+   */
+  running?: readonly string[];
+  /**
+   * The seller has the app open: the device's changes waiting out a backoff run now
+   * (`runWaitingPhoneOperationsNow`), and it is told to look again sooner.
+   */
+  appOpen?: boolean;
+}
+
 /**
  * Claims the device's next due work and returns its first call, or `null` when nothing waits
- * for it. Runs in `executor`, the request's transaction.
+ * for it. Work on a connection that has a run under way waits, so a device that runs several
+ * marketplaces side by side gets one run per marketplace. Runs in `executor`, the request's
+ * transaction.
  */
 export async function claimPhoneRun(
   deps: PhoneWorkDependencies,
   executor: DbExecutor,
-  device: { accountId: string; deviceId: string; runtimeVersion: number },
+  device: ClaimingDevice,
 ): Promise<PhoneRunState | null> {
   if (device.runtimeVersion !== PHONE_RUNTIME_VERSION) throw new PhoneRuntimeMismatchError();
   return inTransaction(executor, async (trx) => {
     await releaseStoppedRuns(trx, device);
+    if (device.appOpen === true) await runWaitingPhoneOperationsNow(trx, device);
     for (let looked = 0; looked < MAX_CLAIM_CANDIDATES; looked += 1) {
       const work = await nextWork(trx, device);
       if (work === undefined) return null;
@@ -212,16 +238,28 @@ export async function claimPhoneRun(
 /**
  * How long a phone with nothing to run waits before it asks again while the app is open
  * (docs/features/phone-execution.md, "When the phone runs"): until its next work is due (a
- * check tried again after a failed attempt), and never longer than `PHONE_IDLE_CLAIM_SECONDS`
+ * check tried again after a failed attempt, a change the engine is about to hand over, or one
+ * the open app runs without its backoff), and never longer than `PHONE_IDLE_CLAIM_SECONDS`
  * while marketplaces run on it, so work queued meanwhile (a sale check, a delist after a sale)
  * starts within seconds without a push; a phone that runs none asks rarely.
  */
 export async function nextPhoneClaimSeconds(
   executor: DbExecutor,
-  device: { accountId: string; deviceId: string },
+  device: { accountId: string; deviceId: string; appOpen?: boolean },
 ): Promise<number> {
-  // Work is claimable once it is due and no run holds it.
-  const claimableAt = sql<Date>`greatest(work.due_at, coalesce(work.lease_expires_at, work.due_at))`;
+  // Work is claimable once it is due and no run holds it or another work of its connection (a
+  // marketplace whose run is under way gets its next work when that run ends, and its lane asks
+  // then).
+  const claimableAt = sql<Date>`greatest(
+    work.due_at,
+    coalesce(work.lease_expires_at, work.due_at),
+    coalesce(
+      (select max(other.lease_expires_at) from phone_work other
+        where other.account_id = work.account_id and other.connection_id = work.connection_id
+          and other.id <> work.id),
+      work.due_at
+    )
+  )`;
   const found = await executor
     .selectFrom('marketplace_connection as connection')
     .leftJoin('phone_work as work', (join) =>
@@ -240,8 +278,17 @@ export async function nextPhoneClaimSeconds(
     .where('connection.phone_device_id', '=', device.deviceId)
     .executeTakeFirst();
   if (found === undefined || found.connections === 0) return PHONE_UNUSED_CLAIM_SECONDS;
-  if (found.dueInSeconds === null) return PHONE_IDLE_CLAIM_SECONDS;
-  return Math.min(PHONE_IDLE_CLAIM_SECONDS, Math.max(1, Math.ceil(found.dueInSeconds)));
+  const operationDue = await nextPhoneOperationDue(executor, device, {
+    open: device.appOpen === true,
+    staleMs: STALE_HANDOVER_MS,
+  });
+  const waits = [
+    found.dueInSeconds,
+    // The engine hands a due change over within moments.
+    operationDue === null ? null : (operationDue.getTime() - Date.now()) / 1000 + HANDOVER_SECONDS,
+  ].filter((wait): wait is number => wait !== null);
+  if (waits.length === 0) return PHONE_IDLE_CLAIM_SECONDS;
+  return Math.min(PHONE_IDLE_CLAIM_SECONDS, Math.max(1, Math.ceil(Math.min(...waits))));
 }
 
 /** Takes the phone's answer for the run's current call and returns the next call, if any. */
@@ -297,16 +344,17 @@ export async function answerPhoneCall(
 }
 
 /**
- * The device's runs that stopped. The app runs one thing at a time and asks for work only when
- * it runs none, so a run the device still holds stopped in the middle (the app was closed or
- * lost its connection): it ends now instead of when its lease runs out, so the device's other
- * work on that connection does not wait for the lease. Its unanswered call is canceled, and the
- * work is recovered as any lapsed run is.
+ * The device's runs that stopped. The app says which runs it is still running (`running`, one
+ * per marketplace), so a run the device holds besides those stopped in the middle (the app was
+ * closed or lost its connection): it ends now instead of when its lease runs out, so the
+ * device's other work on that connection does not wait for the lease. Its unanswered call is
+ * canceled, and the work is recovered as any lapsed run is.
  */
 async function releaseStoppedRuns(
   trx: DbTransaction,
-  device: { accountId: string; deviceId: string },
+  device: Pick<ClaimingDevice, 'accountId' | 'deviceId' | 'running'>,
 ): Promise<void> {
+  const running = device.running ?? [];
   const held = await trx
     .selectFrom('phone_work as work')
     .innerJoin('marketplace_connection as connection', (join) =>
@@ -318,6 +366,7 @@ async function releaseStoppedRuns(
     .where('work.account_id', '=', device.accountId)
     .where('connection.phone_device_id', '=', device.deviceId)
     .where('work.lease_expires_at', '>', sql<Date>`now()`)
+    .$if(running.length > 0, (query) => query.where('work.id', 'not in', [...running]))
     .forUpdate('work')
     .execute();
   if (held.length === 0) return;
@@ -676,17 +725,7 @@ async function issueCall(
 ): Promise<PendingState> {
   const { request } = pending;
   const profile = profileFor(deps, request);
-  const last = await trx
-    .selectFrom('automation_run')
-    .select('started_at')
-    .where('account_id', '=', work.account_id)
-    .where('connection_id', '=', work.connection_id)
-    .orderBy('started_at', 'desc')
-    .limit(1)
-    .executeTakeFirst();
-  const gap = new Pacing(profile.pacing).delayMs('session');
-  const startDelayMs =
-    last === undefined ? 0 : Math.max(0, last.started_at.getTime() + gap - Date.now());
+  const startDelayMs = continuesSession(work) ? 0 : await sessionGapLeft(trx, work, profile);
   const run = await trx
     .insertInto('automation_run')
     .values({
@@ -729,6 +768,35 @@ async function issueCall(
     .where('id', '=', work.id)
     .execute();
   return issued;
+}
+
+/**
+ * Whether the call goes on a session the phone is in: the run already had a call of its own
+ * answered by the phone (a send's read-back after the send, a create's lookup before it). Its
+ * calls are one visit to the marketplace, as a person checks a listing right after posting it,
+ * so only a run's first call waits out the pause between sessions.
+ */
+function continuesSession(work: WorkRow): boolean {
+  return entries(work).some((entry) => entry.run.type === 'ran');
+}
+
+/** The rest of the pause since the seller's last session on the connection started. */
+async function sessionGapLeft(
+  trx: DbTransaction,
+  work: WorkRow,
+  profile: AutomationProfile,
+): Promise<number> {
+  const last = await trx
+    .selectFrom('automation_run')
+    .select('started_at')
+    .where('account_id', '=', work.account_id)
+    .where('connection_id', '=', work.connection_id)
+    .orderBy('started_at', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  if (last === undefined) return 0;
+  const gap = new Pacing(profile.pacing).delayMs('session');
+  return Math.max(0, last.started_at.getTime() + gap - Date.now());
 }
 
 /** The marketplace's profile as the call's adapter runs it (on its stand-in site in development). */
