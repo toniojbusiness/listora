@@ -17,11 +17,12 @@ export const DEPOP_SITE_URL = 'https://www.depop.com';
 
 /**
  * A Depop product slug: the seller's username and words of the listing, lowercase and joined by
- * hyphens (`jdoe-levis-trucker-jacket`). The Selling API addresses the same products by it
+ * hyphens (`jdoe-levis-trucker-jacket`); a username may have underscores and periods
+ * (`365_nails-black-and-white-nail-set`). The Selling API addresses the same products by it
  * (`/api/v1/products/by-slug/{slug}/`), so a listing automated today is still found once the
  * seller connects the API. At least one hyphen, so `/products/create/` is never a product.
  */
-export const DEPOP_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)+$/;
+export const DEPOP_SLUG = /^[a-z0-9][a-z0-9._]*(?:-[a-z0-9_]+)+$/;
 
 /** Paths on Depop's site, relative to its origin. */
 export const DEPOP_PATHS = {
@@ -36,9 +37,12 @@ export const DEPOP_PATHS = {
   sold: (page: number) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ''}`,
 } as const;
 
-/** The slug in a path that opens a product (`/products/jdoe-levis-jacket/`), else `null`. */
+/**
+ * The slug in a path that opens a product (`/products/jdoe-levis-jacket/`, or its seller's own
+ * view, `/products/jdoe-levis-jacket/manage/`, where Depop sends them), else `null`.
+ */
 export function slugFromPath(path: string): string | null {
-  const slug = /^\/products\/([^/]+)\/?$/.exec(path)?.[1];
+  const slug = /^\/products\/([^/]+)\/(?:manage\/?)?$/.exec(path)?.[1];
   if (slug === undefined) return null;
   const decoded = decodeURIComponent(slug);
   return DEPOP_SLUG.test(decoded) ? decoded : null;

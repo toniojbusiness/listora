@@ -157,7 +157,8 @@ API and the debug fake camera (`LISTORA_FAKE_CAMERA`); the review flow (`testRev
 screens 15 to 26) and the inventory and item screens (`testInventoryTour`, 27 to 34) go through
 the local stack with the fake AI and fake eBay, as `ReviewFlowUITests` and `ListingFlowUITests`
 do, so the target starts it like `ios-test`; the inventory tour also shows Sales and Tasks empty
-(38, 39), the list layout (45), and "Mark as sold" with the celebration (46, 47). The signed-out
+(38, 39), the list layout (45), "Mark as sold" with the celebration (46, 47), Needs you
+(65), and select mode with the List all, Price, and End all sheets (61 to 64). The signed-out
 and stub passes show Sales with no server answering (35) and the lists that fail to load (36, 37), and
 `testDesignPassTour` the welcome steps (40 to 42) and a photo before and after its background
 cleanup (43, 44). `IOS_SCREENSHOT_TESTS` narrows the tour to one test.
@@ -215,6 +216,28 @@ in dark mode, and on the iPhone 17 Pro Max in dark mode.
 | Type                    | Card headings ("eBay", "Take photos once") were serif next to SF row titles; views tweaked weights.     | Serif only for screen-level display text; named styles for values, metadata, and tag text instead of per-view weights. |
 | Photo detail            | No way to make a photo's background consistent.                                                         | Clean background, with Undo.                                                                                           |
 | Selling                 | A sale landed silently.                                                                                 | A short celebration and a success haptic.                                                                              |
+
+## UI pass: clear words and fewer taps
+
+Walked as a reseller would use the app every day, on the iPhone 17 simulator, through the
+screenshot tour. Before and after sheets are in [design/uipass/](design/uipass/). The bulk
+actions, quick filters, and Needs you are in [inventory.md](inventory.md).
+
+| Screen    | What was confusing, hidden, or slow                                                                                | What changed                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Inventory | No way to act on many items: each item was opened one by one to list, end, relist, reprice, or delete it.          | Select (or a long press), then List all, Price, End all, Relist all, or Delete for every chosen item, with each item's outcome on each marketplace in words. |
+| Inventory | The status filter was three taps deep in a menu, and nothing found the items that need the seller.                 | Quick filters above the list (All, Needs you with its count, Drafts, Ready to list, Listed, Sold, Archived); the menu keeps marketplace and brand.           |
+| Inventory | A failed listing looked like the others from a distance: one line of small red text under the price.               | A "Needs you" badge on its photo (red for a failure, amber for a step waiting for the seller), and the Inventory tab's badge counts them.                    |
+| Inventory | An item on no marketplace said nothing about marketplaces, and its "Ready" chip read as ready in general.          | "Ready to list", and "Not listed anywhere yet" under it.                                                                                                     |
+| Item      | Three identical full-width List buttons (Depop, Poshmark, Mercari), and listing everywhere meant three List flows. | List everywhere at the top of Marketplaces, once two or more can take the item; each card's List is a smaller button.                                        |
+| Item      | No link to the listing, no way to share it, and the last change and its time hidden in the collapsed history.      | View on the marketplace and Share on each listed card, and "Last change: ... , when" under the status.                                                       |
+| Item      | "Through eBay's API" and "Automated in your session" are developer words.                                          | "Listora does it for you through eBay", "... in your linked Poshmark account", "You finish each step in the Mercari app".                                    |
+| Saved     | Only Done: listing the new item meant Inventory, finding it, opening it, and List.                                 | List it now opens the item with List everywhere.                                                                                                             |
+| Activity  | "Your iPhone ran “price” on Mercari" showed the script's name.                                                     | "Your iPhone changed the price on Mercari".                                                                                                                  |
+
+The listing statuses stay the server's honest vocabulary ("Active (confirmed by eBay)",
+"Delist failed - Retry"): each already says what is happening and what to do, and every screen
+and the morning summary share it ([operations.md](operations.md)).
 
 ## UI audit (before design system v2)
 

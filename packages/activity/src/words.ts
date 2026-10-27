@@ -136,6 +136,23 @@ export function hostSource(host: AutomationRunHost): ActivitySource {
   return host === 'phone' ? 'iphone' : 'cloud_browser';
 }
 
+/**
+ * What a browser session did, by the script it ran (`WRITE_SCRIPTS` and the reads in
+ * `@listora/automation`), so a timeline never shows a script's name.
+ */
+const SCRIPT_WORDS: Readonly<Record<string, string>> = {
+  create: 'posted the listing',
+  revise: 'updated the listing',
+  price: 'changed the price',
+  end: 'ended the listing',
+  relist: 'relisted it',
+  markSold: 'marked it sold',
+  read: 'read the listing',
+  health: 'checked your sign-in',
+  orders: 'read your sales',
+  listings: 'read your listings',
+};
+
 /** A browser session, as a timeline names it. */
 export function browserSessionTitle(run: {
   host: AutomationRunHost;
@@ -147,7 +164,7 @@ export function browserSessionTitle(run: {
   const name = MARKETPLACE_NAMES[run.marketplace];
   switch (run.purpose) {
     case 'operation':
-      return `${where} ran “${run.script}” on ${name}`;
+      return `${where} ${SCRIPT_WORDS[run.script] ?? 'worked on the listing'} on ${name}`;
     case 'sale_check':
       return `${where} read your ${name} sales`;
     case 'health':

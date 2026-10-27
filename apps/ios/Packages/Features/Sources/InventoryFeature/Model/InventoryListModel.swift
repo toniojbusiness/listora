@@ -24,6 +24,10 @@ final class InventoryListModel {
     private(set) var isLoadingMore = false
     /// Every brand seen in the list, for the brand filter.
     private(set) var brands: [String] = []
+    /// Select mode: taps choose items for a change to all of them at once.
+    private(set) var isSelecting = false
+    /// The chosen items' ids.
+    private(set) var selection: Set<String> = []
     private var nextCursor: String?
     private let service: any InventoryService
     private let isSignedIn: @MainActor () -> Bool
@@ -35,6 +39,11 @@ final class InventoryListModel {
 
     var isFiltered: Bool {
         query != InventoryQuery()
+    }
+
+    /// A search, marketplace, or brand narrows the list (shown as chips with Clear).
+    var hasMenuFilters: Bool {
+        !query.search.isEmpty || query.marketplace != nil || query.brand != nil
     }
 
     var hasMore: Bool {
@@ -59,6 +68,7 @@ final class InventoryListModel {
             items = page.items
             nextCursor = page.nextCursor
             remember(brandsOf: page.items)
+            selection.formIntersection(page.items.map(\.id))
             phase = .loaded
         } catch {
             guard query == self.query else { return }
@@ -87,6 +97,38 @@ final class InventoryListModel {
 
     func clearFilters() {
         query = InventoryQuery()
+    }
+
+    /// The chosen items, in the list's order.
+    var selectedItems: [ItemSummary] {
+        items.filter { selection.contains($0.id) }
+    }
+
+    var allSelected: Bool {
+        !items.isEmpty && items.allSatisfy { selection.contains($0.id) }
+    }
+
+    func startSelecting(with itemID: String? = nil) {
+        isSelecting = true
+        selection = itemID.map { [$0] } ?? []
+    }
+
+    func stopSelecting() {
+        isSelecting = false
+        selection = []
+    }
+
+    func toggle(_ itemID: String) {
+        if selection.contains(itemID) {
+            selection.remove(itemID)
+        } else {
+            selection.insert(itemID)
+        }
+    }
+
+    /// Every item loaded so far, or none once they all are.
+    func toggleAll() {
+        selection = allSelected ? [] : Set(items.map(\.id))
     }
 
     private func remember(brandsOf items: [ItemSummary]) {

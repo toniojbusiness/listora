@@ -104,6 +104,7 @@ public struct AppDependencies {
             onSignIn: showSignIn, phoneWork: phone.runner,
         )
         inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
+        inventory.phoneProgress = phone.runner
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,

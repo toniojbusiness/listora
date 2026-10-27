@@ -34,6 +34,13 @@
           type: string
           minLength: 1
           maxLength: 120
+      - name: attention
+        in: query
+        description: |
+          `true`: only items that need the seller, those with a listing whose newest change
+          (not counting canceled ones) failed or waits for the seller to finish a step.
+        schema:
+          type: boolean
       - $ref: '../components/parameters.yaml#/Cursor'
       - $ref: '../components/parameters.yaml#/Limit'
     responses:

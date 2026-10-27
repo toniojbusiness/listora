@@ -11,14 +11,57 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
 - **Inventory** lists the account's items, newest first (`listItems`): cover photo, title, SKU,
   price, item status, and each listing's status on its marketplace, exactly as the server words
   it. It opens as a grid of large photos; the toolbar button switches to a list of rows and back,
-  and the choice is kept on the iPhone (`InventoryLayout`). Search goes over SKU, title, brand, and keywords; the filter menu narrows by item status,
-  marketplace (items with a listing there that is not ended or sold), and brand (exact, ignoring
-  case). The list reads the server every time it appears and on pull to refresh, so an item saved
-  in the review flow is there when the seller opens the tab. With no items the empty state points
-  to Add Item; with filters that match nothing it offers to clear them.
+  and the choice is kept on the iPhone (`InventoryLayout`). Search goes over SKU, title, brand,
+  and keywords. The quick filters above the list (`InventoryFilter`) are one tap each: All, Needs
+  you, Drafts, Ready to list, Listed, Sold (sold, delisting, or shipped), and Archived; the filter
+  menu narrows by marketplace (items with a listing there that is not ended or sold) and brand
+  (exact, ignoring case). The list reads the server every time it appears and on pull to refresh,
+  so an item saved in the review flow is there when the seller opens the tab. With no items the
+  empty state points to Add Item; with filters that match nothing it offers to clear them, and an
+  empty Needs you says nothing needs the seller.
+- **Needs you**: an item whose listing's newest change (not counting canceled ones) failed or
+  waits for the seller (`listItems` with `attention=true`). Its photo carries a "Needs you" badge
+  (red for a failure, amber for a step that waits for the seller), the quick filter shows how many,
+  and the Inventory tab's badge counts them (`InventoryAttention`, read when the app comes to the
+  front and each time the list loads; it counts one page, so "50+" at most). An item on no
+  marketplace says "Not listed anywhere yet", and a draft "Review it, then list it".
+- **Bulk actions** (`BulkActionModel`, `BulkActionSheet`): Select in the toolbar, or a long press
+  on an item, chooses items; the selection bar replaces the tab bar with List all, Price, End all,
+  Relist all, and Delete. Each opens a sheet that asks what the change is, then runs it over every
+  item, a few items at a time, reading each item fresh (its listings and the actions they allow
+  now) and going through the same calls as the item screen, each with its own Idempotency-Key,
+  sent again with that key when the answer was lost. The sheet then shows each item's outcome on
+  each marketplace, in words: started (Listora took the change; the item shows its progress until
+  the marketplace confirms, never "done"), done (only what the server itself completed: a delete,
+  a list price saved), skipped with what to do, or failed with the server's or marketplace's
+  message, and Try again reruns the failed items only.
+  - **List all** chooses the marketplaces where Listora lists itself (an API or linked
+    connection) and offers the assisted ones, which make a task. Each listing starts from the same
+    copy as the List flow (`SuggestedCopy`). What the List flow's review would stop is skipped,
+    never guessed: already on that marketplace, no title or price, a title over eBay's 80
+    characters, or no category Listora can map (each says to list it from the item).
+  - **Change price** lowers or raises by a percentage (5 to 30%) or an amount, with an example from
+    the first item. Every live listing changes, and the item's own list price too (`replaceItem`,
+    applied once more on the newest version after a `409`); a listing price below the item's floor
+    on that marketplace is skipped with the floor, since the item screen is where the seller
+    chooses to go below it.
+  - **End all** asks why (sold elsewhere, no longer available) once; **Relist all** relists every
+    ended listing.
+  - **Delete** confirms first; an item still on a marketplace, or with sales, is kept with the
+    server's reason (`deleteItem`).
+  - A listing whose last change is still running takes no other (one change at a time), and is
+    reported as such, with when to try again.
+- **List everywhere**: on the item screen, once two or more marketplaces can take the item, the
+  same List sheet for that item alone (each card's own List stays, as a smaller button, for
+  reviewing one marketplace's version first). "List it now" on the review flow's Saved screen
+  opens the new item in Inventory with it open (`ItemReviewOutcome.saved(listNow:)`,
+  `AddItemEnvironment.onListItem`).
 - **Item screen**: photos, title, SKU, status, list price; one row per marketplace (eBay, Depop,
   Poshmark, Mercari) with the listing's `statusDisplay`, how Listora works with that marketplace
-  ("Through eBay's API" or "Assisted"), the listing's own price, the actions the server allows
+  ("Listora does it for you through eBay", "... in your linked Poshmark account", or "You finish
+  each step in the Mercari app"), the listing's own price, its last settled change and when ("Last
+  change: Price changed (confirmed by eBay), Oct 24, 3:05 PM"), View on the marketplace and Share
+  (the listing's `externalUrl`), the actions the server allows
   (`availableActions`) plus Retry when the newest operation failed and can be retried, and the
   listing's history
   (every operation, newest first; opening one shows its steps from `listOperationEvents`). Then
@@ -51,7 +94,14 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   Check status each queue one operation. Retry re-queues the failed operation
   (`retryOperation`). Change price warns, without refusing, when the new price is below the
   item's floor on that marketplace (`getItemPricing`), as the price screen does. End listing
-  asks for the reason on its own card, so the confirmation opens at the button.
+  asks for the reason on its own card, so the confirmation opens at the button. A change waiting
+  to try again says when ("Waiting to retry at 9:41 PM", or "Checking again at" for a check
+  between read-backs) and offers Try now (`tryOperationNow`), which runs that attempt at once.
+  When two or more marketplaces can take the same change, Relist all and End all (with one
+  reason for all) queue it on each at once; each card then shows how its own change goes, and a
+  marketplace Listora couldn't reach is named in the notice.
+- **Work on this iPhone**: while the phone runs a listing's change, that listing's card shows
+  the step it is on, its number, and about how long is left ([phone-execution.md](phone-execution.md)).
 - **Activity**: the item's timeline, newest first: every step of every marketplace action, each
   browser session on the iPhone or in the cloud with its steps and their times, its tasks, sales,
   the checks that saw them, and its delists ([activity.md](activity.md)).

@@ -13,8 +13,18 @@ public struct PhoneRun: Equatable, Sendable {
     public let id: String
     public let purpose: String
     public let marketplace: String
+    /// The listing change the run is for; `nil` for a sign-in or sale check.
+    public let operationID: String?
     /// `nil` once the run is over.
     public let call: Call?
+
+    public init(id: String, purpose: String, marketplace: String, operationID: String? = nil, call: Call?) {
+        self.id = id
+        self.purpose = purpose
+        self.marketplace = marketplace
+        self.operationID = operationID
+        self.call = call
+    }
 }
 
 /// What a claim found: the run to start, or nothing, and then when to ask again.
@@ -47,6 +57,8 @@ public protocol PhoneWorkService: Sendable {
     func register(installationID: String, _ device: DeviceRegistration) async throws(APIFailure)
     /// Claims the next work waiting for this device, or says when to ask again.
     func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim
+    /// The runtime the server runs with (`have`: the digest the app already runs).
+    func runtime(have: String?) async throws(APIFailure) -> RemoteRuntime
     /// Answers the run's call; the run's next call, or `nil` once it is over.
     func answer(
         runID: String,
@@ -103,6 +115,19 @@ public struct APIPhoneWorkService: PhoneWorkService {
             throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response):
             throw APIFailure(statusCode: 409, response: response)
+        case let .default(status, response):
+            throw APIFailure(statusCode: status, response: response)
+        }
+    }
+
+    public func runtime(have: String?) async throws(APIFailure) -> RemoteRuntime {
+        let output = try await call {
+            try await api.client.getPhoneRuntime(query: .init(have: have))
+        }
+        switch output {
+        case let .ok(response):
+            let body = try decode { try response.body.json }
+            return RemoteRuntime(digest: body.digest, source: body.source)
         case let .default(status, response):
             throw APIFailure(statusCode: status, response: response)
         }
@@ -167,6 +192,7 @@ extension PhoneRun {
             id: run.id,
             purpose: run.purpose.value1?.rawValue ?? run.purpose.value2 ?? "",
             marketplace: run.marketplace.value1?.rawValue ?? run.marketplace.value2 ?? "",
+            operationID: run.operationId,
             call: call,
         )
     }

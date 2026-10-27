@@ -51,6 +51,11 @@ export interface PageDriver {
   attribute(selector: string, name: string): Promise<string | null>;
   attributes(selector: string, name: string): Promise<(string | null)[]>;
   /**
+   * The first match's current value (a form field's `value`, which a page's own scripts may set
+   * without any attribute), or `null` without a match.
+   */
+  value(selector: string): Promise<string | null>;
+  /**
    * The data the page keeps for its own scripts in the global `name` (`window.<name>`), as
    * JSON, or `null` when it has none. A page whose data comes in an inline script that removes
    * itself once it ran (Poshmark's `window.__INITIAL_STATE__`) has it only there.
@@ -63,6 +68,11 @@ export interface StepOptions {
   mutates: boolean;
   /** Overrides the runner's step timeout. */
   timeoutMs?: number;
+  /**
+   * The step may take this many times the runner's step timeout: a page that loads a lot (a sell
+   * form with photos) on a marketplace's own time. Relative, so a short test timeout stays short.
+   */
+  timeScale?: number;
 }
 
 /**
@@ -79,7 +89,13 @@ export type ScriptFailure =
   /** A page automation must never pass; the session must be relinked. */
   | { kind: 'challenge'; challenge: ChallengeKind; step: string; screenshotKey: string | null }
   /** The step ran out of time; its effect, if it mutates, is unknown. */
-  | { kind: 'timeout'; step: string; screenshotKey: string | null }
+  | {
+      kind: 'timeout';
+      step: string;
+      screenshotKey: string | null;
+      /** What the page had when the step ran out of time, structure only, for the log line. */
+      evidence?: PageEvidence;
+    }
   | {
       kind: 'error';
       step: string;

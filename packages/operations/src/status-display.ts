@@ -49,9 +49,13 @@ export interface ListingStatusInput {
      * absent when its steps run in the cloud.
      */
     phoneWait?: PhoneWaitInput | null;
+    /** When its next attempt is due (`next_attempt_at`); a retry waits until then. */
+    nextAttemptAt?: Date | null;
   } | null;
   /** Now, for how long a step has waited for the phone (default: the clock). */
   now?: Date;
+  /** What a relist of this listing does there (`relistMode`), for its in-progress label. */
+  relist?: RelistMode | undefined;
   /** Attempts an operation gets (default: the engine's default retry policy). */
   maxAttempts?: number;
 }
@@ -90,6 +94,42 @@ const IN_PROGRESS = {
   mark_sold: 'Marking sold',
   verify: 'Checking',
 } as const satisfies Record<OperationKind, string>;
+
+/**
+ * What a relist does: brings back the listing Listora ended (`reactivate`: Mercari activates it,
+ * Poshmark puts it back for sale) or posts a new listing (`new`: Depop, whose End deletes, and
+ * any listing whose id a read-back cleared because the marketplace removed it, which the
+ * executor sends as a create).
+ */
+export type RelistMode = 'reactivate' | 'new';
+
+/** The marketplaces where a relist brings back the ended listing itself. */
+const REACTIVATES: readonly Marketplace[] = ['mercari', 'poshmark'];
+
+/**
+ * How a relist goes for a listing on `marketplace`: `externalListingId` is its marketplace id
+ * (`null` once a read-back confirmed the marketplace removed it), and `wasListed` says it was
+ * listed before. `undefined` where Listora doesn't tell (eBay relists under a new id of its own,
+ * and a first listing is no relist).
+ */
+export function relistMode(
+  marketplace: Marketplace,
+  externalListingId: string | null,
+  wasListed: boolean,
+): RelistMode | undefined {
+  if (externalListingId === null) return wasListed ? 'new' : undefined;
+  if (marketplace === 'depop') return 'new';
+  return REACTIVATES.includes(marketplace) ? 'reactivate' : undefined;
+}
+
+/**
+ * "Reactivating..." for a relist that brings the listing back, "Relisting (new listing)..." for
+ * one that posts a new listing, else `IN_PROGRESS`.
+ */
+function inProgress(kind: OperationKind, relist: RelistMode | undefined): string {
+  if (kind !== 'relist' || relist === undefined) return IN_PROGRESS[kind];
+  return relist === 'reactivate' ? 'Reactivating' : 'Relisting (new listing)';
+}
 
 /** "Delist failed - Retry". */
 const FAILED = {
@@ -163,7 +203,7 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
       input.listingStatus,
     );
   }
-  return describeUnsettled(operation, name, input.maxAttempts, input.now);
+  return describeUnsettled(operation, name, input.maxAttempts, input.now, input.relist);
 }
 
 /**
@@ -208,14 +248,27 @@ function describeUnsettled(
   name: string,
   attemptsPerOperation: number | undefined,
   now: Date | undefined,
+  relist?: RelistMode,
 ): StatusDisplay {
+  const doingNow = inProgress(operation.kind, relist);
   const detail = operation.errorMessage === null ? {} : { detail: operation.errorMessage };
   const { kind } = operation;
   const wait = operation.phoneWait;
-  if (wait !== undefined && wait !== null && UNSETTLED_ON_PHONE.includes(operation.status)) {
-    const doing = operation.status === 'verifying' ? 'Checking' : IN_PROGRESS[kind];
+  const at = (now ?? new Date()).getTime();
+  const due = operation.nextAttemptAt?.getTime() ?? null;
+  // A retry before its time waits for that time, not for the phone: the app shows when it is
+  // ("Waiting to retry at 9:41 PM"), and the phone takes it once it is due.
+  const retryLater = operation.status !== 'queued' && due !== null && due > at;
+  if (
+    wait !== undefined &&
+    wait !== null &&
+    UNSETTLED_ON_PHONE.includes(operation.status) &&
+    (wait.running || !retryLater)
+  ) {
+    const doing = operation.status === 'verifying' ? 'Checking' : doingNow;
     if (wait.running) return { tone: 'in_progress', label: `${doing} on your iPhone...` };
-    const waited = waitedFor((now ?? new Date()).getTime() - wait.since.getTime());
+    // The wait for the phone counts from when the step was due, not from its first attempt.
+    const waited = waitedFor(at - Math.max(wait.since.getTime(), due ?? 0));
     return {
       tone: 'in_progress',
       label: `${doing}... waiting on your iPhone (${waited})`,
@@ -225,10 +278,10 @@ function describeUnsettled(
   switch (operation.status) {
     case 'queued':
     case 'running':
-      return { tone: 'in_progress', label: `${IN_PROGRESS[kind]}...` };
+      return { tone: 'in_progress', label: `${doingNow}...` };
     case 'retrying': {
       const retries = (attemptsPerOperation ?? maxAttempts(DEFAULT_RETRY_POLICY)) - 1;
-      const label = `${IN_PROGRESS[kind]}... retry ${String(operation.attempts)} of ${String(retries)}`;
+      const label = `${doingNow}... retry ${String(operation.attempts)} of ${String(retries)}`;
       return { tone: 'in_progress', label, ...detail };
     }
     case 'verifying':

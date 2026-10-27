@@ -8,17 +8,20 @@
  * listing's SKU (`SKU: AJ-000184`). It is how a later attempt or a read-back finds a listing
  * whose id Listora never learned (a create that timed out after Mercari took it), so a create
  * is never posted twice. Reads strip the line again, so the description Listora verifies is the
- * listing's own (docs/mercari.md, "Finding a listing again").
+ * listing's own (docs/mercari.md, "Finding a listing again"). Mercari doesn't take used
+ * underwear (`adapter/underwear.ts`), so it is refused before anything is sent.
  */
 import {
   photosInOrder,
   type AssistedListingPayload,
+  type ItemCondition,
   type ItemSnapshot,
   type ListingVariant,
   type ValidationIssue,
 } from '@listora/marketplaces';
 
 import { SKU_LINE_RESERVE } from '../adapter/sku-line.ts';
+import { isUnderwear } from '../adapter/underwear.ts';
 import { categoryTraits, mapMercariCategory, parseCategoryRef } from './categories.ts';
 import { mercariCondition } from './conditions.ts';
 import type { MercariShipping } from './shipping.ts';
@@ -33,11 +36,13 @@ export interface MercariListingPayload extends AssistedListingPayload {
   size: string | null;
   /** Whether the category takes a size (clothing and shoes). */
   sized: boolean;
-  /** The brand to pick from Mercari's brand list; posted without one when Mercari lists none. */
+  /** The brand to pick from Mercari's brand list (a brand it doesn't list goes to the seller). */
   brand: string | null;
   /** The value and label of Mercari's condition option; `null` when the item has none. */
   condition: { id: number; label: string } | null;
   shipping: MercariShipping;
+  /** The item's own category and condition, whatever the listing's, for Mercari's rules. */
+  source: { itemCategory: string | null; condition: ItemCondition | null };
 }
 
 /**
@@ -74,6 +79,7 @@ export function buildMercariPayload(
     brand: item.brand?.trim() === '' ? null : (item.brand?.trim() ?? null),
     condition: mercari === null ? null : { id: mercari.id, label: mercari.label },
     shipping: { payer: 'buyer', method: 'prepaid_label', weight: traits.weight },
+    source: { itemCategory: item.category, condition },
   };
 }
 
@@ -140,6 +146,15 @@ export function validateMercariPayload(payload: MercariListingPayload): Validati
       field: 'item.condition',
       code: 'required',
       message: 'Mercari needs the item condition.',
+    });
+  } else if (
+    isUnderwear(payload.source.itemCategory) &&
+    payload.source.condition?.startsWith('pre_owned') === true
+  ) {
+    issues.push({
+      field: 'item.condition',
+      code: 'not_allowed',
+      message: "Mercari doesn't take used underwear.",
     });
   }
   if (payload.sized && payload.size === null) {

@@ -814,8 +814,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     it('runs tasks where the task egress places them, with rollback on failed deploys', () => {
       const publicIp = settings.network.taskEgress.via === 'public-ip';
-      // `replace` stops the old tasks while the new ones start; `rolling` keeps them serving.
-      const minimumHealthy = settings.deployments === 'replace' ? 0 : 100;
+      // A deploy keeps the old tasks serving until the new ones are healthy.
+      const minimumHealthy = 100;
       for (const service of appServices()) {
         // Autoscaling owns the task count; a template count would reset it on every deploy.
         expect(service.Properties?.['DesiredCount']).toBeUndefined();

@@ -354,6 +354,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/items/{itemId}/listing-links`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/listing-links/post(linkItemListing)`.
     func linkItemListing(_ input: Operations.LinkItemListing.Input) async throws -> Operations.LinkItemListing.Output
+    /// The categories an item can be listed in on an automated marketplace
+    ///
+    /// For Poshmark, Mercari, and Depop: the category Listora maps the item to (`suggested`),
+    /// or none when the seller has to pick (a unisex or kids' item, or one Listora can't place),
+    /// the likely ones first, and every category in that marketplace's own names. A listing
+    /// names the seller's pick in `variant.categoryRef`, as `ref` gives it.
+    /// `404` for another marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/marketplace-categories/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-categories/{marketplace}/get(getItemMarketplaceCategories)`.
+    func getItemMarketplaceCategories(_ input: Operations.GetItemMarketplaceCategories.Input) async throws -> Operations.GetItemMarketplaceCategories.Output
     /// Create an item for a shared listing and link the listing to it
     ///
     /// For a listing the user shared that has no item in Listora yet. Creates an import
@@ -476,6 +488,19 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/operations/{operationId}/retry`.
     /// - Remark: Generated from `#/paths//v1/operations/{operationId}/retry/post(retryOperation)`.
     func retryOperation(_ input: Operations.RetryOperation.Input) async throws -> Operations.RetryOperation.Output
+    /// Run a waiting operation's next attempt now
+    ///
+    /// Only while `retrying` (waiting for its next attempt after a transient failure) or
+    /// `verifying` (waiting between read-backs). Moves the next attempt to now: the operation
+    /// keeps its status, attempts, and error, and the attempt runs exactly as it would have later
+    /// (a retry reads the listing back before sending anything). A step that runs on the seller's
+    /// iPhone is taken on the phone's next look. `409 invalid_state_transition` for any other
+    /// status.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/operations/{operationId}/try-now`.
+    /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)`.
+    func tryOperationNow(_ input: Operations.TryOperationNow.Input) async throws -> Operations.TryOperationNow.Output
     /// Cancel an operation that has not been sent
     ///
     /// Only while `queued` or `retrying`. Once a request may have reached the marketplace
@@ -819,6 +844,17 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/phone-runs`.
     /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)`.
     func claimPhoneRun(_ input: Operations.ClaimPhoneRun.Input) async throws -> Operations.ClaimPhoneRun.Output
+    /// Get the phone runtime the server runs its phone work with
+    ///
+    /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the
+    /// app runs exactly the marketplace scripts the server replays its answers through, and a
+    /// fix to a marketplace's pages reaches the phone with the server, without an app update.
+    /// With `have` naming the digest the app already runs, the answer leaves out `source`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runtime`.
+    /// - Remark: Generated from `#/paths//v1/phone-runtime/get(getPhoneRuntime)`.
+    func getPhoneRuntime(_ input: Operations.GetPhoneRuntime.Input) async throws -> Operations.GetPhoneRuntime.Output
     /// Answer a phone call of a run
     ///
     /// The phone's answer for the run's call `index`, as its runtime returned it. The server
@@ -1456,6 +1492,26 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// The categories an item can be listed in on an automated marketplace
+    ///
+    /// For Poshmark, Mercari, and Depop: the category Listora maps the item to (`suggested`),
+    /// or none when the seller has to pick (a unisex or kids' item, or one Listora can't place),
+    /// the likely ones first, and every category in that marketplace's own names. A listing
+    /// names the seller's pick in `variant.categoryRef`, as `ref` gives it.
+    /// `404` for another marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/marketplace-categories/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-categories/{marketplace}/get(getItemMarketplaceCategories)`.
+    public func getItemMarketplaceCategories(
+        path: Operations.GetItemMarketplaceCategories.Input.Path,
+        headers: Operations.GetItemMarketplaceCategories.Input.Headers = .init()
+    ) async throws -> Operations.GetItemMarketplaceCategories.Output {
+        try await getItemMarketplaceCategories(Operations.GetItemMarketplaceCategories.Input(
+            path: path,
+            headers: headers
+        ))
+    }
     /// Create an item for a shared listing and link the listing to it
     ///
     /// For a listing the user shared that has no item in Listora yet. Creates an import
@@ -1696,6 +1752,27 @@ extension APIProtocol {
         headers: Operations.RetryOperation.Input.Headers
     ) async throws -> Operations.RetryOperation.Output {
         try await retryOperation(Operations.RetryOperation.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Run a waiting operation's next attempt now
+    ///
+    /// Only while `retrying` (waiting for its next attempt after a transient failure) or
+    /// `verifying` (waiting between read-backs). Moves the next attempt to now: the operation
+    /// keeps its status, attempts, and error, and the attempt runs exactly as it would have later
+    /// (a retry reads the listing back before sending anything). A step that runs on the seller's
+    /// iPhone is taken on the phone's next look. `409 invalid_state_transition` for any other
+    /// status.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/operations/{operationId}/try-now`.
+    /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)`.
+    public func tryOperationNow(
+        path: Operations.TryOperationNow.Input.Path,
+        headers: Operations.TryOperationNow.Input.Headers
+    ) async throws -> Operations.TryOperationNow.Output {
+        try await tryOperationNow(Operations.TryOperationNow.Input(
             path: path,
             headers: headers
         ))
@@ -2283,6 +2360,25 @@ extension APIProtocol {
         try await claimPhoneRun(Operations.ClaimPhoneRun.Input(
             headers: headers,
             body: body
+        ))
+    }
+    /// Get the phone runtime the server runs its phone work with
+    ///
+    /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the
+    /// app runs exactly the marketplace scripts the server replays its answers through, and a
+    /// fix to a marketplace's pages reaches the phone with the server, without an app update.
+    /// With `have` naming the digest the app already runs, the answer leaves out `source`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runtime`.
+    /// - Remark: Generated from `#/paths//v1/phone-runtime/get(getPhoneRuntime)`.
+    public func getPhoneRuntime(
+        query: Operations.GetPhoneRuntime.Input.Query = .init(),
+        headers: Operations.GetPhoneRuntime.Input.Headers = .init()
+    ) async throws -> Operations.GetPhoneRuntime.Output {
+        try await getPhoneRuntime(Operations.GetPhoneRuntime.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// Answer a phone call of a run

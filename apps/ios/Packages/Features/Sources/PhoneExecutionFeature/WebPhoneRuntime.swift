@@ -13,6 +13,28 @@ public protocol PhoneRuntime: AnyObject {
     /// Runs the call (`PhoneCall.input`, JSON) in the marketplace's session on this phone and
     /// returns what the runtime answered (`PhoneCallOutput`, JSON).
     func run(_ input: Data, marketplace: String) async throws -> Data
+    /// Takes the runtime the server runs with when it changed, so the phone runs the scripts the
+    /// server replays its answers through; call it between runs.
+    func refresh() async
+    /// Tells `handler` each step a call starts, as the runtime reports it.
+    func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void)
+}
+
+extension PhoneRuntime {
+    public func refresh() async {}
+    public func observeSteps(_: @escaping @MainActor (PhoneStep) -> Void) {}
+}
+
+/// The runtime as the server hands it out (`getPhoneRuntime`): its digest, and its script when
+/// it is not the one the app already runs.
+public struct RemoteRuntime: Sendable {
+    public let digest: String
+    public let source: String?
+
+    public init(digest: String, source: String?) {
+        self.digest = digest
+        self.source = source
+    }
 }
 
 /// What a check the run stopped at needs from the seller: the page, shown in a visible in-app
@@ -49,15 +71,36 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     private var controllerLoad: ControllerLoad?
     private var loaded: Task<Int, any Error>?
     private var page: MarketplacePage?
+    /// The server's runtime, once it handed one out; the app's own copy runs until then.
+    private var served: (digest: String, source: String)?
+    private let fetchRuntime: @Sendable (_ have: String?) async -> RemoteRuntime?
+    private var stepStarted: (@MainActor (PhoneStep) -> Void)?
 
     public init(
         sessions: any MarketplaceSessionStore,
         handOff: (any ChallengeHandOff)?,
         notifier: CheckNeededNotifier = CheckNeededNotifier(),
+        fetchRuntime: @escaping @Sendable (_ have: String?) async -> RemoteRuntime? = { _ in nil },
     ) {
         self.sessions = sessions
         self.handOff = handOff
         self.notifier = notifier
+        self.fetchRuntime = fetchRuntime
+    }
+
+    public func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void) {
+        stepStarted = handler
+    }
+
+    public func refresh() async {
+        guard let remote = await fetchRuntime(served?.digest), remote.digest != served?.digest,
+              let source = remote.source
+        else { return }
+        served = (remote.digest, source)
+        // The next run loads it into a new controller page.
+        controller = nil
+        controllerLoad = nil
+        loaded = nil
     }
 
     public func runtimeVersion() async throws -> Int {
@@ -99,10 +142,9 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         if let loaded {
             return try await loaded.value
         }
+        let served = served?.source
         let task = Task<Int, any Error> { @MainActor in
-            guard let url = Bundle.module.url(forResource: "phone-runtime", withExtension: "js"),
-                  let source = try? String(contentsOf: url, encoding: .utf8)
-            else {
+            guard let source = served ?? Self.bundledSource() else {
                 throw PhoneRuntimeError.bundleMissing
             }
             let configuration = WKWebViewConfiguration()
@@ -138,6 +180,12 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         }
     }
 
+    /// The runtime the app was built with, which runs until the server hands out its own.
+    private static func bundledSource() -> String? {
+        guard let url = Bundle.module.url(forResource: "phone-runtime", withExtension: "js") else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
     /// One message from the runtime; the reply is its answer, or the failure's message.
     fileprivate func handle(_ message: WKScriptMessage) async -> (Any?, String?) {
         guard let body = message.body as? [String: Any], let method = body["method"] as? String else {
@@ -146,6 +194,14 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         let args = body["args"] as? [String: Any] ?? [:]
         if method == "log" {
             logger.debug("\(args["message"] as? String ?? "", privacy: .public)")
+            return (true, nil)
+        }
+        if method == "progress" {
+            if let call = args["call"] as? String, let index = (args["index"] as? NSNumber)?.intValue,
+               let label = args["label"] as? String
+            {
+                stepStarted?(PhoneStep(call: call, index: index, label: label))
+            }
             return (true, nil)
         }
         guard let page else { return (nil, "closed") }
@@ -266,31 +322,55 @@ struct PageFailure: Error {
     }
 }
 
-/// Keeps the web views in the app's window, out of sight, so WebKit treats their pages as
-/// visible and never throttles their timers; a web view outside any window is.
+/// Keeps the web views in a window of their own, out of sight, so WebKit treats their pages as
+/// visible and never throttles their timers (a web view outside any window is), and so a page
+/// that focuses one of its fields never brings up the keyboard while Listora works in the
+/// background: the shelf's window can never become the key window, which the keyboard follows.
+/// The check hand-off (ChallengeHandOffView) moves a page into a window of its own, where the
+/// seller types as usual.
 @MainActor
 final class WebViewShelf {
     static let shared = WebViewShelf()
     private let shelf = UIView(frame: CGRect(x: -20000, y: 0, width: 1280, height: 900))
+    private var window: UIWindow?
 
     /// Keeps `view` on the shelf at `size` (a marketplace page is desktop-sized).
     func keep(_ view: WKWebView, size: CGSize = CGSize(width: 1280, height: 900)) {
-        if shelf.superview == nil, let window = Self.window() {
+        if shelf.superview == nil {
             shelf.isUserInteractionEnabled = false
             shelf.accessibilityElementsHidden = true
-            window.insertSubview(shelf, at: 0)
+            if let scene = Self.scene() {
+                let window = ShelfWindow(windowScene: scene)
+                window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue - 1)
+                window.backgroundColor = .clear
+                window.isUserInteractionEnabled = false
+                window.accessibilityElementsHidden = true
+                window.isHidden = false
+                window.addSubview(shelf)
+                self.window = window
+            } else if let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).flatMap(\.windows).first
+            {
+                window.insertSubview(shelf, at: 0)
+            }
         }
+        view.endEditing(true)
         view.removeFromSuperview()
         view.translatesAutoresizingMaskIntoConstraints = true
         view.frame = CGRect(origin: .zero, size: size)
         shelf.addSubview(view)
     }
 
-    private static func window() -> UIWindow? {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first
+    private static func scene() -> UIWindowScene? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    }
+}
+
+/// A window that never becomes key, so nothing in it ever owns the keyboard.
+private final class ShelfWindow: UIWindow {
+    override var canBecomeKey: Bool {
+        false
     }
 }
 

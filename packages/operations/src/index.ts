@@ -6,6 +6,7 @@ export {
   dismissOperationByUser,
   enqueueOperation,
   retryOperation,
+  tryOperationNow,
 } from './commands.ts';
 export type { EnqueueResult, NewOperation, OperationTarget } from './commands.ts';
 export { validateDesiredState } from './desired.ts';
@@ -83,11 +84,13 @@ export {
   describeOperation,
   isRetryableFailure,
   REFUSED_CONTENT_ERROR,
+  relistMode,
   waitedFor,
 } from './status-display.ts';
 export type {
   ListingStatusInput,
   PhoneWaitInput,
+  RelistMode,
   StatusDisplay,
   StatusTone,
 } from './status-display.ts';

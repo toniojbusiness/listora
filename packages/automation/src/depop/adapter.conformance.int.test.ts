@@ -1,8 +1,9 @@
 /**
  * The Depop automation adapter against the shared adapter conformance suite, in a real headless
  * Chromium, on the fake Depop site: create, edit, price, end (delete), relist (a new listing),
- * read-back with revisions, no authoritative absence, error mapping, and health, with a session
- * Depop rejected falling back to the user's task. No traffic goes to Depop.
+ * read-back without revisions (a change is confirmed by reading it twice), a deleted product's
+ * 410 Gone as the one authoritative absence, error mapping, and health, with a session Depop
+ * rejected falling back to the user's task. No traffic goes to Depop.
  */
 import { fileURLToPath } from 'node:url';
 

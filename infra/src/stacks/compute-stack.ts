@@ -556,8 +556,9 @@ export class ComputeStack extends ListoraStack {
       assignPublicIp: placement.assignPublicIp,
       // A deploy whose tasks never become healthy rolls back to the previous revision.
       circuitBreaker: { enable: true, rollback: true },
-      // `replace` stops the old tasks while the new ones start (ServiceDeployments).
-      minHealthyPercent: settings.deployments === 'replace' ? 0 : 100,
+      // A deploy starts the new tasks, waits until they are healthy, then stops the old ones,
+      // so the API is up throughout, also in personal with its one task.
+      minHealthyPercent: 100,
       maxHealthyPercent: 200,
       propagateTags: ecs.PropagatedTagSource.SERVICE,
       ...(runsApi && settings.ingress.via === 'load-balancer'

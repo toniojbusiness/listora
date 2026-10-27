@@ -196,3 +196,20 @@ PhoneCallAnswer:
       type: object
       additionalProperties: true
       description: What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+PhoneRuntime:
+  type: object
+  required: [runtimeVersion, digest]
+  properties:
+    runtimeVersion:
+      type: integer
+      format: int32
+      minimum: 1
+      description: The version of phone calls the runtime speaks.
+    digest:
+      type: string
+      maxLength: 128
+      description: The runtime's SHA-256, hex.
+    source:
+      type: string
+      maxLength: 10000000
+      description: The runtime's script; absent when the app already has this digest.

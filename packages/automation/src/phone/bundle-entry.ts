@@ -40,6 +40,9 @@ function webkitHost(): PhoneHost {
     log: (level, message, fields) => {
       void call('log', { level, message, fields }).catch(() => undefined);
     },
+    progress: (step) => {
+      void call('progress', { ...step }).catch(() => undefined);
+    },
   };
 }
 

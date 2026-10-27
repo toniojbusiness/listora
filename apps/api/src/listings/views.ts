@@ -15,6 +15,7 @@ import {
   describeListingStatus,
   phoneWaits,
   REFUSED_CONTENT_ERROR,
+  relistMode,
   UNFINISHED_STATUSES,
   type PhoneWait,
 } from '@listora/operations';
@@ -116,7 +117,9 @@ export function listingStatusDisplay(
         errorCode: operation.error_code,
         successEvidence: operation.success_evidence,
         phoneWait: phoneWait ?? null,
+        nextAttemptAt: operation.next_attempt_at,
       },
+      relist: relistMode(row.marketplace, row.external_listing_id, row.listed_at !== null),
     });
   }
   const name = marketplaceName(row.marketplace);

@@ -6,9 +6,13 @@ import type { ConformanceAction, ConformanceMarketplace } from '@listora/marketp
 
 import type { FakeMercariAction, FakeMercariSite } from './fake-mercari.ts';
 
-/** The step timeout of adapters under test; a `timeout_after_send` answer comes far later. */
-export const MERCARI_STEP_TIMEOUT_MS = 4_000;
-const LATE_ANSWER_MS = 5 * MERCARI_STEP_TIMEOUT_MS;
+/**
+ * The step timeout of adapters under test. List, the longest step, gets three times it, and a
+ * `timeout_after_send` answer comes after that, soon enough for the check to finish within a
+ * test's time (a host may hold the page until the answer comes).
+ */
+export const MERCARI_STEP_TIMEOUT_MS = 3_000;
+const LATE_ANSWER_MS = 4 * MERCARI_STEP_TIMEOUT_MS;
 
 /** A read by SKU looks at the newest listings first, so a failing read fails whichever opens first. */
 const SITE_ACTIONS = {

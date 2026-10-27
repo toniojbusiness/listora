@@ -27,8 +27,23 @@ export interface PageEvidence {
   requests: string[];
   /** Data scripts the page keeps (`#__NEXT_DATA__ application/json`). */
   scripts: string[];
+  /**
+   * The page's form controls and buttons, by what names them (`input[file] #photos`,
+   * `textarea data-vv-name:description`, `button testid:Submit`), never their values.
+   */
+  controls: string[];
+  /**
+   * The choices and labels a form offers (a category list, conditions, a field's label): the
+   * site's own words. Any with a digit or an `@` are left out, so no address, price, or id is.
+   */
+  choices: string[];
   /** The page's own data: `__INITIAL_STATE__.auth.isUserLoggedIn: true`. */
   data: string[];
+  /**
+   * The open pickers' structure (listboxes and menus, a few levels down), indented by depth:
+   * how their groups and options are built, so a choice can be found in its group.
+   */
+  lists: string[];
 }
 
 /** The page globals marketplaces keep their data in. */
@@ -71,7 +86,42 @@ export const EVIDENCE_SCRIPT = `(() => {
   const scripts = [...document.querySelectorAll('script[id], script[type]:not([src])')]
     .map((script) => ({ id: script.id || null, type: script.type || null }))
     .slice(0, 40);
-  return { path: location.pathname, title: document.title, testIds, links, requests, scripts };
+  const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
+  const controls = [...document.querySelectorAll('input, textarea, select, button, summary, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"], [data-et-name]:not(a), [data-test]:not(a)')]
+    .slice(0, 120)
+    .map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      type: element.getAttribute('type'),
+      names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text: element.tagName === 'BUTTON' || element.tagName === 'SUMMARY' || element.getAttribute('role') === 'button' || (element.hasAttribute('data-et-name') && !/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
+    }));
+  const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
+    .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
+    .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
+  const describe = (element) => {
+    const role = element.getAttribute('role');
+    const text = (element.children.length === 0 || role === 'option' || role === 'group' || role === 'presentation' || element.tagName === 'LI') ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : '';
+    return {
+      tag: element.tagName.toLowerCase(),
+      names: ['role', 'id', 'aria-label', 'aria-labelledby', 'aria-selected', 'data-testid'].flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text,
+    };
+  };
+  const lists = [];
+  for (const list of document.querySelectorAll('[role="listbox"], [role="menu"]')) {
+    if (list.children.length === 0) continue;
+    lists.push({ depth: 0, ...describe(list) });
+    const walk = (node, depth) => {
+      for (const child of node.children) {
+        if (lists.length >= 120) return;
+        lists.push({ depth, ...describe(child) });
+        if (depth < 3) walk(child, depth + 1);
+      }
+    };
+    walk(list, 1);
+    if (lists.length >= 120) break;
+  }
+  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices, lists };
 })()`;
 
 /** Words of paths, titles, and labels that say what a page is, never whose it is. */
@@ -92,7 +142,11 @@ const STRUCTURAL_WORDS = new Set(
     'feeds followers following gateway inquiries insights internal mobile overview payout ' +
     'payouts pending preferences presentation private public purchase receipt receipts referrals ' +
     'reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary ' +
-    'transaction transactions verification verifications'
+    'transaction transactions verification verifications ' +
+    // The words of listing forms: their fields, pickers, and buttons.
+    'add apply cancel choose color colour condition continue cover department description ' +
+    'designer discard done enter next optional photo photos post price quantity required save ' +
+    'select single size sizes style subcategory title type update upload'
   ).split(' '),
 );
 
@@ -129,7 +183,39 @@ const rawSchema = z.object({
   ),
   requests: z.array(z.string()),
   scripts: z.array(z.object({ id: z.string().nullable(), type: z.string().nullable() })),
+  controls: z
+    .array(
+      z.object({
+        tag: z.string(),
+        type: z.string().nullable(),
+        names: z.array(z.tuple([z.string(), z.string()])),
+        text: z.string().nullable(),
+      }),
+    )
+    .default([]),
+  choices: z.array(z.string()).default([]),
+  lists: z
+    .array(
+      z.object({
+        depth: z.number(),
+        tag: z.string(),
+        names: z.array(z.tuple([z.string(), z.string()])),
+        text: z.string(),
+      }),
+    )
+    .default([]),
 });
+
+/** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
+const CODE_NAMES = new Set([
+  'data-testid',
+  'data-test',
+  'data-vv-name',
+  'data-et-name',
+  'name',
+  'id',
+  'role',
+]);
 
 /**
  * The evidence of what `EVIDENCE_SCRIPT` read and of the page's data globals (`data`, by name),
@@ -190,6 +276,41 @@ export function redactEvidence(
       .flatMap(([name, value]) => dataSkeleton(name, value))
       .slice(0, MAX_DATA_LINES)
       .map(clean),
+    controls: distinct(
+      read.controls.map((control) =>
+        clean(
+          [
+            control.type === null ? control.tag : `${control.tag}[${reducedId(control.type)}]`,
+            ...control.names.map(([name, value]) =>
+              CODE_NAMES.has(name)
+                ? `${name}:${reducedId(value)}`
+                : `${name}:${reducedWords(value)}`,
+            ),
+            control.text === null || control.text === ''
+              ? null
+              : `text:${reducedWords(control.text)}`,
+          ]
+            .filter((part) => part !== null)
+            .join(' '),
+        ),
+      ),
+    ),
+    choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean)),
+    lists: read.lists.map((item) =>
+      clean(
+        [
+          `${'  '.repeat(Math.min(item.depth, 4))}${item.tag}`,
+          ...item.names.map(([name, value]) =>
+            name === 'aria-label'
+              ? `${name}:${reducedWords(value)}`
+              : `${name}:${reducedId(value)}`,
+          ),
+          item.text === '' ? null : `text:${/[0-9@]/.test(item.text) ? '<x>' : item.text}`,
+        ]
+          .filter((part) => part !== null)
+          .join(' '),
+      ),
+    ),
   };
 }
 
@@ -289,4 +410,7 @@ export const pageEvidenceSchema = z.object({
   requests: z.array(z.string().max(MAX_ITEM_LENGTH)).max(121),
   scripts: z.array(z.string().max(MAX_ITEM_LENGTH)).max(40),
   data: z.array(z.string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
+  controls: z.array(z.string().max(MAX_ITEM_LENGTH)).max(120).default([]),
+  choices: z.array(z.string().max(MAX_ITEM_LENGTH)).max(150).default([]),
+  lists: z.array(z.string().max(MAX_ITEM_LENGTH)).max(121).default([]),
 }) satisfies z.ZodType<PageEvidence>;

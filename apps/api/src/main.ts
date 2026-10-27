@@ -25,6 +25,9 @@ import { createAuthDriver } from './auth/create-driver.ts';
 import { loadApiConfig } from './config.ts';
 import { pingDatabase } from './db.ts';
 
+/** How long a stopping API task on ECS keeps serving (within the task's 30 s stop timeout). */
+const SHUTDOWN_DRAIN_MS = 10_000;
+
 const config = loadApiConfig();
 const logger = createLogger({ service: 'api', level: config.logLevel });
 const pool = createPool({ connectionString: config.databaseUrl });
@@ -109,10 +112,16 @@ const app = buildApp({
 });
 
 // SIGTERM (ECS) or SIGINT: stop accepting connections, let in-flight requests finish, then
-// close the database pool.
+// close the database pool. On ECS the API first keeps serving for a moment: the HTTP API's VPC
+// link finds out from Cloud Map that a stopping task is gone only after ECS deregistered it, so
+// closing at once refuses the requests still routed here (5 gateway 5xx in one rolling deploy,
+// 2026-10-27).
+const drainMs = process.env['ECS_CONTAINER_METADATA_URI_V4'] === undefined ? 0 : SHUTDOWN_DRAIN_MS;
 handleShutdownSignals({
   logger,
+  timeoutMs: drainMs + 10_000,
   shutdown: async () => {
+    if (drainMs > 0) await new Promise((resolve) => setTimeout(resolve, drainMs));
     await app.close();
     await db.destroy();
   },

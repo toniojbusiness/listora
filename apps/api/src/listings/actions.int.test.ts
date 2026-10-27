@@ -298,6 +298,12 @@ describe('listing actions through the operation engine and the fake eBay (real P
     const again = await api.call('retryOperation', { token, params: { operationId } });
     expect(again.status).toBe(409);
     expect(again.error.message).toBe('Only a failed change can be retried; this one is done.');
+    // So is Try now, which only moves a waiting attempt to now (engine.int.test.ts).
+    const tried = await api.call('tryOperationNow', { token, params: { operationId } });
+    expect(tried.status).toBe(409);
+    expect(tried.error.message).toBe(
+      'Only a change waiting to try again can be tried now; this one is done.',
+    );
 
     // Relist: a new eBay listing id, active again.
     const relisting = await api.call('relistListing', { token, params: { listingId: draft.id } });
@@ -315,6 +321,35 @@ describe('listing actions through the operation engine and the fake eBay (real P
       'create',
     ]);
     expect(operations.body.data[1]?.statusDisplay.label).toBe('Delisted (confirmed by eBay)');
+  });
+
+  it('relists a listing the marketplace removed as a new listing', async () => {
+    const ready = await readyItem();
+    const draft = await draftListing(ready.id);
+    await api.call('publishListing', { token, params: { listingId: draft.id } });
+    const active = await settled(draft.id);
+    await api.call('endListing', {
+      token,
+      params: { listingId: draft.id },
+      body: { reason: 'not_available' },
+    });
+    await settled(draft.id);
+    // The marketplace removed the ended listing: a read-back that said so cleared its id, as
+    // after a Depop End, which deletes.
+    await api.db
+      .updateTable('marketplace_listing')
+      .set({ external_listing_id: null, external_url: null })
+      .where('id', '=', draft.id)
+      .execute();
+
+    const relisting = await api.call('relistListing', { token, params: { listingId: draft.id } });
+
+    expect(relisting.status).toBe(202);
+    expect(relisting.body.listing.statusDisplay.label).toBe('Relisting (new listing)...');
+    expect(relisting.body.listing.latestOperation?.kind).toBe('relist');
+    const relisted = await settled(draft.id);
+    expect(relisted.statusDisplay.label).toBe('Active (confirmed by eBay)');
+    expect(relisted.externalListingId).not.toBe(active.externalListingId);
   });
 
   it('reads a listing and its newest operation from one snapshot, never a stale row', async () => {

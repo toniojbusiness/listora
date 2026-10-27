@@ -37,6 +37,7 @@
   "source": {
     "category": "clothing/outerwear/denim_jackets",
     "department": "men",
-    "sizeLabel": "M"
+    "sizeLabel": "M",
+    "itemCategory": "clothing/outerwear/denim_jackets"
   }
 }

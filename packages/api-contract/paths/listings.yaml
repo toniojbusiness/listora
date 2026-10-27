@@ -358,3 +358,28 @@
         $ref: '../components/responses.yaml#/Conflict'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/marketplace-categories/{marketplace}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+  get:
+    tags: [listings]
+    operationId: getItemMarketplaceCategories
+    summary: The categories an item can be listed in on an automated marketplace
+    description: |
+      For Poshmark, Mercari, and Depop: the category Listora maps the item to (`suggested`),
+      or none when the seller has to pick (a unisex or kids' item, or one Listora can't place),
+      the likely ones first, and every category in that marketplace's own names. A listing
+      names the seller's pick in `variant.categoryRef`, as `ref` gives it.
+      `404` for another marketplace.
+    responses:
+      '200':
+        description: The item's categories on the marketplace.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/MarketplaceCategories'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

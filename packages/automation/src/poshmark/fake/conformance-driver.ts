@@ -1,15 +1,19 @@
 /**
  * Drives the fake Poshmark for the shared adapter conformance suite (test-only): each failure the
- * suite asks for becomes the page Poshmark would show. Poshmark never says a listing is gone for
- * good (Listora has not seen its answer for a deleted listing), so there is no `remove`, and the
- * suite checks that no absence is authoritative.
+ * suite asks for becomes the page Poshmark would show. A deleted listing's page answers 404 with
+ * Poshmark's record that it is `archived` (seen on real listings deleted from a seller's closet,
+ * 2026-10-27), which says the listing is gone for good, so `remove` deletes it on the fake.
  */
 import type { ConformanceAction, ConformanceMarketplace } from '@listora/marketplaces/conformance';
 
 import type { FakePoshmark, FakePoshmarkAction, FakePoshmarkFault } from './fake-poshmark.ts';
 
-/** The step timeout of adapters under test; a `timeout_after_send` answer comes far later. */
-export const CONFORMANCE_STEP_TIMEOUT_MS = 4_000;
+/**
+ * The step timeout of adapters under test. Poshmark's List step gets four of them, and the check
+ * of a timeout after sending waits that step out, so on the phone too it has to fit in a test's
+ * own time limit. A `timeout_after_send` answer comes later than the List step's timeout.
+ */
+export const CONFORMANCE_STEP_TIMEOUT_MS = 2_500;
 const LATE_ANSWER_MS = 5 * CONFORMANCE_STEP_TIMEOUT_MS;
 
 /**
@@ -52,6 +56,9 @@ export function fakePoshmarkConformance(site: FakePoshmark): ConformanceMarketpl
     },
     serveStaleRead() {
       site.inject({ action: 'listing', fault: { type: 'stale_read' } });
+    },
+    remove(externalListingId) {
+      site.remove(externalListingId);
     },
     countListings: (listing) => site.listings(listing.externalSku ?? listing.listingId).length,
     reset() {

@@ -123,6 +123,8 @@ paths:
     $ref: './paths/listings.yaml#/~1v1~1items~1{itemId}~1listings'
   /v1/items/{itemId}/listing-links:
     $ref: './paths/listings.yaml#/~1v1~1items~1{itemId}~1listing-links'
+  /v1/items/{itemId}/marketplace-categories/{marketplace}:
+    $ref: './paths/listings.yaml#/~1v1~1items~1{itemId}~1marketplace-categories~1{marketplace}'
   /v1/listing-imports:
     $ref: './paths/listings.yaml#/~1v1~1listing-imports'
   /v1/listings:
@@ -151,6 +153,8 @@ paths:
     $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1events'
   /v1/operations/{operationId}/retry:
     $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1retry'
+  /v1/operations/{operationId}/try-now:
+    $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1try-now'
   /v1/operations/{operationId}/cancel:
     $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1cancel'
   /v1/connections:
@@ -209,6 +213,8 @@ paths:
     $ref: './paths/phone.yaml#/~1v1~1devices~1{installationId}'
   /v1/phone-runs:
     $ref: './paths/phone.yaml#/~1v1~1phone-runs'
+  /v1/phone-runtime:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runtime'
   /v1/phone-runs/{runId}/calls/{index}:
     $ref: './paths/phone.yaml#/~1v1~1phone-runs~1{runId}~1calls~1{index}'
   /v1/items/{itemId}/activity:
@@ -564,6 +570,10 @@ components:
       $ref: './components/schemas/listings.yaml#/ListingPage'
     ListingOperationAccepted:
       $ref: './components/schemas/listings.yaml#/ListingOperationAccepted'
+    MarketplaceCategory:
+      $ref: './components/schemas/listings.yaml#/MarketplaceCategory'
+    MarketplaceCategories:
+      $ref: './components/schemas/listings.yaml#/MarketplaceCategories'
     # ---------------------------------------------------------------- operations
     OperationKind:
       $ref: './components/schemas/operations.yaml#/OperationKind'
@@ -694,6 +704,8 @@ components:
       $ref: './components/schemas/phone.yaml#/PhoneRunResult'
     PhoneCallAnswer:
       $ref: './components/schemas/phone.yaml#/PhoneCallAnswer'
+    PhoneRuntime:
+      $ref: './components/schemas/phone.yaml#/PhoneRuntime'
     # ---------------------------------------------------------------- sales
     SaleStatus:
       $ref: './components/schemas/sales.yaml#/SaleStatus'

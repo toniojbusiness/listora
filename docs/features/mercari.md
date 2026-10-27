@@ -17,10 +17,10 @@ the cloud browser runner ([automation.md](automation.md)). The code is in
 | Operation  | How                                                                                                           | Confirmed by                                     |
 | ---------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | Create     | Fills the sell form (`/sell/`), then clicks List. Only that click can change anything.                        | The listing page: status, title, text, price     |
-| Revise     | Fills the edit form (`/sell/edit/<id>/`) with every detail except photos, then clicks Save                    | The same                                         |
-| Price      | Fills only the price on the edit form, then clicks Save                                                       | The same                                         |
-| End        | **Deactivate** on the edit page, then confirms in its dialog. The listing is kept, never deleted.             | The page shows the listing as inactive (`ended`) |
-| Relist     | **Activate** on the edit page of an inactive listing. The listing keeps its id.                               | The page shows the listing for sale (`active`)   |
+| Revise     | Fills the edit form (`/sell/edit/<id>/`) with every detail except photos, then clicks Update                  | The same                                         |
+| Price      | Fills only the price on the edit form, then clicks Update                                                     | The same                                         |
+| End        | **Deactivate** on the edit page (it acts at once, with no confirmation). The listing is kept, never deleted.  | The page shows the listing as inactive (`ended`) |
+| Relist     | **Activate** on the edit page of an inactive listing (same id); a listing Mercari removed is posted anew.     | The page shows the listing for sale (`active`)   |
 | Mark sold  | Not needed: Mercari marks its own sales sold                                                                  |                                                  |
 | Read       | The listing's page (`/us/item/<id>/`)                                                                         |                                                  |
 | Sale check | The seller's "in progress" (sold, waiting to ship) and "sold" tabs, newest first                              |                                                  |
@@ -35,13 +35,15 @@ the cloud browser runner ([automation.md](automation.md)). The code is in
 - A sale check reports each sold item as one order. Its id is the item id, because a Mercari
   listing sells only once.
 
-**Freshness.** The listing page's last-updated time (`time[datetime]`) is the listing's revision,
-in milliseconds. Mercari changes it with every edit. Automated changes are always seconds apart
+**Freshness.** The listing page's last-updated time (`updated`, in seconds, in the page's
+`__NEXT_DATA__` record `ItemDetail:<id>`) is the listing's revision, in milliseconds. Mercari changes it with every edit. Automated changes are always seconds apart
 because of pacing, so the revision grows with every change. A stale page shows an older time, and
 the engine ignores it ([operations.md](operations.md)).
 
-**Absence.** Only Mercari's own "this item has been deleted" notice for an id is a definitive
-absence. A plain "not found" page could be a listing that is not visible yet, so it never counts.
+**Absence.** A deleted item's page answers 410 without the item's data, which is a definitive
+absence. A sold item's page answers 410 too, but still with its data (status `sold_out`), so it
+reads as sold. A plain "not found" page could be a listing that is not visible yet, so it never
+counts.
 
 ## Finding a listing again
 
@@ -106,6 +108,10 @@ The mappings are static tables in the repository. Each has a test.
   - descriptions: 1,000 characters, including the SKU line
   - prices: whole dollars, from $1 to $2,000
   - photos: 1 to 12, uploaded in posting order
+- **Prohibited items**: Mercari's prohibited items include "items that are soiled with human
+  materials such as used underwear" (read 2026-10-27), so used underwear (a pre-owned item whose
+  own category is underwear) is refused before anything is sent. New underwear goes to Men or
+  Women > Other, whose form asks no size.
 
 ## Structure
 
@@ -136,10 +142,14 @@ module's selectors.
 ## Tests
 
 The tests never send traffic to Mercari. They run in a real headless Chromium against the fake
-Mercari site (`fake/fake-mercari.ts`). The fake copies the adapter's model of Mercari: the same
-paths and page elements, the sell form's level-by-level category picker, brand search, size
-lists and validation, the edit page's confirmation dialogs, and the seller's tabs with
-pagination. It can also inject each failure:
+Mercari site (`fake/fake-mercari.ts`). The fake copies the pages as Mercari serves them (read
+on the seller's own session, 2026-10-26 and 27): the sell page drawn by its scripts, with the
+templates tip, the category dialog, brand and size option lists, condition radios, the prepaid
+label and the free-shipping question, and Smart Pricing on by default; the page after List or
+Update with its link to the listing; the item page's data, with `stop` for a deactivated listing
+and a 410 for a deleted one (with data for a sold one); the edit page drawn after load, with its
+Deactivate and Activate toggle and Update; and the seller's tabs as tables whose rows draw a
+moment after load. It can also inject each failure:
 
 - Cloudflare's "Just a moment..." interstitial
 - Cloudflare's Turnstile widget on a page
@@ -164,38 +174,25 @@ adapter runs against Mercari itself.
 
 ## Live verification
 
-Mercari's logged-in pages sit behind Cloudflare bot protection, which Listora never gets around.
-So the paths and selectors in `site.ts` and `pages/` are Listora's model of Mercari's US site, and
-they were not checked against the live site while building this. The first linked session should
-confirm them, ideally with the product owner watching. Check each of these in order:
+Mapped and verified on the seller's own session (2026-10-26 and 27), on the Mac with Listora's own
+phone runtime and scripts (`runPhoneCall` against the signed-in browser, in a background tab)
+and from the iPhone, on Listora's own test listing:
 
-1. The account page path, and its marker element.
-2. On the sell form:
-   - the photo input
-   - the title and description fields
-   - the category levels and their names in `categories.ts`
-   - the brand search and its suggestions
-   - the condition values 1 to 5
-   - the size lists
-   - the shipping choices and weight labels
-   - the price field
-   - the List button
-   - the validation message
-3. On the listing page: its path and id format, name, price, description, last-updated time,
-   sold badge, inactive notice, and deleted notice.
-4. On the edit page: its path, the Deactivate and Activate buttons, and their confirmation
-   dialog.
-5. On the seller's tabs: their paths and pagination, the row link, title, price, and sold time.
-6. The limits in `MERCARI_LIMITS`.
+- **List** (phone): the sell form, Smart Pricing switched off (it asks to confirm), the add-a-card
+  warning read as a refusal, and the page after List (`/sell/...` with "Sell another item" and a
+  link to the listing). Posted in 49 seconds and confirmed by read-back.
+- **Read** (Mac and phone): an active, a deactivated (`stop`), a sold (410 with data), and a
+  deleted (410 without data) listing.
+- **Change price** (Mac and phone, 23 seconds on the phone): the edit form draws seconds after
+  the page loads (11 seconds once), and Update shows the same page as after List.
+- **End and relist** (Mac): Deactivate and Activate act at once, with no confirmation, and open the
+  seller's active listings.
+- **Sale check** (Mac): the sold tab's rows show no sale time, only the day the row last changed
+  ("Updated", `11/16/24`); the sale's time is the item page's `lastSoldAt`. On the iPhone, Mercari
+  draws the tabs in its mobile layout, whose rows link to their listing only through the photo
+  (`ProductThumbWrapper`) and show no title or price; those come from the item page.
 
-When the live site differs, the step stops before it sends anything and the user does it, so
-this check can never cause a false success. The run logs what the page has instead
+When the live site differs, the step stops before it sends anything and the user does it, so a
+change can never cause a false success. The run logs what the page has instead
 ([automation.md](automation.md#how-it-works), "When a page changes"). Fixing a mismatch means
 changing the selectors in one page module.
-
-Confirmed on a real session (2026-10-26, from that evidence): item 1. `/mypage/` is a static
-Next.js page whose scripts draw it after the document is ready. It has the seller's own account
-section (`SellerInfo`, `EditProfileButton`, `Balance`), the sign-out form (`LogoutForm`), and
-links to `/mypage/listings/active/` (`My-listings`) and the sales tab (`Sales`). The health check
-waits for `EditProfileButton`. The listing tabs' paths are not confirmed yet: the sales tab's
-path is not `sold`.

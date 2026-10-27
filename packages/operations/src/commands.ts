@@ -41,6 +41,7 @@ import { syncItemListedStatus } from './item-status.ts';
 import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdAfter } from './ordering.ts';
 import {
+  attemptNow,
   eventDetail,
   operationPriority,
   transitionOperation,
@@ -214,6 +215,30 @@ export async function retryOperation(
       .executeTakeFirst();
     if (newer !== undefined) throw new SupersededOperationError(op.id);
     return transitionOperation(trx, op, { to: 'queued' }, { action: 'retry' });
+  });
+}
+
+/**
+ * Try now: an operation waiting for its next attempt (`retrying`, or `verifying` between
+ * read-backs) runs that attempt at once instead of at its scheduled time. It keeps its status,
+ * attempts, and error, and the attempt runs through the state machine exactly as it would have
+ * later (a retry reads the listing back before sending anything); only the time moves, and the
+ * operation's history records the move (with the operator, from the admin tool). Refused for any
+ * other status, so it never starts a step that is running or one the user must do.
+ */
+export async function tryOperationNow(
+  executor: DbExecutor,
+  target: OperationTarget & { actor?: string },
+): Promise<OperationRow> {
+  return inTransaction(executor, async (trx) => {
+    const op = await lockOperation(trx, target);
+    if (op.status !== 'retrying' && op.status !== 'verifying') {
+      throw new InvalidTransitionError(op.id, op.status, 'running');
+    }
+    return attemptNow(trx, op, {
+      action: 'try_now',
+      ...(target.actor === undefined ? {} : { actor: target.actor }),
+    });
   });
 }
 

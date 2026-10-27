@@ -306,6 +306,10 @@ actor FakeWorkService: PhoneWorkService {
         registrations.append(device)
     }
 
+    func runtime(have _: String?) async throws(APIFailure) -> RemoteRuntime {
+        RemoteRuntime(digest: "bundled", source: nil)
+    }
+
     func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim {
         #expect(installationID == "install-1")
         #expect(runtimeVersion == 1)
@@ -351,11 +355,23 @@ final class FakeRuntime: PhoneRuntime {
     private(set) var maxConcurrent = 0
     private var running = 0
     var fails = false
+    /// What each call answers.
+    var output = FakeRuntime.answer
+    /// The steps each call runs (label, seconds), reported as the runtime reports them.
+    var steps: [(String, Double)] = []
+    var clock: TestClock?
+    /// Runs as each step starts, after the runner heard of it.
+    var onStep: (() -> Void)?
     /// Runs during the first call (a trigger arriving mid-run).
     var onRun: (() -> Void)?
+    private var stepStarted: (@MainActor (PhoneStep) -> Void)?
 
     func runtimeVersion() async throws -> Int {
         1
+    }
+
+    func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void) {
+        stepStarted = handler
     }
 
     func run(_ input: Data, marketplace: String) async throws -> Data {
@@ -371,7 +387,12 @@ final class FakeRuntime: PhoneRuntime {
             self.onRun = nil
             onRun()
         }
+        for (index, (label, seconds)) in steps.enumerated() {
+            stepStarted?(PhoneStep(call: "create", index: index + 1, label: label))
+            onStep?()
+            clock?.step(taking: seconds)
+        }
         await Task.yield()
-        return Self.answer
+        return output
     }
 }

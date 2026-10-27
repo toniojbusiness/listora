@@ -228,7 +228,13 @@ type Resolution =
    * Read the listing back later. With `unknownResult`, a send may have taken effect, so the
    * read-back happens even when no attempts remain.
    */
-  | { type: 'verify'; error: OperationError; unknownResult: boolean }
+  | {
+      type: 'verify';
+      error: OperationError;
+      unknownResult: boolean;
+      /** The read must be repeated to confirm a match: it follows soon, not after the backoff. */
+      soon?: boolean;
+    }
   | { type: 'failed'; error: OperationError }
   | { type: 'user'; task: UserTaskSpec };
 
@@ -996,7 +1002,10 @@ async function sendTo(
   }
   const request: OperationRequest = {
     operationId: ctx.op.id,
-    kind,
+    // A relist of a listing whose marketplace listing is gone (a read-back confirmed the
+    // marketplace removed it, as a Depop End does, and cleared its id) has nothing to bring
+    // back: the marketplace's create posts it again as a new listing, after the same checks.
+    kind: kind === 'relist' && ref.externalListingId === null ? 'create' : kind,
     idempotencyKey: ctx.op.idempotency_key,
     attempt: step.attempt,
     desired: ctx.desired,
@@ -1194,6 +1203,26 @@ async function checkTarget(
       detail,
     };
   }
+  // A create or relist the marketplace said it took (its send was confirmed, and its read-back
+  // missed it) that a read still can't find, without the marketplace saying it is gone, is no
+  // proof it didn't go through: a marketplace's own search can lag behind a listing it just took
+  // (Poshmark's closet, for minutes, 2026-10-27), and so can the new listing's own page
+  // (Poshmark's, while it holds a new listing back), and sending again would post it twice. It
+  // is read again later instead; when the attempts run out it fails, and the seller checks. A
+  // step that was interrupted before its send is not this case: its read-back decides as before.
+  if (
+    comparison.reason === 'not_found' &&
+    ctx.op.status === 'verifying' &&
+    ctx.op.error_code === 'not_applied' &&
+    (ctx.op.kind === 'create' || ctx.op.kind === 'relist') &&
+    !read.remote.found &&
+    !read.remote.authoritative
+  ) {
+    return {
+      resolution: { type: 'verify', error: notShown(ctx.name, fields), unknownResult: false },
+      detail,
+    };
+  }
   // Read back and not applied: sending again is no longer blind.
   return { resolution: { type: 'retry', error: notShown(ctx.name, fields) }, detail };
 }
@@ -1325,7 +1354,7 @@ function undecidedRead(
     case 'stale':
       return { type: 'verify', error: notCurrent(ctx.name), unknownResult };
     case 'unrepeated':
-      return { type: 'verify', error: confirmingAgain(ctx.name), unknownResult };
+      return { type: 'verify', error: confirmingAgain(ctx.name), unknownResult, soon: true };
     case 'not_found':
     case 'mismatch':
     case 'nothing_desired':
@@ -1613,7 +1642,12 @@ async function applyResolution(
         );
         return 'failed';
       }
-      const delayMs = delayAfterAttempt(deps.policy, attempts);
+      // A send whose result is unknown, or a match that must be read again, is checked soon
+      // (never later than the backoff): the seller is waiting to see it listed, and nothing is
+      // sent again meanwhile.
+      const soon = resolution.soon === true || (resolution.unknownResult && step.type === 'send');
+      const backoffMs = delayAfterAttempt(deps.policy, attempts);
+      const delayMs = soon ? Math.min(CHECK_SOON_MS, backoffMs) : backoffMs;
       await transitionOperation(
         trx,
         op,
@@ -1831,6 +1865,9 @@ function notCurrent(name: string): OperationError {
     message: `${name} showed an older version of the listing. Listora is checking again.`,
   };
 }
+
+/** How soon a check follows a send with an unknown result, or a match that must be repeated. */
+export const CHECK_SOON_MS = 15_000;
 
 function cannotCheck(name: string): OperationError {
   return { code: 'read_failed', message: `Listora couldn't check the listing on ${name}.` };

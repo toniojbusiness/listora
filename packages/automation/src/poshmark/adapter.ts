@@ -18,8 +18,8 @@
  * - relist: availability "For Sale" again. A sold listing cannot be relisted.
  * - mark sold: not needed; Poshmark marks its own sales sold.
  *
- * Reads carry a revision (the listing's newest change time, pages/state.ts). Absences are never
- * authoritative (pages/listing-page.ts).
+ * Reads carry a revision (the listing's newest change time, pages/state.ts). Only a well-formed
+ * listing id whose page answers 404 is a definitive absence (pages/listing-page.ts).
  */
 import { createPoshmarkAdapter } from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';
@@ -42,6 +42,8 @@ export interface PoshmarkAdapterOptions {
   sessions: AutomationSessions;
   photos: PhotoSource;
   logger: Logger;
+  /** See `PoshmarkScriptOptions.settleWaitMs`. */
+  settleWaitMs?: number;
 }
 
 export function createPoshmarkAutomationAdapter(
@@ -59,7 +61,11 @@ export function createPoshmarkAutomationAdapter(
     sessions: options.sessions,
     // Fallback tasks open the real Poshmark, where the user does the step.
     assisted: createPoshmarkAdapter(),
-    scripts: createPoshmarkScripts({ site, photos: options.photos }),
+    scripts: createPoshmarkScripts({
+      site,
+      photos: options.photos,
+      ...(options.settleWaitMs === undefined ? {} : { settleWaitMs: options.settleWaitMs }),
+    }),
     scriptSet: { name: 'poshmark', marketplace: 'poshmark', siteUrl: origin },
     readFreshness: 'revision',
     buildPayload: buildPoshmarkPayload,

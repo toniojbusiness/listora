@@ -284,9 +284,12 @@ struct DraftListView: View {
     /// the review, goes back to the draft.
     private func finishReview(_ request: ItemReviewRequest, _ outcome: ItemReviewOutcome) {
         switch outcome {
-        case .saved:
+        case let .saved(_, listNow):
             path = []
             model.completeDraft(request.sessionID)
+            if listNow {
+                environment.onListItem?(request.itemID)
+            }
         case .editPhotos, .back:
             if case .review = path.last {
                 path.removeLast()

@@ -12,6 +12,8 @@ coverage
 .env
 .env.*
 apps/ios
+# The phone runtime the API hands the app (packages/automation/src/phone/bundle-file.ts).
+!apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/phone-runtime.js
 docs
 infra/*
 !infra/package.json

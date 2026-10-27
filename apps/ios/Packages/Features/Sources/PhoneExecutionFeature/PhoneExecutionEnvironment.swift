@@ -43,7 +43,10 @@ public final class PhoneExecutionEnvironment {
         self.sessions = sessions
         runner = PhoneRunner(
             service: service,
-            runtime: WebPhoneRuntime(sessions: sessions, handOff: handOff),
+            runtime: WebPhoneRuntime(sessions: sessions, handOff: handOff) { have in
+                // The server's runtime when it can be reached; the app's own otherwise.
+                try? await service.runtime(have: have)
+            },
             installationID: installationID,
             isSignedIn: isSignedIn,
             device: {
@@ -55,6 +58,7 @@ public final class PhoneExecutionEnvironment {
                     pushEnvironment: nil,
                 )
             },
+            keepAwake: { UIApplication.shared.isIdleTimerDisabled = $0 },
         )
     }
 

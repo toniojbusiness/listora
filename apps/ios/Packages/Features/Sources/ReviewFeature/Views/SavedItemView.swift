@@ -6,6 +6,8 @@ import SwiftUI
 struct SavedItemView: View {
     let saved: ReviewFlowModel.SavedItem
     let onDone: () -> Void
+    /// List it now: the item, with List everywhere open.
+    let onListNow: () -> Void
 
     var body: some View {
         CenteredScroll { content }
@@ -14,8 +16,11 @@ struct SavedItemView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
             .bottomActionBar {
-                Button("Done", action: onDone)
+                Button("List it now", systemImage: "tag.fill", action: onListNow)
                     .buttonStyle(.listoraPrimary)
+                    .accessibilityIdentifier("saved.listNow")
+                Button("Done", action: onDone)
+                    .buttonStyle(.listoraSecondary)
                     .accessibilityIdentifier("saved.done")
             }
             .sensoryFeedback(.success, trigger: saved.sku)

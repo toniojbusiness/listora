@@ -71,10 +71,26 @@ function inRange(value: string, min: number, max: number): string | null {
 }
 
 /**
+ * Mercari's names for the extended letter sizes where they differ by department: its women's
+ * sizes say `2XL (20-22)` and `3XL (24-26)`, its men's `XXL (50-52)` (read 2026-10-27).
+ */
+const LETTER_SIZE_ALIASES: Readonly<Record<string, string>> = {
+  XXL: '2XL',
+  '2XL': 'XXL',
+  XXXL: '3XL',
+  '3XL': 'XXXL',
+  XXXXL: '4XL',
+  '4XL': 'XXXXL',
+};
+
+/**
  * Whether a size option's label offers `size`: the label is the size, or the size followed by
- * a space and more (`M (8-10)`).
+ * a space and more (`M (8-10)`), under either of its names (`XXL` is `2XL (20-22)`).
  */
 export function sizeOptionMatches(optionLabel: string, size: string): boolean {
   const label = optionLabel.trim();
-  return label === size || label.startsWith(`${size} `);
+  const names = [size, LETTER_SIZE_ALIASES[size.toUpperCase()]].filter(
+    (name): name is string => name !== undefined,
+  );
+  return names.some((name) => label === name || label.startsWith(`${name} `));
 }

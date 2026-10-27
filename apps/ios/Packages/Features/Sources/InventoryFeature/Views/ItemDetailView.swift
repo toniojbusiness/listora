@@ -17,6 +17,7 @@ struct ItemDetailView: View {
     @State private var editingSize = false
     @State private var reviewing = false
     @State private var showsActivity = false
+    @State private var listEverywhere: BulkActionModel?
 
     /// The assisted step whose task is open.
     private struct OpenTask: Identifiable {
@@ -27,8 +28,12 @@ struct ItemDetailView: View {
         }
     }
 
-    init(environment: InventoryEnvironment, itemID: String) {
+    /// `listsEverywhere`: List everywhere opens once the item has loaded.
+    private let listsEverywhere: Bool
+
+    init(environment: InventoryEnvironment, itemID: String, listsEverywhere: Bool = false) {
         self.environment = environment
+        self.listsEverywhere = listsEverywhere
         _model = State(initialValue: environment.makeDetailModel(itemID: itemID))
     }
 
@@ -39,6 +44,10 @@ struct ItemDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await model.load()
+                if listsEverywhere, !model.hasLoadedOnce {
+                    openListEverywhere()
+                }
+                model.hasLoadedOnce = true
                 await model.followChanges()
             }
             .refreshable { await model.load() }
@@ -59,9 +68,14 @@ struct ItemDetailView: View {
             )
             .navigationDestination(isPresented: $reviewing) {
                 if let item = model.item, let review = environment.reviewScreen {
-                    review(ItemReviewRequest(sessionID: item.id, itemID: item.id, sku: item.sku)) { _ in
+                    review(ItemReviewRequest(sessionID: item.id, itemID: item.id, sku: item.sku)) { outcome in
                         reviewing = false
-                        Task { await model.load() }
+                        Task {
+                            await model.load()
+                            if case .saved(_, listNow: true) = outcome {
+                                openListEverywhere()
+                            }
+                        }
                     }
                 }
             }
@@ -78,6 +92,11 @@ struct ItemDetailView: View {
                     destination(model.itemID, task.operationID) { openTask = nil }
                 }
             })
+            .sheet(
+                item: $listEverywhere,
+                onDismiss: { Task { await model.refresh() } },
+                content: { bulk in BulkActionSheet(model: bulk, kind: .list) { listEverywhere = nil } },
+            )
             .sheet(isPresented: $editingSize) {
                 SizeEditorView(current: model.item?.details.sizeLabel) { size in
                     await model.saveSize(size)
@@ -168,8 +187,12 @@ struct ItemDetailView: View {
                     histories: model.histories,
                     events: model.events,
                     busyMarketplace: model.busyMarketplace,
+                    phoneProgress: environment.phoneProgress?.progress,
                     perform: perform,
                     end: { reason, row in end(row, reason: reason) },
+                    relistAll: { rows in performAll(rows) { .relist(listingID: $0) } },
+                    endAll: { reason, rows in performAll(rows) { .end(listingID: $0, reason: reason.contract) } },
+                    listEverywhere: openListEverywhere,
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)
@@ -227,6 +250,15 @@ struct ItemDetailView: View {
             .accessibilityIdentifier("item.markSold")
         }
     }
+}
+
+/// What the item screen's buttons do.
+extension ItemDetailView {
+    /// The List sheet for this item, where it can still be listed.
+    private func openListEverywhere() {
+        guard let item = model.item, model.rows.contains(where: { $0.actions.contains(.list) }) else { return }
+        listEverywhere = environment.makeBulkAction(items: [ItemSummary(item)])
+    }
 
     private func perform(_ action: MarketplaceRowState.Action, on row: MarketplaceRowState) {
         switch action {
@@ -252,142 +284,23 @@ struct ItemDetailView: View {
             Task { await model.perform(request, marketplace: row.id) }
         case let .retry(operationID):
             Task { await model.retry(operationID: operationID, marketplace: row.id) }
+        case let .tryNow(operationID):
+            Task { await model.tryNow(operationID: operationID, marketplace: row.id) }
         case let .openTask(operationID):
             openTask = OpenTask(operationID: operationID)
         }
     }
 
+    /// The same change on each row's listing at once (Relist all, End all).
+    private func performAll(_ rows: [MarketplaceRowState], _ request: (String) -> ListingRequest) {
+        let requests = rows.compactMap { row -> (request: ListingRequest, marketplace: String)? in
+            row.listing.map { (request($0.id), row.id) }
+        }
+        Task { await model.performAll(requests) }
+    }
+
     private func end(_ row: MarketplaceRowState, reason: EndReason) {
         guard let listing = row.listing else { return }
         Task { await model.perform(.end(listingID: listing.id, reason: reason.contract), marketplace: row.id) }
-    }
-}
-
-/// Everything that happened to the item, from every marketplace action to every sale check.
-private struct ActivityLink: View {
-    let open: () -> Void
-
-    var body: some View {
-        Button(action: open) {
-            ListRow(
-                "Activity",
-                subtitle: "Every step Listora took with this item, and when",
-                systemImage: "clock.arrow.circlepath",
-            ) {
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(Palette.textSecondary)
-                    .accessibilityHidden(true)
-            }
-            .cardStyle()
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("item.activity")
-    }
-}
-
-/// Title, SKU, status, and list price.
-private struct ItemHeader: View {
-    let item: Item
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        // The price under the title at accessibility sizes, so neither breaks mid-word.
-        let heading = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.sm))
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            heading {
-                Text(item.details.title ?? "Untitled item")
-                    .font(Typography.title)
-                    .foregroundStyle(Palette.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("item.title")
-                if let price = item.details.listPrice {
-                    Text(Formatting.money(price))
-                        .font(Typography.price)
-                        .foregroundStyle(Palette.textPrimary)
-                        .fixedSize()
-                        .accessibilityLabel("List price \(Formatting.money(price))")
-                }
-            }
-            // The chip wraps under the SKU rather than breaking it.
-            FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
-                Text(item.sku)
-                    .font(Typography.metadata)
-                    .foregroundStyle(Palette.textSecondary)
-                    .textSelection(.enabled)
-                    .accessibilityIdentifier("item.sku")
-                Chip(item.status.label)
-                    .accessibilityIdentifier("item.status")
-            }
-        }
-    }
-}
-
-/// List price, cost, and profit: the sale's profit once sold, before that an estimate before
-/// marketplace fees, labeled as such.
-private struct MoneySection: View {
-    let item: Item
-
-    var body: some View {
-        DetailSection(title: "Cost and profit") {
-            LabeledRow("List price", value: item.details.listPrice.map(Formatting.money) ?? "Not set")
-            LabeledRow("Cost", value: item.details.cost.map(Formatting.money) ?? "Not set")
-                .accessibilityIdentifier("item.cost")
-            if let profit = item.saleSummary?.profit {
-                LabeledRow(
-                    "Profit",
-                    value: Formatting.money(profit),
-                    note: item.saleSummary?.feesEstimated == true ? "With estimated fees" : nil,
-                )
-                .accessibilityIdentifier("item.profit")
-            } else if let price = item.details.listPrice, let cost = item.details.cost {
-                LabeledRow(
-                    "Profit at list price",
-                    value: Formatting.money(cents: price.amountCents - cost.amountCents),
-                    note: "Before marketplace fees and shipping",
-                )
-                .accessibilityIdentifier("item.profit")
-            }
-            if let source = item.details.purchaseSource {
-                LabeledRow("Bought at", value: source)
-            }
-        }
-    }
-}
-
-extension Components.Schemas.ItemCondition {
-    var label: String {
-        switch self {
-        case .newWithTags: "New with tags"
-        case .newWithoutTags: "New without tags"
-        case .newWithDefects: "New with defects"
-        case .preOwnedExcellent: "Pre-owned, excellent"
-        case .preOwnedGood: "Pre-owned, good"
-        case .preOwnedFair: "Pre-owned, fair"
-        }
-    }
-}
-
-/// The item's photos, swipeable, cover first.
-private struct PhotoCarousel: View {
-    let photos: [Components.Schemas.Photo]
-
-    var body: some View {
-        if photos.isEmpty {
-            PhotoView(url: nil, cornerRadius: Radius.large)
-                .frame(height: 200)
-        } else {
-            TabView {
-                ForEach(photos, id: \.id) { photo in
-                    PhotoView(url: photo.urls?.listing ?? photo.urls?.thumbnail, cornerRadius: Radius.large)
-                        .accessibilityLabel("Photo \(photo.position + 1) of \(photos.count)")
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: photos.count > 1 ? .automatic : .never))
-            .frame(height: 240)
-        }
     }
 }

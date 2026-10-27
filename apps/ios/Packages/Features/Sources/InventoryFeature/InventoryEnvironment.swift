@@ -2,6 +2,7 @@ import APIClient
 import Core
 import Foundation
 import ListoraAPI
+import Observation
 import SwiftUI
 
 /// The sales screens the item screen opens, which the sales feature implements: "Mark as sold"
@@ -55,8 +56,15 @@ public final class InventoryEnvironment {
     /// Reviews a draft item, also one that is not a draft on this iPhone (made on another device,
     /// or before a reinstall); without one, the item screen offers no "Review item".
     public var reviewScreen: ItemReviewScreen?
-    /// A status filter for the list to apply when it next appears (the Today card for drafts).
-    private var requestedStatus: Components.Schemas.KnownItemStatus?
+    /// The marketplace work this iPhone runs now, for the item screen's progress; without it,
+    /// the screen shows only the server's status.
+    public weak var phoneProgress: (any PhoneWorkProgressSource)?
+    /// A filter for the list to apply when it next appears (the Today card for drafts).
+    private var requestedFilter: InventoryFilter?
+    /// An item to open, with List everywhere, when the list next appears (List it now).
+    private var requestedItem: String?
+    /// How many items need the seller, for the Inventory tab's badge.
+    public let attention: InventoryAttention
 
     /// `phoneWork` runs at once the listing changes queued for this phone.
     public convenience init(
@@ -96,6 +104,7 @@ public final class InventoryEnvironment {
         self.onSignIn = onSignIn
         self.saleScreens = saleScreens
         self.taskDestination = taskDestination
+        attention = InventoryAttention(service: service, isSignedIn: isSignedIn)
     }
 
     /// The item screen, for another tab's navigation stack (a Today card opens it).
@@ -110,17 +119,33 @@ public final class InventoryEnvironment {
 
     /// Shows the drafts the next time the inventory appears.
     public func showDrafts() {
-        requestedStatus = .draft
+        requestedFilter = .drafts
     }
 
-    /// The status filter asked for since the list last appeared, once.
-    func takeRequestedStatus() -> Components.Schemas.KnownItemStatus? {
-        defer { requestedStatus = nil }
-        return requestedStatus
+    /// Opens the item the next time the inventory appears, with List everywhere open.
+    public func listItem(id: String) {
+        requestedItem = id
+    }
+
+    /// The item asked for since the list last appeared, once.
+    func takeRequestedItem() -> String? {
+        defer { requestedItem = nil }
+        return requestedItem
+    }
+
+    /// The filter asked for since the list last appeared, once.
+    func takeRequestedFilter() -> InventoryFilter? {
+        defer { requestedFilter = nil }
+        return requestedFilter
     }
 
     func makeListModel() -> InventoryListModel {
         InventoryListModel(service: service, isSignedIn: isSignedIn)
+    }
+
+    /// One change for these items (Inventory's selection, or one item's List everywhere).
+    func makeBulkAction(items: [ItemSummary]) -> BulkActionModel {
+        BulkActionModel(items: items, service: service, listingCopy: listingCopy, timing: detailTiming)
     }
 
     func makeDetailModel(itemID: String) -> ItemDetailModel {
@@ -134,5 +159,36 @@ public final class InventoryEnvironment {
     /// The List flow, with `marketplace` (the row the seller tapped List on) selected.
     func makeListingFlow(item: Item, marketplace: String? = nil) -> ListingFlowModel {
         ListingFlowModel(item: item, service: service, listingCopy: listingCopy, marketplace: marketplace)
+    }
+}
+
+/// How many items need the seller (a listing whose newest change failed or waits for them), for
+/// the Inventory tab's badge and the Needs you filter. Read when the app comes to the front and
+/// each time Inventory loads; at most one page is counted, so a badge never claims more than it
+/// read (`hasMore` then says there are more).
+@MainActor
+@Observable
+public final class InventoryAttention {
+    /// The items counted, at most one page.
+    public private(set) var total = 0
+    public private(set) var hasMore = false
+    private let service: any InventoryService
+    private let isSignedIn: @MainActor () -> Bool
+
+    init(service: any InventoryService, isSignedIn: @escaping @MainActor () -> Bool) {
+        self.service = service
+        self.isSignedIn = isSignedIn
+    }
+
+    /// Reads the count again; a failed read keeps the last one.
+    public func refresh() async {
+        guard isSignedIn() else {
+            total = 0
+            hasMore = false
+            return
+        }
+        guard let page = try? await service.items(InventoryQuery(filter: .needsYou), cursor: nil) else { return }
+        total = page.items.count
+        hasMore = page.nextCursor != nil
     }
 }

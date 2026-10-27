@@ -29,6 +29,8 @@ final class ItemDetailModel {
     private(set) var busyMarketplace: String?
     /// The last action's failure to reach the server, safe to show.
     var notice: String?
+    /// The screen ran its first load, so a request made on opening it (List everywhere) is done.
+    var hasLoadedOnce = false
 
     private var connections: [Connection] = []
     private let service: any InventoryService
@@ -90,6 +92,68 @@ final class ItemDetailModel {
     func retry(operationID: String, marketplace: String) async {
         await run(marketplace: marketplace) { [service] key throws(APIFailure) in
             _ = try await service.retry(operationID: operationID, idempotencyKey: key)
+        }
+    }
+
+    /// The same change on several marketplaces at once (Relist all, End all): each is queued on
+    /// its own, at the same time, and each listing's status then says how its change goes. One
+    /// that can't reach Listora says so by its marketplace's name; the others still go.
+    func performAll(_ requests: [(request: ListingRequest, marketplace: String)]) async {
+        guard busyMarketplace == nil, !requests.isEmpty else { return }
+        busyMarketplace = Self.allMarketplaces
+        notice = nil
+        defer { busyMarketplace = nil }
+        let service = service
+        let attempts = timing.sendAttempts
+        let delay = timing.sendRetryDelay
+        let failures = await withTaskGroup(of: String?.self) { group in
+            for (request, marketplace) in requests {
+                group.addTask {
+                    let key = UUID().uuidString
+                    for attempt in 1 ... max(1, attempts) {
+                        do {
+                            _ = try await service.perform(request, idempotencyKey: key)
+                            return nil
+                        } catch let error as APIFailure {
+                            if Self.mayResend(error), attempt < attempts {
+                                try? await Task.sleep(for: delay)
+                                continue
+                            }
+                            return "\(Formatting.marketplaceName(marketplace)): \(error.message)"
+                        } catch {
+                            return "\(Formatting.marketplaceName(marketplace)): \(error.localizedDescription)"
+                        }
+                    }
+                    return nil
+                }
+            }
+            var failed: [String] = []
+            for await failure in group {
+                if let failure {
+                    failed.append(failure)
+                }
+            }
+            return failed.sorted()
+        }
+        if !failures.isEmpty {
+            notice = failures.joined(separator: "\n")
+        }
+        await refresh()
+    }
+
+    /// Whether a send that failed is sent again (with the same idempotency key, so it is applied
+    /// once): Listora couldn't be reached, or its gateway answered for it while it restarted.
+    nonisolated static func mayResend(_ error: APIFailure) -> Bool {
+        error.retryable && (error.statusCode == nil || error.code == "server_unavailable")
+    }
+
+    /// `busyMarketplace` while a change goes to several marketplaces at once.
+    static let allMarketplaces = "all"
+
+    /// Try now: the operation waiting for its next attempt runs that attempt at once.
+    func tryNow(operationID: String, marketplace: String) async {
+        await run(marketplace: marketplace) { [service] key throws(APIFailure) in
+            _ = try await service.tryNow(operationID: operationID, idempotencyKey: key)
         }
     }
 
@@ -156,7 +220,7 @@ final class ItemDetailModel {
                 break
             } catch {
                 attempt += 1
-                if error.statusCode == nil, error.retryable, attempt < timing.sendAttempts {
+                if Self.mayResend(error), attempt < timing.sendAttempts {
                     try? await Task.sleep(for: timing.sendRetryDelay)
                     continue
                 }

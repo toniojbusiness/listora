@@ -1,3 +1,4 @@
+import { jsonb, type OperationStatus } from '@listora/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, fieldsOf, type TestApi } from '../test-support.ts';
@@ -110,5 +111,61 @@ describe('listItems (real Postgres)', () => {
       expect(response.status, cursor).toBe(400);
       expect(response.error.code).toBe('invalid_request');
     }
+  });
+
+  it('filters to the items that need the seller: a newest change that failed or waits for them', async () => {
+    const tenant = await api.tenantOf('maria.lopez@example.com');
+    const listingOn = async (name: string, marketplace: 'ebay' | 'poshmark') => {
+      const row = await api.db
+        .insertInto('marketplace_listing')
+        .values({
+          account_id: tenant.accountId,
+          item_id: ids[name] ?? '',
+          marketplace,
+          status: 'active',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      return row.id;
+    };
+    let minute = 0;
+    const operation = async (listingId: string, status: OperationStatus) => {
+      minute += 1;
+      await api.db
+        .insertInto('marketplace_operation')
+        .values({
+          account_id: tenant.accountId,
+          listing_id: listingId,
+          kind: 'price',
+          idempotency_key: `attention-${listingId}-${String(minute)}`,
+          desired: jsonb({ price: { amountCents: 1000, currency: 'USD' } }),
+          status,
+          attempts: 1,
+          origin: 'user',
+          created_at: new Date(Date.UTC(2026, 9, 1, 12, minute)),
+          ...(status === 'succeeded' ? { success_evidence: 'read_back' as const } : {}),
+          ...(status === 'failed' ? { error_code: 'marketplace_error', error_message: 'No.' } : {}),
+        })
+        .execute();
+    };
+    // The jacket's newest change failed; a canceled one after it does not count.
+    const jacket = await listingOn('jacket', 'ebay');
+    await operation(jacket, 'succeeded');
+    await operation(jacket, 'failed');
+    await operation(jacket, 'canceled');
+    // The boots' failure was put right by a later change.
+    const boots = await listingOn('boots', 'ebay');
+    await operation(boots, 'failed');
+    await operation(boots, 'succeeded');
+    // The dress waits for the seller on Poshmark, and is fine on eBay.
+    await operation(await listingOn('dress', 'poshmark'), 'needs_user_action');
+    await operation(await listingOn('dress', 'ebay'), 'succeeded');
+
+    expect(titles((await list({ attention: 'true' })).body)).toEqual([
+      'Linen dress',
+      'Denim jacket',
+    ]);
+    expect(titles((await list({ attention: 'true', q: 'denim' })).body)).toEqual(['Denim jacket']);
+    expect((await list({ attention: 'false' })).body.data).toHaveLength(4);
   });
 });
