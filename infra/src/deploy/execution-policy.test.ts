@@ -10,16 +10,26 @@ import {
   ATTACHABLE_MANAGED_POLICIES,
   cdkExecutionPolicy,
   executionPolicyName,
+  roleBoundaryName,
+  roleBoundaryPolicy,
   SERVICE_PREFIXES,
   type PolicyStatement,
 } from './execution-policy.ts';
 
 interface Resource {
   Type: string;
-  Properties?: { RoleName?: unknown; ManagedPolicyArns?: unknown[] };
+  Properties?: {
+    RoleName?: unknown;
+    ManagedPolicyArns?: unknown[];
+    PermissionsBoundary?: unknown;
+    Policies?: { PolicyDocument: { Statement: { Action: string | string[] }[] } }[];
+    PolicyDocument?: { Statement: { Action: string | string[] }[] };
+  };
 }
 
 const ACCOUNT = '976033325938';
+const BOUNDARY = (environment: string) =>
+  `arn:aws:iam::${ACCOUNT}:policy/${roleBoundaryName(environment)}`;
 const list = (value: string | readonly string[]): readonly string[] =>
   typeof value === 'string' ? [value] : value;
 const matches = (pattern: string, value: string): boolean =>
@@ -30,11 +40,26 @@ const matches = (pattern: string, value: string): boolean =>
       .join('.*')}$`,
   ).test(value);
 
-/** Whether `statements` allow `action` on `resource`, IAM style: any Deny wins. */
-function allows(statements: readonly PolicyStatement[], action: string, resource: string): boolean {
+/**
+ * Whether `statements` allow `action` on `resource`, IAM style: any Deny wins. A statement with
+ * a condition applies only when `context` satisfies it (StringEquals and ArnEquals).
+ */
+function allows(
+  statements: readonly PolicyStatement[],
+  action: string,
+  resource: string,
+  context: Readonly<Record<string, string>> = {},
+): boolean {
+  const satisfied = (statement: PolicyStatement) =>
+    Object.values(statement.Condition ?? {}).every((keys) =>
+      Object.entries(keys).every(([key, values]) =>
+        list(values).some((value) => context[key] === value),
+      ),
+    );
   const applies = (statement: PolicyStatement) =>
     list(statement.Action).some((pattern) => matches(pattern, action)) &&
-    list(statement.Resource).some((pattern) => matches(pattern, resource));
+    list(statement.Resource).some((pattern) => matches(pattern, resource)) &&
+    satisfied(statement);
   const applying = statements.filter(applies);
   return (
     applying.some((statement) => statement.Effect === 'Allow') &&
@@ -110,7 +135,9 @@ describe('the restricted CDK execution policy', () => {
         if (typeof name === 'string') {
           expect(name.startsWith(`listora-${environment}-`), name).toBe(true);
           expect(
-            allows(policy.Statement, 'iam:CreateRole', `arn:aws:iam::${ACCOUNT}:role/${name}`),
+            allows(policy.Statement, 'iam:CreateRole', `arn:aws:iam::${ACCOUNT}:role/${name}`, {
+              'iam:PermissionsBoundary': BOUNDARY(environment),
+            }),
           ).toBe(true);
         }
         for (const arn of resource.Properties?.ManagedPolicyArns ?? []) {
@@ -127,14 +154,22 @@ describe('the restricted CDK execution policy', () => {
   it('never allows changing the deploy role, the bootstrap roles, or any other role', () => {
     const { Statement } = cdkExecutionPolicy('personal', ACCOUNT);
     const role = (name: string) => `arn:aws:iam::${ACCOUNT}:role/${name}`;
+    const bounded = { 'iam:PermissionsBoundary': BOUNDARY('personal') };
     for (const action of ['iam:CreateRole', 'iam:PutRolePolicy', 'iam:UpdateAssumeRolePolicy']) {
-      expect(allows(Statement, action, role(deployRoleName('personal')))).toBe(false);
+      expect(allows(Statement, action, role(deployRoleName('personal')), bounded)).toBe(false);
       expect(
-        allows(Statement, action, role('cdk-hnb659fds-deploy-role-976033325938-us-east-1')),
+        allows(
+          Statement,
+          action,
+          role('cdk-hnb659fds-deploy-role-976033325938-us-east-1'),
+          bounded,
+        ),
       ).toBe(false);
-      expect(allows(Statement, action, role('listora-prod-compute-TaskRole'))).toBe(false);
-      expect(allows(Statement, action, role('admin'))).toBe(false);
-      expect(allows(Statement, action, role('listora-personal-compute-TaskRole'))).toBe(true);
+      expect(allows(Statement, action, role('listora-prod-compute-TaskRole'), bounded)).toBe(false);
+      expect(allows(Statement, action, role('admin'), bounded)).toBe(false);
+      expect(allows(Statement, action, role('listora-personal-compute-TaskRole'), bounded)).toBe(
+        true,
+      );
     }
     expect(allows(Statement, 'iam:CreateUser', `arn:aws:iam::${ACCOUNT}:user/someone`)).toBe(false);
     expect(allows(Statement, 'iam:CreateOpenIDConnectProvider', '*')).toBe(false);
@@ -150,8 +185,91 @@ describe('the restricted CDK execution policy', () => {
     );
     expect(attach?.Condition).toEqual({
       ArnEquals: { 'iam:PolicyARN': ATTACHABLE_MANAGED_POLICIES },
+      StringEquals: { 'iam:PermissionsBoundary': BOUNDARY('personal') },
     });
     expect(ATTACHABLE_MANAGED_POLICIES.join()).not.toMatch(/AdministratorAccess|PowerUser|IAMFull/);
+  });
+
+  it('creates and changes a role only with the role boundary, and never removes it', () => {
+    const { Statement } = cdkExecutionPolicy('personal', ACCOUNT);
+    const ours = `arn:aws:iam::${ACCOUNT}:role/listora-personal-compute-TaskRole`;
+    const withBoundary = { 'iam:PermissionsBoundary': BOUNDARY('personal') };
+    const otherBoundary = { 'iam:PermissionsBoundary': `arn:aws:iam::${ACCOUNT}:policy/wide-open` };
+    for (const action of [
+      'iam:CreateRole',
+      'iam:PutRolePermissionsBoundary',
+      'iam:PutRolePolicy',
+      'iam:DeleteRolePolicy',
+    ]) {
+      expect(allows(Statement, action, ours, withBoundary), action).toBe(true);
+      expect(allows(Statement, action, ours), `${action} without a boundary`).toBe(false);
+      expect(allows(Statement, action, ours, otherBoundary), `${action}, other boundary`).toBe(
+        false,
+      );
+    }
+    const attach = {
+      ...withBoundary,
+      'iam:PolicyARN': ATTACHABLE_MANAGED_POLICIES[0] ?? '',
+    };
+    expect(allows(Statement, 'iam:AttachRolePolicy', ours, attach)).toBe(true);
+    expect(allows(Statement, 'iam:AttachRolePolicy', ours, { ...attach, ...otherBoundary })).toBe(
+      false,
+    );
+    expect(allows(Statement, 'iam:DeleteRolePermissionsBoundary', ours, withBoundary)).toBe(false);
+    // Neither this policy nor the boundary can be changed by a deploy.
+    for (const name of [executionPolicyName('personal'), roleBoundaryName('personal')]) {
+      for (const action of ['iam:CreatePolicyVersion', 'iam:DeletePolicy']) {
+        expect(allows(Statement, action, `arn:aws:iam::${ACCOUNT}:policy/${name}`)).toBe(false);
+      }
+    }
+  });
+
+  it.each(deployed)(
+    'puts the role boundary on every role of the $name stacks',
+    ({ environment, resources }) => {
+      const roles = resources.filter((resource) => resource.Type === 'AWS::IAM::Role');
+      expect(roles.length).toBeGreaterThan(0);
+      for (const resource of roles) {
+        const boundary = JSON.stringify(resource.Properties?.PermissionsBoundary ?? null);
+        expect(boundary, JSON.stringify(resource.Properties?.RoleName)).toContain(
+          `:policy/${roleBoundaryName(environment)}"`,
+        );
+      }
+    },
+  );
+
+  it.each(deployed)(
+    'leaves every action the $name roles are given within the role boundary',
+    ({ resources }) => {
+      const boundary = roleBoundaryPolicy().Statement;
+      const actions = resources.flatMap((resource) => {
+        if (resource.Type === 'AWS::IAM::Policy') {
+          return resource.Properties?.PolicyDocument?.Statement ?? [];
+        }
+        if (resource.Type === 'AWS::IAM::Role') {
+          return (resource.Properties?.Policies ?? []).flatMap((p) => p.PolicyDocument.Statement);
+        }
+        return [];
+      });
+      expect(actions.length).toBeGreaterThan(0);
+      for (const action of new Set(actions.flatMap((statement) => list(statement.Action)))) {
+        expect(allows(boundary, action.replace(/\*/g, 'Anything'), '*'), action).toBe(true);
+      }
+    },
+  );
+
+  it('bounds every role to the services the stacks use, never IAM or STS', () => {
+    const boundary = roleBoundaryPolicy().Statement;
+    for (const action of [
+      'iam:CreateRole',
+      'iam:PutRolePolicy',
+      'iam:PassRole',
+      'sts:AssumeRole',
+      'organizations:LeaveOrganization',
+    ]) {
+      expect(allows(boundary, action, '*'), action).toBe(false);
+    }
+    expect(allows(boundary, 's3:GetObject', '*')).toBe(true);
   });
 
   it('fits the managed policy size limit', () => {
@@ -165,6 +283,11 @@ describe('the restricted CDK execution policy', () => {
     const printed = spawnSync('node', [script, 'personal', ACCOUNT], { encoding: 'utf8' });
     expect(printed.status).toBe(0);
     expect(JSON.parse(printed.stdout)).toEqual(cdkExecutionPolicy('personal', ACCOUNT));
+    const boundary = spawnSync('node', [script, 'personal', ACCOUNT, 'boundary'], {
+      encoding: 'utf8',
+    });
+    expect(boundary.status).toBe(0);
+    expect(JSON.parse(boundary.stdout)).toEqual(roleBoundaryPolicy());
     const refused = spawnSync('node', [script, 'personal', '123'], { encoding: 'utf8' });
     expect(refused.status).toBe(2);
     expect(refused.stderr).toContain('usage:');

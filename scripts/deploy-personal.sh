@@ -10,10 +10,11 @@
 #                    aws and cdk command; the script never exports credentials.
 #   --ci             Run by .github/workflows/deploy-personal.yml: the full deploy with the
 #                    ambient AWS credentials (the GitHub deploy role, assumed through OIDC), no
-#                    profile and no Anthropic key file. It checks Listora's bootstrap and
-#                    execution policy without changing them, needs the owner's address already
-#                    verified by SES (it cannot wait for a click), and keeps the stored Anthropic
-#                    key. Changing any of those is the deploy from a Mac, with --profile.
+#                    profile and no Anthropic key file. It checks Listora's bootstrap, its
+#                    execution policy, and the role boundary without changing them, needs the
+#                    owner's address already verified by SES (it cannot wait for a click), and
+#                    keeps the stored Anthropic key. Changing any of those is the deploy from a
+#                    Mac, with --profile.
 #   --code-only      The fast path, for a commit that changes no infrastructure: build and push
 #                    the images, run the migrations only when there are new ones, and move the
 #                    services to the new images directly, without CloudFormation. It first
@@ -38,8 +39,9 @@
 # healthy, as in every rollout), the health check runs again, and the deploy fails.
 #
 # Steps: verify the account; check the zones and the existing stacks; synthesize offline; make
-# sure the restricted CDK bootstrap is in place (create its execution policy and bootstrap if
-# the account has none, refuse if it has another); deploy the registry; build and push the
+# sure the restricted CDK bootstrap is in place (create or update the role boundary and the
+# execution policy, and bootstrap with Listora's template when the account has none or an older
+# one of Listora's, refuse one with another execution policy); deploy the registry; build and push the
 # image; deploy the state stacks and the migration task; wait until SES has verified the
 # owner's address (the first deploy emails them a link to click); deploy the user pool; store
 # the Anthropic key; run the migrations; deploy the services and alarms; wait for health; run
@@ -94,6 +96,8 @@ readonly region=${LISTORA_AWS_REGION:-us-east-1}
 readonly container_cli=${LISTORA_CONTAINER_CLI:-docker}
 readonly policy_name="listora-$ENVIRONMENT-cdk-execution"
 readonly policy_arn="arn:aws:iam::$EXPECTED_ACCOUNT:policy/$policy_name"
+readonly boundary_name="listora-$ENVIRONMENT-role-boundary"
+readonly boundary_arn="arn:aws:iam::$EXPECTED_ACCOUNT:policy/$boundary_name"
 readonly registry="$EXPECTED_ACCOUNT.dkr.ecr.$region.amazonaws.com"
 readonly api_log_group="/listora/$ENVIRONMENT/api"
 readonly stacks=(registry network secrets data storage email auth migrate compute observability)
@@ -104,7 +108,7 @@ if [[ "$ci" == true ]]; then
   [[ -z "$profile" ]] || { echo "deploy-personal: --ci uses the ambient credentials; drop --profile" >&2; exit 2; }
   [[ "$code_only" == false ]] || { echo "deploy-personal: --ci runs the full deploy; drop --code-only" >&2; exit 2; }
 fi
-# Checks only, never changes: the bootstrap and its policy, which only an administrator updates.
+# Checks only, never changes: the bootstrap and its policies, which only an administrator updates.
 verify_only=false
 [[ "$code_only" == false && "$ci" == false ]] || verify_only=true
 readonly verify_only
@@ -346,63 +350,109 @@ info "database: deletion protection on"
 
 node infra/src/deploy/execution-policy.ts "$ENVIRONMENT" "$EXPECTED_ACCOUNT" >"$workdir/policy.json"
 info "restricted CDK execution policy $policy_name: $(jq '.Statement | length' "$workdir/policy.json") statements, $(jq -c '[.Statement[0].Action[] | sub(":\\*$"; "")]' "$workdir/policy.json")"
+node infra/src/deploy/execution-policy.ts "$ENVIRONMENT" "$EXPECTED_ACCOUNT" boundary >"$workdir/boundary.json"
+# Every role a deploy creates carries the boundary, or the execution policy refuses it mid-deploy.
+for name in "${stacks[@]}"; do
+  jq -e --arg boundary ":policy/$boundary_name" \
+    '[.Resources[] | select(.Type == "AWS::IAM::Role") | .Properties.PermissionsBoundary | tostring | contains($boundary)] | all' \
+    "$(template "$name")" >/dev/null ||
+    fail "a role of listora-$ENVIRONMENT-$name would deploy without the role boundary $boundary_name"
+done
+info "role boundary $boundary_name: on every role of the stacks, no IAM"
+node infra/src/deploy/bootstrap-template.ts "$ENVIRONMENT" >"$workdir/bootstrap.yaml"
+template_hash=$(node infra/src/deploy/bootstrap-template.ts "$ENVIRONMENT" hash)
+readonly template_hash
+info "bootstrap template $template_hash: the deploy role changes only listora-$ENVIRONMENT-* stacks"
 
 # --- 5. Restricted CDK bootstrap -------------------------------------------------------------
 # Listora's own bootstrap (infra/src/bootstrap.ts; infra/cdk.json makes every cdk command use
-# it), so the account's default CDKToolkit and the apps that use it are never touched.
+# it), so the account's default CDKToolkit and the apps that use it are never touched. Its
+# template (infra/src/deploy/bootstrap-template.ts) lets the deploy role change only this
+# environment's stacks; its execution policy requires the role boundary on every role.
 readonly qualifier=listora
 readonly toolkit=CDKToolkit-listora
-step "Make sure Listora's CDK bootstrap ($toolkit) uses the restricted execution policy"
+step "Make sure Listora's CDK bootstrap ($toolkit) is its own template with the restricted execution policy"
 bootstrap_flags="--qualifier $qualifier --toolkit-stack-name $toolkit --cloudformation-execution-policies $policy_arn --termination-protection"
 # shellcheck disable=SC2206 # the flags above have no spaces inside a value
-bootstrap=(cdk_ bootstrap "aws://$EXPECTED_ACCOUNT/$region" --app "$ASSEMBLY" $bootstrap_flags)
+bootstrap=(cdk_ bootstrap "aws://$EXPECTED_ACCOUNT/$region" --app "$ASSEMBLY" --template "$workdir/bootstrap.yaml" $bootstrap_flags)
+# The bootstrap template a deployed toolkit stack was made from (empty: the CDK default).
+deployed_template() {
+  jq -r '.Stacks[0].Outputs[]? | select(.OutputKey == "ListoraBootstrapTemplate") | .OutputValue' <<<"$1"
+}
+# Makes the managed policy $1 (ARN $2) the document in file $3, creating it with description $4.
+ensure_policy() {
+  local name=$1 arn=$2 document=$3 description=$4
+  if aws_ iam get-policy --policy-arn "$arn" --output json >"$workdir/existing-policy.json" 2>"$workdir/err"; then
+    local version versions
+    version=$(jq -r '.Policy.DefaultVersionId' "$workdir/existing-policy.json")
+    aws_ iam get-policy-version --policy-arn "$arn" --version-id "$version" \
+      --query PolicyVersion.Document --output json >"$workdir/current.json"
+    if [[ "$(jq -S . "$workdir/current.json")" == "$(jq -S . "$document")" ]]; then
+      info "$name is up to date ($version)"
+      return
+    fi
+    [[ "$verify_only" == false ]] ||
+      fail "$name differs from the committed document (infra/src/deploy/execution-policy.ts); to update it, $full_deploy"
+    versions=$(aws_ iam list-policy-versions --policy-arn "$arn" --query 'length(Versions)' --output text)
+    [[ "$versions" -lt 5 ]] ||
+      fail "$name already has 5 versions; delete an old non-default one, then run this again"
+    aws_ iam create-policy-version --policy-arn "$arn" \
+      --policy-document "file://$document" --set-as-default >/dev/null
+    info "$name updated to the committed document"
+  else
+    grep -q 'NoSuchEntity' "$workdir/err" || fail "cannot read $arn: $(cat "$workdir/err")"
+    [[ "$verify_only" == false ]] || fail "$name does not exist yet; $full_deploy"
+    aws_ iam create-policy --policy-name "$name" --description "$description" \
+      --policy-document "file://$document" --tags Key=project,Value=listora >/dev/null
+    info "created $name"
+  fi
+}
 if [[ "$dry_run" == true && "$verify_only" == true ]]; then
-  would "aws cloudformation describe-stacks --stack-name $toolkit; aws iam get-policy-version --policy-arn $policy_arn  (refuse unless both are current: $([[ "$ci" == true ]] && echo --ci || echo --code-only) changes neither)"
+  would "aws cloudformation describe-stacks --stack-name $toolkit; aws iam get-policy-version --policy-arn $policy_arn; aws iam get-policy-version --policy-arn $boundary_arn  (refuse unless all are current: $([[ "$ci" == true ]] && echo --ci || echo --code-only) changes none)"
 elif [[ "$dry_run" == true ]]; then
+  would "aws iam create-policy --policy-name $boundary_name --policy-document file://<the boundary above>  (or a new default version when it differs)"
   would "aws iam create-policy --policy-name $policy_name --policy-document file://<the policy above>  (or a new default version when it differs)"
-  would "npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile <profile> $bootstrap_flags  (only when $toolkit does not exist; refuse one with another policy)"
+  would "npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile <profile> --template <the template above> $bootstrap_flags  (when $toolkit does not exist, or with --force when it is another template; refuse one with another policy)"
 else
   # First, before changing anything: an existing bootstrap must be this restricted one.
   bootstrapped=false
+  template_current=false
   if toolkit_stack=$(aws_ cloudformation describe-stacks --stack-name "$toolkit" --output json 2>"$workdir/err"); then
     policies=$(jq -r '.Stacks[0].Parameters[]? | select(.ParameterKey == "CloudFormationExecutionPolicies") | .ParameterValue' <<<"$toolkit_stack")
     [[ "$policies" == "$policy_arn" ]] ||
-      fail "$toolkit runs CloudFormation with '${policies:-AdministratorAccess (the default)}', not $policy_arn; re-bootstrap it on purpose: npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile $profile $bootstrap_flags"
+      fail "$toolkit runs CloudFormation with '${policies:-AdministratorAccess (the default)}', not $policy_arn; re-bootstrap it on purpose: npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile $profile --template <(node src/deploy/bootstrap-template.ts $ENVIRONMENT) --force $bootstrap_flags"
     bootstrapped=true
+    deployed_hash=$(deployed_template "$toolkit_stack")
+    if [[ "$deployed_hash" == "$template_hash" ]]; then
+      template_current=true
+    else
+      [[ "$verify_only" == false ]] ||
+        fail "$toolkit is not Listora's current bootstrap template ($template_hash; deployed: ${deployed_hash:-the CDK default}); to update it, $full_deploy"
+    fi
   else
     grep -q 'does not exist' "$workdir/err" || fail "cannot describe $toolkit: $(cat "$workdir/err")"
     [[ "$verify_only" == false ]] || fail "$toolkit does not exist yet; $full_deploy"
   fi
-  if aws_ iam get-policy --policy-arn "$policy_arn" --output json >"$workdir/existing-policy.json" 2>"$workdir/err"; then
-    version=$(jq -r '.Policy.DefaultVersionId' "$workdir/existing-policy.json")
-    aws_ iam get-policy-version --policy-arn "$policy_arn" --version-id "$version" \
-      --query PolicyVersion.Document --output json >"$workdir/current.json"
-    if [[ "$(jq -S . "$workdir/current.json")" == "$(jq -S . "$workdir/policy.json")" ]]; then
-      info "$policy_name is up to date ($version)"
-    else
-      [[ "$verify_only" == false ]] ||
-        fail "$policy_name differs from the committed document (infra/src/deploy/execution-policy.ts); to update it, $full_deploy"
-      versions=$(aws_ iam list-policy-versions --policy-arn "$policy_arn" --query 'length(Versions)' --output text)
-      [[ "$versions" -lt 5 ]] ||
-        fail "$policy_name already has 5 versions; delete an old non-default one, then run this again"
-      aws_ iam create-policy-version --policy-arn "$policy_arn" \
-        --policy-document "file://$workdir/policy.json" --set-as-default >/dev/null
-      info "$policy_name updated to the committed document"
-    fi
-  else
-    grep -q 'NoSuchEntity' "$workdir/err" || fail "cannot read $policy_arn: $(cat "$workdir/err")"
-    [[ "$verify_only" == false ]] || fail "$policy_name does not exist yet; $full_deploy"
-    aws_ iam create-policy --policy-name "$policy_name" \
-      --description "Listora $ENVIRONMENT: what CloudFormation may change in CDK deploys (infra/src/deploy/execution-policy.ts)" \
-      --policy-document "file://$workdir/policy.json" --tags Key=project,Value=listora >/dev/null
-    info "created $policy_name"
-  fi
+  # The boundary first: the execution policy requires it on every role it creates or changes.
+  ensure_policy "$boundary_name" "$boundary_arn" "$workdir/boundary.json" \
+    "Listora $ENVIRONMENT: the permissions boundary of every role the stacks create (infra/src/deploy/execution-policy.ts)"
+  ensure_policy "$policy_name" "$policy_arn" "$workdir/policy.json" \
+    "Listora $ENVIRONMENT: what CloudFormation may change in CDK deploys (infra/src/deploy/execution-policy.ts)"
 
-  if [[ "$bootstrapped" == true ]]; then
-    info "$toolkit uses $policy_arn"
+  if [[ "$template_current" == true ]]; then
+    info "$toolkit uses $policy_arn and Listora's bootstrap template ($template_hash)"
   else
-    "${bootstrap[@]}" || fail "cdk bootstrap failed"
-    info "bootstrapped with $policy_arn"
+    # cdk skips, with only a warning, a toolkit stack made from another template unless forced.
+    if [[ "$bootstrapped" == true ]]; then
+      "${bootstrap[@]}" --force || fail "cdk bootstrap failed"
+    else
+      "${bootstrap[@]}" || fail "cdk bootstrap failed"
+    fi
+    toolkit_stack=$(aws_ cloudformation describe-stacks --stack-name "$toolkit" --output json) ||
+      fail "cannot describe $toolkit after the bootstrap"
+    [[ "$(deployed_template "$toolkit_stack")" == "$template_hash" ]] ||
+      fail "cdk bootstrap did not make $toolkit Listora's bootstrap template ($template_hash)"
+    info "bootstrapped $toolkit with $policy_arn and Listora's bootstrap template ($template_hash)"
   fi
 fi
 

@@ -1,11 +1,12 @@
 import type { App } from 'aws-cdk-lib';
+import { ManagedPolicy, PermissionsBoundary } from 'aws-cdk-lib/aws-iam';
 
 import { ENVIRONMENT_SETTINGS, type DeployTarget } from './config.ts';
 import { AuthStack } from './stacks/auth-stack.ts';
 import type { ListoraStackProps } from './stacks/common.ts';
 import { ComputeStack } from './stacks/compute-stack.ts';
 import { DataStack } from './stacks/data-stack.ts';
-import { DeployAccessStack } from './stacks/deploy-access-stack.ts';
+import { DeployAccessStack, roleBoundaryName } from './stacks/deploy-access-stack.ts';
 import { EmailStack } from './stacks/email-stack.ts';
 import { MigrateStack } from './stacks/migrate-stack.ts';
 import { NetworkStack } from './stacks/network-stack.ts';
@@ -117,6 +118,18 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     services: compute.services,
     database: data.database,
   });
+
+  // Every role of the stacks a deploy changes carries the role boundary, which the restricted
+  // execution policy requires (deploy/execution-policy.ts; infra/README.md, Trust boundary). The
+  // deploy-access stack, which an administrator deploys, is outside the bootstrap.
+  const deployed = [registry, network, secrets, data, migrate, storage, email, auth, compute];
+  for (const stack of [...deployed, observability]) {
+    if (stack === undefined) continue;
+    const boundary = roleBoundaryName(target.environment);
+    PermissionsBoundary.of(stack).apply(
+      ManagedPolicy.fromManagedPolicyName(stack, 'RoleBoundary', boundary),
+    );
+  }
 
   return {
     deployAccess,
