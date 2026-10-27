@@ -235,6 +235,7 @@ extension RootView {
             screens: SettingsScreens(
                 linkAccounts: { AnyView(LinkAccountsView(model: dependencies.linkAccounts)) },
                 marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },
+                imports: { dependencies.importsScreen() },
                 notifications: {
                     AnyView(NotificationSettingsView(
                         today: dependencies.today,

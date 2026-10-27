@@ -45,6 +45,9 @@ import type {
   InboundEventResult,
   InboundEventSource,
   ItemStatus,
+  ListingImportMatch,
+  ListingImportOutcome,
+  ListingImportStatus,
   ListingStatus,
   Marketplace,
   MembershipRole,
@@ -979,6 +982,59 @@ export interface PhoneWorkTable {
   pending_call: NullableJsonb<JsonObject>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The import a `listing_import` reads the next page of. */
+  import_id: Nullable<string>;
+}
+
+// Imports -------------------------------------------------------------------------------------
+
+/** One import of the seller's listings on a marketplace (docs/features/imports.md). */
+export interface ListingImportTable {
+  id: Id;
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  status: Generated<ListingImportStatus>;
+  host: AutomationRunHost;
+  /** The next page to read; null for the first page. */
+  cursor: Nullable<string>;
+  pages_read: Generated<number>;
+  listings_read: Generated<number>;
+  imported: Generated<number>;
+  merged: Generated<number>;
+  already_listed: Generated<number>;
+  needs_you: Generated<number>;
+  failed: Generated<number>;
+  /** Why reading stopped before the last page; user-readable. */
+  error_code: Nullable<string>;
+  error_message: Nullable<string>;
+  read_at: NullableTimestamp;
+  finished_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** One listing an import read, and how it settled. */
+export interface ListingImportEntryTable {
+  id: Id;
+  account_id: string;
+  import_id: string;
+  marketplace: Marketplace;
+  external_listing_id: string;
+  /** The listing as read (`ListedListing`). */
+  listing: Jsonb<JsonObject>;
+  outcome: Generated<ListingImportOutcome>;
+  match: Nullable<ListingImportMatch>;
+  item_id: Nullable<string>;
+  listing_id: Nullable<string>;
+  /** For `needs_you`: `[{ itemId, reason }]`, best first. */
+  candidates: DefaultedJsonb<JsonArray>;
+  error_message: Nullable<string>;
+  /** The seller said it is an item of its own: imported without matching it again. */
+  new_item: Generated<boolean>;
+  settled_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
 }
 
 // Today ---------------------------------------------------------------------------------------
@@ -1104,6 +1160,8 @@ export interface Database {
   session_check: SessionCheckTable;
   app_device: AppDeviceTable;
   phone_work: PhoneWorkTable;
+  listing_import: ListingImportTable;
+  listing_import_entry: ListingImportEntryTable;
   today_summary_setting: TodaySummarySettingTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;

@@ -995,6 +995,56 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/sales/{saleId}/explanation`.
     /// - Remark: Generated from `#/paths//v1/sales/{saleId}/explanation/get(getSaleExplanation)`.
     func getSaleExplanation(_ input: Operations.GetSaleExplanation.Input) async throws -> Operations.GetSaleExplanation.Output
+    /// List the marketplaces Listora imports listings from, each with its latest import
+    ///
+    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
+    /// import can start now (the marketplace is linked, none is under way) or why not, and its
+    /// newest import with its progress and summary.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/imports`.
+    /// - Remark: Generated from `#/paths//v1/imports/get(listListingImports)`.
+    func listListingImports(_ input: Operations.ListListingImports.Input) async throws -> Operations.ListListingImports.Output
+    /// Import the seller's listings for sale on a marketplace
+    ///
+    /// Starts reading the seller's listings for sale on a linked marketplace, a page at a time
+    /// where the marketplace runs (the seller's iPhone, or Listora's cloud browser), read-only:
+    /// nothing on the marketplace changes. Each listing becomes an item already listed there, is
+    /// added to the item it is the same as, or becomes a question for the seller.
+    /// `marketplace_not_connected` when the marketplace is not linked, `already_exists` while an
+    /// import of it is under way, `marketplace_action_unavailable` for a marketplace Listora
+    /// doesn't import from.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/imports`.
+    /// - Remark: Generated from `#/paths//v1/imports/post(startListingImport)`.
+    func startListingImport(_ input: Operations.StartListingImport.Input) async throws -> Operations.StartListingImport.Output
+    /// Get an import's progress and summary
+    ///
+    /// - Remark: HTTP `GET /v1/imports/{importId}`.
+    /// - Remark: Generated from `#/paths//v1/imports/{importId}/get(getListingImport)`.
+    func getListingImport(_ input: Operations.GetListingImport.Input) async throws -> Operations.GetListingImport.Output
+    /// List the import's questions for the seller
+    ///
+    /// The listings the import was not sure about: each may be an item Listora already has, and
+    /// the seller says which, or that it is an item of its own, or to leave it out. At most 200,
+    /// oldest first.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/imports/{importId}/questions`.
+    /// - Remark: Generated from `#/paths//v1/imports/{importId}/questions/get(listListingImportQuestions)`.
+    func listListingImportQuestions(_ input: Operations.ListListingImportQuestions.Input) async throws -> Operations.ListListingImportQuestions.Output
+    /// Answer one of the import's questions
+    ///
+    /// `same_item`: the listing is that item (one of the question's candidates), and becomes its
+    /// listing on the marketplace. `new_item`: it is an item of its own, imported with its photos.
+    /// `skip`: it is not imported. `invalid_state_transition` for a question already answered,
+    /// `marketplace_action_unavailable` when the item already has a listing there.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/imports/{importId}/questions/{questionId}/answer`.
+    /// - Remark: Generated from `#/paths//v1/imports/{importId}/questions/{questionId}/answer/post(answerListingImportQuestion)`.
+    func answerListingImportQuestion(_ input: Operations.AnswerListingImportQuestion.Input) async throws -> Operations.AnswerListingImportQuestion.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -2709,6 +2759,92 @@ extension APIProtocol {
         try await getSaleExplanation(Operations.GetSaleExplanation.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// List the marketplaces Listora imports listings from, each with its latest import
+    ///
+    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
+    /// import can start now (the marketplace is linked, none is under way) or why not, and its
+    /// newest import with its progress and summary.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/imports`.
+    /// - Remark: Generated from `#/paths//v1/imports/get(listListingImports)`.
+    public func listListingImports(headers: Operations.ListListingImports.Input.Headers = .init()) async throws -> Operations.ListListingImports.Output {
+        try await listListingImports(Operations.ListListingImports.Input(headers: headers))
+    }
+    /// Import the seller's listings for sale on a marketplace
+    ///
+    /// Starts reading the seller's listings for sale on a linked marketplace, a page at a time
+    /// where the marketplace runs (the seller's iPhone, or Listora's cloud browser), read-only:
+    /// nothing on the marketplace changes. Each listing becomes an item already listed there, is
+    /// added to the item it is the same as, or becomes a question for the seller.
+    /// `marketplace_not_connected` when the marketplace is not linked, `already_exists` while an
+    /// import of it is under way, `marketplace_action_unavailable` for a marketplace Listora
+    /// doesn't import from.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/imports`.
+    /// - Remark: Generated from `#/paths//v1/imports/post(startListingImport)`.
+    public func startListingImport(
+        headers: Operations.StartListingImport.Input.Headers,
+        body: Operations.StartListingImport.Input.Body
+    ) async throws -> Operations.StartListingImport.Output {
+        try await startListingImport(Operations.StartListingImport.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get an import's progress and summary
+    ///
+    /// - Remark: HTTP `GET /v1/imports/{importId}`.
+    /// - Remark: Generated from `#/paths//v1/imports/{importId}/get(getListingImport)`.
+    public func getListingImport(
+        path: Operations.GetListingImport.Input.Path,
+        headers: Operations.GetListingImport.Input.Headers = .init()
+    ) async throws -> Operations.GetListingImport.Output {
+        try await getListingImport(Operations.GetListingImport.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// List the import's questions for the seller
+    ///
+    /// The listings the import was not sure about: each may be an item Listora already has, and
+    /// the seller says which, or that it is an item of its own, or to leave it out. At most 200,
+    /// oldest first.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/imports/{importId}/questions`.
+    /// - Remark: Generated from `#/paths//v1/imports/{importId}/questions/get(listListingImportQuestions)`.
+    public func listListingImportQuestions(
+        path: Operations.ListListingImportQuestions.Input.Path,
+        headers: Operations.ListListingImportQuestions.Input.Headers = .init()
+    ) async throws -> Operations.ListListingImportQuestions.Output {
+        try await listListingImportQuestions(Operations.ListListingImportQuestions.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Answer one of the import's questions
+    ///
+    /// `same_item`: the listing is that item (one of the question's candidates), and becomes its
+    /// listing on the marketplace. `new_item`: it is an item of its own, imported with its photos.
+    /// `skip`: it is not imported. `invalid_state_transition` for a question already answered,
+    /// `marketplace_action_unavailable` when the item already has a listing there.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/imports/{importId}/questions/{questionId}/answer`.
+    /// - Remark: Generated from `#/paths//v1/imports/{importId}/questions/{questionId}/answer/post(answerListingImportQuestion)`.
+    public func answerListingImportQuestion(
+        path: Operations.AnswerListingImportQuestion.Input.Path,
+        headers: Operations.AnswerListingImportQuestion.Input.Headers,
+        body: Operations.AnswerListingImportQuestion.Input.Body
+    ) async throws -> Operations.AnswerListingImportQuestion.Output {
+        try await answerListingImportQuestion(Operations.AnswerListingImportQuestion.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
 }

@@ -1,6 +1,7 @@
 import APIClient
 import Core
 import Foundation
+import ImportFeature
 import MarketplaceLinkingFeature
 import PhoneExecutionFeature
 import SettingsFeature
@@ -15,6 +16,8 @@ public struct SettingsModels {
     public let saleEmails: SaleEmailsModel
     /// Settings > Delete account.
     public let accountDeletion: AccountDeletionModel
+    /// Settings > Import your listings: the listings a seller already has, brought in as items.
+    public let imports: ImportsModel
     /// Settings > People: the owner's invites.
     public let invites: InvitesModel
 
@@ -39,6 +42,7 @@ public struct SettingsModels {
         saleEmails = SaleEmailsModel(service: APISaleEmailsService(api: apiClient))
         invites = InvitesModel(service: APIInvitesService(client: apiClient.client))
         accountDeletion = Self.accountDeletion(apiClient, accessTokens, signIn, phone.sessions, profile)
+        imports = AppDependencies.makeImports(apiClient, phone)
     }
 
     /// Deleting the account. It signs out, but its result (the marketplaces to revoke by hand)

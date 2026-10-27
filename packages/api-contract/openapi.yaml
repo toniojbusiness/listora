@@ -73,6 +73,8 @@ tags:
     description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
   - name: activity
     description: The activity timeline of items and marketplace actions, and how each sale was found (docs/features/activity.md).
+  - name: imports
+    description: Importing the seller's existing listings from a linked marketplace, and the questions it asks (docs/features/imports.md).
 
 paths:
   /health/live:
@@ -239,6 +241,14 @@ paths:
     $ref: './paths/activity.yaml#/~1v1~1operations~1{operationId}~1activity'
   /v1/sales/{saleId}/explanation:
     $ref: './paths/activity.yaml#/~1v1~1sales~1{saleId}~1explanation'
+  /v1/imports:
+    $ref: './paths/imports.yaml#/~1v1~1imports'
+  /v1/imports/{importId}:
+    $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}'
+  /v1/imports/{importId}/questions:
+    $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}~1questions'
+  /v1/imports/{importId}/questions/{questionId}/answer:
+    $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}~1questions~1{questionId}~1answer'
 
 components:
   securitySchemes:
@@ -288,6 +298,10 @@ components:
       $ref: './components/parameters.yaml#/RunId'
     CallIndex:
       $ref: './components/parameters.yaml#/CallIndex'
+    ImportId:
+      $ref: './components/parameters.yaml#/ImportId'
+    QuestionId:
+      $ref: './components/parameters.yaml#/QuestionId'
 
   responses:
     DefaultError:
@@ -987,3 +1001,32 @@ components:
       $ref: './components/schemas/activity.yaml#/KnownSaleCheckHealth'
     ConnectionSaleChecks:
       $ref: './components/schemas/activity.yaml#/ConnectionSaleChecks'
+    # ---------------------------------------------------------------- imports
+    ListingImportStatus:
+      $ref: './components/schemas/imports.yaml#/ListingImportStatus'
+    KnownListingImportStatus:
+      $ref: './components/schemas/imports.yaml#/KnownListingImportStatus'
+    ListingImportCounts:
+      $ref: './components/schemas/imports.yaml#/ListingImportCounts'
+    ListingImport:
+      $ref: './components/schemas/imports.yaml#/ListingImport'
+    ListingImportMarketplace:
+      $ref: './components/schemas/imports.yaml#/ListingImportMarketplace'
+    ListingImports:
+      $ref: './components/schemas/imports.yaml#/ListingImports'
+    ListingImportStart:
+      $ref: './components/schemas/imports.yaml#/ListingImportStart'
+    ImportMatchReason:
+      $ref: './components/schemas/imports.yaml#/ImportMatchReason'
+    KnownImportMatchReason:
+      $ref: './components/schemas/imports.yaml#/KnownImportMatchReason'
+    ListingImportCandidate:
+      $ref: './components/schemas/imports.yaml#/ListingImportCandidate'
+    ListingImportQuestion:
+      $ref: './components/schemas/imports.yaml#/ListingImportQuestion'
+    ListingImportQuestions:
+      $ref: './components/schemas/imports.yaml#/ListingImportQuestions'
+    ImportAnswerKind:
+      $ref: './components/schemas/imports.yaml#/ImportAnswerKind'
+    ListingImportAnswer:
+      $ref: './components/schemas/imports.yaml#/ListingImportAnswer'

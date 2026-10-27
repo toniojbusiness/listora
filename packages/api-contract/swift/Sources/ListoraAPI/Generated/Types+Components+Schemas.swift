@@ -359,7 +359,9 @@ extension Components {
                 ])
             }
         }
-        /// Where a field value came from.
+        /// Where a field value came from: `marketplace` is a listing Listora imported from the
+        /// seller's marketplace account.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownProvenance`.
         @frozen public enum KnownProvenance: String, Codable, Hashable, Sendable, CaseIterable {
@@ -367,6 +369,7 @@ extension Components {
             case ocr = "ocr"
             case barcode = "barcode"
             case user = "user"
+            case marketplace = "marketplace"
         }
         /// The body of every error response.
         ///
@@ -7148,7 +7151,8 @@ extension Components {
         /// `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
         /// or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
         /// a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
-        /// history, which changes nothing.
+        /// history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
+        /// listings for sale, for an import.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownPhoneWorkPurpose`.
@@ -7157,6 +7161,7 @@ extension Components {
             case sessionCheck = "session_check"
             case saleCheck = "sale_check"
             case saleHistory = "sale_history"
+            case listingImport = "listing_import"
         }
         /// - Remark: Generated from `#/components/schemas/PhoneRunClaim`.
         public struct PhoneRunClaim: Codable, Hashable, Sendable {
@@ -12366,6 +12371,514 @@ extension Components {
                 case lastSucceededAt
                 case nextCheckAt
                 case lastError
+            }
+        }
+        /// A `KnownListingImportStatus`, or a status added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ListingImportStatus`.
+        public struct ListingImportStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportStatus/value1`.
+            public var value1: Components.Schemas.KnownListingImportStatus?
+            /// - Remark: Generated from `#/components/schemas/ListingImportStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ListingImportStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownListingImportStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `reading`: pages of the seller's listings are still being read. `importing`: reading is
+        /// over and listings are still being turned into items. `finished`: every listing is settled
+        /// (some may wait for the seller's answer).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownListingImportStatus`.
+        @frozen public enum KnownListingImportStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case reading = "reading"
+            case importing = "importing"
+            case finished = "finished"
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportCounts`.
+        public struct ListingImportCounts: Codable, Hashable, Sendable {
+            /// Listings for sale the import read.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/read`.
+            public var read: Swift.Int32
+            /// New items, each already listed on the marketplace.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/imported`.
+            public var imported: Swift.Int32
+            /// Listings added to an item Listora already had.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/merged`.
+            public var merged: Swift.Int32
+            /// Listings Listora already had.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/alreadyListed`.
+            public var alreadyListed: Swift.Int32
+            /// Questions waiting for the seller.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/needsYou`.
+            public var needsYou: Swift.Int32
+            /// Listings that could not be imported (importing again tries them again).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/failed`.
+            public var failed: Swift.Int32
+            /// Creates a new `ListingImportCounts`.
+            ///
+            /// - Parameters:
+            ///   - read: Listings for sale the import read.
+            ///   - imported: New items, each already listed on the marketplace.
+            ///   - merged: Listings added to an item Listora already had.
+            ///   - alreadyListed: Listings Listora already had.
+            ///   - needsYou: Questions waiting for the seller.
+            ///   - failed: Listings that could not be imported (importing again tries them again).
+            public init(
+                read: Swift.Int32,
+                imported: Swift.Int32,
+                merged: Swift.Int32,
+                alreadyListed: Swift.Int32,
+                needsYou: Swift.Int32,
+                failed: Swift.Int32
+            ) {
+                self.read = read
+                self.imported = imported
+                self.merged = merged
+                self.alreadyListed = alreadyListed
+                self.needsYou = needsYou
+                self.failed = failed
+            }
+            public enum CodingKeys: String, CodingKey {
+                case read
+                case imported
+                case merged
+                case alreadyListed
+                case needsYou
+                case failed
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImport`.
+        public struct ListingImport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImport/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ListingImport/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/ListingImport/status`.
+            public var status: Components.Schemas.ListingImportStatus
+            /// - Remark: Generated from `#/components/schemas/ListingImport/runsOn`.
+            public var runsOn: Components.Schemas.ExecutionLocation
+            /// - Remark: Generated from `#/components/schemas/ListingImport/counts`.
+            public var counts: Components.Schemas.ListingImportCounts
+            /// Where it is, in the seller's words ("Reading your Depop listings on your iPhone... 48 so far").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImport/progress`.
+            public var progress: Swift.String
+            /// What it did once reading is over ("Imported 42 from Depop, 3 need you").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImport/summary`.
+            public var summary: Swift.String?
+            /// Why reading stopped before the last page; the listings read before it still import.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImport/stoppedReason`.
+            public var stoppedReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImport/startedAt`.
+            public var startedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ListingImport/finishedAt`.
+            public var finishedAt: Components.Schemas.Timestamp?
+            /// Creates a new `ListingImport`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - marketplace:
+            ///   - status:
+            ///   - runsOn:
+            ///   - counts:
+            ///   - progress: Where it is, in the seller's words ("Reading your Depop listings on your iPhone... 48 so far").
+            ///   - summary: What it did once reading is over ("Imported 42 from Depop, 3 need you").
+            ///   - stoppedReason: Why reading stopped before the last page; the listings read before it still import.
+            ///   - startedAt:
+            ///   - finishedAt:
+            public init(
+                id: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                status: Components.Schemas.ListingImportStatus,
+                runsOn: Components.Schemas.ExecutionLocation,
+                counts: Components.Schemas.ListingImportCounts,
+                progress: Swift.String,
+                summary: Swift.String? = nil,
+                stoppedReason: Swift.String? = nil,
+                startedAt: Components.Schemas.Timestamp,
+                finishedAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.id = id
+                self.marketplace = marketplace
+                self.status = status
+                self.runsOn = runsOn
+                self.counts = counts
+                self.progress = progress
+                self.summary = summary
+                self.stoppedReason = stoppedReason
+                self.startedAt = startedAt
+                self.finishedAt = finishedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case marketplace
+                case status
+                case runsOn
+                case counts
+                case progress
+                case summary
+                case stoppedReason
+                case startedAt
+                case finishedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace`.
+        public struct ListingImportMarketplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// Whether an import can start now.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/canStart`.
+            public var canStart: Swift.Bool
+            /// Why not, in the seller's words, when it can't.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/unavailableReason`.
+            public var unavailableReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/latest`.
+            public var latest: Components.Schemas.ListingImport?
+            /// Creates a new `ListingImportMarketplace`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - canStart: Whether an import can start now.
+            ///   - unavailableReason: Why not, in the seller's words, when it can't.
+            ///   - latest:
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                canStart: Swift.Bool,
+                unavailableReason: Swift.String? = nil,
+                latest: Components.Schemas.ListingImport? = nil
+            ) {
+                self.marketplace = marketplace
+                self.canStart = canStart
+                self.unavailableReason = unavailableReason
+                self.latest = latest
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case canStart
+                case unavailableReason
+                case latest
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImports`.
+        public struct ListingImports: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImports/marketplaces`.
+            public var marketplaces: [Components.Schemas.ListingImportMarketplace]
+            /// Creates a new `ListingImports`.
+            ///
+            /// - Parameters:
+            ///   - marketplaces:
+            public init(marketplaces: [Components.Schemas.ListingImportMarketplace]) {
+                self.marketplaces = marketplaces
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplaces
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportStart`.
+        public struct ListingImportStart: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportStart/marketplace`.
+            public var marketplace: Components.Schemas.KnownMarketplace
+            /// Creates a new `ListingImportStart`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            public init(marketplace: Components.Schemas.KnownMarketplace) {
+                self.marketplace = marketplace
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.marketplace = try container.decode(
+                    Components.Schemas.KnownMarketplace.self,
+                    forKey: .marketplace
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "marketplace"
+                ])
+            }
+        }
+        /// A `KnownImportMatchReason`, or a reason added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ImportMatchReason`.
+        public struct ImportMatchReason: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImportMatchReason/value1`.
+            public var value1: Components.Schemas.KnownImportMatchReason?
+            /// - Remark: Generated from `#/components/schemas/ImportMatchReason/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ImportMatchReason`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownImportMatchReason? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Why the listing may be this item: `sku` (its SKU line names it), `photo_and_title`, `photo`
+        /// (a photo alike), or `title` (the title alike).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownImportMatchReason`.
+        @frozen public enum KnownImportMatchReason: String, Codable, Hashable, Sendable, CaseIterable {
+            case sku = "sku"
+            case photoAndTitle = "photo_and_title"
+            case photo = "photo"
+            case title = "title"
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportCandidate`.
+        public struct ListingImportCandidate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/sku`.
+            public var sku: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/coverPhotoUrl`.
+            public var coverPhotoUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/reason`.
+            public var reason: Components.Schemas.ImportMatchReason
+            /// The reason in the seller's words ("A photo looks the same").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/why`.
+            public var why: Swift.String
+            /// Creates a new `ListingImportCandidate`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - sku:
+            ///   - title:
+            ///   - coverPhotoUrl:
+            ///   - reason:
+            ///   - why: The reason in the seller's words ("A photo looks the same").
+            public init(
+                itemId: Components.Schemas.Id,
+                sku: Swift.String,
+                title: Swift.String? = nil,
+                coverPhotoUrl: Swift.String? = nil,
+                reason: Components.Schemas.ImportMatchReason,
+                why: Swift.String
+            ) {
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.coverPhotoUrl = coverPhotoUrl
+                self.reason = reason
+                self.why = why
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case sku
+                case title
+                case coverPhotoUrl
+                case reason
+                case why
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportQuestion`.
+        public struct ListingImportQuestion: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/externalListingId`.
+            public var externalListingId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/externalUrl`.
+            public var externalUrl: Swift.String?
+            /// The listing's title (on Depop, the first line of its text).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/price`.
+            public var price: Components.Schemas.Money?
+            /// The listing's cover photo, on the marketplace's own image CDN.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/photoUrl`.
+            public var photoUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/candidates`.
+            public var candidates: [Components.Schemas.ListingImportCandidate]
+            /// Creates a new `ListingImportQuestion`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - marketplace:
+            ///   - externalListingId:
+            ///   - externalUrl:
+            ///   - title: The listing's title (on Depop, the first line of its text).
+            ///   - price:
+            ///   - photoUrl: The listing's cover photo, on the marketplace's own image CDN.
+            ///   - candidates:
+            public init(
+                id: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                externalListingId: Swift.String,
+                externalUrl: Swift.String? = nil,
+                title: Swift.String? = nil,
+                price: Components.Schemas.Money? = nil,
+                photoUrl: Swift.String? = nil,
+                candidates: [Components.Schemas.ListingImportCandidate]
+            ) {
+                self.id = id
+                self.marketplace = marketplace
+                self.externalListingId = externalListingId
+                self.externalUrl = externalUrl
+                self.title = title
+                self.price = price
+                self.photoUrl = photoUrl
+                self.candidates = candidates
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case marketplace
+                case externalListingId
+                case externalUrl
+                case title
+                case price
+                case photoUrl
+                case candidates
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportQuestions`.
+        public struct ListingImportQuestions: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestions/questions`.
+            public var questions: [Components.Schemas.ListingImportQuestion]
+            /// Creates a new `ListingImportQuestions`.
+            ///
+            /// - Parameters:
+            ///   - questions:
+            public init(questions: [Components.Schemas.ListingImportQuestion]) {
+                self.questions = questions
+            }
+            public enum CodingKeys: String, CodingKey {
+                case questions
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ImportAnswerKind`.
+        @frozen public enum ImportAnswerKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case sameItem = "same_item"
+            case newItem = "new_item"
+            case skip = "skip"
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportAnswer`.
+        public struct ListingImportAnswer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportAnswer/answer`.
+            public var answer: Components.Schemas.ImportAnswerKind
+            /// For `same_item`, the candidate it is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportAnswer/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// Creates a new `ListingImportAnswer`.
+            ///
+            /// - Parameters:
+            ///   - answer:
+            ///   - itemId: For `same_item`, the candidate it is.
+            public init(
+                answer: Components.Schemas.ImportAnswerKind,
+                itemId: Components.Schemas.Id? = nil
+            ) {
+                self.answer = answer
+                self.itemId = itemId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case answer
+                case itemId
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.answer = try container.decode(
+                    Components.Schemas.ImportAnswerKind.self,
+                    forKey: .answer
+                )
+                self.itemId = try container.decodeIfPresent(
+                    Components.Schemas.Id.self,
+                    forKey: .itemId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "answer",
+                    "itemId"
+                ])
             }
         }
     }

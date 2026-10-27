@@ -75,16 +75,16 @@ once 30 wrong codes arrived within 15 minutes (per API process, in memory).
 
 ### Reaching invitees in the SES sandbox
 
-The personal environment's AWS account has no SES production access yet, and in the sandbox SES
-sends only to verified addresses. With `INVITE_EMAIL_VERIFICATION=ses` (set in
-`ENVIRONMENT_SETTINGS.personal.signIn`), redeeming also makes the invitee's address an SES email
-identity (`CreateEmailIdentity`), which emails them a verification link from Amazon Web Services.
-Until they click it, `redeemInvite` answers `status: email_verification_sent` and the app says
-to open that email first; Continue redeems again, and once SES reports the address verified the
-answer is `ready` and the sign-in code is sent. A link that expired is sent again. Once the
-account has SES production access, set `inviteEmailVerification: 'none'` and invitees skip this
-step. The API's task role may create, read, and delete only email-address identities
-(`identity/*@*`).
+The personal environment's AWS account has SES production access (granted 2026-10-27), so the
+pool's codes reach any address and it runs with `INVITE_EMAIL_VERIFICATION=none`
+(`ENVIRONMENT_SETTINGS.personal.signIn`): redeeming answers `ready` at once. An account still in
+SES's sandbox, which sends only to verified addresses, sets `ses`: redeeming then also makes the
+invitee's address an SES email identity (`CreateEmailIdentity`), which emails them a
+verification link from Amazon Web Services. Until they click it, `redeemInvite` answers
+`status: email_verification_sent` and the app says to open that email first; Continue redeems
+again, and once SES reports the address verified the answer is `ready` and the sign-in code is
+sent. A link that expired is sent again. With `ses`, the API's task role may create, read, and
+delete only email-address identities (`identity/*@*`); with `none` it has no SES rights.
 
 ## In the app
 
@@ -115,7 +115,7 @@ tests use `FakeInviteeDirectory` (`@listora/accounts/testing`) for the identity 
 
 ## Data
 
-Migration `20261027193326_invites`:
+Migration `20261027214618_invites`:
 
 - `account.invited_at`: when the account was created from an invite; null for accounts created
   directly, which are the only ones that may invite.
@@ -128,8 +128,8 @@ Migration `20261027193326_invites`:
 
 ## Follow-ups
 
-- An invitee's SES identity stays if the API cannot remove it right after their account is
-  deleted (it only logs); the end of the SES sandbox makes these identities unnecessary.
+- With `INVITE_EMAIL_VERIFICATION=ses`, an invitee's SES identity stays if the API cannot remove
+  it right after their account is deleted (it only logs).
 - A revoked person's data stays until the owner restores them or they are deleted by an
   operator; a way for the owner to delete a revoked person's account is not built yet.
 - Universal links (an `https://` invite link that opens the app, or the App Store when it is

@@ -6,6 +6,7 @@
 import {
   descriptionText,
   type OperationRequest,
+  type ListedListing,
   type RemoteListing,
   type RemoteListingState,
   type RemoteOrder,
@@ -41,8 +42,6 @@ import { EBAY_MIN_PRICE_CENTS, type EbayAutomationPayload } from './payload.ts';
  * number Listora never learned is one it just listed, so it is among the newest.
  */
 export const SKU_LOOKUP_DEPTH = 8;
-/** Pages of active listings one read goes through at most (newest first). */
-export const MAX_LISTING_PAGES = 25;
 /** Pages of sold listings one sale check goes through at most (newest first). */
 export const MAX_SOLD_PAGES = 5;
 
@@ -276,31 +275,40 @@ export function createEbayScripts(
       }
       return [...orders.values()];
     },
-    listings: async (step) => {
-      const listings: RemoteListing[] = [];
-      let offset = 0;
-      for (let number = 1; number <= MAX_LISTING_PAGES; number += 1) {
-        const shown = await step('read the active listings', { mutates: false }, (page) =>
-          readActiveListingsPage(page, site, offset),
-        );
-        // Seller Hub's rows show no description or last update: these are never read-backs.
-        listings.push(
-          ...shown.rows.map((row): RemoteListing => ({
-            found: true,
-            externalListingId: row.itemId,
-            externalUrl: itemUrl(site, row.itemId),
-            status: 'active',
-            title: row.title,
-            description: null,
-            priceCents: row.priceCents,
-            currency: row.priceCents === null ? null : 'USD',
-            revision: null,
-          })),
-        );
-        if (!shown.hasMore) return { listings, complete: true };
-        offset += shown.rows.length;
+    listings: async (cursor, step) => {
+      // One page of Seller Hub's active listings: the cursor is the page's offset. Its rows
+      // show no description, last update, or photos, so a listing found here is never a
+      // read-back, and eBay is not offered for imports yet (docs/features/imports.md).
+      const offset = cursor === null ? 0 : Number(cursor);
+      if (!Number.isSafeInteger(offset) || offset < 0) {
+        throw new Error(`an eBay listings cursor is an offset, not ${String(cursor)}`);
       }
-      return { listings, complete: false };
+      const shown = await step('read the active listings', { mutates: false }, (page) =>
+        readActiveListingsPage(page, site, offset),
+      );
+      return {
+        listings: shown.rows.map((row): ListedListing => ({
+          found: true,
+          externalListingId: row.itemId,
+          externalUrl: itemUrl(site, row.itemId),
+          status: 'active',
+          title: row.title,
+          description: null,
+          priceCents: row.priceCents,
+          currency: row.priceCents === null ? null : 'USD',
+          revision: null,
+          details: {
+            photoUrls: [],
+            brand: null,
+            size: null,
+            condition: null,
+            categoryRef: null,
+            categoryPath: [],
+            sku: null,
+          },
+        })),
+        next: shown.hasMore ? String(offset + shown.rows.length) : null,
+      };
     },
   };
 }

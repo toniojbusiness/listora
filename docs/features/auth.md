@@ -101,9 +101,9 @@ people they invite:
 EMAIL_OTP]` (Cognito requires `PASSWORD` in the list; nobody has one), MFA off (one-time
   codes cannot be combined with it), and no account recovery (there is no password to reset).
 - **SES sending.** Email codes need the pool to send through SES (`DEVELOPER`). The email stack
-  holds the owner's address as an SES identity, which in the SES sandbox is also what lets SES
-  send to it; each invitee's address becomes one when they redeem their invite
-  (`INVITE_EMAIL_VERIFICATION=ses`, [invites.md](invites.md#reaching-invitees-in-the-ses-sandbox)). The codes come from the owner's own address without a domain, and from
+  holds the owner's address as an SES identity, which in the SES sandbox was also what let SES
+  send to it. The account has SES production access since 2026-10-27, so codes reach invitees
+  too ([invites.md](invites.md#reaching-invitees-in-the-ses-sandbox)). The codes come from the owner's own address without a domain, and from
   `no-reply@<domain>` (the domain's DKIM-verified identity) with one.
 - **The one-time setup.** Creating the identity emails the owner a verification link from AWS.
   `scripts/deploy-personal.sh` waits after the email stack until it is clicked, then deploys

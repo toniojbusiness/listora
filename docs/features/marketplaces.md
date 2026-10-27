@@ -49,7 +49,7 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
     connection: ConnectionRef | null,
   ): string | null;
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>; // sale checks
-  listListings?(ctx: AdapterContext): Promise<RemoteListings>; // imports and drift checks
+  listListings?(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage>; // imports
   // An order's fees: fees | not_yet | transient | unavailable (docs/features/sales.md)
   readOrderFees?(externalOrderId: string, ctx: AdapterContext): Promise<OrderFeesResult>;
 }
@@ -59,7 +59,8 @@ Imports and emails join the interface as optional members with the tasks that fi
 (T-23, T-36); orders joined with the browser runner's sale checks
 ([automation.md](automation.md), `listOrdersSince`), and the seller's listings with the Poshmark
 and Mercari automation adapters ([poshmark.md](poshmark.md), [mercari.md](mercari.md),
-`listListings`). eBay's notifications and order sync follow
+`listListings`: a page at a time, each listing with its photos and details, for
+[imports.md](imports.md)). eBay's notifications and order sync follow
 eBay's own contracts and live in `@listora/sales`, outside the interface
 ([ebay-notifications.md](ebay-notifications.md)). A `ConnectionRef` names the connection's
 `mode` and `status`. Credentials are not part of the interface: an adapter gets a connection's

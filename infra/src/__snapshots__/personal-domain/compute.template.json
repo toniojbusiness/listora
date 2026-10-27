@@ -112,16 +112,6 @@
             },
             {
               "Action": [
-                "ses:CreateEmailIdentity",
-                "ses:DeleteEmailIdentity",
-                "ses:GetEmailIdentity"
-              ],
-              "Effect": "Allow",
-              "Resource": "arn:aws:ses:us-east-1:333333333333:identity/*@*",
-              "Sid": "VerifyInviteeAddresses"
-            },
-            {
-              "Action": [
                 "s3:GetBucket*",
                 "s3:GetObject*",
                 "s3:List*"
@@ -285,7 +275,7 @@
               },
               {
                 "Name": "INVITE_EMAIL_VERIFICATION",
-                "Value": "ses"
+                "Value": "none"
               },
               {
                 "Name": "DATABASE_URL",

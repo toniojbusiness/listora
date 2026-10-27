@@ -47,7 +47,7 @@ import { stepLabel } from './progress.ts';
  * The version of `PhoneCallInput` and `PhoneCallOutput` this runtime speaks. The server hands a
  * call only to an app whose runtime speaks its version; change it with any change to either.
  */
-export const PHONE_RUNTIME_VERSION = 1;
+export const PHONE_RUNTIME_VERSION = 2;
 
 /** One script call for the phone, as the server describes it (`PhoneCall.input` in the API). */
 export interface PhoneCallInput {

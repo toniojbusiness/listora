@@ -190,7 +190,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var marketplacesSection: some View {
-        if screens.linkAccounts != nil || screens.marketplaces != nil {
+        if screens.linkAccounts != nil || screens.marketplaces != nil || screens.imports != nil {
             Section {
                 if screens.linkAccounts != nil {
                     NavigationLink(value: SettingsDestination.linkAccounts) {
@@ -216,6 +216,16 @@ public struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.marketplaces")
+                }
+                if screens.imports != nil {
+                    NavigationLink(value: SettingsDestination.imports) {
+                        ListRow(
+                            "Import your listings",
+                            subtitle: "Bring what you already have for sale on Depop, Poshmark, and Mercari.",
+                            systemImage: "square.and.arrow.down",
+                        )
+                    }
+                    .accessibilityIdentifier("settings.imports")
                 }
             } header: {
                 SectionHeader("Marketplaces")
@@ -327,7 +337,7 @@ extension SettingsView {
             if let profile {
                 EditProfileView(model: profile)
             }
-        case .linkAccounts, .marketplaces, .notifications, .saleEmails:
+        case .linkAccounts, .marketplaces, .imports, .notifications, .saleEmails:
             screens.screen(for: destination)
         case .people:
             if let invites {

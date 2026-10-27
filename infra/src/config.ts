@@ -252,9 +252,8 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     // to api.<domain>.
     ingress: { via: 'http-api', disableDefaultEndpoint: false },
     // The owner signs in to their own copy with an emailed code, and invites the others. The
-    // account's SES is in its sandbox (no domain, no production access), so each invitee's
-    // address gets verified before codes reach it.
-    signIn: { via: 'owner-pool', inviteEmailVerification: 'ses' },
+    // account's SES has production access (granted 2026-10-27), so codes reach any address.
+    signIn: { via: 'owner-pool', inviteEmailVerification: 'none' },
     database: {
       // Single-AZ Graviton RDS beats Aurora Serverless v2: the worker keeps connections open,
       // so Aurora never pauses and bills at least 0.5 ACU around the clock.

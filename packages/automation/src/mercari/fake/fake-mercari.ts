@@ -49,6 +49,7 @@ import type { AddressInfo } from 'node:net';
 
 import type { SessionCookie } from '@listora/connections';
 
+import { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from '../../fake-photos/fake-photos.ts';
 import { mercariCatalog } from '../catalog/catalog.ts';
 import { MERCARI_CONDITIONS } from '../conditions.ts';
 import type { MercariListingTab } from '../site.ts';
@@ -419,6 +420,15 @@ export class FakeMercariSite {
       response.end(PHOTO_BYTES);
       return;
     }
+    const media = FAKE_MEDIA_PATH.exec(url.pathname)?.[1];
+    if (media !== undefined) {
+      record.status = 200;
+      void fakeMediaPhoto(media).then((photo) => {
+        response.writeHead(200, { 'content-type': 'image/jpeg' });
+        response.end(photo);
+      });
+      return;
+    }
 
     const token = cookieValue(request.headers.cookie, SESSION_COOKIE);
     const session = token === undefined ? undefined : this.#sessions.get(token);
@@ -637,7 +647,7 @@ export class FakeMercariSite {
         // A sold item's page answers 410 too, with its data (read 2026-10-27).
         return {
           status: shown.status === 'sold_out' ? 410 : 200,
-          body: page(`${shown.title} | Mercari`, itemPage(shown, session)),
+          body: page(`${shown.title} | Mercari`, itemPage(shown, session, this.url)),
         };
       }
       case 'listings': {
@@ -968,7 +978,7 @@ function dollars(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
-function itemPage(item: FakeMercariItem, session: Session): string {
+function itemPage(item: FakeMercariItem, session: Session, origin: string): string {
   const own = item.seller === session.seller;
   const badge =
     item.status === 'trading' || item.status === 'sold_out'
@@ -997,7 +1007,7 @@ ${badge}${inactive}
 <p data-testid="UserName">fake seller</p>
 ${edit}
 </main>
-${itemData(item)}`;
+${itemData(item, origin)}`;
 }
 
 /**
@@ -1006,11 +1016,42 @@ ${itemData(item)}`;
  * name (`stop` for a listing the seller deactivated), the last change, and when it last sold
  * (0 before it ever did), both in seconds.
  */
-function itemData(item: FakeMercariItem): string {
+/** The names Mercari gives its conditions, by id (conditions.ts). */
+const MERCARI_CONDITION_NAMES: Readonly<Record<number, string>> = Object.fromEntries(
+  Object.values(MERCARI_CONDITIONS).map((condition) => [condition.id, condition.label]),
+);
+
+function itemData(item: FakeMercariItem, origin: string): string {
+  // The item's condition, size, brand, and categories are references to records of their own,
+  // as in Mercari's Apollo cache (read on the captain's listing, 2026-10-27).
+  const ref = (key: string) => ({ __ref: key });
+  const condition = MERCARI_CONDITION_NAMES[item.conditionId] ?? 'Good';
+  const records: Record<string, unknown> = {
+    [`ItemDetailItemCondition:${String(item.conditionId)}`]: {
+      __typename: 'ItemDetailItemCondition',
+      id: String(item.conditionId),
+      name: condition,
+    },
+    ...(item.size === null
+      ? {}
+      : { 'ItemDetailItemSize:1': { __typename: 'ItemDetailItemSize', id: '1', name: item.size } }),
+    ...(item.brand === null
+      ? {}
+      : {
+          'ItemDetailItemBrand:1': { __typename: 'ItemDetailItemBrand', id: '1', name: item.brand },
+        }),
+    ...Object.fromEntries(
+      item.category.map((name, index) => [
+        `MasterItemCategory:${String(index + 1)}`,
+        { __typename: 'MasterItemCategory', id: String(index + 1), name },
+      ]),
+    ),
+  };
   const data = {
     props: {
       pageProps: {
         serverState: {
+          ...records,
           [`ItemDetail:${item.id}`]: {
             id: item.id,
             name: item.title,
@@ -1020,6 +1061,19 @@ function itemData(item: FakeMercariItem): string {
             created: Math.floor(item.listedAt.getTime() / 1000),
             updated: Math.floor(item.updatedAt.getTime() / 1000),
             lastSoldAt: item.soldAt === null ? 0 : Math.floor(item.soldAt.getTime() / 1000),
+            // What an import reads (pages/listing-details.ts), the photos on the fake's own
+            // image CDN (`/media/`, fake-photos.ts).
+            photos: item.photos.map((name, index) => {
+              const url = `${origin}/media/${fakeMediaName(`${item.id}-${String(index)}-${name}`)}.jpg`;
+              return { __typename: 'ItemDetailPhoto', imageUrl: url, thumbnail: url };
+            }),
+            itemCondition: ref(`ItemDetailItemCondition:${String(item.conditionId)}`),
+            itemSize: item.size === null ? null : ref('ItemDetailItemSize:1'),
+            brand: item.brand === null ? null : ref('ItemDetailItemBrand:1'),
+            itemCategoryHierarchy: item.category.map((_name, index) =>
+              ref(`MasterItemCategory:${String(index + 1)}`),
+            ),
+            categoryTitle: item.category.at(-1) ?? null,
           },
         },
       },

@@ -1,0 +1,196 @@
+ListingImportStatus:
+  description: A `KnownListingImportStatus`, or a status added after this client was built.
+  anyOf:
+    - $ref: '#/KnownListingImportStatus'
+    - type: string
+      maxLength: 64
+KnownListingImportStatus:
+  type: string
+  description: |
+    `reading`: pages of the seller's listings are still being read. `importing`: reading is
+    over and listings are still being turned into items. `finished`: every listing is settled
+    (some may wait for the seller's answer).
+  enum: [reading, importing, finished]
+ListingImportCounts:
+  type: object
+  required: [read, imported, merged, alreadyListed, needsYou, failed]
+  properties:
+    read:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Listings for sale the import read.
+    imported:
+      type: integer
+      format: int32
+      minimum: 0
+      description: New items, each already listed on the marketplace.
+    merged:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Listings added to an item Listora already had.
+    alreadyListed:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Listings Listora already had.
+    needsYou:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Questions waiting for the seller.
+    failed:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Listings that could not be imported (importing again tries them again).
+ListingImport:
+  type: object
+  required: [id, marketplace, status, runsOn, counts, progress, startedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    status:
+      $ref: '#/ListingImportStatus'
+    runsOn:
+      $ref: './phone.yaml#/ExecutionLocation'
+    counts:
+      $ref: '#/ListingImportCounts'
+    progress:
+      type: string
+      maxLength: 200
+      description: Where it is, in the seller's words ("Reading your Depop listings on your iPhone... 48 so far").
+    summary:
+      type: string
+      maxLength: 300
+      description: What it did once reading is over ("Imported 42 from Depop, 3 need you").
+    stoppedReason:
+      type: string
+      maxLength: 500
+      description: Why reading stopped before the last page; the listings read before it still import.
+    startedAt:
+      $ref: './common.yaml#/Timestamp'
+    finishedAt:
+      $ref: './common.yaml#/Timestamp'
+ListingImportMarketplace:
+  type: object
+  required: [marketplace, canStart]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    canStart:
+      type: boolean
+      description: Whether an import can start now.
+    unavailableReason:
+      type: string
+      maxLength: 300
+      description: Why not, in the seller's words, when it can't.
+    latest:
+      $ref: '#/ListingImport'
+ListingImports:
+  type: object
+  required: [marketplaces]
+  properties:
+    marketplaces:
+      type: array
+      maxItems: 10
+      items:
+        $ref: '#/ListingImportMarketplace'
+ListingImportStart:
+  type: object
+  additionalProperties: false
+  required: [marketplace]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/KnownMarketplace'
+ImportMatchReason:
+  description: A `KnownImportMatchReason`, or a reason added after this client was built.
+  anyOf:
+    - $ref: '#/KnownImportMatchReason'
+    - type: string
+      maxLength: 64
+KnownImportMatchReason:
+  type: string
+  description: |
+    Why the listing may be this item: `sku` (its SKU line names it), `photo_and_title`, `photo`
+    (a photo alike), or `title` (the title alike).
+  enum: [sku, photo_and_title, photo, title]
+ListingImportCandidate:
+  type: object
+  required: [itemId, sku, reason, why]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    sku:
+      type: string
+      maxLength: 64
+    title:
+      type: string
+      maxLength: 500
+    coverPhotoUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+    reason:
+      $ref: '#/ImportMatchReason'
+    why:
+      type: string
+      maxLength: 200
+      description: The reason in the seller's words ("A photo looks the same").
+ListingImportQuestion:
+  type: object
+  required: [id, marketplace, externalListingId, candidates]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    externalListingId:
+      type: string
+      maxLength: 200
+    externalUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+    title:
+      type: string
+      maxLength: 500
+      description: The listing's title (on Depop, the first line of its text).
+    price:
+      $ref: './common.yaml#/Money'
+    photoUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+      description: The listing's cover photo, on the marketplace's own image CDN.
+    candidates:
+      type: array
+      minItems: 1
+      maxItems: 3
+      items:
+        $ref: '#/ListingImportCandidate'
+ListingImportQuestions:
+  type: object
+  required: [questions]
+  properties:
+    questions:
+      type: array
+      maxItems: 200
+      items:
+        $ref: '#/ListingImportQuestion'
+ImportAnswerKind:
+  type: string
+  enum: [same_item, new_item, skip]
+ListingImportAnswer:
+  type: object
+  additionalProperties: false
+  required: [answer]
+  properties:
+    answer:
+      $ref: '#/ImportAnswerKind'
+    itemId:
+      $ref: './common.yaml#/Id'
+      description: For `same_item`, the candidate it is.
