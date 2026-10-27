@@ -3,6 +3,9 @@
  * lifecycle, step timeouts, screenshots, pacing, checks it must stop at, and cookie rotation.
  * No real marketplace is contacted.
  */
+import { createServer, type IncomingHttpHeaders } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import sharp from 'sharp';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -440,6 +443,92 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       failure: { kind: 'error', code: 'server_error' },
     });
     expect(await browser.run('fine', go, signal())).toMatchObject({ ok: true });
+  });
+
+  it("reads the marketplace's web API from the page, with the site's cookie as the bearer token", async () => {
+    // The marketplace's API on an origin of its own, answering the site's pages as Depop's does.
+    const seen: IncomingHttpHeaders[] = [];
+    let answer: { status: number; body: string; headers?: Record<string, string> } = {
+      status: 200,
+      body: '{"products":[{"slug":"ana-denim-jacket"}]}',
+    };
+    const api = createServer((request, response) => {
+      const cors = {
+        'access-control-allow-origin': site.url,
+        'access-control-allow-headers': 'authorization, accept',
+        'access-control-expose-headers': 'retry-after',
+      };
+      if (request.method === 'OPTIONS') {
+        response.writeHead(204, cors).end();
+        return;
+      }
+      seen.push(request.headers);
+      response.writeHead(answer.status, { ...cors, ...answer.headers }).end(answer.body);
+    });
+    await new Promise<void>((resolve) => api.listen(0, '127.0.0.1', resolve));
+    const apiOrigin = `http://127.0.0.1:${String((api.address() as AddressInfo).port)}`;
+    try {
+      const token = {
+        ...site.issueSession(),
+        name: 'api_token',
+        value: 'tok%201',
+        httpOnly: false,
+      };
+      const browser = await session([site.issueSession(), token], { apiOrigins: [apiOrigin] });
+      const get = (url: string) =>
+        browser.read(
+          'api',
+          async (step) => {
+            await step('open the account', { mutates: false }, (page) => page.goto(`${site.url}/`));
+            return step('read the API', { mutates: false }, (page) =>
+              page.apiGet(url, { bearerCookie: 'api_token' }),
+            );
+          },
+          signal(),
+        );
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: true,
+        value: { status: 200, body: { products: [{ slug: 'ana-denim-jacket' }] } },
+      });
+      // The cookie's value goes as the bearer token, as the site's own scripts send it.
+      expect(seen.at(-1)?.authorization).toBe('Bearer tok 1');
+      expect(seen.at(-1)?.cookie).toBeUndefined();
+
+      answer = { status: 404, body: '{"message":"Product not found"}' };
+      expect(await get(`${apiOrigin}/api/products/gone/`)).toMatchObject({
+        ok: true,
+        value: { status: 404, body: { message: 'Product not found' } },
+      });
+      answer = { status: 200, body: 'not json' };
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: true,
+        value: { status: 200, body: null },
+      });
+      answer = { status: 429, body: '{}', headers: { 'retry-after': '9' } };
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: false,
+        failure: { kind: 'error', code: 'rate_limited', retryAfterMs: 9_000 },
+      });
+      answer = { status: 503, body: '{}' };
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: false,
+        failure: { kind: 'error', code: 'server_error' },
+      });
+      // Anywhere but the profile's API origins ends the run.
+      expect(await get('https://example.com/api/')).toMatchObject({
+        ok: false,
+        failure: { kind: 'error', code: 'script_error' },
+      });
+
+      // A bot check that answers in the API's place stops the session for good.
+      answer = { status: 403, body: '<title>Just a moment...</title>' };
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: false,
+        failure: { kind: 'challenge', challenge: 'bot_check' },
+      });
+    } finally {
+      await new Promise((resolve) => api.close(resolve));
+    }
   });
 
   it('keeps scripts on the marketplace, and reads from changing anything', async () => {

@@ -48,8 +48,18 @@ from the app
   out, in private storage under `automation/<account>/`, deleted after 14 days or with the
   account; a page off the marketplace's origins is never kept. The browser is honest about what
   it is: Playwright's own headless Chromium and user agent, no stealth, no fingerprint changes.
+- **Reads through the marketplace's own API** (`PageDriver.apiGet`). Where a marketplace's pages
+  load their data from its web API (Depop's pages from `webapi.depop.com`), a script may read
+  that API the way the pages do: a GET sent from the page, to one of the profile's `apiOrigins`
+  only, with the page's own credentials (`bearerCookie` names the site's cookie whose value its
+  own scripts send as their bearer token; the value never leaves the page). It is paced like an
+  action, allowed in reads, and only ever a GET: every change still goes through the site's own
+  pages. A 429 or 5xx stops the run as a rate limit or a marketplace error, a 403 that is not
+  JSON as a bot check; any other status is the script's to read. Both hosts run it the same
+  way (the phone's runtime receives the API origins with each call).
 - **Network rules** (`safety/network.ts`). The runner checks every request and WebSocket before
-  Chromium sends it. The main frame may only load the profile's own origins. No request may go
+  Chromium sends it. The main frame may only load the profile's own origins; its API origins
+  take every request but a main-frame navigation. No request may go
   to a private address: loopback, the private ranges, link-local (where the cloud's metadata
   and task credential endpoints are), or internal host names. Images, scripts, and styles from
   other public hosts (the marketplaces' CDNs) still load. Chromium follows HTTP redirects

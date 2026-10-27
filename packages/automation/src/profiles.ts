@@ -50,6 +50,12 @@ export interface AutomationProfile {
   readonly marketplace: Marketplace;
   /** `https://poshmark.com`: a session never navigates the main frame anywhere else. */
   readonly origins: readonly string[];
+  /**
+   * The origins of the marketplace's own web API that its pages read from
+   * (`https://webapi.depop.com`), the only ones `PageDriver.apiGet` may ask; none for a
+   * marketplace whose scripts read only pages.
+   */
+  readonly apiOrigins: readonly string[];
   /** `poshmark.com`: the only cookies a session loads or keeps. */
   readonly cookieDomains: readonly string[];
   /**
@@ -122,6 +128,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     marketplace: 'poshmark',
     origins: ['https://poshmark.com', 'https://www.poshmark.com'],
     cookieDomains: ['poshmark.com'],
+    apiOrigins: [],
     loginUrl: 'https://poshmark.com/login',
     emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
@@ -136,6 +143,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     marketplace: 'mercari',
     origins: ['https://www.mercari.com', 'https://mercari.com'],
     cookieDomains: ['mercari.com'],
+    apiOrigins: [],
     loginUrl: 'https://www.mercari.com/login/',
     emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
@@ -150,6 +158,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     marketplace: 'depop',
     origins: ['https://www.depop.com', 'https://depop.com'],
     cookieDomains: ['depop.com'],
+    apiOrigins: [],
     loginUrl: 'https://www.depop.com/login/',
     emailsSignInLinks: true,
     pacing: DEFAULT_PACING,
@@ -166,6 +175,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     // is stopped as a login page rather than as a page outside eBay.
     origins: ['https://www.ebay.com', 'https://ebay.com', 'https://signin.ebay.com'],
     cookieDomains: ['ebay.com'],
+    apiOrigins: [],
     loginUrl: 'https://signin.ebay.com/signin/',
     emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
@@ -211,6 +221,8 @@ export function standInProfile(base: AutomationProfile, siteUrl: string): Automa
   return {
     ...base,
     origins: [site.origin],
+    // The stand-in serves the marketplace's API reads itself.
+    apiOrigins: base.apiOrigins.length > 0 ? [site.origin] : [],
     cookieDomains: [site.hostname],
     // The marketplace's own sign-in path, on the stand-in (`/login` on Poshmark, `/login/` on
     // Mercari and Depop, `/signin/` on eBay).

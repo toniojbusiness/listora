@@ -208,6 +208,7 @@ export class PhoneTestSessions implements AutomationSessions {
         call: request.call,
         name: request.script,
         origins: [...this.#profile.origins],
+        apiOrigins: [...this.#profile.apiOrigins],
         cookieDomains: [...this.#profile.cookieDomains],
         pacing: this.#profile.pacing,
         stepTimeoutMs: this.#stepTimeoutMs,
