@@ -109,6 +109,8 @@ const SUBCATEGORIES_MS = 3_000;
 /** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
 const APPEAR_MS = 8_000;
 const LOOK_EVERY_MS = 500;
+/** How long the brand suggestions stay the same before Listora takes them as Mercari's answer. */
+const BRAND_SETTLED_MS = 2_000;
 
 /**
  * Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
@@ -233,7 +235,15 @@ async function pickCategory(page: PageDriver, path: readonly string[]): Promise<
  */
 async function pickBrand(page: PageDriver, brand: string | null): Promise<void> {
   await expectElement(page, LISTING_FORM.brand, FORM, 'brand search');
-  if (brand !== null && (await pickBrandOption(page, brand, brand))) return;
+  if (brand !== null) {
+    // Mercari's search matches what is typed as it is, so a brand it spells otherwise
+    // (`Abercrombie and Fitch` for its `Abercrombie & Fitch`) is searched again by its first word.
+    const first = brand.split(/\s+/)[0] ?? '';
+    const searches = [brand, ...(first.length >= 3 && first !== brand ? [first] : [])];
+    for (const search of searches) {
+      if (await pickBrandOption(page, search, brand)) return;
+    }
+  }
   if (!(await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand))) {
     throw changed(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
   }
@@ -244,10 +254,18 @@ async function pickBrandOption(page: PageDriver, search: string, wanted: string)
   await page.fill(LISTING_FORM.brand, '');
   await page.type(LISTING_FORM.brand, search);
   // The suggestions follow Mercari's search as it answers each keystroke, so the list read first
-  // may still be for the first letters: it is read until it offers the brand.
+  // may still be for the first letters: it is read until it offers the brand, or stays the same
+  // for a moment without it.
   const end = Date.now() + APPEAR_MS;
+  let previous: string | null = null;
+  let settledAt = Date.now();
   for (;;) {
     const offered = await page.texts(LISTING_FORM.brandOption);
+    const shown = offered.join('\n');
+    if (shown !== previous) {
+      previous = shown;
+      settledAt = Date.now();
+    }
     const match =
       offered.find((option) => option === wanted) ??
       offered.find((option) => option.toLowerCase() === wanted.toLowerCase()) ??
@@ -256,7 +274,7 @@ async function pickBrandOption(page: PageDriver, search: string, wanted: string)
       await page.click(`${LISTING_FORM.brandOption}:text-is("${quote(match)}") >> nth=0`);
       return true;
     }
-    if (Date.now() >= end) return false;
+    if (Date.now() >= end || Date.now() - settledAt >= BRAND_SETTLED_MS) return false;
     await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
   }
 }

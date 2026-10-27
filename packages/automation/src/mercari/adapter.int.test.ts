@@ -212,7 +212,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     expect(site.item(unlisted.ref.externalListingId)?.brand).toBeNull();
     const none = await create(sampleListingContent({ item: { brand: null } }));
     expect(site.item(none.ref.externalListingId)?.brand).toBeNull();
-  });
+   }, 90_000);
 
   it('fills every kind of form Mercari has: each size list, and none', async () => {
     // A category of each of Mercari's size groups (catalog/catalog.json), with a size of the
@@ -244,7 +244,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
         size,
       });
     }
-  });
+   }, 240_000);
 
   it('revises every detail on the edit page and keeps the photos', async () => {
     const { ref } = await create();
