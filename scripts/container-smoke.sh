@@ -75,6 +75,13 @@ docker run --name listora-smoke-migrate --network "$network" --read-only \
   fail "the schema migration task failed"
 echo "container-smoke: migrations applied"
 
+# The operator CLI runs as the migration task (scripts/admin-remote.sh), with its access.
+docker run --rm --name listora-smoke-admin --network "$network" --read-only \
+  --env-file "$workdir/migrate.env" \
+  "$image" node apps/admin/src/cli.ts sale-checks >/dev/null ||
+  fail "the operator CLI does not run in the image"
+echo "container-smoke: the operator CLI runs"
+
 docker run --detach --name listora-smoke-api --network "$network" --read-only \
   --env-file "$workdir/api.env" --publish 127.0.0.1:3000:3000 \
   "$image" node apps/api/src/main.ts >/dev/null
