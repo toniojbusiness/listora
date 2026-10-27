@@ -6,12 +6,13 @@
  * Poshmark's `Men/Shirts/Tees - Short Sleeve`), so what the seller picks is exactly what the
  * listing form is filled with.
  *
- * Kids', unisex, and other items Listora can't place with confidence get no suggestion, so the
- * seller picks; the likely ones (a unisex item's men's and women's categories) come first.
+ * Items Listora can't place with confidence (unisex items on Mercari, and items a marketplace's
+ * map has no category for) get no suggestion, so the seller picks; the likely ones (a unisex
+ * item's men's and women's categories) come first.
  */
 import type { Marketplace } from '@listora/db';
 
-import { mapDepopCategory, mappedDepopCategories } from './depop/categories.ts';
+import { allDepopCategories, mapDepopCategory } from './depop/categories.ts';
 import { mapMercariCategory, mappedMercariCategories } from './mercari/categories.ts';
 import {
   mappedPoshmarkCatalogs,
@@ -71,13 +72,14 @@ export function marketplaceCategories(
       );
     case 'depop':
       return assemble(
-        mappedDepopCategories().map((entry) => namedChoice(entry.path)),
+        allDepopCategories().map((entry) => namedChoice(entry.path)),
         (department) => {
           const found = mapDepopCategory(item.category, department);
           return found === null ? null : namedChoice(found.path);
         },
         item,
-        false,
+        // Depop has no unisex department; Listora lists unisex items under Men.
+        true,
       );
     case 'ebay':
       // eBay's categories come from its own taxonomy (packages/marketplaces/src/ebay).

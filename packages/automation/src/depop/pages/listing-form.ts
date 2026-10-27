@@ -3,15 +3,17 @@
  * on a listing's edit page (`/products/edit/<slug>/`). Filling it changes nothing; only
  * submitting it does.
  *
- * The form, in the order the script fills it: photos (one file input, in posting order, the
- * first the cover), the description (the whole listing text: copy, Listora's SKU line, hashtags;
- * Depop listings have no title), the category level by level (department, category, product
- * type; each level's options appear once the one above is picked), size (from the product
- * type's size list), brand (typed into Depop's brand search and picked from its suggestions;
- * without an exact suggestion the listing is posted without a brand, since the form takes only
- * brands from its own list), condition, and the price in dollars and cents. Shipping is left as
- * the seller set it up on Depop: the form starts with the seller's own shipping choice, and a
- * seller with none gets Depop's own message asking for one (a rejection the user can fix).
+ * The form, in the order the script fills it: the description (the whole listing text: copy,
+ * Listora's SKU line, hashtags; Depop listings have no title), the category (searched for, and
+ * picked in its group, headed by department and category), size (from the product type's size
+ * list), brand (typed into Depop's brand search and picked from its suggestions; without an
+ * exact suggestion the listing is posted without a brand, since the form takes only brands from
+ * its own list), condition, colours and material, the price in dollars and cents, Boost off, and
+ * last the photos (one file input, in posting order, the first the cover), so Depop's own fill
+ * from them finds Listora's values in place (docs/features/depop-automation.md, "Filling the
+ * form"). Shipping is left as the seller set it up on Depop: the form starts with the seller's
+ * own shipping choice, and a seller with none gets Depop's own message asking for one (a
+ * rejection the user can fix).
  *
  * After submitting, the form either shows Depop's validation message (a rejection in Depop's own
  * words) or opens the product's page (`/products/<slug>/`, where Depop shows a new listing).
@@ -34,9 +36,8 @@ import {
  * drawn by Depop's scripts, with the photos input `#upload-input__input`, the description
  * `textarea#description`, the price `#priceAmount__input`, and its pickers as comboboxes, each
  * an input, a toggle button, and a menu of options (`#group-` for the category, `#brand-`,
- * `#condition-`, `#colour-`, ...). How the category combobox lists Depop's categories, the size
- * picker, the Post button's words, and Depop's validation message are confirmed from the
- * evidence of the next run that reaches them.
+ * `#condition-`, `#colour-`, `#variants-` for the size, `#attributes.material-`, ...). Confirmed
+ * on every form shape on the captain's session (2026-10-27).
  */
 export const LISTING_FORM = {
   /** The form is there once its description field is. */
@@ -52,16 +53,19 @@ export const LISTING_FORM = {
   error: '[role="alert"]',
   /** A field Depop marks as needing a fix. */
   invalid: '[aria-invalid="true"]',
-  /**
-   * Read on the captain's session (2026-10-26): once photos are added, Depop fills in item info
-   * from them itself (a brand, a condition, a suggested category), and says so with this mark.
-   */
-  itemInfoAdded: '[data-testid="Item info added"]',
   clearBrand: 'button[data-testid="brandButton__clear"]',
+  clearCategory: 'button[data-testid="groupButton__clear"]',
+  /**
+   * "Boost your listing" (an extra 12% fee when it sells): Listora never turns it on. Read on
+   * the captain's session (2026-10-27): the form's only switch.
+   */
+  boost: 'input[data-testid="switch"][type="checkbox"]',
+  /**
+   * An added photo, once Depop has it: its preview from Depop's own image server (read on the
+   * captain's session, 2026-10-27, about 3 seconds after adding three).
+   */
+  photoPreview: 'div[role="button"] > img[src]',
 } as const;
-
-/** How long Depop gets to fill in item info from the photos before Listora fills the form. */
-const ITEM_INFO_MS = 15_000;
 
 /** Depop's Done page after a post: under the sell page's path, with one more segment. */
 const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
@@ -76,13 +80,18 @@ const LOOK_EVERY_MS = 500;
  * options are only clicked in an open menu.
  */
 function combo(name: string) {
-  const open = `ul#${name}-menu[style*="--display: block"]`;
+  // By attribute: item specifics' ids have a dot (`attributes.material-menu`).
+  const open = `ul[id="${name}-menu"][style*="--display: block"]`;
   return {
-    input: `input#${name}-input`,
-    toggle: `button#${name}-toggle-button`,
+    input: `input[id="${name}-input"]`,
+    toggle: `button[id="${name}-toggle-button"]`,
     open,
     option: (text: string) => `${open} [role="option"]:text-is("${text.replaceAll('"', '\\"')}")`,
     anyOption: `${open} [role="option"]`,
+    /** A multi-value picker's picked values, each shown with its own "Remove <value>". */
+    picked: `div:has(> input[id="${name}-input"]) button[aria-label^="Remove "]`,
+    unpick: (text: string) =>
+      `div:has(> input[id="${name}-input"]) button[aria-label="Remove ${text.replaceAll('"', '\\"')}"]`,
   } as const;
 }
 
@@ -106,24 +115,149 @@ export async function fillListing(
   photos: readonly UploadFile[] | null,
 ): Promise<void> {
   await awaitElement(page, LISTING_FORM.form, FORM, FORM);
+  await page.fill(LISTING_FORM.description, depopListingText(payload, sku));
+  let brand = await fillPicks(page, payload);
+  await fillPrice(page, payload.price.amountCents);
+  // Depop's own SKU field stays empty: Depop takes a SKU once only, even after the listing is
+  // deleted (a relist under it is refused), so Listora finds its listings by the SKU line.
+  await noBoost(page);
   if (photos !== null) {
-    // Drawn with the rest of the form, a moment after its description field.
+    // Last: Depop fills in item info from the photos ("Item info added"), and its fill takes
+    // only fields still empty, so Listora's are in place first. Drawn with the rest of the
+    // form, a moment after its description field.
     await awaitElement(page, LISTING_FORM.photos, FORM, 'photo input');
     await page.upload(LISTING_FORM.photos, photos);
-    // Depop's own fill from the photos comes first, so Listora's values are the ones kept.
-    await appears(page, LISTING_FORM.itemInfoAdded, ITEM_INFO_MS);
+    await photosAdded(page, photos.length);
+    await lookAgain(page, PHOTO_FILL_MS);
+    // Depop's fill may still have taken a field over: Listora's values are put back once.
+    if ((await mismatch(page, payload, brand)) !== null) brand = await fillPicks(page, payload);
   }
-  await page.fill(LISTING_FORM.description, depopListingText(payload, sku));
+  await expectPicked(page, payload, brand);
+  await expectComplete(page);
+}
+
+/** How long Depop gets to fill in item info from the photos once they are added. */
+const PHOTO_FILL_MS = 1_500;
+/** How long Depop gets to take the photos (it uploads them to its image server first). */
+const PHOTOS_MS = 30_000;
+
+/** Waits until Depop shows every photo as added: Post refuses a form whose photos are still going. */
+async function photosAdded(page: PageDriver, count: number): Promise<void> {
+  if (
+    !(await appears(page, `${LISTING_FORM.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS))
+  ) {
+    const shown = await page.count(LISTING_FORM.photoPreview);
+    throw changed(FORM, `shows ${String(shown)} of ${String(count)} photos as added`);
+  }
+}
+
+/** The category and every picker the payload fills; the brand the form then shows. */
+async function fillPicks(page: PageDriver, payload: DepopAutomationPayload): Promise<string> {
   if (payload.category === null) throw new Error('a listing without a category passed validation');
   await pickCategory(page, payload.category);
   if (payload.size !== null) await pickSize(page, payload.size);
-  await pickBrand(page, payload.brand);
+  const brand = await pickBrand(page, payload.brand);
   if (payload.condition === null) {
     throw new Error('a listing without a condition passed validation');
   }
   await pick(page, 'condition', payload.condition.label, `condition "${payload.condition.label}"`);
-  await fillPrice(page, payload.price.amountCents);
-  await expectComplete(page);
+  for (const detail of payload.details ?? []) await pickAll(page, detail.field, detail.values);
+  return brand;
+}
+
+/** Turns "Boost your listing" off when Depop drew it on. */
+async function noBoost(page: PageDriver): Promise<void> {
+  if (!(await page.exists(LISTING_FORM.boost))) return;
+  if (await checked(page)) await page.check(LISTING_FORM.boost, false);
+}
+
+async function checked(page: PageDriver): Promise<boolean> {
+  return page.exists(`${LISTING_FORM.boost}:checked`);
+}
+
+/**
+ * The first pick the form no longer shows (one Depop's own fill took over), in words, or
+ * `null`. `brand` is the brand Listora picked, `''` for none.
+ */
+async function mismatch(
+  page: PageDriver,
+  payload: DepopAutomationPayload,
+  brand: string,
+): Promise<string | null> {
+  const shown = async (name: string) => (await page.value(combo(name).input))?.trim() ?? '';
+  // Without a brand of Listora's, one Depop filled in from the photos is its own suggestion, as
+  // a seller filling the form by hand gets it, and stays.
+  if (brand !== '' && (await shown('brand')) !== brand) return `the brand "${brand}"`;
+  const type = payload.category?.[2];
+  if (type !== undefined && (await shown('group')) !== type) return `the category "${type}"`;
+  if (payload.size !== null && (await shown('variants')) !== payload.size) {
+    return `the size "${payload.size}"`;
+  }
+  if (payload.condition !== null && (await shown('condition')) !== payload.condition.label) {
+    return `the condition "${payload.condition.label}"`;
+  }
+  for (const detail of payload.details ?? []) {
+    const picked = await pickedValues(page, detail.field);
+    if (picked.length !== detail.values.length || detail.values.some((v) => !picked.includes(v))) {
+      return `the ${detail.field} "${detail.values.join(', ')}"`;
+    }
+  }
+  return null;
+}
+
+/**
+ * The form still shows what Listora picked, and "Boost your listing" is off, just before the
+ * step that submits it.
+ */
+async function expectPicked(
+  page: PageDriver,
+  payload: DepopAutomationPayload,
+  brand: string,
+): Promise<void> {
+  const missing = await mismatch(page, payload, brand);
+  if (missing !== null) throw changed(FORM, `no longer shows ${missing}`);
+  if ((await page.exists(LISTING_FORM.boost)) && (await checked(page))) {
+    throw changed(FORM, 'keeps "Boost your listing" on');
+  }
+}
+
+/**
+ * Picks exactly these values in one of the form's multi-value pickers (colours, material),
+ * leaving out any other value it had (one Depop filled in from the photos). Read on the
+ * captain's session (2026-10-27): each picked value shows in the picker with its own "Remove
+ * <value>" button, and its option in the menu no longer takes a click.
+ */
+async function pickAll(page: PageDriver, name: string, values: readonly string[]): Promise<void> {
+  const box = combo(name);
+  if (!(await page.exists(box.toggle))) throw changed(FORM, `has no ${name} picker`);
+  for (const value of await pickedValues(page, name)) {
+    if (!values.includes(value)) await page.click(box.unpick(value));
+  }
+  for (const value of values) {
+    if ((await pickedValues(page, name)).includes(value)) continue;
+    if (!(await page.exists(box.open))) await page.click(box.toggle);
+    await awaitElement(page, box.anyOption, FORM, `${name} options`);
+    if (!(await page.exists(box.option(value)))) {
+      throw changed(FORM, `offers no ${name} "${value}"`);
+    }
+    await page.click(box.option(value));
+  }
+  // Closed again, so the next picker opens on its own.
+  if (await page.exists(box.open)) await page.click(box.toggle);
+  const picked = await pickedValues(page, name);
+  if (picked.length !== values.length || values.some((value) => !picked.includes(value))) {
+    throw changed(
+      FORM,
+      `shows ${name} "${picked.join(', ')}" after picking "${values.join(', ')}"`,
+    );
+  }
+}
+
+/** The values a multi-value picker shows as picked. */
+async function pickedValues(page: PageDriver, name: string): Promise<string[]> {
+  return (await page.attributes(combo(name).picked, 'aria-label')).flatMap((label) =>
+    label === null ? [] : [label.replace(/^Remove /, '').trim()],
+  );
 }
 
 /**
@@ -237,20 +371,29 @@ async function pickCategory(page: PageDriver, path: readonly string[]): Promise<
     throw new Error('a category path has a department, a category, and a product type');
   }
   const box = combo('group');
+  // The edit form starts with the listing's category picked.
+  if (await page.exists(LISTING_FORM.clearCategory)) await page.click(LISTING_FORM.clearCategory);
   await expectElement(page, box.input, FORM, 'category search');
-  await page.type(box.input, type);
-  await awaitElement(page, box.anyOption, FORM, 'category options');
   const group = `${FORM_DEPARTMENTS[department] ?? department} > ${category}`;
-  const headers = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) =>
-    text.replace(/\s+/g, ' ').trim(),
-  );
-  const index = headers.indexOf(group);
-  if (index < 0) throw changed(FORM, `has no category group "${group}"`);
-  const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll('"', '\\"')}")`;
-  if ((await page.count(option)) !== 1) {
-    throw changed(FORM, `has no one "${type}" in the category group "${group}"`);
+  // The search matches product types and categories: by the product type first, and by the
+  // category when the product type's name is a common one ("Other").
+  for (const search of [type, category]) {
+    await page.fill(box.input, '');
+    await page.type(box.input, search);
+    await awaitElement(page, box.anyOption, FORM, 'category options');
+    const headers = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) =>
+      text.replace(/\s+/g, ' ').trim(),
+    );
+    const index = headers.indexOf(group);
+    if (index < 0) continue;
+    const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll('"', '\\"')}")`;
+    if ((await page.count(option)) !== 1) {
+      throw changed(FORM, `has no one "${type}" in the category group "${group}"`);
+    }
+    await page.click(option);
+    return;
   }
-  await page.click(option);
+  throw changed(FORM, `has no category group "${group}"`);
 }
 
 /** The category picker's groups and their headers ("Men > Tops"), in the same order. */
@@ -295,27 +438,37 @@ async function pickSize(page: PageDriver, size: string): Promise<void> {
   }
   if (!(await page.exists(box.open))) await page.click(box.toggle);
   await awaitElement(page, box.anyOption, FORM, 'size options');
-  const offered = await page.texts(box.anyOption);
-  const label = offered.find((option) => sizeOptionMatches(option, size));
+  const offered = (await page.texts(box.anyOption)).map((option) => option.trim());
+  const label = offered.includes(size)
+    ? size
+    : offered.find((option) => sizeOptionMatches(option, size));
   if (label === undefined) throw changed(FORM, `offers no size "${size}" for this category`);
   await page.click(box.option(label));
 }
 
 /** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
-async function pickBrand(page: PageDriver, brand: string | null): Promise<void> {
+/** Picks the brand, or leaves it empty; the brand the form then shows (`''` for none). */
+async function pickBrand(page: PageDriver, brand: string | null): Promise<string> {
   const box = combo('brand');
   // A brand Depop filled in from the photos is cleared, so the listing's own is the one kept.
   if (await page.exists(LISTING_FORM.clearBrand)) await page.click(LISTING_FORM.clearBrand);
   await expectElement(page, box.input, FORM, 'brand search');
-  if (brand === null) return;
+  if (brand === null) return '';
   await page.type(box.input, brand);
   await awaitElement(page, box.anyOption, FORM, 'brand suggestions');
-  const suggestions = await page.texts(box.anyOption);
-  const exact = suggestions.find((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
-  // Without an exact suggestion the listing goes without a brand: the form takes only its own.
-  if (exact === undefined) {
+  const suggestions = (await page.texts(box.anyOption)).map((suggestion) => suggestion.trim());
+  const own = brand.toLowerCase();
+  // The brand itself, ignoring case; else the one brand Depop lists under its longer name
+  // ("PSD Underwear" for PSD).
+  const longer = suggestions.filter((suggestion) => suggestion.toLowerCase().startsWith(`${own} `));
+  const picked =
+    suggestions.find((suggestion) => suggestion.toLowerCase() === own) ??
+    (longer.length === 1 ? longer[0] : undefined);
+  // Without one the listing goes without a brand: the form takes only its own.
+  if (picked === undefined) {
     await page.fill(box.input, '');
-    return;
+    return '';
   }
-  await page.click(box.option(exact));
+  await page.click(box.option(picked));
+  return picked;
 }

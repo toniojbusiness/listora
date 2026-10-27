@@ -19,7 +19,7 @@ import type {
 import { desiredStateForContent, isContentKind, readBackState } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 
-import { automationProfile } from '../profiles.ts';
+import { automationProfile, standInProfile } from '../profiles.ts';
 import { PlaywrightBrowserRunner } from '../runner/browser-runner.ts';
 import { MemoryScreenshotStore } from '../runner/screenshots.ts';
 import { FakeSiteSessions, QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -45,11 +45,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
 
   function adapterOn(fake: FakeDepopSite) {
     const profile = { ...automationProfile('depop'), pacing: QUICK_PACING };
-    const own = new FakeSiteSessions(fake, runner, {
-      ...profile,
-      origins: [fake.url],
-      cookieDomains: ['127.0.0.1'],
-    });
+    const own = new FakeSiteSessions(fake, runner, standInProfile(profile, fake.url));
     return {
       sessions: own,
       adapter: createDepopAutomationAdapter({
@@ -201,10 +197,14 @@ describe('Depop automation adapter on the fake Depop site', () => {
       // The copy, Listora's SKU line, then the hashtags on their own last line.
       description: `${content.variant.description}\n\nSKU: ${ref.externalSku ?? ''}\n\n#vintage #denim`,
       priceCents: 4500,
-      category: ['Menswear', 'Coats & jackets', 'Jackets'],
+      category: ['Men', 'Coats and jackets', 'Jackets'],
       size: 'M',
       brand: "Levi's",
       condition: 'used_excellent',
+      // Depop's own colour for the item's, before the photos' suggestion could take it.
+      colours: ['Blue'],
+      // "Boost your listing" left off: no extra fee.
+      boosted: false,
       // The seller's own shipping choice, left as it was.
       shipping: 'depop_shipping',
       // The sample lists its photos out of posting order: tag (2), front (0), back (1).
@@ -224,15 +224,26 @@ describe('Depop automation adapter on the fake Depop site', () => {
       description: content.variant.description,
       priceCents: 4500,
       currency: 'USD',
-      // Depop's product page no longer says when the product last changed.
-      revision: null,
+      // Depop's own last change time, from the read its edit page makes.
+      revision: listed?.updatedAt.getTime(),
     });
     expect(remote).toMatchObject(
       readBackState(desiredStateForContent('create', content), adapter.capabilities()),
     );
-    expect(outcome).not.toHaveProperty('revision');
+    // Found by its SKU in the same run, with the same revision.
+    expect(outcome).toMatchObject({ revision: remote.found ? remote.revision : -1 });
     // Found again by its SKU before its slug is known, the way a timed-out create is.
     expect(await adapter.readListing({ ...ref, externalListingId: null }, ctx())).toEqual(remote);
+  });
+
+  it('turns "Boost your listing" off when the form starts with it on', async () => {
+    await withSite({ boostByDefault: true }, async (fake, own) => {
+      const ref = newRef();
+      const outcome = await own.execute(request('create', ref), ctx());
+      expect(outcome).toMatchObject({ type: 'confirmed' });
+      const [posted] = fake.productsWithSku(ref.externalSku ?? '');
+      expect(posted).toMatchObject({ status: 'ONSALE', boosted: false });
+    });
   });
 
   it('posts a create sent again once, finding the first by its SKU', async () => {
@@ -248,11 +259,16 @@ describe('Depop automation adapter on the fake Depop site', () => {
     expect(site.productsWithSku(ref.externalSku ?? '')).toHaveLength(1);
   });
 
-  it('posts without a brand Depop does not list, and picks a brand it does whatever the case', async () => {
-    const unknown = await create(sampleListingContent({ item: { brand: 'Handmade Studio' } }));
-    expect(site.product(unknown.ref.externalListingId)?.brand).toBeNull();
+  it("picks Depop's brand whatever the case or by its longer name, and never one Depop doesn't list", async () => {
     const cased = await create(sampleListingContent({ item: { brand: 'ADIDAS' } }));
     expect(site.product(cased.ref.externalListingId)?.brand).toBe('adidas');
+    // Depop lists the brand under a longer name.
+    const longer = await create(sampleListingContent({ item: { brand: 'free' } }));
+    expect(site.product(longer.ref.externalListingId)?.brand).toBe('Free People');
+    // A brand Depop doesn't list is not typed in: the form keeps Depop's own suggestion from
+    // the photos, as it does for a seller filling it by hand (the fake's is Nike).
+    const unknown = await create(sampleListingContent({ item: { brand: 'Handmade Studio' } }));
+    expect(site.product(unknown.ref.externalListingId)?.brand).toBe('Nike');
   });
 
   it('revises every detail on the edit page and keeps the photos', async () => {
@@ -273,7 +289,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
     const outcome = await adapter.execute(request('revise', ref, { content }), ctx());
     expect(outcome).toMatchObject({ type: 'confirmed', externalListingId: ref.externalListingId });
     expect(site.product(ref.externalListingId)).toMatchObject({
-      category: ['Womenswear', 'Footwear', 'Boots'],
+      category: ['Women', 'Footwear', 'Boots'],
       size: 'US 8.5',
       condition: 'used_fair',
       brand: 'Dr. Martens',
@@ -363,7 +379,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
     });
     const { ref } = await create(content);
     expect(site.product(ref.externalListingId)).toMatchObject({
-      category: ['Womenswear', 'Footwear', 'Boots'],
+      category: ['Women', 'Footwear', 'Boots'],
       size: 'US 9',
     });
   });
@@ -472,10 +488,11 @@ describe('Depop automation adapter on the fake Depop site', () => {
     const ref = newRef();
     // The category picker finds product types in groups headed by department and category:
     // Jackets are there, but in no "Men > Hovercraft" group.
-    const content = sampleListingContent({
-      variant: { categoryRef: 'Menswear > Hovercraft > Jackets' },
-    });
-    expect(await adapter.execute(request('create', ref, { content }), ctx())).toMatchObject({
+    const op = request('create', ref);
+    // A category Listora's copy of Depop's taxonomy has, and Depop's form no longer offers.
+    if (op.payload === null) throw new Error('a create has a payload');
+    const stale = { ...op, payload: { ...op.payload, category: ['Men', 'Hovercraft', 'Jackets'] } };
+    expect(await adapter.execute(stale, ctx())).toMatchObject({
       type: 'pendingUser',
       excerpt: { automation: 'page_changed' },
     });
@@ -484,7 +501,8 @@ describe('Depop automation adapter on the fake Depop site', () => {
 
   it('fails a read-back of a product page it no longer understands', async () => {
     const { ref } = await create();
-    inject('read', { type: 'redesigned' });
+    // The product's page and the API's read of it, both redesigned.
+    site.inject({ action: 'read', fault: { type: 'redesigned' }, times: 2 });
     await expect(adapter.readListing(ref, ctx())).rejects.toThrow('element_missing');
   });
 

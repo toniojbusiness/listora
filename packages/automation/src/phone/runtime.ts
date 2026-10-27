@@ -25,6 +25,7 @@ import {
   type ScriptSet,
 } from '../adapter/script-call.ts';
 import { createDepopScripts } from '../depop/scripts.ts';
+import { depopSite } from '../depop/site.ts';
 import type { DepopAutomationPayload } from '../depop/payload.ts';
 import { createEbayScripts } from '../ebay/scripts.ts';
 import type { EbayAutomationPayload } from '../ebay/payload.ts';
@@ -184,7 +185,7 @@ function scriptRunner(
   const origin = new URL(set.siteUrl).origin;
   switch (set.name) {
     case 'depop': {
-      const scripts = createDepopScripts({ site: { origin }, photos });
+      const scripts = createDepopScripts({ site: depopSite(set.siteUrl), photos });
       return (call, step) =>
         runScriptCall(scripts, call as ScriptCall<DepopAutomationPayload>, step);
     }

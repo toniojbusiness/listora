@@ -9,7 +9,12 @@
 import type { ExecutionLocation, Marketplace } from '@listora/db';
 import type { AutomatedMarketplace } from '@listora/marketplaces';
 
-import { DEPOP_CHALLENGE_SIGNS, DEPOP_PRIVATE_SELECTORS } from './depop/site.ts';
+import {
+  DEPOP_API_URL,
+  DEPOP_CHALLENGE_SIGNS,
+  DEPOP_PACING,
+  DEPOP_PRIVATE_SELECTORS,
+} from './depop/site.ts';
 import { EBAY_CHALLENGE_SIGNS, EBAY_PRIVATE_SELECTORS } from './ebay/site.ts';
 import { MERCARI_CHALLENGE_SIGNS, MERCARI_PRIVATE_SELECTORS } from './mercari/site.ts';
 
@@ -153,10 +158,10 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     marketplace: 'depop',
     origins: ['https://www.depop.com', 'https://depop.com'],
     cookieDomains: ['depop.com'],
-    apiOrigins: [],
+    apiOrigins: [DEPOP_API_URL],
     loginUrl: 'https://www.depop.com/login/',
     emailsSignInLinks: true,
-    pacing: DEFAULT_PACING,
+    pacing: DEPOP_PACING,
     limits: DEFAULT_LIMITS,
     challenges: DEPOP_CHALLENGE_SIGNS,
     privateSelectors: DEPOP_PRIVATE_SELECTORS,
