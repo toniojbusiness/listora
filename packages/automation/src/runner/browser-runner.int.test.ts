@@ -72,6 +72,7 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       value: 'closet-ana',
       mutated: false,
       steps: ['open the account', 'read the seller'],
+      stepMs: [expect.any(Number) as unknown, expect.any(Number) as unknown],
     });
     // The browser says what it is: no disguise, no stealth.
     const seen = site.requests.filter((request) => request.path === '/');
