@@ -9030,10 +9030,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 	/** The seller's private SKU on the edit form (only its seller sees it). */
 	async function privateSku(page) {
+		const shown = (await page.value(FORM_SELECTORS.sku))?.trim() ?? "";
+		if (shown !== "") return shown;
 		const state = await page.pageData("__INITIAL_STATE__");
 		const parsed = editorSkuSchema.safeParse(state);
-		const value = (parsed.success ? parsed.data.$_listing_editor.post.seller_private_info.sku ?? null : null) ?? await page.attribute(FORM_SELECTORS.sku, "value");
-		return value === null || value.trim() === "" ? null : value.trim();
+		const fromState = parsed.success ? parsed.data.$_listing_editor.post.seller_private_info.sku ?? null : null;
+		return fromState === null || fromState.trim() === "" ? null : fromState.trim();
 	}
 	const editorSkuSchema = object({ $_listing_editor: object({ post: object({ seller_private_info: object({ sku: string().nullable().optional() }) }) }) });
 	function wholeDollars(cents) {
@@ -10349,6 +10351,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		attributes(selector, name) {
 			return this.#query((backend) => backend.attributes(selector, name));
 		}
+		value(selector) {
+			return this.#query((backend) => backend.value(selector));
+		}
 		pageData(name) {
 			return this.#query((backend) => backend.pageData(name));
 		}
@@ -10618,7 +10623,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
   }, selector + ' to be ' + state);
   return true;
 `);
-	/** What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`. */
+	/**
+	* What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`, and
+	* `value` (the first match's current value, which a page's scripts may set without an attribute).
+	*/
 	const QUERY = pageFunction(`
   const elements = resolveAll(selector);
   switch (what) {
@@ -10627,6 +10635,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
     case 'texts': return elements.map((element) => (element.textContent || '').trim());
     case 'attribute': return elements.length === 0 ? null : elements[0].getAttribute(name);
     case 'attributes': return elements.map((element) => element.getAttribute(name));
+    case 'value': return elements.length === 0 || typeof elements[0].value !== 'string' ? null : elements[0].value;
     default: throw new Error('unknown query ' + what);
   }
 `);
@@ -10765,6 +10774,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				selector,
 				what: "attribute",
 				name
+			}));
+		}
+		async value(selector) {
+			return expectText(await this.#page(QUERY, {
+				selector,
+				what: "value",
+				name: null
 			}));
 		}
 		async attributes(selector, name) {

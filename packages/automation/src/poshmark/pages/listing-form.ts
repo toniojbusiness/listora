@@ -356,16 +356,18 @@ async function saved(page: PageDriver): Promise<{ type: 'saved'; path: string }>
 
 /** The seller's private SKU on the edit form (only its seller sees it). */
 export async function privateSku(page: PageDriver): Promise<string | null> {
-  // Read on the captain's session (2026-10-26): the form's field has no value attribute (Vue
-  // sets the value itself); the edit form's data holds it at
-  // `$_listing_editor.post.seller_private_info.sku`.
+  // Read on the captain's session (2026-10-26 and 27): the form's field has no value attribute
+  // (Vue sets the field's value itself), and the edit form's data holds it at
+  // `$_listing_editor.post.seller_private_info.sku`. The field's value comes first: that data
+  // is about 6 MB, which took the phone over 30 seconds to read.
+  const shown = (await page.value(FORM_SELECTORS.sku))?.trim() ?? '';
+  if (shown !== '') return shown;
   const state = await page.pageData('__INITIAL_STATE__');
   const parsed = editorSkuSchema.safeParse(state);
   const fromState = parsed.success
     ? (parsed.data.$_listing_editor.post.seller_private_info.sku ?? null)
     : null;
-  const value = fromState ?? (await page.attribute(FORM_SELECTORS.sku, 'value'));
-  return value === null || value.trim() === '' ? null : value.trim();
+  return fromState === null || fromState.trim() === '' ? null : fromState.trim();
 }
 
 const editorSkuSchema = z.object({

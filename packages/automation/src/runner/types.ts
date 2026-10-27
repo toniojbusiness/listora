@@ -51,6 +51,11 @@ export interface PageDriver {
   attribute(selector: string, name: string): Promise<string | null>;
   attributes(selector: string, name: string): Promise<(string | null)[]>;
   /**
+   * The first match's current value (a form field's `value`, which a page's own scripts may set
+   * without any attribute), or `null` without a match.
+   */
+  value(selector: string): Promise<string | null>;
+  /**
    * The data the page keeps for its own scripts in the global `name` (`window.<name>`), as
    * JSON, or `null` when it has none. A page whose data comes in an inline script that removes
    * itself once it ran (Poshmark's `window.__INITIAL_STATE__`) has it only there.

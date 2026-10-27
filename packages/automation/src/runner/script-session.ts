@@ -125,6 +125,8 @@ export interface PageBackend {
   texts(selector: string): Promise<string[]>;
   attribute(selector: string, name: string): Promise<string | null>;
   attributes(selector: string, name: string): Promise<(string | null)[]>;
+  /** The first match's current value (`PageDriver.value`). */
+  value(selector: string): Promise<string | null>;
   /**
    * The page's global `name` as JSON (`null` when it has none), read in the page's own script
    * world, the only place a page's own data lives.
@@ -657,6 +659,10 @@ class Driver implements PageDriver {
 
   attributes(selector: string, name: string): Promise<(string | null)[]> {
     return this.#query((backend) => backend.attributes(selector, name));
+  }
+
+  value(selector: string): Promise<string | null> {
+    return this.#query((backend) => backend.value(selector));
   }
 
   pageData(name: string): Promise<unknown> {
