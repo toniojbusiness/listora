@@ -223,9 +223,10 @@ jobs:
           if (( ${size_kb:-0} > 4 * 1024 * 1024 )); then rm -rf "$IOS_COMPILATION_CACHE"; echo 'Starting it over.'; fi
       - run: make ios-lint
       - run: make ios-check-ats
-      # One clean boot of the test simulator, started just before the build so it boots during
-      # it (about two minutes; started before the installs, it slowed Homebrew down by as much): every other simulator is shut down and the test one erased first. The
-      # tests start only once it has finished booting (the wait before them).
+      # One clean boot of the test simulator: every other simulator is shut down and the test
+      # one erased first. It starts just before the build so it boots during it (about two
+      # minutes); started before the installs, it slowed Homebrew down by as much. The tests
+      # start only once it has finished booting (the wait before them).
       - name: Start booting a clean iPhone 17 simulator
         run: |
           xcodebuild -version
