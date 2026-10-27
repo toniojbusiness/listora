@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # The Listora images, from one set of sources. `app` (the default target, the last stage) runs
-# the API, the worker, and the migrations; ECS chooses the entry point per service
+# the API, the worker, the migrations, and the operator CLI (scripts/admin-remote.sh); ECS chooses the entry point per service
 # (infra/src/containers.ts). `runner` runs the on-demand browser runner
 # (apps/worker/src/runner/main.ts): the same files on top of Playwright's headless Chromium.
 # Node runs the TypeScript sources directly, so there is no build stage: install the production
@@ -26,12 +26,14 @@ FROM runtime AS base
 COPY package.json package-lock.json .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/worker/package.json apps/worker/
+COPY apps/admin/package.json apps/admin/
 COPY infra/package.json infra/
 COPY packages/ packages/
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 COPY apps/api/src apps/api/src
 COPY apps/worker/src apps/worker/src
+COPY apps/admin/src apps/admin/src
 # The phone runtime the API hands the app, built from packages/automation (npm run phone:bundle).
 COPY apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/phone-runtime.js apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/
 
