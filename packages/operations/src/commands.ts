@@ -41,6 +41,7 @@ import { syncItemListedStatus } from './item-status.ts';
 import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdAfter } from './ordering.ts';
 import {
+  attemptNow,
   eventDetail,
   operationPriority,
   transitionOperation,
@@ -234,33 +235,7 @@ export async function tryOperationNow(
     if (op.status !== 'retrying' && op.status !== 'verifying') {
       throw new InvalidTransitionError(op.id, op.status, 'running');
     }
-    const moved = await trx
-      .updateTable('marketplace_operation')
-      .set({ next_attempt_at: sql<Date>`now()` })
-      .where('account_id', '=', op.account_id)
-      .where('id', '=', op.id)
-      .returningAll()
-      .executeTakeFirstOrThrow();
-    await trx
-      .insertInto('operation_event')
-      .values({
-        account_id: op.account_id,
-        operation_id: op.id,
-        from_status: op.status,
-        to_status: op.status,
-        attempt: op.attempts,
-        error_code: op.error_code,
-        detail: jsonb(eventDetail({ action: 'try_now', actor: target.actor })),
-      })
-      .execute();
-    await scheduleOperationJob(trx, {
-      accountId: op.account_id,
-      operationId: op.id,
-      listingId: op.listing_id,
-      priority: operationPriority(op),
-      runAt: moved.next_attempt_at ?? new Date(),
-    });
-    return moved;
+    return attemptNow(trx, op, { action: 'try_now', actor: target.actor });
   });
 }
 

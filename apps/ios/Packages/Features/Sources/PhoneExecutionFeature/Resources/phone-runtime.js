@@ -7937,6 +7937,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		* drops, so it is switched off.
 		*/
 		smartPricing: "button[data-testid=\"SmartPricingButton\"]",
+		/** Its switch asks to confirm turning it off. */
+		smartPricingTurnOff: "button[data-testid=\"SmartPricingTurnOffButton\"]",
 		/** Mercari's answer to List from a seller without a card on file: add one first. */
 		paymentWarning: "[data-testid=\"PaymentWarningModal\"]",
 		list: "button[data-testid=\"ListButton\"]",
@@ -7993,6 +7995,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		if (!await appears$1(page, LISTING_FORM.smartPricing, 2e3)) return;
 		if ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() !== "ON") return;
 		await page.click(LISTING_FORM.smartPricing);
+		if (!await appears$1(page, LISTING_FORM.smartPricingTurnOff)) throw changed(FORM, "asks nothing when Smart Pricing is switched off");
+		await page.click(LISTING_FORM.smartPricingTurnOff);
 		const end = Date.now() + APPEAR_MS;
 		while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "ON") {
 			if (Date.now() >= end) throw changed(FORM, "kept Smart Pricing on");
