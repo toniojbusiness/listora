@@ -9,6 +9,7 @@ import { DEFAULT_PAGE_SIZE } from '../pagination.ts';
 
 import {
   activityEntryView,
+  type ActivityUrls,
   decodeActivityCursor,
   encodeActivityCursor,
   saleExplanationView,
@@ -19,7 +20,15 @@ import {
  * `listOperationActivity`, newest first, read from the records the server, the browser runner,
  * and the phone keep; and `getSaleExplanation`, how a sale was found and what it started.
  */
-export function registerActivityRoutes(app: FastifyInstance, deps: RouteDependencies): void {
+export interface ActivityRouteDependencies extends RouteDependencies {
+  /** Package photos' URLs. */
+  storage: ActivityUrls;
+}
+
+export function registerActivityRoutes(
+  app: FastifyInstance,
+  deps: ActivityRouteDependencies,
+): void {
   const page = async (
     db: Parameters<typeof loadActivity>[0],
     filter: Omit<ActivityFilter, 'limit' | 'to'>,
@@ -36,7 +45,7 @@ export function registerActivityRoutes(app: FastifyInstance, deps: RouteDependen
     return {
       status: 200 as const,
       body: {
-        data: shown.map(activityEntryView),
+        data: shown.map((entry) => activityEntryView(entry, deps.storage)),
         ...(entries.length > limit && last ? { nextCursor: encodeActivityCursor(last.at) } : {}),
       },
     };
@@ -60,6 +69,6 @@ export function registerActivityRoutes(app: FastifyInstance, deps: RouteDependen
       saleId: params.saleId,
     });
     if (explanation === undefined) throw notFound('Sale');
-    return { status: 200, body: saleExplanationView(explanation) };
+    return { status: 200, body: saleExplanationView(explanation, deps.storage) };
   });
 }

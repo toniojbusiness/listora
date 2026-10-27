@@ -1,0 +1,283 @@
+PackCheckSettings:
+  type: object
+  description: Whether Pack check is on. It is off until the seller turns it on in Settings.
+  required: [enabled]
+  properties:
+    enabled:
+      type: boolean
+PackCheckSettingsReplace:
+  type: object
+  additionalProperties: false
+  required: [enabled]
+  properties:
+    enabled:
+      type: boolean
+LabelCarrier:
+  description: A `KnownLabelCarrier`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownLabelCarrier'
+    - type: string
+      maxLength: 64
+KnownLabelCarrier:
+  type: string
+  description: The carrier a tracking number's shape names; `other` when it can't tell.
+  enum: [usps, ups, fedex, dhl, other]
+LabelSource:
+  description: A `KnownLabelSource`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownLabelSource'
+    - type: string
+      maxLength: 64
+KnownLabelSource:
+  type: string
+  description: |
+    `marketplace`: read from the marketplace's own order page. `scan`: the seller scanned it
+    onto the order after the photo check, because Listora had no label for it.
+  enum: [marketplace, scan]
+PackMatch:
+  description: A `KnownPackMatch`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownPackMatch'
+    - type: string
+      maxLength: 64
+KnownPackMatch:
+  type: string
+  description: |
+    How Listora knew the label was this order's: `sticker` (the label and the item's sticker
+    both match), `label` (the label's tracking number matches), or `photo` (a label Listora
+    didn't know, which the seller checked against the item's photo).
+  enum: [sticker, label, photo]
+PackLocation:
+  type: object
+  description: Where the item is kept, for example shelf `B-12`.
+  required: [code]
+  properties:
+    code:
+      type: string
+      maxLength: 32
+    label:
+      type: string
+      maxLength: 100
+PackItem:
+  type: object
+  description: One item of the order.
+  required: [itemId, sku, description]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    sku:
+      $ref: './common.yaml#/Sku'
+    title:
+      type: string
+      maxLength: 200
+    description:
+      type: string
+      maxLength: 100
+      description: How Pack check names it, `black Shaka Wear tee, 2XL`.
+    sizeLabel:
+      type: string
+      maxLength: 100
+    location:
+      $ref: '#/PackLocation'
+    thumbnailUrl:
+      type: string
+      format: uri
+      description: The item's cover photo, small; absent until a photo is processed.
+    photoUrl:
+      type: string
+      format: uri
+      description: The item's cover photo, large, for the photo check.
+PackLabel:
+  type: object
+  description: The order's shipping label.
+  required: [trackingNumber, carrier, source]
+  properties:
+    trackingNumber:
+      type: string
+      maxLength: 40
+    carrier:
+      $ref: '#/LabelCarrier'
+    source:
+      $ref: '#/LabelSource'
+PackRecord:
+  type: object
+  description: The order's package, once packed.
+  required: [packedAt, trackingNumber, matchedBy, labelMismatch]
+  properties:
+    packedAt:
+      $ref: './common.yaml#/Timestamp'
+    trackingNumber:
+      type: string
+      maxLength: 40
+      description: The label that went on the package.
+    matchedBy:
+      $ref: '#/PackMatch'
+    stickerSku:
+      $ref: './common.yaml#/Sku'
+    labelMismatch:
+      type: boolean
+      description: |
+        The marketplace now shows another label for this order than the one packed (read after
+        the seller packed it with a label Listora didn't know): check the package again.
+    photoUrl:
+      type: string
+      format: uri
+      description: The package photo, kept for a claim.
+    photoAddedAt:
+      $ref: './common.yaml#/Timestamp'
+PackOrder:
+  type: object
+  description: |
+    One sale that still needs a package, as the to-ship list shows it: its items, the buyer's
+    first name, its label, and whether it is packed. `labelStatus` and `packStatus` are the
+    server's words; clients show them as given.
+  required: [saleId, marketplace, soldAt, description, items, labelStatus, packStatus]
+  properties:
+    saleId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    orderNumber:
+      type: string
+      maxLength: 200
+      description: The marketplace's order number (for Mercari and Depop, the listing's id).
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+    shipBy:
+      $ref: './common.yaml#/Timestamp'
+    description:
+      type: string
+      maxLength: 300
+      description: How Pack check names the order, `the black Shaka Wear tee, 2XL`.
+    buyerFirstName:
+      type: string
+      maxLength: 40
+      description: Only the first name, from the marketplace's order page.
+    items:
+      type: array
+      minItems: 1
+      maxItems: 50
+      items:
+        $ref: '#/PackItem'
+    label:
+      $ref: '#/PackLabel'
+    labelStatus:
+      $ref: './common.yaml#/StatusDisplay'
+    pack:
+      $ref: '#/PackRecord'
+    packStatus:
+      $ref: './common.yaml#/StatusDisplay'
+PackOrderList:
+  type: object
+  required: [data, generatedAt]
+  properties:
+    data:
+      type: array
+      maxItems: 200
+      description: Newest first; packed orders stay a day.
+      items:
+        $ref: '#/PackOrder'
+    generatedAt:
+      $ref: './common.yaml#/Timestamp'
+PackLabelRefresh:
+  type: object
+  description: The label reads Listora asked for.
+  required: [orders, marketplaces]
+  properties:
+    orders:
+      type: integer
+      format: int32
+      minimum: 0
+      description: How many orders' labels will be read.
+    marketplaces:
+      type: array
+      maxItems: 10
+      description: Where the reads run on this account's iPhone; the app runs them.
+      items:
+        $ref: './common.yaml#/Marketplace'
+PackScanVerdict:
+  description: A `KnownPackScanVerdict`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownPackScanVerdict'
+    - type: string
+      maxLength: 64
+KnownPackScanVerdict:
+  type: string
+  description: |
+    `match`: the label is the order being packed's. `found`: with no order chosen, the label's
+    (or sticker's) order. `wrong_order`: the label is another order's. `already_packed`: the
+    label went on a package already. `sticker_mismatch`: the sticker is another item's.
+    `unknown_label`: no order has this label yet. `sticker_scanned`: a sticker where the label
+    goes. `not_a_label`: not a tracking number. A verdict this client doesn't know: show
+    `headline` and `detail`, and offer nothing.
+  enum:
+    [
+      match,
+      found,
+      wrong_order,
+      already_packed,
+      sticker_mismatch,
+      unknown_label,
+      sticker_scanned,
+      not_a_label,
+    ]
+PackScan:
+  type: object
+  description: |
+    What a scan means for the package on the table, in the server's words. Only `canPack`
+    lets the app offer Packed; only `canPhotoCheck` lets it offer the photo check of a label
+    Listora doesn't know.
+  required: [verdict, tone, headline, detail, canPack, canPhotoCheck]
+  properties:
+    verdict:
+      $ref: '#/PackScanVerdict'
+    tone:
+      $ref: './common.yaml#/StatusTone'
+    headline:
+      type: string
+      maxLength: 300
+    detail:
+      type: string
+      maxLength: 500
+    trackingNumber:
+      type: string
+      maxLength: 40
+      description: The scanned label's tracking number, when it can be one.
+    order:
+      $ref: '#/PackOrder'
+    expectedOrder:
+      $ref: '#/PackOrder'
+    packedOrder:
+      $ref: '#/PackOrder'
+    canPack:
+      type: boolean
+    canPhotoCheck:
+      type: boolean
+PackOrderPack:
+  type: object
+  additionalProperties: false
+  required: [label]
+  properties:
+    label:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: What the camera read from the shipping label, or the number the seller typed.
+    sticker:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: What the camera read from the item's sticker.
+    photoCheck:
+      type: boolean
+      description: |
+        The seller compared the item with the order's photo and says this label, which Listora
+        doesn't know, is this order's.
+PackPhotoAdd:
+  type: object
+  additionalProperties: false
+  required: [uploadFileId]
+  properties:
+    uploadFileId:
+      $ref: './common.yaml#/Id'
+      description: A JPEG uploaded through an upload session.

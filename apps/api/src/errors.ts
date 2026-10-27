@@ -24,6 +24,7 @@ export const ERROR_STATUS = {
   marketplace_reauth_required: 409,
   marketplace_action_unavailable: 409,
   app_update_required: 409,
+  pack_refused: 409,
   payload_too_large: 413,
   validation_failed: 422,
   idempotency_key_reused: 422,

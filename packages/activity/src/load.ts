@@ -75,6 +75,7 @@ export async function loadActivity(
     if (filter.marketplace === undefined || scope !== 'all') sources.push(itemChanges(db, filter));
   }
   if (scope === 'sale' || scope === 'all') sources.push(orders(db, filter));
+  if (scope !== 'operation') sources.push(packages(db, filter));
   const entries = (await Promise.all(sources)).flat();
   return entries
     .sort((a, b) => b.at.getTime() - a.at.getTime() || b.id.localeCompare(a.id))
@@ -457,6 +458,79 @@ async function sales(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEn
   });
 }
 
+const MATCH_WORDS = {
+  sticker: "The label and the item's sticker matched this order.",
+  label: "The label's tracking number matched this order.",
+  photo: "Listora didn't know this label; you checked the item against its photo.",
+} as const;
+
+/** Packages Pack check packed (docs/features/pack-check.md), and their photos. */
+async function packages(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEntry[]> {
+  const rows = await db
+    .selectFrom('sale_pack as pack')
+    .innerJoin('sale', (join) =>
+      join.onRef('sale.account_id', '=', 'pack.account_id').onRef('sale.id', '=', 'pack.sale_id'),
+    )
+    .select([
+      'pack.sale_id',
+      'pack.tracking_number',
+      'pack.matched_by',
+      'pack.packed_at',
+      'pack.photo_key',
+      'pack.photo_added_at',
+      'sale.marketplace',
+    ])
+    .$if(filter.accountId !== undefined, (q) =>
+      q.where('pack.account_id', '=', filter.accountId ?? ''),
+    )
+    .$if(filter.saleId !== undefined, (q) => q.where('pack.sale_id', '=', filter.saleId ?? ''))
+    .$if(filter.itemId !== undefined, (q) =>
+      q.where('pack.sale_id', 'in', (eb) =>
+        eb
+          .selectFrom('sale_item')
+          .select('sale_item.sale_id')
+          .where('sale_item.item_id', '=', filter.itemId ?? ''),
+      ),
+    )
+    .$if(filter.marketplace !== undefined, (q) =>
+      q.where('sale.marketplace', '=', filter.marketplace ?? 'ebay'),
+    )
+    .$if(filter.from !== undefined, (q) =>
+      q.where('pack.packed_at', '>=', filter.from ?? new Date(0)),
+    )
+    .$if(filter.to !== undefined, (q) => q.where('pack.packed_at', '<', filter.to ?? new Date()))
+    .orderBy('pack.packed_at', 'desc')
+    .limit(filter.limit)
+    .execute();
+  return rows.flatMap((row) => {
+    const base = {
+      kind: 'package' as const,
+      source: 'you' as const,
+      outcome: 'succeeded' as const,
+      marketplace: row.marketplace,
+      itemId: filter.itemId ?? null,
+      saleId: row.sale_id,
+    };
+    const packed: ActivityEntry = {
+      ...blank(`package:${row.sale_id}`, row.packed_at),
+      ...base,
+      title: `Packed with the label ending ${row.tracking_number.slice(-4)}`,
+      detail: MATCH_WORDS[row.matched_by],
+    };
+    if (row.photo_key === null || row.photo_added_at === null) return [packed];
+    return [
+      packed,
+      {
+        ...blank(`package_photo:${row.sale_id}`, row.photo_added_at),
+        ...base,
+        title: 'Package photo added',
+        detail: 'A photo of the open package with its label, kept for a claim.',
+        photoKey: row.photo_key,
+      },
+    ];
+  });
+}
+
 async function delistRuns(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEntry[]> {
   if (
     filter.marketplace !== undefined &&
@@ -697,6 +771,7 @@ function blank(id: string, at: Date): ActivityEntry {
     steps: null,
     error: null,
     reference: null,
+    photoKey: null,
   };
 }
 

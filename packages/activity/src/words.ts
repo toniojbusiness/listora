@@ -169,6 +169,8 @@ export function browserSessionTitle(run: {
       return `${where} read your ${name} sales`;
     case 'health':
       return `${where} checked your ${name} sign-in`;
+    case 'label_read':
+      return `${where} read your ${name} shipping labels`;
     default:
       return assertNever(run.purpose, 'automation run purpose');
   }

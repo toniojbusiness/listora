@@ -31,6 +31,7 @@ import {
 } from './pages/listing-form.ts';
 import { onDepop, readOwnListings, type ApiProduct } from './pages/api.ts';
 import { readProduct, type ProductPageRead } from './pages/product-page.ts';
+import { MAX_RECEIPT_PAGES, orderLabel, readReceipts, type ReceiptLabel } from './pages/receipts.ts';
 import { readSoldItemsPage } from './pages/sold-items-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
 
@@ -280,6 +281,21 @@ export function createDepopScripts(
         if (!shown.hasMore || (since !== null && oldest !== null && oldest < since)) break;
       }
       return orders;
+    },
+    labels: async (orders, step) => {
+      const receipts: ReceiptLabel[] = [];
+      let cursor: string | null = null;
+      for (let number = 1; number <= MAX_RECEIPT_PAGES; number += 1) {
+        const shown = await step('read the sold items', { mutates: false }, async (page) => {
+          await onDepop(page, site);
+          return readReceipts(page, site, cursor);
+        });
+        receipts.push(...shown.receipts);
+        const missing = orders.some((order) => !orderLabel(order, receipts).found);
+        if (shown.next === null || !missing) break;
+        cursor = shown.next;
+      }
+      return orders.map((order) => orderLabel(order, receipts));
     },
     listings: async (step) => {
       const listings: RemoteListing[] = [];

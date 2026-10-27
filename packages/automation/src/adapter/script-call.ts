@@ -12,11 +12,13 @@
 import type {
   AssistedListingPayload,
   AutomatedMarketplace,
+  LabelReadRequest,
   ListingRef,
   OperationRequest,
   RemoteListingState,
   RemoteListings,
   RemoteOrder,
+  RemoteOrderLabel,
 } from '@listora/marketplaces';
 
 import { assertNever } from '@listora/shared';
@@ -53,6 +55,8 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
   orders?: (since: Date | null, step: StepRunner) => Promise<RemoteOrder[]>;
   /** The seller's listings, for imports and drift checks. Only reads. */
   listings?: (step: StepRunner) => Promise<RemoteListings>;
+  /** The orders' shipping labels from their order pages, for Pack check. Only reads. */
+  labels?: (orders: readonly LabelReadRequest[], step: StepRunner) => Promise<RemoteOrderLabel[]>;
 }
 
 /** The script sets: one per automation adapter (the fake site's stands in for any marketplace). */
@@ -77,7 +81,8 @@ export type ScriptCall<P extends AssistedListingPayload = AssistedListingPayload
   | { script: 'health' }
   /** `since` is an ISO time, or `null` for every order the pages show. */
   | { script: 'orders'; since: string | null }
-  | { script: 'listings' };
+  | { script: 'listings' }
+  | { script: 'labels'; orders: LabelReadRequest[] };
 
 /**
  * Whether an earlier attempt of the operation may have posted or changed the listing, so a
@@ -125,6 +130,11 @@ export async function runScriptCall<P extends AssistedListingPayload>(
       const listings = scripts.listings;
       if (listings === undefined) throw new Error('these scripts list no listings');
       return listings(step);
+    }
+    case 'labels': {
+      const labels = scripts.labels;
+      if (labels === undefined) throw new Error('these scripts read no order labels');
+      return labels(call.orders, step);
     }
     default:
       return assertNever(call, 'script call');

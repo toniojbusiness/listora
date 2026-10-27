@@ -26,6 +26,7 @@ import {
   type Excerpt,
   type Health,
   type ItemSnapshot,
+  type LabelReadRequest,
   type ListingRef,
   type ListingVariant,
   type MarketplaceAdapter,
@@ -35,6 +36,7 @@ import {
   type RemoteListingState,
   type RemoteListings,
   type RemoteOrder,
+  type RemoteOrderLabel,
   type ValidationIssue,
   type WriteOperationKind,
 } from '@listora/marketplaces';
@@ -265,6 +267,25 @@ export class AutomationAdapter<
       ctx.signal,
     );
     return this.#readValue(run, 'check sales');
+  }
+
+  async readOrderLabels(
+    orders: readonly LabelReadRequest[],
+    ctx: AdapterContext,
+  ): Promise<RemoteOrderLabel[]> {
+    if (this.#options.scripts.labels === undefined) {
+      throw new Error(`Listora doesn't read ${this.#name} order labels`);
+    }
+    const connection = this.#connection(ctx);
+    const run = await this.#use<RemoteOrderLabel[]>(
+      connection,
+      'label_read',
+      null,
+      'order labels',
+      { script: 'labels', orders: orders.map((order) => ({ ...order })) },
+      ctx.signal,
+    );
+    return this.#readValue(run, 'read your shipping labels');
   }
 
   async listListings(ctx: AdapterContext): Promise<RemoteListings> {

@@ -21,6 +21,7 @@
     { "path": "packages/sales" },
     { "path": "packages/activity" },
     { "path": "packages/today" },
+    { "path": "packages/pack-check" },
     { "path": "packages/automation" },
     { "path": "packages/email-sales" },
     { "path": "packages/tag-parse" },

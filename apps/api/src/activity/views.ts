@@ -6,8 +6,13 @@ import type { ActivityEntry, SaleExplanation } from '@listora/activity';
 
 import { ApiError } from '../errors.ts';
 
+/** Where a package photo is read from (the photo storage's public URLs). */
+export interface ActivityUrls {
+  publicUrl: (key: string) => string;
+}
+
 /** The contract's `ActivityEntry`: absent instead of null, words within their limits. */
-export function activityEntryView(entry: ActivityEntry): ContractEntry {
+export function activityEntryView(entry: ActivityEntry, urls: ActivityUrls): ContractEntry {
   return {
     id: entry.id,
     at: entry.at.toISOString(),
@@ -49,10 +54,14 @@ export function activityEntryView(entry: ActivityEntry): ContractEntry {
             screenshot: entry.reference.screenshot,
           },
         }),
+    ...(entry.photoKey === null ? {} : { photoUrl: urls.publicUrl(entry.photoKey) }),
   };
 }
 
-export function saleExplanationView(explanation: SaleExplanation): ContractExplanation {
+export function saleExplanationView(
+  explanation: SaleExplanation,
+  urls: ActivityUrls,
+): ContractExplanation {
   const { check } = explanation;
   return {
     saleId: explanation.saleId,
@@ -101,7 +110,7 @@ export function saleExplanationView(explanation: SaleExplanation): ContractExpla
       startedAt: delist.startedAt.toISOString(),
       ...(delist.settledAt === null ? {} : { settledAt: delist.settledAt.toISOString() }),
     })),
-    entries: explanation.entries.map(activityEntryView),
+    entries: explanation.entries.map((entry) => activityEntryView(entry, urls)),
   };
 }
 

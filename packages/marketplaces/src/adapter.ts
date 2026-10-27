@@ -19,7 +19,8 @@
  * T-23, T-36), as optional members; orders joined with the browser runner's sale checks
  * (`listOrdersSince`), the seller's listings with the Poshmark and Mercari automation adapters
  * (`listListings`, for imports and drift checks), and an order's fees with the sale lifecycle
- * (`readOrderFees`, T-26). Credentials are not members: an adapter gets
+ * (`readOrderFees`, T-26), and an order's shipping label with Pack check (`readOrderLabels`).
+ * Credentials are not members: an adapter gets
  * a connection's tokens or browser session at use time from its own source (eBay's
  * `EbaySellerSource`, which `@listora/connections` implements over the token vault; the browser
  * runner's session vault).
@@ -361,7 +362,34 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
    * adapters that can list them have it. Throws when the marketplace cannot be read.
    */
   listListings?(ctx: AdapterContext): Promise<RemoteListings>;
+  /**
+   * The shipping labels of the seller's orders, from each order's own page, for Pack check
+   * (docs/features/pack-check.md): its tracking number and the buyer's first name. Only reads.
+   * Only adapters that can read order pages have it. Throws when the marketplace cannot be
+   * read; an order the pages don't show is `found: false`.
+   */
+  readOrderLabels?(orders: readonly LabelReadRequest[], ctx: AdapterContext): Promise<RemoteOrderLabel[]>;
 }
+
+/** An order whose label Pack check reads: its marketplace id and the listings that sold in it. */
+export interface LabelReadRequest {
+  externalOrderId: string;
+  externalListingIds: string[];
+}
+
+/**
+ * An order's shipping label as its page shows it. Only the buyer's first name: never their full
+ * name, address, or messages.
+ */
+export type RemoteOrderLabel =
+  | {
+      externalOrderId: string;
+      found: true;
+      /** As the page shows it; `null` while the order has no label yet. */
+      trackingNumber: string | null;
+      buyerFirstName: string | null;
+    }
+  | { externalOrderId: string; found: false };
 
 /** A listing a read found. */
 export type RemoteListing = Extract<RemoteListingState, { found: true }>;
