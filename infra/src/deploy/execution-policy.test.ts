@@ -114,7 +114,9 @@ describe('the restricted CDK execution policy', () => {
           ).toBe(true);
         }
         for (const arn of resource.Properties?.ManagedPolicyArns ?? []) {
-          const resolved = JSON.stringify(arn).replace('${AWS::Partition}', 'aws');
+          const resolved = JSON.stringify(arn)
+            .replace('${AWS::Partition}', 'aws')
+            .replace('"arn:",{"Ref":"AWS::Partition"},":iam', 'arn:aws:iam');
           expect(
             ATTACHABLE_MANAGED_POLICIES.some((allowed) => resolved.includes(allowed)),
             resolved,

@@ -66,7 +66,9 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   contract (add first and use in a later release; stop using first and drop in a later
   release).
 - **Alarms.** The observability stack alarms on the worker's trust metrics
-  ([observability.md](observability.md#trust-metrics-and-alarms)).
+  ([observability.md](observability.md#trust-metrics-and-alarms)) and emails every alarm, failed
+  deploy, and cost-budget notice to the operator, with a weekly health summary; backups and the
+  restore steps are in [alerts.md](alerts.md).
 - **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
   `npm run infra:synth` (part of `npm run check`) runs `cdk synth` of every environment with
   credentials hidden.

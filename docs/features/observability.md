@@ -51,4 +51,6 @@ over a day, on any account or connection deletion unfinished after 8 days (`Over
 to the alarm topic. The relink alarm fires on a level, which suits one seller; an environment with
 many sellers should alarm on increases instead, so one unlinked connection does not mask the next. A
 new metric adds a catalog entry; keep dimensions few, since CloudWatch bills each combination of
-values as a metric ([costs.md](costs.md)).
+values as a metric ([costs.md](costs.md)). A `worker-heartbeat` alarm fires when the worker publishes no
+trust metrics for 15 minutes, and every alarm, failed deploy, and cost-budget notice is emailed to the
+operator, with a weekly health summary ([alerts.md](alerts.md)).
