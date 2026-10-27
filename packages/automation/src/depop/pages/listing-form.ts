@@ -269,9 +269,16 @@ async function pick(page: PageDriver, name: string, text: string, what: string):
   await page.click(box.option(text));
 }
 
+/** How long Depop takes to draw the size picker once a category is picked. */
+const SIZE_PICKER_MS = 10_000;
+
 async function pickSize(page: PageDriver, size: string): Promise<void> {
   const box = combo('variants');
-  await expectElement(page, box.toggle, FORM, 'size picker');
+  // Depop draws the size picker for the category just picked, a moment after the pick (on the
+  // phone once, after Listora had already looked, 2026-10-27).
+  if (!(await appears(page, box.toggle, SIZE_PICKER_MS))) {
+    throw changed(FORM, `has no size picker (${box.toggle})`);
+  }
   if (!(await page.exists(box.open))) await page.click(box.toggle);
   await awaitElement(page, box.anyOption, FORM, 'size options');
   const offered = await page.texts(box.anyOption);

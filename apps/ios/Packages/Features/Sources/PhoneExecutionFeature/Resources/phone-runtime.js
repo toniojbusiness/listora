@@ -6100,9 +6100,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await expectElement$2(page, box.option(text), FORM$2, `${what} "${text}"`);
 		await page.click(box.option(text));
 	}
+	/** How long Depop takes to draw the size picker once a category is picked. */
+	const SIZE_PICKER_MS = 1e4;
 	async function pickSize$1(page, size) {
 		const box = combo("variants");
-		await expectElement$2(page, box.toggle, FORM$2, "size picker");
+		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$2(FORM$2, `has no size picker (${box.toggle})`);
 		if (!await page.exists(box.open)) await page.click(box.toggle);
 		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
 		const label = (await page.texts(box.anyOption)).find((option) => sizeOptionMatches$1(option, size));
@@ -6138,10 +6140,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	};
 	/** How long Depop gets to show its dialog and to close it once the listing is deleted. */
 	const DIALOG_MS = 2e4;
-	/** Opens the editor; `not_editable` when Depop showed something else (a sold listing). */
+	/** How long the edit page may take to draw its form (Depop's forms are drawn after load). */
+	const FORM_MS = 2e4;
+	/**
+	* Opens the editor; `not_editable` when Depop showed something else (a sold listing's product
+	* page), or no form in time.
+	*/
 	async function openEditor$1(page, site, slug) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.edit(slug)));
-		return await page.exists(LISTING_FORM$2.form) ? "editing" : "not_editable";
+		const end = Date.now() + FORM_MS;
+		for (;;) {
+			if (await page.exists(LISTING_FORM$2.form)) return "editing";
+			if (!new URL(page.url()).pathname.startsWith("/products/edit/") || Date.now() >= end) return "not_editable";
+			await lookAgain$1(page, 500);
+		}
 	}
 	/** Checks the product page has its Delete listing button, before the step that deletes. */
 	async function expectDelete(page) {
@@ -6576,8 +6588,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	const SOLD_ITEMS_PAGE = {
 		/** The note a seller without sales sees. */
 		none: `p:text-is("Once you've made a sale, you'll be able to see your receipt here.")`,
-		/** A sale's row links to its receipt. */
-		receipt: "a[href^=\"/sellinghub/sold-items/\"]"
+		/** A sale's row links to its receipt (not the page's own address, which a menu may link). */
+		receipt: "a[href^=\"/sellinghub/sold-items/\"]:not([href=\"/sellinghub/sold-items/\"])"
 	};
 	const PAGE$8 = "sold items page";
 	/** How long the list may take to draw. */
@@ -6698,7 +6710,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			if (slug === null) return notListed();
 			if (await step("open the editor", { mutates: false }, (page) => openEditor$1(page, site, slug)) === "editing") return { slug };
 			const shown = await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug));
-			if (!shown.state.found) return notListed();
+			if (!shown.state.found) return shown.state.authoritative ? deleted() : notListed();
 			if (shown.state.status === "sold") return sold();
 			if (shown.state.status === "ended") return deleted();
 			throw changed$2("edit page", "shows no listing form for a listing on sale");
@@ -7923,14 +7935,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
 		if (brand === null) return;
 		await page.type(LISTING_FORM.brand, brand);
-		const exact = `${LISTING_FORM.brandOption}:text-is("${quote$1(brand)}")`;
-		if (await appears$1(page, exact)) {
-			await page.click(exact);
-			return;
-		}
-		const match = (await page.texts(LISTING_FORM.brandOption)).find((option) => option.toLowerCase() === brand.toLowerCase());
+		if (!await appears$1(page, LISTING_FORM.brandOption)) throw changed(FORM, `lists no brand "${brand}"`);
+		const offered = await page.texts(LISTING_FORM.brandOption);
+		const match = offered.find((option) => option === brand) ?? offered.find((option) => option.toLowerCase() === brand.toLowerCase());
 		if (match === void 0) throw changed(FORM, `lists no brand "${brand}"`);
-		await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}")`);
+		await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
 	}
 	async function pickSize(page, size) {
 		await expectElement(page, LISTING_FORM.size, FORM, "size list");
@@ -8700,19 +8709,18 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* change (the same form, filled in). Every selector the adapter uses on it is here, so a change
 	* to Poshmark's form is fixed in this one file.
 	*
-	* Read in Poshmark's own public listing-editor code (2026-10-26): the form's text inputs are
-	* named by their validation names (`data-vv-name`: `title`, `description`, `originalPrice`,
-	* `inputPrice` for the listing price, `sku`), the photos input is `#img-file-input`, and a new
-	* listing is published in two steps, Next (`data-et-name="next"`) and then List on the share
-	* step (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`).
-	* Poshmark's validation messages are `.form__error-message`. Read on the captain's real session
-	* (2026-10-26, from the evidence of a run that stopped there): picking the photos opens Poshmark's
-	* cover-photo editor (`ImageEditModal`, drawn only while open), which keeps the photos only once
-	* its Apply (`data-et-name="apply"`) confirms them, and the listing price field is
-	* `data-vv-name="listingPrice"`; there is no `data-vv-name="brand"` field. The pickers (catalog, size,
-	* condition, availability) and the brand field are read in the same code (FORM_SELECTORS). A selector that no longer matches ends the step
-	* as `element_missing` before anything is submitted, so the step goes to the user. The fake
-	* Poshmark (fake/) mirrors exactly what this file expects.
+	* Read in Poshmark's own public listing-editor code (2026-10-26) and on the captain's real
+	* session (from the evidence of runs that stopped there): the form's text inputs are named by
+	* their validation names (`data-vv-name`: `title`, `description`, `originalPrice`,
+	* `listingPrice`, `sku`), the photos input is `#img-file-input`, and a new listing is published in
+	* two steps, Next (`data-et-name="next"`) and then List on the share step
+	* (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`). Picking
+	* the photos opens Poshmark's cover-photo editor, which keeps them only once its Apply confirms
+	* them; the brand is a text field in the brand section, not a `data-vv-name` field. Poshmark's
+	* validation messages are `.form__error-message`, always in the page and hidden until they apply.
+	* The pickers (catalog, size, condition, availability) are in FORM_SELECTORS. A selector that no
+	* longer matches ends the step as `element_missing` before anything is submitted, so the step
+	* goes to the user. The fake Poshmark (fake/) mirrors exactly what this file expects.
 	*
 	* Only `submit` changes anything: filling the form is not saved until it is submitted.
 	*/
@@ -8733,9 +8741,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		/**
 		* The Listing Price dialog the price field opens (read on the captain's session, 2026-10-26):
 		* the price again, Automate Offers (on by default, and then a lowest price is required), the
-		* original price, and Done. Listora sets no automatic offers, so it turns them off.
+		* original price, and Done. Listora sets no automatic offers, so it turns them off. This is the
+		* dialog while it shows (`modal--in`); it stays in the page once closed.
 		*/
-		/** The dialog while it shows (`modal--in`); it stays in the page once closed. */
 		priceDialog: ".listing-price-suggestion-modal.modal--in",
 		priceDialogPrice: ".listing-price-suggestion-modal #listing-price-modal-listing-price-input",
 		priceDialogOriginal: ".listing-price-suggestion-modal #listing-price-modal-original-price-input",
@@ -8958,7 +8966,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			message
 		};
 	}
-	/** Waits for the listing's page, where Poshmark goes once it saved the listing. */
 	/**
 	* Waits for where Poshmark goes once it saved the listing: the listing's page, or (read on the
 	* captain's session, 2026-10-26: after List on a new listing) the seller's closet.
