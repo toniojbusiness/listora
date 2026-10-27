@@ -588,6 +588,7 @@
           ],
           "Version": "2012-10-17"
         },
+        "PermissionsBoundary": "arn:aws:iam::222222222222:policy/listora-prod-role-boundary",
         "Tags": [
           {
             "Key": "Name",
@@ -706,7 +707,8 @@
               ]
             }
           }
-        ]
+        ],
+        "PermissionsBoundary": "arn:aws:iam::222222222222:policy/listora-prod-role-boundary"
       }
     },
     "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
