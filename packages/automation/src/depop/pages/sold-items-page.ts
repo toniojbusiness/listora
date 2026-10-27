@@ -16,8 +16,8 @@ import { absolute, changed, lookAgain, type DepopSite } from './common.ts';
 export const SOLD_ITEMS_PAGE = {
   /** The note a seller without sales sees. */
   none: `p:text-is("Once you've made a sale, you'll be able to see your receipt here.")`,
-  /** A sale's row links to its receipt. */
-  receipt: 'a[href^="/sellinghub/sold-items/"]',
+  /** A sale's row links to its receipt (not the page's own address, which a menu may link). */
+  receipt: 'a[href^="/sellinghub/sold-items/"]:not([href="/sellinghub/sold-items/"])',
 } as const;
 
 const PAGE = 'sold items page';

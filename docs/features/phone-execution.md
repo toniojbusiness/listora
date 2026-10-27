@@ -100,6 +100,18 @@ data (`pageData`, one fixed read of a page global, in the page's own world, the 
 data lives), reports the main frame's navigations, HTTP status, and dialogs, fetches listing
 photos, and hands checks to the seller. Every rule stays in the runtime.
 
+- **No keyboard in the background.** The web views live in a window of their own, behind the
+  app's, that can never become the key window, which the keyboard follows: a page that focuses
+  one of its fields while Listora works never brings up the keyboard or its bar. The check
+  hand-off moves the page into a visible window, where the seller types as usual.
+- **Progress.** Each step the runtime starts goes to the app (`progress`, never waited for): the
+  step in plain words ("Adding the photos", from the script's step name) and its number. The item
+  screen's card for that listing shows it while the phone works on its change: the step, "Step 4
+  of 9", and "Working on your iPhone, about 40 seconds left", estimated from the same call's
+  step times the last time it ran to the end on this phone (kept in the app's defaults, per
+  marketplace and call). The phone stays awake while it works. Each answer also carries its
+  steps' times (`stepMs`), which the server logs for every call (`phone call answered`, with
+  the marketplace, the call, and each step's milliseconds).
 - **The marketplace page** is an off-screen `WKWebView` with a data store of its own, filled
   with the cookies the phone keeps. It asks for desktop pages at a desktop size, as Safari's
   "Request Desktop Website" does, so the marketplaces serve the pages the scripts read. It is

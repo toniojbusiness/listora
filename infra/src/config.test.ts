@@ -322,12 +322,6 @@ describe('ENVIRONMENT_SETTINGS', () => {
     expect(personal.containerInsights).toBe(false);
   });
 
-  it('replaces the task in place only in personal; staging and prod keep the API up during deploys', () => {
-    expect(ENVIRONMENT_SETTINGS.personal.deployments).toBe('replace');
-    expect(ENVIRONMENT_SETTINGS.staging.deployments).toBe('rolling');
-    expect(ENVIRONMENT_SETTINGS.prod.deployments).toBe('rolling');
-  });
-
   it('signs in to personal only with its owner pool; staging and prod keep dev until they get a pool', () => {
     expect(ENVIRONMENT_SETTINGS.personal.signIn).toEqual({ via: 'owner-pool' });
     expect(ENVIRONMENT_SETTINGS.staging.signIn).toEqual({ via: 'dev' });

@@ -159,7 +159,8 @@ export function createDepopScripts(
     const shown = await step('open the listing', { mutates: false }, (page) =>
       readProduct(page, site, slug),
     );
-    if (!shown.state.found) return notListed();
+    // Gone (Depop says so) is a deleted listing too.
+    if (!shown.state.found) return shown.state.authoritative ? deleted() : notListed();
     if (shown.state.status === 'sold') return sold();
     if (shown.state.status === 'ended') return deleted();
     // A listing on sale whose edit page has no form: the page is not what Listora knows.

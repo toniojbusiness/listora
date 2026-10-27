@@ -45,17 +45,6 @@ export type ServiceLayout =
   | { readonly layout: 'combined'; readonly app: ServiceSize };
 
 /**
- * How a deploy replaces the API and worker tasks:
- *
- * - `rolling`: start the new tasks, wait until they are healthy, then stop the old ones, so
- *   the API is always up.
- * - `replace`: stop the old tasks while the new ones start. A deploy finishes about a minute
- *   sooner, but the API answers nothing for about a minute: for one reseller's own copy, not
- *   for an environment other people use.
- */
-export type ServiceDeployments = 'rolling' | 'replace';
-
-/**
  * How tasks reach the internet (marketplace, AI, and AWS APIs):
  *
  * - `nat`: tasks run in private `app` subnets behind NAT gateways. One gateway is the
@@ -123,7 +112,6 @@ export interface EnvironmentSettings {
     readonly performanceInsights: boolean;
   };
   readonly services: ServiceLayout;
-  readonly deployments: ServiceDeployments;
   /**
    * Size of the on-demand headless-Chromium runner that automates Poshmark, Mercari, Depop, and
    * eBay (decision D1 in docs/features/automation.md): the compute stack's `runner` service, with no
@@ -195,7 +183,6 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       api: { cpu: 256, memoryMiB: 512, minTasks: 1, maxTasks: 2 },
       worker: { cpu: 256, memoryMiB: 512, minTasks: 1, maxTasks: 2 },
     },
-    deployments: 'rolling',
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_MONTH,
     containerInsights: false,
@@ -224,7 +211,6 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       api: { cpu: 512, memoryMiB: 1024, minTasks: 2, maxTasks: 6 },
       worker: { cpu: 512, memoryMiB: 1024, minTasks: 2, maxTasks: 4 },
     },
-    deployments: 'rolling',
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.THREE_MONTHS,
     containerInsights: true,
@@ -265,8 +251,6 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     // One task runs both processes: 0.25 vCPU is the smallest Fargate size, and 1 GiB leaves
     // the worker room to decode full-size photos.
     services: { layout: 'combined', app: { cpu: 256, memoryMiB: 1024, minTasks: 1, maxTasks: 1 } },
-    // The owner's deploys finish sooner; the app is down for about a minute while they run.
-    deployments: 'replace',
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_WEEK,
     containerInsights: false,

@@ -48,11 +48,21 @@ public struct APIFailure: Error, Equatable, Sendable {
 
     /// A request that threw instead of returning a response.
     public init(_ error: any Error) {
-        let underlying = (error as? ClientError)?.underlyingError ?? error
+        let client = error as? ClientError
+        let underlying = client?.underlyingError ?? error
         if let failure = underlying as? APIFailure {
             self = failure
         } else if underlying is URLError {
             self = .networkUnavailable
+        } else if let status = client?.response?.status.code, status >= 500 {
+            // A server error without Listora's own error body: its gateway answered while the
+            // service restarted or was overloaded. The same request may go through in a moment.
+            self.init(
+                statusCode: status,
+                code: "server_unavailable",
+                message: "Listora couldn't answer just now. Try again in a moment.",
+                retryable: true,
+            )
         } else {
             self.init(
                 statusCode: nil,

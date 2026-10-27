@@ -354,10 +354,10 @@ deploy, then:
    not running.
 5. **Waits for health and runs the smoke test**, as the full deploy does.
 
-Personal's app service replaces its one task in place (`deployments: 'replace'` in
-`src/config.ts`: minimum healthy 0%), on every deploy: the old task stops while the new one
-starts, so the API answers nothing for about a minute. Staging and prod keep `rolling`. The
-deploy times are in [docs/features/infra.md](../docs/features/infra.md#deploy-times).
+Every service rolls (minimum healthy 100%, maximum 200%), also personal's one-task app service:
+the new task starts, and the old one serves until the new one passes its health check, so a
+deploy never takes the API down. The deploy times are in
+[docs/features/infra.md](../docs/features/infra.md#deploy-times).
 
 The services then run revisions that CloudFormation did not make; the stacks still describe the
 commit of the last full deploy. The next full deploy brings them back in line: it replaces the

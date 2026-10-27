@@ -3,19 +3,18 @@
  * change (the same form, filled in). Every selector the adapter uses on it is here, so a change
  * to Poshmark's form is fixed in this one file.
  *
- * Read in Poshmark's own public listing-editor code (2026-10-26): the form's text inputs are
- * named by their validation names (`data-vv-name`: `title`, `description`, `originalPrice`,
- * `inputPrice` for the listing price, `sku`), the photos input is `#img-file-input`, and a new
- * listing is published in two steps, Next (`data-et-name="next"`) and then List on the share
- * step (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`).
- * Poshmark's validation messages are `.form__error-message`. Read on the captain's real session
- * (2026-10-26, from the evidence of a run that stopped there): picking the photos opens Poshmark's
- * cover-photo editor (`ImageEditModal`, drawn only while open), which keeps the photos only once
- * its Apply (`data-et-name="apply"`) confirms them, and the listing price field is
- * `data-vv-name="listingPrice"`; there is no `data-vv-name="brand"` field. The pickers (catalog, size,
- * condition, availability) and the brand field are read in the same code (FORM_SELECTORS). A selector that no longer matches ends the step
- * as `element_missing` before anything is submitted, so the step goes to the user. The fake
- * Poshmark (fake/) mirrors exactly what this file expects.
+ * Read in Poshmark's own public listing-editor code (2026-10-26) and on the captain's real
+ * session (from the evidence of runs that stopped there): the form's text inputs are named by
+ * their validation names (`data-vv-name`: `title`, `description`, `originalPrice`,
+ * `listingPrice`, `sku`), the photos input is `#img-file-input`, and a new listing is published in
+ * two steps, Next (`data-et-name="next"`) and then List on the share step
+ * (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`). Picking
+ * the photos opens Poshmark's cover-photo editor, which keeps them only once its Apply confirms
+ * them; the brand is a text field in the brand section, not a `data-vv-name` field. Poshmark's
+ * validation messages are `.form__error-message`, always in the page and hidden until they apply.
+ * The pickers (catalog, size, condition, availability) are in FORM_SELECTORS. A selector that no
+ * longer matches ends the step as `element_missing` before anything is submitted, so the step
+ * goes to the user. The fake Poshmark (fake/) mirrors exactly what this file expects.
  *
  * Only `submit` changes anything: filling the form is not saved until it is submitted.
  */
@@ -49,9 +48,9 @@ export const FORM_SELECTORS = {
   /**
    * The Listing Price dialog the price field opens (read on the captain's session, 2026-10-26):
    * the price again, Automate Offers (on by default, and then a lowest price is required), the
-   * original price, and Done. Listora sets no automatic offers, so it turns them off.
+   * original price, and Done. Listora sets no automatic offers, so it turns them off. This is the
+   * dialog while it shows (`modal--in`); it stays in the page once closed.
    */
-  /** The dialog while it shows (`modal--in`); it stays in the page once closed. */
   priceDialog: '.listing-price-suggestion-modal.modal--in',
   priceDialogPrice: '.listing-price-suggestion-modal #listing-price-modal-listing-price-input',
   priceDialogOriginal: '.listing-price-suggestion-modal #listing-price-modal-original-price-input',
@@ -346,7 +345,6 @@ async function refusal(page: PageDriver): Promise<{ type: 'refused'; message: st
   return message === '' ? null : { type: 'refused', message };
 }
 
-/** Waits for the listing's page, where Poshmark goes once it saved the listing. */
 /**
  * Waits for where Poshmark goes once it saved the listing: the listing's page, or (read on the
  * captain's session, 2026-10-26: after List on a new listing) the seller's closet.

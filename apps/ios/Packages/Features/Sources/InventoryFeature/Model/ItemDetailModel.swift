@@ -113,7 +113,7 @@ final class ItemDetailModel {
                             _ = try await service.perform(request, idempotencyKey: key)
                             return nil
                         } catch let error as APIFailure {
-                            if error.statusCode == nil, error.retryable, attempt < attempts {
+                            if Self.mayResend(error), attempt < attempts {
                                 try? await Task.sleep(for: delay)
                                 continue
                             }
@@ -135,6 +135,12 @@ final class ItemDetailModel {
             notice = failures.joined(separator: "\n")
         }
         await refresh()
+    }
+
+    /// Whether a send that failed is sent again (with the same idempotency key, so it is applied
+    /// once): Listora couldn't be reached, or its gateway answered for it while it restarted.
+    nonisolated static func mayResend(_ error: APIFailure) -> Bool {
+        error.retryable && (error.statusCode == nil || error.code == "server_unavailable")
     }
 
     /// `busyMarketplace` while a change goes to several marketplaces at once.
@@ -210,7 +216,7 @@ final class ItemDetailModel {
                 break
             } catch {
                 attempt += 1
-                if error.statusCode == nil, error.retryable, attempt < timing.sendAttempts {
+                if Self.mayResend(error), attempt < timing.sendAttempts {
                     try? await Task.sleep(for: timing.sendRetryDelay)
                     continue
                 }

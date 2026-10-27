@@ -27,14 +27,27 @@ const DIALOG_MS = 20_000;
 
 export type EditorOpened = 'editing' | 'not_editable';
 
-/** Opens the editor; `not_editable` when Depop showed something else (a sold listing). */
+/** How long the edit page may take to draw its form (Depop's forms are drawn after load). */
+const FORM_MS = 20_000;
+
+/**
+ * Opens the editor; `not_editable` when Depop showed something else (a sold listing's product
+ * page), or no form in time.
+ */
 export async function openEditor(
   page: PageDriver,
   site: DepopSite,
   slug: string,
 ): Promise<EditorOpened> {
   await page.goto(absolute(site, DEPOP_PATHS.edit(slug)));
-  return (await page.exists(LISTING_FORM.form)) ? 'editing' : 'not_editable';
+  const end = Date.now() + FORM_MS;
+  for (;;) {
+    if (await page.exists(LISTING_FORM.form)) return 'editing';
+    if (!new URL(page.url()).pathname.startsWith('/products/edit/') || Date.now() >= end) {
+      return 'not_editable';
+    }
+    await lookAgain(page, 500);
+  }
 }
 
 /** Checks the product page has its Delete listing button, before the step that deletes. */

@@ -72,9 +72,10 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   since the commit the services run, registers task definition revisions that differ from the
   compute stack's only in the image tags, and moves the services to them through ECS, waiting
   until each rollout completes (a circuit-breaker rollback fails the deploy); then the same
-  health wait and smoke test. Personal's app service replaces its one task in place
-  (`deployments: 'replace'`, minimum healthy 0%), so the API is down for about a minute during
-  any deploy; staging and prod keep rolling deploys. The next full deploy puts the services
+  health wait and smoke test. Every service rolls (minimum healthy 100%), personal's one-task
+  app service too: the old task serves until the new one passes its health check, so a deploy
+  never takes the API down (personal's replace-in-place deploys gave gateway 5xx for about a
+  minute, 2026-10-27). The next full deploy puts the services
   back on the stacks' own task definitions. Details: infra/README.md, Code-only deploys.
 
 ### Deploy times

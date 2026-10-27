@@ -156,6 +156,29 @@ struct APIFailureTests {
     }
 
     @Test
+    func `a gateway error without Listora's body is a retryable server error, not an unreadable answer`() {
+        // What the API gateway answers while the service restarts: a 503 with its own body.
+        let error = ClientError(
+            operationID: "endListing",
+            operationInput: (),
+            request: nil,
+            requestBody: nil,
+            baseURL: nil,
+            response: HTTPResponse(status: .serviceUnavailable),
+            responseBody: nil,
+            causeDescription: "Unexpected content type",
+            underlyingError: DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "not JSON")),
+        )
+
+        let failure = APIFailure(error)
+
+        #expect(failure.code == "server_unavailable")
+        #expect(failure.statusCode == 503)
+        #expect(failure.retryable)
+        #expect(failure.message == "Listora couldn't answer just now. Try again in a moment.")
+    }
+
+    @Test
     func `a connection failure is retryable and says so plainly`() {
         let failure = APIFailure(URLError(.notConnectedToInternet))
 

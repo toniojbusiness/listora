@@ -51,7 +51,14 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   Check status each queue one operation. Retry re-queues the failed operation
   (`retryOperation`). Change price warns, without refusing, when the new price is below the
   item's floor on that marketplace (`getItemPricing`), as the price screen does. End listing
-  asks for the reason on its own card, so the confirmation opens at the button.
+  asks for the reason on its own card, so the confirmation opens at the button. A change waiting
+  to try again says when ("Waiting to retry at 9:41 PM", or "Checking again at" for a check
+  between read-backs) and offers Try now (`tryOperationNow`), which runs that attempt at once.
+  When two or more marketplaces can take the same change, Relist all and End all (with one
+  reason for all) queue it on each at once; each card then shows how its own change goes, and a
+  marketplace Listora couldn't reach is named in the notice.
+- **Work on this iPhone**: while the phone runs a listing's change, that listing's card shows
+  the step it is on, its number, and about how long is left ([phone-execution.md](phone-execution.md)).
 
 ## Never show success the server has not confirmed
 

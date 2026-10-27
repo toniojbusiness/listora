@@ -5,8 +5,8 @@
  * The form, in the order the script fills it: photos (one file input, in posting order), title,
  * description (with Listora's SKU line), the category level by level (each level's options
  * appear once the one above is picked), brand (typed into Mercari's brand search and picked from
- * its suggestions; without an exact suggestion the listing is posted without a brand, since the
- * form takes only brands from its own list), condition, size (from the category's size list),
+ * its suggestions; the form takes only brands from its own list, so a brand it doesn't list stops
+ * the step and hands it to the seller), condition, size (from the category's size list),
  * shipping (who pays, and the prepaid label's weight), and the whole-dollar price.
  *
  * After submitting, the form either shows Mercari's validation message (a rejection in
@@ -188,15 +188,17 @@ async function pickBrand(page: PageDriver, brand: string | null): Promise<void> 
   await expectElement(page, LISTING_FORM.brand, FORM, 'brand search');
   if (brand === null) return;
   await page.type(LISTING_FORM.brand, brand);
-  const exact = `${LISTING_FORM.brandOption}:text-is("${quote(brand)}")`;
-  if (await appears(page, exact)) {
-    await page.click(exact);
-    return;
+  // The suggestions come as Mercari's search answers: the exact brand, else the same brand in
+  // another case. Without it the form would take no brand, so the step goes to the seller.
+  if (!(await appears(page, LISTING_FORM.brandOption))) {
+    throw changed(FORM, `lists no brand "${brand}"`);
   }
   const offered = await page.texts(LISTING_FORM.brandOption);
-  const match = offered.find((option) => option.toLowerCase() === brand.toLowerCase());
+  const match =
+    offered.find((option) => option === brand) ??
+    offered.find((option) => option.toLowerCase() === brand.toLowerCase());
   if (match === undefined) throw changed(FORM, `lists no brand "${brand}"`);
-  await page.click(`${LISTING_FORM.brandOption}:text-is("${quote(match)}")`);
+  await page.click(`${LISTING_FORM.brandOption}:text-is("${quote(match)}") >> nth=0`);
 }
 
 async function pickSize(page: PageDriver, size: string): Promise<void> {
