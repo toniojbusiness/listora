@@ -1946,6 +1946,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/phone-runs/wait": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wait for this phone's next work
+         * @description While the app is open and has claimed everything it can, it waits here instead of
+         *     looking again on a timer: the answer comes as soon as work for this phone may be
+         *     claimable (the engine handed a change to the phone, a check came due, a run's claim
+         *     ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+         *     usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+         *     trigger in the app, the app leaving) leaves nothing behind.
+         */
+        get: operations["waitForPhoneWork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/phone-runtime": {
         parameters: {
             query?: never;
@@ -3818,6 +3843,13 @@ export interface components {
              */
             appOpen?: boolean;
         };
+        PhoneWorkWaitResult: {
+            /**
+             * @description `true` when work for this phone may be claimable now (claim it), `false` when the wait
+             *     ran out with none (wait again, or claim as usual).
+             */
+            ready: boolean;
+        };
         /**
          * @description One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
          *     and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
@@ -5472,6 +5504,7 @@ export type Device = components['schemas']['Device'];
 export type PhoneWorkPurpose = components['schemas']['PhoneWorkPurpose'];
 export type KnownPhoneWorkPurpose = components['schemas']['KnownPhoneWorkPurpose'];
 export type PhoneRunClaim = components['schemas']['PhoneRunClaim'];
+export type PhoneWorkWaitResult = components['schemas']['PhoneWorkWaitResult'];
 export type PhoneCall = components['schemas']['PhoneCall'];
 export type PhoneRun = components['schemas']['PhoneRun'];
 export type PhoneRunResult = components['schemas']['PhoneRunResult'];
@@ -8384,6 +8417,34 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    waitForPhoneWork: {
+        parameters: {
+            query: {
+                /** @description The app installation's id, which it keeps in its Keychain. */
+                installationId: components["schemas"]["Id"];
+                /** @description The longest the answer may take. */
+                waitSeconds: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether work may be ready. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneWorkWaitResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };

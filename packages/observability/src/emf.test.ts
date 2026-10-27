@@ -130,6 +130,7 @@ describe('formatEmf', () => {
       OperationFailed: 'Count',
       DelistFailed: 'Count',
       DelistLatency: 'Milliseconds',
+      DelistEverywhereLatency: 'Milliseconds',
       StuckOperations: 'Count',
       OldestStuckOperationAge: 'Seconds',
       OldestUnverifiedOperationAge: 'Seconds',

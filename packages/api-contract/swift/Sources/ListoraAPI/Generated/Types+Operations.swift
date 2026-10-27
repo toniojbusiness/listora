@@ -17648,6 +17648,218 @@ public enum Operations {
             }
         }
     }
+    /// Wait for this phone's next work
+    ///
+    /// While the app is open and has claimed everything it can, it waits here instead of
+    /// looking again on a timer: the answer comes as soon as work for this phone may be
+    /// claimable (the engine handed a change to the phone, a check came due, a run's claim
+    /// ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+    /// usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+    /// trigger in the app, the app leaving) leaves nothing behind.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runs/wait`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)`.
+    public enum WaitForPhoneWork {
+        public static let id: Swift.String = "waitForPhoneWork"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The app installation's id, which it keeps in its Keychain.
+                ///
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query/installationId`.
+                public var installationId: Components.Schemas.Id
+                /// The longest the answer may take.
+                ///
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query/waitSeconds`.
+                public var waitSeconds: Swift.Int32
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - installationId: The app installation's id, which it keeps in its Keychain.
+                ///   - waitSeconds: The longest the answer may take.
+                public init(
+                    installationId: Components.Schemas.Id,
+                    waitSeconds: Swift.Int32
+                ) {
+                    self.installationId = installationId
+                    self.waitSeconds = waitSeconds
+                }
+            }
+            public var query: Operations.WaitForPhoneWork.Input.Query
+            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.WaitForPhoneWork.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.WaitForPhoneWork.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.WaitForPhoneWork.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.WaitForPhoneWork.Input.Query,
+                headers: Operations.WaitForPhoneWork.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PhoneWorkWaitResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PhoneWorkWaitResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.WaitForPhoneWork.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.WaitForPhoneWork.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Whether work may be ready.
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.WaitForPhoneWork.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.WaitForPhoneWork.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Get the phone runtime the server runs its phone work with
     ///
     /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the

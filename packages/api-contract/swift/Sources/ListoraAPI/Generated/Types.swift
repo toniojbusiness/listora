@@ -942,6 +942,19 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/phone-runs`.
     /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)`.
     func claimPhoneRun(_ input: Operations.ClaimPhoneRun.Input) async throws -> Operations.ClaimPhoneRun.Output
+    /// Wait for this phone's next work
+    ///
+    /// While the app is open and has claimed everything it can, it waits here instead of
+    /// looking again on a timer: the answer comes as soon as work for this phone may be
+    /// claimable (the engine handed a change to the phone, a check came due, a run's claim
+    /// ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+    /// usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+    /// trigger in the app, the app leaving) leaves nothing behind.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runs/wait`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)`.
+    func waitForPhoneWork(_ input: Operations.WaitForPhoneWork.Input) async throws -> Operations.WaitForPhoneWork.Output
     /// Get the phone runtime the server runs its phone work with
     ///
     /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the
@@ -2660,6 +2673,27 @@ extension APIProtocol {
         try await claimPhoneRun(Operations.ClaimPhoneRun.Input(
             headers: headers,
             body: body
+        ))
+    }
+    /// Wait for this phone's next work
+    ///
+    /// While the app is open and has claimed everything it can, it waits here instead of
+    /// looking again on a timer: the answer comes as soon as work for this phone may be
+    /// claimable (the engine handed a change to the phone, a check came due, a run's claim
+    /// ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+    /// usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+    /// trigger in the app, the app leaving) leaves nothing behind.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runs/wait`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)`.
+    public func waitForPhoneWork(
+        query: Operations.WaitForPhoneWork.Input.Query,
+        headers: Operations.WaitForPhoneWork.Input.Headers = .init()
+    ) async throws -> Operations.WaitForPhoneWork.Output {
+        try await waitForPhoneWork(Operations.WaitForPhoneWork.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// Get the phone runtime the server runs its phone work with

@@ -8460,15 +8460,31 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** How long the edit page may take to draw its form, or to answer the toggle. */
 	const DRAW_MS = 25e3;
 	const LOOK_EVERY_MS$1 = 500;
-	/** Opens the editor; `not_editable` when Mercari showed something else (a sold listing). */
+	/**
+	* Opens the editor; `not_editable` when Mercari showed something else (a sold listing's page) or
+	* answered with an error (a listing it removed).
+	*/
 	async function openEditor(page, site, id) {
 		await page.goto(absolute(site, MERCARI_PATHS.edit(id)));
+		const status = page.status();
+		if (status !== null && status >= 400) return "not_editable";
 		const end = Date.now() + DRAW_MS;
 		for (;;) {
 			if (await page.exists(LISTING_FORM.form)) return "editing";
 			if (!onEditPage(page) || Date.now() >= end) return "not_editable";
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
+	}
+	/**
+	* Whether the listing the editor shows is active (its toggle says Deactivate) or inactive (it
+	* says Activate): an end or relist reads this on the edit page it acts on, with no read of the
+	* listing's own page first. A toggle that says something else is a page Listora doesn't know.
+	*/
+	async function editorShows(page) {
+		const shown = (await page.text(EDIT_PAGE.toggle))?.trim();
+		if (shown === "Deactivate") return "active";
+		if (shown === "Activate") return "inactive";
+		throw changed(PAGE$3, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
 	}
 	/** Deactivates the listing the editor shows, and waits for Mercari to take it. */
 	async function deactivate(page) {
@@ -8882,6 +8898,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (shown.state.status === "sold") return sold();
 			throw changed("edit page", "shows no listing form for a listing that has not sold");
 		}
+		/**
+		* The edit page an end or relist acts on, and whether it shows the listing active or inactive,
+		* so the change takes one page load before it acts (reading the listing's own page first took
+		* another). Mercari shows no editor for a sold or removed listing; its own page then says what
+		* became of it.
+		*/
+		async function onEditor(step, id) {
+			const shown = await step("open the editor", { mutates: false }, async (page) => await openEditor(page, site, id) === "editing" ? editorShows(page) : null);
+			if (shown !== null) return shown;
+			return step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
+		}
 		/** Posts a new listing from the payload (List, or a relist of a listing Mercari removed). */
 		async function createListing(op, step) {
 			const payload = op.payload;
@@ -8956,35 +8983,38 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			end: async (op, step) => {
 				const id = op.listing.externalListingId;
 				if (id === null) return notListed();
-				const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
-				if (!shown.state.found) return notListed();
-				if (shown.state.status !== "active") return { type: "applied" };
-				const opened = await editor(op, step);
-				if (!("id" in opened)) return opened;
-				return step("deactivate", { mutates: true }, async (page) => {
+				const shown = await onEditor(step, id);
+				if (shown === "active") return step("deactivate", { mutates: true }, async (page) => {
 					await deactivate(page);
 					return { type: "applied" };
 				});
+				if (shown === "inactive") return { type: "applied" };
+				if (!shown.state.found) return notListed();
+				if (shown.state.status !== "active") return { type: "applied" };
+				throw changed("edit page", "shows no listing form for an active listing");
 			},
 			relist: async (op, step) => {
 				const id = op.listing.externalListingId;
 				if (id === null) return notListed();
-				const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
-				if (!shown.state.found) return shown.state.authoritative ? createListing(op, step) : notListed();
-				if (shown.state.status === "active") return {
-					type: "applied",
-					externalListingId: id
-				};
-				if (shown.state.status === "sold") return sold();
-				const opened = await editor(op, step);
-				if (!("id" in opened)) return opened;
-				return step("activate", { mutates: true }, async (page) => {
+				const shown = await onEditor(step, id);
+				if (shown === "inactive") return step("activate", { mutates: true }, async (page) => {
 					await activate(page);
 					return {
 						type: "applied",
 						externalListingId: id
 					};
 				});
+				if (shown === "active") return {
+					type: "applied",
+					externalListingId: id
+				};
+				if (!shown.state.found) return shown.state.authoritative ? createListing(op, step) : notListed();
+				if (shown.state.status === "sold") return sold();
+				if (shown.state.status === "active") return {
+					type: "applied",
+					externalListingId: id
+				};
+				throw changed("edit page", "shows no listing form for a listing that has not sold");
 			},
 			read: async (ref, step) => {
 				const id = ref.externalListingId;
@@ -9350,11 +9380,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	};
 	/**
 	* Opens a form and waits until it is there; `false` for a listing Poshmark has no form for (a
-	* 404). A form that never comes is a page Listora no longer understands (`PageChangedError`).
+	* 404, or a page it sent the seller to instead, as for a listing that can't be edited). A form
+	* that never comes is a page Listora no longer understands (`PageChangedError`).
 	*/
 	async function openForm(page, url) {
 		await page.goto(url);
 		if (page.status() === 404) return false;
+		const asked = new URL(url).pathname.replace(/\/$/, "");
+		if (!new URL(page.url()).pathname.startsWith(asked)) return false;
 		try {
 			await page.waitFor(FORM_SELECTORS.form, "attached");
 		} catch {
@@ -9533,6 +9566,16 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (Date.now() >= end) return false;
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
 		}
+	}
+	/**
+	* The availability the edit form shows the listing in, or `null` when its picker shows neither
+	* (Listora then reads the listing's own page instead).
+	*/
+	async function shownAvailability(page) {
+		await expectField(page, FORM_SELECTORS.availabilitySelector, "availability picker");
+		const shown = (await page.text(FORM_SELECTORS.availabilitySelector))?.replace(/\s+/g, " ").trim();
+		const found = Object.entries(AVAILABILITY_LABELS).find(([, label]) => label === shown);
+		return found === void 0 ? null : found[0];
 	}
 	async function setAvailability(page, availability) {
 		await expectField(page, FORM_SELECTORS.availabilitySelector, "availability picker");
@@ -9956,7 +9999,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				timeScale: 2
 			}, (page) => chooseColors(page, payload.colors));
 		}
-		/** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
+		/**
+		* Saves the open form; Poshmark's validation messages are a rejection in its own words. An
+		* update lands on the listing's page and is applied as it is: the operation's read-back reads
+		* the listing next, so reading it here too would only load the same page twice.
+		*/
 		async function save(step, button) {
 			const result = await step(button === "list" ? "list" : "update", {
 				mutates: true,
@@ -9967,6 +10014,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				code: "validation_failed",
 				message: result.message
 			};
+			if (button === "update") {
+				const id = listingIdFromPath(result.path);
+				return id === null ? { type: "applied" } : {
+					type: "applied",
+					externalListingId: id
+				};
+			}
 			return applied(step, result.path);
 		}
 		/**
@@ -10006,10 +10060,26 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function openEditor(step, id) {
 			return step("open the edit form", { mutates: false }, (page) => openForm(page, site.editListing(id)));
 		}
-		/** Sets the listing's availability (ending or relisting it), unless it already has it. */
+		/**
+		* Sets the listing's availability (ending or relisting it), unless it already has it. The
+		* edit form shows the availability, so a listing it shows in the other one is changed there at
+		* once, with no read of the listing's page first (that took a page load, and up to two minutes
+		* of looks right after an earlier change, when Poshmark's page shows no listing). The
+		* listing's page decides everything else: a listing without a form (one Poshmark removed, or
+		* sold), one already as asked, and one Poshmark hides.
+		*/
 		async function changeAvailability(op, step, availability) {
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
+			const onForm = await step("open the edit form", { mutates: false }, async (page) => await openForm(page, site.editListing(id)) ? shownAvailability(page) : null);
+			if (onForm !== null && onForm !== availability) {
+				await step("set the availability", { mutates: false }, (page) => setAvailability(page, availability));
+				return save(step, "update");
+			}
+			if (onForm === "not_for_sale" && availability === "not_for_sale") return {
+				type: "applied",
+				externalListingId: id
+			};
 			const page = await settledListing(step, id);
 			if (page.type === "hidden") return hiddenListing();
 			const shown = sellersListing(page, site);

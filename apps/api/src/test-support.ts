@@ -40,9 +40,11 @@ import {
 import { DEFAULT_RETRY_POLICY } from '@listora/operations';
 import {
   loadAutomationSettings,
+  listenForPhoneWork,
   phoneWorkAdapters,
   type AutomationSettings,
   type PhoneWorkDependencies,
+  type PhoneWorkSignals,
 } from '@listora/automation';
 import { LocalTokenVault, SessionVault } from '@listora/connections';
 import {
@@ -297,9 +299,11 @@ function testPhoneWork(
   logger: Logger,
   settings: AutomationSettings,
   vault: SessionVault,
+  signals: PhoneWorkSignals,
 ): PhoneWorkDependencies {
   return {
     db,
+    signals,
     adapters: phoneWorkAdapters(
       settings,
       { fakeMarketplaceUrl: undefined, ebay: undefined, depop: undefined },
@@ -438,6 +442,11 @@ export async function createTestApi(
     throw error;
   }
 
+  // The app's waits for phone work hear it as the API does (phone/signals.ts).
+  const phoneSignals = listenForPhoneWork({
+    connectionString: scratch.url,
+    logger: createLogger({ service: 'api-test', level: 'silent' }),
+  });
   const logLines: Record<string, unknown>[] = [];
   const logger = createLogger({
     service: 'api-test',
@@ -514,7 +523,7 @@ export async function createTestApi(
     ai,
     analysisJobs,
     marketplaceSessions: options.marketplaceSessions ?? marketplaceSessions,
-    phone: testPhoneWork(db, logger, automation, marketplaceSessions.vault),
+    phone: testPhoneWork(db, logger, automation, marketplaceSessions.vault, phoneSignals.signals),
     batchJobs,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
@@ -622,6 +631,7 @@ export async function createTestApi(
     call,
     close: async () => {
       await app.close();
+      await phoneSignals.close();
       await db.destroy();
       await scratch.drop();
       await rm(storageDir, { recursive: true, force: true });

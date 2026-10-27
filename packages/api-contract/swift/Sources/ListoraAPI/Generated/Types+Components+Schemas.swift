@@ -7233,6 +7233,25 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PhoneWorkWaitResult`.
+        public struct PhoneWorkWaitResult: Codable, Hashable, Sendable {
+            /// `true` when work for this phone may be claimable now (claim it), `false` when the wait
+            /// ran out with none (wait again, or claim as usual).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneWorkWaitResult/ready`.
+            public var ready: Swift.Bool
+            /// Creates a new `PhoneWorkWaitResult`.
+            ///
+            /// - Parameters:
+            ///   - ready: `true` when work for this phone may be claimable now (claim it), `false` when the wait
+            public init(ready: Swift.Bool) {
+                self.ready = ready
+            }
+            public enum CodingKeys: String, CodingKey {
+                case ready
+            }
+        }
         /// One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
         /// and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
         /// (`PhoneCallInput` in packages/automation/src/phone/runtime.ts), versioned by

@@ -93,9 +93,7 @@ public struct AppDependencies {
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
         phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
-        sales = SalesEnvironment(
-            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
-        )
+        sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone)
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
         inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
@@ -119,6 +117,21 @@ public struct AppDependencies {
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
         settings = SettingsModels(apiClient, accessTokens, signIn, phone, profileDirectory, launchOptions)
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
+    }
+
+    /// Sales: the feed, each sale, and its delists, which run at once on this phone and show the
+    /// phone's progress.
+    private static func makeSales(
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+        _ showSignIn: @escaping @MainActor () -> Void,
+        _ phone: PhoneExecutionEnvironment,
+    ) -> SalesEnvironment {
+        let sales = SalesEnvironment(
+            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
+        )
+        sales.phoneProgress = phone.runner
+        return sales
     }
 
     /// Marketplaces: each connection's health, and where its automated steps run.

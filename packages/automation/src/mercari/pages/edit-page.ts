@@ -25,19 +25,37 @@ const LOOK_EVERY_MS = 500;
 
 export type EditorOpened = 'editing' | 'not_editable';
 
-/** Opens the editor; `not_editable` when Mercari showed something else (a sold listing). */
+/**
+ * Opens the editor; `not_editable` when Mercari showed something else (a sold listing's page) or
+ * answered with an error (a listing it removed).
+ */
 export async function openEditor(
   page: PageDriver,
   site: MercariSite,
   id: string,
 ): Promise<EditorOpened> {
   await page.goto(absolute(site, MERCARI_PATHS.edit(id)));
+  // No edit page for this listing (one Mercari removed): there is no form to wait for.
+  const status = page.status();
+  if (status !== null && status >= 400) return 'not_editable';
   const end = Date.now() + DRAW_MS;
   for (;;) {
     if (await page.exists(LISTING_FORM.form)) return 'editing';
     if (!onEditPage(page) || Date.now() >= end) return 'not_editable';
     await lookAgain(page, LOOK_EVERY_MS);
   }
+}
+
+/**
+ * Whether the listing the editor shows is active (its toggle says Deactivate) or inactive (it
+ * says Activate): an end or relist reads this on the edit page it acts on, with no read of the
+ * listing's own page first. A toggle that says something else is a page Listora doesn't know.
+ */
+export async function editorShows(page: PageDriver): Promise<'active' | 'inactive'> {
+  const shown = (await page.text(EDIT_PAGE.toggle))?.trim();
+  if (shown === 'Deactivate') return 'active';
+  if (shown === 'Activate') return 'inactive';
+  throw changed(PAGE, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
 }
 
 /** Deactivates the listing the editor shows, and waits for Mercari to take it. */

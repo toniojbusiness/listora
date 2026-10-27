@@ -78,9 +78,27 @@ actor FakeWorkService: PhoneWorkService {
     private(set) var registrations: [DeviceRegistration] = []
     /// What each claim said: the runs the phone still ran, and whether the app was open.
     private(set) var claimedWith: [(running: [String], appOpen: Bool)] = []
+    /// What each wait for work answers, in order (`true`: work reached the phone); once none are
+    /// left, the server has no waits, as an older one doesn't.
+    private var waitReplies: [Bool] = []
+    /// The longest each wait for work was asked to take.
+    private(set) var waited: [Duration] = []
 
     init(claims: [Reply]) {
         claimReplies = claims
+    }
+
+    func script(waits: [Bool]) {
+        waitReplies = waits
+    }
+
+    func waitForWork(installationID: String, upTo: Duration) async throws(APIFailure) -> Bool {
+        #expect(installationID == "install-1")
+        guard !waitReplies.isEmpty else {
+            throw APIFailure(statusCode: 404, code: "not_found", message: "No waits here.", retryable: false)
+        }
+        waited.append(upTo)
+        return waitReplies.removeFirst()
     }
 
     func script(answers: [String: [Reply]]) {

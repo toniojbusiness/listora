@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
@@ -48,6 +49,7 @@ struct SoldSection: View {
                     if let run {
                         StatusBadge(run.statusDisplay.label, tone: StatusTone(run.statusDisplay.tone))
                             .accessibilityIdentifier("item.delistRun")
+                        DelistTiming(run: run)
                     }
                 }
                 .contentShape(Rectangle())
@@ -65,5 +67,32 @@ struct SoldSection: View {
     private func roi(_ basisPoints: Int64) -> String {
         let text = (Decimal(basisPoints) / 100).formatted(.number.precision(.fractionLength(0 ... 1)))
         return basisPoints > 0 ? "+\(text)%" : "\(text)%"
+    }
+}
+
+/// "Sold 23 s ago · 1 of 3 delisted", counting each second while the delists run, then
+/// "Delisted everywhere in 41 s".
+private struct DelistTiming: View {
+    let run: Components.Schemas.DelistRun
+
+    var body: some View {
+        let done = run.results.count { result in
+            result.state.value1 == .delisted || result.state.value1 == .userConfirmed
+        }
+        let finished = run.completedAt != nil && done == run.results.count
+        TimelineView(.periodic(from: .now, by: finished ? 3600 : 1)) { context in
+            if let text = DelistClock.text(
+                startedAt: run.startedAt,
+                completedAt: run.completedAt,
+                done: done,
+                total: run.results.count,
+                now: context.date,
+            ) {
+                Text(text)
+                    .font(Typography.footnote.monospacedDigit())
+                    .foregroundStyle(finished ? Palette.success : Palette.textSecondary)
+                    .accessibilityIdentifier("item.delistRun.timing")
+            }
+        }
     }
 }

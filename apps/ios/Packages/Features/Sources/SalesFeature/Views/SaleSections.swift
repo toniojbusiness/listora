@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
@@ -97,9 +98,13 @@ struct RelistSection: View {
     }
 }
 
-/// The delist on every other marketplace, as the server reports each one.
+/// The delist on every other marketplace, as the server reports each one, live: how long since
+/// the sale (then how long the delist everywhere took), and each delist this iPhone works on
+/// now, step by step.
 struct DelistSection: View {
     let sale: Sale
+    /// The work this iPhone runs now (one per marketplace).
+    var phoneProgress: [PhoneWorkProgress] = []
 
     var body: some View {
         ForEach(sale.delistRuns, id: \.id) { run in
@@ -110,21 +115,68 @@ struct DelistSection: View {
                         Text("It wasn't listed anywhere else.")
                             .font(Typography.subheadline)
                             .foregroundStyle(Palette.textSecondary)
+                    } else {
+                        DelistTimingLine(run: run, identifier: "sale.delist.timing")
                     }
                     ForEach(run.results, id: \.listingId) { result in
-                        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-                            Text(result.marketplace.name)
-                                .font(Typography.emphasis)
-                                .foregroundStyle(Palette.textPrimary)
-                            Spacer(minLength: Spacing.sm)
-                            StatusBadge(result.statusDisplay.label, tone: StatusTone(result.statusDisplay.tone))
-                                .accessibilityIdentifier("sale.delist.\(result.marketplace.id)")
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                                Text(result.marketplace.name)
+                                    .font(Typography.emphasis)
+                                    .foregroundStyle(Palette.textPrimary)
+                                Spacer(minLength: Spacing.sm)
+                                StatusBadge(result.statusDisplay.label, tone: StatusTone(result.statusDisplay.tone))
+                                    .accessibilityIdentifier("sale.delist.\(result.marketplace.id)")
+                            }
+                            if let progress = phoneProgress.first(where: { $0.operationID == result.operationId }) {
+                                StepProgressView(
+                                    step: progress.step ?? "Starting",
+                                    stepText: progress.stepText,
+                                    fraction: progress.fractionDone,
+                                    identifier: "sale.delist.\(result.marketplace.id).progress",
+                                ) { now in
+                                    progress.timeLeftText(at: now)
+                                }
+                            }
                         }
                     }
                 }
                 .cardStyle()
             }
         }
+    }
+}
+
+/// "Sold 23 s ago · 1 of 3 delisted", counting each second while the delists run, then
+/// "Delisted everywhere in 41 s".
+struct DelistTimingLine: View {
+    let run: Components.Schemas.DelistRun
+    let identifier: String
+
+    var body: some View {
+        let done = run.results.count(where: { $0.state.isDone })
+        let finished = run.completedAt != nil && done == run.results.count
+        TimelineView(.periodic(from: .now, by: finished ? 3600 : 1)) { context in
+            if let text = DelistClock.text(
+                startedAt: run.startedAt,
+                completedAt: run.completedAt,
+                done: done,
+                total: run.results.count,
+                now: context.date,
+            ) {
+                Text(text)
+                    .font(Typography.footnote.monospacedDigit())
+                    .foregroundStyle(finished ? Palette.success : Palette.textSecondary)
+                    .accessibilityIdentifier(identifier)
+            }
+        }
+    }
+}
+
+extension Components.Schemas.DelistResultState {
+    /// Delisted by a read-back, or confirmed by the seller: the only two that count as done.
+    var isDone: Bool {
+        value1 == .delisted || value1 == .userConfirmed
     }
 }
 

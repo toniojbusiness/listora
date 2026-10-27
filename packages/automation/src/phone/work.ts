@@ -87,6 +87,7 @@ import { prepareSessionCheck, recordSessionCheck } from '../session-checks/job.t
 import { prepareImportPage, recordImportPage, recordImportPageFailure } from '../imports/read.ts';
 import { queueSessionCheckForPhone } from '../session-checks/schedule.ts';
 import { readPhoneAnswer, readPhoneEvidence } from './answers.ts';
+import type { PhoneWorkSignals } from './signals.ts';
 import { PHONE_RUNTIME_VERSION, type PhoneCallInput } from './runtime.ts';
 import {
   callKey,
@@ -122,6 +123,8 @@ export interface PhoneWorkDependencies {
   phone?: PhoneQueueSettings;
   /** How long a claim holds without word from the phone (default 10 minutes). */
   leaseMs?: number;
+  /** Word that work may be ready, which ends the open app's wait for it (signals.ts). */
+  signals?: PhoneWorkSignals;
 }
 
 /** A phone run, as the app sees it. */
@@ -256,9 +259,23 @@ export async function nextPhoneClaimSeconds(
   executor: DbExecutor,
   device: { accountId: string; deviceId: string; appOpen?: boolean },
 ): Promise<number> {
-  // Work is claimable once it is due and no run holds it or another work of its connection (a
-  // marketplace whose run is under way gets its next work when that run ends, and its lane asks
-  // then).
+  const due = await phoneWorkDue(executor, device);
+  if (due.connections === 0) return PHONE_UNUSED_CLAIM_SECONDS;
+  if (due.inMs === null) return PHONE_IDLE_CLAIM_SECONDS;
+  return Math.min(PHONE_IDLE_CLAIM_SECONDS, Math.max(1, Math.ceil(due.inMs / 1000)));
+}
+
+/**
+ * How many connections the device runs, and how long until its next work is claimable (`inMs`,
+ * at most 0 when some is now): work handed to the phone once it is due and no run holds it or
+ * another work of its connection (a marketplace whose run is under way gets its next work when
+ * that run ends, and its lane asks then), and a change the engine is about to hand over (or, with
+ * the app open, one whose backoff the open app runs now). `null` when none is coming.
+ */
+async function phoneWorkDue(
+  executor: DbExecutor,
+  device: { accountId: string; deviceId: string; appOpen?: boolean },
+): Promise<{ connections: number; inMs: number | null }> {
   const claimableAt = sql<Date>`greatest(
     work.due_at,
     coalesce(work.lease_expires_at, work.due_at),
@@ -286,18 +303,76 @@ export async function nextPhoneClaimSeconds(
     .where('connection.runs_on', '=', 'phone')
     .where('connection.phone_device_id', '=', device.deviceId)
     .executeTakeFirst();
-  if (found === undefined || found.connections === 0) return PHONE_UNUSED_CLAIM_SECONDS;
+  if (found === undefined || found.connections === 0) return { connections: 0, inMs: null };
   const operationDue = await nextPhoneOperationDue(executor, device, {
     open: device.appOpen === true,
     staleMs: STALE_HANDOVER_MS,
   });
   const waits = [
-    found.dueInSeconds,
+    found.dueInSeconds === null ? null : found.dueInSeconds * 1000,
     // The engine hands a due change over within moments.
-    operationDue === null ? null : (operationDue.getTime() - Date.now()) / 1000 + HANDOVER_SECONDS,
+    operationDue === null ? null : operationDue.getTime() - Date.now() + HANDOVER_SECONDS * 1000,
   ].filter((wait): wait is number => wait !== null);
-  if (waits.length === 0) return PHONE_IDLE_CLAIM_SECONDS;
-  return Math.min(PHONE_IDLE_CLAIM_SECONDS, Math.max(1, Math.ceil(Math.min(...waits))));
+  return { connections: found.connections, inMs: waits.length === 0 ? null : Math.min(...waits) };
+}
+
+/** The longest one wait for phone work holds (under the API gateway's 30-second limit). */
+export const PHONE_WAIT_MAX_SECONDS = 20;
+
+/**
+ * The open app's wait for its next work (docs/features/phone-execution.md, "When the phone
+ * runs"): returns `true` as soon as work for the device may be claimable (handed to the phone
+ * meanwhile, or due now), `false` once `maxMs` passed with none, or the request went away. With
+ * `signals` listening, new work ends the wait the moment its transaction commits; without them
+ * (or while their connection is down) it looks every `PHONE_IDLE_CLAIM_SECONDS`, as the app's
+ * claims did before. Reads only: the app claims afterwards.
+ */
+export async function waitForPhoneWork(
+  deps: Pick<PhoneWorkDependencies, 'signals'>,
+  executor: DbExecutor,
+  device: { accountId: string; deviceId: string },
+  options: { maxMs: number; signal?: AbortSignal },
+): Promise<boolean> {
+  const deadline = Date.now() + options.maxMs;
+  for (;;) {
+    // Subscribed before the read, so work committed in between still wakes the wait.
+    const subscription = deps.signals?.subscribe(device.accountId);
+    try {
+      const due = await phoneWorkDue(executor, { ...device, appOpen: true });
+      if (due.inMs !== null && due.inMs <= 0) return true;
+      const listening = deps.signals?.listening === true;
+      const look = listening ? Infinity : PHONE_IDLE_CLAIM_SECONDS * 1000;
+      const left = deadline - Date.now();
+      const wait = Math.min(left, due.inMs ?? Infinity, look);
+      if (wait <= 0) return false;
+      const woke =
+        subscription === undefined
+          ? await sleepFor(wait, options.signal)
+          : await subscription.wait(wait, options.signal);
+      if (woke === 'aborted') return false;
+      if (woke === 'timeout') return wait < left;
+    } finally {
+      subscription?.cancel();
+    }
+  }
+}
+
+function sleepFor(ms: number, signal?: AbortSignal): Promise<'timeout' | 'aborted'> {
+  return new Promise((resolve) => {
+    if (signal?.aborted === true) {
+      resolve('aborted');
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', aborted);
+      resolve('timeout');
+    }, ms);
+    const aborted = (): void => {
+      clearTimeout(timer);
+      resolve('aborted');
+    };
+    signal?.addEventListener('abort', aborted, { once: true });
+  });
 }
 
 /** Takes the phone's answer for the run's current call and returns the next call, if any. */

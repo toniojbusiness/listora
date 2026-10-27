@@ -65,6 +65,10 @@ public protocol PhoneWorkService: Sendable {
         running: [String],
         appOpen: Bool,
     ) async throws(APIFailure) -> PhoneClaim
+    /// While the app is open: returns as soon as work for this device may be ready to claim
+    /// (`true`), or once `upTo` passed with none (`false`). It claims nothing; the app claims
+    /// after it.
+    func waitForWork(installationID: String, upTo: Duration) async throws(APIFailure) -> Bool
     /// The runtime the server runs with (`have`: the digest the app already runs).
     func runtime(have: String?) async throws(APIFailure) -> RemoteRuntime
     /// Answers the run's call; the run's next call, or `nil` once it is over.
@@ -74,6 +78,15 @@ public protocol PhoneWorkService: Sendable {
         answer: Data,
         installationID: String,
     ) async throws(APIFailure) -> PhoneRun?
+}
+
+extension PhoneWorkService {
+    /// A service without waits: the runner looks again on its own timer instead.
+    public func waitForWork(installationID _: String, upTo _: Duration) async throws(APIFailure) -> Bool {
+        throw APIFailure(
+            statusCode: 404, code: "not_found", message: "Listora can't wait for work here.", retryable: false,
+        )
+    }
 }
 
 public struct APIPhoneWorkService: PhoneWorkService {
@@ -134,6 +147,26 @@ public struct APIPhoneWorkService: PhoneWorkService {
             throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response):
             throw APIFailure(statusCode: 409, response: response)
+        case let .default(status, response):
+            throw APIFailure(statusCode: status, response: response)
+        }
+    }
+
+    public func waitForWork(installationID: String, upTo: Duration) async throws(APIFailure) -> Bool {
+        let query = Operations.WaitForPhoneWork.Input.Query(
+            installationId: installationID,
+            waitSeconds: Int32(max(1, min(20, upTo.components.seconds))),
+        )
+        let output = try await call {
+            try await api.client.waitForPhoneWork(query: query)
+        }
+        switch output {
+        case let .ok(response):
+            return try decode { try response.body.json }.ready
+        case let .notFound(response):
+            throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response):
+            throw APIFailure(statusCode: 422, response: response)
         case let .default(status, response):
             throw APIFailure(statusCode: status, response: response)
         }

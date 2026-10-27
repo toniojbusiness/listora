@@ -29,6 +29,7 @@ import {
   privateSku,
   setAvailability,
   setPrice,
+  shownAvailability,
   submit,
   type Availability,
 } from './pages/listing-form.ts';
@@ -216,7 +217,11 @@ export function createPoshmarkScripts(
     );
   }
 
-  /** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
+  /**
+   * Saves the open form; Poshmark's validation messages are a rejection in its own words. An
+   * update lands on the listing's page and is applied as it is: the operation's read-back reads
+   * the listing next, so reading it here too would only load the same page twice.
+   */
   async function save(step: StepRunner, button: 'list' | 'update'): Promise<WriteResult> {
     // Next uploads the photos and creates the listing before the share step's List shows.
     const result = await step(
@@ -226,6 +231,10 @@ export function createPoshmarkScripts(
     );
     if (result.type === 'refused') {
       return { type: 'rejected', code: 'validation_failed', message: result.message };
+    }
+    if (button === 'update') {
+      const id = listingIdFromPath(result.path);
+      return id === null ? { type: 'applied' } : { type: 'applied', externalListingId: id };
     }
     return applied(step, result.path);
   }
@@ -282,7 +291,14 @@ export function createPoshmarkScripts(
     );
   }
 
-  /** Sets the listing's availability (ending or relisting it), unless it already has it. */
+  /**
+   * Sets the listing's availability (ending or relisting it), unless it already has it. The
+   * edit form shows the availability, so a listing it shows in the other one is changed there at
+   * once, with no read of the listing's page first (that took a page load, and up to two minutes
+   * of looks right after an earlier change, when Poshmark's page shows no listing). The
+   * listing's page decides everything else: a listing without a form (one Poshmark removed, or
+   * sold), one already as asked, and one Poshmark hides.
+   */
   async function changeAvailability(
     op: OperationRequest<PoshmarkListingPayload>,
     step: StepRunner,
@@ -290,6 +306,19 @@ export function createPoshmarkScripts(
   ): Promise<WriteResult> {
     const id = op.listing.externalListingId;
     if (id === null) return notListed();
+    const onForm = await step('open the edit form', { mutates: false }, async (page) =>
+      (await openForm(page, site.editListing(id))) ? shownAvailability(page) : null,
+    );
+    if (onForm !== null && onForm !== availability) {
+      await step('set the availability', { mutates: false }, (page) =>
+        setAvailability(page, availability),
+      );
+      return save(step, 'update');
+    }
+    // Not for sale already: nothing to end. The read-back decides.
+    if (onForm === 'not_for_sale' && availability === 'not_for_sale') {
+      return { type: 'applied', externalListingId: id };
+    }
     const page = await settledListing(step, id);
     if (page.type === 'hidden') return hiddenListing();
     // A listing Poshmark is reviewing after a change is there to end or relist all the same.
