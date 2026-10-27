@@ -12,7 +12,8 @@
  * most 1,500 (Poshmark's Bulk Upload template, as in @listora/analysis); a price in whole
  * dollars (every price Poshmark's pages showed was) from $3
  * (`app_listing_fee__us.minimum_selling_price`) up to $1,000,000 (`max_listing_price_amount`);
- * at most 16 photos; and a department, category, size, and condition, which the form requires.
+ * at most 16 photos; a department, category, size, and condition, which the form requires; and
+ * underwear only new with tags (Poshmark removes used underwear, `adapter/underwear.ts`).
  */
 import type { JsonObject } from '@listora/db';
 import type {
@@ -23,6 +24,7 @@ import type {
 } from '@listora/marketplaces';
 import { photosInOrder } from '@listora/marketplaces';
 
+import { isUnderwear } from '../adapter/underwear.ts';
 import {
   mapPoshmarkCatalog,
   parseCatalogRef,
@@ -40,8 +42,16 @@ export interface PoshmarkListingPayload extends AssistedListingPayload {
   brand: string | null;
   /** What the item cost new, which Poshmark shows struck through; only when known. */
   originalPrice: { amountCents: number; currency: 'USD' } | null;
-  /** Where the size and category came from, for validation messages. */
-  source: { category: string | null; department: string | null; sizeLabel: string | null };
+  /**
+   * Where the size and category came from, for validation messages, and the item's own
+   * category, whatever the listing's.
+   */
+  source: {
+    category: string | null;
+    department: string | null;
+    sizeLabel: string | null;
+    itemCategory: string | null;
+  };
 }
 
 export const POSHMARK_LIMITS = {
@@ -84,6 +94,7 @@ export function buildPoshmarkPayload(
       category: variant.categoryRef ?? item.category,
       department: item.department,
       sizeLabel,
+      itemCategory: item.category,
     },
   };
 }
@@ -165,6 +176,12 @@ export function validatePoshmarkPayload(payload: PoshmarkListingPayload): Valida
       field: 'item.condition',
       code: 'required',
       message: "Poshmark needs the item's condition.",
+    });
+  } else if (isUnderwear(source.itemCategory) && payload.condition.code !== 'nwt') {
+    issues.push({
+      field: 'item.condition',
+      code: 'not_allowed',
+      message: "Poshmark doesn't take used underwear: it lists underwear only new with tags.",
     });
   }
   return issues;

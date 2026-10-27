@@ -185,4 +185,26 @@ describe('Poshmark payload rules', () => {
       `Poshmark has no size "Huge" for Men's Jackets & Coats. Set a size Poshmark offers.`,
     );
   });
+
+  it('takes underwear only new with tags, since Poshmark removes used underwear', () => {
+    const boxers = (condition: 'pre_owned_excellent' | 'new_without_tags' | 'new_with_tags') => ({
+      item: { category: 'clothing/intimates/underwear', sizeLabel: 'XL', condition },
+      variant: { aspects: [] },
+    });
+    expect(issues(boxers('pre_owned_excellent'))).toEqual([
+      {
+        field: 'item.condition',
+        code: 'not_allowed',
+        message: "Poshmark doesn't take used underwear: it lists underwear only new with tags.",
+      },
+    ]);
+    // Poshmark lists new underwear without tags as Like New, which reads as used.
+    expect(fields(boxers('new_without_tags'))).toEqual(['item.condition:not_allowed']);
+    expect(fields(boxers('new_with_tags'))).toEqual([]);
+    // The item's own category decides, whatever Poshmark category the listing names.
+    const named = boxers('pre_owned_excellent');
+    expect(
+      fields({ ...named, variant: { ...named.variant, categoryRef: 'Men/Underwear & Socks' } }),
+    ).toEqual(['item.condition:not_allowed']);
+  });
 });

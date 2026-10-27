@@ -141,6 +141,28 @@ describe('Mercari payload', () => {
     expect(validateMercariPayload(payload())).toEqual([]);
   });
 
+  it('refuses used underwear, which Mercari prohibits, and takes new underwear', () => {
+    const boxers = (condition: 'pre_owned_good' | 'new_without_tags') =>
+      validateMercariPayload(
+        payload({
+          item: {
+            category: 'clothing/intimates/underwear',
+            department: 'men',
+            sizeLabel: 'XL',
+            condition,
+          },
+        }),
+      );
+    expect(boxers('pre_owned_good')).toEqual([
+      {
+        field: 'item.condition',
+        code: 'not_allowed',
+        message: "Mercari doesn't take used underwear.",
+      },
+    ]);
+    expect(boxers('new_without_tags')).toEqual([]);
+  });
+
   it('refuses what Mercari’s form would, naming Mercari', () => {
     const many = Array.from({ length: 13 }, (_, position) => ({
       photoId: `p${String(position)}`,
