@@ -123,12 +123,12 @@ export function createDepopScripts(
     const files = await step('get the photos', { mutates: false }, (_page, signal) =>
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );
-    await step('fill in the listing', { mutates: false, timeoutMs: 120_000 }, async (page) => {
+    await step('fill in the listing', { mutates: false, timeScale: 4 }, async (page) => {
       await openSellForm(page, site);
       await fillListing(page, payload, sku, files);
       await expectSubmit(page, 'post');
     });
-    const result = await step('post', { mutates: true, timeoutMs: 60_000 }, async (page) =>
+    const result = await step('post', { mutates: true, timeScale: 2 }, async (page) =>
       submitted(await submitListing(page, 'post')),
     );
     if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
@@ -177,7 +177,7 @@ export function createDepopScripts(
         await fillListing(page, payload, listingSku(op.listing), null);
         await expectSubmit(page, 'save');
       });
-      return step('save', { mutates: true, timeoutMs: 60_000 }, async (page) =>
+      return step('save', { mutates: true, timeScale: 2 }, async (page) =>
         submitted(await submitListing(page, 'save')),
       );
     },
@@ -199,7 +199,7 @@ export function createDepopScripts(
         await fillPrice(page, priceCents);
         await expectSubmit(page, 'save');
       });
-      return step('save', { mutates: true, timeoutMs: 60_000 }, async (page) =>
+      return step('save', { mutates: true, timeScale: 2 }, async (page) =>
         submitted(await submitListing(page, 'save')),
       );
     },
@@ -215,7 +215,7 @@ export function createDepopScripts(
       if (shown.state.status !== 'active') return { type: 'applied' };
       // The seller's own product page has Delete listing, which asks to confirm in a dialog.
       await step('find Delete listing', { mutates: false }, (page) => expectDelete(page));
-      return step('delete', { mutates: true, timeoutMs: 60_000 }, async (page) => {
+      return step('delete', { mutates: true, timeScale: 2 }, async (page) => {
         await deleteListing(page);
         return { type: 'applied' };
       });

@@ -67,10 +67,16 @@ export const LISTING_FORM = {
   smartPricingTurnOff: 'button[data-testid="SmartPricingTurnOffButton"]',
   /** Mercari's answer to List from a seller without a card on file: add one first. */
   paymentWarning: '[data-testid="PaymentWarningModal"]',
-  /** Mercari's page once a new listing is up. */
+  /**
+   * Mercari's page once a listing is up, after List and after an edit's Update alike (read
+   * 2026-10-27: under the sell page's path, "Sell another item", "Share your listing").
+   */
   listed: '[data-testid="SellAnotherItem"], [data-testid="ShareListing"]',
+  /** Its link to the listing's page. */
+  liveListing: 'a[data-testid="LiveListingLink"]',
   list: 'button[data-testid="ListButton"]',
-  save: 'button[data-testid="SaveButton"]',
+  /** The edit page's submit: the same button, there named Update (read 2026-10-27). */
+  save: 'button[data-testid="ListButton"]',
   error: '[data-testid="FormError"]',
 } as const;
 
@@ -250,6 +256,17 @@ const ANSWER_MS = 45_000;
  * the listing's page, or the form again with Mercari's message or a field marked as needing a
  * fix. Anything else leaves the outcome unknown, so the operation's check reads it back.
  */
+/** The item Mercari's page after a submit links to as the live listing, when it does. */
+async function linkedItem(page: PageDriver): Promise<string | null> {
+  const href = await page.attribute(LISTING_FORM.liveListing, 'href');
+  if (href === null) return null;
+  try {
+    return itemIdFromPath(new URL(href, page.url()).pathname);
+  } catch {
+    return null;
+  }
+}
+
 export async function submitListing(page: PageDriver, button: 'list' | 'save'): Promise<Submitted> {
   const selector = LISTING_FORM[button];
   await expectElement(page, selector, FORM, `${button === 'list' ? 'List' : 'Save'} button`);
@@ -275,11 +292,11 @@ export async function submitListing(page: PageDriver, button: 'list' | 'save'): 
         message: "Mercari didn't take the listing: it marked a field as needing a fix.",
       };
     }
-    // Mercari's own page after a listing goes up (read 2026-10-27: under the sell page's path,
-    // with "Sell another item" and "Share your listing"), which may name the item in its path.
-    if (button === 'list' && (await page.exists(LISTING_FORM.listed))) {
+    // Mercari's own page once the listing is up, which names the item in its path or its link
+    // to the listing.
+    if (await page.exists(LISTING_FORM.listed)) {
       const named = path.split('/').find((segment) => MERCARI_ITEM_ID.test(segment));
-      return { type: 'listed', itemId: named ?? null };
+      return { type: 'listed', itemId: named ?? (await linkedItem(page)) };
     }
     // Left the form for a page that doesn't name the listing.
     if (path !== start && !path.startsWith(MERCARI_PATHS.sell)) {

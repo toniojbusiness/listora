@@ -189,4 +189,9 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
         try record("retry:\(operationID)")
         return Fixtures.operation(status: .queued, label: "Delisting...", tone: .inProgress)
     }
+
+    func tryNow(operationID: String, idempotencyKey _: String) async throws(APIFailure) -> Schemas.Operation {
+        try record("tryNow:\(operationID)")
+        return Fixtures.operation(status: .retrying, label: "Delisting... retry 1 of 5", tone: .inProgress)
+    }
 }

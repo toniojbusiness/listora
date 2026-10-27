@@ -63,6 +63,11 @@ export interface StepOptions {
   mutates: boolean;
   /** Overrides the runner's step timeout. */
   timeoutMs?: number;
+  /**
+   * The step may take this many times the runner's step timeout: a page that loads a lot (a sell
+   * form with photos) on a marketplace's own time. Relative, so a short test timeout stays short.
+   */
+  timeScale?: number;
 }
 
 /**

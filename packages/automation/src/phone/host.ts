@@ -9,6 +9,7 @@
  * Every method rejects with an `Error` whose message is one of `HOST_FAILURES` when the bridge
  * knows why, or a short description otherwise.
  */
+import type { PhoneStep } from './progress.ts';
 
 /** Why a host call failed, as the app reports it. */
 export const HOST_FAILURES = ['timeout', 'unreachable', 'blocked', 'closed'] as const;
@@ -65,4 +66,9 @@ export interface PhoneHost {
    */
   handOff(check: { kind: string; marketplace: string }): Promise<HandOffAnswer>;
   log(level: 'debug' | 'warn', message: string, fields: Record<string, unknown>): void;
+  /**
+   * The run started a step: the app shows where it is while it works. Like `log`, it is never
+   * waited for and never fails the run (an app from before it answers that it doesn't know it).
+   */
+  progress(step: PhoneStep): void;
 }

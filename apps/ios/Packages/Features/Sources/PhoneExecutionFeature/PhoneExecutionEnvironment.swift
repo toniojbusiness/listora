@@ -58,6 +58,7 @@ public final class PhoneExecutionEnvironment {
                     pushEnvironment: nil,
                 )
             },
+            keepAwake: { UIApplication.shared.isIdleTimerDisabled = $0 },
         )
     }
 

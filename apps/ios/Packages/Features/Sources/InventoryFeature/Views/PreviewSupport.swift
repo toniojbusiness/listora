@@ -64,6 +64,10 @@ private struct EmptyInventoryService: InventoryService {
     func retry(operationID _: String, idempotencyKey _: String) async throws(APIFailure) -> Operation {
         throw .networkUnavailable
     }
+
+    func tryNow(operationID _: String, idempotencyKey _: String) async throws(APIFailure) -> Operation {
+        throw .networkUnavailable
+    }
 }
 
 extension InventoryEnvironment {

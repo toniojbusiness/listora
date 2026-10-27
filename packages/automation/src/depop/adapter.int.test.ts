@@ -209,7 +209,8 @@ describe('Depop automation adapter on the fake Depop site', () => {
       // The sample lists its photos out of posting order: tag (2), front (0), back (1).
       photos: ['front.jpg', 'back.jpg', 'tag.jpg'],
     });
-    expect(ref.externalListingId).toMatch(/^fake-seller-classic-trucker-jacket-in-/);
+    // The seller's username, then the listing's first words.
+    expect(ref.externalListingId).toMatch(/^fake_seller-classic-trucker-jacket-in-/);
 
     const remote = await adapter.readListing(ref, ctx());
     expect(remote).toEqual({
@@ -222,12 +223,13 @@ describe('Depop automation adapter on the fake Depop site', () => {
       description: content.variant.description,
       priceCents: 4500,
       currency: 'USD',
-      revision: listed?.updatedAt.getTime(),
+      // Depop's product page no longer says when the product last changed.
+      revision: null,
     });
     expect(remote).toMatchObject(
       readBackState(desiredStateForContent('create', content), adapter.capabilities()),
     );
-    expect(outcome.revision).toBe(listed?.updatedAt.getTime());
+    expect(outcome).not.toHaveProperty('revision');
     // Found again by its SKU before its slug is known, the way a timed-out create is.
     expect(await adapter.readListing({ ...ref, externalListingId: null }, ctx())).toEqual(remote);
   });
@@ -371,6 +373,16 @@ describe('Depop automation adapter on the fake Depop site', () => {
     expect(await adapter.readListing(ref, ctx())).toEqual({ found: false, authoritative: false });
   });
 
+  it('reads a listing Depop deleted for good (410 Gone) as gone, and ends it without a click', async () => {
+    const { ref } = await create();
+    site.gone(ref.externalListingId);
+    expect(await adapter.readListing(ref, ctx())).toEqual({ found: false, authoritative: true });
+    const before = site.requests.length;
+    // Gone is ended already: nothing is sent, and the read-back confirms it.
+    expect(await adapter.execute(request('end', ref), ctx())).toMatchObject({ type: 'confirmed' });
+    expect(posts(before)).toEqual([]);
+  });
+
   describe('stops at every check and gives the step to the user', () => {
     const cases: [string, FakeDepopSiteFault, string][] = [
       ['a bot-check page', { type: 'bot_check' }, 'bot_check'],
@@ -408,7 +420,8 @@ describe('Depop automation adapter on the fake Depop site', () => {
 
     it('in a delete, which the user then does', async () => {
       const { ref } = await create();
-      inject('form', { type: 'captcha' });
+      // Delete listing is on the product's own page.
+      inject('read', { type: 'captcha' });
       expect(await adapter.execute(request('end', ref), ctx())).toMatchObject({
         type: 'pendingUser',
         task: { kind: 'delist_manually', deepLink: expect.stringContaining('https://') as unknown },
@@ -456,8 +469,10 @@ describe('Depop automation adapter on the fake Depop site', () => {
 
   it('gives a create to the user when the form offers no such category', async () => {
     const ref = newRef();
+    // The category picker finds product types in groups headed by department and category:
+    // Jackets are there, but in no "Men > Hovercraft" group.
     const content = sampleListingContent({
-      variant: { categoryRef: 'Menswear > Hovercraft > Parts' },
+      variant: { categoryRef: 'Menswear > Hovercraft > Jackets' },
     });
     expect(await adapter.execute(request('create', ref, { content }), ctx())).toMatchObject({
       type: 'pendingUser',

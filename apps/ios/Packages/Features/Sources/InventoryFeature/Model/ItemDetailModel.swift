@@ -93,6 +93,13 @@ final class ItemDetailModel {
         }
     }
 
+    /// Try now: the operation waiting for its next attempt runs that attempt at once.
+    func tryNow(operationID: String, marketplace: String) async {
+        await run(marketplace: marketplace) { [service] key throws(APIFailure) in
+            _ = try await service.tryNow(operationID: operationID, idempotencyKey: key)
+        }
+    }
+
     /// The item's "Don't sell below" price on `marketplace`, for the price change to warn below
     /// it; nil without a cost or when the server can't say.
     func floor(on marketplace: String) async -> Money? {

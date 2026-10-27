@@ -116,6 +116,7 @@ export function listingStatusDisplay(
         errorCode: operation.error_code,
         successEvidence: operation.success_evidence,
         phoneWait: phoneWait ?? null,
+        nextAttemptAt: operation.next_attempt_at,
       },
     });
   }

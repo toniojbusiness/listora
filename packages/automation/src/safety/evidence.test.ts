@@ -67,6 +67,7 @@ describe('page evidence', () => {
         'button data-et-name:list text:List',
       ],
       choices: ['Women', 'Tops & blouses', 'New With Tags'],
+      lists: [],
       data: [
         '__INITIAL_STATE__: object',
         '__INITIAL_STATE__.auth: object',

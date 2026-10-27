@@ -15,6 +15,7 @@ import { loadChromium } from '../runner/playwright.ts';
 import { TINY_JPEG, type SessionIssuer } from '../test-support.ts';
 import { toBase64 } from './backend.ts';
 import type { HandOffAnswer, HostPageState, HostPhoto, PhoneHost } from './host.ts';
+import type { PhoneStep } from './progress.ts';
 import { PHONE_RUNTIME_VERSION, runPhoneCall, type PhoneCallInput } from './runtime.ts';
 
 /** How long after an action a page load it started has to begin to be waited for. */
@@ -27,6 +28,8 @@ export class PlaywrightPhoneHost implements PhoneHost {
   /** What the "seller" does with the next checks; the default answer after them. */
   answers: (HandOffAnswer | (() => Promise<HandOffAnswer>))[] = [];
   defaultAnswer: HandOffAnswer = 'unavailable';
+  /** Every step the runtime said it started, in order. */
+  readonly steps: PhoneStep[] = [];
   #status: number | null = null;
   #retryAfter: number | null = null;
   #acceptDialog = false;
@@ -116,6 +119,10 @@ export class PlaywrightPhoneHost implements PhoneHost {
 
   log(): void {
     // Tests read results, not logs.
+  }
+
+  progress(step: PhoneStep): void {
+    this.steps.push(step);
   }
 
   #note(response: Response): void {

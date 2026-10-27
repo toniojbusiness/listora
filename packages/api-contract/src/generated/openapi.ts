@@ -1027,6 +1027,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operations/{operationId}/try-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operationId: components["parameters"]["OperationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a waiting operation's next attempt now
+         * @description Only while `retrying` (waiting for its next attempt after a transient failure) or
+         *     `verifying` (waiting between read-backs). Moves the next attempt to now: the operation
+         *     keeps its status, attempts, and error, and the attempt runs exactly as it would have later
+         *     (a retry reads the listing back before sending anything). A step that runs on the seller's
+         *     iPhone is taken on the phone's next look. `409 invalid_state_transition` for any other
+         *     status.
+         */
+        post: operations["tryOperationNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/operations/{operationId}/cancel": {
         parameters: {
             query?: never;
@@ -6143,6 +6170,42 @@ export interface operations {
         responses: {
             /** @description The queued operation. */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    tryOperationNow: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                operationId: components["parameters"]["OperationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The operation, due now. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

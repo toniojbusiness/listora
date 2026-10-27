@@ -151,6 +151,8 @@ paths:
     $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1events'
   /v1/operations/{operationId}/retry:
     $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1retry'
+  /v1/operations/{operationId}/try-now:
+    $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1try-now'
   /v1/operations/{operationId}/cancel:
     $ref: './paths/operations.yaml#/~1v1~1operations~1{operationId}~1cancel'
   /v1/connections:

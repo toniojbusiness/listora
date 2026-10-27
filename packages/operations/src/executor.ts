@@ -1619,10 +1619,12 @@ async function applyResolution(
         );
         return 'failed';
       }
-      // A send whose result is unknown, or a match that must be read again, is checked soon:
-      // the seller is waiting to see it listed, and nothing is sent again meanwhile.
+      // A send whose result is unknown, or a match that must be read again, is checked soon
+      // (never later than the backoff): the seller is waiting to see it listed, and nothing is
+      // sent again meanwhile.
       const soon = resolution.soon === true || (resolution.unknownResult && step.type === 'send');
-      const delayMs = soon ? CHECK_SOON_MS : delayAfterAttempt(deps.policy, attempts);
+      const backoffMs = delayAfterAttempt(deps.policy, attempts);
+      const delayMs = soon ? Math.min(CHECK_SOON_MS, backoffMs) : backoffMs;
       await transitionOperation(
         trx,
         op,

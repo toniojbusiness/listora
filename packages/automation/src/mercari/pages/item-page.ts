@@ -2,8 +2,9 @@
  * A listing's page (`/us/item/<id>/`), as its seller sees it: the read-back every automated
  * Mercari step is verified by.
  *
- * - Status: a sold badge is `sold` (sold and waiting to ship, or done), the inactive notice
- *   `ended` (the seller deactivated it), otherwise `active`.
+ * - Status: the item's status in the page's data (STATUSES): `on_sale` is `active`, `trading`
+ *   and `sold_out` are `sold`, and `stop` (what Mercari calls a listing the seller deactivated,
+ *   read 2026-10-27) is `ended`.
  * - Freshness: the item's last change (`updated`, in the page's data), in milliseconds, is the
  *   listing's revision. Mercari updates it on every change, and automated changes are seconds
  *   apart (human pacing), so it grows with every change.
@@ -38,6 +39,8 @@ export interface ItemRead {
   state: RemoteListingState;
   /** The SKU the description's last line names, when it has one. */
   sku: string | null;
+  /** When it last sold (`lastSoldAt`), for a listing that sold. */
+  soldAt: Date | null;
 }
 
 export function itemUrl(site: MercariSite, id: string): string {
@@ -47,14 +50,20 @@ export function itemUrl(site: MercariSite, id: string): string {
 /** Opens the listing's page and reads it. */
 export async function readItem(page: PageDriver, site: MercariSite, id: string): Promise<ItemRead> {
   await page.goto(itemUrl(site, id));
-  // A deleted item's page answers 410 "This item is no longer available" (seen on Listora's own
-  // test listing deleted from the captain's account, 2026-10-27): it is gone.
-  if (page.status() === 410) return { state: { found: false, authoritative: true }, sku: null };
+  // A deleted item's page answers 410 "This item is no longer available" without the item's
+  // data (seen on Listora's own test listing deleted from the captain's account, 2026-10-27).
+  // A sold item's page answers 410 too, but still with its data (status `sold_out`).
+  if (page.status() === 410) {
+    const shown = (await page.exists(ITEM_PAGE.data)) ? await readShownItem(page, site) : null;
+    return shown?.state.found === true
+      ? shown
+      : { state: { found: false, authoritative: true }, sku: null, soldAt: null };
+  }
   if (await page.exists(ITEM_PAGE.deleted)) {
-    return { state: { found: false, authoritative: true }, sku: null };
+    return { state: { found: false, authoritative: true }, sku: null, soldAt: null };
   }
   if (page.status() === 404 || (await page.exists(ITEM_PAGE.notFound))) {
-    return { state: { found: false, authoritative: false }, sku: null };
+    return { state: { found: false, authoritative: false }, sku: null, soldAt: null };
   }
   return readShownItem(page, site);
 }
@@ -64,6 +73,7 @@ const STATUSES: Readonly<Record<string, RemoteListingStatus>> = {
   on_sale: 'active',
   trading: 'sold',
   sold_out: 'sold',
+  stop: 'ended',
   inactive: 'ended',
   cancelled: 'ended',
   suspended: 'ended',
@@ -77,6 +87,8 @@ const itemRecordSchema = z.object({
   status: z.string(),
   /** The last change, in seconds. */
   updated: z.number().int().positive(),
+  /** When it last sold, in seconds; absent or 0 before it ever sold. */
+  lastSoldAt: z.number().int().nonnegative().nullish(),
 });
 
 /**
@@ -104,7 +116,7 @@ export async function readShownItem(page: PageDriver, site: MercariSite): Promis
   if (!parsed.success) throw changed('listing page', 'has none of the listing data Listora reads');
   const raw = parsed.data.props.pageProps.serverState[`ItemDetail:${id}`];
   if (raw === undefined || raw === null)
-    return { state: { found: false, authoritative: false }, sku: null };
+    return { state: { found: false, authoritative: false }, sku: null, soldAt: null };
   const record = itemRecordSchema.safeParse(raw);
   if (!record.success)
     throw changed('listing page', 'shows the listing without what Listora reads');
@@ -124,5 +136,6 @@ export async function readShownItem(page: PageDriver, site: MercariSite): Promis
       revision: record.data.updated * 1000,
     },
     sku,
+    soldAt: record.data.lastSoldAt ? new Date(record.data.lastSoldAt * 1000) : null,
   };
 }

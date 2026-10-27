@@ -62,6 +62,8 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
   let accountId: string;
   let deviceId: string;
   let connectionId: string;
+  /** The seller's Depop username. */
+  let seller: string;
   /** The phone's own web data: its signed-in Depop session. */
   let webData: BrowserContext;
   const vault = new SessionVault({
@@ -137,7 +139,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       })
       .returning('id')
       .executeTakeFirstOrThrow());
-    const cookie = site.issueSession(`seller-${accountId}`);
+    seller = `seller_${accountId.replaceAll('-', '').slice(-12)}`;
+    const cookie = site.issueSession(seller);
+    // The seller already has a listing for sale. A lookup by SKU reads the shop's product links,
+    // and an empty shop is only known as empty after the shop page module's wait for them (15
+    // seconds), longer than these steps get.
+    site.seed({ seller, description: 'Wool scarf.', priceCents: 1500 });
     ({ connectionId } = await linkAutomationSession(
       db,
       { vault, profile: settings.profiles.depop },
@@ -176,6 +183,20 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
         });
       }
     }
+  }
+
+  /**
+   * Runs the phone, then the read-back the engine repeats there: Depop's pages show no revision,
+   * so a read-back that matches confirms a change only once a later read matches too.
+   */
+  async function runPhoneAndConfirm(
+    op: { id: string },
+    answers: HandOffAnswer[] = [],
+  ): Promise<void> {
+    await runPhone(answers);
+    expect(await operation(op.id)).toMatchObject({ status: 'verifying', error_code: 'confirming' });
+    await step(op);
+    await runPhone();
   }
 
   async function newListing(): Promise<string> {
@@ -331,7 +352,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       marketplace: 'depop',
       evidence: { path: expect.any(String) as string, testIds: expect.any(Array) as string[] },
     });
-    expect(JSON.stringify(lines)).not.toContain(`seller-${accountId}`);
+    expect(JSON.stringify(lines)).not.toContain(seller);
     // Only the log line has it: the run's transcript keeps the answer without it.
     const kept = await db
       .selectFrom('phone_work')
@@ -352,7 +373,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       expect.objectContaining({ purpose: 'operation', operation_id: create.id, claimed_at: null }),
     ]);
     expect(await jobOf(create)).toMatchObject({ task_identifier: 'marketplace_operation' });
-    await runPhone();
+    await runPhoneAndConfirm(create);
     expect(await operation(create.id)).toMatchObject({
       status: 'succeeded',
       success_evidence: 'read_back',
@@ -367,7 +388,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
 
     const end = await enqueue(listingId, 'end');
     await step(end);
-    await runPhone();
+    await runPhoneAndConfirm(end);
     expect(await operation(end.id)).toMatchObject({
       status: 'succeeded',
       success_evidence: 'read_back',
@@ -395,7 +416,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(connection.status).toBe('connected');
     // Once the seller completes it, the next run of the step lists it.
     await step(create);
-    await runPhone(['completed']);
+    await runPhoneAndConfirm(create, ['completed']);
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
@@ -427,7 +448,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     await step(create);
     await runPhone();
     await step(create);
-    await runPhone();
+    await runPhoneAndConfirm(create);
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
@@ -465,7 +486,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     await step(create);
     await runPhone();
     await step(create);
-    await runPhone();
+    await runPhoneAndConfirm(create);
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
@@ -513,7 +534,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     const listingId = await newListing();
     const create = await enqueue(listingId, 'create');
     await step(create);
-    await runPhone();
+    await runPhoneAndConfirm(create);
     const { external_listing_id: slug } = await db
       .selectFrom('marketplace_listing')
       .select('external_listing_id')

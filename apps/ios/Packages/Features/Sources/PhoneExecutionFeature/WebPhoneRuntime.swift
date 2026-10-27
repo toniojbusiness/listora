@@ -16,10 +16,13 @@ public protocol PhoneRuntime: AnyObject {
     /// Takes the runtime the server runs with when it changed, so the phone runs the scripts the
     /// server replays its answers through; call it between runs.
     func refresh() async
+    /// Tells `handler` each step a call starts, as the runtime reports it.
+    func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void)
 }
 
 extension PhoneRuntime {
     public func refresh() async {}
+    public func observeSteps(_: @escaping @MainActor (PhoneStep) -> Void) {}
 }
 
 /// The runtime as the server hands it out (`getPhoneRuntime`): its digest, and its script when
@@ -71,6 +74,7 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     /// The server's runtime, once it handed one out; the app's own copy runs until then.
     private var served: (digest: String, source: String)?
     private let fetchRuntime: @Sendable (_ have: String?) async -> RemoteRuntime?
+    private var stepStarted: (@MainActor (PhoneStep) -> Void)?
 
     public init(
         sessions: any MarketplaceSessionStore,
@@ -82,6 +86,10 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         self.handOff = handOff
         self.notifier = notifier
         self.fetchRuntime = fetchRuntime
+    }
+
+    public func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void) {
+        stepStarted = handler
     }
 
     public func refresh() async {
@@ -186,6 +194,14 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         let args = body["args"] as? [String: Any] ?? [:]
         if method == "log" {
             logger.debug("\(args["message"] as? String ?? "", privacy: .public)")
+            return (true, nil)
+        }
+        if method == "progress" {
+            if let call = args["call"] as? String, let index = (args["index"] as? NSNumber)?.intValue,
+               let label = args["label"] as? String
+            {
+                stepStarted?(PhoneStep(call: call, index: index, label: label))
+            }
             return (true, nil)
         }
         guard let page else { return (nil, "closed") }

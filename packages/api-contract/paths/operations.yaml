@@ -104,6 +104,35 @@
         $ref: '../components/responses.yaml#/Conflict'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/operations/{operationId}/try-now:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OperationId'
+  post:
+    tags: [operations]
+    operationId: tryOperationNow
+    summary: Run a waiting operation's next attempt now
+    description: |
+      Only while `retrying` (waiting for its next attempt after a transient failure) or
+      `verifying` (waiting between read-backs). Moves the next attempt to now: the operation
+      keeps its status, attempts, and error, and the attempt runs exactly as it would have later
+      (a retry reads the listing back before sending anything). A step that runs on the seller's
+      iPhone is taken on the phone's next look. `409 invalid_state_transition` for any other
+      status.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The operation, due now.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/operations.yaml#/Operation'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
 /v1/operations/{operationId}/cancel:
   parameters:
     - $ref: '../components/parameters.yaml#/OperationId'

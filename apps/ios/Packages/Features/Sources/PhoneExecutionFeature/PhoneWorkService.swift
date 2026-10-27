@@ -13,8 +13,18 @@ public struct PhoneRun: Equatable, Sendable {
     public let id: String
     public let purpose: String
     public let marketplace: String
+    /// The listing change the run is for; `nil` for a sign-in or sale check.
+    public let operationID: String?
     /// `nil` once the run is over.
     public let call: Call?
+
+    public init(id: String, purpose: String, marketplace: String, operationID: String? = nil, call: Call?) {
+        self.id = id
+        self.purpose = purpose
+        self.marketplace = marketplace
+        self.operationID = operationID
+        self.call = call
+    }
 }
 
 /// What a claim found: the run to start, or nothing, and then when to ask again.
@@ -182,6 +192,7 @@ extension PhoneRun {
             id: run.id,
             purpose: run.purpose.value1?.rawValue ?? run.purpose.value2 ?? "",
             marketplace: run.marketplace.value1?.rawValue ?? run.marketplace.value2 ?? "",
+            operationID: run.operationId,
             call: call,
         )
     }

@@ -154,19 +154,19 @@ export function createPoshmarkScripts(
       // Validation refuses such a payload before any attempt; this guards the form all the same.
       throw new Error('the listing has no Poshmark catalog, size, or condition');
     }
-    await step('fill in the title and description', { mutates: false, timeoutMs: 60_000 }, (page) =>
+    await step('fill in the title and description', { mutates: false, timeScale: 2 }, (page) =>
       fillText(page, payload),
     );
-    await step('fill in the prices', { mutates: false, timeoutMs: 60_000 }, (page) =>
+    await step('fill in the prices', { mutates: false, timeScale: 2 }, (page) =>
       fillPrices(page, payload),
     );
-    await step('fill in the brand', { mutates: false, timeoutMs: 60_000 }, (page) =>
+    await step('fill in the brand', { mutates: false, timeScale: 2 }, (page) =>
       fillBrand(page, payload.brand),
     );
-    await step('choose the category', { mutates: false, timeoutMs: 60_000 }, (page) =>
+    await step('choose the category', { mutates: false, timeScale: 2 }, (page) =>
       chooseCatalog(page, catalog),
     );
-    await step('choose the size and condition', { mutates: false, timeoutMs: 60_000 }, (page) =>
+    await step('choose the size and condition', { mutates: false, timeScale: 2 }, (page) =>
       chooseSizeAndCondition(page, size, condition),
     );
   }
@@ -176,7 +176,7 @@ export function createPoshmarkScripts(
     // Next uploads the photos and creates the listing before the share step's List shows.
     const result = await step(
       button === 'list' ? 'list' : 'update',
-      { mutates: true, timeoutMs: 120_000 },
+      { mutates: true, timeScale: 4 },
       (page) => submit(page, button),
     );
     if (result.type === 'refused') {
@@ -242,14 +242,12 @@ export function createPoshmarkScripts(
         Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
       );
       // Poshmark's listing editor is a heavy page: it gets more time than a step's default.
-      const opened = await step(
-        'open the listing form',
-        { mutates: false, timeoutMs: 60_000 },
-        (page) => openForm(page, site.createListing()),
+      const opened = await step('open the listing form', { mutates: false, timeScale: 2 }, (page) =>
+        openForm(page, site.createListing()),
       );
       // Poshmark sends a seller to the form, never to a 404, so a missing one is a changed page.
       if (!opened) throw new PageChangedError("Poshmark's listing form isn't there");
-      await step('add the photos', { mutates: false, timeoutMs: 60_000 }, (page) =>
+      await step('add the photos', { mutates: false, timeScale: 2 }, (page) =>
         addPhotos(page, files),
       );
       await fillListing(step, payload);

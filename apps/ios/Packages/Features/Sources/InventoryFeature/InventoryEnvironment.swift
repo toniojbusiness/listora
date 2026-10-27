@@ -55,6 +55,9 @@ public final class InventoryEnvironment {
     /// Reviews a draft item, also one that is not a draft on this iPhone (made on another device,
     /// or before a reinstall); without one, the item screen offers no "Review item".
     public var reviewScreen: ItemReviewScreen?
+    /// The marketplace work this iPhone runs now, for the item screen's progress; without it,
+    /// the screen shows only the server's status.
+    public weak var phoneProgress: (any PhoneWorkProgressSource)?
     /// A status filter for the list to apply when it next appears (the Today card for drafts).
     private var requestedStatus: Components.Schemas.KnownItemStatus?
 

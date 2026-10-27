@@ -1,32 +1,42 @@
 /**
  * The fake Depop site: a local web app with the pages and flows of Depop's website that the
  * Depop automation adapter uses (docs/features/depop-automation.md), for its development and
- * tests. No test sends traffic to Depop. It mirrors the adapter's model of Depop: the same
- * paths, the same form elements and embedded page data (`script#__NEXT_DATA__`), the sell form's
- * level-by-level category picker, size lists, brand search, and validation, the edit page's
- * Delete with the browser's confirmation dialog, the selling hub's listings and sold items with
- * pagination, and Depop's checks (a bot-check page, a CAPTCHA, a login code, a logged-out
- * session), with fault injection for each.
+ * tests. No test sends traffic to Depop. It models Depop's pages as the page modules read them
+ * (`depop/pages/`, read on the live site in 2026-10), with the pages themselves in
+ * fake-depop-pages.ts: pages whose parts Depop's own scripts draw after the document is ready,
+ * the header's user menu whose "Your profile" opens the seller's shop, the shop's links to the
+ * seller's products, a product page's App Router data (`self.__next_f.push` rows holding the
+ * product's query data) and its schema.org price, the sell form's comboboxes (category groups,
+ * the size list, the brand search, the condition) with Depop's own item info from the photos,
+ * its validation, and its Done page after a Post, the product page's Delete listing with its
+ * dialog, the selling hub's listings and sold items with pagination (still in
+ * `script#__NEXT_DATA__`, as their page modules read them), and Depop's checks (a bot-check page,
+ * a CAPTCHA, a login code, a logged-out session), with fault injection for each.
  *
  *   GET  /login/                       the login page (a password field: no session needs it)
  *   POST /login/                       log in by hand: any username and password; sets the session cookie
  *   POST /login/email-link/            email me a sign-in link: "sends" a one-time link (`signInLinks()`)
  *   GET  /login/magic-link/?token=     the emailed link: signs in once and sets the session cookie
  *   GET  /login/verify/                a login code step
- *   GET  /sellinghub/                  the selling hub, drawn by its script ([data-testid="avatar"])
+ *   GET  /sellinghub/                  the selling hub, its header (the avatar, the user menu) drawn by its script
+ *   GET  /<username>/                  a seller's shop: links to their products for sale, newest first
  *   GET  /products/create/             the sell form; POST lists (multipart, photos)
- *   GET  /products/:slug/              a product's page (its data: text, price, status, change)
+ *   GET  /products/create/done/        the Done page a Post opens
+ *   GET  /products/:slug/              a product's page (its data: text, status; its price)
  *   GET  /products/edit/:slug/         the edit form; POST saves it
- *   POST /products/edit/:slug/delete   delete (after the page's confirmation dialog)
+ *   POST /products/edit/:slug/delete   delete (the product page's Delete listing, confirmed)
  *   GET  /sellinghub/selling/          the seller's listings for sale; `?page=N`, 10 a page
  *   GET  /sellinghub/sold-items/       the seller's sold items; `?page=N`, 10 a page
  *   GET  /photos/<name>.jpg            a photo, standing in for Listora's image CDN (no session)
  *
  * Every page except the login pages and photos needs the session cookie; without a valid one it
- * redirects to the login page. A product's change time grows by at least a second with every
- * change (automated changes are seconds apart), so it serves as a revision; a stale read serves
- * the product as it was before its latest change. A deleted product stays readable with the
- * status `DELETED`; an unknown slug is a plain 404.
+ * redirects to the login page. Depop usernames are letters, numbers, periods, and underscores,
+ * and a product's slug starts with its seller's username. A product's change time grows by at
+ * least a second with every change (automated changes are seconds apart), so the selling page
+ * shows it as a revision; a stale read serves the product as it was before its latest change. A
+ * deleted product stays readable with the status `STATUS_DELETED`; `gone` makes its page answer
+ * 410 Gone, as Depop's did for a listing Listora deleted (2026-10-27); an unknown slug is a plain
+ * 404.
  */
 import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -38,18 +48,59 @@ import { DEPOP_EMAIL_ADDRESS } from '@listora/shared';
 import {
   cookieValue,
   delay,
-  escape,
   readForm,
   redirect,
   type Reply,
   type SubmittedForm,
 } from '../../fake-site/http.ts';
-import { mappedDepopCategories, type DepopSizeKind } from '../categories.ts';
+import { mappedDepopCategories } from '../categories.ts';
 import { DEPOP_CONDITION_LABELS } from '../conditions.ts';
 import { DEPOP_SLUG } from '../site.ts';
+import {
+  botCheckPage,
+  captchaWidget,
+  donePage,
+  emailLinkSentPage,
+  expiredLinkPage,
+  FAKE_DEPOP_BRANDS,
+  FAKE_DEPOP_OTHER_BRAND,
+  FAKE_DEPOP_SHIPPING,
+  FAKE_DEPOP_SIZES,
+  gonePage,
+  hubPage,
+  listingFormPage,
+  loginPage,
+  nextDataPage,
+  notFoundPage,
+  plainPage,
+  priceAmount,
+  productPage,
+  sellingPage,
+  shopPage,
+  soldItemsPage,
+  verifyPage,
+} from './fake-depop-pages.ts';
 
+export { FAKE_DEPOP_BRANDS, FAKE_DEPOP_SHIPPING } from './fake-depop-pages.ts';
+
+/**
+ * The pages and submissions a fault can be injected into: `health` is the selling hub (where a
+ * lookup by SKU starts, to find the seller), `shop` a seller's shop, `read` a product's page
+ * (where Delete listing is), `form` the sell and edit forms, `create` and `update` their
+ * submissions, `done` the Done page after a Post, `delete` the confirmed Delete listing, and
+ * `listings` and `sold` the selling hub's lists.
+ */
 export type FakeDepopSiteAction =
-  'create' | 'update' | 'delete' | 'read' | 'listings' | 'sold' | 'health' | 'form';
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'read'
+  | 'shop'
+  | 'done'
+  | 'listings'
+  | 'sold'
+  | 'health'
+  | 'form';
 
 export type FakeDepopSiteFault =
   /** A bot-check page ("Please verify you are a human") instead of the page, status 403. */
@@ -79,12 +130,12 @@ export interface FakeDepopSiteFaultRule {
   times?: number;
 }
 
-/** Depop's product statuses, as its pages embed them. */
+/** Depop's product statuses, which its pages show as `STATUS_ONSALE`, ... */
 export type FakeDepopStatus = 'ONSALE' | 'SOLD' | 'DELETED';
 
 export interface FakeDepopProduct {
   slug: string;
-  /** The seller whose session listed it; the selling hub shows only their own. */
+  /** The username of the seller whose session listed it; their shop shows only their own. */
   seller: string;
   status: FakeDepopStatus;
   /** The whole listing text, as the form's description field got it. */
@@ -124,69 +175,35 @@ export interface FakeDepopSiteOptions {
   onSignInLink?: (link: string) => void;
 }
 
-/** The brands Depop's brand search offers (a sample of its list). */
-export const FAKE_DEPOP_BRANDS = [
-  "Levi's",
-  'Nike',
-  'adidas',
-  'Carhartt',
-  'Dr. Martens',
-  'Patagonia',
-  'Ralph Lauren',
-  'Stüssy',
-  'The North Face',
-  'Urban Outfitters',
-  'Zara',
-  'Converse',
-  'Vans',
-  'Free People',
-] as const;
-
-/** The shipping choices of the form. */
-export const FAKE_DEPOP_SHIPPING = {
-  depop_shipping: 'Depop Shipping',
-  ship_yourself: 'Ship it yourself',
-} as const;
-
-const SIZES: Readonly<Record<Exclude<DepopSizeKind, 'none'>, readonly string[]>> = {
-  clothing: [
-    'XXS',
-    'XS',
-    'S',
-    'M',
-    'L',
-    'XL',
-    'XXL',
-    'XXXL',
-    'One size',
-    'US 00',
-    ...Array.from({ length: 25 }, (_, index) => `US ${String(index)}`),
-    ...Array.from({ length: 27 }, (_, index) => `W${String(24 + index)}`),
-  ],
-  shoes: Array.from({ length: 21 }, (_, index) => {
-    const size = 5 + index / 2;
-    return `US ${Number.isInteger(size) ? String(size) : `${String(Math.floor(size))}.5`}`;
-  }),
-};
-
 interface StoredProduct {
+  /** Depop's numeric id for the product. */
+  id: number;
   current: FakeDepopProduct;
   previous: FakeDepopProduct | null;
+  /** Depop no longer serves it: its page answers 410 Gone. */
+  gone: boolean;
 }
 
 interface Session {
+  /** The seller's username. */
   seller: string;
 }
 
 interface Route {
   method: 'GET' | 'POST';
   action: FakeDepopSiteAction;
+  /** The product's slug, or the shop's username. */
   slug: string | null;
 }
 
 const SESSION_COOKIE = 'fake_depop_session';
+const DEFAULT_SELLER = 'fake_seller';
 const PHOTO_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const LIMITS = { description: 1_000, hashtags: 5, photos: 8, minCents: 100 };
+/** A Depop username (shop-page.ts), lowercase as the fake keeps them. */
+const USERNAME = /^[a-z0-9][a-z0-9._]{1,29}$/;
+/** The newest products a shop shows before the seller scrolls. */
+const SHOP_PAGE_SIZE = 24;
 
 export class FakeDepopSite {
   readonly #server: Server;
@@ -236,10 +253,14 @@ export class FakeDepopSite {
     return this.#url;
   }
 
-  /** The cookie a seller's logged-in browser holds, as the app would hand it to Listora. */
-  issueSession(seller = 'fake-seller'): SessionCookie {
+  /**
+   * The cookie a seller's logged-in browser holds, as the app would hand it to Listora. Depop
+   * usernames are letters, numbers, periods, and underscores, so any other character in `seller`
+   * becomes an underscore (`e2e-seller` is signed in as `e2e_seller`).
+   */
+  issueSession(seller = DEFAULT_SELLER): SessionCookie {
     const token = randomBytes(16).toString('hex');
-    this.#sessions.set(token, { seller });
+    this.#sessions.set(token, { seller: depopUsername(seller) });
     return {
       name: SESSION_COOKIE,
       value: token,
@@ -287,10 +308,11 @@ export class FakeDepopSite {
       priceCents: number;
     },
   ): string {
-    const seller = product.seller ?? 'fake-seller';
+    const seller = depopUsername(product.seller ?? DEFAULT_SELLER);
     const slug = this.#newSlug(seller, product.description);
     const now = new Date();
     this.#products.set(slug, {
+      id: this.#sequence,
       current: {
         status: 'ONSALE',
         category: ['Womenswear', 'Tops', 'T-shirts'],
@@ -307,6 +329,7 @@ export class FakeDepopSite {
         updatedAt: seconds(now),
       },
       previous: null,
+      gone: false,
     });
     return slug;
   }
@@ -314,6 +337,16 @@ export class FakeDepopSite {
   /** A buyer buys the product: it is sold (the sold items page). */
   sell(slug: string, soldAt = new Date()): void {
     this.#change(this.#stored(slug), { status: 'SOLD', soldAt });
+  }
+
+  /**
+   * Depop deletes the product for good: its page answers 410 Gone, as Depop's did for a listing
+   * Listora deleted (2026-10-27).
+   */
+  gone(slug: string): void {
+    const stored = this.#stored(slug);
+    if (stored.current.status === 'ONSALE') this.#change(stored, { status: 'DELETED' });
+    stored.gone = true;
   }
 
   /** Depop no longer serves the product at all: its page is a plain 404. */
@@ -374,7 +407,7 @@ export class FakeDepopSite {
           return;
         }
       }
-      send({ status: 200, body: page('Log in | Depop', loginForm(), {}) });
+      send({ status: 200, body: loginPage() });
       return;
     }
     if (url.pathname === '/login/email-link/' && method === 'POST') {
@@ -383,7 +416,7 @@ export class FakeDepopSite {
       const form = await readForm(request);
       const email = form.text('email');
       if (email === '') {
-        send({ status: 200, body: page('Log in | Depop', loginForm(), {}) });
+        send({ status: 200, body: loginPage() });
         return;
       }
       const token = randomBytes(16).toString('hex');
@@ -391,7 +424,7 @@ export class FakeDepopSite {
       const link = new URL(`/login/magic-link/?token=${token}`, this.#url).href;
       this.#signInLinks.push(link);
       this.#onSignInLink?.(link);
-      send({ status: 200, body: page('Check your email | Depop', emailLinkSent(), {}) });
+      send({ status: 200, body: emailLinkSentPage() });
       return;
     }
     if (url.pathname === '/login/magic-link/') {
@@ -399,7 +432,7 @@ export class FakeDepopSite {
       const token = url.searchParams.get('token') ?? '';
       const seller = this.#signInTokens.get(token);
       if (seller === undefined) {
-        send({ status: 400, body: page('Link expired | Depop', expiredLink(), {}) });
+        send({ status: 400, body: expiredLinkPage() });
         return;
       }
       this.#signInTokens.delete(token);
@@ -414,7 +447,7 @@ export class FakeDepopSite {
       return;
     }
     if (url.pathname === '/login/verify/') {
-      send({ status: 200, body: page('Check your email | Depop', verifyForm(), {}) });
+      send({ status: 200, body: verifyPage() });
       return;
     }
     if (/^\/photos\/[\w.-]+\.jpg$/.test(url.pathname)) {
@@ -464,7 +497,7 @@ export class FakeDepopSite {
             fault.retryAfterSeconds === undefined
               ? {}
               : { 'retry-after': String(fault.retryAfterSeconds) },
-          body: page('Too many requests | Depop', '<p>Slow down a little.</p>', {}),
+          body: plainPage('Too many requests | Depop', '<p>Slow down a little.</p>'),
         };
       case 'redesigned':
         return { status: 200, body: plainPage('Depop', '<main><h1>Something new</h1></main>') };
@@ -479,12 +512,16 @@ export class FakeDepopSite {
 
     const form = route.method === 'POST' ? await readForm(request) : null;
     if (fault?.type === 'reject' && form !== null) {
-      return refused(fault.message, route.slug === null ? null : this.#products.get(route.slug));
+      return this.#refused(
+        fault.message,
+        route.slug === null ? null : this.#products.get(route.slug),
+        session,
+      );
     }
     const apply = (): Reply => this.#apply(route, url, form, session, fault);
     if (fault?.type === 'server_error') {
       if (fault.afterApply === true) apply();
-      return { status: 500, body: page('Something went wrong | Depop', '<p>Error.</p>', {}) };
+      return { status: 500, body: plainPage('Something went wrong | Depop', '<p>Error.</p>') };
     }
     if (fault?.type === 'slow') {
       const early = fault.afterApply ? apply() : undefined;
@@ -508,31 +545,42 @@ export class FakeDepopSite {
   ): Reply {
     switch (route.action) {
       case 'health':
-        return {
-          status: 200,
-          body: plainPage('Selling Hub - Depop', hubPage(session.seller)),
-        };
+        return { status: 200, body: hubPage(session.seller) };
+      case 'shop':
+        return this.#shop(route.slug ?? '', session);
       case 'form':
         if (route.slug === null) {
           return {
             status: 200,
-            body: page('Sell | Depop', listingForm(null, this.#defaultShipping), {}),
+            body: listingFormPage({
+              product: null,
+              shipping: this.#defaultShipping,
+              message: null,
+              viewer: session.seller,
+            }),
           };
         }
         return this.#owned(route.slug, session, (stored) =>
-          stored.current.status === 'ONSALE'
+          onSale(stored)
             ? {
                 status: 200,
-                body: page('Edit listing | Depop', listingForm(stored.current, null), {}),
+                body: listingFormPage({
+                  product: stored.current,
+                  shipping: null,
+                  message: null,
+                  viewer: session.seller,
+                }),
               }
-            : redirect(`/products/${stored.current.slug}/`),
+            : // Depop shows no edit page for a listing that is not for sale: its page instead.
+              redirect(`/products/${stored.current.slug}/`),
         );
       case 'create': {
         const fields = listingFields(form, null);
-        if (typeof fields === 'string') return refused(fields, null);
+        if (typeof fields === 'string') return this.#refused(fields, null, session);
         const slug = this.#newSlug(session.seller, fields.description);
         const now = new Date();
         this.#products.set(slug, {
+          id: this.#sequence,
           current: {
             slug,
             seller: session.seller,
@@ -543,48 +591,55 @@ export class FakeDepopSite {
             soldAt: null,
           },
           previous: null,
+          gone: false,
         });
-        return redirect(`/products/${slug}/`);
+        // "Post and add another" opens a new empty form; otherwise Depop's Done page, which
+        // doesn't name the new listing.
+        return redirect(
+          form?.text('postAnother') === '' ? '/products/create/done/' : '/products/create/',
+        );
       }
+      case 'done':
+        return { status: 200, body: donePage(session.seller) };
       case 'update':
         return this.#owned(route.slug, session, (stored) => {
-          if (stored.current.status !== 'ONSALE') {
-            return refused('Only listings on sale can be edited.', stored);
+          if (!onSale(stored)) {
+            return this.#refused('Only listings on sale can be edited.', stored, session);
           }
           const fields = listingFields(form, stored.current);
-          if (typeof fields === 'string') return refused(fields, stored);
+          if (typeof fields === 'string') return this.#refused(fields, stored, session);
           this.#change(stored, fields);
           return redirect(`/products/${stored.current.slug}/`);
         });
       case 'delete':
         return this.#owned(route.slug, session, (stored) => {
-          if (stored.current.status === 'ONSALE') this.#change(stored, { status: 'DELETED' });
+          if (onSale(stored)) this.#change(stored, { status: 'DELETED' });
           return redirect(`/products/${stored.current.slug}/`);
         });
       case 'read': {
         const stored = this.#products.get(route.slug ?? '');
         if (stored === undefined) return notFound();
+        if (stored.gone) return { status: 410, body: gonePage() };
         const shown =
           fault?.type === 'stale_read' && stored.previous !== null
             ? stored.previous
             : stored.current;
         return {
           status: 200,
-          body: page('Depop', productPage(shown, session), { product: productData(shown) }),
+          body: productPage({
+            product: shown,
+            id: stored.id,
+            others: this.#forSale(shown.seller).filter((other) => other.slug !== shown.slug),
+            viewer: session.seller,
+            origin: this.#url,
+          }),
         };
       }
       case 'listings': {
-        const { rows, more } = this.#pageOf(
-          url,
-          this.products()
-            .filter((product) => product.seller === session.seller && product.status === 'ONSALE')
-            .sort(
-              (a, b) => b.listedAt.getTime() - a.listedAt.getTime() || b.slug.localeCompare(a.slug),
-            ),
-        );
+        const { rows, more } = this.#pageOf(url, this.#forSale(session.seller));
         return {
           status: 200,
-          body: page('Selling | Depop', sellingPage(rows), {
+          body: nextDataPage('Selling | Depop', sellingPage(rows), {
             products: rows.map(productData),
             hasMore: more,
           }),
@@ -599,7 +654,7 @@ export class FakeDepopSite {
         );
         return {
           status: 200,
-          body: page('Sold items | Depop', soldItemsPage(rows), {
+          body: nextDataPage('Sold items | Depop', soldItemsPage(rows), {
             soldItems: rows.map((product) => ({
               slug: product.slug,
               description: product.description,
@@ -611,6 +666,30 @@ export class FakeDepopSite {
         };
       }
     }
+  }
+
+  /** A seller's shop; a username nobody signed in or listed with is not a shop. */
+  #shop(username: string, session: Session): Reply {
+    const known =
+      username === session.seller ||
+      [...this.#sessions.values()].some((other) => other.seller === username) ||
+      [...this.#products.values()].some((stored) => stored.current.seller === username);
+    if (!known) return notFound();
+    return {
+      status: 200,
+      body: shopPage(username, session.seller, this.#forSale(username).slice(0, SHOP_PAGE_SIZE)),
+    };
+  }
+
+  /** The seller's products for sale, newest first. */
+  #forSale(seller: string): FakeDepopProduct[] {
+    return [...this.#products.values()]
+      .filter((stored) => stored.current.seller === seller && onSale(stored))
+      .sort(
+        (a, b) =>
+          b.current.listedAt.getTime() - a.current.listedAt.getTime() || b.id - a.id,
+      )
+      .map((stored) => copy(stored.current));
   }
 
   #pageOf(url: URL, rows: FakeDepopProduct[]): { rows: FakeDepopProduct[]; more: boolean } {
@@ -625,6 +704,19 @@ export class FakeDepopSite {
     const stored = slug === null ? undefined : this.#products.get(slug);
     if (stored?.current.seller !== session.seller) return notFound();
     return act(stored);
+  }
+
+  /** The form again, with Depop's message; nothing applied. */
+  #refused(message: string, stored: StoredProduct | undefined | null, session: Session): Reply {
+    return {
+      status: 422,
+      body: listingFormPage({
+        product: stored?.current ?? null,
+        shipping: this.#defaultShipping,
+        message,
+        viewer: session.seller,
+      }),
+    };
   }
 
   #stored(slug: string): StoredProduct {
@@ -650,14 +742,7 @@ export class FakeDepopSite {
       .split(/[^a-z0-9]+/)
       .filter((word) => word !== '')
       .slice(0, 4);
-    const slug = [
-      seller.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      ...words,
-      this.#sequence.toString(36),
-    ]
-      .join('-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
+    const slug = [seller, ...words, this.#sequence.toString(36)].join('-');
     if (!DEPOP_SLUG.test(slug)) throw new Error(`the fake made an invalid slug ${slug}`);
     return slug;
   }
@@ -684,40 +769,52 @@ function matchRoute(method: string, path: string): Route | null {
     if (get) return { method, action: 'form', slug: null };
     if (post) return { method, action: 'create', slug: null };
   }
-  const edit = /^\/products\/edit\/([a-z0-9-]+)\/(delete)?$/.exec(path);
-  const slug = edit?.[1];
+  if (get && path === '/products/create/done/') return { method, action: 'done', slug: null };
+  const edit = /^\/products\/edit\/([^/]+)\/(delete)?$/.exec(path);
+  const slug = edit?.[1] === undefined ? undefined : decoded(edit[1]);
   if (slug !== undefined) {
     if (get && edit?.[2] === undefined) return { method, action: 'form', slug };
     if (post && edit?.[2] === undefined) return { method, action: 'update', slug };
     if (post && edit?.[2] === 'delete') return { method, action: 'delete', slug };
     return null;
   }
-  const product = /^\/products\/([a-z0-9-]+)\/$/.exec(path)?.[1];
-  if (get && product !== undefined) return { method, action: 'read', slug: product };
+  const product = /^\/products\/([^/]+)\/$/.exec(path)?.[1];
+  if (get && product !== undefined) return { method, action: 'read', slug: decoded(product) };
+  const shop = /^\/([^/]+)\/$/.exec(path)?.[1];
+  const username = shop === undefined ? undefined : decoded(shop);
+  if (get && username !== undefined && USERNAME.test(username)) {
+    return { method, action: 'shop', slug: username };
+  }
   return null;
 }
 
-function notFound(): Reply {
-  return {
-    status: 404,
-    body: page(
-      'Page not found | Depop',
-      '<main data-testid="notFound"><h1>Sorry, we couldn’t find that page.</h1></main>',
-      {},
-    ),
-  };
+function decoded(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }
 
-/** The form again, with Depop's message; nothing applied. */
-function refused(message: string, stored: StoredProduct | undefined | null): Reply {
-  return {
-    status: 422,
-    body: page(
-      'Sell | Depop',
-      `<p data-testid="listingForm__error" role="alert">${escape(message)}</p>${listingForm(stored?.current ?? null, null)}`,
-      {},
-    ),
-  };
+function notFound(): Reply {
+  return { status: 404, body: notFoundPage() };
+}
+
+function onSale(stored: StoredProduct): boolean {
+  return stored.current.status === 'ONSALE' && !stored.gone;
+}
+
+/**
+ * A Depop username for `name`: Depop's take letters, numbers, periods, and underscores, and the
+ * fake keeps them lowercase, as product slugs have them.
+ */
+function depopUsername(name: string): string {
+  const username = name
+    .toLowerCase()
+    .replace(/[^a-z0-9._]+/g, '_')
+    .replace(/^[._]+/, '')
+    .slice(0, 30);
+  return USERNAME.test(username) ? username : DEFAULT_SELLER;
 }
 
 // Forms ---------------------------------------------------------------------------------------
@@ -737,9 +834,10 @@ function listingFields(
   const description = text('description').replaceAll('\r\n', '\n');
   const price = text('price');
   const photos = form?.fileNames('photos') ?? [];
-  const category = [text('category0'), text('category1'), text('category2')].filter(
-    (name) => name !== '',
-  );
+  // The category picker sends the product type's whole path ("Menswear > Tops > T-shirts").
+  const category = text('category')
+    .split(' > ')
+    .filter((name) => name !== '');
   const leaf = mappedDepopCategories().find(
     (entry) => entry.path.join(' > ') === category.join(' > '),
   );
@@ -761,8 +859,12 @@ function listingFields(
     return 'You can add up to 5 hashtags.';
   }
   if (leaf === undefined) return 'Choose a category.';
-  if (leaf.size !== 'none' && !SIZES[leaf.size].includes(size)) return 'Choose a size.';
-  if (brand !== '' && !(FAKE_DEPOP_BRANDS as readonly string[]).includes(brand)) {
+  if (leaf.size !== 'none' && !FAKE_DEPOP_SIZES[leaf.size].includes(size)) return 'Choose a size.';
+  if (
+    brand !== '' &&
+    brand !== FAKE_DEPOP_OTHER_BRAND &&
+    !(FAKE_DEPOP_BRANDS as readonly string[]).includes(brand)
+  ) {
     return 'Choose a brand from the list.';
   }
   if (!Object.keys(DEPOP_CONDITION_LABELS).includes(condition)) return 'Choose the condition.';
@@ -785,78 +887,13 @@ function listingFields(
   };
 }
 
-// Pages ---------------------------------------------------------------------------------------
-
-/** A page with Depop's embedded data, `props.pageProps`. */
-/**
- * A page as depop.com serves it: responsive (the app's sign-in page shows it at phone size), with
- * its data.
- */
-function page(title: string, body: string, pageProps: Record<string, unknown>): string {
-  const data = scriptJson({ props: { pageProps }, page: '/', buildId: 'fake' });
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title></head><body>${body}<script id="__NEXT_DATA__" type="application/json">${data}</script></body></html>`;
-}
-
-/** A page without embedded data. */
-/**
- * The selling hub as Depop serves it (read 2026-10-26): no page data, and a header its scripts
- * draw after the document is ready, with the signed-in user's avatar in the user menu.
- */
-function hubPage(seller: string): string {
-  const header =
-    '<div data-testid="userNavItem-wrapper"><img data-testid="avatar" alt="" src="data:,"></div>';
-  return (
-    `<header data-testid="header" id="header"></header><main><h1>Selling hub</h1>` +
-    `<p data-testid="sellerUsername">${escape(seller)}</p></main>` +
-    `<script>setTimeout(() => { document.getElementById('header').innerHTML = ${JSON.stringify(header)}; }, 300);</script>`
-  );
-}
-
-function plainPage(title: string, body: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title></head><body>${body}</body></html>`;
-}
-
-/**
- * The sign-in page. Its email field is a text field: an `email` input keeps the app's sign-in web
- * view from going idle in the simulator while it has focus, which stretches every UI test step to
- * the framework's two-minute idle timeout (it made PhoneExecutionUITests time out on CI). Listora
- * never reads this form.
- */
-function loginForm(): string {
-  return `<main><h1>Log in to Depop</h1><form method="post" action="/login/"><input name="username"><input name="password" type="password"><button type="submit">Log in</button></form><form method="post" action="/login/email-link/"><input name="email" placeholder="Email"><button type="submit">Email me a sign-in link</button></form></main>`;
-}
-
-function emailLinkSent(): string {
-  return `<main><h1>Check your email</h1><p>We emailed you a link to log in.</p></main>`;
-}
-
-function expiredLink(): string {
-  return `<main><h1>This link has expired</h1><p>Ask for a new link to log in.</p></main>`;
-}
-
-function verifyForm(): string {
-  return `<main><h1>Check your email</h1><p>Enter the code we sent to your email.</p><input name="code" inputmode="numeric"><button type="submit">Continue</button></main>`;
-}
-
-/** A bot-check block page (no frame or script: nothing leaves this machine). */
-function botCheckPage(): string {
-  return plainPage(
-    'depop.com',
-    '<main><h1>Please verify you are a human</h1><p>Access to this page has been denied because we believe you are using automation tools.</p></main>',
-  );
-}
-
-function captchaWidget(): string {
-  return `<div class="h-captcha" data-sitekey="fake-site-key" style="width:304px;height:78px;border:1px solid #ccc">I am human</div>`;
-}
+// Page data -----------------------------------------------------------------------------------
 
 function priceData(cents: number): { priceAmount: string; currencyName: string } {
-  return {
-    priceAmount: `${String(Math.floor(cents / 100))}.${String(cents % 100).padStart(2, '0')}`,
-    currencyName: 'USD',
-  };
+  return { priceAmount: priceAmount(cents), currencyName: 'USD' };
 }
 
+/** A product as the selling hub's list embeds it (page-data.ts). */
 function productData(product: FakeDepopProduct): Record<string, unknown> {
   return {
     slug: product.slug,
@@ -869,158 +906,6 @@ function productData(product: FakeDepopProduct): Record<string, unknown> {
     condition: product.condition,
     categories: product.category,
   };
-}
-
-function dollars(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function productPage(product: FakeDepopProduct, session: Session): string {
-  const own = product.seller === session.seller;
-  const badge =
-    product.status === 'SOLD'
-      ? '<span data-testid="product__sold">Sold</span>'
-      : product.status === 'DELETED'
-        ? '<p data-testid="product__deleted">This item is no longer available.</p>'
-        : '';
-  const edit =
-    own && product.status === 'ONSALE'
-      ? `<a data-testid="product__edit" href="/products/edit/${product.slug}/">Edit listing</a>`
-      : '';
-  return `<main data-testid="productPage">
-${badge}
-<p data-testid="product__price">${dollars(product.priceCents)}</p>
-<p data-testid="product__description" style="white-space:pre-wrap">${escape(product.description)}</p>
-<dl><dt>Size</dt><dd>${escape(product.size ?? '')}</dd><dt>Brand</dt><dd>${escape(product.brand ?? '')}</dd>
-<dt>Condition</dt><dd>${escape(DEPOP_CONDITION_LABELS[product.condition as keyof typeof DEPOP_CONDITION_LABELS])}</dd></dl>
-<p data-testid="sellerUsername">${escape(product.seller)}</p>
-${edit}
-</main>`;
-}
-
-function sellingPage(rows: readonly FakeDepopProduct[]): string {
-  const items = rows
-    .map(
-      (product) =>
-        `<li><a href="/products/${product.slug}/">${escape(product.description.slice(0, 40))}</a> ${dollars(product.priceCents)}</li>`,
-    )
-    .join('');
-  return `<main><h1>Selling</h1><ul data-testid="sellingList">${items}</ul></main>`;
-}
-
-function soldItemsPage(rows: readonly FakeDepopProduct[]): string {
-  const items = rows
-    .map(
-      (product) =>
-        `<li><a href="/products/${product.slug}/">${escape(product.description.slice(0, 40))}</a> ${dollars(product.priceCents)} <span data-testid="buyerName">a buyer</span> <span data-testid="shippingAddress">1 Buyer Street</span></li>`,
-    )
-    .join('');
-  return `<main><h1>Sold items</h1><ul data-testid="soldList">${items}</ul></main>`;
-}
-
-/**
- * The listing form, with the small script that makes Depop's pickers work: each category
- * level's options appear once the level above is picked, the size list follows the product
- * type, the brand search suggests brands from Depop's list as the seller types, and Delete asks
- * the browser to confirm.
- */
-function listingForm(product: FakeDepopProduct | null, defaultShipping: string | null): string {
-  const action = product === null ? '/products/create/' : `/products/edit/${product.slug}/`;
-  const value = (text: string | null | undefined): string => escape(text ?? '');
-  const tree = mappedDepopCategories().map((entry) => ({ path: entry.path, size: entry.size }));
-  const conditions = Object.entries(DEPOP_CONDITION_LABELS)
-    .map(
-      ([option, label]) =>
-        `<label><input type="radio" name="condition" value="${option}"${product?.condition === option ? ' checked' : ''}> ${label}</label>`,
-    )
-    .join('');
-  const shipping = product?.shipping ?? defaultShipping;
-  const shippingOptions = Object.entries(FAKE_DEPOP_SHIPPING)
-    .map(
-      ([option, label]) =>
-        `<option value="${option}"${shipping === option ? ' selected' : ''}>${label}</option>`,
-    )
-    .join('');
-  const buttons =
-    product === null
-      ? '<button type="submit" data-testid="listingForm__post">Post</button>'
-      : '<button type="submit" data-testid="listingForm__save">Save changes</button>';
-  const remove =
-    product === null
-      ? ''
-      : `<button type="button" data-testid="listingForm__delete">Delete listing</button><form method="post" action="/products/edit/${product.slug}/delete" id="delete-form"></form>`;
-  const current = { category: product?.category ?? [], size: product?.size ?? null };
-  return `<form method="post" action="${action}" enctype="multipart/form-data" data-testid="listingForm">
-<label>Photos <input type="file" name="photos" data-testid="listingForm__photos" multiple accept="image/jpeg"></label>
-<label>Description <textarea name="description" data-testid="listingForm__description">${value(product?.description)}</textarea></label>
-<select name="category0" data-testid="listingForm__category0"><option value="">Department</option></select>
-<select name="category1" data-testid="listingForm__category1"><option value="">Category</option></select>
-<select name="category2" data-testid="listingForm__category2"><option value="">Type</option></select>
-<select name="size" data-testid="listingForm__size"><option value="">Size</option></select>
-<label>Brand <input name="brand" data-testid="listingForm__brand" autocomplete="off" value="${value(product?.brand)}"></label>
-<ul data-testid="listingForm__brandSuggestions" hidden></ul>
-<fieldset>${conditions}</fieldset>
-<label>Price $<input name="price" data-testid="listingForm__price" inputmode="decimal" value="${product === null ? '' : priceData(product.priceCents).priceAmount}"></label>
-<select name="shipping" data-testid="listingForm__shipping"><option value="">Shipping</option>${shippingOptions}</select>
-${buttons}
-</form>
-${remove}
-<script>
-(() => {
-  const tree = ${scriptJson(tree)};
-  const sizes = ${scriptJson(SIZES)};
-  const brands = ${scriptJson(FAKE_DEPOP_BRANDS)};
-  const current = ${scriptJson(current)};
-  const levels = [0, 1, 2].map((level) => document.querySelector('[data-testid="listingForm__category' + level + '"]'));
-  const placeholders = ['Department', 'Category', 'Type'];
-  const size = document.querySelector('[data-testid="listingForm__size"]');
-  const fill = (select, names, placeholder) => {
-    select.replaceChildren(new Option(placeholder, ''), ...names.map((name) => new Option(name, name)));
-  };
-  const picked = (upTo) => levels.slice(0, upTo).map((select) => select.value);
-  const children = (path) => [...new Set(tree
-    .filter((entry) => path.every((name, index) => entry.path[index] === name))
-    .map((entry) => entry.path[path.length]))];
-  const leaf = () => tree.find((entry) => entry.path.join('>') === picked(3).join('>'));
-  const refresh = (from) => {
-    for (let level = from + 1; level < 3; level += 1) {
-      fill(levels[level], picked(level).every(Boolean) ? children(picked(level)) : [], placeholders[level]);
-    }
-    const entry = leaf();
-    fill(size, entry && entry.size !== 'none' ? sizes[entry.size] : [], 'Size');
-  };
-  fill(levels[0], children([]), placeholders[0]);
-  levels.forEach((select, level) => select.addEventListener('change', () => refresh(level)));
-  current.category.forEach((name, level) => { levels[level].value = name; refresh(level); });
-  if (current.size) size.value = current.size;
-  const brand = document.querySelector('[data-testid="listingForm__brand"]');
-  const list = document.querySelector('[data-testid="listingForm__brandSuggestions"]');
-  brand.addEventListener('input', () => {
-    const typed = brand.value.trim().toLowerCase();
-    const found = typed === '' ? [] : brands.filter((name) => name.toLowerCase().includes(typed));
-    list.replaceChildren(...(found.length === 0
-      ? [Object.assign(document.createElement('li'), { textContent: 'No brands found' })]
-      : found.map((name) => {
-          const option = Object.assign(document.createElement('li'), { textContent: name });
-          option.dataset.testid = 'listingForm__brandSuggestion';
-          option.addEventListener('click', () => { brand.value = name; list.hidden = true; });
-          return option;
-        })));
-    list.hidden = typed === '';
-  });
-  const remove = document.querySelector('[data-testid="listingForm__delete"]');
-  if (remove) {
-    remove.addEventListener('click', () => {
-      if (confirm('Delete this listing? This can’t be undone.')) document.getElementById('delete-form').submit();
-    });
-  }
-})();
-</script>`;
-}
-
-/** JSON for an inline script: `<` escaped, so no value can close the script element. */
-function scriptJson(value: unknown): string {
-  return JSON.stringify(value).replaceAll('<', '\\u003c');
 }
 
 function seconds(date: Date): Date {

@@ -47,6 +47,16 @@ export async function awaitElement(
   }
 }
 
+/**
+ * Looks at the page again after a moment: the driver inspects it (a check that came up stops
+ * the run) and learns its address anew, which Mercari's own scripts change without loading a
+ * page.
+ */
+export async function lookAgain(page: PageDriver, ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  await page.waitFor('body', 'attached');
+}
+
 /** The failure for a Mercari page that is not as the script expects. */
 export function changed(pageName: string, problem: string): PageChangedError {
   return new PageChangedError(`Mercari's ${pageName} ${problem}; the page may have changed.`);

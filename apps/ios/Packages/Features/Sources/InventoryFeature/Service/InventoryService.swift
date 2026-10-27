@@ -59,6 +59,8 @@ protocol InventoryService: Sendable {
     ) async throws(APIFailure) -> Components.Schemas.MarketplaceCategories
     func perform(_ action: ListingRequest, idempotencyKey: String) async throws(APIFailure) -> Listing
     func retry(operationID: String, idempotencyKey: String) async throws(APIFailure) -> Operation
+    /// Runs a waiting operation's next attempt now (`tryOperationNow`).
+    func tryNow(operationID: String, idempotencyKey: String) async throws(APIFailure) -> Operation
 }
 
 /// A listing action the server queues as an operation.
@@ -320,6 +322,25 @@ struct APIInventoryService: InventoryService {
         switch output {
         case let .accepted(response):
             let operation = try body { try response.body.json }
+            await queued()
+            return operation
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func tryNow(operationID: String, idempotencyKey: String) async throws(APIFailure) -> Operation {
+        let output = try await call {
+            try await client.tryOperationNow(
+                path: .init(operationId: operationID),
+                headers: .init(idempotencyKey: idempotencyKey),
+            )
+        }
+        switch output {
+        case let .ok(response):
+            let operation = try body { try response.body.json }
+            // A step that runs on this phone runs now too.
             await queued()
             return operation
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)

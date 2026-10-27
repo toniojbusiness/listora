@@ -8,15 +8,20 @@
  * ran, with Poshmark's own keys (listing records with `inventory.status`, `price_amount.val`, and
  * change times to the second), 24-hex listing ids, closet filters and pages (`availability`,
  * `sort_by`, `max_id`), and seller pages that send a browser without a session to
- * `/login?pmrd[url]=...`. The listing form, behind Poshmark's
- * login, mirrors exactly what the adapter's form module expects (poshmark/pages/listing-form.ts),
- * with Poshmark's form rules. It injects every failure the adapter must stop at or recover from.
+ * `/login?pmrd[url]=...`. The listing editor, behind Poshmark's login, mirrors exactly what the
+ * adapter's form module reads (poshmark/pages/listing-form.ts, mapped on a real seller's session
+ * 2026-10-26), with Poshmark's form rules: the cover-photo editor whose Apply keeps the photos,
+ * the dropdown pickers, the Listing Price dialog with Automate Offers, the SKU in the private
+ * details, and a new listing's Next and then List, after which Poshmark shows the seller's closet
+ * (which doesn't name the new listing). The edit form's data holds the listing's private SKU, and
+ * a deleted listing's page answers 404 (`remove`). It injects every failure the adapter must stop
+ * at or recover from.
  *
  *   GET  /login                      the login page (a password field: no Listora session needs it)
  *   POST /login                      log in by hand: any username and password; sets the session cookie
  *   GET  /create-listing             the listing form (a session is required)
- *   POST /create-listing             list
- *   GET  /listing/<title>-<id>       a listing's public page (also /listing/<id>)
+ *   POST /create-listing             list (the share step's List); answers with the seller's closet
+ *   GET  /listing/<title>-<id>       a listing's public page (also /listing/<id>); 404 once deleted
  *   GET  /edit-listing/<id>          its edit form (its seller's session only)
  *   POST /edit-listing/<id>          update it
  *   GET  /closet/<username>          a closet: ?availability=all|available|sold_out|not_for_sale,
@@ -266,6 +271,11 @@ export class FakePoshmark {
     this.#change(stored, { inventory: 'sold_out', inventoryChangedAt: at });
   }
 
+  /** The seller deletes the listing: its pages answer 404 from then on, as Poshmark's do. */
+  remove(id: string): void {
+    if (!this.#listings.delete(id)) throw new Error(`no listing ${id}`);
+  }
+
   async close(): Promise<void> {
     for (const timer of this.#timers) clearTimeout(timer);
     this.#timers.clear();
@@ -461,7 +471,8 @@ export class FakePoshmark {
           inventoryChangedAt: at,
         };
         this.#listings.set(listing.id, { current: listing, previous: null });
-        return { status: 302, headers: { location: listingPath(listing) } };
+        // As on Poshmark: List ends on the seller's closet, whose address doesn't name the listing.
+        return { status: 302, headers: { location: `/closet/${encodeURIComponent(seller)}` } };
       }
       case 'update': {
         const stored = this.#own(route.id, seller);
@@ -573,6 +584,18 @@ export class FakePoshmark {
         editing,
       ),
       seller,
+      // The edit form's data holds the listing's private SKU (its field has no value attribute).
+      stored === undefined
+        ? {}
+        : {
+            $_listing_editor: {
+              post: {
+                id: stored.current.id,
+                title: stored.current.title,
+                seller_private_info: { sku: stored.current.sku },
+              },
+            },
+          },
     );
   }
 
@@ -705,7 +728,7 @@ function fieldsOf(listing: FakePoshmarkListing): FormFields {
       listing.originalPriceCents === null ? '' : String(listing.originalPriceCents / 100),
     listingPrice: String(listing.priceCents / 100),
     sku: listing.sku,
-    availability: listing.inventory === 'not_for_sale' ? 'not_for_sale' : 'for_sale',
+    availability: listing.inventory === 'not_for_sale' ? 'not_for_sale' : 'available',
   };
 }
 
@@ -737,7 +760,7 @@ function invalidListing(fields: FormFields, photos: number, creating: boolean): 
   if (fields.originalPrice !== '' && !/^\d+$/.test(fields.originalPrice)) {
     problems.push('Original price must be a whole number.');
   }
-  if (fields.availability !== 'for_sale' && fields.availability !== 'not_for_sale') {
+  if (fields.availability !== 'available' && fields.availability !== 'not_for_sale') {
     problems.push('Please select the availability.');
   }
   return problems;
@@ -804,6 +827,49 @@ function catalogData(): Record<
   );
 }
 
+/** The titles the condition picker shows (Poshmark's `listingEditor.condition.dropdownOptions`). */
+const CONDITION_TITLES = {
+  nwt: 'New With Tags',
+  uln: 'Like New',
+  ug: 'Good',
+  uf: 'Fair',
+} as const satisfies Record<PoshmarkConditionCode, string>;
+
+/** The availability picker's items: Poshmark's own codes, with the labels the picker shows. */
+const AVAILABILITIES = [
+  ['available', 'For Sale'],
+  ['not_for_sale', 'Not For Sale'],
+] as const;
+
+/** The form's own message for each required field, which Next shows when the field is empty. */
+const REQUIRED_MESSAGES = {
+  photos: 'Please add at least one photo.',
+  title: 'Title is required.',
+  description: 'Description is required.',
+  category: 'Please select a category.',
+  size: 'Please select a size.',
+  condition: 'Please select a condition.',
+  listingPrice: 'Listing price is required.',
+} as const;
+
+/** The pickers' choices, which the form sends in hidden fields. */
+const PICKED_FIELDS = [
+  'department',
+  'category',
+  'subcategory',
+  'size_set',
+  'size',
+  'condition',
+  'availability',
+] as const;
+
+/**
+ * Poshmark's listing editor as poshmark/pages/listing-form.ts reads it: text fields named by
+ * their validation names, the photo picker, dropdown pickers whose menus are drawn only while
+ * they are open, the brand field, the prices (the listing price opens the Listing Price
+ * dialog), the SKU in the private details a link shows, and the availability. A new listing has
+ * Next and then the share step's List; a change has Update. `EDITOR_SCRIPT` runs it all.
+ */
 function listingForm(
   action: string,
   values: FormFields | null,
@@ -811,114 +877,284 @@ function listingForm(
   editing: boolean,
 ): string {
   const value = (text: string | undefined): string => escape(text ?? '');
-  const radios = (
-    name: string,
-    options: readonly [value: string, label: string][],
-    selected: string,
-  ) =>
-    options
-      .map(
-        ([option, label]) =>
-          `<label><input type="radio" name="${name}" value="${escape(option)}"${option === selected ? ' checked' : ''}>${escape(label)}</label>`,
-      )
-      .join('');
-  const selection = {
-    department: values?.department ?? null,
-    category: values?.category ?? null,
-    subcategory: values?.subcategory ?? null,
-    size_set: values?.sizeSet ?? null,
-    size: values?.size ?? null,
+  // Every message the form can show is in the page; Vue's v-show hides the ones that don't apply.
+  const required = (field: keyof typeof REQUIRED_MESSAGES): string =>
+    `<p class="form__error-message" data-field="${field}" style="display: none;">${escape(REQUIRED_MESSAGES[field])}</p>`;
+  const dropdown = (container: string, selector = ''): string =>
+    `<div ${container}><div class="dropdown__selector"${selector}></div><div class="dropdown__menu" hidden></div></div>`;
+  const editor = {
+    catalog: catalogData(),
+    conditions: Object.entries(CONDITION_TITLES),
+    availabilities: AVAILABILITIES,
+    selection: {
+      department: values?.department ?? null,
+      category: values?.category ?? null,
+      subcategory: values?.subcategory ?? null,
+      size_set: values?.sizeSet ?? null,
+      size: values?.size ?? null,
+      condition: values?.condition ?? null,
+      availability: values?.availability ?? 'available',
+      sku: values?.sku ?? '',
+    },
   };
-  const errorList = errors
-    .map((error) => `<p class="form__error-message">${escape(error)}</p>`)
-    .join('');
+  const photos = `<section><h2>Photos</h2>
+<input type="file" id="img-file-input" aria-label="img-file-input" multiple accept="image/jpeg">
+<input type="file" name="photos" multiple hidden>${required('photos')}
+</section>`;
+  const publish = editing
+    ? '<button type="submit" data-et-name="update">Update</button>'
+    : '<button type="button" data-et-name="next">Next</button><section id="share-step" hidden><h2>Share</h2><button type="submit" data-et-name="list">List</button></section>';
   return `<form id="listing-editor" method="post" action="${action}" enctype="multipart/form-data">
-${errorList}
-${editing ? '' : '<section><h2>Photos</h2><input type="file" id="img-file-input" name="photos" aria-label="img-file-input" multiple accept="image/jpeg"></section>'}
+${errors.map((error) => `<p class="form__error-message">${escape(error)}</p>`).join('')}
+${editing ? '' : photos}
 <section><h2>Listing details</h2>
-<input data-vv-name="title" name="title" placeholder="What are you selling? (required)" value="${value(values?.title)}">
-<textarea data-vv-name="description" name="description" placeholder="Describe it! (required)">${value(values?.description)}</textarea>
-<details data-test="catalog"><summary>Category</summary>
-<div data-test="catalog-departments">${radios(
-    'department',
-    POSHMARK_DEPARTMENTS.map((name) => [name, name]),
-    values?.department ?? '',
-  )}</div>
-<div data-test="catalog-categories"></div>
-<div data-test="catalog-subcategories"></div>
-</details>
-<details data-test="size"><summary>Size</summary>
-<div data-test="size-sets"></div>
-<div data-test="size-options"></div>
-</details>
-<details data-test="condition"><summary>Condition</summary>
-<div data-test="condition-options">${radios('condition', Object.entries(POSHMARK_CONDITIONS), values?.condition ?? '')}</div>
-</details>
-<input data-vv-name="brand" name="brand" placeholder="Enter the Brand" value="${value(values?.brand)}">
+<input type="text" data-vv-name="title" name="title" placeholder="What are you selling? (required)" value="${value(values?.title)}">${required('title')}
+<textarea data-vv-name="description" name="description" placeholder="Describe it! (required)">${value(values?.description)}</textarea>${required('description')}
+${dropdown('class="listing-editor__category-container"')}${required('category')}
+${dropdown('class="listing-editor__subcategory-container"')}
+${dropdown('class="listing-editor__size-container"', ' data-test="size"')}${required('size')}
+${dropdown('class="listing-editor__condition-container"')}${required('condition')}
+<div data-et-name="listingEditorBrandSection"><input type="text" name="brand" placeholder="Enter the Brand" value="${value(values?.brand)}"></div>
 </section>
 <section><h2>Pricing</h2>
-<input data-vv-name="originalPrice" name="originalPrice" placeholder="Original Price" value="${value(values?.originalPrice)}">
-<input data-vv-name="inputPrice" name="listingPrice" type="number" aria-label="form__text" value="${value(values?.listingPrice)}">
+<input type="number" data-vv-name="originalPrice" name="originalPrice" placeholder="Original Price" value="${value(values?.originalPrice)}">
+<input type="number" data-vv-name="listingPrice" name="listingPrice" placeholder="Listing Price (required)" value="${value(values?.listingPrice)}">${required('listingPrice')}
 </section>
-<section><h2>Seller private info</h2>
-<input data-vv-name="sku" name="sku" placeholder="SKU" value="${value(values?.sku)}">
+<section class="listing-editor__toggle"><h2>Additional Details (PRIVATE)</h2><a class="listing-editor-toggle-link">show details</a>
+<div hidden><input type="text" data-vv-name="sku" name="sku" placeholder="SKU"></div>
 </section>
-<details data-test="availability"><summary>Availability</summary>
-<div data-test="availability-options">${radios(
-    'availability',
-    [
-      ['for_sale', 'For Sale'],
-      ['not_for_sale', 'Not For Sale'],
-    ],
-    values?.availability ?? 'for_sale',
-  )}</div>
-</details>
-${editing ? '<button type="submit" data-et-name="update">Update</button>' : '<button type="button" data-et-name="next">Next</button><section id="share-step" hidden><h2>Share</h2><button type="submit" data-et-name="list">List</button></section>'}
+${dropdown('data-et-name="listingEditorAvailabilitySection"')}
+${PICKED_FIELDS.map((name) => `<input type="hidden" name="${name}">`).join('')}
+${publish}
 </form>
-<script type="application/json" id="catalog-data">${json(catalogData())}</script>
-<script type="application/json" id="selection-data">${json(selection)}</script>
-<script>${PICKER_SCRIPT}</script>`;
+${PRICE_DIALOG}
+<script type="application/json" id="editor-data">${json(editor)}</script>
+<script>${EDITOR_SCRIPT}</script>`;
 }
 
-/** Shows the categories of the chosen department, then the subcategories and sizes of the category. */
-const PICKER_SCRIPT = `(() => {
-  const catalog = JSON.parse(document.getElementById('catalog-data').textContent);
-  const state = JSON.parse(document.getElementById('selection-data').textContent);
+/**
+ * The Listing Price dialog the price field opens: the price again, Automate Offers (on, and
+ * then it wants the lowest price an offer may reach), the original price, and Done, which puts
+ * the prices in the form. Closed, it stays in the page without `modal--in`.
+ */
+const PRICE_DIALOG = `<div class="modal listing-price-suggestion-modal" style="display: none;">
+<div class="modal__header"><h2>Listing Price</h2></div>
+<div class="modal__body">
+<label for="listing-price-modal-listing-price-input">Listing Price</label><input type="number" id="listing-price-modal-listing-price-input">
+<label data-test="toggle-switch"><input type="checkbox" checked>Automate Offers</label>
+<div data-test="automate-offers"></div>
+<p class="form__error-message" style="display: none;">Enter the lowest price you would accept, or turn off Automate Offers.</p>
+<label for="listing-price-modal-original-price-input">Original Price</label><input type="number" id="listing-price-modal-original-price-input">
+</div>
+<div class="modal__footer" data-test="modal-footer"><button type="button" class="btn btn--primary">Done</button></div>
+</div>`;
+
+/** Runs the listing editor in the page, as Poshmark's own scripts do. */
+const EDITOR_SCRIPT = `(() => {
+  const data = JSON.parse(document.getElementById('editor-data').textContent);
+  const { catalog, conditions, availabilities } = data;
+  const state = data.selection;
   const form = document.getElementById('listing-editor');
-  const next = form.querySelector('button[data-et-name="next"]');
-  // As on Poshmark: Next goes on to the share step, whose List publishes the listing.
-  if (next) next.addEventListener('click', () => { form.querySelector('#share-step').hidden = false; });
-  const list = (name) => form.querySelector('[data-test="' + name + '"]');
-  const radios = (container, name, values, selected) => {
-    container.replaceChildren(...values.map((value) => {
-      const label = document.createElement('label');
-      const input = document.createElement('input');
-      input.type = 'radio';
-      input.name = name;
-      input.value = value;
-      input.checked = value === selected;
-      label.append(input, value);
-      return label;
-    }));
+  const make = (tag, attributes, children) => {
+    const node = document.createElement(tag);
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+    node.append(...children);
+    return node;
   };
-  const render = () => {
-    const categories = catalog[state.department] || {};
-    const category = categories[state.category];
-    radios(list('catalog-categories'), 'category', Object.keys(categories), state.category);
-    radios(list('catalog-subcategories'), 'subcategory', category ? category.subcategories : [], state.subcategory);
-    radios(list('size-sets'), 'size_set', category ? Object.keys(category.sets) : [], state.size_set);
-    radios(list('size-options'), 'size', category && category.sets[state.size_set] ? category.sets[state.size_set] : [], state.size);
+  const item = (tag, attributes, content, choose) => {
+    const node = make(tag, attributes, [content]);
+    node.addEventListener('click', choose);
+    return node;
   };
-  form.addEventListener('change', (event) => {
-    const { name, value } = event.target;
-    if (name === 'department') Object.assign(state, { department: value, category: null, subcategory: null, size_set: null, size: null });
-    else if (name === 'category') Object.assign(state, { category: value, subcategory: null, size_set: null, size: null });
-    else if (name === 'subcategory') state.subcategory = value;
-    else if (name === 'size_set') Object.assign(state, { size_set: value, size: null });
-    else if (name === 'size') state.size = value;
-    else return;
-    render();
+  const labelOf = (pairs, code) => (pairs.find((pair) => pair[0] === code) || [])[1];
+  const chosenCategory = () => (catalog[state.department] || {})[state.category] || null;
+
+  // A picker opens on its selector; its menu is drawn only while it is open, and opening one
+  // picker closes the others.
+  const pickers = [];
+  const dropdown = (container, draw) => {
+    const selector = container.querySelector('.dropdown__selector');
+    const menu = container.querySelector('.dropdown__menu');
+    const picker = {
+      open: () => {
+        for (const other of pickers) if (other !== picker) other.close();
+        menu.replaceChildren(...draw());
+        menu.hidden = false;
+      },
+      close: () => {
+        menu.replaceChildren();
+        menu.hidden = true;
+      },
+      redraw: () => menu.replaceChildren(...draw()),
+      show: (text) => {
+        selector.textContent = text;
+      },
+    };
+    selector.addEventListener('click', () => (menu.hidden ? picker.open() : picker.close()));
+    pickers.push(picker);
+    return picker;
+  };
+
+  // The catalog lists the departments, then the categories of the one clicked; a category with
+  // subcategories opens the subcategory picker.
+  let browsing = state.department;
+  const category = dropdown(form.querySelector('.listing-editor__category-container'), () => [
+    make('nav', {}, Object.keys(catalog).map((name) =>
+      item('a', { class: 'dropdown__menu__item' }, name, () => {
+        browsing = name;
+        category.redraw();
+      }))),
+    make('ul', {}, Object.keys(catalog[browsing] || {}).map((name) =>
+      item('li', { class: 'dropdown__menu__item' }, name, () => {
+        Object.assign(state, { department: browsing, category: name, subcategory: null, size_set: null, size: null });
+        category.close();
+        render();
+        if (chosenCategory().subcategories.length > 0) subcategory.open();
+      }))),
+  ]);
+  const subcategory = dropdown(form.querySelector('.listing-editor__subcategory-container'), () =>
+    (chosenCategory() === null ? [] : chosenCategory().subcategories).map((name) =>
+      item('a', { 'data-et-name': 'sub_category' }, name, () => {
+        state.subcategory = name;
+        subcategory.close();
+        render();
+      })));
+
+  // The size picker has a tab per size set and a button per size. One size applies on its
+  // click and closes the picker; Done is for several sizes.
+  let tab = null;
+  const size = dropdown(form.querySelector('.listing-editor__size-container'), () => {
+    const sets = chosenCategory() === null ? {} : chosenCategory().sets;
+    const names = Object.keys(sets);
+    if (!names.includes(tab)) tab = names.includes(state.size_set) ? state.size_set : (names[0] || null);
+    return [
+      make('ul', { 'data-test': 'horizontal-list' }, names.map((name) =>
+        item('li', { class: 'navigation--horizontal__tab' }, make('span', {}, [name]), () => {
+          tab = name;
+          size.redraw();
+        }))),
+      make('div', { class: 'multi-size-selector' }, (sets[tab] || []).map((name) =>
+        item('button', { type: 'button', class: 'multi-size-selector__button' }, name, () => {
+          Object.assign(state, { size_set: tab, size: name });
+          size.close();
+          render();
+        }))),
+      item('button', { type: 'button', class: 'btn btn--primary', 'data-et-name': 'apply', 'data-et-on-name': 'multi_item_quantity_tile' }, 'Done', () => size.close()),
+    ];
   });
+
+  const condition = dropdown(form.querySelector('.listing-editor__condition-container'), () =>
+    conditions.map(([code, title]) =>
+      item('div', { 'data-et-name': 'listing_condition' }, make('div', { class: 'fw--med' }, [title]), () => {
+        state.condition = code;
+        condition.close();
+        render();
+      })));
+
+  const availability = dropdown(form.querySelector('[data-et-name="listingEditorAvailabilitySection"]'), () =>
+    availabilities.map(([code, label]) =>
+      item('a', { class: 'dropdown__link', 'data-et-name': code }, label, () => {
+        state.availability = code;
+        availability.close();
+        render();
+      })));
+
+  const render = () => {
+    for (const name of ${json(PICKED_FIELDS)}) {
+      form.querySelector('input[type="hidden"][name="' + name + '"]').value = state[name] || '';
+    }
+    category.show(state.category ? state.department + ' / ' + state.category : 'Select Category');
+    subcategory.show(state.subcategory || 'Select Subcategory');
+    size.show(state.size || 'Select Size');
+    condition.show(labelOf(conditions, state.condition) || 'Select Condition');
+    availability.show(labelOf(availabilities, state.availability) || 'Select Availability');
+  };
+
+  // Additional Details (PRIVATE) shows the SKU field once its link is clicked. Vue sets the
+  // field's value itself, so the field has no value attribute.
+  const details = form.querySelector('.listing-editor__toggle a.listing-editor-toggle-link');
+  details.addEventListener('click', () => {
+    details.nextElementSibling.hidden = !details.nextElementSibling.hidden;
+    details.textContent = details.nextElementSibling.hidden ? 'show details' : 'hide details';
+  });
+  form.querySelector('input[data-vv-name="sku"]').value = state.sku;
+
+  // Picking photos opens the cover-photo editor; only its Apply keeps them for the listing.
+  const picker = form.querySelector('#img-file-input');
+  const kept = form.querySelector('input[type="file"][name="photos"]');
+  if (picker !== null) {
+    picker.addEventListener('change', () => {
+      for (const open of document.querySelectorAll('.photo-editor')) open.remove();
+      if (picker.files.length === 0) return;
+      const cancel = make('button', { type: 'button', class: 'btn btn--tertiary', 'data-et-name': 'cancel' }, ['Cancel']);
+      const apply = make('button', { type: 'button', class: 'btn btn--primary', 'data-et-name': 'apply' }, ['Apply']);
+      const editor = make('div', { class: 'modal modal--in photo-editor' }, [
+        make('div', { class: 'modal__body image-edit-modal' }, [make('p', {}, ['Edit cover photo'])]),
+        make('div', { class: 'modal__footer', 'data-test': 'modal-footer' }, [cancel, apply]),
+      ]);
+      apply.addEventListener('click', () => {
+        kept.files = picker.files;
+        editor.remove();
+      });
+      cancel.addEventListener('click', () => editor.remove());
+      document.body.append(editor);
+    });
+  }
+
+  // The price field opens the Listing Price dialog; its Done puts the dialog's prices in the
+  // form. Automate Offers stays on until it is switched off, and while on it wants a lowest price.
+  const price = form.querySelector('input[data-vv-name="listingPrice"]');
+  const original = form.querySelector('input[data-vv-name="originalPrice"]');
+  const dialog = document.querySelector('.listing-price-suggestion-modal');
+  const dialogPrice = dialog.querySelector('#listing-price-modal-listing-price-input');
+  const dialogOriginal = dialog.querySelector('#listing-price-modal-original-price-input');
+  const offers = dialog.querySelector('label[data-test="toggle-switch"] input');
+  const lowest = dialog.querySelector('[data-test="automate-offers"]');
+  const offersMessage = dialog.querySelector('.form__error-message');
+  const drawLowest = () => {
+    lowest.replaceChildren(...(offers.checked ? [make('input', { type: 'number', 'data-vv-name': 'inputPrice', placeholder: 'Lowest Price' }, [])] : []));
+  };
+  offers.addEventListener('change', drawLowest);
+  drawLowest();
+  price.addEventListener('focus', () => {
+    if (dialog.classList.contains('modal--in')) return;
+    dialogPrice.value = price.value;
+    dialogOriginal.value = original.value;
+    dialog.style.display = '';
+    dialog.classList.add('modal--in');
+  });
+  dialog.querySelector('button.btn--primary').addEventListener('click', () => {
+    const floor = lowest.querySelector('input');
+    const wantsFloor = floor !== null && floor.value.trim() === '';
+    offersMessage.style.display = wantsFloor ? '' : 'none';
+    if (wantsFloor) return;
+    price.value = dialogPrice.value;
+    original.value = dialogOriginal.value;
+    dialog.classList.remove('modal--in');
+    dialog.style.display = 'none';
+  });
+
+  // Next shows the messages of the required fields left empty, or else the share step, whose
+  // List publishes the listing.
+  const next = form.querySelector('button[data-et-name="next"]');
+  if (next !== null) {
+    next.addEventListener('click', () => {
+      const empty = {
+        photos: kept.files.length === 0,
+        title: form.querySelector('input[data-vv-name="title"]').value.trim() === '',
+        description: form.querySelector('textarea[data-vv-name="description"]').value.trim() === '',
+        category: !state.category,
+        size: !state.size,
+        condition: !state.condition,
+        listingPrice: price.value.trim() === '',
+      };
+      for (const message of form.querySelectorAll('.form__error-message[data-field]')) {
+        message.style.display = empty[message.getAttribute('data-field')] ? '' : 'none';
+      }
+      form.querySelector('#share-step').hidden = Object.values(empty).some(Boolean);
+    });
+  }
+
   render();
 })();`;
 

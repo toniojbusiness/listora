@@ -157,6 +157,11 @@ export interface ScriptSessionDependencies {
   /** What the page's network did, for the log line of a run that stops (the runner's). */
   networkSummary?: () => unknown;
   /**
+   * Called as each step starts (`index` counts from 1 in the run), so a host can show where the
+   * run is (the phone's progress, docs/features/phone-execution.md). It must not throw.
+   */
+  onStep?: (step: { name: string; index: number }) => void;
+  /**
    * Ends the session once: closes the page and returns the cookies the marketplace set on its
    * own domains (for rotation), or none where the host keeps them itself.
    */
@@ -255,8 +260,10 @@ export class ScriptSession implements AutomationSession {
       }
       current = stepName;
       steps.push(stepName);
+      this.#deps.onStep?.({ name: stepName, index: steps.length });
       if (options.mutates) mutated = true;
-      const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs;
+      const timeoutMs =
+        options.timeoutMs ?? this.#deps.stepTimeoutMs * Math.max(1, options.timeScale ?? 1);
       return this.#runStep(body, timeoutMs, signal, readOnly);
     };
 

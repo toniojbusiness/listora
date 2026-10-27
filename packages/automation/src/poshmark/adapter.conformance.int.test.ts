@@ -1,8 +1,9 @@
 /**
  * The Poshmark automation adapter against the shared adapter conformance suite, in a real
  * headless Chromium on the fake Poshmark: create, edit, price, end (not for sale), relist (for
- * sale again), read-back with revisions, absences that are never authoritative, error mapping,
- * and health, with a rejected session falling back to the user's task. No real Poshmark traffic.
+ * sale again), read-back with revisions, absences that are authoritative only for a deleted
+ * listing (Poshmark's 404), error mapping, and health, with a rejected session falling back to
+ * the user's task. No real Poshmark traffic.
  */
 import { fileURLToPath } from 'node:url';
 

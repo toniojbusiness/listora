@@ -488,6 +488,19 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/operations/{operationId}/retry`.
     /// - Remark: Generated from `#/paths//v1/operations/{operationId}/retry/post(retryOperation)`.
     func retryOperation(_ input: Operations.RetryOperation.Input) async throws -> Operations.RetryOperation.Output
+    /// Run a waiting operation's next attempt now
+    ///
+    /// Only while `retrying` (waiting for its next attempt after a transient failure) or
+    /// `verifying` (waiting between read-backs). Moves the next attempt to now: the operation
+    /// keeps its status, attempts, and error, and the attempt runs exactly as it would have later
+    /// (a retry reads the listing back before sending anything). A step that runs on the seller's
+    /// iPhone is taken on the phone's next look. `409 invalid_state_transition` for any other
+    /// status.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/operations/{operationId}/try-now`.
+    /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)`.
+    func tryOperationNow(_ input: Operations.TryOperationNow.Input) async throws -> Operations.TryOperationNow.Output
     /// Cancel an operation that has not been sent
     ///
     /// Only while `queued` or `retrying`. Once a request may have reached the marketplace
@@ -1709,6 +1722,27 @@ extension APIProtocol {
         headers: Operations.RetryOperation.Input.Headers
     ) async throws -> Operations.RetryOperation.Output {
         try await retryOperation(Operations.RetryOperation.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Run a waiting operation's next attempt now
+    ///
+    /// Only while `retrying` (waiting for its next attempt after a transient failure) or
+    /// `verifying` (waiting between read-backs). Moves the next attempt to now: the operation
+    /// keeps its status, attempts, and error, and the attempt runs exactly as it would have later
+    /// (a retry reads the listing back before sending anything). A step that runs on the seller's
+    /// iPhone is taken on the phone's next look. `409 invalid_state_transition` for any other
+    /// status.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/operations/{operationId}/try-now`.
+    /// - Remark: Generated from `#/paths//v1/operations/{operationId}/try-now/post(tryOperationNow)`.
+    public func tryOperationNow(
+        path: Operations.TryOperationNow.Input.Path,
+        headers: Operations.TryOperationNow.Input.Headers
+    ) async throws -> Operations.TryOperationNow.Output {
+        try await tryOperationNow(Operations.TryOperationNow.Input(
             path: path,
             headers: headers
         ))

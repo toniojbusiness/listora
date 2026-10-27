@@ -298,6 +298,12 @@ describe('listing actions through the operation engine and the fake eBay (real P
     const again = await api.call('retryOperation', { token, params: { operationId } });
     expect(again.status).toBe(409);
     expect(again.error.message).toBe('Only a failed change can be retried; this one is done.');
+    // So is Try now, which only moves a waiting attempt to now (engine.int.test.ts).
+    const tried = await api.call('tryOperationNow', { token, params: { operationId } });
+    expect(tried.status).toBe(409);
+    expect(tried.error.message).toBe(
+      'Only a change waiting to try again can be tried now; this one is done.',
+    );
 
     // Relist: a new eBay listing id, active again.
     const relisting = await api.call('relistListing', { token, params: { listingId: draft.id } });

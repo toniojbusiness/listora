@@ -49,6 +49,8 @@ export interface ListingStatusInput {
      * absent when its steps run in the cloud.
      */
     phoneWait?: PhoneWaitInput | null;
+    /** When its next attempt is due (`next_attempt_at`); a retry waits until then. */
+    nextAttemptAt?: Date | null;
   } | null;
   /** Now, for how long a step has waited for the phone (default: the clock). */
   now?: Date;
@@ -212,10 +214,21 @@ function describeUnsettled(
   const detail = operation.errorMessage === null ? {} : { detail: operation.errorMessage };
   const { kind } = operation;
   const wait = operation.phoneWait;
-  if (wait !== undefined && wait !== null && UNSETTLED_ON_PHONE.includes(operation.status)) {
+  const at = (now ?? new Date()).getTime();
+  const due = operation.nextAttemptAt?.getTime() ?? null;
+  // A retry before its time waits for that time, not for the phone: the app shows when it is
+  // ("Waiting to retry at 9:41 PM"), and the phone takes it once it is due.
+  const retryLater = operation.status !== 'queued' && due !== null && due > at;
+  if (
+    wait !== undefined &&
+    wait !== null &&
+    UNSETTLED_ON_PHONE.includes(operation.status) &&
+    (wait.running || !retryLater)
+  ) {
     const doing = operation.status === 'verifying' ? 'Checking' : IN_PROGRESS[kind];
     if (wait.running) return { tone: 'in_progress', label: `${doing} on your iPhone...` };
-    const waited = waitedFor((now ?? new Date()).getTime() - wait.since.getTime());
+    // The wait for the phone counts from when the step was due, not from its first attempt.
+    const waited = waitedFor(at - Math.max(wait.since.getTime(), due ?? 0));
     return {
       tone: 'in_progress',
       label: `${doing}... waiting on your iPhone (${waited})`,

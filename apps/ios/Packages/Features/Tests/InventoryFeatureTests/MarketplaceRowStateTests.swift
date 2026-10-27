@@ -1,3 +1,4 @@
+import Foundation
 import ListoraAPI
 import Testing
 @testable import InventoryFeature
@@ -47,6 +48,48 @@ struct MarketplaceRowStateTests {
         )
         #expect(row.actions.isEmpty)
         #expect(row.isWorking)
+    }
+
+    @Test
+    func `offers Try now on a change waiting to try again, and says when it will`() throws {
+        let now = Fixtures.date
+        let calendar = Calendar.current
+        let later = try #require(calendar.date(byAdding: .minute, value: 10, to: now))
+        var retrying = Fixtures.operation(status: .retrying, label: "Delisting... retry 1 of 5", tone: .inProgress)
+        retrying.nextAttemptAt = later
+        let row = MarketplaceRowState(
+            marketplace: .ebay,
+            listing: Fixtures.listing(label: "Delisting... retry 1 of 5", tone: .inProgress, actions: [], latest: retrying),
+            connection: Fixtures.connection(.ebay, mode: "api"),
+            now: now,
+        )
+        #expect(row.actions == [.tryNow(operationID: Fixtures.operationID)])
+        let time = later.formatted(
+            date: calendar.isDate(later, inSameDayAs: now) ? .omitted : .abbreviated,
+            time: .shortened,
+        )
+        #expect(row.scheduleLabel == "Waiting to retry at \(time)")
+
+        var checking = Fixtures.operation(status: .verifying, label: "Checking...", tone: .checking)
+        checking.nextAttemptAt = later
+        let check = MarketplaceRowState(
+            marketplace: .ebay,
+            listing: Fixtures.listing(label: "Checking...", tone: .checking, actions: [], latest: checking),
+            connection: Fixtures.connection(.ebay, mode: "api"),
+            now: now,
+        )
+        #expect(check.scheduleLabel == "Checking again at \(time)")
+        #expect(check.actions == [.tryNow(operationID: Fixtures.operationID)])
+
+        // Once the attempt is due it runs (or waits on this iPhone): nothing to try now.
+        let due = MarketplaceRowState(
+            marketplace: .ebay,
+            listing: Fixtures.listing(label: "Delisting... retry 1 of 5", tone: .inProgress, actions: [], latest: retrying),
+            connection: Fixtures.connection(.ebay, mode: "api"),
+            now: later.addingTimeInterval(1),
+        )
+        #expect(due.actions.isEmpty)
+        #expect(due.scheduleLabel == nil)
     }
 
     @Test

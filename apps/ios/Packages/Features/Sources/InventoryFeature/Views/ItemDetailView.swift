@@ -164,6 +164,7 @@ struct ItemDetailView: View {
                     histories: model.histories,
                     events: model.events,
                     busyMarketplace: model.busyMarketplace,
+                    phoneProgress: environment.phoneProgress?.progress,
                     perform: perform,
                     end: { reason, row in end(row, reason: reason) },
                     loadEvents: { id in await model.loadEvents(operationID: id) },
@@ -247,6 +248,8 @@ struct ItemDetailView: View {
             Task { await model.perform(request, marketplace: row.id) }
         case let .retry(operationID):
             Task { await model.retry(operationID: operationID, marketplace: row.id) }
+        case let .tryNow(operationID):
+            Task { await model.tryNow(operationID: operationID, marketplace: row.id) }
         case let .openTask(operationID):
             openTask = OpenTask(operationID: operationID)
         }

@@ -211,6 +211,54 @@ struct PhoneRunnerTests {
         #expect(await service.registrations.count == 1)
     }
 
+    @Test
+    func `shows the step it runs and the time left from the last full run, and keeps the phone awake`() async throws {
+        let service = FakeWorkService(claims: [
+            .run(PhoneRun(id: "run-1", purpose: "listing", marketplace: "depop", operationID: "op-1", call: .call(0))),
+            .run(PhoneRun(id: "run-2", purpose: "listing", marketplace: "depop", operationID: "op-2", call: .call(0))),
+            .none,
+        ])
+        await service.script(answers: ["run-1": [.over], "run-2": [.over]])
+        let clock = TestClock()
+        let defaults = try #require(UserDefaults(suiteName: "phone-runner-\(UUID().uuidString)"))
+        let runtime = FakeRuntime()
+        runtime.output = Data(#"{"type":"ran","result":{"ok":true}}"#.utf8)
+        runtime.steps = [("Getting the photos", 4), ("Adding the photos", 10), ("Posting", 6)]
+        runtime.clock = clock
+        var awake: [Bool] = []
+        let runner = PhoneRunner(
+            service: service,
+            runtime: runtime,
+            installationID: { "install-1" },
+            isSignedIn: { true },
+            device: { DeviceRegistration(name: "Test iPhone", appVersion: "1.0", runtimeVersion: 0) },
+            sleep: { _ in },
+            keepAwake: { awake.append($0) },
+            timings: StepTimings(defaults: defaults, clock: { clock.now }),
+        )
+        var seen: [PhoneWorkProgress?] = []
+        runtime.onStep = { seen.append(runner.progress) }
+
+        await runner.runUntilDone(.opened)
+
+        // The first run has no earlier one to estimate from: it counts its steps only.
+        #expect(seen.prefix(3).map { $0?.stepNumber } == [1, 2, 3])
+        #expect(seen.prefix(3).allSatisfy { $0?.stepCount == nil && $0?.expectedEnd == nil })
+        #expect(seen[1]?.step == "Adding the photos")
+        #expect(seen[1]?.operationID == "op-1")
+        // The second knows the steps and their times from the first.
+        let second = try #require(seen[4])
+        #expect(second.operationID == "op-2")
+        #expect(second.stepNumber == 2)
+        #expect(second.stepCount == 3)
+        #expect(second.expectedEnd == clock.started[4].addingTimeInterval(16))
+        #expect(second.secondsLeft(at: clock.started[4]) == 16)
+        #expect(second.fractionDone == 1.0 / 3)
+        // Nothing runs afterwards, and the phone may sleep again.
+        #expect(runner.progress == nil)
+        #expect(awake == [true, false])
+    }
+
     private func makeRunner(
         _ service: FakeWorkService,
         _ runtime: FakeRuntime,
@@ -348,6 +396,19 @@ actor FakeWorkService: PhoneWorkService {
     }
 }
 
+/// A clock the fake runtime moves forward as its steps take time.
+@MainActor
+final class TestClock {
+    var now = Date(timeIntervalSince1970: 1_800_000_000)
+    /// When each step the fake runtime ran started, in order.
+    private(set) var started: [Date] = []
+
+    func step(taking seconds: Double) {
+        started.append(now)
+        now = now.addingTimeInterval(seconds)
+    }
+}
+
 @MainActor
 final class FakeRuntime: PhoneRuntime {
     static let answer = Data(#"{"kind":"result"}"#.utf8)
@@ -355,11 +416,23 @@ final class FakeRuntime: PhoneRuntime {
     private(set) var maxConcurrent = 0
     private var running = 0
     var fails = false
+    /// What each call answers.
+    var output = FakeRuntime.answer
+    /// The steps each call runs (label, seconds), reported as the runtime reports them.
+    var steps: [(String, Double)] = []
+    var clock: TestClock?
+    /// Runs as each step starts, after the runner heard of it.
+    var onStep: (() -> Void)?
     /// Runs during the first call (a trigger arriving mid-run).
     var onRun: (() -> Void)?
+    private var stepStarted: (@MainActor (PhoneStep) -> Void)?
 
     func runtimeVersion() async throws -> Int {
         1
+    }
+
+    func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void) {
+        stepStarted = handler
     }
 
     func run(_ input: Data, marketplace: String) async throws -> Data {
@@ -375,7 +448,12 @@ final class FakeRuntime: PhoneRuntime {
             self.onRun = nil
             onRun()
         }
+        for (index, (label, seconds)) in steps.enumerated() {
+            stepStarted?(PhoneStep(call: "create", index: index + 1, label: label))
+            onStep?()
+            clock?.step(taking: seconds)
+        }
         await Task.yield()
-        return Self.answer
+        return output
     }
 }
