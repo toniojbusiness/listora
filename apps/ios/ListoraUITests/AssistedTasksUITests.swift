@@ -154,10 +154,11 @@ final class AssistedTasksUITests: XCTestCase {
 
         let link = app.textFields["task.link"]
         link.scrollClear(of: bar, in: app)
-        link.tap()
-        link.typeText(listingURL)
+        try require(link.typeChecked(listingURL), "the link field holds \(link.value ?? "nothing")")
         keepScreenshot("Link pasted")
-        app.buttons["task.done"].tap()
+        try require(bar.isEnabled, "Done is off with the link \(link.value ?? "")")
+        bar.tap()
+        try require(app.staticTexts["task.title"].waitForNonExistence(timeout: 15), "the task did not close on Done")
     }
 
     /// End the listing: a delist task that opens the listing itself; the user removes it.

@@ -21,8 +21,11 @@ final class MarketplacePage: NSObject {
     private var status: Int?
     private var retryAfterSeconds: Int?
     private var acceptDialog = false
-    /// Each page load's completion, by navigation, and the newest one.
-    private var loads: [ObjectIdentifier: OneShot<Void>] = [:]
+    /// Each page load's completion, by navigation, until WebKit ends the load, and the newest one.
+    /// An entry keeps its navigation: an identifier is unique only while its object lives, and a
+    /// freed navigation's identifier came back for a newer one, whose load then looked finished
+    /// before it began, so the run read the page before it.
+    private var loads: [ObjectIdentifier: (navigation: WKNavigation, load: OneShot<Void>)] = [:]
     private var newest: OneShot<Void>?
 
     init(origins: [String], logger: Logger) {
@@ -135,11 +138,18 @@ final class MarketplacePage: NSObject {
     private func track(_ navigation: WKNavigation) -> OneShot<Void> {
         let id = ObjectIdentifier(navigation)
         if let known = loads[id] {
-            return known
+            return known.load
         }
         let load = OneShot<Void>()
-        loads[id] = load
+        loads[id] = (navigation, load)
         newest = load
+        return load
+    }
+
+    /// A load WebKit ended (it finished or failed): nothing more comes for it, so it is let go.
+    private func end(_ navigation: WKNavigation) -> OneShot<Void> {
+        let load = track(navigation)
+        loads[ObjectIdentifier(navigation)] = nil
         return load
     }
 
@@ -214,7 +224,7 @@ extension MarketplacePage: WKNavigationDelegate {
 
     func webView(_: WKWebView, didFinish navigation: WKNavigation?) {
         guard let navigation else { return }
-        track(navigation).finish(.success(()))
+        end(navigation).finish(.success(()))
     }
 
     func webView(_: WKWebView, didFail navigation: WKNavigation?, withError error: any Error) {
@@ -231,7 +241,7 @@ extension MarketplacePage: WKNavigationDelegate {
 
     private func fail(_ navigation: WKNavigation?, _ error: any Error) {
         guard let navigation else { return }
-        let load = track(navigation)
+        let load = end(navigation)
         let error = error as NSError
         // A load another one replaced: the newer one decides.
         if error.domain == NSURLErrorDomain, error.code == NSURLErrorCancelled, newest !== load {

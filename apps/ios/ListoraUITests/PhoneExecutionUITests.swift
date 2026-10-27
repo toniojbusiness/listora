@@ -14,8 +14,12 @@ final class PhoneExecutionUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// Depop is unlinked again: a test that ends early leaves no Depop work for this phone, which
+    /// a later test's fresh app, with no Depop session, would meet as Depop's sign-in page and
+    /// hand to the seller over its screen.
     override func tearDown() async throws {
         try await stack?.clearDepopChecks()
+        try await stack?.unlink("depop")
     }
 
     /// Keeps a screenshot in the test results, for reviewing the screens.

@@ -123,7 +123,8 @@ it".
 operation, sale, marketplace, and time (`--since`, `--until`); `sale-why` explains a sale;
 `sale-checks` lists every automation connection's health and the latest checks (`--json` for
 all of them). In AWS, `scripts/admin-remote.sh <env> [--profile <name>] -- <command>` runs the
-same CLI as a one-off task with the migration task's database access and prints its output; for
+same CLI (which the application image carries) as a one-off task with the migration task's
+database access and prints its output; for
 example `scripts/admin-remote.sh personal --profile prequal-main -- sale-checks`. CloudWatch Logs
 then has the details by `runId` (`/listora/<env>/api` for phone runs, `/runner` for the runner's,
 `/worker` for the health task).
