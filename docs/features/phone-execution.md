@@ -196,7 +196,13 @@ marketplaces ran one after another. What makes them fast now:
   ([operations.md](operations.md), idempotent re-execution);
 - marketplaces side by side, delists first, each in a warm web view;
 - the open app runs work at once: a change it queues is claimed within a second of the engine
-  handing it over, and a retry or a confirming read runs 3 s after the step before it.
+  handing it over, and a retry or a confirming read runs 3 s after the step before it;
+- the open app hears of new work at once: a delist after a sale (or any work) handed to the phone
+  ends the app's wait the moment its transaction commits, where it used to wait for the app's
+  next look, up to 5 seconds later ("When the phone runs");
+- End and Relist on Mercari and Poshmark load one page before they act, and Poshmark's End,
+  Relist, and Change price don't read the listing again before the read-back does: about 11 s
+  less per Poshmark End or Relist and 6 s less per price change ([poshmark.md](poshmark.md)).
 
 The targets: a delist about 15 s after the app opens, a listing 45 to 60 s per marketplace, every
 marketplace at once.
