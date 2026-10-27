@@ -113,4 +113,19 @@ struct BrandTests {
         #expect(BrandSpinner.side(for: .small) < BrandSpinner.side(for: .regular))
         #expect(BrandSpinner.side(for: .regular) < BrandSpinner.side(for: .large))
     }
+
+    @MainActor
+    @Test
+    func `the spinner's layer animations repeat the cycle from the same frames`() {
+        let animation = SpinnerView.animation("strokeEnd", duration: BrandSpinner.cycle) {
+            Double(BrandSpinner.frame(at: $0 * BrandSpinner.cycle).end)
+        }
+        #expect(animation.repeatCount == .infinity && animation.duration == BrandSpinner.cycle)
+        let values = (animation.values as? [NSNumber])?.map(\.doubleValue) ?? []
+        #expect(values.count == SpinnerView.keyframes + 1 && animation.keyTimes?.count == values.count)
+        #expect(values.first == 0 && values.max() == 1)
+        // Drawn by just past halfway through the cycle, and still whole at the end (it lifts off
+        // from the start instead).
+        #expect(values[SpinnerView.keyframes * 6 / 10] == 1 && values.last == 1)
+    }
 }
