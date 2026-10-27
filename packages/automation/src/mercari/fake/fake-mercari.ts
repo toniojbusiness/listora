@@ -7,16 +7,20 @@
  *
  * The sell page is drawn by its own script once the document is ready, with no form element. A
  * tip about listing templates covers it on a seller's first visit. The category is a dialog of
- * rows, a level at a time; brand and size are lists of options; the condition is a radio per
- * Mercari condition id. Shipping starts on "Ship on your own"; Mercari's prepaid label comes
- * with the label Mercari recommends for the category and asks "Offer buyers free shipping?".
+ * rows, a level at a time, over Mercari's whole catalog (catalog/catalog.json); brand and size
+ * are lists of options, the sizes the category's size group lists; the condition is a radio per
+ * Mercari condition id. A brand is required: one Mercari doesn't list is its "No brand / Not
+ * sure". Descriptions need five words. Shipping starts on "Ship on your own"; Mercari's prepaid
+ * label comes with the label Mercari recommends and asks "Offer buyers free shipping?".
  * Smart Pricing starts on, and List refuses it without a lowest price. The edit page draws the
  * same form with Update, and Deactivate or Activate, which act at once and open the seller's
  * active listings. After List or Update, Mercari shows its own page linking to the listing. A
  * listing's page carries the listing in its Next.js page data, sale time included. The seller's
  * tabs are tables whose rows draw a moment after the page loads. Mercari's checks (Cloudflare's
  * interstitial and Turnstile widget, a CAPTCHA, a login code, a logged-out session) and its
- * refusals (an account to verify first, a card to add first) each come with fault injection.
+ * refusals (an account to verify first, a card to add first, its warning that a listing may be
+ * a prohibited item) each come with fault injection. A category can be made to ask for a phone's
+ * IMEI (`imeiCategories`), as Mercari's form does for some phones.
  *
  *   GET  /login/                      the login page (a password field: no session needs it)
  *   POST /login/                      log in by hand: any email and password; sets the session cookie
@@ -45,9 +49,8 @@ import type { AddressInfo } from 'node:net';
 
 import type { SessionCookie } from '@listora/connections';
 
-import { mappedMercariCategories, type MercariSizeKind } from '../categories.ts';
+import { mercariCatalog } from '../catalog/catalog.ts';
 import { MERCARI_CONDITIONS } from '../conditions.ts';
-import { SHIPPING_WEIGHTS, weightLabel } from '../shipping.ts';
 import type { MercariListingTab } from '../site.ts';
 
 export type FakeMercariAction =
@@ -78,6 +81,12 @@ export type FakeMercariFault =
   | { type: 'server_error'; afterApply?: boolean }
   /** A form submission comes back with this validation message; nothing is applied. */
   | { type: 'reject'; message: string }
+  /**
+   * On List or Update (`create`, `update`): Mercari's warning that the listing may break its
+   * rules ("Oops!", this reason, "Continue listing", "Learn more"), over the form; nothing is
+   * applied unless the seller continues.
+   */
+  | { type: 'item_warning'; message: string }
   /**
    * On the sell page (`form`): Mercari's dialog asking the seller to verify their account
    * before they can list, instead of the form.
@@ -148,7 +157,14 @@ export interface FakeMercariOptions {
    * true, as Mercari's does). Without the link, the scripts find a new listing by its SKU.
    */
   listedPageLinksItem?: boolean;
+  /** Categories (Mercari's names joined with ` > `) whose form asks for a phone's IMEI. */
+  imeiCategories?: readonly string[];
+  /** Categories the dialog no longer offers, as when Mercari drops one after a catalog read. */
+  withoutCategories?: readonly string[];
 }
+
+/** Mercari's own brand for an item without one, or one its list doesn't have. */
+export const FAKE_MERCARI_NO_BRAND = 'No brand / Not sure';
 
 /** The brands Mercari's brand search offers (a sample of its list). */
 export const FAKE_MERCARI_BRANDS = [
@@ -167,30 +183,12 @@ export const FAKE_MERCARI_BRANDS = [
   'Carhartt',
   'Dr. Martens',
   'Converse',
+  'Abercrombie & Fitch',
+  FAKE_MERCARI_NO_BRAND,
 ] as const;
 
-const SIZES: Readonly<Record<Exclude<MercariSizeKind, 'none'>, readonly string[]>> = {
-  clothing: [
-    'XXS',
-    'XS',
-    'S',
-    'M',
-    'L',
-    'XL',
-    'XXL',
-    '3XL',
-    '4XL',
-    'One size',
-    '00',
-    '0',
-    ...Array.from({ length: 12 }, (_, index) => String((index + 1) * 2)),
-    ...Array.from({ length: 17 }, (_, index) => String(28 + index)),
-  ],
-  shoes: Array.from({ length: 21 }, (_, index) => {
-    const size = 5 + index / 2;
-    return Number.isInteger(size) ? String(size) : `${String(Math.floor(size))}.5`;
-  }),
-};
+/** The prepaid label class Mercari's form recommends (the fake recommends one for every item). */
+export const FAKE_MERCARI_LABEL = 'Up to 1 lb';
 
 interface StoredItem {
   current: FakeMercariItem;
@@ -217,6 +215,7 @@ export class FakeMercariSite {
   readonly #server: Server;
   readonly #pageSize: number;
   readonly #listedPageLinksItem: boolean;
+  readonly #formOptions: Pick<SellFormOptions, 'imeiCategories' | 'withoutCategories'>;
   readonly #items = new Map<string, StoredItem>();
   readonly #deleted = new Set<string>();
   readonly #sessions = new Map<string, Session>();
@@ -233,6 +232,10 @@ export class FakeMercariSite {
   private constructor(options: FakeMercariOptions) {
     this.#pageSize = options.pageSize ?? 10;
     this.#listedPageLinksItem = options.listedPageLinksItem ?? true;
+    this.#formOptions = {
+      imeiCategories: options.imeiCategories ?? [],
+      withoutCategories: options.withoutCategories ?? [],
+    };
     this.#server = createServer((request, response) => {
       void this.#handle(request, response).catch((error: unknown) => {
         if (!response.headersSent) {
@@ -315,9 +318,9 @@ export class FakeMercariSite {
         category: ['Women', 'Tops & blouses', 'T-shirts'],
         brand: null,
         conditionId: 3,
-        size: 'M',
+        size: 'M (8-10)',
         shippingPayer: 'Buyer',
-        shippingWeight: weightLabel('8 oz'),
+        shippingWeight: FAKE_MERCARI_LABEL,
         photos: ['photo.jpg'],
         listedAt: now,
         soldAt: null,
@@ -463,6 +466,7 @@ export class FakeMercariSite {
       case 'turnstile':
       case 'server_error':
       case 'reject':
+      case 'item_warning':
       case 'verification_required':
       case 'card_required':
       case 'slow':
@@ -478,11 +482,30 @@ export class FakeMercariSite {
     if (fault?.type === 'verification_required' && route.action === 'form' && route.id === null) {
       return { status: 200, body: page('Sell | Mercari', verificationRequired()) };
     }
+    if (
+      fault?.type === 'item_warning' &&
+      (route.action === 'create' || route.action === 'update')
+    ) {
+      const stored = route.id === null ? undefined : this.#items.get(route.id);
+      return {
+        status: 200,
+        body: page(
+          'Sell | Mercari',
+          listingForm(stored?.current ?? null, {
+            itemWarning: fault.message,
+            ...this.#formOptions,
+          }),
+        ),
+      };
+    }
     if (fault?.type === 'card_required' && route.action === 'create') {
       // The form again, with the warning over it.
       return {
         status: 200,
-        body: page('Sell | Mercari', listingForm(null, { paymentWarning: true })),
+        body: page(
+          'Sell | Mercari',
+          listingForm(null, { paymentWarning: true, ...this.#formOptions }),
+        ),
       };
     }
     const apply = (): Reply => this.#apply(route, url, form, session, fault);
@@ -527,15 +550,27 @@ export class FakeMercariSite {
           // The tip about listing templates shows on a seller's first visit.
           const templatesTip = !this.#tipped.has(session.seller);
           this.#tipped.add(session.seller);
-          return { status: 200, body: page('Sell | Mercari', listingForm(null, { templatesTip })) };
+          return {
+            status: 200,
+            body: page(
+              'Sell | Mercari',
+              listingForm(null, { templatesTip, ...this.#formOptions }),
+            ),
+          };
         }
         return this.#owned(route.id, session, (stored) =>
           stored.current.status === 'on_sale' || stored.current.status === 'inactive'
-            ? { status: 200, body: page('Edit listing | Mercari', listingForm(stored.current)) }
+            ? {
+                status: 200,
+                body: page(
+                  'Edit listing | Mercari',
+                  listingForm(stored.current, { ...this.#formOptions }),
+                ),
+              }
             : redirect(`/us/item/${stored.current.id}/`),
         );
       case 'create': {
-        const fields = listingFields(form, null);
+        const fields = listingFields(form, null, this.#formOptions);
         if (typeof fields === 'string') return refused(fields, undefined);
         const id = this.#newId();
         const now = new Date();
@@ -564,7 +599,7 @@ export class FakeMercariSite {
           if (stored.current.status !== 'on_sale' && stored.current.status !== 'inactive') {
             return refused('Sold items cannot be edited.', stored);
           }
-          const fields = listingFields(form, stored.current);
+          const fields = listingFields(form, stored.current, this.#formOptions);
           if (typeof fields === 'string') return refused(fields, stored);
           this.#change(stored, fields);
           // The same page as after List (read 2026-10-27).
@@ -798,6 +833,7 @@ type ListingFields = Pick<
 function listingFields(
   form: SubmittedForm | null,
   existing: FakeMercariItem | null,
+  options: Pick<SellFormOptions, 'imeiCategories' | 'withoutCategories'>,
 ): ListingFields | string {
   const text = (name: string): string => form?.text(name) ?? '';
   const title = text('name');
@@ -807,9 +843,11 @@ function listingFields(
   const category = text('category')
     .split(' > ')
     .filter((name) => name !== '');
-  const leaf = mappedMercariCategories().find(
-    (entry) => entry.path.join(' > ') === category.join(' > '),
-  );
+  const chosen = mercariCatalog().find(category);
+  const sizes =
+    chosen === null || chosen.sizeGroupId === null
+      ? []
+      : mercariCatalog().sizeLabels(chosen.sizeGroupId);
   const brand = text('brand');
   const condition = Number(text('condition'));
   const size = text('size');
@@ -821,21 +859,27 @@ function listingFields(
   if (title === '') return 'Enter a title.';
   if (title.length > LIMITS.title) return 'Title must be 80 characters or less.';
   if (description === '') return 'Enter a description.';
+  if (description.split(/\s+/).filter((word) => word !== '').length < 5) {
+    return 'Your description needs to be at least 5 words.';
+  }
   if (description.length > LIMITS.description) {
     return 'Description must be 1,000 characters or less.';
   }
-  if (leaf === undefined) return 'Select a category.';
-  if (brand !== '' && !(FAKE_MERCARI_BRANDS as readonly string[]).includes(brand)) {
-    return 'Select a brand from the list.';
+  // A department alone is not a category a listing can be in.
+  const named = category.join(' > ');
+  if (chosen === null || category.length < 2 || options.withoutCategories?.includes(named) === true) {
+    return 'Select a category to continue';
   }
+  if (options.imeiCategories?.includes(named) === true && text('imei') === '') {
+    return 'IMEI can not be empty.';
+  }
+  if (!(FAKE_MERCARI_BRANDS as readonly string[]).includes(brand)) return 'Please select a brand.';
   if (!Object.values(MERCARI_CONDITIONS).some((option) => option.id === condition)) {
     return 'Select the condition.';
   }
-  if (leaf.size !== 'none' && !SIZES[leaf.size].includes(size)) return 'Select a size.';
+  if (sizes.length > 0 && !sizes.includes(size)) return 'Size can not be empty.';
   if (text('shipping') !== 'MERCARI') return 'Enter a shipping price, or choose a prepaid label.';
-  if (!SHIPPING_WEIGHTS.some((option) => weightLabel(option) === label)) {
-    return 'Select a shipping label.';
-  }
+  if (label !== FAKE_MERCARI_LABEL) return 'Select a shipping label.';
   if (freeShipping !== 'yes' && freeShipping !== 'no') {
     return 'Choose whether to offer buyers free shipping.';
   }
@@ -849,9 +893,9 @@ function listingFields(
     description,
     priceCents: dollars * 100,
     category,
-    brand: brand === '' ? null : brand,
+    brand: brand === FAKE_MERCARI_NO_BRAND ? null : brand,
     conditionId: condition,
-    size: leaf.size === 'none' ? null : size,
+    size: sizes.length === 0 ? null : size,
     shippingPayer: freeShipping === 'yes' ? 'Seller' : 'Buyer',
     shippingWeight: label,
     photos: keptPhotos,
@@ -1053,6 +1097,12 @@ interface SellFormOptions {
   templatesTip?: boolean;
   /** Mercari's add-a-card warning over the form, its answer to List without a card on file. */
   paymentWarning?: boolean;
+  /** Mercari's warning that the listing may break its rules, with this reason, over the form. */
+  itemWarning?: string;
+  /** Categories whose form asks for a phone's IMEI. */
+  imeiCategories?: readonly string[];
+  /** Categories the dialog leaves out. */
+  withoutCategories?: readonly string[];
 }
 
 /** A dialog over the whole page, as Mercari's tips, confirmations, and warnings are. */
@@ -1112,6 +1162,7 @@ function listingForm(item: FakeMercariItem | null, options: SellFormOptions = {}
 <label>Description <textarea data-testid="Description">${value(item?.description)}</textarea></label>
 <p>Category <button type="button" data-testid="SellCategoryFieldButton">${item === null ? 'Select a category' : escape(item.category.join(' > '))}</button></p>
 <div id="categories"></div>
+<div id="imei"></div>
 <label>Brand <input data-testid="Brand" autocomplete="off" placeholder="Search brands" value="${value(item?.brand)}"></label>
 <ul id="brands" role="listbox"></ul>
 <fieldset><legend>Condition</legend>${conditions}</fieldset>
@@ -1131,12 +1182,19 @@ ${toggle}`;
   const config = {
     html,
     action: item === null ? '/sell/' : `/sell/edit/${item.id}/`,
-    tree: mappedMercariCategories().map((entry) => ({
-      path: entry.path,
-      size: entry.size,
-      label: weightLabel(entry.weight),
+    // Every category of Mercari's catalog, a row per level, and its size group's labels.
+    tree: [...mercariCatalog().byId.values()]
+      .filter((category) => options.withoutCategories?.includes(category.path.join(' > ')) !== true)
+      .map((category) => ({
+      path: category.path,
+      size: category.sizeGroupId,
+      imei: (options.imeiCategories ?? []).includes(category.path.join(' > ')),
+      leaf: !category.hasChildren,
     })),
-    sizes: SIZES,
+    sizes: Object.fromEntries(
+      [...mercariCatalog().sizeGroups.keys()].map((id) => [id, mercariCatalog().sizeLabels(id)]),
+    ),
+    label: FAKE_MERCARI_LABEL,
     brands: FAKE_MERCARI_BRANDS,
     state: {
       category: item?.category ?? [],
@@ -1147,11 +1205,15 @@ ${toggle}`;
       smartPricing,
     },
   };
+  const itemWarning =
+    options.itemWarning === undefined
+      ? ''
+      : `<div role="dialog" aria-modal="true" style="${OVERLAY}"><div style="${OVERLAY_BOX}"><h2>Oops!</h2><p>${escape(options.itemWarning)}</p><button type="button" data-testid="ItemCreationWarningModalContinueButton">Continue listing</button><a href="/us/help_center/article/318/" data-testid="ItemCreationWarningLearnMoreButton">Learn more</a></div></div>`;
   const warning =
     options.paymentWarning === true
       ? `<div data-testid="PaymentWarningModal" role="dialog" aria-modal="true" style="${OVERLAY}"><div style="${OVERLAY_BOX}"><h2>Add a credit or debit card</h2><p>Mercari needs a payment method on file before you can list.</p><a href="/mypage/payment/">Add credit / debit card</a></div></div>`
       : '';
-  return `<main id="sell"></main>${warning}
+  return `<main id="sell"></main>${warning}${itemWarning}
 <script>
 (() => {
   const config = ${scriptJson(config)};
@@ -1181,7 +1243,7 @@ ${toggle}`;
     const drawSize = () => {
       sizes.replaceChildren();
       const chosen = entry(state.category);
-      if (!chosen || chosen.size === 'none') {
+      if (!chosen || chosen.size === null) {
         sizeField.replaceChildren();
         return;
       }
@@ -1212,7 +1274,7 @@ ${toggle}`;
       }
       const chosen = entry(state.category);
       const label = make('label', {}, 'Shipping label ');
-      label.append(make('input', { 'data-testid': 'SelectShipping', readonly: '', value: chosen ? chosen.label : '' }));
+      label.append(make('input', { 'data-testid': 'SelectShipping', readonly: '', value: chosen ? config.label : '' }));
       const answer = state.freeShipping === 'yes' ? 'Yes' : state.freeShipping === 'no' ? 'No' : 'Choose';
       const question = make('div', { 'data-testid': 'ShippingPayerOption', role: 'button', tabindex: '0' }, 'Offer buyers free shipping? ' + answer);
       const answers = make('ul', { role: 'listbox' });
@@ -1241,6 +1303,8 @@ ${toggle}`;
     // Category: a dialog of rows, a level at a time, from the top each time it opens.
     const categoryButton = find('[data-testid="SellCategoryFieldButton"]');
     const categories = find('#categories');
+    // A category with subcategories lists them and, last, "All <category>", which picks it whole
+    // (a department has no such row); a subcategory is picked when its row is.
     const showLevel = (path) => {
       const dialog = make('div', { 'data-testid': 'DialogWrapper', role: 'dialog', 'aria-label': 'Category' });
       for (const name of children(path)) {
@@ -1248,19 +1312,39 @@ ${toggle}`;
         row.addEventListener('click', () => pick([...path, name]));
         dialog.append(row);
       }
+      if (path.length >= 2) {
+        const whole = make('button', { type: 'button', 'data-testid': 'CategoryRow' }, 'All ' + path[path.length - 1]);
+        whole.addEventListener('click', () => choose(path));
+        dialog.append(whole);
+      }
       categories.replaceChildren(dialog);
     };
-    const pick = (path) => {
+    const choose = (path) => {
       const chosen = entry(path);
-      if (chosen) {
-        state.category = path;
-        categoryButton.textContent = named(path);
-        if (chosen.size === 'none' || !config.sizes[chosen.size].includes(state.size)) state.size = null;
-        drawSize();
-        drawPrepaid();
-      }
+      state.category = path;
+      categoryButton.textContent = named(path);
+      if (chosen.size === null || !config.sizes[chosen.size].includes(state.size)) state.size = null;
+      categories.replaceChildren();
+      drawSize();
+      drawImei();
+      drawPrepaid();
+    };
+    const pick = (path) => {
       if (children(path).length > 0) showLevel(path);
-      else categories.replaceChildren();
+      else choose(path);
+    };
+
+    // IMEI: asked only by the categories that want a phone's.
+    const imeiField = find('#imei');
+    const drawImei = () => {
+      const chosen = entry(state.category);
+      if (!chosen || !chosen.imei) {
+        imeiField.replaceChildren();
+        return;
+      }
+      const label = make('label', {}, 'IMEI ');
+      label.append(make('input', { 'data-testid': 'IMEI', placeholder: 'Enter the imei for your device' }));
+      imeiField.replaceChildren(label);
     };
     categoryButton.addEventListener('click', () => showLevel([]));
 
@@ -1355,8 +1439,9 @@ ${toggle}`;
         brand: state.brand || '',
         condition: checked ? checked.value : '',
         size: state.size || '',
+        imei: find('[data-testid="IMEI"]') ? find('[data-testid="IMEI"]').value : '',
         shipping: state.shipping,
-        shippingLabel: state.shipping === 'MERCARI' && chosen ? chosen.label : '',
+        shippingLabel: state.shipping === 'MERCARI' && chosen ? config.label : '',
         freeShipping: state.freeShipping || '',
         price: price.value,
       };
@@ -1368,6 +1453,7 @@ ${toggle}`;
     if (toggle) toggle.addEventListener('click', () => send(toggle.dataset.action, {}, null));
 
     drawSize();
+    drawImei();
     drawPrepaid();
   };
   setTimeout(draw, ${String(DRAW_MS)});
