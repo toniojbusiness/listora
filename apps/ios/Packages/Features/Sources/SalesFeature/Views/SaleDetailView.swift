@@ -90,6 +90,9 @@ struct SaleDetailView: View {
                 if sale.items.count > 1 {
                     ItemsSection(sale: sale)
                 }
+                if let explanation = model.explanation {
+                    FoundSection(explanation: explanation)
+                }
             }
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth)

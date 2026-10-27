@@ -3,7 +3,7 @@ import { Writable } from 'node:stream';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AiConfigError, AiControlError, topAccountsBySpend } from '@listora/ai';
-import { createInventoryItem, type Db } from '@listora/db';
+import { createInventoryItem, jsonb, type Db } from '@listora/db';
 import { createLogger } from '@listora/shared';
 
 import { parseCommand } from './args.ts';
@@ -350,6 +350,113 @@ describe('marketplace-purge (real Postgres)', () => {
         connections: 2,
         actor: 'ops-alice',
       }),
+    );
+  });
+});
+
+describe('activity and sale detection (real Postgres)', () => {
+  /** A Mercari automation connection of Alpha's that runs on the phone, with its schedule. */
+  async function mercari(): Promise<string> {
+    const existing = await db
+      .selectFrom('marketplace_connection')
+      .select('id')
+      .where('account_id', '=', alpha)
+      .where('marketplace', '=', 'mercari')
+      .executeTakeFirst();
+    if (existing !== undefined) return existing.id;
+    const connection = await db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: alpha,
+        marketplace: 'mercari',
+        mode: 'automation',
+        status: 'connected',
+        token_ciphertext: Buffer.from('sealed'),
+        runs_on: 'phone',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('sale_check_schedule')
+      .values({
+        account_id: alpha,
+        connection_id: connection.id,
+        marketplace: 'mercari',
+        next_check_at: new Date('2026-10-24T13:00:00Z'),
+        next_reason: 'retry',
+        failures_in_a_row: 2,
+        last_error_code: 'element_missing',
+        last_error_message: "Mercari's sold items page has changed, so Listora couldn't read it.",
+        health: 'failing',
+        unhealthy_since: new Date('2026-10-24T10:00:00Z'),
+      })
+      .execute();
+    return connection.id;
+  }
+
+  it('asks for a read-only sold history read on the phone, then shows what it saw', async () => {
+    const connectionId = await mercari();
+    const asked = await run(['sale-history', 'read', 'mercari', '--account', alpha]);
+    expect(asked).toContain(
+      `read-only read of the Mercari sold history (connection ${connectionId})`,
+    );
+    expect(asked).toContain('runs on the seller’s iPhone');
+    const waiting = await db
+      .selectFrom('phone_work')
+      .select('purpose')
+      .where('connection_id', '=', connectionId)
+      .execute();
+    expect(waiting).toEqual([{ purpose: 'sale_history' }]);
+    expect(logLines()).toEqual([
+      expect.objectContaining({ event: 'sale_history_requested', connectionId, queued: true }),
+    ]);
+
+    await db
+      .insertInto('sale_check_run')
+      .values({
+        account_id: alpha,
+        connection_id: connectionId,
+        marketplace: 'mercari',
+        kind: 'history',
+        host: 'phone',
+        started_at: new Date('2026-10-24T11:00:00Z'),
+        finished_at: new Date('2026-10-24T11:00:09Z'),
+        outcome: 'succeeded',
+        orders_seen: 1,
+        items_seen: 1,
+        new_orders: 0,
+        newest_sold_at: new Date('2026-09-30T16:00:00Z'),
+        oldest_sold_at: new Date('2026-09-30T16:00:00Z'),
+        orders: jsonb([
+          {
+            orderId: 'm-123',
+            soldAt: '2026-09-30T16:00:00.000Z',
+            items: [{ listingId: 'm555', title: 'Coach bag', priceCents: 6500 }],
+          },
+        ]),
+      })
+      .execute();
+    output = '';
+    const shown = await run(['sale-history', 'show', 'mercari', '--account', alpha]);
+    expect(shown).toContain('sold orders seen  1');
+    expect(shown).toContain('2026-09-30T16:00:00.000Z  m-123  m555     $65.00  Coach bag');
+  });
+
+  it('lists sale-check health and the latest checks, and searches a timeline', async () => {
+    await mercari();
+    const health = await run(['sale-checks', '--account', alpha]);
+    expect(health).toContain('failing');
+    expect(health).toContain("Mercari's sold items page has changed, so Listora couldn't read it.");
+    output = '';
+    const timeline = await run(['activity', '--account', alpha, '--marketplace', 'mercari']);
+    expect(timeline).toContain('Read your Mercari sold history');
+    expect(timeline).toContain('Saw 1 sold order on your iPhone. Nothing was changed.');
+  });
+
+  it('says plainly when a sale or a connection is missing', async () => {
+    await expect(run(['sale-why', MISSING_ACCOUNT])).rejects.toThrow(CommandError);
+    await expect(run(['sale-history', 'read', 'depop', '--account', alpha])).rejects.toThrow(
+      'has no working Depop automation connection',
     );
   });
 });

@@ -56,6 +56,23 @@ import type { AutomationSessions, SessionRequest, SessionRun } from './sessions.
 
 export type { AutomationScripts, WriteResult, WriteScript } from './script-call.ts';
 
+/**
+ * A read through the seller's session (their orders, their listings) that did not get its
+ * answer: `code` says why (`no_session`, `automation_paced`, `automation_busy`, or how the
+ * script stopped, such as `element_missing`), and `step` names the step it stopped at.
+ */
+export class AutomationReadError extends Error {
+  readonly code: string;
+  readonly step: string | null;
+
+  constructor(code: string, step: string | null, message: string) {
+    super(message);
+    this.name = 'AutomationReadError';
+    this.code = code;
+    this.step = step;
+  }
+}
+
 const SCRIPT_FOR_KIND = {
   create: 'create',
   revise: 'revise',
@@ -381,13 +398,23 @@ export class AutomationAdapter<
   #readValue<T>(run: SessionRun<T>, what: string): T {
     switch (run.type) {
       case 'no_session':
-        throw new Error(`Listora can't ${what} on ${this.#name} until you log in again.`);
+        throw new AutomationReadError(
+          'no_session',
+          null,
+          `Listora can't ${what} on ${this.#name} until you log in again.`,
+        );
       case 'rate_limited':
       case 'busy':
-        throw new Error(`Listora will ${what} on ${this.#name} again shortly.`);
+        throw new AutomationReadError(
+          run.type === 'busy' ? 'automation_busy' : 'automation_paced',
+          null,
+          `Listora will ${what} on ${this.#name} again shortly.`,
+        );
       case 'ran':
         if (run.result.ok) return run.result.value;
-        throw new Error(
+        throw new AutomationReadError(
+          failureCode(run.result.failure),
+          run.result.failure.step,
           `Listora couldn't ${what} on ${this.#name} (${failureCode(run.result.failure)}).`,
         );
       default:

@@ -52,6 +52,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   (`retryOperation`). Change price warns, without refusing, when the new price is below the
   item's floor on that marketplace (`getItemPricing`), as the price screen does. End listing
   asks for the reason on its own card, so the confirmation opens at the button.
+- **Activity**: the item's timeline, newest first: every step of every marketplace action, each
+  browser session on the iPhone or in the cloud with its steps and their times, its tasks, sales,
+  the checks that saw them, and its delists ([activity.md](activity.md)).
 
 ## Never show success the server has not confirmed
 

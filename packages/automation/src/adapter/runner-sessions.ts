@@ -16,7 +16,14 @@
  */
 import { sql } from 'kysely';
 
-import type { AutomationRunOutcome, Db, DbExecutor, Marketplace } from '@listora/db';
+import {
+  jsonb,
+  type AutomationRunOutcome,
+  type Db,
+  type DbExecutor,
+  type JsonArray,
+  type Marketplace,
+} from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { assertNever, type Logger } from '@listora/shared';
 import { sameCookies, type LoadedSession, type SessionVault } from '@listora/connections';
@@ -177,6 +184,7 @@ export class RunnerSessions implements AutomationSessions {
         error_code:
           failure === null ? null : failure.kind === 'error' ? failure.code : failure.kind,
         screenshot_key: failure?.screenshotKey ?? null,
+        steps: jsonb(runSteps(result)),
       })
       .where('account_id', '=', loaded.accountId)
       .where('id', '=', run.id)
@@ -244,6 +252,25 @@ export async function rateLimitWait(
     }
   }
   return wait;
+}
+
+/** One step of a browser session, as its `automation_run.steps` keeps it. */
+export interface AutomationRunStep {
+  name: string;
+  /** How long it took; null when the host did not say (an older phone runtime). */
+  ms: number | null;
+}
+
+/** The steps a run took, for its `automation_run` record. */
+export function runSteps(result: ScriptResult<unknown>): JsonArray {
+  return result.steps.map((name, index) => {
+    const ms = result.stepMs?.[index];
+    const step: AutomationRunStep = {
+      name: name.slice(0, 100),
+      ms: ms === undefined ? null : Math.max(0, Math.round(ms)),
+    };
+    return { ...step };
+  });
 }
 
 /** How a run ended, for its `automation_run` record. */

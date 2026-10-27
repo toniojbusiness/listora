@@ -231,13 +231,14 @@ export class ScriptSession implements AutomationSession {
     readOnly: boolean,
   ): Promise<ScriptResult<T>> {
     const steps: string[] = [];
+    const stepMs: number[] = [];
     let mutated = false;
     let current = 'start';
     if (this.#closed !== null) {
-      return failed(steps, mutated, error('start', 'aborted', 'the session is closed'));
+      return failed(steps, stepMs, mutated, error('start', 'aborted', 'the session is closed'));
     }
     if (this.#challenge !== null) {
-      return failed(steps, mutated, {
+      return failed(steps, stepMs, mutated, {
         kind: 'challenge',
         challenge: this.#challenge,
         step: 'start',
@@ -255,9 +256,15 @@ export class ScriptSession implements AutomationSession {
       }
       current = stepName;
       steps.push(stepName);
+      const index = stepMs.push(0) - 1;
       if (options.mutates) mutated = true;
       const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs;
-      return this.#runStep(body, timeoutMs, signal, readOnly);
+      const startedAt = Date.now();
+      try {
+        return await this.#runStep(body, timeoutMs, signal, readOnly);
+      } finally {
+        stepMs[index] = Date.now() - startedAt;
+      }
     };
 
     try {
@@ -265,8 +272,8 @@ export class ScriptSession implements AutomationSession {
       // A script that caught the page's stop and carried on still stopped there.
       const stopped = this.#stop();
       if (stopped !== null) throw new PageProblemError(stopped);
-      this.#deps.logger.debug({ script: name, steps }, 'automation script finished');
-      return { ok: true, value, mutated, steps };
+      this.#deps.logger.debug({ script: name, steps, stepMs }, 'automation script finished');
+      return { ok: true, value, mutated, steps, stepMs };
     } catch (caught) {
       const stopped = this.#stop();
       const thrown = stopped === null ? caught : new PageProblemError(stopped);
@@ -289,7 +296,7 @@ export class ScriptSession implements AutomationSession {
         },
         'automation script stopped',
       );
-      return failed(steps, mutated, failure);
+      return failed(steps, stepMs, mutated, failure);
     }
   }
 
@@ -710,8 +717,13 @@ class Driver implements PageDriver {
   }
 }
 
-function failed<T>(steps: string[], mutated: boolean, failure: ScriptFailure): ScriptResult<T> {
-  return { ok: false, failure, mutated, steps };
+function failed<T>(
+  steps: string[],
+  stepMs: number[],
+  mutated: boolean,
+  failure: ScriptFailure,
+): ScriptResult<T> {
+  return { ok: false, failure, mutated, steps, stepMs };
 }
 
 function error(

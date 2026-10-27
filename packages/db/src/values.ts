@@ -256,7 +256,12 @@ export type ExecutionLocation = (typeof EXECUTION_LOCATIONS)[number];
 export const AUTOMATION_RUN_HOSTS = ['runner', 'phone'] as const;
 export type AutomationRunHost = (typeof AUTOMATION_RUN_HOSTS)[number];
 
-export const PHONE_WORK_PURPOSES = ['operation', 'session_check', 'sale_check'] as const;
+export const PHONE_WORK_PURPOSES = [
+  'operation',
+  'session_check',
+  'sale_check',
+  'sale_history',
+] as const;
 export type PhoneWorkPurpose = (typeof PHONE_WORK_PURPOSES)[number];
 
 export const DEVICE_PLATFORMS = ['ios'] as const;
@@ -294,6 +299,17 @@ export type SaleCheckReason = (typeof SALE_CHECK_REASONS)[number];
 
 export const SALE_CHECK_OUTCOMES = ['succeeded', 'failed', 'challenge'] as const;
 export type SaleCheckOutcome = (typeof SALE_CHECK_OUTCOMES)[number];
+
+/**
+ * What a recorded sale check did (`sale_check_run.kind`): a `scheduled` check hands new sold
+ * orders to the sale intake; a `history` read only reads the seller's sold history.
+ */
+export const SALE_CHECK_RUN_KINDS = ['scheduled', 'history'] as const;
+export type SaleCheckRunKind = (typeof SALE_CHECK_RUN_KINDS)[number];
+
+/** Whether a connection's sale checks work (`sale_check_schedule.health`). */
+export const SALE_CHECK_HEALTHS = ['healthy', 'failing', 'overdue'] as const;
+export type SaleCheckHealth = (typeof SALE_CHECK_HEALTHS)[number];
 
 /** Whether a newly linked session works (`session_check.status`). */
 export const SESSION_CHECK_STATUSES = ['pending', 'passed', 'failed'] as const;

@@ -59,8 +59,10 @@ import type {
   PreArchiveItemStatus,
   PricingSource,
   PushEnvironment,
+  SaleCheckHealth,
   SaleCheckOutcome,
   SaleCheckReason,
+  SaleCheckRunKind,
   SaleDetectionSource,
   RelistDecision,
   SaleStatus,
@@ -509,6 +511,8 @@ export interface SaleTable {
   returned_at: NullableTimestamp;
   /** What the seller paid to ship outside the payout; null until known. */
   shipping_cost_cents: Nullable<number>;
+  /** The sale check that saw it, while that check's record is kept. */
+  sale_check_run_id: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -792,6 +796,8 @@ export interface AutomationRunTable {
   screenshot_key: Nullable<string>;
   /** Where it ran: the browser runner, or the phone. */
   host: Generated<AutomationRunHost>;
+  /** The steps it ran, in order, and how long each took (`AutomationRunStep`). */
+  steps: NullableJsonb<JsonArray>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -807,6 +813,47 @@ export interface SaleCheckScheduleTable {
   last_finished_at: NullableTimestamp;
   last_outcome: Nullable<SaleCheckOutcome>;
   checked_through: NullableTimestamp;
+  last_succeeded_at: NullableTimestamp;
+  failures_in_a_row: Generated<number>;
+  last_error_code: Nullable<string>;
+  /** User-readable, names the marketplace. */
+  last_error_message: Nullable<string>;
+  /** Whether the connection's sale checks work (docs/features/activity.md). */
+  health: Generated<SaleCheckHealth>;
+  unhealthy_since: NullableTimestamp;
+  /** When the seller was told about the current problem. */
+  alerted_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/**
+ * One sale check, or one read of the seller's sold history: where and when it ran, what it read,
+ * and how it ended (docs/features/activity.md).
+ */
+export interface SaleCheckRunTable {
+  id: Id;
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  kind: SaleCheckRunKind;
+  /** Why a scheduled check ran; null for a history read. */
+  reason: Nullable<SaleCheckReason>;
+  host: AutomationRunHost;
+  started_at: Generated<Date>;
+  finished_at: NullableTimestamp;
+  outcome: Nullable<SaleCheckOutcome>;
+  since: NullableTimestamp;
+  orders_seen: Nullable<number>;
+  items_seen: Nullable<number>;
+  new_orders: Nullable<number>;
+  newest_sold_at: NullableTimestamp;
+  oldest_sold_at: NullableTimestamp;
+  /** What it read, at most 100 orders (`SaleCheckOrderRecord`); never buyer data. */
+  orders: DefaultedJsonb<JsonArray>;
+  error_code: Nullable<string>;
+  error_message: Nullable<string>;
+  automation_run_id: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -995,6 +1042,7 @@ export interface Database {
   deletion_record: DeletionRecordTable;
   automation_run: AutomationRunTable;
   sale_check_schedule: SaleCheckScheduleTable;
+  sale_check_run: SaleCheckRunTable;
   session_check: SessionCheckTable;
   app_device: AppDeviceTable;
   phone_work: PhoneWorkTable;

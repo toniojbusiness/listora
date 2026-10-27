@@ -11,6 +11,10 @@ process follows are in [architecture.md](../architecture.md#typescript-conventio
 - **Operation history.** Every operation transition appends an `operation_event` with a
   redacted request and response excerpt, error code, and attempt number
   ([operations.md](operations.md)).
+- **Activity.** One timeline per item, operation, sale, and marketplace, from those records,
+  every browser session's steps and their times, and every sale check; the app's Activity
+  screen and `npm run admin -- activity` show it, and `scripts/admin-remote.sh` runs the search
+  in AWS ([activity.md](activity.md)).
 - **AI spend.** The worker's hourly spend check logs one `event: "ai_spend_alert"` line per
   alert and one `event: "ai_spend_check"` summary ([ai.md](ai.md)). CloudWatch metric filters
   and alarms (T-30, T-32) key on these field names, so they change only together with the
@@ -34,9 +38,12 @@ marketplace and kind and per marketplace, `OperationFailed` per marketplace and 
 job runs ahead of every operation step in the queue, so a backlog cannot silence it):
 `StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying, needs_user_action),
 `OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day), `MarketplaceConnections` per
-marketplace and status, `ConnectionsNeedingRelink`, and `OverdueDeletions`. The observability stack alarms on an
+marketplace and status, `ConnectionsNeedingRelink`, `UnhealthySaleChecks` per marketplace that has
+any (working automation connections whose sale checks fail or stopped running,
+[activity.md](activity.md)), and `OverdueDeletions`. The observability stack alarms on an
 operation unverified for 30 minutes, any failed delist, an account's AI cost today over
-`aiDailyCostAlarmUsd`, a connection needing relink, and per marketplace on p95 delist latency over
+`aiDailyCostAlarmUsd`, a connection needing relink, any connection whose sale checks fail or stopped
+running (`sale-checks-unhealthy`), and per marketplace on p95 delist latency over
 an hour above `delistLatencyAlarmMinutes` (10 minutes for eBay's API, 13 hours for the
 browser-automated marketplaces and their 12-hour sale checks) and a verified-success rate below 90%
 over a day, on any account or connection deletion unfinished after 8 days (`OverdueDeletions`,

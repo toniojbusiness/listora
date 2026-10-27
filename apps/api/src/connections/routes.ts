@@ -47,6 +47,7 @@ import {
   authorizationView,
   connectionHealthView,
   connectionView,
+  type SaleCheckState,
 } from './views.ts';
 
 export interface ConnectionsDependencies {
@@ -89,12 +90,17 @@ export function registerConnectionRoutes(
   const cloudAccessOf = (marketplace: Marketplace) =>
     cloudAccess(deps.marketplaceSessions.profiles, marketplace);
   const context = (
-    state: { sessionChecks: ReadonlyMap<string, SessionCheckState>; execution: ExecutionState },
+    state: {
+      sessionChecks: ReadonlyMap<string, SessionCheckState>;
+      saleChecks: ReadonlyMap<string, SaleCheckState>;
+      execution: ExecutionState;
+    },
     now = deps.now(),
   ) => ({
     adapters: deps.adapters,
     canConnect,
     sessionChecks: state.sessionChecks,
+    saleChecks: state.saleChecks,
     execution: state.execution,
     cloudAccess: cloudAccessOf,
     now,
@@ -353,14 +359,51 @@ async function accountState(
 ): Promise<{
   connections: Map<Marketplace, ConnectionRow>;
   sessionChecks: Map<string, SessionCheckState>;
+  saleChecks: Map<string, SaleCheckState>;
   execution: ExecutionState;
 }> {
   const connections = await accountConnections(db, accountId);
   return {
     connections,
     sessionChecks: await accountSessionChecks(db, accountId),
+    saleChecks: await accountSaleChecks(db, accountId),
     execution: await accountExecutionState(db, accountId),
   };
+}
+
+/** The account's sale-check schedules by connection id (docs/features/activity.md). */
+async function accountSaleChecks(
+  db: DbExecutor,
+  accountId: string,
+): Promise<Map<string, SaleCheckState>> {
+  const rows = await db
+    .selectFrom('sale_check_schedule')
+    .select([
+      'connection_id',
+      'health',
+      'last_finished_at',
+      'last_succeeded_at',
+      'next_check_at',
+      'last_error_code',
+      'last_error_message',
+    ])
+    .where('account_id', '=', accountId)
+    .execute();
+  return new Map(
+    rows.map((row) => [
+      row.connection_id,
+      {
+        health: row.health,
+        lastCheckedAt: row.last_finished_at,
+        lastSucceededAt: row.last_succeeded_at,
+        nextCheckAt: row.next_check_at,
+        lastError:
+          row.last_error_code === null || row.last_error_message === null
+            ? null
+            : { code: row.last_error_code, message: row.last_error_message },
+      },
+    ]),
+  );
 }
 
 /**

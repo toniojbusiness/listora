@@ -88,6 +88,15 @@ export const TRUST_METRICS = {
     dimensionSets: [[]],
     description: 'Connections the seller must link again (reauth_required or revoked).',
   },
+  UnhealthySaleChecks: {
+    unit: 'Count',
+    dimensionSets: [['Marketplace'], []],
+    description:
+      'Working automation connections whose sale checks fail or stopped running ' +
+      '(`failing` or `overdue`, docs/features/activity.md): sales there are not being seen, so ' +
+      'a sold item may stay for sale elsewhere. Published per marketplace that has any; without ' +
+      'dimensions, Maximum is the worst marketplace.',
+  },
   OverdueDeletions: {
     unit: 'Count',
     dimensionSets: [[]],

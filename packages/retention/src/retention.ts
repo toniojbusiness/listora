@@ -33,6 +33,11 @@ export const RETENTION_DAYS = {
   operationEvents: 180,
   /** Raw marketplace notifications, poll results, and parsed emails, after processing. */
   inboundEvents: 90,
+  /**
+   * Sale-check records (docs/features/activity.md): when each check ran, what it read, and why
+   * it failed, after the check started. A sale keeps its own detection source.
+   */
+  saleCheckRuns: 90,
   /** AI usage events (cost and quota accounting); the daily totals stay with the account. */
   aiUsageEvents: 400,
   /** A connection whose access the marketplace revoked, unless the seller reconnects. */
@@ -88,6 +93,17 @@ export async function runDataRetention(
           select id from inbound_event
           where processed_at < ${cutoff('inboundEvents')}
           order by processed_at
+          limit ${batchSize}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    }),
+    saleCheckRuns: await repeat(async () => {
+      const result = await sql`
+        delete from sale_check_run where id in (
+          select id from sale_check_run
+          where started_at < ${cutoff('saleCheckRuns')}
+          order by started_at
           limit ${batchSize}
         )
       `.execute(db);

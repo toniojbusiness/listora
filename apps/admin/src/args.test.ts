@@ -17,6 +17,61 @@ function usageError(...argv: string[]): string {
 }
 
 describe('parseCommand', () => {
+  it('reads an activity search by account, SKU, marketplace, and time', () => {
+    expect(
+      parse(
+        'activity',
+        '--account',
+        ACCOUNT,
+        '--sku',
+        'aj-000184',
+        '--marketplace',
+        'mercari',
+        '--since',
+        '2026-10-26T18:00:00Z',
+        '--until',
+        '2026-10-27',
+        '--limit',
+        '10',
+      ),
+    ).toEqual({
+      name: 'activity',
+      filter: {
+        accountId: ACCOUNT,
+        sku: 'AJ-000184',
+        marketplace: 'mercari',
+        from: new Date('2026-10-26T18:00:00Z'),
+        to: new Date('2026-10-27T00:00:00Z'),
+      },
+      limit: 10,
+      json: false,
+    });
+    expect(parse('activity', '--operation', ACCOUNT.toUpperCase())).toEqual({
+      name: 'activity',
+      filter: { operationId: ACCOUNT },
+      limit: 50,
+      json: false,
+    });
+    expect(parse('sale-why', ACCOUNT, '--json')).toEqual({
+      name: 'sale-why',
+      saleId: ACCOUNT,
+      json: true,
+    });
+    expect(parse('sale-checks', '--marketplace', 'depop')).toEqual({
+      name: 'sale-checks',
+      accountId: undefined,
+      marketplace: 'depop',
+      limit: 20,
+      json: false,
+    });
+    expect(parse('sale-history', 'read', 'mercari', '--account', ACCOUNT)).toEqual({
+      name: 'sale-history-read',
+      accountId: ACCOUNT,
+      marketplace: 'mercari',
+      json: false,
+    });
+  });
+
   it('defaults cost reports to today in UTC', () => {
     expect(parse('ai-cost', 'accounts')).toEqual({
       name: 'cost-accounts',
@@ -170,6 +225,14 @@ describe('parseCommand', () => {
     [['marketplace-purge', 'depop'], '--mode is required: api or automation'],
     [['marketplace-purge', 'depop', '--mode', 'api'], '--actor is required'],
     [['marketplace-purge', 'depop', '--json'], 'marketplace-purge does not take --json'],
+    [['activity', '--item', ACCOUNT, '--sale', ACCOUNT], 'give at most one of'],
+    [['activity', '--sku', 'AJ-000001'], '--sku needs --account'],
+    [['activity', '--since', 'yesterday'], '--since must be an ISO 8601 time'],
+    [['activity', '--marketplace', 'etsy'], '--marketplace must be one of'],
+    [['sale-why'], 'sale id must be a UUID'],
+    [['sale-history', 'read', 'mercari'], 'sale-history read needs --account'],
+    [['sale-history', 'delete', 'mercari'], 'sale-history needs read or show'],
+    [['sale-history', 'read', 'mercari', '--account', ACCOUNT, '--json'], 'does not take --json'],
   ])('rejects %j', (argv, message) => {
     expect(usageError(...argv)).toContain(message);
   });

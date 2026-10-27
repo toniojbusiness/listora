@@ -1,0 +1,76 @@
+/v1/items/{itemId}/activity:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  get:
+    tags: [activity]
+    operationId: listItemActivity
+    summary: List an item's activity
+    description: |
+      Everything that happened to the item, newest first: its changes, every step of every
+      marketplace action on its listings, each browser session that ran one (in Listora's cloud
+      browser or on the seller's iPhone, with its steps and their times), the tasks it gave the
+      seller, its sales, the checks that saw them, and the delists they started.
+    parameters:
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of the item's activity.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/activity.yaml#/ActivityPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/operations/{operationId}/activity:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OperationId'
+  get:
+    tags: [activity]
+    operationId: listOperationActivity
+    summary: List a marketplace action's activity
+    description: |
+      One marketplace action, newest first: each of its steps, each browser session that ran
+      one with its steps and their times, and the tasks it gave the seller.
+    parameters:
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of the operation's activity.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/activity.yaml#/ActivityPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/{saleId}/explanation:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  get:
+    tags: [activity]
+    operationId: getSaleExplanation
+    summary: Explain how a sale was found and what it started
+    description: |
+      How Listora learned of the sale (which sale check saw it, where, and when; or the
+      marketplace's notification, a forwarded email, the seller's entry), when it was recorded,
+      each delist it started on the other marketplaces and how it ended, and its timeline.
+    responses:
+      '200':
+        description: The explanation.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/activity.yaml#/SaleExplanation'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

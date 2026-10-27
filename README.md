@@ -93,7 +93,7 @@ has the steps.
 | `npm run dev:runner`           | Run the browser runner by hand (the worker starts it on demand otherwise)                                                                        |
 | `npm run phone:bundle`         | Rebuild the iPhone app's phone runtime (`phone-runtime.js`) from the automation code; a test fails while it is stale                             |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
-| `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail), marketplace data purges          |
+| `npm run admin -- --help`      | Operator CLI: AI costs, the spend check, the AI kill switch and blocks, data purges, the activity search, sale-check health and history reads    |
 | `npm run perf:api`             | Benchmark the API's screens on a synthetic 2,000-item seller (scratch database); see [performance.md](docs/features/performance.md)              |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
 | `npm run corpus:render`        | Regenerate the synthetic tag corpus and its fake AI fixtures after changing the corpus generator                                                 |
@@ -124,7 +124,7 @@ one runs at the same time.
 ```text
 apps/api/               Fastify HTTP API (@listora/api)
 apps/worker/            Background worker and the on-demand browser runner (@listora/worker)
-apps/admin/             Operator CLI: AI cost reports, spend check, kill switch, blocks (@listora/admin)
+apps/admin/             Operator CLI: AI cost reports, spend check, kill switch, blocks, activity search (@listora/admin)
 apps/ios/               iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/            AI provider layer: providers, price table, metering, budget guards, quota counter (@listora/ai)
 packages/analysis/      Item analysis: prompt, output schema, provenance, marketplace copy, the job (@listora/analysis)
@@ -142,6 +142,7 @@ packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker me
 packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)
 packages/email-sales/   Email sale detection: forwarding addresses, folder and SES ingest, DKIM/SPF, parsers (@listora/email-sales)
 packages/today/         The Today screen: card rules, the summary's queries, the morning summary (@listora/today)
+packages/activity/      The activity timeline and the sale explanation, from the records that keep them (@listora/activity)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)

@@ -73,6 +73,8 @@ export interface NewSale {
   shippingChargedCents: number;
   detectionSource: SaleDetectionSource;
   inboundEventId: string | null;
+  /** The automated sale check that saw it (`sale_check_run`), for a sale a check found. */
+  saleCheckRunId?: string | null;
   shipBy: Date | null;
   lines: readonly SaleLine[];
 }
@@ -121,6 +123,7 @@ export async function recordSale(
         shipping_charged_cents: sale.shippingChargedCents,
         detection_source: sale.detectionSource,
         inbound_event_id: sale.inboundEventId,
+        sale_check_run_id: sale.saleCheckRunId ?? null,
         ship_by: sale.shipBy,
       })
       .onConflict((conflict) =>

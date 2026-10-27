@@ -63,8 +63,9 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
 
 1. **Handing over.** When the engine would enqueue a browser runner step for a connection that
    runs on the phone, it writes a `phone_work` row instead and keeps the operation's status and
-   job. Session checks and sale checks do the same. A delist after a sale goes first
-   (`priority`).
+   job. Session checks, sale checks, and read-only reads of the sold history
+   ([activity.md](activity.md)) do the same. A delist after a sale goes first (`priority`), and a
+   history read waits behind routine changes.
 2. **Claiming.** The app claims the next work for its device (`POST /v1/phone-runs`). The claim
    is a lease (10 minutes, renewed by every answer). One run per connection at a time, and the
    runner's per-seller rate limits and pause between sessions apply, counted in
@@ -175,8 +176,8 @@ ends. Signed out, it runs nothing.
   APNs token and environment.
 - `marketplace_connection.runs_on` and `phone_device_id`: where a connection's automated steps
   run.
-- `phone_work`: work handed to the phone (an operation step, a session check, or a sale check),
-  since when it waits, its lease, and the answered calls of the run under way.
+- `phone_work`: work handed to the phone (an operation step, a session check, a sale check, or a
+  history read), since when it waits, its lease, and the answered calls of the run under way.
 - `automation_run.host`: `runner` or `phone`.
 
 ## Open items
@@ -189,4 +190,5 @@ ends. Signed out, it runs nothing.
   is recovered).
 - A failed phone run keeps no screenshot (the runner's screenshot rules would need a phone
   equivalent); the server logs its step and reason (`automation script stopped`, `host: phone`)
-  as the runner logs its own.
+  as the runner logs its own, and its run record keeps its steps and their times
+  ([activity.md](activity.md)).

@@ -420,6 +420,53 @@ describe('trust metrics (real Postgres)', () => {
       });
     });
 
+    it('counts working automation connections whose sale checks fail or stopped running', async () => {
+      const automation = async (
+        marketplace: Marketplace,
+        status: ConnectionStatus,
+        health: 'healthy' | 'failing' | 'overdue',
+      ) => {
+        const row = await db
+          .insertInto('marketplace_connection')
+          .values({
+            account_id: accountId,
+            marketplace,
+            mode: 'automation',
+            status,
+            token_ciphertext: status === 'connected' ? Buffer.from('sealed') : null,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        await db
+          .insertInto('sale_check_schedule')
+          .values({
+            account_id: accountId,
+            connection_id: row.id,
+            marketplace,
+            next_check_at: TICK,
+            next_reason: 'scheduled',
+            health,
+            unhealthy_since: health === 'healthy' ? null : TICK,
+          })
+          .execute();
+      };
+      await automation('mercari', 'connected', 'failing');
+      await automation('depop', 'connected', 'overdue');
+      await automation('poshmark', 'connected', 'healthy');
+      // A connection waiting for its seller is counted by ConnectionsNeedingRelink instead.
+      await automation('ebay', 'reauth_required', 'failing');
+
+      const groups = await collectCurrentState(db, TICK);
+      expect(
+        groups
+          .filter((group) => 'UnhealthySaleChecks' in group.values)
+          .map((group) => [group.dimensions, group.values.UnhealthySaleChecks]),
+      ).toEqual([
+        [{ Marketplace: 'depop' }, [1]],
+        [{ Marketplace: 'mercari' }, [1]],
+      ]);
+    });
+
     it('counts account and connection deletions unfinished past their 8-day deadline', async () => {
       const overdue = () =>
         collectCurrentState(db, TICK).then((groups) => find(groups, 'OverdueDeletions')[0]);

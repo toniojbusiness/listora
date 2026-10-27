@@ -82,11 +82,12 @@ apps/
                 src/features/ (account deletion, connection deletion, data retention, AI spend
                 check, item analysis, batch items' analysis start, photo processing, trust
                 metrics, the daily connection health check, the delist SLA, push delivery, sale
-                fees, the morning summary, sale email ingest); and the
+                fees, the morning summary, sale email ingest, sale-check health); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
-                and account blocks, marketplace data purges (@listora/admin)
+                and account blocks, marketplace data purges, the activity search and sale-check
+                health (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
@@ -116,7 +117,8 @@ packages/
                 with single-flight refresh, health checks, revocation, unlinking and its
                 deletion job (@listora/connections)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
-                automation adapter base, sale-check scheduling, the runner launcher, the
+                automation adapter base, sale-check scheduling, records, and health, the runner
+                launcher, the
                 fake marketplace site, and the Poshmark, Mercari, Depop, and eBay adapters with
                 their fake sites (poshmark/, mercari/, depop/, ebay/) (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
@@ -127,6 +129,8 @@ packages/
   email-sales/  Email sale detection: forwarding addresses, the folder and SES ingest drivers,
                 DKIM and SPF checks, the sold-email parsers, matching, confirm and review tasks
                 (@listora/email-sales)
+  activity/     The activity timeline of items, operations, sales, and marketplaces, read from
+                the records that keep them, and the sale explanation (@listora/activity)
   auto-delist/  The auto-delist orchestrator: the fan-out after a sale, delist runs and their
                 per-marketplace truth, SLA re-alerts, double-sale incidents (@listora/auto-delist)
   push/         Push notifications: the notification, the sender interface and its recording
@@ -151,6 +155,7 @@ scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
   dev-browser.sh  The browser runner's headless Chromium, in .local/playwright
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
+  admin-remote.sh  Runs the operator CLI against a deployed environment's database
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Images: `app` runs the API and the worker; `runner` adds headless Chromium
 docs/           This overview, the roadmap, one doc per feature in docs/features/, and the
@@ -225,6 +230,7 @@ src/
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
   today/         The Today summary (getToday) and the morning summary setting
+  activity/      An item's and an operation's activity, and a sale's explanation
   voice/         interpretVoiceCorrection: the text model's reading of a spoken correction
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
   perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
@@ -336,7 +342,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
   batches by later POSTs once expired).
 - **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
-  automation runs and sale-check schedules in [automation.md](features/automation.md#data);
+  automation runs and sale-check schedules in [automation.md](features/automation.md#data), and
+  sale-check records and health in [activity.md](features/activity.md#data);
   inventory, photos, and history in [items.md](features/items.md); batches in
   [batch.md](features/batch.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
@@ -443,6 +450,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/infra.md](features/infra.md)                             | Hosting and deploys                                                           |
 | [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                       |
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                  |
+| [features/activity.md](features/activity.md)                       | The activity timeline, sale-check records and health, explaining a sale       |
 | [features/ios.md](features/ios.md)                                 | iOS app conventions                                                           |
 | [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric    |
 | [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review     |

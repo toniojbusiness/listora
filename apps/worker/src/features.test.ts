@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { ACCOUNT_DELETION_TASK } from '@listora/accounts';
 import { ITEM_ANALYSIS_TASK } from '@listora/analysis';
 import { AUTO_DELIST_SLA_TASK } from '@listora/auto-delist';
-import { PHONE_WATCH_TASK, SALE_ORDER_TASK } from '@listora/automation';
+import { PHONE_WATCH_TASK, SALE_CHECK_HEALTH_TASK, SALE_ORDER_TASK } from '@listora/automation';
 import { BATCH_ITEM_ANALYSIS_TASK } from '@listora/batches';
 import { CONNECTION_DELETION_TASK } from '@listora/connections';
 import { EMAIL_INGEST_TASK } from '@listora/email-sales';
@@ -82,6 +82,7 @@ describe('worker feature discovery', () => {
       'phone-work',
       'photos',
       'push',
+      'sale-check-health',
       'sale-fees',
       'today-summary',
       'trust-metrics',
@@ -111,6 +112,7 @@ describe('worker feature discovery', () => {
       DATA_RETENTION_TASK,
       EMAIL_INGEST_TASK,
       PHONE_WATCH_TASK,
+      SALE_CHECK_HEALTH_TASK,
       TODAY_SUMMARY_TASK,
     ]);
     expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);

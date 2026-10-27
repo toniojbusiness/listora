@@ -99,7 +99,13 @@ describe('RunnerSessions (real Postgres, headless Chromium)', () => {
     );
     expect(run).toEqual({
       type: 'ran',
-      result: { ok: true, value: 'fake-seller', mutated: false, steps: ['open the account'] },
+      result: {
+        ok: true,
+        value: 'fake-seller',
+        mutated: false,
+        steps: ['open the account'],
+        stepMs: [expect.any(Number) as unknown],
+      },
     });
     expect(await runs()).toEqual([
       expect.objectContaining({

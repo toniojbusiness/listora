@@ -7,6 +7,7 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../../packages/activity" },
     { "path": "../../packages/accounts" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/analysis" },

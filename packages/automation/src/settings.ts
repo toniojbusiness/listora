@@ -23,6 +23,10 @@ export interface SaleCheckSettings {
   /** The adapted interval stays within these. */
   readonly minIntervalMs: number;
   readonly maxIntervalMs: number;
+  /** This many failed checks in a row make a connection's sale checks `failing`. */
+  readonly alertAfterFailures: number;
+  /** A check this long past due without running makes them `overdue`. */
+  readonly overdueMs: number;
 }
 
 export interface AutomationSettings {
@@ -164,6 +168,8 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
     defaultIntervalMs: hours('SALE_CHECK_DEFAULT_HOURS', 12),
     minIntervalMs: hours('SALE_CHECK_MIN_HOURS', 2),
     maxIntervalMs: hours('SALE_CHECK_MAX_HOURS', 24),
+    alertAfterFailures: integer(issues, env, 'SALE_CHECK_ALERT_FAILURES', 2, 1, 10),
+    overdueMs: hours('SALE_CHECK_OVERDUE_HOURS', 6),
   };
   if (
     saleChecks.minIntervalMs > saleChecks.defaultIntervalMs ||

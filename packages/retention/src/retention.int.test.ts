@@ -79,7 +79,10 @@ describe('data retention job (real Postgres)', () => {
     return row.id;
   }
 
-  async function ids(table: 'operation_event' | 'inbound_event' | 'ai_usage_event', of: string[]) {
+  async function ids(
+    table: 'operation_event' | 'inbound_event' | 'ai_usage_event' | 'sale_check_run',
+    of: string[],
+  ) {
     const { rows } = await sql<{ id: string }>`
       select id from ${sql.table(table)} where id = any(${of}::uuid[]) order by id
     `.execute(db);
@@ -181,6 +184,76 @@ describe('data retention job (real Postgres)', () => {
     expect(await ids('inbound_event', [old, recent, unprocessed])).toEqual(
       [recent, unprocessed].sort(),
     );
+  });
+
+  it('deletes sale-check records 90 days after the check, keeping the sale that one saw', async () => {
+    const { accountId, itemId } = await account();
+    const connection = await db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: accountId,
+        marketplace: 'mercari',
+        mode: 'automation',
+        display_name: 'Mercari',
+        status: 'connected',
+        token_ciphertext: Buffer.from('sealed'),
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const check = async (startedAt: Date) =>
+      (
+        await db
+          .insertInto('sale_check_run')
+          .values({
+            account_id: accountId,
+            connection_id: connection.id,
+            marketplace: 'mercari',
+            kind: 'scheduled',
+            reason: 'scheduled',
+            host: 'phone',
+            started_at: startedAt,
+            finished_at: startedAt,
+            outcome: 'succeeded',
+            orders_seen: 1,
+            items_seen: 1,
+            new_orders: 1,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const old = await check(ago(RETENTION_DAYS.saleCheckRuns + 1));
+    const recent = await check(ago(RETENTION_DAYS.saleCheckRuns - 1));
+    const sale = await db
+      .insertInto('sale')
+      .values({
+        account_id: accountId,
+        marketplace: 'mercari',
+        external_order_id: randomUUID(),
+        sold_at: ago(RETENTION_DAYS.saleCheckRuns + 1),
+        detection_source: 'poll',
+        sale_check_run_id: old,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('sale_item')
+      .values({
+        account_id: accountId,
+        sale_id: sale.id,
+        marketplace: 'mercari',
+        item_id: itemId,
+        sale_price_cents: 2500,
+      })
+      .execute();
+
+    await runDataRetention({ db, logger });
+    expect(await ids('sale_check_run', [old, recent])).toEqual([recent]);
+    const kept = await db
+      .selectFrom('sale')
+      .select(['detection_source', 'sale_check_run_id'])
+      .where('id', '=', sale.id)
+      .executeTakeFirstOrThrow();
+    expect(kept).toEqual({ detection_source: 'poll', sale_check_run_id: null });
   });
 
   it('deletes AI usage events after 400 days and keeps the daily totals', async () => {

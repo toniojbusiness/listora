@@ -105,7 +105,9 @@ of its latest sale that stands.
 - **Sale screen.** The header and status, "Relist it?" with one choice per relistable listing,
   the delist on every other marketplace as the server words it (it keeps reading the server while
   a delist runs), the fees with "Estimated" or "From <marketplace>", payout, label, cost, profit,
-  and ROI, and the actions the sale allows (cancel and return ask first).
+  and ROI, "How Listora found it" (which check saw the sale, where and when, and each delist's
+  result and when it settled; [activity.md](activity.md)), and the actions the sale allows
+  (cancel and return ask first).
 - **Sales tab.** Recent sales, newest first, with price and profit ("Est. profit" while fees are
   estimated), and the way to the profit dashboard ([profit.md](profit.md)).
 

@@ -39,7 +39,7 @@ export interface SaleCheckDelay {
 export function nextSaleCheckDelay(
   now: Date,
   saleTimes: readonly Date[],
-  settings: SaleCheckSettings,
+  settings: Pick<SaleCheckSettings, 'defaultIntervalMs' | 'minIntervalMs' | 'maxIntervalMs'>,
 ): SaleCheckDelay {
   const nowMs = now.getTime();
   const lookbackStart = nowMs - SALE_HISTORY_DAYS * 24 * HOUR_MS;
