@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Prints which tests failed, and which passed only on a retry (flaky), from an xcodebuild result
-# bundle. `make ios-test` runs it after the tests; the CI iOS job also writes it to the job summary.
+# bundle. `make ios-unit-test` and `make ios-ui-test` run it after the tests; the CI iOS jobs also
+# write it to their job summaries.
 #
 # Usage: scripts/ios-test-summary.sh <path/to/Test.xcresult> [summary-file]
 #

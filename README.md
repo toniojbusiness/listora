@@ -110,7 +110,7 @@ The iOS app has its own `make` targets, run from the repository root. The full l
 
 | Command         | What it does                                                                            |
 | --------------- | --------------------------------------------------------------------------------------- |
-| `make ios-test` | Run every iOS test on the simulator, the backend UI tests against `npm run e2e:stack`   |
+| `make ios-test` | Run every iOS test on the simulator, the UI tests against `npm run e2e:stack`           |
 | `make e2e-full` | The full-stack end-to-end suite on fakes ([docs/features/e2e.md](docs/features/e2e.md)) |
 | `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                                            |
 | `make ios-open` | Generate the Xcode project and open it in Xcode                                         |
@@ -161,14 +161,16 @@ docs/                   Architecture overview, roadmap, one doc per feature (doc
 
 `.github/workflows/ci.yml` runs on every pull request that is not a draft (marking a draft
 ready for review starts it) and on every push to `main`. Branch pushes without a pull request
-do not run CI, so one commit never runs twice. It has four jobs:
+do not run CI, so one commit never runs twice. Its jobs:
 
-| Job                                              | Runner                   | When it does real work                                      |
-| ------------------------------------------------ | ------------------------ | ----------------------------------------------------------- |
-| `Detect changed areas`                           | Linux                    | Always; decides whether the iOS and image jobs build        |
-| `Backend check (Linux)`                          | Linux                    | Always                                                      |
-| `Application image build and smoke test (Linux)` | Linux                    | Only when an image input changed; otherwise a passing no-op |
-| `iOS lint, build and test (macOS)`               | macOS, or Linux as no-op | Only when an iOS input changed                              |
+| Job                                              | Runner               | When it does real work                                      |
+| ------------------------------------------------ | -------------------- | ----------------------------------------------------------- |
+| `Detect changed areas`                           | Linux                | Always; decides whether the iOS and image jobs build        |
+| `Backend check (Linux)`                          | Linux                | Always                                                      |
+| `Application image build and smoke test (Linux)` | Linux                | Only when an image input changed; otherwise a passing no-op |
+| `iOS lint, build and unit tests (macOS)`         | macOS                | Only when an iOS input changed; otherwise skipped           |
+| `iOS UI tests (macOS, shard N of 3)`             | macOS, three of them | Only when a UI test input changed; otherwise skipped        |
+| `iOS checks`                                     | Linux                | Always; passes when every iOS job the change needed passed  |
 
 The backend job installs PostgreSQL 18 from the PGDG apt repository (Swift comes with the
 runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
@@ -188,39 +190,55 @@ files they read from the image at startup (the feature discovery indexes
 `packages/api-contract/bundled/**`), `infra/**`, `scripts/container-smoke.sh`, or
 `.github/workflows/ci.yml` (the `image` filter in the `changes` job).
 
-The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, SwiftFormat,
-and PostgreSQL 18 from Homebrew and Node with `npm ci`, then runs `make ios-lint` and
-`make ios-test`, whose UI tests that go through the backend run against the local stack
-(`packages/e2e`). It caches the app's SwiftPM checkouts but not DerivedData, because a fresh
-checkout resets the file timestamps Xcode's incremental build relies on. Before the tests it
-shuts down every simulator and erases and boots the iPhone 17 one once, waiting until it has
-finished booting. Every run, passed or failed, uploads the test results (`Test.xcresult`,
-including the UI tests' screenshots), the failing-test summary, and the stack's API and worker
-logs, and puts the summary in the job summary, so a failure names its test instead of a bare
-`** TEST FAILED **`.
+The iOS jobs run side by side on macOS runners with Xcode 26.3, so the iOS result takes about as
+long as its longest job instead of the whole suite in a row (55 to 60 minutes in one job
+before, October 2026). The unit job runs `make ios-lint`, `make ios-check-ats`, and
+`make ios-unit-test` (every test target but the UI tests; no backend). Each UI shard runs
+`make ios-ui-test IOS_UI_SHARD=<n>/3` against its own local stack (`packages/e2e`), with Node
+(`npm ci`) and PostgreSQL 18 from Homebrew; `scripts/ios-ui-shard.sh` splits the UI test classes
+into shards of about equal running time, from the times in `scripts/ios-ui-test-seconds.tsv`
+(`scripts/ios-ui-shard.sh plan 3` shows the split; refresh the times with
+`scripts/ios-ui-shard.sh seconds <UI.xcresult>` when the shards drift apart). Every job builds
+for itself (`make ios-build-for-testing`) from the Xcode compilation cache
+(`IOS_COMPILATION_CACHE` in the Makefile): unlike DerivedData, whose incremental build relies on
+file timestamps that a fresh checkout resets, it is keyed by file contents. Pushes to `main`
+save it and the app's SwiftPM checkouts; pull requests only restore them, which keeps the
+repository's cache space for the caches every run uses. The cache starts over once it passes
+4 GB. Each job starts booting the erased iPhone 17 simulator before the build and waits until
+it has finished booting before the tests. Every run, passed or failed, uploads each job's test
+results (`Unit.xcresult`, or `UI.xcresult` with the UI tests' screenshots and the stack's API
+and worker logs) and the failing-test summary, and puts the summary in the job summary, so a
+failure names its test instead of a bare `** TEST FAILED **`. `iOS checks` is the one result to
+require before a merge.
 
-**Flaky test rule.** `make ios-test` retries a failing test up to twice
+**Flaky test rule.** `make ios-test` (and each of its halves) retries a failing test up to twice
 (`-retry-tests-on-failure -test-iterations 3`, locally and in CI). A test that fails every try
 fails the run. A test that passes only on a retry does not block the merge, but it is still
 flaky: the summary lists it under "Flaky", and it gets a follow-up fix (open a task for it in
-the pull request description) rather than being left to retry forever. It builds only when the change touches a file the iOS build reads:
-`apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI`
-Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS
-parser is tested against), `packages/e2e/**` (the local stack), `Makefile`, or
-`.github/workflows/ci.yml` (the `ios` filter). Other backend changes do not build it, though
-the UI tests run the backend: the backend job covers them, and the contract keeps the API and
-the app in step.
+the pull request description) rather than being left to retry forever.
 
-**Cost rule.** macOS runner minutes are the expensive ones, so the iOS and image jobs build
-only when one of their inputs changed. Otherwise they succeed in seconds without building, so
-they still report a result and can be required checks; they fail, rather than passing, when
-change detection fails. When either build starts reading a new file, add it to its filter.
+The unit job runs only when the change touches a file the iOS build reads: `apps/ios/**` except
+Markdown, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI` Swift
+package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS parser
+is tested against), `packages/e2e/**` (the local stack), `Makefile`, `scripts/ios-*`, or
+`.github/workflows/ci.yml`. The UI shards run for the same files minus the ones no UI test can
+see: the listing URL fixtures, the unit and package test sources (`apps/ios/ListoraTests/**`,
+`apps/ios/Packages/**/Tests/**`), and the fixture generators (`apps/ios/Tools/**`). The filters
+are the `changes` job's. Other backend changes do not run them, though the UI tests run the
+backend: the backend job covers them, and the contract keeps the API and the app in step.
+
+**Capacity rule.** The macOS runners are the scarce ones (an account runs only a few macOS jobs
+at once, and one iOS run takes four), so the iOS and image jobs build only when one of their
+inputs changed. `iOS checks` and the image job still report a result every time, so they can be
+required checks; they fail, rather than passing, when change detection fails. When a build
+starts reading a new file, add it to its filter.
 
 Which jobs do real work, by change:
 
 | Change                           | Real work                      |
 | -------------------------------- | ------------------------------ |
 | iOS only (`apps/ios/**`)         | changes, backend, iOS          |
+| iOS unit tests only              | changes, backend, iOS unit     |
 | Backend only (`apps/api/src/**`) | changes, backend               |
 | Infra (`infra/**`, `Dockerfile`) | changes, backend, image        |
 | Docs only                        | changes, backend               |

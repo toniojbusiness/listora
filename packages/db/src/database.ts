@@ -1,6 +1,7 @@
 import { Kysely, PostgresDialect, type Transaction } from 'kysely';
 import pg from 'pg';
 
+import { DEFAULT_CONNECT_TIMEOUT_MS } from './config.ts';
 import type { Database } from './schema.ts';
 
 export type Db = Kysely<Database>;
@@ -12,7 +13,10 @@ export type DbExecutor = Db | DbTransaction;
 
 export interface DatabaseOptions {
   connectionString: string;
-  /** Fail fast instead of hanging when Postgres is unreachable. */
+  /**
+   * Fail fast instead of hanging when Postgres is unreachable (default
+   * `DEFAULT_CONNECT_TIMEOUT_MS`, DATABASE_CONNECT_TIMEOUT_MS for the API and the worker).
+   */
   connectionTimeoutMillis?: number;
   max?: number;
 }
@@ -46,7 +50,7 @@ export function parseSafeInteger(value: string): number {
 export function createPool(options: DatabaseOptions): DatabasePool {
   const pool = new pg.Pool({
     connectionString: options.connectionString,
-    connectionTimeoutMillis: options.connectionTimeoutMillis ?? 5_000,
+    connectionTimeoutMillis: options.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MS,
     max: options.max ?? 10,
     types: typeParsers,
   });

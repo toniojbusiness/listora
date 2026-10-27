@@ -21,7 +21,8 @@ final class ConnectionHealthUITests: XCTestCase {
 
         // Inventory shows the banner in the server's words.
         let banner = app.descendants(matching: .any)["connectionAttention.banner"]
-        XCTAssertTrue(banner.waitForExistence(timeout: 15), "no connection banner")
+        // The first launch on CI's busy simulator can take most of 15 seconds before Inventory asks.
+        XCTAssertTrue(banner.waitForExistence(timeout: 30), "no connection banner")
         XCTAssertTrue(banner.label.contains("Reconnect eBay"), banner.label)
         keepScreenshot("Inventory with the connection banner")
         app.buttons["connectionAttention.open"].tap()

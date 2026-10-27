@@ -30,7 +30,10 @@ const SHUTDOWN_DRAIN_MS = 10_000;
 
 const config = loadApiConfig();
 const logger = createLogger({ service: 'api', level: config.logLevel });
-const pool = createPool({ connectionString: config.databaseUrl });
+const pool = createPool({
+  connectionString: config.databaseUrl,
+  connectionTimeoutMillis: config.databaseConnectTimeoutMs,
+});
 const db = createDatabase(pool);
 
 const ebay = config.marketplaces.ebay;

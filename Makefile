@@ -15,6 +15,14 @@ IOS_PACKAGE_PATHS := \
 	-clonedSourcePackagesDirPath $(IOS_BUILD_DIR)/SourcePackages \
 	-packageCachePath $(IOS_BUILD_DIR)/PackageCache
 
+# Optional Xcode compilation cache: a directory of compiler outputs keyed by their inputs' contents,
+# so unlike DerivedData it stays valid in a fresh checkout. CI sets it to a directory it keeps
+# between runs (the CI section of README.md); a warm cache cuts a clean build to about a third.
+# Off by default, because it grows to about 1.5 GB.
+IOS_COMPILATION_CACHE ?=
+IOS_CACHE_SETTINGS := $(if $(IOS_COMPILATION_CACHE),COMPILATION_CACHE_ENABLE_CACHING=YES \
+	COMPILATION_CACHE_CAS_PATH='$(IOS_COMPILATION_CACHE)')
+
 XCODEBUILD := xcodebuild \
 	-project $(IOS_PROJECT) \
 	-scheme Listora \
@@ -23,7 +31,8 @@ XCODEBUILD := xcodebuild \
 	-derivedDataPath $(IOS_BUILD_DIR)/DerivedData \
 	$(IOS_PACKAGE_PATHS) \
 	-skipPackagePluginValidation \
-	-quiet
+	-quiet \
+	$(IOS_CACHE_SETTINGS)
 
 # Release builds (scripts/ios-release.sh; release guide in apps/ios/README.md). The build number
 # defaults to CURRENT_PROJECT_VERSION in Config/Base.xcconfig for ios-archive and is required by
@@ -40,7 +49,7 @@ E2E_STACK := node --env-file-if-exists=.env packages/e2e/src/cli.ts \
 # Fails with an install hint when a command-line tool is missing.
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
-.PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-screenshots ios-lint ios-format ios-open ios-clean \
+.PHONY: ios-generate ios-build ios-build-for-testing ios-test ios-unit-test ios-ui-test ios-e2e-ready ios-check-ats ios-screenshots ios-lint ios-format ios-open ios-clean \
 	ios-simulator e2e-full \
 	ios-tag-fixtures ios-batch-fixtures ios-app-icon ios-archive ios-testflight ios-install-device
 
@@ -78,19 +87,52 @@ ios-check-ats: ios-generate
 # the run, but the summary lists it as flaky so it gets a follow-up fix (README, CI section).
 IOS_TEST_LIMITS := -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
 	-retry-tests-on-failure -test-iterations 3
-# Optional file the failing-test summary is also written to (CI sets $$GITHUB_STEP_SUMMARY).
+# Optional file the failing-test summary of ios-unit-test or ios-ui-test is also written to (CI
+# writes it into each job's summary).
 IOS_TEST_SUMMARY_FILE ?=
+# One shard of the UI tests, <shard>/<count> (for example 2/3): scripts/ios-ui-shard.sh splits the
+# UI test classes by their recorded running time. Empty runs every UI test.
+IOS_UI_SHARD ?=
 
-## Run unit, package, and UI tests on the simulator. Results: .build/ios/Test.xcresult.
-## Parallel testing is off because it would clone the simulator. The UI tests that go through the
+## Run unit, package, and UI tests on the simulator: the ATS check, then ios-unit-test and
+## ios-ui-test (both run even when the first fails). Results: .build/ios/Unit.xcresult and
+## .build/ios/UI.xcresult. Each run ends by naming the tests that failed and the ones that passed
+## only on a retry.
+ios-test: ios-check-ats
+	@status=0; \
+	$(MAKE) --no-print-directory ios-unit-test || status=1; \
+	$(MAKE) --no-print-directory ios-ui-test || status=1; \
+	exit $$status
+
+## Build the app, the Share Extension, the packages, and every test target for the test runs.
+ios-build-for-testing: ios-generate ios-simulator
+	$(XCODEBUILD) build-for-testing
+
+## Unit and package tests: every test target of the scheme but the UI tests. They need no backend.
+## Parallel testing is off here and in ios-ui-test because it would clone the simulator.
+ios-unit-test: ios-build-for-testing
+	rm -rf $(IOS_BUILD_DIR)/Unit.xcresult
+	@status=0; \
+	$(XCODEBUILD) test-without-building -skip-testing:ListoraUITests -parallel-testing-enabled NO \
+		$(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Unit.xcresult || status=$$?; \
+	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/Unit.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
+	exit $$status
+
+## UI tests (ListoraUITests), or the IOS_UI_SHARD shard of them. The ones that go through the
 ## backend run against the local stack (packages/e2e): the real API and worker with fakes, on a
 ## scratch database of this checkout's Postgres cluster. Its logs: .build/ios/e2e-logs.
-## It ends by naming the tests that failed and the ones that passed only on a retry.
-ios-test: ios-generate ios-simulator ios-check-ats ios-e2e-ready
-	rm -rf $(IOS_BUILD_DIR)/Test.xcresult $(IOS_BUILD_DIR)/e2e-logs
-	@status=0; \
-	$(E2E_STACK) -- $(XCODEBUILD) test -parallel-testing-enabled NO $(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult || status=$$?; \
-	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/Test.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
+ios-ui-test: ios-build-for-testing ios-e2e-ready
+	rm -rf $(IOS_BUILD_DIR)/UI.xcresult $(IOS_BUILD_DIR)/e2e-logs
+	@if [ -n '$(IOS_UI_SHARD)' ]; then \
+		tests=$$(scripts/ios-ui-shard.sh $(subst /, ,$(IOS_UI_SHARD))) || exit 2; \
+		echo "UI test shard $(IOS_UI_SHARD):" $$(echo "$$tests" | sed 's|-only-testing:ListoraUITests/||'); \
+	else \
+		tests=-only-testing:ListoraUITests; \
+	fi; \
+	status=0; \
+	$(E2E_STACK) -- $(XCODEBUILD) test-without-building $$tests -parallel-testing-enabled NO \
+		$(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/UI.xcresult || status=$$?; \
+	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/UI.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
 	exit $$status
 
 ## The full-stack end-to-end suite (docs/features/e2e.md): FullStackUITests on the simulator,

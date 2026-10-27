@@ -391,8 +391,9 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   contract check, the offline `cdk synth` of every environment, unit tests, and integration
   tests. It must pass before merge. When iOS code
   is touched, `make ios-lint` and `make ios-test` must pass too. `make ios-test` runs the
-  package, unit, and UI tests on an existing iPhone 17 simulator and keeps DerivedData in
-  `.build/ios`. It runs them inside the local stack (`packages/e2e`, `npm run e2e:stack`): the
+  package and unit tests (`make ios-unit-test`), then the UI tests (`make ios-ui-test`), on an
+  existing iPhone 17 simulator and keeps DerivedData in `.build/ios`. It runs the UI tests
+  inside the local stack (`packages/e2e`, `npm run e2e:stack`): the
   API and worker from this checkout with the fake drivers, on a scratch database of the
   `scripts/dev-db.sh` cluster, with a signed-in test user. UI tests that go through the
   backend use it; the fake AI answers them from `apps/ios/ListoraUITests/FakeAI`. It retries a
@@ -421,10 +422,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   ([features/e2e.md](features/e2e.md)).
 - CI runs the same fresh-clone path as local development; see the CI section of the
   [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
-  (`scripts/container-smoke.sh`) when an image input changed. A macOS job runs
-  `make ios-lint` and `make ios-test`, but only when a file the iOS build reads changed (macOS
-  minutes cost 10 times Linux minutes); the Linux backend check runs on every non-draft pull
-  request.
+  (`scripts/container-smoke.sh`) when an image input changed. macOS jobs run `make ios-lint`
+  and the unit tests in one, and the UI tests in three shards side by side, but only when a file
+  the iOS build reads changed (macOS runners are the scarce ones); `iOS checks` sums them up.
+  The Linux backend check runs on every non-draft pull request.
 
 ## 8. Feature docs
 

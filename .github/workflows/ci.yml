@@ -31,7 +31,8 @@ jobs:
       # paths-filter lists a pull request's files through the API.
       pull-requests: read
     outputs:
-      ios: ${{ steps.filter.outputs.ios }}
+      ios: ${{ steps.filter.outputs.ios_inputs == 'true' || steps.app.outputs.ios_app == 'true' }}
+      ios_ui: ${{ steps.filter.outputs.ios_ui_inputs == 'true' || steps.app.outputs.ios_app_ui == 'true' }}
       image: ${{ steps.filter.outputs.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,14 +43,21 @@ jobs:
           # its context rules, the dependency manifests, the entry points, the container
           # configuration in infra/, and the smoke test. Source changes behind the entry points
           # are covered by the backend check. Keep in sync with the CI section of README.md.
-          # `ios`: everything the iOS job reads.
+          # `ios_inputs`: what the iOS jobs read outside apps/ios (apps/ios itself is the `app`
+          # step below). `ios_ui_inputs`: those of them the UI tests read.
           filters: |
-            ios:
-              - 'apps/ios/**'
+            ios_inputs:
               - 'packages/api-contract/**'
               - 'packages/shared/fixtures/listing-urls.json'
               - 'packages/e2e/**'
               - 'Makefile'
+              - 'scripts/ios-*'
+              - '.github/workflows/ci.yml'
+            ios_ui_inputs:
+              - 'packages/api-contract/**'
+              - 'packages/e2e/**'
+              - 'Makefile'
+              - 'scripts/ios-*'
               - '.github/workflows/ci.yml'
             image:
               - 'Dockerfile'
@@ -71,6 +79,24 @@ jobs:
               - 'infra/**'
               - 'scripts/container-smoke.sh'
               - '.github/workflows/ci.yml'
+      # A file matches one of these filters only when it matches every pattern: inside apps/ios
+      # and none of the exclusions. Documentation never builds anything; the unit tests'
+      # sources, the app-level integration tests (ListoraTests), and the fixture generators
+      # (Tools, run by hand) cannot change what a UI test sees.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: app
+        with:
+          predicate-quantifier: every
+          filters: |
+            ios_app:
+              - 'apps/ios/**'
+              - '!**/*.md'
+            ios_app_ui:
+              - 'apps/ios/**'
+              - '!**/*.md'
+              - '!apps/ios/ListoraTests/**'
+              - '!apps/ios/Packages/**/Tests/**'
+              - '!apps/ios/Tools/**'
 
   backend:
     name: Backend check (Linux)
@@ -149,90 +175,206 @@ jobs:
       - if: ${{ env.IMAGE_AFFECTED == 'true' }}
         run: scripts/container-smoke.sh
 
-  # This job always reports a result, so it can be a required check: when no iOS input changed
-  # it runs on Linux and succeeds in seconds without building. It never succeeds when change
-  # detection failed.
-  ios:
-    name: iOS lint, build and test (macOS)
+  # The iOS checks run as jobs side by side on macOS runners: lint, the build, and the unit and
+  # package tests in one, and the UI tests split into IOS_UI_SHARDS shards by running time
+  # (scripts/ios-ui-shard.sh), each with its own local stack. Each job builds for itself, from
+  # the Xcode compilation cache `main` saves, so none waits for another. `iOS checks` below
+  # sums them up into one result for a required check.
+  ios-unit:
+    name: iOS lint, build and unit tests (macOS)
     needs: changes
-    if: ${{ !cancelled() && !github.event.pull_request.draft }}
-    runs-on: ${{ needs.changes.outputs.ios == 'true' && 'macos-26' || 'ubuntu-24.04' }}
-    # Room for a cold build plus up to two retries of a failing test (make ios-test): a passing
-    # run alone took 55 to 57 minutes on main (October 2026), so 60 cut off runs mid-test.
-    timeout-minutes: 90
+    if: ${{ needs.changes.outputs.ios == 'true' }}
+    runs-on: macos-26
+    timeout-minutes: 30
     env:
-      IOS_AFFECTED: ${{ needs.changes.outputs.ios }}
       # Pinned to the Xcode used for local development (README prerequisites).
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      IOS_COMPILATION_CACHE: ${{ github.workspace }}/.build/ios/CompilationCache
     steps:
-      - name: Require a successful change detection
-        if: ${{ needs.changes.result != 'success' }}
-        run: |
-          echo "::error::Change detection ended with '${{ needs.changes.result }}', so the iOS result is unknown."
-          exit 1
-      - name: Skip the iOS build (no iOS input changed)
-        if: ${{ env.IOS_AFFECTED != 'true' }}
-        run: echo "No file the iOS build reads changed; see the changes job for the filter."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ env.IOS_AFFECTED == 'true' }}
-      - name: Show Xcode and simulators
-        if: ${{ env.IOS_AFFECTED == 'true' }}
+      # One clean boot of the test simulator, started now so it boots during the build (about
+      # two minutes): every other simulator is shut down and the test one erased first. The
+      # tests start only once it has finished booting (the wait before them).
+      - name: Start booting a clean iPhone 17 simulator
         run: |
           xcodebuild -version
-          xcrun simctl list devices available | grep iPhone
-      - name: Install XcodeGen, SwiftLint, SwiftFormat, and PostgreSQL 18
-        if: ${{ env.IOS_AFFECTED == 'true' }}
-        run: brew install xcodegen swiftlint swiftformat postgresql@18
-      # `make ios-test` runs the UI tests that go through the backend against the local stack
-      # (packages/e2e): the API and worker from this checkout, on the scripts/dev-db.sh cluster.
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: ${{ env.IOS_AFFECTED == 'true' }}
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - if: ${{ env.IOS_AFFECTED == 'true' }}
-        run: npm ci
-      # SwiftPM checkouts for the app's package graph. DerivedData is not cached: Xcode keys
-      # incremental builds on file timestamps, which every fresh checkout resets.
-      - name: Cache SwiftPM checkouts for the iOS app
-        if: ${{ env.IOS_AFFECTED == 'true' }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+          xcrun simctl shutdown all
+          xcrun simctl erase 'iPhone 17'
+          xcrun simctl boot 'iPhone 17'
+      - name: Install XcodeGen, SwiftLint, and SwiftFormat
+        run: brew install xcodegen swiftlint swiftformat
+      # SwiftPM checkouts for the app's package graph, and the compilation cache (Makefile,
+      # IOS_COMPILATION_CACHE): Xcode keys it on file contents, so it stays valid in a fresh
+      # checkout, where DerivedData would not (Xcode keys that on timestamps). Only `main` saves
+      # them; a pull request restores `main`'s, which keeps the repository's cache space for
+      # the caches every run uses.
+      - name: Restore SwiftPM checkouts for the iOS app
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build/ios/SourcePackages
             .build/ios/PackageCache
           key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
-      - if: ${{ env.IOS_AFFECTED == 'true' }}
-        run: make ios-lint
-      # One clean boot of the test simulator before the tests: every other simulator is shut
-      # down, the test one is erased and booted, and the tests start only once it has finished
-      # booting, so the first UI test does not race a half-booted device.
-      - name: Boot a clean iPhone 17 simulator
-        if: ${{ env.IOS_AFFECTED == 'true' }}
+      - name: Restore the Xcode compilation cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/ios/CompilationCache
+          key: ios-compilation-${{ runner.os }}-xcode-26.3-${{ github.sha }}
+          restore-keys: ios-compilation-${{ runner.os }}-xcode-26.3-
+      # Each save adds what changed, so the cache only grows; past 4 GB it starts over (one
+      # cold build), which keeps the restore quick and the saved entry small.
+      - name: Start the compilation cache over when it has grown past 4 GB
         run: |
+          size_kb=$(du -sk "$IOS_COMPILATION_CACHE" 2>/dev/null | cut -f1)
+          echo "Compilation cache: $(( ${size_kb:-0} / 1024 )) MB"
+          if (( ${size_kb:-0} > 4 * 1024 * 1024 )); then rm -rf "$IOS_COMPILATION_CACHE"; echo 'Starting it over.'; fi
+      - run: make ios-lint
+      - run: make ios-check-ats
+      - id: build
+        run: make ios-build-for-testing
+      - name: Wait until the simulator has booted
+        run: xcrun simctl bootstatus 'iPhone 17' -b > /dev/null
+      # Retries a failing test up to twice. It ends by naming the tests that failed and the ones
+      # that passed only on a retry; the same summary goes into .build/ios/test-summary.txt.
+      - run: make ios-unit-test IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
+      - name: Show the failing-test summary
+        if: ${{ always() && hashFiles('.build/ios/test-summary.txt') != '' }}
+        run: |
+          { echo '### iOS unit and package tests'; echo '```'; cat .build/ios/test-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-unit-test-results
+          path: |
+            .build/ios/Unit.xcresult
+            .build/ios/test-summary.txt
+          retention-days: 7
+      # The caches every iOS job restores; saved once the build has succeeded, even when a test
+      # then failed, because the build outputs are good either way.
+      - name: Save SwiftPM checkouts for the iOS app
+        if: ${{ always() && github.event_name == 'push' && steps.build.outcome == 'success' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios/SourcePackages
+            .build/ios/PackageCache
+          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
+      - name: Save the Xcode compilation cache
+        if: ${{ always() && github.event_name == 'push' && steps.build.outcome == 'success' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/ios/CompilationCache
+          key: ios-compilation-${{ runner.os }}-xcode-26.3-${{ github.sha }}
+
+  ios-ui:
+    name: iOS UI tests (macOS, shard ${{ matrix.shard }} of 3)
+    needs: changes
+    if: ${{ needs.changes.outputs.ios_ui == 'true' }}
+    runs-on: macos-26
+    # A shard takes about 15 minutes of tests; the rest is room for a cold build and retries.
+    timeout-minutes: 45
+    strategy:
+      # Every shard reports its own failures, not only the first one's.
+      fail-fast: false
+      matrix:
+        # 1 to IOS_UI_SHARDS.
+        shard: [1, 2, 3]
+    env:
+      # As in ios-unit.
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      IOS_COMPILATION_CACHE: ${{ github.workspace }}/.build/ios/CompilationCache
+      IOS_UI_SHARDS: '3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Start booting a clean iPhone 17 simulator
+        run: |
+          xcodebuild -version
           xcrun simctl shutdown all
           xcrun simctl erase 'iPhone 17'
           xcrun simctl boot 'iPhone 17'
-          xcrun simctl bootstatus 'iPhone 17' -b
-      # Retries a failing test up to twice. It ends by naming the tests that failed and the ones
-      # that passed only on a retry; the same summary goes into .build/ios/test-summary.txt.
-      - if: ${{ env.IOS_AFFECTED == 'true' }}
-        run: make ios-test IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
+      - name: Install XcodeGen and PostgreSQL 18
+        run: brew install xcodegen postgresql@18
+      # The UI tests that go through the backend run against the local stack (packages/e2e):
+      # the API and worker from this checkout, on the scripts/dev-db.sh cluster.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Restore SwiftPM checkouts for the iOS app
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios/SourcePackages
+            .build/ios/PackageCache
+          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
+      - name: Restore the Xcode compilation cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/ios/CompilationCache
+          key: ios-compilation-${{ runner.os }}-xcode-26.3-${{ github.sha }}
+          restore-keys: ios-compilation-${{ runner.os }}-xcode-26.3-
+      - run: make ios-build-for-testing
+      - name: Wait until the simulator has booted
+        run: xcrun simctl bootstatus 'iPhone 17' -b > /dev/null
+      # Retries a failing test up to twice, and ends with the summary, as ios-unit-test does.
+      - run: make ios-ui-test IOS_UI_SHARD="${{ matrix.shard }}/$IOS_UI_SHARDS" IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
       - name: Show the failing-test summary
-        if: ${{ always() && env.IOS_AFFECTED == 'true' && hashFiles('.build/ios/test-summary.txt') != '' }}
+        if: ${{ always() && hashFiles('.build/ios/test-summary.txt') != '' }}
         run: |
-          { echo '### iOS tests'; echo '```'; cat .build/ios/test-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          { echo '### iOS UI tests, shard ${{ matrix.shard }}'; echo '```'; cat .build/ios/test-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       # Uploads on success too, so the UI tests' kept screenshots (Review, Cost, Price, Saved)
       # are available as evidence, not only when a run fails.
-      - name: Upload test results and screenshots
-        if: ${{ always() && env.IOS_AFFECTED == 'true' }}
+      - name: Upload test results, screenshots, and the stack's logs
+        if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ios-test-results
+          name: ios-ui-test-results-${{ matrix.shard }}
           path: |
-            .build/ios/Test.xcresult
+            .build/ios/UI.xcresult
             .build/ios/e2e-logs
             .build/ios/test-summary.txt
           retention-days: 7
+
+  # One result for the iOS jobs, so it can be the required check: it passes when every iOS job
+  # that the change needs passed, and when the change needed none (the jobs are then skipped).
+  # It never passes when change detection failed. Skipped (which also satisfies a required
+  # check) on a draft pull request.
+  ios:
+    name: iOS checks
+    needs: [changes, ios-unit, ios-ui]
+    if: ${{ !cancelled() && !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every iOS job the change needs to have passed
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          IOS: ${{ needs.changes.outputs.ios }}
+          IOS_UI: ${{ needs.changes.outputs.ios_ui }}
+          UNIT: ${{ needs.ios-unit.result }}
+          UI: ${{ needs.ios-ui.result }}
+        run: |
+          if [[ $CHANGES != success ]]; then
+            echo "::error::Change detection ended with '$CHANGES', so the iOS result is unknown."
+            exit 1
+          fi
+          status=0
+          check() { # <job> <needed: true|false> <result>
+            local want=skipped
+            [[ $2 == true ]] && want=success
+            if [[ $3 == "$want" ]]; then
+              echo "$1: $3"
+            else
+              echo "::error::$1 ended with '$3' (expected '$want')."
+              status=1
+            fi
+          }
+          check 'iOS lint, build and unit tests' "$IOS" "$UNIT"
+          check 'iOS UI tests' "$IOS_UI" "$UI"
+          exit $status

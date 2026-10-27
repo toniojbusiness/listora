@@ -29,7 +29,9 @@ Run these from the repository root.
 | `make ios-generate`       | Generate `apps/ios/Listora.xcodeproj` from `project.yml`                               |
 | `make ios-open`           | Generate the project and open it in Xcode                                              |
 | `make ios-build`          | Build the app, Share Extension, and packages for the simulator                         |
-| `make ios-test`           | Run package, unit, and UI tests on the simulator, in the local stack                   |
+| `make ios-test`           | Run package, unit, and UI tests on the simulator, the UI tests in the local stack      |
+| `make ios-unit-test`      | Only the package and unit tests (no backend)                                           |
+| `make ios-ui-test`        | Only the UI tests, in the local stack; `IOS_UI_SHARD=2/3` runs one CI shard            |
 | `make e2e-full`           | The full-stack suite (`FullStackUITests`; docs/features/e2e.md)                        |
 | `make ios-lint`           | SwiftLint (strict) and the SwiftFormat check                                           |
 | `make ios-format`         | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes                         |
@@ -42,8 +44,9 @@ Run these from the repository root.
 | `make ios-testflight`     | Signed release archive uploaded to TestFlight (Releases)                               |
 | `make ios-install-device` | Install and launch on your own iPhone with a free Apple ID (Installing on your iPhone) |
 
-`make ios-test` writes DerivedData, SwiftPM caches, and the result bundle
-(`.build/ios/Test.xcresult`) to `.build/ios` in this checkout, never to `~/Library`. To use a
+`make ios-test` writes DerivedData, SwiftPM caches, and the result bundles
+(`.build/ios/Unit.xcresult` and `.build/ios/UI.xcresult`) to `.build/ios` in this checkout, never
+to `~/Library`. To use a
 different simulator, pass its name: `make ios-test IOS_SIMULATOR='iPhone 17 Pro'`. It also needs
 the backend's dependencies (`npm ci` at the repository root); see
 [Testing against the API](#testing-against-the-api).
@@ -295,7 +298,7 @@ session against an address nobody answers at.
 
 ### Testing against the API
 
-`make ios-test` runs every test inside the local stack (`packages/e2e`): the API and the worker
+`make ios-test` (its `ios-ui-test` half) runs the UI tests inside the local stack (`packages/e2e`): the API and the worker
 from this checkout with the fake drivers (dev sign-in, local photo storage, the fake AI
 provider answering from `ListoraUITests/FakeAI/default.json`), on a scratch database of this
 checkout's `scripts/dev-db.sh` cluster and a port of its own, with a signed-in test user. It

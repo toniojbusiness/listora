@@ -121,6 +121,10 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
     const shared = {
       PATH: process.env['PATH'],
       DATABASE_URL: database.scratch.url,
+      // A CI runner busy with the simulator can take longer than the 5 s default to open a
+      // connection to this healthy local Postgres; the request then failed and a UI test missed
+      // the screen it waited for.
+      DATABASE_CONNECT_TIMEOUT_MS: '30000',
       LOG_LEVEL: 'info',
       STORAGE_DRIVER: 'local',
       STORAGE_LOCAL_DIR: storageDir,

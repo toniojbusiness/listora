@@ -15,6 +15,7 @@ describe('loadApiConfig', () => {
       host: '127.0.0.1',
       port: 3000,
       databaseUrl: DATABASE_URL,
+      databaseConnectTimeoutMs: 5_000,
       logLevel: 'info',
       auth: { driver: 'dev', devSecret: undefined },
       storage: {
@@ -76,23 +77,30 @@ describe('loadApiConfig', () => {
         ...REQUIRED,
         API_HOST: '0.0.0.0',
         API_PORT: '0',
+        DATABASE_CONNECT_TIMEOUT_MS: '30000',
         LOG_LEVEL: 'debug',
         AUTH_DEV_SECRET: 'x'.repeat(32),
       }),
     ).toMatchObject({
       host: '0.0.0.0',
       port: 0,
+      databaseConnectTimeoutMs: 30_000,
       logLevel: 'debug',
       auth: { driver: 'dev', devSecret: 'x'.repeat(32) },
     });
   });
 
   it('reports every invalid key at once', () => {
-    const error = captureConfigError({ API_PORT: '70000', LOG_LEVEL: 'loud' });
+    const error = captureConfigError({
+      API_PORT: '70000',
+      DATABASE_CONNECT_TIMEOUT_MS: '5s',
+      LOG_LEVEL: 'loud',
+    });
     expect(error.issues).toEqual([
       'API_PORT must be an integer from 0 to 65535',
       'AUTH_DRIVER is required',
       'DATABASE_URL is required',
+      'DATABASE_CONNECT_TIMEOUT_MS must be an integer from 100 to 120000 (milliseconds)',
       'LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent',
     ]);
   });

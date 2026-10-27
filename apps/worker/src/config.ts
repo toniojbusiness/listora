@@ -20,6 +20,7 @@ import {
   MarketplaceConfigError,
   type MarketplaceConfig,
 } from '@listora/connections';
+import { CONNECT_TIMEOUT_ISSUE, parseConnectTimeoutMs } from '@listora/db';
 import {
   EmailIngestConfigError,
   loadEmailIngestConfig,
@@ -31,6 +32,8 @@ import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@list
 
 export interface WorkerConfig {
   databaseUrl: string;
+  /** DATABASE_CONNECT_TIMEOUT_MS: how long opening a database connection may take. */
+  databaseConnectTimeoutMs: number;
   logLevel: LogLevel;
   /** Marketplace operation steps run at the same time. */
   concurrency: number;
@@ -95,6 +98,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   } else if (!/^postgres(ql)?:\/\//.test(databaseUrl)) {
     issues.push('DATABASE_URL must be a postgres:// URL');
   }
+  const databaseConnectTimeoutMs = parseConnectTimeoutMs(env['DATABASE_CONNECT_TIMEOUT_MS']);
+  if (databaseConnectTimeoutMs === undefined) issues.push(CONNECT_TIMEOUT_ISSUE);
 
   const logLevel = env['LOG_LEVEL'] ?? 'info';
   if (!isLogLevel(logLevel)) {
@@ -129,6 +134,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
 
   if (
     issues.length > 0 ||
+    databaseConnectTimeoutMs === undefined ||
     !isLogLevel(logLevel) ||
     storage === undefined ||
     ai === undefined ||
@@ -144,6 +150,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   }
   return {
     databaseUrl,
+    databaseConnectTimeoutMs,
     logLevel,
     concurrency,
     taskConcurrency,

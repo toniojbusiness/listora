@@ -114,12 +114,12 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Help and contact"].waitForExistence(timeout: 5))
         // Dev names no support address.
         XCTAssertTrue(element("help.noContact").exists)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.goBack(from: "Help and contact"), "Help did not close\n\(app.debugDescription)")
 
         reveal(app.buttons["settings.privacy"]).tap()
         XCTAssertTrue(element("legal.privacy-policy").waitForExistence(timeout: 5), "\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["Summary"].exists)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.goBack(from: "Privacy policy"), "the privacy policy did not close")
 
         reveal(app.buttons["settings.terms"]).tap()
         XCTAssertTrue(element("legal.terms-of-service").waitForExistence(timeout: 5))

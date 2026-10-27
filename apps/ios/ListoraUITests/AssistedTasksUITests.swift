@@ -79,7 +79,9 @@ final class AssistedTasksUITests: XCTestCase {
         try require(row.waitForExistence(timeout: 15), "the seeded item is not in the inventory")
         row.tap()
         let status = app.descendants(matching: .any)["marketplace.poshmark.status"]
-        try require(waitForLabel(of: status, "Not listed", timeout: 15), status.label)
+        // The item screen's first read can take longer than 15 seconds on CI's busy simulator: a
+        // run once failed here with the label already "Not listed".
+        try require(waitForLabel(of: status, "Not listed", timeout: 30), status.label)
         return status
     }
 

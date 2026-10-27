@@ -1,4 +1,9 @@
-export { loadMigrateConfig } from './config.ts';
+export {
+  CONNECT_TIMEOUT_ISSUE,
+  DEFAULT_CONNECT_TIMEOUT_MS,
+  loadMigrateConfig,
+  parseConnectTimeoutMs,
+} from './config.ts';
 export type { MigrateCommand, MigrateConfig } from './config.ts';
 export { createDatabase, createPool, inTransaction, parseSafeInteger } from './database.ts';
 export type { DatabaseOptions, DatabasePool, Db, DbExecutor, DbTransaction } from './database.ts';
