@@ -10,7 +10,7 @@ import Testing
 struct BulkActionModelTests {
     let copy = ListingCopyStore(directory: URL.temporaryDirectory.appending(path: "Bulk-\(UUID().uuidString)"))
 
-    private func item(
+    func item(
         _ id: String,
         sku: String,
         title: String? = "Levi's jacket",
@@ -25,7 +25,7 @@ struct BulkActionModelTests {
         return item
     }
 
-    private func listing(
+    func listing(
         _ marketplace: Schemas.KnownMarketplace,
         id: String,
         status: Schemas.KnownListingStatus = .active,
@@ -42,7 +42,7 @@ struct BulkActionModelTests {
         return listing
     }
 
-    private func model(_ service: FakeInventoryService, _ items: [Schemas.Item]) -> BulkActionModel {
+    func model(_ service: FakeInventoryService, _ items: [Schemas.Item]) -> BulkActionModel {
         service.itemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         return BulkActionModel(
             items: items.map { ItemSummary($0) },
@@ -52,7 +52,7 @@ struct BulkActionModelTests {
         )
     }
 
-    private func results(_ model: BulkActionModel) -> [String] {
+    func results(_ model: BulkActionModel) -> [String] {
         model.outcomes.map { "\($0.sku) \($0.marketplace ?? "item") \($0.result): \($0.message)" }
     }
 

@@ -192,6 +192,11 @@ marketplaces ran one after another. What makes them fast now:
 The targets: a delist about 15 s after the app opens, a listing 45 to 60 s per marketplace, every
 marketplace at once.
 
+On the captain's iPhone (2026-10-27, a Shaka Wear tee, from the tap to the marketplace's
+confirmed read-back): a listing took 32 s on Depop (about 61 s before), 29 s on Mercari (36 s),
+and 44 s on Poshmark (about 2 minutes under its review before); End all ended all three side by
+side in 11 to 13 s.
+
 ## Local development
 
 - `npm run phone:bundle` rebuilds the app's `phone-runtime.js`; a test fails when the

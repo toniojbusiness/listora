@@ -39,7 +39,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
     connection) and offers the assisted ones, which make a task. Each listing starts from the same
     copy as the List flow (`SuggestedCopy`). What the List flow's review would stop is skipped,
     never guessed: already on that marketplace, no title or price, a title over eBay's 80
-    characters, or no category Listora can map (each says to list it from the item).
+    characters, or no category Listora can map (each says to list it from the item). A draft
+    whose earlier listing failed is sent again by that try's Retry, since it may have reached the
+    marketplace and the server takes no new draft for it; one still working is left alone.
   - **Change price** lowers or raises by a percentage (5 to 30%) or an amount, with an example from
     the first item. Every live listing changes, and the item's own list price too (`replaceItem`,
     applied once more on the newest version after a `409`); a listing price below the item's floor

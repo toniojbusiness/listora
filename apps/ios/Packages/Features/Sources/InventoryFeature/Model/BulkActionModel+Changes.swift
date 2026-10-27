@@ -5,12 +5,22 @@ import ListoraAPI
 
 /// Each change of a ``BulkAction`` on one item, through the same calls as the item screen.
 extension BulkActionModel {
-    /// The item's draft on the marketplace, created or brought up to date, then published.
+    /// The item's draft on the marketplace, created or brought up to date, then published. A
+    /// draft whose earlier listing failed is sent again by that try's Retry instead.
     func list(_ item: Item, on marketplace: KnownMarketplace) async -> BulkOutcome {
         let id = marketplace.rawValue
         let name = Formatting.marketplaceName(id)
         let connection = connections.first { $0.marketplace.value1 == marketplace }
         let existing = item.listings.first { $0.marketplace.value1 == marketplace }
+        if let existing, existing.isWorking {
+            return outcome(
+                item, id, .skipped,
+                "Still working on the last change on \(name). Try again once it's done.",
+            )
+        }
+        if let existing, let failed = existing.failedListing {
+            return await retryListing(item, on: id, failed)
+        }
         let variant: ListingVariant
         switch await listingVariant(of: item, on: marketplace, existing: existing, connection: connection) {
         case let .success(made): variant = made
@@ -42,6 +52,27 @@ extension BulkActionModel {
             assisted
                 ? "Task added: post it in the \(name) app."
                 : "Listing on \(name) started. It shows as listed once \(name) confirms.",
+        )
+    }
+
+    /// The failed listing's Retry, as the item screen's: it may have reached the marketplace, so
+    /// the server takes no new draft for it and sends the same listing again
+    /// (`docs/features/operations.md`).
+    private func retryListing(_ item: Item, on id: String, _ failed: Operation) async -> BulkOutcome {
+        let name = Formatting.marketplaceName(id)
+        guard failed.error?.retryable ?? true else {
+            return outcome(item, id, .skipped, "Listing on \(name) failed. Open the item to see why.")
+        }
+        do {
+            _ = try await send { [service] key throws(APIFailure) in
+                try await service.retry(operationID: failed.id, idempotencyKey: key)
+            }
+        } catch {
+            return outcome(item, id, .failed, error.message)
+        }
+        return outcome(
+            item, id, .started,
+            "Listing on \(name) started again. It shows as listed once \(name) confirms.",
         )
     }
 
@@ -275,6 +306,14 @@ extension Listing {
     /// The server allows `action` on the listing now.
     func allows(_ action: Components.Schemas.KnownListingAction) -> Bool {
         availableActions.contains { $0.action.value1 == action && $0.mode.value1 != nil }
+    }
+
+    /// The failed create of a draft the server won't publish anew: it is sent again by its Retry.
+    var failedListing: Operation? {
+        guard status.value1 == .draft, !allows(.publish), let operation = latestOperation,
+              operation.status.value1 == .failed, operation.kind.value1 == .create
+        else { return nil }
+        return operation
     }
 
     /// Its newest change is still running or waiting.
