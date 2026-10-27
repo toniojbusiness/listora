@@ -3,7 +3,12 @@
  * describes it). They are the one definition both hosts run: the browser runner, and the
  * iPhone app for a seller whose Poshmark runs on their phone (docs/features/phone-execution.md).
  */
-import type { ListingRef, OperationRequest, RemoteOrder } from '@listora/marketplaces';
+import type {
+  ListingRef,
+  OperationRequest,
+  RemoteListingState,
+  RemoteOrder,
+} from '@listora/marketplaces';
 
 import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
@@ -41,6 +46,10 @@ export const SKU_LOOKUP = {
   /** Without a title to search for, only listings created this recently are candidates. */
   recentMs: 72 * 3_600_000,
 } as const;
+
+/** How often, and how far apart, a listing page that shows no listing is read again. */
+const SETTLE_LOOKS = 4;
+const SETTLE_WAIT_MS = 30_000;
 
 /** Closet pages read for a full closet listing (48 listings each). */
 const CLOSET_PAGES = 50;
@@ -194,6 +203,21 @@ export function createPoshmarkScripts(
     return applied(step, result.path);
   }
 
+  /**
+   * The listing as its page shows it, read again a few times while the page shows no listing
+   * without saying it is gone: right after a change, Poshmark's page showed none for about two
+   * minutes (read on the seller's own listing, 2026-10-27).
+   */
+  async function settledListing(step: StepRunner, id: string): Promise<RemoteListingState> {
+    for (let look = 1; ; look += 1) {
+      const shown = await step('open the listing', { mutates: false }, (page) =>
+        readListing(page, site, id),
+      );
+      if (shown.found || shown.authoritative || look === SETTLE_LOOKS) return shown;
+      await new Promise((resolve) => setTimeout(resolve, SETTLE_WAIT_MS));
+    }
+  }
+
   /** Opens the listing's edit form; `false` when the listing is not there to edit. */
   async function openEditor(step: StepRunner, id: string): Promise<boolean> {
     return step('open the edit form', { mutates: false }, (page) =>
@@ -209,9 +233,7 @@ export function createPoshmarkScripts(
   ): Promise<WriteResult> {
     const id = op.listing.externalListingId;
     if (id === null) return notListed();
-    const shown = await step('open the listing', { mutates: false }, (page) =>
-      readListing(page, site, id),
-    );
+    const shown = await settledListing(step, id);
     if (!shown.found) {
       if (!shown.authoritative) return notListed();
       // A listing Poshmark says is gone is ended already (the read-back confirms it), and

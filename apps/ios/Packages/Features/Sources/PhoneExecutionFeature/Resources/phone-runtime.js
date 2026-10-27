@@ -7847,12 +7847,24 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 
 // src/mercari/sizes.ts
 /**
+	* Mercari's names for the extended letter sizes where they differ by department: its women's
+	* sizes say `2XL (20-22)` and `3XL (24-26)`, its men's `XXL (50-52)` (read 2026-10-27).
+	*/
+	const LETTER_SIZE_ALIASES = {
+		XXL: "2XL",
+		"2XL": "XXL",
+		XXXL: "3XL",
+		"3XL": "XXXL",
+		XXXXL: "4XL",
+		"4XL": "XXXXL"
+	};
+	/**
 	* Whether a size option's label offers `size`: the label is the size, or the size followed by
-	* a space and more (`M (8-10)`).
+	* a space and more (`M (8-10)`), under either of its names (`XXL` is `2XL (20-22)`).
 	*/
 	function sizeOptionMatches(optionLabel, size) {
 		const label = optionLabel.trim();
-		return label === size || label.startsWith(`${size} `);
+		return [size, LETTER_SIZE_ALIASES[size.toUpperCase()]].filter((name) => name !== void 0).some((name) => label === name || label.startsWith(`${name} `));
 	}
 
 // src/mercari/pages/listing-form.ts
@@ -8001,11 +8013,17 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
 		if (brand === null) return;
 		await page.type(LISTING_FORM.brand, brand);
-		if (!await appears$1(page, LISTING_FORM.brandOption)) throw changed(FORM, `lists no brand "${brand}"`);
-		const offered = await page.texts(LISTING_FORM.brandOption);
-		const match = offered.find((option) => option === brand) ?? offered.find((option) => option.toLowerCase() === brand.toLowerCase());
-		if (match === void 0) throw changed(FORM, `lists no brand "${brand}"`);
-		await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
+		const end = Date.now() + APPEAR_MS;
+		for (;;) {
+			const offered = await page.texts(LISTING_FORM.brandOption);
+			const match = offered.find((option) => option === brand) ?? offered.find((option) => option.toLowerCase() === brand.toLowerCase());
+			if (match !== void 0) {
+				await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
+				return;
+			}
+			if (Date.now() >= end) throw changed(FORM, `lists no brand "${brand}"`);
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+		}
 	}
 	async function pickSize(page, size) {
 		await expectElement(page, LISTING_FORM.size, FORM, "size list");
@@ -9153,6 +9171,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		/** Without a title to search for, only listings created this recently are candidates. */
 		recentMs: 2592e5
 	};
+	/** How often, and how far apart, a listing page that shows no listing is read again. */
+	const SETTLE_LOOKS = 4;
+	const SETTLE_WAIT_MS = 3e4;
 	/** Closet pages read for a full closet listing (48 listings each). */
 	const CLOSET_PAGES = 50;
 	/** Sold-item pages read per sale check (48 each, the newest sales among them). */
@@ -9275,6 +9296,18 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			};
 			return applied(step, result.path);
 		}
+		/**
+		* The listing as its page shows it, read again a few times while the page shows no listing
+		* without saying it is gone: right after a change, Poshmark's page showed none for about two
+		* minutes (read on the seller's own listing, 2026-10-27).
+		*/
+		async function settledListing(step, id) {
+			for (let look = 1;; look += 1) {
+				const shown = await step("open the listing", { mutates: false }, (page) => readListing(page, site, id));
+				if (shown.found || shown.authoritative || look === SETTLE_LOOKS) return shown;
+				await new Promise((resolve) => setTimeout(resolve, SETTLE_WAIT_MS));
+			}
+		}
 		/** Opens the listing's edit form; `false` when the listing is not there to edit. */
 		async function openEditor(step, id) {
 			return step("open the edit form", { mutates: false }, (page) => openForm(page, site.editListing(id)));
@@ -9283,7 +9316,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function changeAvailability(op, step, availability) {
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
-			const shown = await step("open the listing", { mutates: false }, (page) => readListing(page, site, id));
+			const shown = await settledListing(step, id);
 			if (!shown.found) {
 				if (!shown.authoritative) return notListed();
 				return availability === "not_for_sale" ? {
