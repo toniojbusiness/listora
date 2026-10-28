@@ -7,15 +7,36 @@
   },
   "include": ["src", "src/**/*.json"],
   "references": [
-    { "path": "../shared" },
-    { "path": "../analysis" },
-    { "path": "../testing" },
-    { "path": "../db" },
-    { "path": "../storage" },
-    { "path": "../connections" },
-    { "path": "../marketplaces" },
-    { "path": "../operations" },
-    { "path": "../push" },
-    { "path": "../sales" }
-  ]
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../analysis"
+    },
+    {
+      "path": "../testing"
+    },
+    {
+      "path": "../db"
+    },
+    {
+      "path": "../storage"
+    },
+    {
+      "path": "../connections"
+    },
+    {
+      "path": "../marketplaces"
+    },
+    {
+      "path": "../operations"
+    },
+    {
+      "path": "../push"
+    },
+    {
+      "path": "../sales"
+    }
+  ],
+  "exclude": ["src/*/recordings"]
 }
