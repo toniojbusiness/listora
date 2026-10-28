@@ -1442,7 +1442,7 @@ export interface paths {
         };
         /**
          * List sales
-         * @description The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+         * @description The sales feed, newest sold first, each with its delist runs.
          */
         get: operations["listSales"];
         put?: never;
@@ -1457,6 +1457,28 @@ export interface paths {
          *     to its item on `marketplace`.
          */
         post: operations["createSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sales/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the seller's sales, in total and per marketplace
+         * @description Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+         *     marketplace: the sales the seller's connected marketplaces showed (their sales history
+         *     included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+         */
+        get: operations["getSalesSummary"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2928,12 +2950,12 @@ export interface components {
         PhotoUrls: {
             /**
              * Format: uri
-             * @description 400 px long edge.
+             * @description 640 px long edge; the app's lists and grids.
              */
             thumbnail: string;
             /**
              * Format: uri
-             * @description 1600 px long edge; what marketplaces fetch.
+             * @description 1600 px long edge; what marketplaces fetch, and the app's item screen.
              */
             listing: string;
         };
@@ -4279,8 +4301,49 @@ export interface components {
          *     show an unknown source generically.
          */
         SaleDetectionSource: components["schemas"]["KnownSaleDetectionSource"];
-        /** @enum {string} */
-        KnownSaleDetectionSource: "webhook" | "poll" | "email" | "manual";
+        /**
+         * @description `history`: found in the seller's sales history when the marketplace was connected; it sold
+         *     before then, so Listora never asks to ship it.
+         * @enum {string}
+         */
+        KnownSaleDetectionSource: "webhook" | "poll" | "email" | "manual" | "history";
+        /**
+         * @description The seller's sales that stand, all time: in total, and the seller's own totals on each
+         *     marketplace in the fixed `KnownMarketplace` order. Only totals: no ranking or share, so no
+         *     marketplace's performance is presented relative to another's (eBay's API License Agreement
+         *     restricts that without eBay's consent).
+         */
+        SalesSummary: {
+            total: components["schemas"]["SalesTotals"];
+            /**
+             * @description Each marketplace with a sale or a connected account, in the fixed `KnownMarketplace`
+             *     order (never ranked); a connected one without a sale has zeros.
+             */
+            marketplaces: components["schemas"]["MarketplaceSales"][];
+            /** @description When the earliest of the sales sold. Absent without a sale. */
+            firstSoldAt?: components["schemas"]["Timestamp"];
+        };
+        /** @description A number of sales and what they brought in. */
+        SalesTotals: {
+            /**
+             * Format: int32
+             * @description Orders (a bundle is one).
+             */
+            salesCount: number;
+            /** Format: int32 */
+            itemsSold: number;
+            /** @description The sale prices plus the shipping buyers paid, as the profit dashboard counts it. */
+            revenue: components["schemas"]["Money"];
+        };
+        /** @description The seller's own totals on one marketplace. */
+        MarketplaceSales: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** Format: int32 */
+            salesCount: number;
+            /** Format: int32 */
+            itemsSold: number;
+            revenue: components["schemas"]["Money"];
+        };
         /**
          * @description `completed`: every other listing is delisted (confirmed by the marketplace's read-back)
          *     or done (the user confirmed). `needs_attention`: a delist failed, waits for the user, or
@@ -6218,6 +6281,9 @@ export type SaleStatus = components['schemas']['SaleStatus'];
 export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
 export type KnownSaleDetectionSource = components['schemas']['KnownSaleDetectionSource'];
+export type SalesSummary = components['schemas']['SalesSummary'];
+export type SalesTotals = components['schemas']['SalesTotals'];
+export type MarketplaceSales = components['schemas']['MarketplaceSales'];
 export type DelistRunStatus = components['schemas']['DelistRunStatus'];
 export type DelistResultState = components['schemas']['DelistResultState'];
 export type KnownDelistResultState = components['schemas']['KnownDelistResultState'];
@@ -8467,6 +8533,27 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getSalesSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The seller's sales. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesSummary"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getSale: {
         parameters: {
             query?: never;
@@ -10076,7 +10163,7 @@ export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<component
 export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
 export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history", "listing_import", "label_read", "offer_check", "offer_response"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
-export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
+export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual", "history"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
 export const knownDelistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownDelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed", "canceled"];
 export const knownSaleActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleAction"]> = ["confirm", "mark_shipped", "cancel", "record_return"];

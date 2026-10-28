@@ -105,7 +105,8 @@ packages/
   batches/      Batch listing: batches and their items' state, the job that starts each submitted
                 item's analysis once its photos are processed (@listora/batches)
   imports/      Importing existing listings: starting an import, settling each listing it read
-                into an item (the match, photos, details), the seller's answers (@listora/imports)
+                into an item (the match, photos, details), the seller's answers; the sold items
+                of the seller's sales history (@listora/imports)
   pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
                 links, sold-data label guard; pure, no I/O (@listora/pricing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
@@ -244,7 +245,8 @@ src/
   phone/         The seller's devices, and the marketplace work their iPhone claims and
                  answers (docs/features/phone-execution.md)
   sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
-                 double sales; Mark as sold (createSale), the lifecycle, and the relist question
+                 double sales; the sales in total and per marketplace (getSalesSummary); Mark as
+                 sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
   today/         The Today summary (getToday) and the morning summary setting
   listing-refresh/ The listing refresh setting and an item's own cadence

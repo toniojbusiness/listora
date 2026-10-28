@@ -439,6 +439,13 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
           title: 'Sold Jacket',
           priceCents: 4500,
           currency: 'USD',
+          // The sold listing's record, for a sold item Listora would make of it.
+          listing: expect.objectContaining({
+            externalListingId: sold.externalListingId,
+            status: 'sold',
+            title: 'Sold Jacket',
+            details: expect.objectContaining({ brand: "Levi's", size: 'M' }) as unknown,
+          }) as unknown,
         },
       ],
     });

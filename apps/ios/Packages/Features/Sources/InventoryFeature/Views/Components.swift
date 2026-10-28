@@ -63,16 +63,17 @@ struct LabeledRow: View {
 }
 
 /// A photo from its URL, filling the space it is given, with a placeholder while it loads or
-/// when there is none.
+/// when there is none. `preview`, a smaller copy (the thumbnail), shows while a large one loads.
 struct PhotoView: View {
     let url: String?
+    var preview: String?
     let cornerRadius: CGFloat
 
     var body: some View {
         // The color takes exactly the proposed size; the photo fills it and is clipped to it.
         Palette.surfaceSecondary.color
             .overlay {
-                RemoteImage(url: url.flatMap(URL.init(string:))) {
+                RemoteImage(url: url.flatMap(URL.init(string:)), preview: preview.flatMap(URL.init(string:))) {
                     Image(systemName: "photo")
                         .font(Typography.title3)
                         .foregroundStyle(Palette.textSecondary)

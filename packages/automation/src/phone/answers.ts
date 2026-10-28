@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 
-import { CHALLENGE_KINDS } from '@listora/db';
+import { CHALLENGE_KINDS, FEE_KINDS } from '@listora/db';
 import { ITEM_CONDITIONS, REMOTE_LISTING_STATUSES } from '@listora/marketplaces';
 
 import type { ScriptCall } from '../adapter/script-call.ts';
@@ -101,6 +101,18 @@ const orders = z
     z.object({
       externalOrderId: z.string().min(1).max(200),
       soldAt: z.iso.datetime({ offset: true }).transform((time) => new Date(time)),
+      shipped: z.boolean().optional(),
+      fees: z
+        .array(
+          z.object({
+            kind: z.enum(FEE_KINDS),
+            description: z.string().min(1).max(200),
+            amountCents: z.number().int(),
+            currency: z.literal('USD'),
+          }),
+        )
+        .max(20)
+        .optional(),
       items: z
         .array(
           z.object({
@@ -108,6 +120,7 @@ const orders = z
             title: z.string().max(5_000).nullable(),
             priceCents: z.number().int().min(0),
             currency: z.literal('USD'),
+            listing: listedListing.optional(),
           }),
         )
         .max(100),

@@ -72,10 +72,10 @@ describe('the Today summary (real Postgres)', () => {
       expect(cards[0]?.id).toBe(ship[0]?.id);
     });
 
-    it('drops an item once it is shipped or archived, or its sale is canceled or returned', async () => {
+    it('drops an item once it is shipped or archived, its sale is canceled or returned, or it is history', async () => {
       const accountId = await harness.account();
       const items = await Promise.all(
-        ['shipped', 'archived', 'canceled', 'returned', 'kept'].map((title) =>
+        ['shipped', 'archived', 'canceled', 'returned', 'history', 'kept'].map((title) =>
           harness.item(accountId, { status: 'listed', title }),
         ),
       );
@@ -97,6 +97,12 @@ describe('the Today summary (real Postgres)', () => {
         .updateTable('sale')
         .set({ status: 'returned', returned_at: new Date() })
         .where('id', '=', sales[3]?.saleId ?? '')
+        .execute();
+      // From the sales history (it sold before the connection's history ends): never one to ship.
+      await harness.db
+        .updateTable('sale')
+        .set({ detection_source: 'history' })
+        .where('id', '=', sales[4]?.saleId ?? '')
         .execute();
 
       const { cards } = await loadToday(harness.db, accountId, now());

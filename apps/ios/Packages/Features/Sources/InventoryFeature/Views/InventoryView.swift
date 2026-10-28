@@ -256,6 +256,13 @@ public struct InventoryView<Header: View>: View {
             .padding(Spacing.md)
         }
         .refreshable { await model.load() }
+        // Every loaded page's photos are fetched at once (about 50 KB each), so scrolling finds
+        // them on disk instead of starting each download as its item comes into view.
+        .task(id: model.items.count) {
+            RemoteImageLoader.shared.prefetch(model.items.compactMap {
+                $0.coverPhoto?.urls.flatMap { URL(string: $0.thumbnail) }
+            })
+        }
     }
 }
 

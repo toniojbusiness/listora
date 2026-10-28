@@ -3,7 +3,7 @@
     tags: [sales]
     operationId: listSales
     summary: List sales
-    description: The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+    description: The sales feed, newest sold first, each with its delist runs.
     parameters:
       - name: itemId
         in: query
@@ -75,6 +75,24 @@
         $ref: '../components/responses.yaml#/Conflict'
       '422':
         $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/summary:
+  get:
+    tags: [sales]
+    operationId: getSalesSummary
+    summary: Get the seller's sales, in total and per marketplace
+    description: |
+      Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+      marketplace: the sales the seller's connected marketplaces showed (their sales history
+      included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+    responses:
+      '200':
+        description: The seller's sales.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/SalesSummary'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
 /v1/sales/{saleId}:

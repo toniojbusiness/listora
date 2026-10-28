@@ -104,6 +104,17 @@ export async function processImage(
   };
 }
 
+/**
+ * One derivative made again from a photo's stored `original` (already upright, sRGB, and
+ * metadata-free), for a derivative whose size changed after the photo was processed.
+ */
+export async function deriveFromOriginal(
+  original: Uint8Array,
+  kind: DerivativeKind,
+): Promise<DerivedImage> {
+  return derive(sharp(original, { failOn: 'error', limitInputPixels: MAX_INPUT_PIXELS }), kind);
+}
+
 /** One derivative of the upright image: resized to its kind's edge, sRGB, no metadata. */
 async function derive(upright: Sharp, kind: DerivativeKind): Promise<DerivedImage> {
   const { maxEdge, quality } = DERIVATIVES[kind];

@@ -2008,7 +2008,7 @@ paths:
         - sales
       operationId: listSales
       summary: List sales
-      description: The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+      description: The sales feed, newest sold first, each with its delist runs.
       parameters:
         - name: itemId
           in: query
@@ -2081,6 +2081,25 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sales/summary:
+    get:
+      tags:
+        - sales
+      operationId: getSalesSummary
+      summary: Get the seller's sales, in total and per marketplace
+      description: |
+        Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+        marketplace: the sales the seller's connected marketplaces showed (their sales history
+        included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+      responses:
+        '200':
+          description: The seller's sales.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesSummary'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/sales/{saleId}:
@@ -4497,11 +4516,11 @@ components:
         thumbnail:
           type: string
           format: uri
-          description: 400 px long edge.
+          description: 640 px long edge; the app's lists and grids.
         listing:
           type: string
           format: uri
-          description: 1600 px long edge; what marketplaces fetch.
+          description: 1600 px long edge; what marketplaces fetch, and the app's item screen.
     Photo:
       type: object
       required:
@@ -7198,11 +7217,80 @@ components:
           maxLength: 64
     KnownSaleDetectionSource:
       type: string
+      description: |
+        `history`: found in the seller's sales history when the marketplace was connected; it sold
+        before then, so Listora never asks to ship it.
       enum:
         - webhook
         - poll
         - email
         - manual
+        - history
+    SalesSummary:
+      type: object
+      description: |
+        The seller's sales that stand, all time: in total, and the seller's own totals on each
+        marketplace in the fixed `KnownMarketplace` order. Only totals: no ranking or share, so no
+        marketplace's performance is presented relative to another's (eBay's API License Agreement
+        restricts that without eBay's consent).
+      required:
+        - total
+        - marketplaces
+      properties:
+        total:
+          $ref: '#/components/schemas/SalesTotals'
+        marketplaces:
+          type: array
+          description: |
+            Each marketplace with a sale or a connected account, in the fixed `KnownMarketplace`
+            order (never ranked); a connected one without a sale has zeros.
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/MarketplaceSales'
+        firstSoldAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When the earliest of the sales sold. Absent without a sale.
+    SalesTotals:
+      type: object
+      description: A number of sales and what they brought in.
+      required:
+        - salesCount
+        - itemsSold
+        - revenue
+      properties:
+        salesCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Orders (a bundle is one).
+        itemsSold:
+          type: integer
+          format: int32
+          minimum: 0
+        revenue:
+          $ref: '#/components/schemas/Money'
+          description: The sale prices plus the shipping buyers paid, as the profit dashboard counts it.
+    MarketplaceSales:
+      type: object
+      description: The seller's own totals on one marketplace.
+      required:
+        - marketplace
+        - salesCount
+        - itemsSold
+        - revenue
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        salesCount:
+          type: integer
+          format: int32
+          minimum: 0
+        itemsSold:
+          type: integer
+          format: int32
+          minimum: 0
+        revenue:
+          $ref: '#/components/schemas/Money'
     DelistRunStatus:
       type: string
       description: |

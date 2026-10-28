@@ -154,7 +154,7 @@ describe('photo uploads (real Postgres, local storage)', () => {
 
     // What marketplaces and the app fetch: the right size, and no GPS or other metadata.
     for (const [url, longEdge] of [
-      [ready?.urls?.thumbnail, 400],
+      [ready?.urls?.thumbnail, 640],
       [ready?.urls?.listing, 1600],
     ] as const) {
       const response = await api.app.inject({ method: 'GET', url: new URL(url ?? '').pathname });

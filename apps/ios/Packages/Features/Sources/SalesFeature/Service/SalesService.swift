@@ -8,6 +8,7 @@ typealias Money = Components.Schemas.Money
 typealias KnownMarketplace = Components.Schemas.KnownMarketplace
 typealias ItemSummary = Components.Schemas.ItemSummary
 typealias SaleExplanation = Components.Schemas.SaleExplanation
+typealias SalesSummary = Components.Schemas.SalesSummary
 
 /// One page of the sales feed.
 struct SalePage: Equatable, Sendable {
@@ -43,6 +44,8 @@ enum SaleChange: Equatable, Sendable {
 /// show what the server reports and never decide an outcome themselves.
 protocol SalesService: Sendable {
     func sales(cursor: String?) async throws(APIFailure) -> SalePage
+    /// The seller's sales that stand, all time: in total and per marketplace.
+    func summary() async throws(APIFailure) -> SalesSummary
     func sale(id: String) async throws(APIFailure) -> Sale
     /// How the sale was found, and what each delist it started did (docs/features/activity.md).
     func explanation(saleID: String) async throws(APIFailure) -> SaleExplanation
@@ -71,6 +74,13 @@ struct APISalesService: SalesService {
             let page = try body { try response.body.json }
             return SalePage(sales: page.data, nextCursor: page.nextCursor)
         case let .badRequest(response): throw APIFailure(statusCode: 400, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func summary() async throws(APIFailure) -> SalesSummary {
+        switch try await call({ try await client.getSalesSummary() }) {
+        case let .ok(response): try body { try response.body.json }
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

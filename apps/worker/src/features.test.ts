@@ -17,7 +17,7 @@ import { EMAIL_INGEST_TASK } from '@listora/email-sales';
 import { LISTING_REFRESH_TASK } from '@listora/listing-refresh';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
-import { PHOTO_PROCESSING_TASK } from '@listora/photos';
+import { PHOTO_PROCESSING_TASK, THUMBNAIL_REFRESH_TASK } from '@listora/photos';
 import { BACKGROUND_PUSH_TASK, PUSH_TASK } from '@listora/push';
 import { DATA_RETENTION_TASK } from '@listora/retention';
 import { SALE_FEES_TASK } from '@listora/sales';
@@ -108,6 +108,7 @@ describe('worker feature discovery', () => {
         LISTING_IMPORT_APPLY_TASK,
         LISTING_RESYNC_TASK,
         PHOTO_PROCESSING_TASK,
+        THUMBNAIL_REFRESH_TASK,
         PUSH_TASK,
         BACKGROUND_PUSH_TASK,
         SALE_ORDER_TASK,

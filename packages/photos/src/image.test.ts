@@ -54,7 +54,7 @@ describe('processImage', () => {
     expect(sizes).toEqual({
       original: [3000, 2000],
       ai: [1024, 683],
-      thumbnail: [400, 267],
+      thumbnail: [640, 427],
       listing: [1600, 1067],
     });
   });

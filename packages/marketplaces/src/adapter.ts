@@ -377,9 +377,10 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
    */
   readOrderFees?(externalOrderId: string, ctx: AdapterContext): Promise<OrderFeesResult>;
   /**
-   * The seller's orders sold at or after `since` (all recent ones when `null`), for a scheduled
-   * sale check. Only adapters that can read orders have it. Throws when the marketplace cannot
-   * be read, like `readListing`; an empty list means it showed no order.
+   * The seller's orders sold at or after `since`, for a scheduled sale check; with `null`, the
+   * seller's sales history: every order the marketplace's sold pages show, up to the adapter's
+   * history limit. Only adapters that can read orders have it. Throws when the marketplace
+   * cannot be read, like `readListing`; an empty list means it showed no order.
    */
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>;
   /**
@@ -480,6 +481,12 @@ export interface RemoteOrderItem {
   title: string | null;
   priceCents: number;
   currency: CurrencyCode;
+  /**
+   * The sold listing as the marketplace's pages show it (status `sold`), with its photos and
+   * details, when they show it: a sale of a listing Listora doesn't have becomes a sold item
+   * from it (docs/features/sales.md, "Sales history").
+   */
+  listing?: ListedListing;
 }
 
 /**
@@ -490,6 +497,17 @@ export interface RemoteOrder {
   externalOrderId: string;
   soldAt: Date;
   items: RemoteOrderItem[];
+  /**
+   * Whether the marketplace shows the order shipped (or delivered), or still waiting to ship;
+   * absent when its pages don't say.
+   */
+  shipped?: boolean;
+  /**
+   * The fees the marketplace took on the order as its pages show them (Depop's receipt: what
+   * the items sold for less what the seller is paid), which replace the estimate; absent when
+   * its pages don't show them.
+   */
+  fees?: OrderFee[];
 }
 
 /** Finds the adapter for a marketplace; `undefined` when Listora has none configured. */

@@ -136,6 +136,8 @@ public struct ThreadBead: View {
                     .foregroundStyle(tone.color)
                     .background(Circle().fill(Palette.surface).padding(-1.5))
                     .offset(x: side * 0.12, y: side * 0.08)
+                    // An overlay's image is read on its own otherwise ("Selected").
+                    .accessibilityHidden(true)
             }
         }
         .keyframeAnimator(initialValue: 1.0, trigger: knot) { bead, scale in
@@ -253,6 +255,8 @@ struct ThreadPiece: View {
                 .rotationEffect(.degrees(90))
                 .foregroundStyle(Palette.textSecondary)
                 .opacity(style == .cut ? 1 : 0)
+                // Decoration: never read ("Cut"), even inside a background.
+                .accessibilityHidden(true)
         }
         .frame(width: Self.width)
     }

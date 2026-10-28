@@ -106,7 +106,7 @@ describe('processPhoto (real Postgres and local storage)', () => {
     ).toEqual({
       original: [1536, 2048],
       ai: [768, 1024],
-      thumbnail: [300, 400],
+      thumbnail: [480, 640],
       listing: [1200, 1600],
     });
     expect(derivatives.thumbnail.key).toMatch(/^public\/[0-9a-f]{32}\/thumbnail\.jpg$/);

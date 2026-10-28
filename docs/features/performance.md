@@ -121,7 +121,8 @@ flight. Photo processing, the heaviest local job, takes 28 ms of wall time and a
 CPU for a 2048 x 1536 upload (6 libvips threads; 43 ms with 1), with a peak of about 240 MB
 for the process, so the personal environment's 0.25 vCPU processes an item's 6 photos in about
 5 s. The derivatives of such an upload take about 1.5 MB (original 898 KB, listing 463 KB,
-AI 165 KB, thumbnail 20 KB).
+AI 165 KB, thumbnail 20 KB at the 400 px of then; the 640 px thumbnail of now is about 2.5
+times that).
 
 ## AI cost
 
@@ -194,13 +195,40 @@ real marketplace page has been measured.
   with SwiftUI's `AsyncImage`, which keeps no decoded copy: a row scrolled back into view
   downloaded or re-read its photo and decoded it again, at full size (a 400 x 300 thumbnail
   decodes to 480 KB to fill a 72-point square), and the app's shared `URLCache` holds 10 MB on
-  disk, a few hundred thumbnails. A 2,000-item inventory's thumbnails are about 60 MB. Now
+  disk, a few hundred thumbnails. A 2,000-item inventory's thumbnails are about 130 MB at 640 px. Now
   `RemoteImage` (DesignSystem) shows them: `RemoteImageLoader` fetches through its own 200 MB
   disk cache (public photo URLs are immutable, so cached copies are used whatever their age),
   decodes off the main actor at the smallest size that fills the frame (288 x 216 for a 72-point
   row at 3x: 249 KB), and keeps up to 48 MB of decoded images in memory, so a row that comes
   back shows its photo in its first frame with no download and no decode. The inventory, Today,
   tasks, task detail, review, and batch screens use it.
+- **Listing photos load like thumbnails (2026-10-28).** After importing 118 real Depop listings
+  (526 photos), the captain found the photos slow. Measured on those photos through the real
+  photo CDN, in the simulator on the Mac's Wi-Fi with an empty cache: the Inventory grid, the
+  default layout since the Hang Tag redesign, showed each cell's 1600 px listing image (about
+  300 KB) because the 400 px thumbnail was too small for a 161-point cell at 3x, and fetched it
+  only when the cell scrolled into view; the item screen fetched each listing photo only when it
+  was swiped to. Now the thumbnail is 640 px (about 67 KB on these photos), sharp in the widest
+  cell, and the grid shows it; the inventory downloads every loaded page's thumbnails at once,
+  and the item screen downloads all of the item's photos when it opens and shows the cached
+  thumbnail until the large one arrives (`RemoteImage(url:preview:)`,
+  `RemoteImageLoader.prefetch`). A photo is downloaded once at a time, so a view that asks
+  while its prefetch is on the way waits for it. Photos processed before get the new thumbnail
+  from the worker's thumbnail refresh ([photos.md](photos.md)).
+
+  | Same 118 items and photos, cold cache                  |               Before |                 After |
+  | ------------------------------------------------------ | -------------------: | --------------------: |
+  | Inventory grid, 10 screens scrolled: bytes downloaded  | 19.0 MB for 62 cells | 5.5 MB for all 118 \* |
+  | Inventory grid: a cell's wait for its photo, p50 / p90 |      500 ms / 565 ms |         0 ms / 163 ms |
+  | Item screen: next photo after a swipe                  |     about 550 ms \** |         1-9 ms (disk) |
+  | Relaunch: a photo from the disk cache                  |      6-18 ms (Today) |  22-37 ms (Inventory) |
+
+  \* Every thumbnail of the inventory (and Today's), prefetched, at the 400 px the CDN still held:
+  the refresh had not run on them. At 640 px it is about 11 MB, still less than the 62 listing
+  images, for all 118 items. \** Three photos measured, 507-595 ms each.
+  The relaunch was already served from disk before; on a phone's mobile data the cold numbers
+  grow with the bytes, which is where the grid's quarter-size photos matter most.
+
 - **Next pages.** Appending a page checked each new row against every row already shown; it now
   uses a set (2,000 comparisons instead of 100,000 at the 40th page).
 - **Uploads are already efficient.** Photos are prepared on the phone as upright JPEGs of at most

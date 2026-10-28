@@ -33,7 +33,7 @@ const price = z.object({ priceAmount: z.string(), currencyName: z.string() });
 /** One product, as the API's list of the seller's own listings gives it. */
 export const productRecordSchema = z.object({
   slug: z.string().regex(DEPOP_SLUG),
-  /** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
+  /** `ONSALE`, `SOLD` or `PURCHASED`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
   status: z.string(),
   /** The whole listing text: copy, Listora's SKU line, hashtags. */
   description: z.string(),
@@ -43,15 +43,6 @@ export const productRecordSchema = z.object({
 });
 export type ProductRecord = z.infer<typeof productRecordSchema>;
 
-/** One sold item, as the sold items page embeds it (no buyer details are read). */
-export const soldItemSchema = z.object({
-  slug: z.string().regex(DEPOP_SLUG),
-  description: z.string(),
-  price,
-  soldAt: z.string(),
-});
-export type SoldItemRecord = z.infer<typeof soldItemSchema>;
-
 /**
  * Depop's product statuses, as the Selling API names them too (`STATUS_ONSALE`, ...). Deleted
  * and banned products are `ended`, as the Depop API adapter reads them: Depop keeps them, and a
@@ -60,6 +51,8 @@ export type SoldItemRecord = z.infer<typeof soldItemSchema>;
 const STATUSES: Readonly<Record<string, RemoteListingStatus>> = {
   ONSALE: 'active',
   SOLD: 'sold',
+  // A buyer bought it (the list of sold listings says so, 2026-10-28).
+  PURCHASED: 'sold',
   MARKED_AS_SOLD: 'sold',
   DELETED: 'ended',
   BANNED: 'ended',
