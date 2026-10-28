@@ -28,6 +28,7 @@
     { "path": "../../packages/shared" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/today" },
+    { "path": "../../packages/listing-refresh" },
     { "path": "../../packages/testing" }
   ]
 }

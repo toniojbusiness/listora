@@ -15,6 +15,7 @@
  *   GET  /listings/:id/edit     the edit form; POST /listings/:id saves it
  *   POST /listings/:id/delete   delete (the page asks to confirm in a dialog)
  *   POST /listings/:id/relist   relist an ended listing
+ *   POST /listings/:id/refresh  refresh an active listing in place ([data-refreshed-at])
  *   GET  /sold                  sold orders ([data-order-id], [data-sold-at], ...)
  *   GET  /photos/<name>.jpg     a photo, standing in for Listora's image CDN (no session)
  *
@@ -40,7 +41,16 @@ import {
 } from './http.ts';
 
 export type FakeSiteAction =
-  'create' | 'update' | 'end' | 'relist' | 'read' | 'search' | 'health' | 'orders' | 'form';
+  | 'create'
+  | 'update'
+  | 'end'
+  | 'relist'
+  | 'refresh'
+  | 'read'
+  | 'search'
+  | 'health'
+  | 'orders'
+  | 'form';
 
 export type FakeSiteFault =
   /** A visible CAPTCHA widget instead of the page. */
@@ -86,6 +96,8 @@ export interface FakeSiteListing {
   priceCents: number;
   photoCount: number;
   revision: number;
+  /** When it last showed as fresh: its publish, or its latest refresh (ISO 8601). */
+  refreshedAt: string;
 }
 
 export interface FakeSiteOrder {
@@ -231,6 +243,7 @@ export class FakeAutomationSite {
         priceCents: listing.priceCents,
         photoCount: 1,
         revision: 1,
+        refreshedAt: new Date().toISOString(),
       },
       previous: null,
     });
@@ -496,7 +509,14 @@ export class FakeAutomationSite {
         }
         const id = `L${String(this.#nextId++)}`;
         this.#listings.set(id, {
-          current: { id, seller: session.seller, status: 'active', revision: 1, ...fields },
+          current: {
+            id,
+            seller: session.seller,
+            status: 'active',
+            revision: 1,
+            refreshedAt: new Date().toISOString(),
+            ...fields,
+          },
           previous: null,
         });
         return redirect(`/listings/${id}`);
@@ -521,6 +541,13 @@ export class FakeAutomationSite {
       case 'end':
         return this.#withListing(route.id, (stored) => {
           if (stored.current.status === 'active') this.#change(stored, { status: 'ended' });
+          return redirect(`/listings/${stored.current.id}`);
+        });
+      case 'refresh':
+        return this.#withListing(route.id, (stored) => {
+          if (stored.current.status === 'active') {
+            this.#change(stored, { refreshedAt: new Date().toISOString() });
+          }
           return redirect(`/listings/${stored.current.id}`);
         });
       case 'relist':
@@ -606,7 +633,7 @@ function matchRoute(method: string, path: string): Route | null {
   if (method === 'GET' && path === '/listings/new') return { method, action: 'form', id: null };
   if (method === 'POST' && path === '/listings') return { method, action: 'create', id: null };
   if (method === 'GET' && path === '/sold') return { method, action: 'orders', id: null };
-  const match = /^\/listings\/([A-Za-z0-9-]+)(\/(edit|delete|relist))?$/.exec(path);
+  const match = /^\/listings\/([A-Za-z0-9-]+)(\/(edit|delete|relist|refresh))?$/.exec(path);
   if (match === null) return null;
   const id = match[1] ?? null;
   const sub = match[3];
@@ -615,6 +642,7 @@ function matchRoute(method: string, path: string): Route | null {
   if (method === 'POST' && sub === undefined) return { method, action: 'update', id };
   if (method === 'POST' && sub === 'delete') return { method, action: 'end', id };
   if (method === 'POST' && sub === 'relist') return { method, action: 'relist', id };
+  if (method === 'POST' && sub === 'refresh') return { method, action: 'refresh', id };
   return null;
 }
 
@@ -630,7 +658,7 @@ function listingFields(form: SubmittedForm | null): ListingFields {
   };
 }
 
-type ListingFields = Omit<FakeSiteListing, 'id' | 'seller' | 'status' | 'revision'>;
+type ListingFields = Omit<FakeSiteListing, 'id' | 'seller' | 'status' | 'revision' | 'refreshedAt'>;
 
 function invalidListing(fields: ListingFields): string | null {
   if (fields.title === '') return 'Add a title.';
@@ -674,11 +702,11 @@ ${listing === null ? '<label>SKU <input id="sku" name="sku"></label><label>Photo
 function listingPage(listing: FakeSiteListing): string {
   const actions =
     listing.status === 'active'
-      ? `<a id="edit" href="/listings/${listing.id}/edit">Edit</a><form method="post" action="/listings/${listing.id}/delete" onsubmit="return confirm('Delete this listing?')"><button id="delete" type="submit">Delete</button></form>`
+      ? `<a id="edit" href="/listings/${listing.id}/edit">Edit</a><form method="post" action="/listings/${listing.id}/delete" onsubmit="return confirm('Delete this listing?')"><button id="delete" type="submit">Delete</button></form><form method="post" action="/listings/${listing.id}/refresh"><button id="refresh" type="submit">Refresh</button></form>`
       : listing.status === 'ended'
         ? `<form method="post" action="/listings/${listing.id}/relist"><button id="relist" type="submit">Relist</button></form>`
         : '';
-  return `<article data-listing-id="${listing.id}" data-sku="${escape(listing.sku)}" data-status="${listing.status}" data-revision="${String(listing.revision)}">
+  return `<article data-listing-id="${listing.id}" data-sku="${escape(listing.sku)}" data-status="${listing.status}" data-revision="${String(listing.revision)}" data-refreshed-at="${listing.refreshedAt}">
 <h1 data-field="title">${escape(listing.title)}</h1>
 <p data-field="description">${escape(listing.description)}</p>
 <span data-field="price" data-cents="${String(listing.priceCents)}">$${(listing.priceCents / 100).toFixed(2)}</span>

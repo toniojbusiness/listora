@@ -503,9 +503,12 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
             Date.parse(refreshedAfter),
           );
           // Never a delete and repost: the listing keeps its id and everything it shows.
-          const { refreshedAt: _after, revision: _afterRevision, ...kept } = after;
-          const { refreshedAt: _before, revision: _beforeRevision, ...was } = before;
-          expect(kept).toEqual(was);
+          const unchanged = (remote: typeof after) => ({
+            ...remote,
+            refreshedAt: null,
+            revision: null,
+          });
+          expect(unchanged(after)).toEqual(unchanged(before));
           expect(market().countListings(sent)).toBe(1);
         });
       }

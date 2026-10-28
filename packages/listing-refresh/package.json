@@ -1,0 +1,20 @@
+{
+  "name": "@listora/listing-refresh",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Listing refresh: the cadence settings, each live listing's next and last refresh, and the paced schedule that queues refreshes through the operation engine.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/operations": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}
