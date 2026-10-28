@@ -51,6 +51,7 @@ describe('API feature discovery', () => {
       'profit',
       'sale-emails',
       'sales',
+      'sync',
       'tasks',
       'today',
       'uploads',
@@ -103,6 +104,7 @@ describe('buildApp', () => {
     ['pack-check', 'packOrder'],
     ['photos', 'addItemPhoto'],
     ['pricing', 'getItemPricing'],
+    ['sync', 'requestSync'],
     ['uploads', 'createUploadSession'],
     ['usage', 'getUsage'],
   ])('serves the %s feature (%s)', async (_feature, operationId) => {

@@ -2524,6 +2524,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Each linked marketplace's sync
+         * @description What each marketplace linked by signing in is reading now, what its last sync found, and
+         *     when a read last got through (docs/features/sync.md).
+         */
+        get: operations["getSyncStatus"];
+        put?: never;
+        /**
+         * Sync every linked marketplace now
+         * @description Asks for read-only checks of every marketplace linked by signing in: its sales, the
+         *     buyers' offers, and its listings once the seller imported them. Only reads; nothing changes
+         *     on a marketplace, and a read-only connection is read like any other. A marketplace synced
+         *     in the last 2 minutes (6 hours for listings) is not read again. The reads of marketplaces
+         *     that run on the seller's iPhone wait for it to claim them.
+         */
+        post: operations["requestSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5852,6 +5881,37 @@ export interface components {
         OfferCheckList: {
             data: components["schemas"]["OfferCheck"][];
         };
+        /** @description A `KnownSyncState`, or one added after this client was built. */
+        SyncState: components["schemas"]["KnownSyncState"];
+        /**
+         * @description `syncing`: a read of the marketplace waits or runs (on the seller's iPhone, or in the cloud).
+         *     `synced`: the last reads got through. `failed`: the last read didn't; syncing again tries
+         *     again. `not_synced`: nothing was read yet.
+         * @enum {string}
+         */
+        KnownSyncState: "syncing" | "synced" | "failed" | "not_synced";
+        /**
+         * @description One linked marketplace's sync: Listora's reads of its sales, the buyers' offers, and (once
+         *     the seller imported them) its listings. A sync only reads; nothing changes on a marketplace.
+         */
+        SyncMarketplace: {
+            marketplace: components["schemas"]["Marketplace"];
+            state: components["schemas"]["SyncState"];
+            /**
+             * @description In the seller's words, without the marketplace's name: what it is doing while `syncing`
+             *     ("Checking sales..."), what the last sync found ("52 sales found", "No new sales, 1 offer
+             *     waiting"), or why it didn't get through ("Couldn't check sales. Sync again to try again.").
+             */
+            statusText: string;
+            /** @description When a read of the marketplace last got through. */
+            lastSyncedAt?: components["schemas"]["Timestamp"];
+            /** @description Listora only reads this account (read-only connection); a sync reads it like any other. */
+            readOnly: boolean;
+        };
+        /** @description Each linked marketplace Listora reads by signing in, in marketplace order. */
+        SyncStatus: {
+            data: components["schemas"]["SyncMarketplace"][];
+        };
     };
     responses: {
         /** @description Any error. See `KnownErrorCode` for the codes and their HTTP statuses. */
@@ -6366,6 +6426,10 @@ export type OfferCounterRange = components['schemas']['OfferCounterRange'];
 export type OfferAnswer = components['schemas']['OfferAnswer'];
 export type OfferCheck = components['schemas']['OfferCheck'];
 export type OfferCheckList = components['schemas']['OfferCheckList'];
+export type SyncState = components['schemas']['SyncState'];
+export type KnownSyncState = components['schemas']['KnownSyncState'];
+export type SyncMarketplace = components['schemas']['SyncMarketplace'];
+export type SyncStatus = components['schemas']['SyncStatus'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -9973,6 +10037,59 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getSyncStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marketplaces' syncs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatus"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    requestSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marketplaces' syncs, with the reads now asked for. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatus"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -10072,3 +10189,4 @@ export const knownImportMatchReasonValues: ReadonlyArray<FlattenedDeepRequired<c
 export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ImportAnswerKind"]> = ["same_item", "new_item", "skip"];
 export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
+export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];

@@ -10,6 +10,7 @@ import SalesFeature
 import SettingsFeature
 import SignInFeature
 import SwiftUI
+import SyncFeature
 import TasksFeature
 import TodayFeature
 
@@ -75,6 +76,7 @@ public struct RootView: View {
                 selection = .today
                 dependencies.settings.profile.signedOut()
                 dependencies.settings.invites.signedOut()
+                dependencies.sync.signedOut()
             }
         }
         // The avatar in the headers shows the seller's own initials or photo.
@@ -106,6 +108,12 @@ public struct RootView: View {
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) {
                     // The tab rail stands in for the system tab bar, which TabView still drives.
                     screen(for: tab)
+                        // What the marketplace sync is doing, where the seller syncs.
+                        .overlay(alignment: .bottom) {
+                            if tab == .today || tab == .sales {
+                                SyncIndicator(model: dependencies.sync)
+                            }
+                        }
                         .toolbar(.hidden, for: .tabBar)
                 }
             }
@@ -128,6 +136,12 @@ public struct RootView: View {
         .task(id: scenePhase == .active) {
             guard scenePhase == .active else { return }
             await dependencies.phone.runner.follow()
+        }
+        // One sync of the marketplaces when the app opens; after that only on Sync now or a pull
+        // to refresh, never on a timer (docs/features/sync.md).
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await dependencies.sync.syncOnOpen()
         }
         .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in
             selection = .tasks

@@ -23068,4 +23068,289 @@ public enum Operations {
             }
         }
     }
+    /// Each linked marketplace's sync
+    ///
+    /// What each marketplace linked by signing in is reading now, what its last sync found, and
+    /// when a read last got through (docs/features/sync.md).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sync`.
+    /// - Remark: Generated from `#/paths//v1/sync/get(getSyncStatus)`.
+    public enum GetSyncStatus {
+        public static let id: Swift.String = "getSyncStatus"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/sync/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetSyncStatus.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetSyncStatus.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetSyncStatus.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.GetSyncStatus.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/sync/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/sync/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SyncStatus)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.SyncStatus {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetSyncStatus.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetSyncStatus.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The marketplaces' syncs.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sync/get(getSyncStatus)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetSyncStatus.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetSyncStatus.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sync/get(getSyncStatus)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Sync every linked marketplace now
+    ///
+    /// Asks for read-only checks of every marketplace linked by signing in: its sales, the
+    /// buyers' offers, and its listings once the seller imported them. Only reads; nothing changes
+    /// on a marketplace, and a read-only connection is read like any other. A marketplace synced
+    /// in the last 2 minutes (6 hours for listings) is not read again. The reads of marketplaces
+    /// that run on the seller's iPhone wait for it to claim them.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sync`.
+    /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)`.
+    public enum RequestSync {
+        public static let id: Swift.String = "requestSync"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/sync/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/sync/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RequestSync.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RequestSync.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.RequestSync.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.RequestSync.Input.Headers) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/sync/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/sync/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SyncStatus)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.SyncStatus {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.RequestSync.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.RequestSync.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The marketplaces' syncs, with the reads now asked for.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.RequestSync.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.RequestSync.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
 }

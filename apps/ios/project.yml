@@ -266,6 +266,7 @@ schemes:
         - package: Features/PhoneExecutionFeatureTests
         - package: Features/PackCheckFeatureTests
         - package: Features/ImportFeatureTests
+        - package: Features/SyncFeatureTests
     profile:
       config: Prod-Release
     analyze:

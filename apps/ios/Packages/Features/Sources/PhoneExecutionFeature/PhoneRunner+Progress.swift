@@ -6,12 +6,15 @@ extension PhoneRunner {
     /// The run whose calls start now: its marketplace's progress starts over unless it is the
     /// same work.
     func track(_ run: PhoneRun) {
-        if let shown = progressByMarketplace[run.marketplace], shown.operationID == run.operationID {
+        if let shown = progressByMarketplace[run.marketplace], shown.operationID == run.operationID,
+           shown.purpose == run.purpose
+        {
             return
         }
         progressByMarketplace[run.marketplace] = PhoneWorkProgress(
             marketplace: run.marketplace,
             operationID: run.operationID,
+            purpose: run.purpose,
             step: nil,
             stepNumber: 0,
             stepCount: nil,
@@ -22,7 +25,9 @@ extension PhoneRunner {
     /// The runtime started a step of a marketplace's call running now.
     func stepStarted(_ step: PhoneStep) {
         guard let shown = progressByMarketplace[step.marketplace] else { return }
-        progressByMarketplace[step.marketplace] = timings.started(step, operationID: shown.operationID)
+        progressByMarketplace[step.marketplace] = timings.started(
+            step, operationID: shown.operationID, purpose: shown.purpose,
+        )
     }
 
     /// Whether the runtime's answer says the script ran all its steps (`result.ok`).

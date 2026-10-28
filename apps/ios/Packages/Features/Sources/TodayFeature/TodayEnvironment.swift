@@ -18,6 +18,10 @@ public final class TodayEnvironment {
     let saleDestination: @MainActor (String) -> AnyView
     /// The marketplace connections screen, pushed on Today's navigation stack.
     let marketplacesDestination: @MainActor () -> AnyView
+    /// Syncs the linked marketplaces on a pull to refresh (docs/features/sync.md).
+    public weak var sync: (any MarketplaceSync)?
+    /// The header's Sync now button.
+    public var syncButton: (@MainActor () -> AnyView)?
 
     public convenience init(
         apiClient: APIClient,

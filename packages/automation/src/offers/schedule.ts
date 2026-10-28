@@ -6,8 +6,8 @@
  * rate limits like every run. A connection whose steps run in the cloud is not read: no
  * marketplace with offers may run there today, and its offers stay in the marketplace's app.
  *
- * A connection's offers are read every hour while the phone runs (the dispatcher asks for every
- * read that is due), and when the seller opens Tasks, at most once every 10 minutes.
+ * A connection's offers are read when the seller asks: opening Tasks (at most once every 10
+ * minutes) and syncing (docs/features/sync.md), never on a timer.
  */
 import { sql } from 'kysely';
 
@@ -17,9 +17,7 @@ import { isOfferMarketplace, OFFER_RULES, type OfferMarketplace } from '@listora
 /** The marketplaces whose offers Listora reads. */
 export const OFFER_MARKETPLACES = Object.keys(OFFER_RULES) as OfferMarketplace[];
 
-/** How often a connection's offers are read without the seller asking. */
-export const OFFER_CHECK_INTERVAL_MS = 60 * 60_000;
-/** The least time between two reads the seller asks for (opening Tasks). */
+/** The least time between two reads the seller asks for (opening Tasks; a sync asks sooner). */
 export const OFFER_CHECK_MIN_GAP_MS = 10 * 60_000;
 
 /** An offer read waits behind routine changes and sale checks; an answer goes with changes. */
@@ -124,45 +122,6 @@ export async function requestOfferChecks(
       marketplace: connection.marketplace,
     };
     if (await queueOfferCheck(executor, target)) queued.push(connection.marketplace);
-  }
-  return queued;
-}
-
-/** Asks for the offer reads that are due (the dispatcher, every minute); returns how many. */
-export async function queueDueOfferChecks(
-  executor: DbExecutor,
-  intervalMs = OFFER_CHECK_INTERVAL_MS,
-  limit = 100,
-): Promise<number> {
-  const due = await executor
-    .selectFrom('marketplace_connection as connection')
-    .leftJoin('offer_check as oc', (join) =>
-      join
-        .onRef('oc.account_id', '=', 'connection.account_id')
-        .onRef('oc.connection_id', '=', 'connection.id'),
-    )
-    .select(['connection.account_id', 'connection.id', 'connection.marketplace'])
-    .where('connection.mode', '=', 'automation')
-    .where('connection.status', 'in', ['connected', 'degraded'])
-    .where('connection.runs_on', '=', 'phone')
-    .where('connection.marketplace', 'in', OFFER_MARKETPLACES)
-    .where((eb) =>
-      eb.or([
-        eb('oc.requested_at', 'is', null),
-        eb('oc.requested_at', '<', sql<Date>`now() - make_interval(secs => ${intervalMs / 1000})`),
-      ]),
-    )
-    .orderBy(sql`oc.requested_at nulls first`)
-    .limit(limit)
-    .execute();
-  let queued = 0;
-  for (const row of due) {
-    const target = {
-      accountId: row.account_id,
-      connectionId: row.id,
-      marketplace: row.marketplace,
-    };
-    if (await queueOfferCheck(executor, target)) queued += 1;
   }
   return queued;
 }

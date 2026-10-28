@@ -13,6 +13,7 @@ import SalesFeature
 import SettingsFeature
 import SignInFeature
 import SwiftUI
+import SyncFeature
 import TagReadingFeature
 import TasksFeature
 import TodayFeature
@@ -60,6 +61,9 @@ public struct AppDependencies {
     public let gettingStarted: GettingStartedModel
     /// Pack check: the to-ship list, label scans, stickers, and slips (docs/features/pack-check.md).
     public let packCheck: PackCheckEnvironment
+    /// Sync now, the pull to refresh, and the sync on opening the app, with its indicator
+    /// (docs/features/sync.md).
+    public let sync: SyncModel
 
     public init(
         configuration: AppConfiguration,
@@ -105,9 +109,7 @@ public struct AppDependencies {
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
             onSignIn: showSignIn, phoneWork: phone.runner,
         )
-        packCheck.attach(to: inventory)
-        inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
-        inventory.phoneProgress = phone.runner
+        Self.wire(inventory, review, phone, packCheck)
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
@@ -121,7 +123,21 @@ public struct AppDependencies {
         linkAccounts = Self.makeLinkAccounts(apiClient, phone, configuration)
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
         settings = SettingsModels(apiClient, accessTokens, signIn, phone, profileDirectory, launchOptions)
+        sync = Self.makeSync(apiClient, accessTokens, phone, (today, sales), linkAccounts)
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
+    }
+
+    /// The inventory's screens from other features: the review, Pack check's scans, and the work
+    /// this phone runs on a listing.
+    private static func wire(
+        _ inventory: InventoryEnvironment,
+        _ review: ReviewEnvironment,
+        _ phone: PhoneExecutionEnvironment,
+        _ packCheck: PackCheckEnvironment,
+    ) {
+        packCheck.attach(to: inventory)
+        inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
+        inventory.phoneProgress = phone.runner
     }
 
     /// Marketplaces: each connection's health, and where its automated steps run.

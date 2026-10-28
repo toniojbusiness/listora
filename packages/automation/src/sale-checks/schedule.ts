@@ -1,7 +1,8 @@
 /**
  * Sale-check scheduling in Postgres (`sale_check_schedule`, one row per automation connection)
  * and the check's job in the job queue. The worker's dispatch task (dispatch.ts) adds the job
- * of every check that is due; the browser runner runs it (job.ts) and schedules the next one.
+ * of every check that is due in the cloud; the browser runner runs it (job.ts) and schedules
+ * the next one. A connection that runs on the phone is checked when the seller syncs.
  * A forwarded sale email asks for a check at once (`requestSaleCheck`), so the sale is seen on
  * the marketplace and the delist starts without waiting for the schedule.
  */
@@ -148,7 +149,7 @@ export async function queueSaleCheckForPhone(
  */
 export async function requestSaleCheck(
   executor: DbExecutor,
-  request: { accountId: string; marketplace: Marketplace; reason?: 'email' | 'offer' },
+  request: { accountId: string; marketplace: Marketplace; reason?: 'email' | 'offer' | 'sync' },
 ): Promise<boolean> {
   return inTransaction(executor, async (trx) => {
     const connection = await trx
@@ -209,7 +210,12 @@ export async function requestSaleHistoryRead(
   });
 }
 
-/** Checks that are due, on connections that can be checked, oldest first. */
+/**
+ * Checks that are due, on connections that can be checked, oldest first. A connection that runs
+ * on the seller's iPhone has none: its sales are checked when the seller syncs (opening the app,
+ * Sync now, a pull to refresh, docs/features/sync.md), never on a timer, and when something asks
+ * for a check (`requestSaleCheck`).
+ */
 export async function dueSaleChecks(executor: DbExecutor, limit = 100): Promise<ScheduledCheck[]> {
   const rows = await executor
     .selectFrom('sale_check_schedule as schedule')
@@ -221,6 +227,7 @@ export async function dueSaleChecks(executor: DbExecutor, limit = 100): Promise<
     .select(['schedule.account_id', 'schedule.connection_id', 'schedule.marketplace'])
     .where('connection.mode', '=', 'automation')
     .where('connection.status', 'in', ['connected', 'degraded'])
+    .where('connection.runs_on', '=', 'cloud')
     .where('schedule.next_check_at', '<=', sql<Date>`now()`)
     .orderBy('schedule.next_check_at')
     .limit(limit)

@@ -38,7 +38,7 @@ import { loadChromium } from '../runner/playwright.ts';
 import { LISTING_IMPORT_APPLY_TASK, queueImportPage } from '../imports/schedule.ts';
 import { queueLabelReads } from '../label-reads/queue.ts';
 import { requestOfferAnswer } from '../offers/answer.ts';
-import { queueDueOfferChecks, queueOfferCheck } from '../offers/schedule.ts';
+import { queueOfferCheck, requestOfferChecks } from '../offers/schedule.ts';
 import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
 import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -1346,12 +1346,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(await offerTasks()).toHaveLength(1);
     expect(site.offers.answers).toEqual([]);
 
-    // The dispatcher asks again only once the hour since the last read is up.
+    // The seller asks again (opening Tasks, a sync) only once the gap since the last read is up.
     const offerReadsWaiting = async () =>
       (await work()).filter((row) => row.purpose === 'offer_check').length;
-    await queueDueOfferChecks(db);
+    await requestOfferChecks(db, { accountId });
     expect(await offerReadsWaiting()).toBe(0);
-    await queueDueOfferChecks(db, 0);
+    await requestOfferChecks(db, { accountId, minGapMs: 0 });
     expect(await offerReadsWaiting()).toBe(1);
     await runPhone();
 

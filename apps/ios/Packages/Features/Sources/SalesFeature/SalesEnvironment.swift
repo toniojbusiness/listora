@@ -38,6 +38,10 @@ public final class SalesEnvironment {
     let packOrders: PackOrdersEntry?
     /// The work this iPhone runs now, which a sale's delists show while the phone works on them.
     public weak var phoneProgress: (any PhoneWorkProgressSource)?
+    /// Syncs the linked marketplaces on a pull to refresh (docs/features/sync.md).
+    public weak var sync: (any MarketplaceSync)?
+    /// The header's Sync now button.
+    public var syncButton: (@MainActor () -> AnyView)?
 
     /// `phoneWork` runs at once the marketplace changes a sale queued for this phone.
     public convenience init(
