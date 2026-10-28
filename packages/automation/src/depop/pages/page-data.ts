@@ -24,8 +24,20 @@ export function expectShape<T>(schema: z.ZodType<T>, value: unknown, page: strin
   if (parsed.success) return parsed.data;
   const path = parsed.error.issues[0]?.path.map(String).join('.') ?? '';
   throw new PageChangedError(
-    `Depop's ${page} no longer has the ${path === '' ? 'data' : path} Listora reads`,
+    `Depop's ${page} no longer has the ${path === '' ? 'data' : path} Listora reads${keysOf(value)}`,
   );
+}
+
+/**
+ * What the value has instead, by field names only (never values), so a changed page says how it
+ * changed: ` (it has: a, b)`.
+ */
+function keysOf(value: unknown): string {
+  if (value === null || typeof value !== 'object')
+    return ` (it is ${value === null ? 'null' : typeof value})`;
+  if (Array.isArray(value)) return ' (it is a list)';
+  const keys = Object.keys(value).slice(0, 12);
+  return keys.length === 0 ? ' (it is empty)' : ` (it has: ${keys.join(', ')})`;
 }
 
 const price = z.object({ priceAmount: z.string(), currencyName: z.string() });

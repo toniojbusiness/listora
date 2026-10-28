@@ -946,16 +946,23 @@ export class FakeDepopSite {
     const start = Number(url.searchParams.get('after') ?? '0');
     const page = slugs.slice(start, start + OFFER_PAGE);
     const end = start + OFFER_PAGE >= slugs.length;
+    // Depop's records: a product id, no slug (read on a real shop's session, 2026-10-28).
     return json(200, {
       objects: page.map((slug) => {
         const stored = this.#products.get(slug);
         return {
-          id: this.#idOf(slug),
-          slug,
-          ...(stored === undefined ? {} : { description: stored.current.description }),
+          product_id: this.#idOf(slug),
+          ...(stored === undefined
+            ? {}
+            : {
+                description: stored.current.description,
+                price_amount: (stored.current.priceCents / 100).toFixed(2),
+                price_currency: 'USD',
+              }),
+          offer_count: String(this.offers.all().filter((offer) => offer.listingId === slug).length),
         };
       }),
-      page_info: { has_more: !end, last: end ? null : String(start + OFFER_PAGE) },
+      page_info: { has_more: !end, ...(end ? {} : { last: String(start + OFFER_PAGE) }) },
     });
   }
 
@@ -967,17 +974,19 @@ export class FakeDepopSite {
       .all()
       .filter((offer) => offer.listingId === slug)
       .filter((offer) => (offer.status === 'pending' || offer.status === 'countered') === active);
+    // The product with its offers under `offers`, as Depop's are (2026-10-28).
     return json(200, {
-      objects: offers.map((offer) => ({
+      product_id: id,
+      offers: offers.map((offer) => ({
         offer_id: offer.id,
-        offer_value: { amount: (offer.amountCents / 100).toFixed(2), currency: 'USD' },
-        offer_display_status: this.offerStatusOverride ?? depopStatus(offer),
+        offerer_username: offer.buyer,
+        offer_value: (offer.amountCents / 100).toFixed(2),
+        offer_currency: 'USD',
         expires_at: offer.expiresAt,
-        created_at: offer.createdAt,
+        offer_display_status: this.offerStatusOverride ?? depopStatus(offer),
         can_make_counter_offer: offer.status === 'pending',
-        offerer: { username: offer.buyer },
       })),
-      page_info: { has_more: false, last: null },
+      page_info: { has_more: false },
     });
   }
 

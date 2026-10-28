@@ -1333,14 +1333,14 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       .execute();
 
   it("reads the seller's offers on the phone read-only: each pending one is a task, and one that goes away closes it", async () => {
-    const { listingId, itemId, priceCents, offer } = await listingWithOffer();
+    const { listingId, itemId, offer } = await listingWithOffer();
     await readOffers();
     const row = await offerRow(offer.id);
     expect(row).toMatchObject({
       status: 'pending',
       amount_cents: 2000,
-      // Depop's offers name no price: the listing's own.
-      list_price_cents: priceCents,
+      // Depop's offers name no price; its list of products with offers names each one's.
+      list_price_cents: 4500,
       buyer_name: 'jacketfan',
       listing_id: listingId,
       item_id: itemId,
