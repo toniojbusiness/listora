@@ -38,7 +38,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
 
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
@@ -92,7 +92,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
 
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
@@ -134,7 +134,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
 
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
@@ -177,7 +177,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()
@@ -231,7 +231,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()

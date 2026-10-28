@@ -19,7 +19,7 @@ final class SignInUITests: XCTestCase {
             "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
     }
 
     override func tearDown() async throws {

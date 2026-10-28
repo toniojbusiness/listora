@@ -29,7 +29,7 @@ final class ShareExtensionUITests: XCTestCase {
     private func launchApp(environment: [String: String]) {
         let app = XCUIApplication()
         app.launchEnvironment = environment
-        app.launch()
+        app.launchQuietly()
         // Signed in, the app shows its tabs; signed out, the welcome screen.
         let shown = app.tabRail.waitForExistence(timeout: 10)
             || app.descendants(matching: .any)["signIn.welcome"].exists

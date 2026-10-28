@@ -11,7 +11,7 @@ final class TabShellUITests: XCTestCase {
         // Without drafts, whatever an earlier test left behind: Add Item shows its guide.
         app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
         app.signInWithoutServer()
-        app.launch()
+        app.launchQuietly()
     }
 
     func testShowsTheFiveTabsAndOpensToday() {

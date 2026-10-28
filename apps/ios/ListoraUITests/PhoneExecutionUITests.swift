@@ -194,7 +194,7 @@ final class PhoneExecutionUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
-        app.launch()
+        app.launchQuietly()
     }
 
     func openLinkAccounts() {

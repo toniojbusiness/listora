@@ -26,7 +26,7 @@ final class AddItemUITests: XCTestCase {
         if reset {
             app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
         }
-        app.launch()
+        app.launchQuietly()
         let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()

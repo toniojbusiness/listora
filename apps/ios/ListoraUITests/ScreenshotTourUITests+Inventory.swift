@@ -14,7 +14,7 @@ extension ScreenshotTourUITests {
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         tab("Inventory")
         let row = app.buttons["inventory.row.\(item.sku)"]

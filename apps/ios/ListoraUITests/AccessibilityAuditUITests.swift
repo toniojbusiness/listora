@@ -127,7 +127,7 @@ final class AccessibilityAuditUITests: XCTestCase {
             "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
     }
 
     /// Signed in through the stub's dev sign-in, past the getting started guide.

@@ -15,7 +15,7 @@ final class CameraCaptureUITests: XCTestCase {
             "LISTORA_RESET_LOCAL_DATA": "1",
         ]
         app.signInWithoutServer()
-        app.launch()
+        app.launchQuietly()
         let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()

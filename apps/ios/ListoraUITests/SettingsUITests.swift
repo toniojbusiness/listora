@@ -19,7 +19,7 @@ final class SettingsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": StubAPIServer.profileEmail,
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
     }
 
     override func tearDown() async throws {

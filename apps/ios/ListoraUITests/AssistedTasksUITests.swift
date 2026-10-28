@@ -226,7 +226,7 @@ final class AssistedTasksUITests: XCTestCase {
         // A simulator that already allowed it never asks; CI's is erased before every run and
         // always asks. Resetting makes every run take the asking path, the one that can break.
         app.resetAuthorizationStatus(for: .photos)
-        app.launch()
+        app.launchQuietly()
         let inventory = app.tabRail.buttons["Inventory"]
         try require(inventory.waitForExistence(timeout: 10))
         inventory.tap()
