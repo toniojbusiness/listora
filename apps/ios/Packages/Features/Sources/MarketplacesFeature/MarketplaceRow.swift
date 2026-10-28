@@ -64,14 +64,13 @@ public struct MarketplaceRow: Identifiable, Equatable, Sendable {
         /// "Runs on this iPhone", "Runs on Sam's iPhone"; how much waits there is the support
         /// views', not the seller's.
         public var text: String {
-            let place = if onThisPhone {
+            if onThisPhone {
                 "Runs on this iPhone"
             } else if onPhone {
                 deviceName.map { "Runs on \($0)" } ?? label
             } else {
                 label
             }
-            return place
         }
 
         /// The move this row offers: from the cloud to the phone, or from the phone to the
