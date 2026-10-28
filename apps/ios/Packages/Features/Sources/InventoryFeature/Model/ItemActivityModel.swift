@@ -123,6 +123,7 @@ struct ActivityRowContent: Equatable, Identifiable {
         case .delist: "tag.slash"
         case .task: "person.crop.circle.badge.exclamationmark"
         case .operation: "arrow.triangle.2.circlepath"
+        case .package: "shippingbox"
         case .item, nil: "pencil"
         }
     }

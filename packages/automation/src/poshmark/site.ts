@@ -53,6 +53,16 @@ export class PoshmarkSite {
     return `${this.origin}/listing/${encodeURIComponent(id)}`;
   }
 
+  /** The seller's sales (`/order/sales`, which opens the Seller Hub's sales list). */
+  sales(): string {
+    return `${this.origin}/order/sales`;
+  }
+
+  /** One sale's order page: requires its seller. */
+  sale(orderId: string): string {
+    return `${this.origin}/order/sales/${encodeURIComponent(orderId)}`;
+  }
+
   /** A seller's closet page. */
   closet(username: string, query: ClosetQuery): string {
     const url = new URL(`${this.origin}/closet/${encodeURIComponent(username)}`);

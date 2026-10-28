@@ -14,8 +14,11 @@ import { z } from 'zod';
 
 import { addJob, inTransaction, type Db, type DbExecutor } from '@listora/db';
 import type { AdapterLookup, RemoteOrder } from '@listora/marketplaces';
+import { isPackCheckEnabled } from '@listora/pack-check';
 import { finishInboundEvent, recordSale } from '@listora/sales';
 import type { Logger } from '@listora/shared';
+
+import { queueLabelReads } from '../label-reads/queue.ts';
 
 /** The worker task that records the sale of an order an automated sale check found. */
 export const SALE_ORDER_TASK = 'automation_sale_order';
@@ -146,6 +149,14 @@ export async function recordSaleOrder(
       event.id,
       sale.type === 'recorded' ? 'processed' : 'ignored',
     );
+    // A new sale to pack: with Pack check on, its label is read from the order page now.
+    if (sale.type === 'recorded' && (await isPackCheckEnabled(trx, payload.accountId))) {
+      await queueLabelReads(trx, {
+        accountId: payload.accountId,
+        marketplace: event.marketplace,
+        now: new Date(),
+      });
+    }
     deps.logger.info(
       { inboundEventId: event.id, marketplace: event.marketplace, outcome: sale.type },
       'automated sale check order recorded',

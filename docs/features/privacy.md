@@ -78,6 +78,12 @@ each derivative's metadata, and `job.int.test.ts` checks every stored object's r
 APP2, or APP13 segment, and none of the fixture's GPS, camera, or serial text. An upload never
 attached expires from storage after 7 days.
 
+Pack check's package photos ([pack-check.md](pack-check.md#package-photo)) go the same way: the app
+re-encodes them, the server keeps only its own re-encoded `listing` image and deletes the upload.
+They show the buyer's address on the label, so they are deleted with the account (their keys are
+in the deletion's objects), when the seller removes one, and when an order is unpacked. Pack
+check keeps a buyer's first name only, never their full name or address.
+
 ## Retention
 
 The daily `data_retention` job (`23 4 * * *` UTC, `runDataRetention`) deletes, in batches of 1,000

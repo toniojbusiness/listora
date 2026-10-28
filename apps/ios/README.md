@@ -112,6 +112,10 @@ Packages/
                       phone runtime in off-screen web views (Resources/phone-runtime.js, built
                       by `npm run phone:bundle`), handing a check to the seller, and the
                       background tasks (docs/features/phone-execution.md)
+    PackCheckFeature  Pack check (Settings > Pack check, Sales > Pack orders): the to-ship
+                      list, label and sticker scans (VisionKit), packing, the package photo,
+                      item stickers and packing slips through AirPrint
+                      (docs/features/pack-check.md)
 ```
 
 Dependency rules:

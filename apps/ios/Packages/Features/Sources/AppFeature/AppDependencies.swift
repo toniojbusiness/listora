@@ -5,6 +5,7 @@ import Foundation
 import InventoryFeature
 import MarketplaceLinkingFeature
 import MarketplacesFeature
+import PackCheckFeature
 import PhoneExecutionFeature
 import PhotoSignalsFeature
 import ReviewFeature
@@ -57,6 +58,8 @@ public struct AppDependencies {
     public let phone: PhoneExecutionEnvironment
     /// The first-run guide, shown once after the first sign-in.
     public let gettingStarted: GettingStartedModel
+    /// Pack check: the to-ship list, label scans, stickers, and slips (docs/features/pack-check.md).
+    public let packCheck: PackCheckEnvironment
 
     public init(
         configuration: AppConfiguration,
@@ -93,7 +96,8 @@ public struct AppDependencies {
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
         phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
-        sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone)
+        packCheck = Self.makePackCheck(apiClient, accessTokens, phone, launchOptions, defaults)
+        sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone, packCheck)
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
         inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
@@ -101,6 +105,7 @@ public struct AppDependencies {
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
             onSignIn: showSignIn, phoneWork: phone.runner,
         )
+        packCheck.attach(to: inventory)
         inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         inventory.phoneProgress = phone.runner
         self.review = review
@@ -117,21 +122,6 @@ public struct AppDependencies {
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
         settings = SettingsModels(apiClient, accessTokens, signIn, phone, profileDirectory, launchOptions)
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
-    }
-
-    /// Sales: the feed, each sale, and its delists, which run at once on this phone and show the
-    /// phone's progress.
-    private static func makeSales(
-        _ apiClient: APIClient,
-        _ accessTokens: AccessTokenStore,
-        _ showSignIn: @escaping @MainActor () -> Void,
-        _ phone: PhoneExecutionEnvironment,
-    ) -> SalesEnvironment {
-        let sales = SalesEnvironment(
-            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
-        )
-        sales.phoneProgress = phone.runner
-        return sales
     }
 
     /// Marketplaces: each connection's health, and where its automated steps run.
@@ -246,6 +236,7 @@ public struct AppDependencies {
         AddItemEnvironment.resetLocalData(defaults: defaults)
         GettingStartedModel.resetLocalData(defaults: defaults)
         InventoryEnvironment.resetLocalData(defaults: defaults)
+        PackCheckEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
     }
 
@@ -305,5 +296,103 @@ public struct AppDependencies {
             accessGrantStorage: accessGrantStorage,
             launchOptions: launchOptions,
         )
+    }
+}
+
+/// Switches UI tests set through the launch environment. Only debug builds read them; release
+/// builds always get ``none``.
+public struct DebugLaunchOptions: Equatable, Sendable {
+    /// `LISTORA_RESET_LOCAL_DATA=1`: start with no drafts and signed out, on the welcome screen.
+    public var resetLocalData = false
+    /// `LISTORA_FIXTURE_PHOTOS=<folder>`: "Import photos" adds that folder's JPEGs.
+    public var fixturePhotosDirectory: URL?
+    /// `LISTORA_FAKE_CAMERA=<folder>`: the guided capture "takes" that folder's JPEGs, so the
+    /// simulator shows the camera flow.
+    public var fakeCameraDirectory: URL?
+    /// `LISTORA_DEV_API_BASE_URL=<url>`: talk to this API instead of the xcconfig one (the UI
+    /// tests' local stack or stub), and hand it to the Share Extension (`DevOverrides`, Dev only).
+    public var apiBaseURL: URL?
+    /// `LISTORA_DEV_ACCESS_TOKEN=<token>` (with `LISTORA_DEV_ACCESS_EMAIL`): start signed in with
+    /// this session, which the UI tests' local stack signed in through the dev auth driver (Dev only).
+    public var accessGrant: AccessGrant?
+    /// `LISTORA_VOICE_TRANSCRIPT=<text>`: the talk button "hears" this instead of the microphone,
+    /// which the simulator cannot feed.
+    public var voiceTranscript: String?
+    /// `LISTORA_VOICE_PERMISSION=denied|restricted`: asking for voice permission ends this way
+    /// (with ``voiceTranscript``; granted otherwise).
+    public var voicePermission: SpeechAuthorization = .authorized
+    /// `LISTORA_SHOW_GETTING_STARTED=1`: show the first-run guide at launch, as after a first
+    /// sign-in (the screenshot tour).
+    public var showsGettingStarted = false
+    /// `LISTORA_SCANNED_CODES=<code>|<code>...`: Pack check's scanner "reads" these, one per tap
+    /// of Scan, instead of the camera the simulator lacks.
+    public var scannedCodes: [String]?
+
+    public static let none = DebugLaunchOptions()
+
+    public init(
+        resetLocalData: Bool = false,
+        fixturePhotosDirectory: URL? = nil,
+        fakeCameraDirectory: URL? = nil,
+        apiBaseURL: URL? = nil,
+        accessGrant: AccessGrant? = nil,
+        voiceTranscript: String? = nil,
+        voicePermission: SpeechAuthorization = .authorized,
+        showsGettingStarted: Bool = false,
+        scannedCodes: [String]? = nil,
+    ) {
+        self.resetLocalData = resetLocalData
+        self.fixturePhotosDirectory = fixturePhotosDirectory
+        self.fakeCameraDirectory = fakeCameraDirectory
+        self.apiBaseURL = apiBaseURL
+        self.accessGrant = accessGrant
+        self.voiceTranscript = voiceTranscript
+        self.voicePermission = voicePermission
+        self.showsGettingStarted = showsGettingStarted
+        self.scannedCodes = scannedCodes
+    }
+
+    /// The options in this process's environment (debug builds), otherwise ``none``.
+    public static func fromProcessEnvironment() -> DebugLaunchOptions {
+        #if DEBUG
+            from(environment: ProcessInfo.processInfo.environment)
+        #else
+            return .none
+        #endif
+    }
+
+    /// The options in a launch environment.
+    public static func from(environment: [String: String], now: Date = Date()) -> DebugLaunchOptions {
+        let token = environment["LISTORA_DEV_ACCESS_TOKEN"].flatMap { $0.isEmpty ? nil : $0 }
+        return DebugLaunchOptions(
+            resetLocalData: environment["LISTORA_RESET_LOCAL_DATA"] == "1",
+            fixturePhotosDirectory: environment["LISTORA_FIXTURE_PHOTOS"].map {
+                URL(filePath: $0, directoryHint: .isDirectory)
+            },
+            fakeCameraDirectory: environment["LISTORA_FAKE_CAMERA"].map {
+                URL(filePath: $0, directoryHint: .isDirectory)
+            },
+            apiBaseURL: environment["LISTORA_DEV_API_BASE_URL"].flatMap(URL.init(string:)),
+            // Dev sessions last a day; the server refuses the token once it ends.
+            accessGrant: token.map {
+                AccessGrant(
+                    accessToken: $0,
+                    expiresAt: now.addingTimeInterval(24 * 60 * 60),
+                    email: environment["LISTORA_DEV_ACCESS_EMAIL"] ?? "ui-test@listora.test",
+                )
+            },
+            voiceTranscript: environment["LISTORA_VOICE_TRANSCRIPT"],
+            voicePermission: voicePermission(environment["LISTORA_VOICE_PERMISSION"]),
+            showsGettingStarted: environment["LISTORA_SHOW_GETTING_STARTED"] == "1",
+            scannedCodes: environment["LISTORA_SCANNED_CODES"].map { $0.split(separator: "|").map(String.init) },
+        )
+    }
+
+    private static func voicePermission(_ value: String?) -> SpeechAuthorization {
+        switch value {
+        case "denied": .microphoneDenied
+        case "restricted": .restricted
+        default: .authorized
+        }
     }
 }

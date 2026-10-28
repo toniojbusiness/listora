@@ -917,6 +917,95 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/today/settings`.
     /// - Remark: Generated from `#/paths//v1/today/settings/put(replaceTodaySettings)`.
     func replaceTodaySettings(_ input: Operations.ReplaceTodaySettings.Input) async throws -> Operations.ReplaceTodaySettings.Output
+    /// Get the Pack check setting
+    ///
+    /// Whether Pack check is on (off until the seller turns it on).
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/settings`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/settings/get(getPackCheckSettings)`.
+    func getPackCheckSettings(_ input: Operations.GetPackCheckSettings.Input) async throws -> Operations.GetPackCheckSettings.Output
+    /// Turn Pack check on or off
+    ///
+    /// Turning it on asks for a read of the labels of the orders that still need a package
+    /// (`refreshPackLabels`).
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/pack-check/settings`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/settings/put(replacePackCheckSettings)`.
+    func replacePackCheckSettings(_ input: Operations.ReplacePackCheckSettings.Input) async throws -> Operations.ReplacePackCheckSettings.Output
+    /// List the orders to pack
+    ///
+    /// The to-ship list: one order per sale that still stands and is not shipped, newest first,
+    /// with its items, the buyer's first name, its label, and whether it is packed (a packed order
+    /// stays a day). Computed from the account's own data, with no marketplace call.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/orders`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/get(listPackOrders)`.
+    func listPackOrders(_ input: Operations.ListPackOrders.Input) async throws -> Operations.ListPackOrders.Output
+    /// Read the orders' shipping labels
+    ///
+    /// Asks for a read of the shipping labels of the orders that need one, from each
+    /// marketplace's own order pages through the seller's session (only reads; nothing changes on
+    /// a marketplace). The reads run on the seller's iPhone; the app runs them and lists the
+    /// orders again. An order is not read again sooner than the read rules allow, however often
+    /// this is called.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/refresh`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/refresh/post(refreshPackLabels)`.
+    func refreshPackLabels(_ input: Operations.RefreshPackLabels.Input) async throws -> Operations.RefreshPackLabels.Output
+    /// Check a scanned label
+    ///
+    /// What a scanned shipping label (and optionally the item's sticker) means for the package
+    /// being packed (`saleId`), or, without one, which order the label is for. Only reads:
+    /// `packOrder` packs. At least one of `label` and `sticker` is needed (`422` otherwise);
+    /// an order that isn't the account's is `404`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/scan`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/scan/get(checkPackScan)`.
+    func checkPackScan(_ input: Operations.CheckPackScan.Input) async throws -> Operations.CheckPackScan.Output
+    /// Pack an order
+    ///
+    /// Records that the scanned label went on this order's package. The scan is checked again:
+    /// a label that is another order's, already on a package, or with another item's sticker is
+    /// `409 pack_refused` (its `message` says why), and so is a label Listora doesn't know
+    /// unless `photoCheck` says the seller checked it against the item's photo. An order that is
+    /// packed already, shipped, canceled, or returned is `409 invalid_state_transition`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/orders/{saleId}/pack`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/pack/post(packOrder)`.
+    func packOrder(_ input: Operations.PackOrder.Input) async throws -> Operations.PackOrder.Output
+    /// Unpack an order
+    ///
+    /// Takes the order off its package, to pack it again; its package photo goes too. An order
+    /// that isn't packed is `404`.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/pack-check/orders/{saleId}/pack`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/pack/delete(unpackOrder)`.
+    func unpackOrder(_ input: Operations.UnpackOrder.Input) async throws -> Operations.UnpackOrder.Output
+    /// Add the package photo
+    ///
+    /// Keeps one photo of the open package with its label, for a claim. It is stored without its
+    /// metadata (no location). The order must be packed and have no photo yet
+    /// (`409 invalid_state_transition` otherwise: remove the photo first to take another); a file
+    /// that isn't a readable JPEG is `422`. The upload follows the upload session rules
+    /// (`409 upload_incomplete`, `upload_expired`, `already_exists` for a file already used).
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/orders/{saleId}/photo`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/photo/post(addPackPhoto)`.
+    func addPackPhoto(_ input: Operations.AddPackPhoto.Input) async throws -> Operations.AddPackPhoto.Output
+    /// Remove the package photo
+    ///
+    /// Deletes the package photo, to take another. An order without one is `404`.
+    ///
+    /// - Remark: HTTP `DELETE /v1/pack-check/orders/{saleId}/photo`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/photo/delete(removePackPhoto)`.
+    func removePackPhoto(_ input: Operations.RemovePackPhoto.Input) async throws -> Operations.RemovePackPhoto.Output
     /// Register this device
     ///
     /// The app registers its installation (an id it keeps in its Keychain) on every launch and
@@ -2630,6 +2719,153 @@ extension APIProtocol {
         try await replaceTodaySettings(Operations.ReplaceTodaySettings.Input(
             headers: headers,
             body: body
+        ))
+    }
+    /// Get the Pack check setting
+    ///
+    /// Whether Pack check is on (off until the seller turns it on).
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/settings`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/settings/get(getPackCheckSettings)`.
+    public func getPackCheckSettings(headers: Operations.GetPackCheckSettings.Input.Headers = .init()) async throws -> Operations.GetPackCheckSettings.Output {
+        try await getPackCheckSettings(Operations.GetPackCheckSettings.Input(headers: headers))
+    }
+    /// Turn Pack check on or off
+    ///
+    /// Turning it on asks for a read of the labels of the orders that still need a package
+    /// (`refreshPackLabels`).
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/pack-check/settings`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/settings/put(replacePackCheckSettings)`.
+    public func replacePackCheckSettings(
+        headers: Operations.ReplacePackCheckSettings.Input.Headers = .init(),
+        body: Operations.ReplacePackCheckSettings.Input.Body
+    ) async throws -> Operations.ReplacePackCheckSettings.Output {
+        try await replacePackCheckSettings(Operations.ReplacePackCheckSettings.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// List the orders to pack
+    ///
+    /// The to-ship list: one order per sale that still stands and is not shipped, newest first,
+    /// with its items, the buyer's first name, its label, and whether it is packed (a packed order
+    /// stays a day). Computed from the account's own data, with no marketplace call.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/orders`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/get(listPackOrders)`.
+    public func listPackOrders(headers: Operations.ListPackOrders.Input.Headers = .init()) async throws -> Operations.ListPackOrders.Output {
+        try await listPackOrders(Operations.ListPackOrders.Input(headers: headers))
+    }
+    /// Read the orders' shipping labels
+    ///
+    /// Asks for a read of the shipping labels of the orders that need one, from each
+    /// marketplace's own order pages through the seller's session (only reads; nothing changes on
+    /// a marketplace). The reads run on the seller's iPhone; the app runs them and lists the
+    /// orders again. An order is not read again sooner than the read rules allow, however often
+    /// this is called.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/refresh`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/refresh/post(refreshPackLabels)`.
+    public func refreshPackLabels(headers: Operations.RefreshPackLabels.Input.Headers) async throws -> Operations.RefreshPackLabels.Output {
+        try await refreshPackLabels(Operations.RefreshPackLabels.Input(headers: headers))
+    }
+    /// Check a scanned label
+    ///
+    /// What a scanned shipping label (and optionally the item's sticker) means for the package
+    /// being packed (`saleId`), or, without one, which order the label is for. Only reads:
+    /// `packOrder` packs. At least one of `label` and `sticker` is needed (`422` otherwise);
+    /// an order that isn't the account's is `404`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/scan`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/scan/get(checkPackScan)`.
+    public func checkPackScan(
+        query: Operations.CheckPackScan.Input.Query = .init(),
+        headers: Operations.CheckPackScan.Input.Headers = .init()
+    ) async throws -> Operations.CheckPackScan.Output {
+        try await checkPackScan(Operations.CheckPackScan.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Pack an order
+    ///
+    /// Records that the scanned label went on this order's package. The scan is checked again:
+    /// a label that is another order's, already on a package, or with another item's sticker is
+    /// `409 pack_refused` (its `message` says why), and so is a label Listora doesn't know
+    /// unless `photoCheck` says the seller checked it against the item's photo. An order that is
+    /// packed already, shipped, canceled, or returned is `409 invalid_state_transition`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/orders/{saleId}/pack`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/pack/post(packOrder)`.
+    public func packOrder(
+        path: Operations.PackOrder.Input.Path,
+        headers: Operations.PackOrder.Input.Headers,
+        body: Operations.PackOrder.Input.Body
+    ) async throws -> Operations.PackOrder.Output {
+        try await packOrder(Operations.PackOrder.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Unpack an order
+    ///
+    /// Takes the order off its package, to pack it again; its package photo goes too. An order
+    /// that isn't packed is `404`.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/pack-check/orders/{saleId}/pack`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/pack/delete(unpackOrder)`.
+    public func unpackOrder(
+        path: Operations.UnpackOrder.Input.Path,
+        headers: Operations.UnpackOrder.Input.Headers = .init()
+    ) async throws -> Operations.UnpackOrder.Output {
+        try await unpackOrder(Operations.UnpackOrder.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Add the package photo
+    ///
+    /// Keeps one photo of the open package with its label, for a claim. It is stored without its
+    /// metadata (no location). The order must be packed and have no photo yet
+    /// (`409 invalid_state_transition` otherwise: remove the photo first to take another); a file
+    /// that isn't a readable JPEG is `422`. The upload follows the upload session rules
+    /// (`409 upload_incomplete`, `upload_expired`, `already_exists` for a file already used).
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/orders/{saleId}/photo`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/photo/post(addPackPhoto)`.
+    public func addPackPhoto(
+        path: Operations.AddPackPhoto.Input.Path,
+        headers: Operations.AddPackPhoto.Input.Headers,
+        body: Operations.AddPackPhoto.Input.Body
+    ) async throws -> Operations.AddPackPhoto.Output {
+        try await addPackPhoto(Operations.AddPackPhoto.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Remove the package photo
+    ///
+    /// Deletes the package photo, to take another. An order without one is `404`.
+    ///
+    /// - Remark: HTTP `DELETE /v1/pack-check/orders/{saleId}/photo`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/photo/delete(removePackPhoto)`.
+    public func removePackPhoto(
+        path: Operations.RemovePackPhoto.Input.Path,
+        headers: Operations.RemovePackPhoto.Input.Headers = .init()
+    ) async throws -> Operations.RemovePackPhoto.Output {
+        try await removePackPhoto(Operations.RemovePackPhoto.Input(
+            path: path,
+            headers: headers
         ))
     }
     /// Register this device

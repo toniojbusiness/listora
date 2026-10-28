@@ -18,6 +18,9 @@ struct ItemDetailView: View {
     @State private var reviewing = false
     @State private var showsActivity = false
     @State private var listEverywhere: BulkActionModel?
+    @State private var printingSticker: StickerRequest?
+    /// Just listed with Pack check on: the screen offers the item's sticker.
+    @State private var offersSticker = false
 
     /// The assisted step whose task is open.
     private struct OpenTask: Identifiable {
@@ -55,9 +58,15 @@ struct ItemDetailView: View {
             .sensoryFeedback(trigger: model.notice) { _, notice in notice == nil ? nil : .error }
             .sheet(
                 item: $listingFlow,
-                onDismiss: { Task { await model.refresh() } },
+                onDismiss: {
+                    offersSticker = environment.stickerScreen != nil && environment.offersStickerAfterListing()
+                    Task { await model.refresh() }
+                },
                 content: { flow in ListingFlowView(model: flow) { listingFlow = nil } },
             )
+            .sheet(item: $printingSticker) { request in
+                environment.stickerScreen?(request)
+            }
             .sheet(
                 item: $markingSold,
                 onDismiss: { Task { await model.refresh() } },
@@ -196,7 +205,7 @@ struct ItemDetailView: View {
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)
-                markSoldButton(for: item)
+                itemActions(for: item)
                 DetailsSection(item: item) { editingSize = true }
                 ActivityLink { showsActivity = true }
             }
@@ -228,6 +237,15 @@ struct ItemDetailView: View {
                     openSale = SaleLink(id: summary.saleId)
                 }
             }
+        }
+    }
+
+    /// "Mark as sold", and the item's sticker.
+    @ViewBuilder
+    private func itemActions(for item: Item) -> some View {
+        markSoldButton(for: item)
+        if environment.stickerScreen != nil {
+            ItemStickerSection(offers: $offersSticker) { printingSticker = StickerRequest(item) }
         }
     }
 

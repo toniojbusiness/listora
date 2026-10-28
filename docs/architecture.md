@@ -141,6 +141,8 @@ packages/
                 fake, the outbox job (@listora/push)
   today/        The Today screen: card rules, the summary's plain queries, the money summary, the
                 morning summary job and its setting (@listora/today)
+  pack-check/   Pack check: label scans and their verdicts, the to-ship list, packing (one label
+                per package), label reads' records, the setting (@listora/pack-check)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
@@ -238,6 +240,8 @@ src/
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
   today/         The Today summary (getToday) and the morning summary setting
+  pack-check/    Pack check: the to-ship list, label reads, scans, packing, the package photo
+                 (docs/features/pack-check.md)
   activity/      An item's and an operation's activity, and a sale's explanation
   voice/         interpretVoiceCorrection: the text model's reading of a spoken correction
   prefill/       Each marketplace's sell form pre-filled for an item, and the review's questions
@@ -374,7 +378,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   summary setting in [today.md](features/today.md#data); sale email inboxes in
   [email-sales.md](features/email-sales.md#data); the marketplace pre-fill's answers and AI picks in
   [marketplace-prefill.md](features/marketplace-prefill.md#data); listing imports in
-  [imports.md](features/imports.md#data). Billing
+  [imports.md](features/imports.md#data); Pack check's setting, labels, and packages in
+  [pack-check.md](features/pack-check.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -484,6 +489,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders           |
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule   |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push   |
+| [features/pack-check.md](features/pack-check.md)                   | Pack check: the to-ship list, label scans, the duplicate-print guard, stickers |
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"           |
 | [features/marketplace-prefill.md](features/marketplace-prefill.md) | Each marketplace's form pre-filled on the review, and its one-tap questions    |
 | [features/imports.md](features/imports.md)                         | Importing existing listings as items, the match, questions, List on the others |

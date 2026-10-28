@@ -13,6 +13,7 @@
     { "path": "../connections" },
     { "path": "../db" },
     { "path": "../marketplaces" },
+    { "path": "../pack-check" },
     { "path": "../shared" },
     { "path": "../testing" }
   ]

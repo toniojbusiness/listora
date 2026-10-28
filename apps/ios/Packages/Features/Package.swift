@@ -24,6 +24,7 @@ let package = Package(
         .library(name: "MarketplaceLinkingFeature", targets: ["MarketplaceLinkingFeature"]),
         .library(name: "PhoneExecutionFeature", targets: ["PhoneExecutionFeature"]),
         .library(name: "ImportFeature", targets: ["ImportFeature"]),
+        .library(name: "PackCheckFeature", targets: ["PackCheckFeature"]),
     ],
     dependencies: [
         .package(path: "../Core"),
@@ -56,6 +57,7 @@ let package = Package(
                 "VoiceInputFeature",
                 "PhotoSignalsFeature",
                 "ImportFeature",
+                "PackCheckFeature",
             ],
         ),
         .target(
@@ -146,6 +148,11 @@ let package = Package(
             ],
             resources: [.copy("Resources/phone-runtime.js")],
         ),
+        // Pack check: the to-ship list, label and sticker scans, packing, stickers, and slips.
+        .target(
+            name: "PackCheckFeature",
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient", "SignInFeature"]),
         .testTarget(
             name: "TodayFeatureTests",
@@ -232,6 +239,15 @@ let package = Package(
             name: "PhoneExecutionFeatureTests",
             dependencies: [
                 "PhoneExecutionFeature",
+                "Core",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
+        ),
+        .testTarget(
+            name: "PackCheckFeatureTests",
+            dependencies: [
+                "PackCheckFeature",
                 "Core",
                 "APIClient",
                 .product(name: "ListoraAPI", package: "swift"),

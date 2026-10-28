@@ -9,6 +9,7 @@ public struct SettingsScreens {
     public var imports: (@MainActor () -> AnyView)?
     public var notifications: (@MainActor () -> AnyView)?
     public var saleEmails: (@MainActor () -> AnyView)?
+    public var packCheck: (@MainActor () -> AnyView)?
 
     /// The screen of one of the rows above; nil for every other destination.
     @MainActor
@@ -19,6 +20,7 @@ public struct SettingsScreens {
         case .imports: imports?()
         case .notifications: notifications?()
         case .saleEmails: saleEmails?()
+        case .packCheck: packCheck?()
         case .profile, .people, .help, .legal, .diagnostics, .deleteAccount: nil
         }
     }
@@ -29,12 +31,14 @@ public struct SettingsScreens {
         imports: (@MainActor () -> AnyView)? = nil,
         notifications: (@MainActor () -> AnyView)? = nil,
         saleEmails: (@MainActor () -> AnyView)? = nil,
+        packCheck: (@MainActor () -> AnyView)? = nil,
     ) {
         self.linkAccounts = linkAccounts
         self.marketplaces = marketplaces
         self.imports = imports
         self.notifications = notifications
         self.saleEmails = saleEmails
+        self.packCheck = packCheck
     }
 }
 
@@ -47,6 +51,7 @@ public enum SettingsDestination: Hashable, Sendable {
     case imports
     case notifications
     case saleEmails
+    case packCheck
     case people
     case help
     case legal(LegalDocument.Kind)
