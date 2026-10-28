@@ -415,3 +415,10 @@ export type OfferResponseStatus = (typeof OFFER_RESPONSE_STATUSES)[number];
 /** `offer_check.last_outcome`. */
 export const OFFER_CHECK_OUTCOMES = ['succeeded', 'failed'] as const;
 export type OfferCheckOutcome = (typeof OFFER_CHECK_OUTCOMES)[number];
+
+/**
+ * The background reads of a connection whose health is kept for the owner
+ * (`background_read_health.read`, docs/features/read-health.md).
+ */
+export const BACKGROUND_READS = ['sale_check', 'listing_import', 'offer_check'] as const;
+export type BackgroundRead = (typeof BACKGROUND_READS)[number];

@@ -56,7 +56,7 @@ export async function awaitElement(
 
 /** The failure for a Depop page that is not as the script expects. */
 export function changed(pageName: string, problem: string): PageChangedError {
-  return new PageChangedError(`Depop's ${pageName} ${problem}; the page may have changed.`);
+  return new PageChangedError(`Depop's ${pageName} ${problem}.`);
 }
 
 /**

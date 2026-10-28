@@ -38,6 +38,10 @@ const RESOURCES: ServiceResources = {
   signIn: { driver: 'cognito', ...USER_POOL, inviteEmailVerification: 'ses' },
   runner: { cluster: 'listora-staging', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: TOKEN_KEY_ARN,
+  ownerAlerts: {
+    environment: 'staging',
+    email: { from: 'alerts@example.com', to: 'owner@example.com' },
+  },
 };
 
 /** What a task's process sees: the plain environment, the image's, and every injected secret. */

@@ -8,6 +8,7 @@ import { AUTO_DELIST_SLA_TASK } from '@listora/auto-delist';
 import {
   LISTING_IMPORT_APPLY_TASK,
   PHONE_WATCH_TASK,
+  READ_ALERTS_TASK,
   SALE_CHECK_HEALTH_TASK,
   SALE_ORDER_TASK,
 } from '@listora/automation';
@@ -56,6 +57,7 @@ const context = {
     marketplaces: { ebay: undefined },
     push: { driver: 'fake' },
     emailIngest: { driver: 'folder', inboundDomain: 'in.listora.test', inboxDir: '/nonexistent' },
+    ownerAlerts: { environment: 'test', delivery: { driver: 'log' } },
   },
   connections: {
     tokens: undefined,
@@ -92,6 +94,7 @@ describe('worker feature discovery', () => {
       'phone-work',
       'photos',
       'push',
+      'read-alerts',
       'sale-check-health',
       'sale-fees',
       'today-summary',
@@ -126,6 +129,7 @@ describe('worker feature discovery', () => {
       EMAIL_INGEST_TASK,
       LISTING_REFRESH_TASK,
       PHONE_WATCH_TASK,
+      READ_ALERTS_TASK,
       SALE_CHECK_HEALTH_TASK,
       TODAY_SUMMARY_TASK,
     ]);

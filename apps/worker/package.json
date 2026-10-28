@@ -12,6 +12,7 @@
   "dependencies": {
     "@listora/accounts": "*",
     "@listora/ai": "*",
+    "@listora/alerts": "*",
     "@listora/analysis": "*",
     "@listora/auto-delist": "*",
     "@listora/automation": "*",

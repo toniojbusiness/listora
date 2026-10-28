@@ -12,7 +12,7 @@ Code:
   message, and turning the setting on and off (`setConnectionReadOnly`).
 - `apps/api/src/connections/routes.ts`: `PUT /v1/connections/{marketplace}/read-only`, and the
   unlink's refusal while read only.
-- `packages/db/migrations/20261028143028_marketplace_read_only.up.sql`: the account's setting
+- `packages/db/migrations/20261028172246_marketplace_read_only.up.sql`: the account's setting
   per marketplace, which outlives the connection.
 - The app's Link accounts screen (`MarketplaceLinkingFeature`): the Read only switch.
 
@@ -145,6 +145,6 @@ nothing.
   `20261028061656_connection_read_only`.
 - `marketplace_read_only` (account, marketplace; one row while the account's connection on that
   marketplace is read only, kept after the connection is deleted), and the triggers that keep it
-  and start a new connection read only, migration `20261028143028_marketplace_read_only`. It is
+  and start a new connection read only, migration `20261028172246_marketplace_read_only`. It is
   the seller's setting, not marketplace data, so it stays through an unlink and goes with the
   account.

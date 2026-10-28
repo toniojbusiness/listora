@@ -37,6 +37,26 @@ export function alertSender(target: DeployTarget): { address: string; identity: 
   throw new Error('alerts need a domain or an owner address to send from');
 }
 
+/**
+ * Permission to email `recipient` from the alert sender, and from nothing else: the alert
+ * functions' and the worker's (its owner alerts, docs/features/read-health.md).
+ */
+export function alertSendStatement(
+  stack: Stack,
+  target: DeployTarget,
+  recipient: string,
+): iam.PolicyStatement {
+  const sender = alertSender(target);
+  // In the SES sandbox, sending needs permission on the recipient's identity as well.
+  const identity = (name: string): string =>
+    `arn:${stack.partition}:ses:${target.region}:${target.account}:identity/${name}`;
+  return new iam.PolicyStatement({
+    actions: ['ses:SendEmail'],
+    resources: [...new Set([identity(sender.identity), identity(recipient)])],
+    conditions: { StringEquals: { 'ses:FromAddress': sender.address } },
+  });
+}
+
 const BUNDLE_SCRIPT = fileURLToPath(
   new URL('../../../packages/alerts/src/bundle.ts', import.meta.url),
 );
@@ -138,14 +158,7 @@ export class AlertEmails extends Construct {
     });
 
     const { partition } = Stack.of(this);
-    // In the SES sandbox, sending needs permission on the recipient's identity as well.
-    const identity = (name: string): string =>
-      `arn:${partition}:ses:${target.region}:${target.account}:identity/${name}`;
-    const send = new iam.PolicyStatement({
-      actions: ['ses:SendEmail'],
-      resources: [...new Set([identity(sender.identity), identity(props.recipient)])],
-      conditions: { StringEquals: { 'ses:FromAddress': sender.address } },
-    });
+    const send = alertSendStatement(Stack.of(this), target, props.recipient);
     this.alertFunction.addToRolePolicy(send);
     this.summaryFunction.addToRolePolicy(send);
 

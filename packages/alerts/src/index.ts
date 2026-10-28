@@ -17,6 +17,12 @@ export {
 } from './handler.ts';
 export { RecordingMailer, SesMailer, subjectLine, type Email, type Mailer } from './mailer.ts';
 export {
+  loadOwnerAlertConfig,
+  OwnerAlertConfigError,
+  type OwnerAlertConfig,
+  type OwnerAlertDelivery,
+} from './owner.ts';
+export {
   weeklySummaryEmail,
   type AlarmFirings,
   type BackupStatus,

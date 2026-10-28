@@ -19,6 +19,7 @@ describe('loadAutomationSettings', () => {
         alertAfterFailures: 2,
         overdueMs: 6 * HOUR,
       },
+      readAlerts: { alertAfterFailures: 3, noSuccessMs: 24 * HOUR },
       fakeSiteUrl: undefined,
       fakePoshmarkUrl: undefined,
       fakeMercariSiteUrl: undefined,
@@ -56,6 +57,8 @@ describe('loadAutomationSettings', () => {
       SALE_CHECK_MIN_HOURS: '1.5',
       SALE_CHECK_ALERT_FAILURES: '3',
       SALE_CHECK_OVERDUE_HOURS: '12',
+      READ_ALERT_FAILURES: '5',
+      READ_ALERT_NO_SUCCESS_HOURS: '12',
     });
     expect(settings.profiles.poshmark.pacing.actionDelayMs).toEqual([1500, 4000]);
     expect(settings.profiles.poshmark.pacing.sessionGapMs).toEqual([10_000, 30_000]);
@@ -68,6 +71,7 @@ describe('loadAutomationSettings', () => {
       alertAfterFailures: 3,
       overdueMs: 12 * HOUR,
     });
+    expect(settings.readAlerts).toEqual({ alertAfterFailures: 5, noSuccessMs: 12 * HOUR });
   });
 
   it('refuses anything faster than the pacing floor or above the limit ceiling', () => {
@@ -81,6 +85,8 @@ describe('loadAutomationSettings', () => {
         SALE_CHECK_MIN_HOURS: '0.1',
         SALE_CHECK_MAX_HOURS: '6',
         SALE_CHECK_ALERT_FAILURES: '0',
+        READ_ALERT_FAILURES: '21',
+        READ_ALERT_NO_SUCCESS_HOURS: '0',
         AUTOMATION_STEP_TIMEOUT_MS: '20000',
         AUTOMATION_CALL_TIMEOUT_MS: '15000',
       });
@@ -97,6 +103,8 @@ describe('loadAutomationSettings', () => {
       'SALE_CHECK_MIN_HOURS must be a number of hours from 1 to 72',
       'SALE_CHECK_ALERT_FAILURES must be an integer from 1 to 10',
       'SALE_CHECK_MIN_HOURS, SALE_CHECK_DEFAULT_HOURS, and SALE_CHECK_MAX_HOURS must be in increasing order',
+      'READ_ALERT_FAILURES must be an integer from 1 to 20',
+      'READ_ALERT_NO_SUCCESS_HOURS must be a number of hours from 1 to 72',
     ]);
   });
 

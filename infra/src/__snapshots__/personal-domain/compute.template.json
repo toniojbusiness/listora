@@ -206,6 +206,19 @@
               "Sid": "InvalidatePhotoCdn"
             },
             {
+              "Action": "ses:SendEmail",
+              "Condition": {
+                "StringEquals": {
+                  "ses:FromAddress": "alerts@personal.example.com"
+                }
+              },
+              "Effect": "Allow",
+              "Resource": [
+                "arn:aws:ses:us-east-1:333333333333:identity/owner@example.com",
+                "arn:aws:ses:us-east-1:333333333333:identity/personal.example.com"
+              ]
+            },
+            {
               "Action": "kms:Decrypt",
               "Condition": {
                 "StringEquals": {
@@ -678,6 +691,22 @@
               {
                 "Name": "AWS_REGION",
                 "Value": "us-east-1"
+              },
+              {
+                "Name": "OWNER_ALERTS",
+                "Value": "ses"
+              },
+              {
+                "Name": "OWNER_ALERT_ENV",
+                "Value": "personal"
+              },
+              {
+                "Name": "OWNER_ALERT_FROM",
+                "Value": "alerts@personal.example.com"
+              },
+              {
+                "Name": "OWNER_ALERT_TO",
+                "Value": "owner@example.com"
               }
             ],
             "Essential": true,

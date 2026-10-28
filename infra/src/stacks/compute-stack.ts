@@ -28,6 +28,7 @@ import {
   signInResources,
   type ServiceResources,
 } from '../containers.ts';
+import { alertSendStatement, alertSender } from './alerts.ts';
 import { ListoraStack, removalPolicyFor, taskPlacement, type ListoraStackProps } from './common.ts';
 import { INBOUND_MAIL_PREFIX } from './email-stack.ts';
 import { AUTOMATION_SCREENSHOT_PREFIX } from './storage-stack.ts';
@@ -192,6 +193,12 @@ export class ComputeStack extends ListoraStack {
               region: target.region,
             },
           }),
+      ownerAlerts: {
+        environment,
+        ...(target.alarmEmail === undefined
+          ? {}
+          : { email: { from: alertSender(target).address, to: target.alarmEmail } }),
+      },
     };
     this.containerOptions = (service) => ({
       image,
@@ -271,6 +278,10 @@ export class ComputeStack extends ListoraStack {
             ],
           }),
         );
+        // Owner alerts about failing background reads, from the alert sender to the alarm email.
+        if (target.alarmEmail !== undefined) {
+          role.addToPrincipalPolicy(alertSendStatement(this, target, target.alarmEmail));
+        }
         role.addToPrincipalPolicy(
           new iam.PolicyStatement({
             sid: 'OpenTokens',

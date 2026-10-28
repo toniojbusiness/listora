@@ -32,6 +32,7 @@ import type {
   AutomationRunOutcome,
   AutomationRunPurpose,
   AuthProvider,
+  BackgroundRead,
   ChallengeKind,
   ConnectionAuthorizationStatus,
   ConnectionMode,
@@ -1248,6 +1249,29 @@ export interface OfferCheckTable {
   updated_at: UpdatedAt;
 }
 
+// Background read health ----------------------------------------------------------------------
+
+/**
+ * Whether one connection's background read works, one per connection and read
+ * (docs/features/read-health.md): the owner's alert and admin view, never the seller's.
+ */
+export interface BackgroundReadHealthTable {
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  read: BackgroundRead;
+  last_succeeded_at: NullableTimestamp;
+  last_failed_at: NullableTimestamp;
+  failures_in_a_row: Generated<number>;
+  failing_since: NullableTimestamp;
+  last_error_code: Nullable<string>;
+  last_error_step: Nullable<string>;
+  last_error_detail: Nullable<string>;
+  owner_alerted_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Pack check ----------------------------------------------------------------------------------
 
 /** Whether Pack check is on, one per account (docs/features/pack-check.md); off by default. */
@@ -1363,4 +1387,5 @@ export interface Database {
   marketplace_offer: MarketplaceOfferTable;
   offer_response: OfferResponseTable;
   offer_check: OfferCheckTable;
+  background_read_health: BackgroundReadHealthTable;
 }

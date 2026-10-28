@@ -6,6 +6,11 @@ import {
   type AiAlertThresholds,
   type AiConfig,
 } from '@listora/ai';
+import {
+  loadOwnerAlertConfig,
+  OwnerAlertConfigError,
+  type OwnerAlertConfig,
+} from '@listora/alerts';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
 import {
   AutomationConfigError,
@@ -70,6 +75,8 @@ export interface WorkerConfig {
   runnerLaunch: RunnerLaunchConfig;
   /** EMAIL_*, read by @listora/email-sales: where forwarded sale emails are read from. */
   emailIngest: EmailIngestConfig;
+  /** OWNER_ALERT*, read by @listora/alerts: how failing background reads reach the owner. */
+  ownerAlerts: OwnerAlertConfig;
 }
 
 export class ConfigError extends Error {
@@ -126,6 +133,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const automation = collect(issues, AutomationConfigError, () => loadAutomationSettings(env));
   const runnerLaunch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
   const emailIngest = collect(issues, EmailIngestConfigError, () => loadEmailIngestConfig(env));
+  const ownerAlerts = collect(issues, OwnerAlertConfigError, () => loadOwnerAlertConfig(env));
 
   if (
     issues.length > 0 ||
@@ -138,7 +146,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     marketplaces === undefined ||
     automation === undefined ||
     runnerLaunch === undefined ||
-    emailIngest === undefined
+    emailIngest === undefined ||
+    ownerAlerts === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -159,6 +168,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     automation,
     runnerLaunch,
     emailIngest,
+    ownerAlerts,
   };
 }
 

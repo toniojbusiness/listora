@@ -115,6 +115,15 @@ export interface ServiceResources {
     readonly bucket: string;
     readonly region: string;
   };
+  /**
+   * The worker's owner alerts (docs/features/read-health.md): the environment that tags their
+   * subjects, and, where the environment emails alarms, the SES sender and recipient the alert
+   * function uses. Without them the worker only logs the alerts.
+   */
+  readonly ownerAlerts: {
+    readonly environment: string;
+    readonly email?: { readonly from: string; readonly to: string };
+  };
 }
 
 /**
@@ -205,6 +214,7 @@ export function containerEnvironment(
         STORAGE_CDN_DISTRIBUTION_ID: deployed().photoStorage.cdnDistributionId,
         ...workerAuth(deployed().signIn),
         ...runnerService(deployed()),
+        ...ownerAlerts(deployed()),
       };
     case 'runner':
       return {
@@ -238,6 +248,18 @@ function apiAuth(signIn: SignInResources): Record<string, string> {
     default:
       return assertNever(signIn);
   }
+}
+
+/** How the worker emails the owner about failing background reads. */
+function ownerAlerts({ ownerAlerts: alerts }: ServiceResources): Record<string, string> {
+  return alerts.email === undefined
+    ? { OWNER_ALERTS: 'log', OWNER_ALERT_ENV: alerts.environment }
+    : {
+        OWNER_ALERTS: 'ses',
+        OWNER_ALERT_ENV: alerts.environment,
+        OWNER_ALERT_FROM: alerts.email.from,
+        OWNER_ALERT_TO: alerts.email.to,
+      };
 }
 
 function workerAuth(signIn: SignInResources): Record<string, string> {
