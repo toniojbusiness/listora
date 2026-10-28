@@ -12,6 +12,7 @@
 import { writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 
+import { COMPRESSION_OPT_IN_HEADER } from '../compression.ts';
 import type { OperationId } from '../contract/routes.ts';
 import { createTestApi, type CallOptions, type TestApi } from '../test-support.ts';
 import { seedSyntheticSeller, type SyntheticSellerCounts } from './seed.ts';
@@ -19,7 +20,7 @@ import { countStatements } from './statements.ts';
 
 const statements = countStatements();
 
-/** The `Accept-Encoding` the app's URLSession sends. */
+/** The `Accept-Encoding` the app's URLSession sends (with the app's opt-in to compression). */
 export const APP_ACCEPT_ENCODING = 'gzip, deflate, br';
 
 export interface Scenario {
@@ -165,7 +166,7 @@ export async function runScenario(
     const started = performance.now();
     const result = await api.call(scenario.operationId, {
       ...options,
-      headers: { 'accept-encoding': encoding },
+      headers: { 'accept-encoding': encoding, [COMPRESSION_OPT_IN_HEADER]: 'accepted' },
     });
     const elapsed = performance.now() - started;
     if (result.status !== 200) {
