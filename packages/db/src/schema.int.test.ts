@@ -269,6 +269,7 @@ const COLUMNS = {
     'user_confirmed_at',
     'condition',
     'hashtags',
+    'shop_unlinked_at',
   ],
   marketplace_operation: [
     'id',

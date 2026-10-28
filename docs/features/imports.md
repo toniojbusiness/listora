@@ -56,7 +56,9 @@ sold item made the same way when Listora had no listing for it ([sales.md](sales
    before it still import, and importing again reads from the start: listings already imported
    settle at once.
 4. **Settling** (`@listora/imports` `applyListingImport`, after every page): each entry becomes
-   - `already_listed`: Listora already has this listing (its marketplace id);
+   - `already_listed`: Listora already has this listing (its marketplace id); one from an
+     unlinked shop joins the import's connection again, since this shop shows it
+     ([marketplace-linking.md](marketplace-linking.md#relinking-another-shop));
    - `merged`: a listing of the item it is the same as; the item keeps its own details and photos;
    - `imported`: a new item, with the listing's photos;
    - `needs_you`: a question for the seller (below);

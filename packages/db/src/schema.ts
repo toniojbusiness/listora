@@ -506,6 +506,11 @@ export interface MarketplaceListingTable {
   pending_remote_revision: Nullable<number>;
   /** When the user last confirmed the listing's state (an assisted listing); never a read-back. */
   user_confirmed_at: NullableTimestamp;
+  /**
+   * When the shop it was on was unlinked: it is from that previous shop, so no later link adopts
+   * it (docs/features/marketplace-linking.md#relinking-another-shop). Only without a connection.
+   */
+  shop_unlinked_at: NullableTimestamp;
 }
 
 export interface MarketplaceOperationTable {
