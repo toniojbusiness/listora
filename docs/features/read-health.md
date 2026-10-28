@@ -57,8 +57,10 @@ Failed in a row: 7, since 2026-10-27T10:00:00.000Z
 Last worked: 2026-10-27T06:00:00.000Z (30 hours ago)
 ```
 
-The seller's own words for these failures (the sale check's, the import's, the offer check's,
-and the activity timeline's) no longer say the page changed either.
+The seller's own words for these failures (the sale check's, the import's, and the activity
+timeline's) no longer say the page changed either. An offer check's failure reaches the seller
+not at all, and a read hidden from sellers never runs, so it is never counted
+([verified-features.md](verified-features.md)).
 
 ## What to do with an alert
 

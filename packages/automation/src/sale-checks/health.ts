@@ -12,6 +12,7 @@ import { sql } from 'kysely';
 
 import {
   inTransaction,
+  MARKETPLACES,
   type Db,
   type DbExecutor,
   type ExecutionLocation,
@@ -24,6 +25,7 @@ import type { Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
 import type { SaleCheckSettings } from '../settings.ts';
+import { checksSales } from './schedule.ts';
 
 /** The worker's scheduled task that marks overdue checks and announces problems. */
 export const SALE_CHECK_HEALTH_TASK = 'sale_check_health';
@@ -185,6 +187,8 @@ export async function runSaleCheckHealth(
 ): Promise<{ overdue: number; alerted: number }> {
   const { db } = deps;
   const now = new Date(deps.now?.() ?? Date.now());
+  // A marketplace whose sale checks are hidden is never checked, so never overdue either.
+  const checked = MARKETPLACES.filter(checksSales);
   const marked = await sql<{ account_id: string; marketplace: Marketplace }>`
     update sale_check_schedule as schedule
     set health = 'overdue', unhealthy_since = schedule.next_check_at
@@ -194,6 +198,7 @@ export async function runSaleCheckHealth(
       and connection.mode = 'automation'
       and connection.status in ('connected', 'degraded')
       and schedule.health = 'healthy'
+      and schedule.marketplace = any(${checked}::text[])
       and schedule.next_check_at < ${now}::timestamptz - make_interval(secs => ${deps.settings.overdueMs / 1000})
     returning schedule.account_id, schedule.marketplace
   `.execute(db);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { useMarketplaceFeatures } from '@listora/marketplaces';
+
 import {
   dueAt,
   effectiveCadence,
@@ -127,6 +129,16 @@ describe("a listing's refresh", () => {
       state: 'scheduled',
       nextAt: NOW,
     });
+  });
+
+  it('is unavailable everywhere until a refresh passes live (verified-features.md)', () => {
+    useMarketplaceFeatures('verified');
+    try {
+      expect(canRefresh(fact)).toBe(false);
+      expect(listingRefresh(fact, account, null, NOW).state).toBe('unavailable');
+    } finally {
+      useMarketplaceFeatures('all');
+    }
   });
 
   it('is unavailable on eBay, without a session, or with one waiting to be relinked', () => {

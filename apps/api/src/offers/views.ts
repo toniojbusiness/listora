@@ -5,7 +5,7 @@
  * only once a read of the offer showed it.
  */
 import type { Offer, OfferCheck, OfferResponse } from '@listora/api-contract';
-import { OFFER_MARKETPLACES, offerActions, offerQuote } from '@listora/automation';
+import { offerActions, offerMarketplaces, offerQuote } from '@listora/automation';
 import type {
   DbExecutor,
   Marketplace,
@@ -59,7 +59,9 @@ export async function offerViews(
   offerIds: readonly string[],
   now: Date,
 ): Promise<Map<string, Offer>> {
-  if (offerIds.length === 0) return new Map();
+  // Only the offers of marketplaces whose offers Listora shows (verified-features.md).
+  const marketplaces = offerMarketplaces();
+  if (offerIds.length === 0 || marketplaces.length === 0) return new Map();
   const [offers, responses] = await Promise.all([
     db
       .selectFrom('marketplace_offer as offer')
@@ -86,6 +88,7 @@ export async function offerViews(
       ])
       .where('offer.account_id', '=', tenant.accountId)
       .where('offer.id', 'in', offerIds)
+      .where('offer.marketplace', 'in', marketplaces)
       .execute(),
     db
       .selectFrom('offer_response')
@@ -126,6 +129,8 @@ function offerView(row: OfferRow, response: ResponseRow | undefined, now: Date):
   const open =
     row.status === 'pending' && (row.expires_at === null || row.expires_at > now) && !answering;
   const accept = offerQuote(row.marketplace, row.amount_cents, now);
+  const answers = offerActions(row.marketplace);
+  const name = MARKETPLACE_NAMES[row.marketplace];
   return {
     id: row.id,
     marketplace: row.marketplace,
@@ -139,18 +144,21 @@ function offerView(row: OfferRow, response: ResponseRow | undefined, now: Date):
     ...(row.made_at === null ? {} : { madeAt: row.made_at.toISOString() }),
     ...(row.expires_at === null ? {} : { expiresAt: row.expires_at.toISOString() }),
     ...(row.offer_url === null ? {} : { url: row.offer_url }),
-    actions: open && !row.read_only ? offerActions(row.marketplace) : [],
+    actions: open && !row.read_only ? answers : [],
     acceptNote: row.read_only
-      ? `This ${MARKETPLACE_NAMES[row.marketplace]} account is read only in Listora. Answer this offer in ${MARKETPLACE_NAMES[row.marketplace]}.`
-      : isOfferMarketplace(row.marketplace)
-        ? OFFER_RULES[row.marketplace].acceptNote
-        : 'Accepting lets the buyer buy it at this price.',
+      ? `This ${name} account is read only in Listora. Answer this offer in ${name}.`
+      : answers.length === 0
+        ? // Answers from Listora haven't passed live here yet (verified-features.md).
+          `Answer this offer in ${name}.`
+        : isOfferMarketplace(row.marketplace)
+          ? OFFER_RULES[row.marketplace].acceptNote
+          : 'Accepting lets the buyer buy it at this price.',
     accept: {
       price: usd(accept.priceCents),
       fees: usd(accept.feesCents),
       net: usd(accept.netCents),
     },
-    ...(isOfferMarketplace(row.marketplace) && OFFER_RULES[row.marketplace].counter
+    ...(answers.includes('counter')
       ? {
           counterRange: {
             above: usd(row.amount_cents),
@@ -222,6 +230,8 @@ function responseStatusText(
 
 /** When each linked marketplace's offers were read, and how the newest read went. */
 export async function offerCheckViews(db: DbExecutor, tenant: Tenant): Promise<OfferCheck[]> {
+  const marketplaces = offerMarketplaces();
+  if (marketplaces.length === 0) return [];
   const rows = await db
     .selectFrom('marketplace_connection as connection')
     .leftJoin('offer_check as oc', (join) =>
@@ -239,22 +249,19 @@ export async function offerCheckViews(db: DbExecutor, tenant: Tenant): Promise<O
       'connection.marketplace',
       'oc.last_succeeded_at',
       'oc.last_outcome',
-      'oc.last_error_message',
       'work.id as waiting',
     ])
     .where('connection.account_id', '=', tenant.accountId)
     .where('connection.mode', '=', 'automation')
     .where('connection.status', 'in', ['connected', 'degraded'])
-    .where('connection.marketplace', 'in', OFFER_MARKETPLACES)
+    .where('connection.marketplace', 'in', marketplaces)
     .orderBy('connection.marketplace')
     .execute();
+  // A failed read's reason is the owner's (read-health.md), never an error for the seller.
   return rows.map((row) => ({
     marketplace: row.marketplace,
     status: row.waiting !== null ? 'waiting' : row.last_outcome === 'failed' ? 'failed' : 'ok',
     ...(row.last_succeeded_at === null ? {} : { checkedAt: row.last_succeeded_at.toISOString() }),
-    ...(row.last_outcome === 'failed' && row.last_error_message !== null
-      ? { message: row.last_error_message }
-      : {}),
   }));
 }
 

@@ -41,12 +41,14 @@ import {
 } from '@listora/db';
 import type { SessionVault } from '@listora/connections';
 import {
+  isFeatureVerified,
   MARKETPLACE_NAMES,
   type AdapterLookup,
   type ConnectionRef,
   type Health,
   type ListingsPage,
   type MarketplaceAdapter,
+  type MarketplaceFeature,
   type RemoteOffer,
   type RemoteOrder,
   type RemoteOrderLabel,
@@ -71,7 +73,7 @@ import {
   type LabelReadTarget,
 } from '@listora/pack-check';
 import { changeSale, SaleStateError } from '@listora/sales';
-import { createLogger, type Logger } from '@listora/shared';
+import { assertNever, createLogger, type Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
 
@@ -597,11 +599,46 @@ async function claim(
     .executeTakeFirstOrThrow();
 }
 
+/**
+ * The feature a seller's work belongs to, when it is one the seller is shown only once it passed
+ * live (docs/features/verified-features.md); `null` for work every marketplace runs (its
+ * listing changes, session checks, label reads) and for the operator's sold-history reads.
+ */
+function workFeature(purpose: WorkRow['purpose']): MarketplaceFeature | null {
+  switch (purpose) {
+    case 'sale_check':
+      return 'sale_checks';
+    case 'listing_import':
+      return 'listing_import';
+    case 'offer_check':
+      return 'offers';
+    case 'offer_response':
+      return 'offer_answers';
+    case 'operation':
+    case 'session_check':
+    case 'sale_history':
+    case 'label_read':
+      return null;
+    default:
+      return assertNever(purpose, 'phone work purpose');
+  }
+}
+
 async function claimStepState(
   deps: PhoneWorkDependencies,
   trx: DbTransaction,
   work: WorkRow,
 ): Promise<StepState | null> {
+  const feature = workFeature(work.purpose);
+  // Work of a feature not verified live (queued before it was hidden) is dropped unrun; an
+  // answer that may have reached the marketplace still reads its offer back.
+  if (
+    feature !== null &&
+    feature !== 'offer_answers' &&
+    !isFeatureVerified(work.marketplace, feature)
+  ) {
+    return null;
+  }
   switch (work.purpose) {
     case 'operation': {
       if (work.operation_id === null) return null;
@@ -698,6 +735,11 @@ async function claimStepState(
       if (!prepared.sent && (await isReadOnlyConnection(trx, work))) {
         // Never sent on a read-only connection.
         await refuseOfferAnswer(trx, prepared);
+        return null;
+      }
+      if (!prepared.sent && !isFeatureVerified(work.marketplace, 'offer_answers')) {
+        // Never sent where answers haven't passed live: the seller answers in the marketplace.
+        await refuseOfferAnswer(trx, prepared, 'unavailable');
         return null;
       }
       await trx

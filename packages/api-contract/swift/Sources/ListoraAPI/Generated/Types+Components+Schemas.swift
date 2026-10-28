@@ -14839,13 +14839,17 @@ extension Components {
                 ])
             }
         }
-        /// When Listora last read the seller's offers on one marketplace, and how that went.
+        /// When Listora last read the seller's offers on one marketplace, and how that went. Only
+        /// marketplaces whose offer reads passed live are listed (docs/features/verified-features.md).
+        /// A read that failed carries no error for the seller: it goes to the owner's alerts
+        /// (docs/features/read-health.md).
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/OfferCheck`.
         public struct OfferCheck: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/OfferCheck/marketplace`.
             public var marketplace: Components.Schemas.Marketplace
-            /// `waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`).
+            /// `waiting` (a read waits for the iPhone), `ok`, or `failed` (the last read did not get through).
             ///
             /// - Remark: Generated from `#/components/schemas/OfferCheck/status`.
             public var status: Swift.String
@@ -14853,31 +14857,25 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/OfferCheck/checkedAt`.
             public var checkedAt: Components.Schemas.Timestamp?
-            /// - Remark: Generated from `#/components/schemas/OfferCheck/message`.
-            public var message: Swift.String?
             /// Creates a new `OfferCheck`.
             ///
             /// - Parameters:
             ///   - marketplace:
-            ///   - status: `waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`).
+            ///   - status: `waiting` (a read waits for the iPhone), `ok`, or `failed` (the last read did not get through).
             ///   - checkedAt: When a read last succeeded.
-            ///   - message:
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 status: Swift.String,
-                checkedAt: Components.Schemas.Timestamp? = nil,
-                message: Swift.String? = nil
+                checkedAt: Components.Schemas.Timestamp? = nil
             ) {
                 self.marketplace = marketplace
                 self.status = status
                 self.checkedAt = checkedAt
-                self.message = message
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
                 case status
                 case checkedAt
-                case message
             }
         }
         /// - Remark: Generated from `#/components/schemas/OfferCheckList`.
@@ -15021,6 +15019,113 @@ extension Components {
             /// - Parameters:
             ///   - data:
             public init(data: [Components.Schemas.SyncMarketplace]) {
+                self.data = data
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+            }
+        }
+        /// A `KnownMarketplaceFeature`, or one added after this client was built. Clients ignore a
+        /// feature they do not know (they show nothing for it).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceFeature`.
+        public struct MarketplaceFeature: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeature/value1`.
+            public var value1: Components.Schemas.KnownMarketplaceFeature?
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeature/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `MarketplaceFeature`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownMarketplaceFeature? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `sales_history`: the seller's past sales read from the marketplace. `sale_checks`: new
+        /// sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
+        /// buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
+        /// offer from Listora. `listing_import`: importing the seller's existing listings.
+        /// `listing_refresh`: refreshing live listings on a schedule.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownMarketplaceFeature`.
+        @frozen public enum KnownMarketplaceFeature: String, Codable, Hashable, Sendable, CaseIterable {
+            case salesHistory = "sales_history"
+            case saleChecks = "sale_checks"
+            case offers = "offers"
+            case offerAnswers = "offer_answers"
+            case listingImport = "listing_import"
+            case listingRefresh = "listing_refresh"
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures`.
+        public struct MarketplaceFeatures: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// The features of this marketplace that passed a live end-to-end test.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures/features`.
+            public var features: [Components.Schemas.MarketplaceFeature]
+            /// Creates a new `MarketplaceFeatures`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - features: The features of this marketplace that passed a live end-to-end test.
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                features: [Components.Schemas.MarketplaceFeature]
+            ) {
+                self.marketplace = marketplace
+                self.features = features
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case features
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList`.
+        public struct MarketplaceFeatureList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList/data`.
+            public var data: [Components.Schemas.MarketplaceFeatures]
+            /// Creates a new `MarketplaceFeatureList`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            public init(data: [Components.Schemas.MarketplaceFeatures]) {
                 self.data = data
             }
             public enum CodingKeys: String, CodingKey {

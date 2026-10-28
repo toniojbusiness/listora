@@ -23032,9 +23032,9 @@ public enum Operations {
     }
     /// List the marketplaces Listora imports listings from, each with its latest import
     ///
-    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-    /// import can start now (the marketplace is linked, none is under way) or why not, and its
-    /// newest import with its progress and summary.
+    /// One entry per marketplace Listora imports from (those whose imports passed live,
+    /// docs/features/verified-features.md): whether an import can start now (the marketplace is
+    /// linked, none is under way) or why not, and its newest import with its progress and summary.
     ///
     ///
     /// - Remark: HTTP `GET /v1/imports`.
@@ -23980,7 +23980,7 @@ public enum Operations {
     }
     /// When each marketplace's offers were last read
     ///
-    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    /// One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     ///
     /// - Remark: HTTP `GET /v1/offer-checks`.
     /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
@@ -25130,6 +25130,142 @@ public enum Operations {
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
             /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// What Listora shows the seller of each marketplace
+    ///
+    /// Each marketplace's features that passed a live end-to-end test on a real account
+    /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+    /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+    /// `features`; anything else is hidden, and the server never queues its checks either. The
+    /// same for every account.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-features`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
+    public enum ListMarketplaceFeatures {
+        public static let id: Swift.String = "listMarketplaceFeatures"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/marketplace-features/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListMarketplaceFeatures.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListMarketplaceFeatures.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListMarketplaceFeatures.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.ListMarketplaceFeatures.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/marketplace-features/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/marketplace-features/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.MarketplaceFeatureList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.MarketplaceFeatureList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListMarketplaceFeatures.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListMarketplaceFeatures.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Every marketplace, each with its verified features.
+            ///
+            /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListMarketplaceFeatures.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListMarketplaceFeatures.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)

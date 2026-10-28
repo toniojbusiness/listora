@@ -326,3 +326,16 @@ export type {
 } from './oauth.ts';
 export { AdapterRegistryError, createAdapterRegistry } from './registry.ts';
 export type { AdapterRegistry } from './registry.ts';
+export {
+  FEATURE_REQUIRES,
+  isFeatureVerified,
+  loadMarketplaceFeatures,
+  MARKETPLACE_FEATURE_SETS,
+  MARKETPLACE_FEATURES,
+  MarketplaceFeaturesConfigError,
+  marketplacesWith,
+  useMarketplaceFeatures,
+  VERIFIED_FEATURES,
+  verifiedFeatures,
+} from './features.ts';
+export type { FeatureEvidence, MarketplaceFeature, MarketplaceFeatureSet } from './features.ts';

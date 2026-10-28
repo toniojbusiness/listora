@@ -11,6 +11,11 @@ import {
   TokenVaultConfigError,
   type TokenVaultConfig,
 } from '@listora/connections';
+import {
+  loadMarketplaceFeatures,
+  MarketplaceFeaturesConfigError,
+  type MarketplaceFeatureSet,
+} from '@listora/marketplaces';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -36,6 +41,8 @@ export interface RunnerConfig {
   idleExitMs: number;
   /** BROWSER_RUNNER_LAUNCH: with `ecs`, the runner scales its own service to zero as it exits. */
   launch: RunnerLaunchConfig;
+  /** The worker's MARKETPLACE_FEATURES, so both run the same checks. */
+  features: MarketplaceFeatureSet;
 }
 
 export class RunnerConfigError extends Error {
@@ -81,6 +88,9 @@ export function loadRunnerConfig(env: NodeJS.ProcessEnv = process.env): RunnerCo
   const storage = collect(issues, StorageConfigError, () => loadStorageConfig(env));
   const automation = collect(issues, AutomationConfigError, () => loadAutomationSettings(env));
   const launch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
+  const features = collect(issues, MarketplaceFeaturesConfigError, () =>
+    loadMarketplaceFeatures(env),
+  );
 
   if (
     issues.length > 0 ||
@@ -88,7 +98,8 @@ export function loadRunnerConfig(env: NodeJS.ProcessEnv = process.env): RunnerCo
     tokenVault === undefined ||
     storage === undefined ||
     automation === undefined ||
-    launch === undefined
+    launch === undefined ||
+    features === undefined
   ) {
     throw new RunnerConfigError(issues);
   }
@@ -101,5 +112,6 @@ export function loadRunnerConfig(env: NodeJS.ProcessEnv = process.env): RunnerCo
     automation,
     idleExitMs: idleSeconds * 1000,
     launch,
+    features,
   };
 }
