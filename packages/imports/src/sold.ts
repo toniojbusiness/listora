@@ -10,14 +10,22 @@
  *
  * It never joins an item Listora has, even one that looks the same: a wrong match would delist
  * that item everywhere else. Nothing on the marketplace changes.
+ *
+ * A sold item made without photos (its order line came without the listing) gets them when a
+ * later check reads the sold listing with its photos (`soldItemPhotoMaker`).
  */
 import { createInventoryItem, jsonb, type DbTransaction, type JsonObject } from '@listora/db';
-import type { SoldItemMaker, SoldItemSource } from '@listora/automation';
+import type { SoldItemMaker, SoldItemPhotoMaker, SoldItemSource } from '@listora/automation';
 import type { ListedListing } from '@listora/marketplaces';
 import { remoteSnapshot } from '@listora/operations';
 import type { Logger } from '@listora/shared';
 
-import { fetchPhotos, insertItemPhotos, type ImportApplyDependencies } from './apply.ts';
+import {
+  fetchPhotos,
+  fetchPhotoUrls,
+  insertItemPhotos,
+  type ImportApplyDependencies,
+} from './apply.ts';
 import {
   IMPORTED_TITLE_LIMIT,
   importedItem,
@@ -135,6 +143,28 @@ export async function createSoldItem(
     })
     .execute();
   return { itemId: item.id, listingId };
+}
+
+/**
+ * The photo maker of the worker's `automation_sold_item_photos` job (@listora/automation,
+ * sold-photos.ts): a sold item made without photos gets its sold listing's, up to
+ * `SOLD_ITEM_PHOTOS`, fetched like an import's (one that can't be fetched is left out) and
+ * processed like any photo (its thumbnail and listing size).
+ */
+export function soldItemPhotoMaker(
+  deps: SoldItemDependencies,
+): SoldItemPhotoMaker<ImportedPhoto[]> {
+  const log = deps.logger.child({ task: 'sold_item_photos' });
+  return {
+    fetch: async (photoUrls) => {
+      const photos = await fetchPhotoUrls(deps, photoUrls.slice(0, SOLD_ITEM_PHOTOS), log);
+      return photos.length === 0 ? null : photos;
+    },
+    add: async (trx, accountId, itemId, photos) => {
+      await insertItemPhotos(deps, trx, accountId, itemId, photos);
+      return photos.length;
+    },
+  };
 }
 
 /** An item from the order line alone: its title and price. */

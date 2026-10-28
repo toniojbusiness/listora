@@ -49,6 +49,7 @@ import { saleCheckError, saleCheckErrorMessage } from './health.ts';
 import { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './interval.ts';
 import { orderEventPayload, queueSaleOrder } from './orders.ts';
 import { queueSaleCheckForPhone, type SaleCheckJobPayload } from './schedule.ts';
+import { queueSoldItemPhotos } from './sold-photos.ts';
 
 export interface SaleCheckDependencies {
   db: DbExecutor;
@@ -403,11 +404,18 @@ async function recordOrders(
       let event = await handOver(`order:${order.externalOrderId}`);
       // A check handed this order over before. A sales history read hands it over once more
       // when it was dropped then (`ignored`: before Listora recorded the sales of listings it
-      // doesn't have); recording it again is a no-op for a sale already recorded.
-      if (event.duplicate) {
-        if (prepared.since !== null || !(await wasIgnored(trx, key.accountId, event.id))) return;
+      // doesn't have); recording it again is a no-op for a sale already recorded. A recorded
+      // sale whose sold item has no photos gets the sold listing's (sold-photos.ts).
+      if (
+        event.duplicate &&
+        prepared.since === null &&
+        (await wasIgnored(trx, key.accountId, event.id))
+      ) {
         event = await handOver(`history:order:${order.externalOrderId}`);
-        if (event.duplicate) return;
+      }
+      if (event.duplicate) {
+        await queueSoldItemPhotos(trx, { ...key, marketplace, runId: prepared.runId }, order);
+        return;
       }
       await queueSaleOrder(trx, { accountId: key.accountId, inboundEventId: event.id });
       added.push(order);

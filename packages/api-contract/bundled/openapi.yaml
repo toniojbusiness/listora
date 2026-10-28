@@ -7612,6 +7612,10 @@ components:
         title:
           type: string
           maxLength: 200
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: The item's cover photo, small; absent until a photo is processed.
         listingId:
           $ref: '#/components/schemas/Id'
           description: The listing the item sold through, when known. Absent for a sale recorded without one.

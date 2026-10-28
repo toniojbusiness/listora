@@ -4525,6 +4525,11 @@ export interface components {
             itemId: components["schemas"]["Id"];
             sku: string;
             title?: string;
+            /**
+             * Format: uri
+             * @description The item's cover photo, small; absent until a photo is processed.
+             */
+            thumbnailUrl?: string;
             /** @description The listing the item sold through, when known. Absent for a sale recorded without one. */
             listingId?: components["schemas"]["Id"];
             /** @description This item's part of the order's sale price (for a bundle, its share of the bundle price). */

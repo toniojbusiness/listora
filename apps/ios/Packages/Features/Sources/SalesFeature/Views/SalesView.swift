@@ -188,13 +188,13 @@ private struct ProfitEntryRow: View {
     }
 }
 
-/// One sale in the list: what sold, where and when, its price, and its profit.
+/// One sale in the list: what sold (its photo), where and when, its price, and its profit.
 private struct SaleRow: View {
     let sale: Sale
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
-            IconTile(monogram: String(sale.marketplace.name.prefix(1)), tone: sale.status.tone)
+            SaleThumbnail(sale: sale)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(sale.title)
                     .font(Typography.headline)
@@ -243,6 +243,35 @@ private struct SaleRow: View {
                 .font(Typography.footnote)
                 .foregroundStyle(Palette.textSecondary)
         }
+    }
+}
+
+/// The sold item's photo, small (its thumbnail); the marketplace's initial until it has one.
+/// Decorative: the row's text names the item.
+struct SaleThumbnail: View {
+    let sale: Sale
+    /// A card's mark, 48 points, growing with Dynamic Type up to 1.6 times.
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+    private static let side: CGFloat = 48
+
+    /// The first item's thumbnail, when its photo is processed.
+    static func url(of sale: Sale) -> URL? {
+        sale.items.first?.thumbnailUrl.flatMap(URL.init(string:))
+    }
+
+    var body: some View {
+        let side = Self.side * min(scale, 1.6)
+        RemoteImage(url: Self.url(of: sale)) {
+            Text(String(sale.marketplace.name.prefix(1)))
+                .font(Typography.headline)
+                .foregroundStyle(sale.status.tone.color)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(sale.status.tone.softColor)
+        }
+        .frame(width: side, height: side)
+        .background(Palette.surfaceSecondary.color)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+        .accessibilityHidden(true)
     }
 }
 

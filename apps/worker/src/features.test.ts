@@ -11,6 +11,7 @@ import {
   READ_ALERTS_TASK,
   SALE_CHECK_HEALTH_TASK,
   SALE_ORDER_TASK,
+  SOLD_ITEM_PHOTOS_TASK,
 } from '@listora/automation';
 import { BATCH_ITEM_ANALYSIS_TASK } from '@listora/batches';
 import { CONNECTION_DELETION_TASK } from '@listora/connections';
@@ -118,6 +119,7 @@ describe('worker feature discovery', () => {
         PUSH_TASK,
         BACKGROUND_PUSH_TASK,
         SALE_ORDER_TASK,
+        SOLD_ITEM_PHOTOS_TASK,
         SALE_FEES_TASK,
         TRUST_METRICS_TASK,
       ].sort(),

@@ -341,6 +341,22 @@ export function orderDetail(result: InboundEventResult | null, error: string | n
   }
 }
 
+/** An order a check stored again for its sold items' photos (`purpose: 'photos'`). */
+export function orderPhotosDetail(result: InboundEventResult | null, error: string | null): string {
+  switch (result) {
+    case null:
+      return "Waiting to add the sold listing's photos to its sold item.";
+    case 'processed':
+      return "Its sold item got the sold listing's photos.";
+    case 'ignored':
+      return 'No photos added: the item has photos already, or none could be fetched.';
+    case 'failed':
+      return error ?? "Listora couldn't read it.";
+    default:
+      return assertNever(result, 'inbound event result');
+  }
+}
+
 /** How Listora learned of a sale. */
 export function saleDetectionWords(source: SaleDetectionSource, marketplace: Marketplace): string {
   const name = MARKETPLACE_NAMES[marketplace];

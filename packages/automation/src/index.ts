@@ -226,6 +226,16 @@ export type {
 } from './sale-checks/orders.ts';
 export type { SaleCheckDependencies } from './sale-checks/job.ts';
 export {
+  addSoldItemPhotos,
+  isSoldItemPhotosJobPayload,
+  SOLD_ITEM_PHOTOS_TASK,
+} from './sale-checks/sold-photos.ts';
+export type {
+  SoldItemPhotoMaker,
+  SoldItemPhotosDependencies,
+  SoldItemPhotosJobPayload,
+} from './sale-checks/sold-photos.ts';
+export {
   dueSaleChecks,
   enqueueSaleCheck,
   queueSaleCheckForPhone,
