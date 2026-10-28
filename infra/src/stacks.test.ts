@@ -233,7 +233,12 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         }),
       });
       t.hasResourceProperties('AWS::RDS::DBParameterGroup', {
-        Parameters: Match.objectLike({ 'rds.force_ssl': '1' }),
+        Parameters: Match.objectLike({
+          'rds.force_ssl': '1',
+          // Slow statements are logged without their values (people's data).
+          log_parameter_max_length: '0',
+          log_parameter_max_length_on_error: '0',
+        }),
       });
       t.hasResourceProperties('AWS::SecretsManager::Secret', {
         Name: `listora/${environment}/database`,
