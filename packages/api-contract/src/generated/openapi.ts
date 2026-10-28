@@ -198,8 +198,14 @@ export interface paths {
         post?: never;
         /**
          * Delete an item
-         * @description Allowed only while no listing is live on a marketplace (every listing is `draft` or
-         *     `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+         * @description Deletes the item from Listora with its listings; nothing changes on a marketplace. The
+         *     history of what was done on the marketplaces is kept for the owner, and no seller view
+         *     serves it. A listing that is not live (`draft`, `ended`, or `sold`) never stops it. One
+         *     that may be live (any other status) does, with `409 invalid_state_transition` naming the
+         *     marketplaces, unless `leaveListings` is `true`: the seller either ends those listings first
+         *     or removes the item from Listora only. Also `409` while a change to one of its listings is
+         *     still in flight (queued, running, retrying, or verifying), and for an item that was sold,
+         *     whose sale records are kept (archive it instead). The SKU is never reused.
          */
         delete: operations["deleteItem"];
         options?: never;
@@ -7202,7 +7208,13 @@ export interface operations {
     };
     deleteItem: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description `true`: remove the item from Listora only. Its live listings stay up on their
+                 *     marketplaces, and Listora stops tracking them.
+                 */
+                leaveListings?: boolean;
+            };
             header?: never;
             path: {
                 itemId: components["parameters"]["ItemId"];

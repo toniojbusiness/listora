@@ -12,8 +12,21 @@ enum BulkAction: Equatable, Sendable {
     case relist
     /// Change the price of every live listing, and the item's list price, by the same rule.
     case changePrice(PriceAdjustment)
-    /// Delete each item from Listora (only an item on no marketplace can be deleted).
-    case delete
+    /// Delete each item from Listora; the mode says what happens to a listing that may be live.
+    case delete(DeleteMode)
+}
+
+/// What Delete does with an item's listings that may still be up on a marketplace. A listing
+/// already off its marketplace (or never posted) never stops a delete.
+enum DeleteMode: Equatable, Sendable {
+    /// None of the items was listed when the seller confirmed, so nothing needs asking. One that
+    /// is live by now is kept, with the server's reason.
+    case notListed
+    /// Each live listing is ended, and the item is deleted once its marketplaces confirm. One still
+    /// live after that is kept, with what is left and what to do.
+    case endListingsFirst
+    /// The item leaves Listora only: its listings stay up on their marketplaces, no longer tracked.
+    case leaveListings
 }
 
 /// What Change price does to each price: lower or raise it by a percentage or an amount.
@@ -92,7 +105,15 @@ extension ItemSummary {
             sizeLabel: item.details.sizeLabel,
             listPrice: item.details.listPrice,
             coverPhoto: item.photos.first,
-            listings: [],
+            listings: item.listings.map {
+                .init(
+                    listingId: $0.id,
+                    marketplace: $0.marketplace,
+                    mode: $0.mode,
+                    status: $0.status,
+                    statusDisplay: $0.statusDisplay,
+                )
+            },
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
         )

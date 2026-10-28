@@ -192,7 +192,7 @@ struct BulkActionModelTests {
         let model = model(service, [item("a", sku: "AJ-1"), item("b", sku: "AJ-2")])
         service.failure = .networkUnavailable
         service.failingCall = "delete:b"
-        await model.run(.delete)
+        await model.run(.delete(.notListed))
         // A lost answer is sent again with the same key; this one never got through.
         #expect(model.outcomes.map(\.result) == [.done, .done], "the resend went through")
 
@@ -203,7 +203,7 @@ struct BulkActionModelTests {
             retryable: false,
         )
         service.failingCall = "delete:b"
-        await model.run(.delete)
+        await model.run(.delete(.notListed))
         #expect(results(model) == [
             "AJ-1 item done: Deleted.",
             "AJ-2 item failed: This item is live on a marketplace. End its listings before deleting it.",

@@ -52,8 +52,15 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
     chooses to go below it.
   - **End all** asks why (sold elsewhere, no longer available) once; **Relist all** relists every
     ended listing.
-  - **Delete** confirms first; an item still on a marketplace, or with sales, is kept with the
-    server's reason (`deleteItem`).
+  - **Delete** confirms first. When a chosen item may still be live on a marketplace (a listing
+    neither draft, ended, nor sold), the confirmation asks what to do with those listings: **End
+    listings, then delete** ends each one (reason: no longer available), waits up to two minutes
+    for its marketplace to confirm, and deletes the item once none is live; an item still listed
+    then is kept, saying which listing is still ending (delete it again once it has) or which
+    did not end and why. **Remove from Listora only** deletes the item and leaves its listings up,
+    no longer tracked. Either way the history of what was done on the marketplaces is kept for
+    the owner, never shown in the app. An item with a sale is kept with the server's reason; see
+    [items.md](items.md#deleting-an-item).
   - A listing whose last change is still running takes no other (one change at a time), and is
     reported as such, with when to try again.
 - **List everywhere**: on the item screen, once two or more marketplaces can take the item, the

@@ -48,8 +48,9 @@ protocol InventoryService: Sendable {
     func item(id: String) async throws(APIFailure) -> Item
     /// Replaces the item's details (`expectedVersion` is the version last read; a newer one is `409`).
     func replaceItem(id: String, with replace: Components.Schemas.ItemReplace) async throws(APIFailure) -> Item
-    /// Deletes an item that is on no marketplace (`409` with the reason otherwise).
-    func deleteItem(id: String) async throws(APIFailure)
+    /// Deletes an item from Listora. Unless `leavingListings`, one with a listing that may be live
+    /// is kept (`409` with the reason); with it, those listings stay up, no longer tracked.
+    func deleteItem(id: String, leavingListings: Bool) async throws(APIFailure)
     func connections() async throws(APIFailure) -> [Connection]
     /// The item's "Don't sell below" price on each marketplace (none without a cost).
     func floors(itemID: String) async throws(APIFailure) -> [Components.Schemas.MarketplaceFloor]

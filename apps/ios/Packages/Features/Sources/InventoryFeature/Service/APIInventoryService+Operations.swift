@@ -5,8 +5,14 @@ import ListoraAPI
 /// The actions on an operation itself (Retry a failed one, Try now a waiting one), and deleting an
 /// item.
 extension APIInventoryService {
-    func deleteItem(id: String) async throws(APIFailure) {
-        switch try await call({ try await client.deleteItem(path: .init(itemId: id)) }) {
+    func deleteItem(id: String, leavingListings: Bool) async throws(APIFailure) {
+        let output = try await call {
+            try await client.deleteItem(
+                path: .init(itemId: id),
+                query: .init(leaveListings: leavingListings ? true : nil),
+            )
+        }
+        switch output {
         case .noContent: return
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response): throw APIFailure(statusCode: 409, response: response)

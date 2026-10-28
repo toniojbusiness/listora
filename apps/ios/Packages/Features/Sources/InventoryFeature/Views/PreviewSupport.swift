@@ -17,7 +17,7 @@ private struct EmptyInventoryService: InventoryService {
         throw .networkUnavailable
     }
 
-    func deleteItem(id _: String) async throws(APIFailure) {
+    func deleteItem(id _: String, leavingListings _: Bool) async throws(APIFailure) {
         throw .networkUnavailable
     }
 

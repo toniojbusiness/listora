@@ -40,12 +40,20 @@ export async function runActivityCommand(
       const { sku, ...rest } = command.filter;
       let itemId = rest.itemId;
       if (sku !== undefined) {
-        const item = await db
-          .selectFrom('inventory_item')
-          .select('id')
-          .where('account_id', '=', rest.accountId ?? '')
-          .where('sku', '=', sku)
-          .executeTakeFirst();
+        // A deleted item's SKU still finds its history (`deleted_item`); SKUs are never reused.
+        const item =
+          (await db
+            .selectFrom('inventory_item')
+            .select('id')
+            .where('account_id', '=', rest.accountId ?? '')
+            .where('sku', '=', sku)
+            .executeTakeFirst()) ??
+          (await db
+            .selectFrom('deleted_item')
+            .select('id')
+            .where('account_id', '=', rest.accountId ?? '')
+            .where('sku', '=', sku)
+            .executeTakeFirst());
         if (item === undefined) throw new CommandError(`no item ${sku} in that account`);
         itemId = item.id;
       }

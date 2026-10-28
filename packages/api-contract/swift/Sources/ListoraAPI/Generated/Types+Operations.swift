@@ -2021,8 +2021,14 @@ public enum Operations {
     }
     /// Delete an item
     ///
-    /// Allowed only while no listing is live on a marketplace (every listing is `draft` or
-    /// `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+    /// Deletes the item from Listora with its listings; nothing changes on a marketplace. The
+    /// history of what was done on the marketplaces is kept for the owner, and no seller view
+    /// serves it. A listing that is not live (`draft`, `ended`, or `sold`) never stops it. One
+    /// that may be live (any other status) does, with `409 invalid_state_transition` naming the
+    /// marketplaces, unless `leaveListings` is `true`: the seller either ends those listings first
+    /// or removes the item from Listora only. Also `409` while a change to one of its listings is
+    /// still in flight (queued, running, retrying, or verifying), and for an item that was sold,
+    /// whose sale records are kept (archive it instead). The SKU is never reused.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/items/{itemId}`.
@@ -2043,6 +2049,23 @@ public enum Operations {
                 }
             }
             public var path: Operations.DeleteItem.Input.Path
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/DELETE/query`.
+            public struct Query: Sendable, Hashable {
+                /// `true`: remove the item from Listora only. Its live listings stay up on their
+                /// marketplaces, and Listora stops tracking them.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/DELETE/query/leaveListings`.
+                public var leaveListings: Swift.Bool?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - leaveListings: `true`: remove the item from Listora only. Its live listings stay up on their
+                public init(leaveListings: Swift.Bool? = nil) {
+                    self.leaveListings = leaveListings
+                }
+            }
+            public var query: Operations.DeleteItem.Input.Query
             /// - Remark: Generated from `#/paths/v1/items/{itemId}/DELETE/header`.
             public struct Headers: Sendable, Hashable {
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteItem.AcceptableContentType>]
@@ -2059,12 +2082,15 @@ public enum Operations {
             ///
             /// - Parameters:
             ///   - path:
+            ///   - query:
             ///   - headers:
             public init(
                 path: Operations.DeleteItem.Input.Path,
+                query: Operations.DeleteItem.Input.Query = .init(),
                 headers: Operations.DeleteItem.Input.Headers = .init()
             ) {
                 self.path = path
+                self.query = query
                 self.headers = headers
             }
         }

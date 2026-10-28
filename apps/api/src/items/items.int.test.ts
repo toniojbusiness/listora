@@ -1,7 +1,8 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { jsonb } from '@listora/db';
+import { loadActivity } from '@listora/activity';
+import { jsonb, type ListingStatus, type Marketplace } from '@listora/db';
 
 import { createTestApi, fieldsOf, type TestApi } from '../test-support.ts';
 
@@ -606,46 +607,273 @@ describe('items (real Postgres)', () => {
       );
     });
 
-    it('refuses while a listing is live', async () => {
-      const created = (await create()).body;
+    /** A listing of the item, and one operation on it with its first event. */
+    async function listingWithOperation(
+      itemId: string,
+      marketplace: Marketplace,
+      status: ListingStatus,
+      operation: { kind: string; status: string },
+    ) {
+      const tenant = await api.tenantOf(OWNER);
+      const listing = await api.db
+        .insertInto('marketplace_listing')
+        .values({ account_id: tenant.accountId, item_id: itemId, marketplace, status })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      // What the operation's checks require of its kind and status.
+      const content = ['create', 'revise', 'relist'].includes(operation.kind) ? '{}' : null;
+      const evidence = operation.status === 'succeeded' ? 'read_back' : null;
+      const nextAttempt = operation.status === 'retrying' ? new Date() : null;
+      const error = operation.status === 'failed' ? 'It failed.' : null;
+      const { rows } = await sql<{ id: string }>`
+        insert into marketplace_operation (account_id, listing_id, kind, status, idempotency_key,
+          desired, origin, content, success_evidence, next_attempt_at, error_message)
+        values (${tenant.accountId}, ${listing.id}, ${operation.kind}, ${operation.status},
+          ${crypto.randomUUID()}, '{}', 'user', ${content}, ${evidence}, ${nextAttempt}, ${error})
+        returning id
+      `.execute(api.db);
+      const operationId = rows[0]?.id ?? '';
+      await sql`
+        insert into operation_event (account_id, operation_id, to_status)
+        values (${tenant.accountId}, ${operationId}, 'queued')
+      `.execute(api.db);
+      return { listingId: listing.id, operationId };
+    }
+
+    /** The item's listings Listora still tracks, and the operations on them or kept for them. */
+    async function remaining(itemId: string, listingIds: readonly string[]) {
+      const tenant = await api.tenantOf(OWNER);
+      const listings = await api.db
+        .selectFrom('marketplace_listing')
+        .select('id')
+        .where('account_id', '=', tenant.accountId)
+        .where('item_id', '=', itemId)
+        .execute();
+      const tracked = await api.db
+        .selectFrom('marketplace_operation')
+        .select('id')
+        .where('account_id', '=', tenant.accountId)
+        .where('listing_id', 'in', [...listingIds])
+        .execute();
+      const kept = await api.db
+        .selectFrom('marketplace_operation')
+        .select('id')
+        .where('account_id', '=', tenant.accountId)
+        .where('deleted_listing_id', 'in', [...listingIds])
+        .where('listing_id', 'is', null)
+        .execute();
+      return { listings: listings.length, operations: tracked.length, kept: kept.length };
+    }
+
+    // The captain's item: a Poshmark publish canceled, a Mercari publish dismissed, and a Depop
+    // listing ended. None is live, so it is deleted, and their history is kept for the owner.
+    it('deletes an item whose listings were never posted or have ended, keeping their history', async () => {
+      const created = (await create({ title: 'Boxer briefs' })).body;
+      const poshmark = await listingWithOperation(created.id, 'poshmark', 'draft', {
+        kind: 'create',
+        status: 'canceled',
+      });
+      const mercari = await listingWithOperation(created.id, 'mercari', 'draft', {
+        kind: 'create',
+        status: 'failed',
+      });
+      const depop = await listingWithOperation(created.id, 'depop', 'ended', {
+        kind: 'end',
+        status: 'succeeded',
+      });
       const tenant = await api.tenantOf(OWNER);
       await api.db
-        .insertInto('marketplace_listing')
+        .insertInto('user_task')
         .values({
           account_id: tenant.accountId,
           item_id: created.id,
-          marketplace: 'ebay',
-          status: 'ending',
+          listing_id: mercari.listingId,
+          operation_id: mercari.operationId,
+          kind: 'list_manually',
+          status: 'dismissed',
+          completed_at: new Date(),
         })
         .execute();
+
+      const response = await api.call('deleteItem', { token, params: { itemId: created.id } });
+      expect(response.status).toBe(204);
+      expect((await api.call('getItem', { token, params: { itemId: created.id } })).status).toBe(
+        404,
+      );
+      const ids = [poshmark.listingId, mercari.listingId, depop.listingId];
+      expect(await remaining(created.id, ids)).toEqual({ listings: 0, operations: 0, kept: 3 });
+
+      // The owner's and operators' timeline still has every action, under the item's id and
+      // title, marked deleted.
+      const history = await loadActivity(api.db, {
+        accountId: tenant.accountId,
+        itemId: created.id,
+        limit: 50,
+      });
+      const operations = history.filter((entry) => entry.kind === 'operation');
+      expect(new Set(operations.map((entry) => entry.operationId))).toEqual(
+        new Set([poshmark.operationId, mercari.operationId, depop.operationId]),
+      );
+      expect(new Set(operations.map((entry) => entry.marketplace))).toEqual(
+        new Set(['poshmark', 'mercari', 'depop']),
+      );
+      expect(operations.every((entry) => entry.itemId === created.id)).toBe(true);
+      expect(history).toContainEqual(
+        expect.objectContaining({
+          kind: 'item',
+          title: 'Item deleted',
+          detail: `${created.sku}: Boxer briefs`,
+          itemId: created.id,
+        }),
+      );
+
+      // The seller sees none of it.
+      const seller = await loadActivity(api.db, {
+        accountId: tenant.accountId,
+        limit: 500,
+        forSeller: true,
+      });
+      expect(seller.filter((entry) => entry.itemId === created.id)).toEqual([]);
+      expect(
+        (await api.call('getOperation', { token, params: { operationId: depop.operationId } }))
+          .status,
+      ).toBe(404);
+      expect(
+        (await api.call('listItemActivity', { token, params: { itemId: created.id } })).status,
+      ).toBe(404);
+    });
+
+    it('is not stopped by a listing that sold on its marketplace', async () => {
+      const created = (await create()).body;
+      await listingWithOperation(created.id, 'ebay', 'sold', { kind: 'end', status: 'succeeded' });
+      const response = await api.call('deleteItem', { token, params: { itemId: created.id } });
+      expect(response.status).toBe(204);
+    });
+
+    it('asks first while a listing may be live, naming its marketplaces', async () => {
+      const created = (await create()).body;
+      const ebay = await listingWithOperation(created.id, 'ebay', 'active', {
+        kind: 'create',
+        status: 'succeeded',
+      });
+      const poshmark = await listingWithOperation(created.id, 'poshmark', 'unknown', {
+        kind: 'create',
+        status: 'failed',
+      });
       const response = await api.call('deleteItem', { token, params: { itemId: created.id } });
       expect(response.status).toBe(409);
       expect(response.error.code).toBe('invalid_state_transition');
+      expect(response.error.message).toBe(
+        'This item is still listed on eBay and Poshmark. End those listings first, or remove it ' +
+          'from Listora only and leave them up.',
+      );
+      expect((await api.call('getItem', { token, params: { itemId: created.id } })).status).toBe(
+        200,
+      );
+      expect(await remaining(created.id, [ebay.listingId, poshmark.listingId])).toEqual({
+        listings: 2,
+        operations: 2,
+        kept: 0,
+      });
+
+      const asked = await api.call('deleteItem', {
+        token,
+        params: { itemId: created.id },
+        query: { leaveListings: 'false' },
+      });
+      expect(asked.status).toBe(409);
+    });
+
+    it('removes an item from Listora only, leaving its live listings up', async () => {
+      const created = (await create()).body;
+      const ebay = await listingWithOperation(created.id, 'ebay', 'active', {
+        kind: 'create',
+        status: 'succeeded',
+      });
+      const poshmark = await listingWithOperation(created.id, 'poshmark', 'needs_user_action', {
+        kind: 'end',
+        status: 'needs_user_action',
+      });
+      const response = await api.call('deleteItem', {
+        token,
+        params: { itemId: created.id },
+        query: { leaveListings: 'true' },
+      });
+      expect(response.status).toBe(204);
+      expect((await api.call('getItem', { token, params: { itemId: created.id } })).status).toBe(
+        404,
+      );
+      expect(await remaining(created.id, [ebay.listingId, poshmark.listingId])).toEqual({
+        listings: 0,
+        operations: 0,
+        kept: 2,
+      });
+      // Its task went with the listing, so the step that waited for the seller is canceled.
+      const waiting = await api.db
+        .selectFrom('marketplace_operation')
+        .select('status')
+        .where('id', '=', poshmark.operationId)
+        .executeTakeFirstOrThrow();
+      expect(waiting.status).toBe('canceled');
+    });
+
+    it('refuses while a change is still on its way to a marketplace', async () => {
+      const created = (await create()).body;
+      await listingWithOperation(created.id, 'poshmark', 'ending', {
+        kind: 'end',
+        status: 'retrying',
+      });
+      const response = await api.call('deleteItem', {
+        token,
+        params: { itemId: created.id },
+        query: { leaveListings: 'true' },
+      });
+      expect(response.status).toBe(409);
+      expect(response.error.message).toBe(
+        'Listora is still working on this item on Poshmark. Delete it once that is done, or cancel it.',
+      );
       expect((await api.call('getItem', { token, params: { itemId: created.id } })).status).toBe(
         200,
       );
     });
 
-    it('refuses when marketplace history must be kept', async () => {
+    it('keeps an item that was sold, with its sale', async () => {
       const created = (await create()).body;
       const tenant = await api.tenantOf(OWNER);
-      const listing = await api.db
-        .insertInto('marketplace_listing')
+      const listing = await listingWithOperation(created.id, 'depop', 'sold', {
+        kind: 'end',
+        status: 'succeeded',
+      });
+      const sale = await api.db
+        .insertInto('sale')
         .values({
           account_id: tenant.accountId,
-          item_id: created.id,
-          marketplace: 'ebay',
-          status: 'ended',
+          marketplace: 'depop',
+          sold_at: new Date(),
+          detection_source: 'manual',
         })
         .returning('id')
         .executeTakeFirstOrThrow();
-      await sql`
-        insert into marketplace_operation (account_id, listing_id, kind, idempotency_key, desired, origin)
-        values (${tenant.accountId}, ${listing.id}, 'end', ${crypto.randomUUID()}, '{}', 'user')
-      `.execute(api.db);
-      const response = await api.call('deleteItem', { token, params: { itemId: created.id } });
+      await api.db
+        .insertInto('sale_item')
+        .values({
+          account_id: tenant.accountId,
+          sale_id: sale.id,
+          marketplace: 'depop',
+          item_id: created.id,
+          listing_id: listing.listingId,
+          sale_price_cents: 2500,
+        })
+        .execute();
+      const response = await api.call('deleteItem', {
+        token,
+        params: { itemId: created.id },
+        query: { leaveListings: 'true' },
+      });
       expect(response.status).toBe(409);
-      expect(response.error.message).toContain('Archive it instead');
+      expect(response.error.message).toBe(
+        'This item was sold, so Listora keeps it with the sale. Archive it instead.',
+      );
       expect((await api.call('getItem', { token, params: { itemId: created.id } })).status).toBe(
         200,
       );

@@ -14,7 +14,7 @@ import type { DbExecutor, DbTransaction, Marketplace } from '@listora/db';
 
 import { OPERATION_PRIORITY, scheduleOperationJob } from './jobs.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
-import { attemptNow, type OperationRow } from './transitions.ts';
+import { attemptNow, type OperationRow, type Tracked } from './transitions.ts';
 
 export interface PhoneQueueSettings {
   /** How often the worker looks at an operation waiting for the phone (default 15 minutes). */
@@ -161,6 +161,8 @@ export async function releasePhoneOperations(
       .select(['account_id', 'id', 'listing_id', 'origin'])
       .where('account_id', '=', connection.accountId)
       .where('id', '=', operationId)
+      .where('listing_id', 'is not', null)
+      .$narrowType<Tracked>()
       .executeTakeFirst();
     if (op === undefined) continue;
     await scheduleOperationJob(trx, {
@@ -224,6 +226,7 @@ export async function runWaitingPhoneOperationsNow(
 ): Promise<number> {
   const waiting = await deviceOperations(trx, device)
     .selectAll('op')
+    .$narrowType<Tracked>()
     .where('op.status', 'in', ['retrying', 'verifying'])
     .where('op.next_attempt_at', '>', sql<Date>`now()`)
     .where(
