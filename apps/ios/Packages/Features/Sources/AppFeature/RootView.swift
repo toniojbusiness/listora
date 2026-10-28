@@ -29,6 +29,7 @@ public struct RootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(dependencies: AppDependencies, initialTab: AppTab = .today) {
+        BrandAppearance.install()
         self.dependencies = dependencies
         _selection = State(initialValue: initialTab)
     }
@@ -103,11 +104,13 @@ public struct RootView: View {
         TabView(selection: $selection) {
             ForEach(AppTab.allCases) { tab in
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) {
+                    // The tab rail stands in for the system tab bar, which TabView still drives.
                     screen(for: tab)
+                        .toolbar(.hidden, for: .tabBar)
                 }
-                .badge(badgeCount(for: tab))
             }
         }
+        .tabRail(railItems, selection: $selection)
         .tint(Palette.brand.color)
         // Deleting the account keeps its result on screen; closing Settings then shows the sign-in.
         .sheet(isPresented: $showsSettings, onDismiss: { dependencies.signIn.finishSignOut() }, content: { settings })
@@ -133,6 +136,20 @@ public struct RootView: View {
         .task(id: scenePhase == .active) {
             guard scenePhase == .active else { return }
             await dependencies.tasks.inbox.follow()
+        }
+    }
+
+    private var railItems: [TabRailItem<AppTab>] {
+        AppTab.allCases.map { tab in
+            let badge = badgeCount(for: tab)
+            return TabRailItem(
+                id: tab,
+                title: tab.title,
+                systemImage: tab.systemImage,
+                badge: badge,
+                badgeDescription: tab.badgeDescription(badge),
+                isTag: tab.isTag,
+            )
         }
     }
 

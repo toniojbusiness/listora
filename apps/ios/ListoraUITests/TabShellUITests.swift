@@ -15,7 +15,7 @@ final class TabShellUITests: XCTestCase {
     }
 
     func testShowsTheFiveTabsAndOpensToday() {
-        let tabBar = app.tabBars.firstMatch
+        let tabBar = app.tabRail
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
         for title in ["Today", "Inventory", "Add", "Tasks", "Sales"] {
             XCTAssertTrue(tabBar.buttons[title].exists, "missing tab \(title)")
@@ -28,7 +28,7 @@ final class TabShellUITests: XCTestCase {
     }
 
     func testEachTabShowsItsScreen() {
-        let tabBar = app.tabBars.firstMatch
+        let tabBar = app.tabRail
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
         // The Add tab's screen is titled Add Item. Without a server, the others say they could
         // not load, with Try again.
@@ -53,7 +53,7 @@ final class TabShellUITests: XCTestCase {
     }
 
     func testSalesOpensSettingsToo() {
-        let sales = app.tabBars.buttons["Sales"]
+        let sales = app.tabRail.buttons["Sales"]
         XCTAssertTrue(sales.waitForExistence(timeout: 10))
         sales.tap()
         app.buttons["settings.open"].tap()

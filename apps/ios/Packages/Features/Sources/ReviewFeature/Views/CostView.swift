@@ -32,7 +32,7 @@ struct CostView: View {
         .background(Palette.background)
         .navigationTitle("Cost")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)
+        .tabRailHidden()
         .bottomActionBar {
             Button("Continue to price") {
                 isSourceFocused = false

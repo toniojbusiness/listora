@@ -24,7 +24,7 @@ final class ProfitDashboardUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(expected.salesCount, 1)
         launch(signedInTo: stack)
 
-        app.tabBars.buttons["Sales"].tap()
+        app.tabRail.buttons["Sales"].tap()
         let entry = app.buttons["sales.profit"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15))
         entry.tap()
@@ -100,7 +100,7 @@ final class ProfitDashboardUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Inventory"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.buttons["Inventory"].waitForExistence(timeout: 10))
     }
 
     /// Keeps a screenshot in the result bundle, passing or not, for reviewing the screens.

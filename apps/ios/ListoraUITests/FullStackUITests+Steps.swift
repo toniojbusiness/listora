@@ -27,7 +27,7 @@ extension FullStackUITests {
         }
         app.launch()
         skipGettingStartedIfShown()
-        XCTAssertTrue(app.tabBars.buttons["Inventory"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabRail.buttons["Inventory"].waitForExistence(timeout: 15))
     }
 
     /// From a signed-out launch: the welcome screen, the seller's email, and the code the dev
@@ -40,7 +40,7 @@ extension FullStackUITests {
         ]
         app.launch()
         XCTAssertTrue(element("signIn.welcome").waitForExistence(timeout: 15), "no welcome screen")
-        XCTAssertFalse(app.tabBars.firstMatch.exists, "the tabs show only once signed in")
+        XCTAssertFalse(app.tabRail.exists, "the tabs show only once signed in")
         let email = app.textFields["signIn.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 5))
         email.tap()
@@ -52,7 +52,7 @@ extension FullStackUITests {
         try await code.typeText(full.signInCode(for: full.stack.email))
         app.buttons["signIn.signIn"].tap()
         skipGettingStartedIfShown()
-        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15), "signing in shows the tabs")
+        XCTAssertTrue(app.tabRail.buttons["Today"].waitForExistence(timeout: 15), "signing in shows the tabs")
         keepScreenshot("Signed in")
     }
 
@@ -66,7 +66,7 @@ extension FullStackUITests {
 
     /// Settings opens from the avatar on Today.
     func openSettings() {
-        app.tabBars.buttons["Today"].tap()
+        app.tabRail.buttons["Today"].tap()
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 15), "no Settings\n\(app.debugDescription)")
         settings.tap()
@@ -116,7 +116,7 @@ extension FullStackUITests {
     /// Imports the fixture photos, waits for the AI draft, and saves it at the recommended price
     /// with its cost. Returns the new item's SKU.
     func createItemFromPhotos() -> String {
-        app.tabBars.buttons["Add"].tap()
+        app.tabRail.buttons["Add"].tap()
         let importPhotos = app.buttons["addItem.importPhotos"]
         XCTAssertTrue(importPhotos.waitForExistence(timeout: 10))
         importPhotos.tap()
@@ -153,7 +153,7 @@ extension FullStackUITests {
     }
 
     func openItem(sku: String) {
-        app.tabBars.buttons["Inventory"].tap()
+        app.tabRail.buttons["Inventory"].tap()
         let row = app.buttons["inventory.row.\(sku)"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "\(sku) is not in the inventory")
         row.tap()

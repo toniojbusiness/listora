@@ -76,6 +76,31 @@ struct PaletteTests {
         }
     }
 
+    /// WCAG AA minimum for graphics that carry meaning (1.4.11).
+    private static let minimumGraphicContrast = 3.0
+
+    @Test
+    func `the string and the rail stand out on every background, like any meaningful graphic`() {
+        for (name, token) in [("thread", Palette.thread), ("rail", Palette.rail)] {
+            for (backgroundName, background) in Self.backgrounds {
+                let light = token.light.contrastRatio(with: background.light)
+                let dark = token.dark.contrastRatio(with: background.dark)
+                #expect(light >= Self.minimumGraphicContrast, "\(name) on \(backgroundName) (light) is \(light):1")
+                #expect(dark >= Self.minimumGraphicContrast, "\(name) on \(backgroundName) (dark) is \(dark):1")
+            }
+        }
+    }
+
+    @Test
+    func `the stitching stays quieter than the string, so decoration never reads as a connection`() {
+        for background in [Palette.surface, Palette.background] {
+            #expect(Palette.stitch.light.contrastRatio(with: background.light)
+                < Palette.thread.light.contrastRatio(with: background.light))
+            #expect(Palette.stitch.dark.contrastRatio(with: background.dark)
+                < Palette.thread.dark.contrastRatio(with: background.dark))
+        }
+    }
+
     @Test
     func `button labels are readable on the brand and danger colors`() {
         expectReadable(Palette.onBrand, on: Palette.brand, "onBrand on brand")

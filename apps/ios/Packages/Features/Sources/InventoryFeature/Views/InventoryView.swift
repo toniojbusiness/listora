@@ -51,7 +51,7 @@ public struct InventoryView<Header: View>: View {
                 )
                 .toolbar { toolbar }
                 // While choosing items the selection bar takes the tab bar's place.
-                .toolbar(model.isSelecting ? .hidden : .automatic, for: .tabBar)
+                .tabRailHidden(model.isSelecting)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if model.isSelecting {
                         SelectionBar(chosen: model.selection.count) { kind in

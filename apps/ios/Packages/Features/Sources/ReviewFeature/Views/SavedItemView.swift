@@ -14,7 +14,7 @@ struct SavedItemView: View {
             .background(Palette.background)
             .navigationTitle("Saved")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
+            .tabRailHidden()
             .bottomActionBar {
                 Button("List it now", systemImage: "tag.fill", action: onListNow)
                     .buttonStyle(.listoraPrimary)

@@ -16,7 +16,7 @@ struct PriceView: View {
             .background(Palette.background)
             .navigationTitle("Price")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
+            .tabRailHidden()
             .measuresInteraction(model)
             .actionErrorAlert(model)
             .sheet(isPresented: $isEnteringPrice) {

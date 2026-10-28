@@ -26,7 +26,7 @@ struct ReviewFlowView: View {
             .navigationTitle(model.item?.sku ?? model.request.sku ?? "Review")
             .navigationBarTitleDisplayMode(.inline)
             // The flow has its own bottom bars; the tabs come back when it ends.
-            .toolbar(.hidden, for: .tabBar)
+            .tabRailHidden()
             .task { await model.appeared() }
             .measuresInteraction(model)
             .actionErrorAlert(model)
