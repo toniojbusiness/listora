@@ -37,6 +37,13 @@ private struct EmptyInventoryService: InventoryService {
         []
     }
 
+    func waitForChange(itemID _: String, after: String?, waitSeconds: Int) async throws(APIFailure) -> ItemChangeWait {
+        if after != nil {
+            try? await Task.sleep(for: .seconds(waitSeconds))
+        }
+        return ItemChangeWait(changed: after == nil, token: "preview")
+    }
+
     func events(operationID _: String) async throws(APIFailure) -> [OperationEvent] {
         []
     }

@@ -145,6 +145,50 @@
         $ref: '../components/responses.yaml#/Conflict'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/changes:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  get:
+    tags: [items]
+    operationId: waitForItemChange
+    summary: Wait for a change to an item's marketplace work
+    description: |
+      While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+      the item screen waits here instead of reading the item on a timer: the answer comes as
+      soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+      with none. Pass the `token` of the previous answer as `after`; without it (the first
+      wait) the answer is immediate, with `changed` true, so the screen reads the item once
+      more after starting to follow it. It only reads.
+    parameters:
+      - name: after
+        in: query
+        required: false
+        description: The `token` of the previous answer.
+        schema:
+          type: string
+          maxLength: 64
+      - name: waitSeconds
+        in: query
+        required: true
+        description: The longest the answer may take.
+        schema:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 20
+    responses:
+      '200':
+        description: Whether the item's operations changed.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/items.yaml#/ItemChangeWaitResult'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
 /v1/skus/{sku}:
   parameters:
     - name: sku

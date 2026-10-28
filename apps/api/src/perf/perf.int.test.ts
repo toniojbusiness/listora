@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { COMPRESS_THRESHOLD_BYTES } from '../compression.ts';
 import { createTestApi, type TestApi } from '../test-support.ts';
 import { SCENARIOS, fixtureFor, runScenario, seedSeller, type BenchFixture } from './bench.ts';
 import { countStatements } from './statements.ts';
@@ -28,6 +29,10 @@ describe('performance benchmark (synthetic seller)', () => {
     for (const scenario of SCENARIOS) {
       const result = await runScenario(api, scenario, fixture, 1);
       expect(result.statements, scenario.name).toBeGreaterThan(0);
+      // Compressed for the app (compression.ts): JSON shrinks well over 2x.
+      if (result.bytes >= 2 * COMPRESS_THRESHOLD_BYTES) {
+        expect(result.wireBytes * 2, scenario.name).toBeLessThan(result.bytes);
+      }
     }
   }, 60_000);
 

@@ -65,13 +65,36 @@ final class ItemDetailModel {
         }
     }
 
-    /// Reads the item again while a change is in progress, until none is. A retry waits until
-    /// its next attempt is due (at most ``DetailTiming/longestPoll``).
+    /// Follows the item while a change is in progress, until none is. The server answers a wait
+    /// the moment one of the item's operations changes (`waitForItemChange`), and the item is
+    /// read again then, so a change waiting for the phone or a retry costs one request every
+    /// ``DetailTiming/changeWait`` instead of one a second. When the wait fails (Listora can't be
+    /// reached), the item is read on a timer instead: every ``DetailTiming/poll``, or when a
+    /// retry is due (at most ``DetailTiming/longestPoll``).
     func followChanges() async {
+        var token: String?
         while !Task.isCancelled {
-            try? await Task.sleep(for: pollDelay())
-            guard !Task.isCancelled else { return }
-            if isWorking {
+            guard isWorking else {
+                token = nil
+                try? await Task.sleep(for: timing.poll)
+                continue
+            }
+            do {
+                let answer = try await service.waitForChange(
+                    itemID: itemID,
+                    after: token,
+                    waitSeconds: Int(timing.changeWait.components.seconds),
+                )
+                guard !Task.isCancelled else { return }
+                token = answer.token
+                if answer.changed {
+                    await refresh()
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                token = nil
+                try? await Task.sleep(for: pollDelay())
+                guard !Task.isCancelled else { return }
                 await refresh()
             }
         }
@@ -263,14 +286,17 @@ final class ItemDetailModel {
     }
 }
 
-/// How often the item screen reads the server while a change runs.
+/// How the item screen follows the server while a change runs.
 struct DetailTiming: Sendable {
+    /// How often the screen looks whether a change runs, and reads the item while it can't wait.
     var poll: Duration
     /// The longest wait between reads, even for a retry that is far off.
     var longestPoll: Duration
     /// Sends of one action when the connection drops before an answer.
     var sendAttempts: Int
     var sendRetryDelay: Duration
+    /// The longest one wait for a change holds (the server answers within 20 seconds).
+    var changeWait: Duration = .seconds(20)
 
     static let standard = DetailTiming(
         poll: .seconds(1),

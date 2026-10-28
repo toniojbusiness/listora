@@ -12,6 +12,7 @@ import type { AiClient } from '@listora/ai';
 import type { PhoneWorkDependencies } from '@listora/automation';
 import type { AnalysisJobQueue } from '@listora/analysis';
 import type { BatchJobQueue } from '@listora/batches';
+import type { KeyedSignals } from '@listora/db';
 import type { PhotoJobQueue } from '@listora/photos';
 import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
@@ -53,6 +54,8 @@ export interface ApiRouteContext extends RouteDependencies {
   invites: InvitesDependencies;
   /** The marketplace work phones run (docs/features/phone-execution.md); none without it. */
   phone: PhoneWorkDependencies | undefined;
+  /** Signals keyed by item id, that end the item screen's wait for a change at once. */
+  itemChanges: KeyedSignals | undefined;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

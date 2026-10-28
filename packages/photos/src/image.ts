@@ -11,6 +11,19 @@ import { perceptualHash, PHASH_SAMPLE_SIZE } from './phash.ts';
  */
 export const MAX_INPUT_PIXELS = 4096 * 4096;
 
+/**
+ * libvips threads per process. One: the API and the worker share a fraction of a vCPU in the
+ * personal environment, and libvips' default (one thread per core) let a burst of photos take
+ * every core from the requests (docs/features/performance.md, "Worker"). A photo takes a little
+ * longer on its own and no more CPU in total.
+ */
+export const IMAGE_THREADS = 1;
+
+/** Limits libvips to `IMAGE_THREADS`; called once at the start of every process that uses it. */
+export function limitImageThreads(): void {
+  sharp.concurrency(IMAGE_THREADS);
+}
+
 /** Every JPEG starts with a start-of-image marker followed by another marker. */
 const JPEG_MAGIC = [0xff, 0xd8, 0xff] as const;
 

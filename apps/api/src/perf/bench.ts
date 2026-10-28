@@ -2,7 +2,8 @@
  * The API latency benchmark (docs/features/performance.md): a synthetic 2,000-item seller on
  * a scratch database, then each screen's read endpoints called in turn, reporting p50, p95,
  * and the number of SQL statements per request. Run it with `npm run perf:api` (options:
- * `--items`, `--other-sellers`, `--iterations`, `--only <name parts, comma-separated>`, `--json <file>`).
+ * `--items`, `--other-sellers`, `--iterations`, `--only <name parts, comma-separated>`, `--json <file>`,
+ * `--encoding <Accept-Encoding>`, the app's by default; `identity` sends every answer uncompressed).
  *
  * The app is the real one (`buildApp` through the integration tests' `createTestApi`), driven
  * with `inject`, so the numbers include routing, validation, auth, the queries, and the
@@ -17,6 +18,9 @@ import { seedSyntheticSeller, type SyntheticSellerCounts } from './seed.ts';
 import { countStatements } from './statements.ts';
 
 const statements = countStatements();
+
+/** The `Accept-Encoding` the app's URLSession sends. */
+export const APP_ACCEPT_ENCODING = 'gzip, deflate, br';
 
 export interface Scenario {
   name: string;
@@ -40,6 +44,8 @@ export interface ScenarioResult {
   maxMs: number;
   statements: number;
   bytes: number;
+  /** The response as sent to a client that accepts what the app does (`gzip, deflate, br`). */
+  wireBytes: number;
 }
 
 export const SCENARIOS: readonly Scenario[] = [
@@ -147,15 +153,20 @@ export async function runScenario(
   scenario: Scenario,
   fixture: BenchFixture,
   iterations: number,
+  encoding: string = APP_ACCEPT_ENCODING,
 ): Promise<ScenarioResult> {
   const options = { token: fixture.token, ...scenario.options(fixture) };
   const durations: number[] = [];
   let perRequest = 0;
   let bytes = 0;
+  let wireBytes = 0;
   for (let i = 0; i < iterations + 5; i += 1) {
     const before = statements();
     const started = performance.now();
-    const result = await api.call(scenario.operationId, options);
+    const result = await api.call(scenario.operationId, {
+      ...options,
+      headers: { 'accept-encoding': encoding },
+    });
     const elapsed = performance.now() - started;
     if (result.status !== 200) {
       throw new Error(`${scenario.name} answered ${String(result.status)}`);
@@ -165,6 +176,7 @@ export async function runScenario(
       durations.push(elapsed);
       perRequest = statements() - before;
       bytes = JSON.stringify(result.body).length;
+      wireBytes = result.wireBytes;
     }
   }
   durations.sort((a, b) => a - b);
@@ -175,6 +187,7 @@ export async function runScenario(
     maxMs: durations.at(-1) ?? 0,
     statements: perRequest,
     bytes,
+    wireBytes,
   };
 }
 
@@ -192,11 +205,11 @@ export async function seedSeller(
 
 function table(results: readonly ScenarioResult[]): string {
   const lines = [
-    '| Endpoint | p50 ms | p95 ms | max ms | SQL statements | Response bytes |',
-    '| --- | ---: | ---: | ---: | ---: | ---: |',
+    '| Endpoint | p50 ms | p95 ms | max ms | SQL statements | Response bytes | Bytes sent |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
     ...results.map(
       (r) =>
-        `| ${r.name} | ${r.p50Ms.toFixed(1)} | ${r.p95Ms.toFixed(1)} | ${r.maxMs.toFixed(1)} | ${String(r.statements)} | ${String(r.bytes)} |`,
+        `| ${r.name} | ${r.p50Ms.toFixed(1)} | ${r.p95Ms.toFixed(1)} | ${r.maxMs.toFixed(1)} | ${String(r.statements)} | ${String(r.bytes)} | ${String(r.wireBytes)} |`,
     ),
   ];
   return `${lines.join('\n')}\n`;
@@ -210,6 +223,8 @@ async function main(): Promise<void> {
       iterations: { type: 'string', default: '100' },
       json: { type: 'string' },
       only: { type: 'string' },
+      // What the requests accept: the app's own header by default; `identity` for none.
+      encoding: { type: 'string', default: APP_ACCEPT_ENCODING },
     },
   });
   const items = Number(values.items);
@@ -232,7 +247,7 @@ async function main(): Promise<void> {
     for (const scenario of SCENARIOS) {
       const name = scenario.name.toLowerCase();
       if (only !== undefined && !only.some((part) => name.includes(part.trim()))) continue;
-      results.push(await runScenario(api, scenario, fixture, iterations));
+      results.push(await runScenario(api, scenario, fixture, iterations, values.encoding));
       // The test API keeps every log line; a benchmark run does not need them.
       api.logLines.length = 0;
     }

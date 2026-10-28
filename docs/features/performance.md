@@ -21,9 +21,11 @@ them; the tools below are in the repository.
   (so a query that misses its account index shows), then calls each screen's read endpoints in
   turn through the real app (`buildApp`, driven with `inject`: routing, validation, auth, SQL,
   and serialization, not the network) and prints p50, p95, and max latency, the SQL statements
-  per request, and the response size. Options: `--items`, `--other-sellers`, `--iterations`
-  (default 100 after 5 warm-up calls), `--only <name parts, comma-separated>`, and
-  `--json <file>`.
+  per request, the response size, and the bytes sent. Requests accept what the app's
+  URLSession accepts (`gzip, deflate, br`), so the bytes sent are compressed as for the app.
+  Options: `--items`, `--other-sellers`, `--iterations` (default 100 after 5 warm-up calls),
+  `--only <name parts, comma-separated>`, `--json <file>`, and `--encoding <Accept-Encoding>`
+  (`identity` for uncompressed answers).
 - **The query-count guard**, `apps/api/src/perf/perf.int.test.ts`: every benchmark scenario
   runs against a 150-item seller in the integration suite, and each list endpoint must read a
   page of 100 in exactly as many statements as a page of 2. An N+1 query fails it.
@@ -118,7 +120,8 @@ polls.
 Throughput is bounded by the marketplaces, not the worker: an operation step is a marketplace
 call followed by a read-back one retry delay later, so 5 slots keep 5 marketplace calls in
 flight. Photo processing, the heaviest local job, takes 28 ms of wall time and about 200 ms of
-CPU for a 2048 x 1536 upload (6 libvips threads; 43 ms with 1), with a peak of about 240 MB
+CPU for a 2048 x 1536 upload (measured with 6 libvips threads; 43 ms with 1, which both the
+worker and the API now use, see below), with a peak of about 240 MB
 for the process, so the personal environment's 0.25 vCPU of then processed an item's 6 photos in about
 5 s. The derivatives of such an upload take about 1.5 MB (original 898 KB, listing 463 KB,
 AI 165 KB, thumbnail 20 KB at the 400 px of then; the 640 px thumbnail of now is about 2.5
@@ -237,6 +240,59 @@ real marketplace page has been measured.
   retries, so uploads continue when the app is suspended.
 - **Networking is on demand.** The app reads a screen's data when it appears and on pull to
   refresh; it does not poll in the background.
+
+## Server efficiency pass of 2026-10-28
+
+The read-only efficiency audit of 2026-10-28 found most of production's API traffic and much
+of its slowness in three places; all three were changed. Numbers from this laptop under heavy
+load (load average 50-57 on 12 cores), so latencies are noisy; request counts and bytes are
+exact.
+
+**Response compression** (`apps/api/src/compression.ts`). No answer was compressed: API
+Gateway's HTTP API does not compress, though the app's URLSession accepts gzip and brotli. An
+`onSend` hook on the root now compresses every JSON, JavaScript, or text answer of at least
+1 KB with brotli (gzip for a client that accepts only that), and never a photo. Brotli runs at
+quality 4: on a 75 KB inventory page it took 0.19 ms of CPU against 0.31 ms for gzip and
+39 ms at brotli's default quality 11, which the API and worker sharing half a vCPU cannot spare per request. The
+benchmark (`npm run perf:api -- --items 120 --other-sellers 4 --iterations 60`, then again
+with `--encoding identity`):
+
+| Endpoint                | Bytes before | Bytes sent after |
+| ----------------------- | -----------: | ---------------: |
+| Inventory, first page   |       28,558 |            4,818 |
+| Inventory, 100 per page |      119,465 |           16,924 |
+| Item detail, listed     |        9,843 |            1,581 |
+| Today                   |        2,212 |              813 |
+| Sales feed              |       46,096 |            5,586 |
+| Tasks, open             |       26,455 |            4,238 |
+| Operations              |       13,516 |            1,805 |
+| Listings                |       34,893 |            3,137 |
+| Connection health       |        4,113 |              924 |
+
+3-11 times fewer bytes on every screen; answers under 1 KB (Usage) go as they are. The phone
+runtime's 569 KB source is compressed too. The perf integration test checks that every
+scenario of 2 KB or more is sent at under half its size.
+
+**The item screen waits instead of polling** (`waitForItemChange`,
+[operations.md](operations.md#following-a-change)). While a listing's change ran, the item
+screen read the item and each listing's operations every second, also while the change waited
+for the phone or a retry: 12,083 of production's 17,430 non-health requests in 7 days (70%).
+It now holds one wait of up to 20 s that the server answers the moment one of the item's
+operations changes, and reads the item only then. One item screen open for 60 s on a Poshmark
+listing waiting for the phone, its change failing at 45 s (scratch script driving the real API):
+
+| Item screen, 60 s           | Requests |  Bytes | Change shown after |
+| --------------------------- | -------: | -----: | -----------------: |
+| Before (read every second)  |       90 | 63,152 |             516 ms |
+| After (wait for the change) |        8 |  2,545 |              33 ms |
+
+**One libvips thread** (`limitImageThreads`, in the worker and in the API, which processes the
+pack check's photo). libvips used one thread per core, so a burst of photos (an import's 526)
+took every core from the requests sharing the task (0.25 vCPU then): `GET /v1/items` p50 went from 15
+to 204 ms within a minute of a processed photo. With one thread a 2048 x 1536 photo took 76-85
+ms of CPU here against 97-99 ms with 6 (24 photos, two rounds each), and its wall time is the
+same or a little longer (61-95 ms against 63-75 ms on this loaded laptop); the work no longer
+fans out over several cores at once.
 
 ## Cloud cost
 
