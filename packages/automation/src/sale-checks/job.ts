@@ -44,6 +44,7 @@ import { recordInboundEvent } from '@listora/sales';
 import type { Logger } from '@listora/shared';
 
 import type { SaleCheckSettings } from '../settings.ts';
+import { readFailure, recordReadFailed, recordReadSucceeded } from '../read-health/health.ts';
 import { saleCheckError, saleCheckErrorMessage } from './health.ts';
 import { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './interval.ts';
 import { orderEventPayload, queueSaleOrder } from './orders.ts';
@@ -233,6 +234,16 @@ export async function startSaleCheckRun(
   return { ...prepared, runId: run.id };
 }
 
+/** The check as a background read, whose health the owner's alerts keep. */
+function readTarget(prepared: StartedSaleCheck) {
+  return {
+    accountId: prepared.key.accountId,
+    connectionId: prepared.key.connectionId,
+    marketplace: prepared.marketplace,
+    read: 'sale_check',
+  } as const;
+}
+
 /** A check that could not read the orders: tried again soon, or after the relink it needs. */
 export async function recordSaleCheckFailure(
   deps: Pick<SaleCheckDependencies, 'db' | 'settings' | 'logger'>,
@@ -258,6 +269,7 @@ export async function recordSaleCheckFailure(
   const outcome = challenged ? 'challenge' : 'failed';
   await finishRun(db, prepared, { outcome, error: failure });
   if (prepared.kind === 'history') return;
+  await recordReadFailed(db, readTarget(prepared), readFailure(error));
   await finish(db, prepared.key, {
     outcome,
     // A relink checks at once; until then the dispatcher skips the connection.
@@ -308,6 +320,7 @@ export async function recordSaleCheckOrders(
     prepared.checkedThrough,
   );
   await finishRun(db, prepared, { outcome: 'succeeded', orders, added: added.length });
+  await recordReadSucceeded(db, readTarget(prepared));
   await finish(db, key, {
     outcome: 'succeeded',
     delayMs: next.delayMs,

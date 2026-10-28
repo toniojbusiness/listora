@@ -6,6 +6,8 @@
  */
 import type { ExecutionLocation } from '@listora/db';
 
+import type { ReadAlertSettings } from './read-health/health.ts';
+
 import {
   AUTOMATED_MARKETPLACES,
   automationProfile,
@@ -36,6 +38,8 @@ export interface AutomationSettings {
   readonly callTimeoutMs: number;
   readonly profiles: Readonly<Record<AutomatedMarketplace, AutomationProfile>>;
   readonly saleChecks: SaleCheckSettings;
+  /** When a failing background read emails the owner (docs/features/read-health.md). */
+  readonly readAlerts: ReadAlertSettings;
   /**
    * Development and tests only: the fake marketplace site that stands in for each automated
    * marketplace without a fake of its own, whose automation connections then run against it.
@@ -180,12 +184,18 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
     );
   }
 
+  const readAlerts = {
+    alertAfterFailures: integer(issues, env, 'READ_ALERT_FAILURES', 3, 1, 20),
+    noSuccessMs: hours('READ_ALERT_NO_SUCCESS_HOURS', 24),
+  };
+
   if (issues.length > 0) throw new AutomationConfigError(issues);
   return {
     stepTimeoutMs,
     callTimeoutMs,
     profiles,
     saleChecks,
+    readAlerts,
     fakeSiteUrl,
     fakePoshmarkUrl,
     fakeMercariSiteUrl,

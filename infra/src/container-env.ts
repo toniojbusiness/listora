@@ -44,6 +44,7 @@ const SMOKE_RESOURCES: ServiceResources = {
   ),
   runner: { cluster: 'listora-smoke', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: 'alias/listora-smoke-tokens',
+  ownerAlerts: { environment: 'smoke' },
 };
 
 const [container, databaseUrl] = process.argv.slice(2);

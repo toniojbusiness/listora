@@ -29,6 +29,7 @@ import {
 import type { Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
+import { readFailure, recordReadFailed, recordReadSucceeded } from '../read-health/health.ts';
 import { queueImportApply, queueImportPage, type ListingImportJobPayload } from './schedule.ts';
 
 export interface ImportReadDependencies {
@@ -200,6 +201,7 @@ export async function recordImportPage(
       .execute();
     await queueImportApply(trx, prepared.key);
     if (!last) await queueImportPage(trx, target(prepared));
+    await recordReadSucceeded(trx, readTarget(prepared));
     deps.logger.info(
       {
         event: 'listing_import_page',
@@ -239,10 +241,21 @@ export async function recordImportPageFailure(
     await queueImportPage(deps.db, target(prepared), PACED_RETRY_MS);
     return;
   }
+  await recordReadFailed(deps.db, readTarget(prepared), readFailure(error));
   await stopReading(deps.db, prepared.key, {
     code: code.slice(0, 100),
     message: importErrorMessage(code, prepared.marketplace),
   });
+}
+
+/** The page's read, whose health the owner's alerts keep. */
+function readTarget(prepared: PreparedImportPage) {
+  return {
+    accountId: prepared.key.accountId,
+    connectionId: prepared.connection.id,
+    marketplace: prepared.marketplace,
+    read: 'listing_import',
+  } as const;
 }
 
 /** Ends the reading early with its reason; the entries read so far still import. */
@@ -281,7 +294,7 @@ export function importErrorMessage(code: string, marketplace: Marketplace): stri
     case 'stopped_for_check':
       return `${name} wants you to complete a check in Listora on your iPhone. Import again once it's done to read the rest.`;
     case 'element_missing':
-      return `${name}'s listings page has changed, so Listora couldn't read the rest.`;
+      return `Listora couldn't read your ${name} listings page, so it stopped reading. Import again to read the rest.`;
     case 'rate_limited':
       return `${name} asked Listora to slow down. Import again later to read the rest.`;
     case 'step_timeout':

@@ -27,6 +27,7 @@
     { "path": "../../packages/batches" },
     { "path": "../../packages/retention" },
     { "path": "../../packages/automation" },
-    { "path": "../../packages/imports" }
+    { "path": "../../packages/imports" },
+    { "path": "../../packages/alerts" }
   ]
 }

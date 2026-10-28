@@ -59,7 +59,7 @@ export async function lookAgain(page: PageDriver, ms: number): Promise<void> {
 
 /** The failure for a Mercari page that is not as the script expects. */
 export function changed(pageName: string, problem: string): PageChangedError {
-  return new PageChangedError(`Mercari's ${pageName} ${problem}; the page may have changed.`);
+  return new PageChangedError(`Mercari's ${pageName} ${problem}.`);
 }
 
 /** Cents from a price as Mercari shows it: `$45`, `$1,250`, or `$45.00`. `null` otherwise. */

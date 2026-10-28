@@ -86,13 +86,13 @@ apps/
                 src/features/ (account deletion, connection deletion, data retention, AI spend
                 check, item analysis, batch items' analysis start, photo processing, trust
                 metrics, the daily connection health check, the delist SLA, push delivery, sale
-                fees, the morning summary, sale email ingest, sale-check health, listing
-                imports); and the
+                fees, the morning summary, sale email ingest, sale-check health, background read
+                alerts, listing imports); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
-                and account blocks, marketplace data purges, the activity search and sale-check
-                health (@listora/admin)
+                and account blocks, marketplace data purges, the activity search, sale-check
+                health, and background read health (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
@@ -126,8 +126,8 @@ packages/
                 with single-flight refresh, health checks, revocation, unlinking and its
                 deletion job (@listora/connections)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
-                automation adapter base, sale-check scheduling, records, and health, the runner
-                launcher, the
+                automation adapter base, sale-check scheduling, records, and health, background
+                read health and the owner's alerts (read-health/), the runner launcher, the
                 fake marketplace site, and the Poshmark, Mercari, Depop, and eBay adapters with
                 their fake sites (poshmark/, mercari/, depop/, ebay/); the marketplace pre-fill
                 over their category trees and forms (prefill/); reading buyers' offers and
@@ -155,7 +155,8 @@ packages/
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
                 (@listora/observability)
   alerts/       Operator email: alert emails for the alarm topic, the weekly health summary, the
-                SES mailer and its fake, the Lambda handlers and their bundle (@listora/alerts)
+                SES mailer and its fake, the worker's owner alert configuration, the Lambda
+                handlers and their bundle (@listora/alerts)
   retention/    Data retention: how long logs and raw payloads are kept, the daily job that
                 deletes what expired (@listora/retention)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
@@ -375,8 +376,9 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
   batches by later POSTs once expired).
 - **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
-  automation runs and sale-check schedules in [automation.md](features/automation.md#data), and
-  sale-check records and health in [activity.md](features/activity.md#data);
+  automation runs and sale-check schedules in [automation.md](features/automation.md#data),
+  sale-check records and health in [activity.md](features/activity.md#data), and background read
+  health in [read-health.md](features/read-health.md#data);
   inventory, photos, and history in [items.md](features/items.md); batches in
   [batch.md](features/batch.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
@@ -496,6 +498,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                   |
 | [features/alerts.md](features/alerts.md)                           | Alert emails, the weekly health summary, backups, and the restore steps        |
 | [features/activity.md](features/activity.md)                       | The activity timeline, sale-check records and health, explaining a sale        |
+| [features/read-health.md](features/read-health.md)                 | The owner's email when a background read keeps failing, the read-health view   |
 | [features/ios.md](features/ios.md)                                 | iOS app conventions                                                            |
 | [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric     |
 | [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review      |

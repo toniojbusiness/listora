@@ -184,6 +184,40 @@ describe('loadWorkerConfig', () => {
     ]);
   });
 
+  it("logs the owner's alerts by default, and emails them through SES when configured", () => {
+    expect(loadWorkerConfig({ DATABASE_URL }).ownerAlerts).toEqual({
+      environment: 'local',
+      delivery: { driver: 'log' },
+    });
+    expect(
+      loadWorkerConfig({
+        DATABASE_URL,
+        OWNER_ALERTS: 'ses',
+        OWNER_ALERT_ENV: 'personal',
+        OWNER_ALERT_FROM: 'alerts@example.com',
+        OWNER_ALERT_TO: 'owner@example.com',
+      }).ownerAlerts,
+    ).toEqual({
+      environment: 'personal',
+      delivery: { driver: 'ses', from: 'alerts@example.com', to: 'owner@example.com' },
+    });
+    expect(
+      captureConfigError({
+        DATABASE_URL,
+        OWNER_ALERTS: 'ses',
+        OWNER_ALERT_ENV: 'Prod!',
+        OWNER_ALERT_FROM: 'not an address',
+      }).issues,
+    ).toEqual([
+      'OWNER_ALERT_ENV must be 1 to 20 lowercase letters, digits, or dashes',
+      'OWNER_ALERT_FROM must be an email address',
+      'OWNER_ALERT_TO is required when OWNER_ALERTS is ses',
+    ]);
+    expect(captureConfigError({ DATABASE_URL, OWNER_ALERTS: 'sns' }).issues).toEqual([
+      'OWNER_ALERTS must be log or ses',
+    ]);
+  });
+
   it.each(['five', '1.5', '-2', '101', ''])('rejects WORKER_CONCURRENCY=%j', (value) => {
     expect(captureConfigError({ DATABASE_URL, WORKER_CONCURRENCY: value }).issues).toEqual([
       'WORKER_CONCURRENCY must be an integer from 1 to 100',

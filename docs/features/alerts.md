@@ -19,6 +19,7 @@ The `alert-email` function emails each message on it through SES; nothing else s
 | API error spikes                    | `api-5xx` (and `load-balancer-5xx` behind an ALB), `api-latency-p95`                                           |
 | The worker stopping                 | `worker-heartbeat` (no trust metrics for 15 minutes), `<service>-running-tasks`, and every unplanned task stop |
 | Sale checks failing or stalling     | `sale-checks-unhealthy` (a connection's checks fail or are overdue, [activity.md](activity.md))                |
+| A background read failing again     | The worker's own email, naming the marketplace, read, step, and error ([read-health.md](read-health.md))       |
 | A failed deploy                     | `listora-<env>-stack-failed`, `-service-deployment-failed`, and `-migration-failed` EventBridge rules          |
 | AWS cost over the month's budget    | The AWS Budget `listora-<env>-monthly-cost` (`monthlyCostAlarmUsd`): actual cost over it, or forecast to be    |
 | Everything else in observability.md | Delist failures and latency, unverified operations, relinks, AI cost, deletions, database CPU, storage, memory |
@@ -81,6 +82,7 @@ and `bundle.test.ts` builds the bundle. `npm run infra:synth` builds the bundle 
 | `worker-heartbeat`, `<service>-running-tasks`, a task stop  | ECS console: is the task running, and why did the last one stop? Its log: `/listora/<env>/worker`.                                     |
 | `api-5xx`, `load-balancer-5xx`, `api-latency-p95`           | The API log for `"level":50` lines and their `requestId`; `/health/ready` for the database.                                            |
 | `sale-checks-unhealthy`                                     | `scripts/admin-remote.sh <env> -- sale-checks` names the connection and its last error ([activity.md](activity.md)).                   |
+| A read failed N times in a row, or has not worked for hours | `scripts/admin-remote.sh <env> -- read-health --account <id>`: each read's last success and error ([read-health.md](read-health.md)).  |
 | `operation-unverified`, `delist-failed`, `delist-latency-*` | `scripts/admin-remote.sh <env> -- activity` on the operation; a failed delist means the item may still be for sale there.              |
 | Deploy failed (stack, ECS rollback, migrations)             | The previous release keeps serving. Read the stack's events or `/listora/<env>/migrate`, fix, and deploy again ([infra.md](infra.md)). |
 | AWS Budgets                                                 | Cost Explorer by service for the month; the usual suspects are a runner left running and log volume ([costs.md](costs.md)).            |

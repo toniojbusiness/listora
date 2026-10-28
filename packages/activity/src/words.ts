@@ -213,7 +213,7 @@ export function browserSessionDetail(run: {
 function stopReason(code: string | null): string {
   switch (code) {
     case 'element_missing':
-      return "the page wasn't what Listora knows (it may have changed)";
+      return "the page wasn't what Listora expected";
     case 'rate_limited':
       return 'the marketplace asked Listora to slow down';
     case 'server_error':

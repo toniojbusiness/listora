@@ -52,7 +52,8 @@ and finishes it with what it read: the orders it saw, the items in them, the one
 the sale intake for the first time, the newest and oldest sale times, at most 100 of the orders
 themselves (order id, sale time, each item's listing id, title, and price), and the browser
 session that read them. A check that fails records its code and the seller's words for it
-("Mercari's sold items page has changed, so Listora couldn't read it."). A check whose runner or
+("Listora couldn't read Mercari's sold items page."), and the background read health it adds up
+to for the owner's alert ([read-health.md](read-health.md)). A check whose runner or
 phone stopped before it finished is closed as interrupted when the next one starts. The order a
 check hands over names the check (`inbound_event.payload.saleCheckRunId`), and so does the sale
 it records (`sale.sale_check_run_id`).

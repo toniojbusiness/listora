@@ -300,8 +300,7 @@ describe('activity timeline (real Postgres)', () => {
       source: 'iphone',
       outcome: 'failed',
       durationMs: 12_340,
-      detail:
-        "Stopped at “find Delete listing”: the page wasn't what Listora knows (it may have changed).",
+      detail: "Stopped at “find Delete listing”: the page wasn't what Listora expected.",
       steps: [
         { name: 'open the listing', durationMs: 1_840 },
         { name: 'find Delete listing', durationMs: 10_500 },

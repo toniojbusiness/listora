@@ -68,17 +68,20 @@ export type { AutomationScripts, WriteResult, WriteScript } from './script-call.
 /**
  * A read through the seller's session (their orders, their listings) that did not get its
  * answer: `code` says why (`no_session`, `automation_paced`, `automation_busy`, or how the
- * script stopped, such as `element_missing`), and `step` names the step it stopped at.
+ * script stopped, such as `element_missing`), `step` names the step it stopped at, and `detail`
+ * is the script's own sanitized words for why (no page text, nothing typed), for the owner only.
  */
 export class AutomationReadError extends Error {
   readonly code: string;
   readonly step: string | null;
+  readonly detail: string | null;
 
-  constructor(code: string, step: string | null, message: string) {
+  constructor(code: string, step: string | null, message: string, detail: string | null = null) {
     super(message);
     this.name = 'AutomationReadError';
     this.code = code;
     this.step = step;
+    this.detail = detail;
   }
 }
 
@@ -518,6 +521,7 @@ export class AutomationAdapter<
           failureCode(run.result.failure),
           run.result.failure.step,
           `Listora couldn't ${what} on ${this.#name} (${failureCode(run.result.failure)}).`,
+          failureDetail(run.result.failure),
         );
       default:
         return assertNever(run, 'session run');
@@ -640,7 +644,7 @@ export function offerAnswerOutcome(
           return {
             type: 'needs_seller',
             code,
-            message: `${name}'s offer page has changed, so Listora can't answer it. Answer it in ${name}.`,
+            message: `Listora couldn't read ${name}'s offer page, so it can't answer it. Answer it in ${name}.`,
           };
         case 'stopped_for_check':
           return {
@@ -694,6 +698,20 @@ function failureCode(failure: ScriptFailure): string {
       return 'step_timeout';
     case 'error':
       return failure.code;
+    default:
+      return assertNever(failure, 'script failure');
+  }
+}
+
+/** What the script said of why it stopped (already sanitized), for the owner's alert. */
+function failureDetail(failure: ScriptFailure): string | null {
+  switch (failure.kind) {
+    case 'challenge':
+      return `the page showed a ${failure.challenge}`;
+    case 'timeout':
+      return 'the step ran out of time';
+    case 'error':
+      return failure.message === '' ? null : failure.message;
     default:
       return assertNever(failure, 'script failure');
   }
