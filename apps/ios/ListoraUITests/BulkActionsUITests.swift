@@ -132,7 +132,8 @@ final class BulkActionsUITests: XCTestCase {
         for sku in skus {
             let row = app.buttons["inventory.row.\(sku)"]
             try require(row.waitForExistence(timeout: 10), "no row for \(sku)")
-            row.tap()
+            // Near its top: a card low on the screen has its middle under the selection bar.
+            row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
         }
         try require(app.staticTexts["\(skus.count) selected"].waitForExistence(timeout: 5), "not \(skus.count) chosen")
     }
