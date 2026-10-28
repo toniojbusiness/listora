@@ -117,6 +117,8 @@ final class ScreenshotTourUITests: XCTestCase {
     private func costTour() throws {
         XCTAssertTrue(app.staticTexts["cost.amount"].waitForExistence(timeout: 10))
         try shot("19-cost-empty", settle: 1)
+        // At the largest text sizes the keypad's first row starts under the bottom bar.
+        app.buttons["keypad.1"].scrollClear(of: app.buttons["cost.continue"], in: app)
         app.buttons["keypad.1"].tap()
         app.buttons["keypad.2"].tap()
         try shot("20-cost")
