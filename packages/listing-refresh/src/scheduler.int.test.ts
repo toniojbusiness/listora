@@ -117,13 +117,17 @@ describe('the refresh schedule', () => {
       .execute();
   }
 
-  const run = (refresh: 'automation' | 'none' = 'automation') =>
+  const run = (
+    refresh: 'automation' | 'none' = 'automation',
+    readOnly?: (connection: { marketplace: Marketplace }) => boolean,
+  ) =>
     runListingRefreshes({
       db,
       adapters: (marketplace) => adapterFor(marketplace, refresh),
       limits: () => LIMITS,
       logger: { info: () => undefined },
       now: () => NOW,
+      ...(readOnly === undefined ? {} : { readOnly }),
     });
 
   it('queues a refresh for a listing 72 hours without selling, oldest due first, read-back only', async () => {
@@ -223,6 +227,28 @@ describe('the refresh schedule', () => {
     expect(await refreshesOf(accountId)).toEqual([]);
     await run();
     expect(await refreshesOf(accountId)).toEqual([]);
+  });
+
+  it('refreshes a Depop listing on schedule under a normal Depop connection', async () => {
+    const { accountId, connectionId } = await seller('depop');
+    const { listingId } = await listing(accountId, connectionId, ago(100 * HOUR), 'depop');
+    await run('automation', () => false);
+    expect((await refreshesOf(accountId)).map((op) => op.listing_id)).toEqual([listingId]);
+  });
+
+  it('never queues anything for a read-only connection', async () => {
+    const { accountId, connectionId } = await seller('depop');
+    await listing(accountId, connectionId, ago(500 * HOUR), 'depop');
+    await run('automation', (connection) => connection.marketplace === 'depop');
+    // Until the read-only guard lands, every Depop session is read-only by default.
+    await run();
+    expect(
+      await db
+        .selectFrom('marketplace_operation')
+        .select('id')
+        .where('account_id', '=', accountId)
+        .execute(),
+    ).toEqual([]);
   });
 
   it('queues one refresh per listing per fresh period, however many runs', async () => {

@@ -59,12 +59,26 @@ export type ListingRefresh =
   /** Listora can't refresh it here: the marketplace has no refresh, or no usable session. */
   | { state: 'unavailable'; lastAt: Date | null };
 
+/**
+ * Whether a connection is read-only: Listora never queues a write of any kind on it, a refresh
+ * included. STUB until the marketplace connections' read-only guard lands (task lstreadonly), whose
+ * flag replaces it: until then every Depop session is treated as a real seller's shop that must
+ * stay read-only (2026-10-28), so no Depop refresh can run before the guard exists.
+ */
+export function isReadOnlyConnection(connection: { marketplace: Marketplace }): boolean {
+  return connection.marketplace === 'depop';
+}
+
 /** Whether Listora can refresh the listing under its connection now. */
-export function canRefresh(fact: Pick<RefreshFact, 'marketplace' | 'connection'>): boolean {
+export function canRefresh(
+  fact: Pick<RefreshFact, 'marketplace' | 'connection'>,
+  readOnly: (connection: { marketplace: Marketplace }) => boolean = isReadOnlyConnection,
+): boolean {
   const { connection } = fact;
   return (
     REFRESH_MARKETPLACES.includes(fact.marketplace) &&
     connection !== null &&
+    !readOnly({ marketplace: fact.marketplace }) &&
     connection.mode === 'automation' &&
     (connection.status === 'connected' || connection.status === 'degraded')
   );

@@ -13,7 +13,13 @@ export {
   parseClock,
 } from './cadence.ts';
 export type { Cadence, QuietWindow } from './cadence.ts';
-export { canRefresh, listingRefresh, loadRefreshFacts, REFRESH_MARKETPLACES } from './schedule.ts';
+export {
+  canRefresh,
+  isReadOnlyConnection,
+  listingRefresh,
+  loadRefreshFacts,
+  REFRESH_MARKETPLACES,
+} from './schedule.ts';
 export type { ListingRefresh, RefreshFact } from './schedule.ts';
 export {
   LISTING_REFRESH_SCHEDULE,

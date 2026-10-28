@@ -38,6 +38,13 @@ is a follow-up.
 | eBay                                                | None: eBay's relist is a new listing that drops the watchers       | -                                                     |
 | Any, without a working browser session, or assisted | None: Listora would have to ask the seller to do it every few days | -                                                     |
 
+**Read-only connections are never refreshed.** A connection marked read-only (a real shop that
+must not be changed, such as a family member's Depop shop) gets no refresh, and no write of any
+kind is queued for it, whatever its adapter can do; its listings show refresh as unavailable.
+Until the marketplace connections' read-only guard lands, `isReadOnlyConnection` is a stub that
+treats every Depop session as read-only, so no Depop refresh can run against a real shop before
+the guard exists; it is replaced by the guard's flag. Tests run only against the fake sites.
+
 The capability is the adapters' own `refresh` flag (`MarketplaceCapabilities.refresh`): an
 automation adapter has it when its scripts have a `refresh` script, never in assisted mode
 (`checkCapabilities` refuses an assisted or bulk-file refresh), and the shared conformance suite
