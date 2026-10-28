@@ -11,6 +11,14 @@ struct SaleLink: Identifiable, Hashable {
 }
 
 extension Item {
+    /// Sold, whether or not the delists elsewhere are done: its tag wears the sold stamp.
+    var isSold: Bool {
+        switch status.value1 {
+        case .soldPendingDelist, .sold, .shipped: true
+        case .draft, .ready, .listed, .archived, nil: false
+        }
+    }
+
     /// Not sold or archived: a sale Listora did not see can be recorded.
     var canBeMarkedSold: Bool {
         switch status.value1 {

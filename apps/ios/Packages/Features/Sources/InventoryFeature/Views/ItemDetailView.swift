@@ -21,6 +21,8 @@ struct ItemDetailView: View {
     @State private var printingSticker: StickerRequest?
     /// Just listed with Pack check on: the screen offers the item's sticker.
     @State private var offersSticker = false
+    /// The item sold while this screen was open, so the sold stamp is pressed onto its tag.
+    @State private var soldWhileOpen = false
 
     /// The assisted step whose task is open.
     private struct OpenTask: Identifiable {
@@ -45,6 +47,11 @@ struct ItemDetailView: View {
             .background(Palette.background)
             .navigationTitle(model.item?.sku ?? "Item")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: model.item?.isSold) { old, new in
+                if old == false, new == true {
+                    soldWhileOpen = true
+                }
+            }
             .task {
                 await model.load()
                 if listsEverywhere, !model.hasLoadedOnce {
@@ -166,8 +173,7 @@ struct ItemDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    // The item is a tag; its marketplaces hang on the string below.
-                    HangingTag(railOverhang: nil) { PhotoCarousel(photos: item.photos) }
+                    ItemTag(item: item, soldWhileOpen: soldWhileOpen)
                     ItemHeader(item: item)
                 }
                 if let notice = model.notice {
