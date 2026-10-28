@@ -119,8 +119,7 @@ public struct AppDependencies {
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
     }
 
-    /// Sales: the feed, each sale, and its delists, which run at once on this phone and show the
-    /// phone's progress.
+    /// Sales: the feed, each sale, and its delists, run at once on this phone with its progress.
     private static func makeSales(
         _ apiClient: APIClient,
         _ accessTokens: AccessTokenStore,
