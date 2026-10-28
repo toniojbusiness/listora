@@ -16,6 +16,11 @@ actor FakeReviewService: ReviewService {
         case pricing
         case usage
         case voice(String, key: String)
+        case hauls
+        case createHaul(key: String)
+        case addHaulItems(haulID: String, itemIDs: [String])
+        case removeHaulItem(haulID: String)
+        case replaceHaul(haulID: String, count: Int32)
     }
 
     private(set) var calls: [Call] = []
@@ -38,6 +43,22 @@ actor FakeReviewService: ReviewService {
     var prefillResponses: [Result<Schemas.ItemMarketplacePrefill, APIFailure>]?
     var prefillAnswerResponses: [Result<Schemas.ItemMarketplacePrefill, APIFailure>] = []
     private var latestItem: Schemas.Item?
+    /// The seller's hauls, newest first, as `hauls()` answers them.
+    var haulList: [Schemas.Haul] = []
+    /// Nil answers a create with the haul it describes.
+    var createHaulAnswers: [Result<Schemas.Haul, APIFailure>]?
+    private(set) var haulCreates: [Schemas.HaulCreate] = []
+    /// The item as the haul changes left it (its share as its cost), which `item(id:)` then
+    /// answers like the server would.
+    private var haulItem: Schemas.Item?
+
+    func setHauls(_ hauls: [Schemas.Haul]) {
+        haulList = hauls
+    }
+
+    func setCreateHaulAnswers(_ answers: [Result<Schemas.Haul, APIFailure>]?) {
+        createHaulAnswers = answers
+    }
 
     func setPrefill(_ answers: [Result<Schemas.ItemMarketplacePrefill, APIFailure>]?) {
         prefillResponses = answers
@@ -85,6 +106,10 @@ actor FakeReviewService: ReviewService {
 
     func item(id _: String) async throws(APIFailure) -> Schemas.Item {
         calls.append(.item)
+        if let haulItem {
+            latestItem = haulItem
+            return haulItem
+        }
         let item = try next(&items)
         latestItem = item
         return item
@@ -132,12 +157,98 @@ actor FakeReviewService: ReviewService {
             item.status = .init(value1: .init(rawValue: status.rawValue), value2: status.rawValue)
         }
         latestItem = item
+        if haulItem != nil {
+            haulItem = item
+        }
         return item
     }
 
     func pricing(itemID _: String) async throws(APIFailure) -> Schemas.PricingSuggestion {
         calls.append(.pricing)
         return try next(&pricingAnswers)
+    }
+
+    func hauls() async throws(APIFailure) -> [Schemas.Haul] {
+        calls.append(.hauls)
+        return haulList
+    }
+
+    func createHaul(_ haul: Schemas.HaulCreate, idempotencyKey: String) async throws(APIFailure) -> Schemas.Haul {
+        calls.append(.createHaul(key: idempotencyKey))
+        haulCreates.append(haul)
+        let created: Schemas.Haul
+        if var answers = createHaulAnswers {
+            defer { createHaulAnswers = answers }
+            created = try next(&answers)
+        } else {
+            created = Fixtures.haul(
+                id: "haul-\(haulCreates.count)",
+                totalCents: haul.total.amountCents,
+                count: max(haul.itemCount, Int32(haul.itemIds?.count ?? 0)),
+                added: Int32(haul.itemIds?.count ?? 0),
+                source: haul.purchaseSource,
+            )
+        }
+        haulList.insert(created, at: 0)
+        joined(created, place: 0)
+        return created
+    }
+
+    func addHaulItems(haulID: String, itemIDs: [String], idempotencyKey _: String) async throws(APIFailure)
+        -> Schemas.Haul
+    {
+        calls.append(.addHaulItems(haulID: haulID, itemIDs: itemIDs))
+        guard var haul = haulList.first(where: { $0.id == haulID }) else {
+            throw APIFailure.server(404, "not_found", "Haul not found.")
+        }
+        haul.itemsAdded += Int32(itemIDs.count)
+        haul.itemCount = max(haul.itemCount, haul.itemsAdded)
+        haulList = haulList.map { $0.id == haulID ? haul : $0 }
+        joined(haul, place: Int(haul.itemsAdded) - 1)
+        return haul
+    }
+
+    func removeHaulItem(haulID: String, itemID _: String) async throws(APIFailure) -> Schemas.Haul {
+        calls.append(.removeHaulItem(haulID: haulID))
+        guard var haul = haulList.first(where: { $0.id == haulID }) else {
+            throw APIFailure.server(404, "not_found", "Haul not found.")
+        }
+        haul.itemsAdded -= 1
+        var item = latestItem ?? Fixtures.item()
+        item.haul = nil
+        item.version += 1
+        haulItem = item
+        return haul
+    }
+
+    func replaceHaul(haulID: String, with replace: Schemas.HaulReplace) async throws(APIFailure) -> Schemas.Haul {
+        calls.append(.replaceHaul(haulID: haulID, count: replace.itemCount))
+        guard let old = haulList.first(where: { $0.id == haulID }) else {
+            throw APIFailure.server(404, "not_found", "Haul not found.")
+        }
+        let haul = Fixtures.haul(
+            id: haulID,
+            totalCents: replace.total.amountCents,
+            count: replace.itemCount,
+            added: old.itemsAdded,
+            source: replace.purchaseSource,
+        )
+        haulList = haulList.map { $0.id == haulID ? haul : $0 }
+        if latestItem?.haul?.id == haulID {
+            joined(haul, place: 0)
+        }
+        return haul
+    }
+
+    /// The item in the haul at `place`, with its share as its cost, as the server leaves it.
+    private func joined(_ haul: Schemas.Haul, place: Int) {
+        var item = latestItem ?? Fixtures.item()
+        let total = haul.total.amountCents
+        let count = Int64(haul.itemCount)
+        item.haul = haul
+        item.details.cost = Fixtures.usd(total / count + (Int64(place) < total % count ? 1 : 0))
+        item.version += 1
+        haulItem = item
     }
 
     func usage() async throws(APIFailure) -> Schemas.Usage {

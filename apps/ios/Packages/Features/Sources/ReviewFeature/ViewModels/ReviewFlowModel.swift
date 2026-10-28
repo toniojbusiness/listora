@@ -54,12 +54,6 @@ final class ReviewFlowModel {
         case custom(Int64)
     }
 
-    struct CostDraft: Equatable {
-        var amount = AmountEntry()
-        var purchaseDate: Date
-        var source = ""
-    }
-
     /// The detail open in its in-place editor, with the text typed so far.
     struct FieldDraft: Equatable {
         let key: ReviewFieldKey
@@ -98,6 +92,11 @@ final class ReviewFlowModel {
     var escalation: Escalation = .idle
     var usage: Usage?
     var cost: CostDraft
+    /// The seller's latest hauls, offered on the cost screen; empty until read.
+    var recentHauls: [Haul] = []
+    /// The Idempotency-Key of the new haul being created and the body it was sent with, so a
+    /// retry of the same haul reuses it and never records the haul twice.
+    var pendingHaul: (key: String, body: HaulCreate)?
     var pricing: PricingState = .idle
     var priceChoice: PriceChoice?
     var saved: SavedItem?
@@ -305,6 +304,10 @@ final class ReviewFlowModel {
         copies = MarketplaceCopy.copies(result: analysis.result, edits: listingCopy.edits(itemID: item.id))
         if let cents = item.details.cost?.amountCents, cost.amount.isEmpty {
             cost.amount = AmountEntry(cents: cents)
+        }
+        if let haul = item.haul {
+            cost.mode = .haul
+            cost.haul = haul
         }
         if let date = item.details.purchaseDate.flatMap(Self.date(fromDay:)) {
             cost.purchaseDate = date

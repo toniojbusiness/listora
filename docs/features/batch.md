@@ -128,8 +128,9 @@ saved items stay in the inventory.
 cost, and price rules: its photos, then only what Listora was unsure about ("Check these",
 editable in place), the cost on the in-app keypad (open on the first item) with where it was
 bought, and the price tiers with the recommended one chosen and the server's own label. **Apply to
-all N items** copies the cost, date, and source to every item still to approve in one tap: the
-haul's total split across them to the cent ("Split $12.00: $4.00 each"), or the same amount each. **Approve at $26.00 & next** saves the edits, the cost, then the price (after the cost's
+all N items** gives every item still to approve its cost in one tap: all of them marked as one
+haul whose total is split across them ("One $12 haul: $4.00 each", a saved haul,
+[hauls.md](hauls.md)), or the same amount each, with the date and source. **Approve at $26.00 & next** saves the edits, the cost, then the price (after the cost's
 floors are known), the highest floor, and status `ready` with its SKU, and shows the next item not
 yet approved. **Skip for now** comes back to the item after the others. A refusal stays on the
 item with the server's message.
@@ -161,11 +162,11 @@ the analyses.
   on live prints, which runs on a device.
 - `AddItemFeatureTests/BatchTests`: the batch store (grouping edits, confirming, deletion) and the
   upload queue's batch steps against the fake server.
-- `ReviewFeatureTests/BatchReviewTests`: approve and next, the cost split, skipping, refusals, and
-  measuring only the page showing.
+- `ReviewFeatureTests/BatchReviewTests`: approve and next, the same cost each, the batch marked as
+  one haul (and its retry), skipping, refusals, and measuring only the page showing.
 - `BatchListingUITests`: a 3-item haul shot with the fake camera (`ListoraUITests/BatchFixtures`),
-  grouped, uploaded and analyzed on the local stack, reviewed with one cost split across the
-  haul, and saved with SKUs.
+  grouped, uploaded and analyzed on the local stack, reviewed with the three marked as one haul,
+  and saved with SKUs, each costing its share.
 
 ## Data
 

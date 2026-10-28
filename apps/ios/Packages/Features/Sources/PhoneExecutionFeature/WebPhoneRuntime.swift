@@ -14,8 +14,10 @@ public protocol PhoneRuntime: AnyObject {
     /// returns what the runtime answered (`PhoneCallOutput`, JSON).
     func run(_ input: Data, marketplace: String) async throws -> Data
     /// Takes the runtime the server runs with when it changed, so the phone runs the scripts the
-    /// server replays its answers through; call it between runs.
-    func refresh() async
+    /// server replays its answers through; call it between runs. `false` when the server couldn't
+    /// say which it runs.
+    @discardableResult
+    func refresh() async -> Bool
     /// Tells `handler` each step a call starts, as the runtime reports it.
     func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void)
     /// While the app is open (`true`), keeps a signed-in web view per marketplace ready between
@@ -24,7 +26,11 @@ public protocol PhoneRuntime: AnyObject {
 }
 
 extension PhoneRuntime {
-    public func refresh() async {}
+    @discardableResult
+    public func refresh() async -> Bool {
+        true
+    }
+
     public func observeSteps(_: @escaping @MainActor (PhoneStep) -> Void) {}
     public func keepWarm(_: Bool) {}
 }
@@ -79,8 +85,10 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     private let logger = Logger(subsystem: "com.listora.app", category: "phone-runtime")
     /// Each marketplace's controller page and marketplace page.
     private var lanes: [String: RuntimeLane] = [:]
-    /// The server's runtime, once it handed one out; the app's own copy runs until then.
-    private var served: (digest: String, source: String)?
+    /// The runtime that runs: the server's, once it handed one out (kept for the next launch), the
+    /// app's own copy until then. Read on the first call, not at launch.
+    private lazy var scripts = RuntimeScripts(bundled: Self.bundledSource(), store: store)
+    private let store = ServedRuntimeStore.caches()
     private let fetchRuntime: @Sendable (_ have: String?) async -> RemoteRuntime?
     private var stepStarted: (@MainActor (PhoneStep) -> Void)?
     private var warm = false
@@ -137,15 +145,17 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         photos.removeAll()
     }
 
-    public func refresh() async {
-        guard let remote = await fetchRuntime(served?.digest), remote.digest != served?.digest,
-              let source = remote.source
-        else { return }
-        served = (remote.digest, source)
-        // The next call of each marketplace loads it into a new controller page.
-        for lane in lanes.values {
-            lane.dropController()
+    @discardableResult
+    public func refresh() async -> Bool {
+        // The server sends its script only when it isn't the one named here.
+        guard let remote = await fetchRuntime(scripts.running?.digest) else { return false }
+        if scripts.take(remote) {
+            // The next call of each marketplace loads it into a new controller page.
+            for lane in lanes.values {
+                lane.dropController()
+            }
         }
+        return true
     }
 
     public func runtimeVersion() async throws -> Int {
@@ -201,7 +211,7 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
 
     /// The runtime's script: the server's when it handed one out, else the app's own.
     private func source() -> String? {
-        served?.source ?? Self.bundledSource()
+        scripts.running?.source
     }
 
     /// The runtime the app was built with, which runs until the server hands out its own.

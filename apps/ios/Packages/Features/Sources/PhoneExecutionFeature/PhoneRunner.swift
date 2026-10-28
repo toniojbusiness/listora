@@ -55,8 +55,15 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     /// The open app's wait until its next look (`follow`), and whether a trigger meanwhile ended
     /// it early: the claim it started says when to look next, which can be much sooner (Listora
     /// answers 5 minutes while no marketplace runs here, seconds once one is linked).
-    private var followWait: Task<Void, any Error>?
+    private var followWait: Task<Bool, any Error>?
     private var wokeEarly = false
+    /// When the last claims started: the open app claims after a wait that found nothing only
+    /// once `safetyClaim` passed since.
+    private(set) var lastClaimAt: Date?
+    /// Whether the runtime was checked against the server's since the app came to the front (or
+    /// since this background run started): once is enough, since the server's changes only with
+    /// a deploy.
+    private var runtimeChecked = false
 
     let service: any PhoneWorkService
     private let runtime: any PhoneRuntime
@@ -65,6 +72,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     private let isAppOpen: @MainActor () -> Bool
     private let device: @MainActor () -> DeviceRegistration
     let sleep: @Sendable (Duration) async throws -> Void
+    let now: @MainActor () -> Date
     private let keepAwake: @MainActor (Bool) -> Void
     let timings: StepTimings
     private var pushToken: (token: String, environment: String)?
@@ -125,6 +133,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         keepAwake: @escaping @MainActor (Bool) -> Void = { _ in },
         timings: StepTimings,
+        now: @escaping @MainActor () -> Date = Date.init,
     ) {
         self.service = service
         self.runtime = runtime
@@ -136,6 +145,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         self.sleep = sleep
         self.keepAwake = keepAwake
         self.timings = timings
+        self.now = now
         runtime.observeSteps { [weak self] step in self?.stepStarted(step) }
     }
 
@@ -147,6 +157,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     /// Runs the waiting work and returns when it is all done, on every marketplace (a background
     /// task, a push).
     public func runUntilDone(_ reason: PhoneWorkReason) async {
+        runtimeChecked = false
         runPhoneWork(reason)
         await whenIdle()
     }
@@ -155,14 +166,17 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     /// work reached this phone (`waitForWork`; on its own timer when Listora can't say) and as a
     /// marketplace's run ends, so work queued or due meanwhile (a delist after a sale) starts
     /// within a second with no push (iOS may drop one, and a personal team's build gets none),
-    /// even while another marketplace works. The runtime keeps a web view per marketplace ready
-    /// meanwhile. Returns once the calling task is canceled (the app left).
+    /// even while another marketplace works. A wait that found nothing claims nothing, but for a
+    /// claim every `safetyClaim`, so the idle app stays quiet and the phone's radio can sleep.
+    /// The runtime keeps a web view per marketplace ready meanwhile, and is checked against the
+    /// server's once. Returns once the calling task is canceled (the app left).
     public func follow() async {
         runtime.keepWarm(true)
         defer { runtime.keepWarm(false) }
-        var woken = false
+        runtimeChecked = false
+        var claim = true
         while !Task.isCancelled {
-            if !woken {
+            if claim {
                 start()
             }
             // A trigger meanwhile (linking, a change in the app, a push) started the claims
@@ -171,18 +185,17 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
             let wait = Task { try await self.waitForWork() }
             followWait = wait
             do {
-                try await withTaskCancellationHandler {
+                claim = try await withTaskCancellationHandler {
                     try await wait.value
                 } onCancel: {
                     wait.cancel()
                 }
-                woken = false
             } catch {
                 guard wokeEarly, !Task.isCancelled else {
                     followWait = nil
                     return
                 }
-                woken = true
+                claim = false
             }
             wokeEarly = false
             followWait = nil
@@ -238,10 +251,12 @@ extension PhoneRunner {
         // Only a claim that found nothing says when to look next.
         nextLook = nil
         guard isSignedIn() else { return }
-        // The scripts the server runs its answers through, when they changed since the last run;
-        // only while no marketplace runs, since a new runtime replaces their web views.
-        if lanes.isEmpty {
-            await runtime.refresh()
+        lastClaimAt = now()
+        // The scripts the server runs its answers through, when they changed since the app came
+        // to the front; only while no marketplace runs, since a new runtime replaces their web
+        // views. A check the server didn't answer is tried again at the next claim.
+        if !runtimeChecked, lanes.isEmpty {
+            runtimeChecked = await runtime.refresh()
         }
         let id = installationID()
         let version: Int

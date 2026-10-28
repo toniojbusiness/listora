@@ -298,6 +298,55 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/item-batches/{batchId}/interaction`.
     /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/interaction/put(replaceItemBatchInteraction)`.
     func replaceItemBatchInteraction(_ input: Operations.ReplaceItemBatchInteraction.Input) async throws -> Operations.ReplaceItemBatchInteraction.Output
+    /// List hauls
+    ///
+    /// Newest first, so the cost screen offers the haul of the trip the seller is on.
+    ///
+    /// - Remark: HTTP `GET /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/get(listHauls)`.
+    func listHauls(_ input: Operations.ListHauls.Input) async throws -> Operations.ListHauls.Output
+    /// Create a haul
+    ///
+    /// Records a haul's total and how many items it had, with `itemIds` joining it at once
+    /// (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+    /// it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/post(createHaul)`.
+    func createHaul(_ input: Operations.CreateHaul.Input) async throws -> Operations.CreateHaul.Output
+    /// Get a haul
+    ///
+    /// - Remark: HTTP `GET /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/get(getHaul)`.
+    func getHaul(_ input: Operations.GetHaul.Input) async throws -> Operations.GetHaul.Output
+    /// Change a haul's total or count
+    ///
+    /// Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+    /// a new `version`). An `itemCount` below `itemsAdded` is `422`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/put(replaceHaul)`.
+    func replaceHaul(_ input: Operations.ReplaceHaul.Input) async throws -> Operations.ReplaceHaul.Output
+    /// Add items to a haul
+    ///
+    /// The items join the haul after the ones already in it, and every item in it gets its new
+    /// share. When the haul's count is reached, each new item adds one to it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls/{haulId}/items`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/post(addHaulItems)`.
+    func addHaulItems(_ input: Operations.AddHaulItems.Input) async throws -> Operations.AddHaulItems.Output
+    /// Take an item out of a haul
+    ///
+    /// The item keeps its last share as its cost, which the seller can then change; the items
+    /// still in the haul get their new shares. The haul's count stays as it is.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/hauls/{haulId}/items/{itemId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/{itemId}/delete(removeHaulItem)`.
+    func removeHaulItem(_ input: Operations.RemoveHaulItem.Input) async throws -> Operations.RemoveHaulItem.Output
     /// Get the plan's quota use
     ///
     /// The account's use of each plan quota in the current period (the UTC calendar month
@@ -1787,6 +1836,107 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// List hauls
+    ///
+    /// Newest first, so the cost screen offers the haul of the trip the seller is on.
+    ///
+    /// - Remark: HTTP `GET /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/get(listHauls)`.
+    public func listHauls(
+        query: Operations.ListHauls.Input.Query = .init(),
+        headers: Operations.ListHauls.Input.Headers = .init()
+    ) async throws -> Operations.ListHauls.Output {
+        try await listHauls(Operations.ListHauls.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Create a haul
+    ///
+    /// Records a haul's total and how many items it had, with `itemIds` joining it at once
+    /// (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+    /// it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/post(createHaul)`.
+    public func createHaul(
+        headers: Operations.CreateHaul.Input.Headers,
+        body: Operations.CreateHaul.Input.Body
+    ) async throws -> Operations.CreateHaul.Output {
+        try await createHaul(Operations.CreateHaul.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get a haul
+    ///
+    /// - Remark: HTTP `GET /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/get(getHaul)`.
+    public func getHaul(
+        path: Operations.GetHaul.Input.Path,
+        headers: Operations.GetHaul.Input.Headers = .init()
+    ) async throws -> Operations.GetHaul.Output {
+        try await getHaul(Operations.GetHaul.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Change a haul's total or count
+    ///
+    /// Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+    /// a new `version`). An `itemCount` below `itemsAdded` is `422`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/put(replaceHaul)`.
+    public func replaceHaul(
+        path: Operations.ReplaceHaul.Input.Path,
+        headers: Operations.ReplaceHaul.Input.Headers = .init(),
+        body: Operations.ReplaceHaul.Input.Body
+    ) async throws -> Operations.ReplaceHaul.Output {
+        try await replaceHaul(Operations.ReplaceHaul.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Add items to a haul
+    ///
+    /// The items join the haul after the ones already in it, and every item in it gets its new
+    /// share. When the haul's count is reached, each new item adds one to it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls/{haulId}/items`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/post(addHaulItems)`.
+    public func addHaulItems(
+        path: Operations.AddHaulItems.Input.Path,
+        headers: Operations.AddHaulItems.Input.Headers,
+        body: Operations.AddHaulItems.Input.Body
+    ) async throws -> Operations.AddHaulItems.Output {
+        try await addHaulItems(Operations.AddHaulItems.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Take an item out of a haul
+    ///
+    /// The item keeps its last share as its cost, which the seller can then change; the items
+    /// still in the haul get their new shares. The haul's count stays as it is.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/hauls/{haulId}/items/{itemId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/{itemId}/delete(removeHaulItem)`.
+    public func removeHaulItem(
+        path: Operations.RemoveHaulItem.Input.Path,
+        headers: Operations.RemoveHaulItem.Input.Headers = .init()
+    ) async throws -> Operations.RemoveHaulItem.Output {
+        try await removeHaulItem(Operations.RemoveHaulItem.Input(
+            path: path,
+            headers: headers
         ))
     }
     /// Get the plan's quota use

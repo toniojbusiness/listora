@@ -12,7 +12,8 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   price, item status, and each listing's status on its marketplace, exactly as the server words
   it. It opens as a grid of large photos; the toolbar button switches to a list of rows and back,
   and the choice is kept on the iPhone (`InventoryLayout`). Search goes over SKU, title, brand,
-  and keywords. The quick filters above the list (`InventoryFilter`) are one tap each: All, Needs
+  and keywords. The quick filters above the list (`InventoryFilter`, kept under the search field
+  on the screen's background, so items scroll out of sight beneath them) are one tap each: All, Needs
   you, Drafts, Ready to list, Listed, Sold (sold, delisting, or shipped), and Archived; the filter
   menu narrows by marketplace (items with a listing there that is not ended or sold) and brand
   (exact, ignoring case). The list reads the server every time it appears and on pull to refresh,

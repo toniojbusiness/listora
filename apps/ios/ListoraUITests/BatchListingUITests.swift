@@ -20,14 +20,22 @@ final class BatchListingUITests: XCTestCase {
         waitForTheAnalyses()
         let skus = try reviewEveryItem()
 
-        // The server has every item saved, at the recommended price, with its share of the cost.
+        // The server has every item saved, at the recommended price, in one $12 haul of 3 with
+        // its share of the cost.
+        var hauls = Set<String>()
         for sku in skus {
             let item = try await stack.item(sku: sku)
             XCTAssertEqual(item.status, "ready", sku)
             XCTAssertEqual(item.details.listPrice?.amountCents, 2600, sku)
             XCTAssertEqual(item.details.cost?.amountCents, 400, sku)
             XCTAssertNotNil(item.details.floorPrice, sku)
+            let haul = try XCTUnwrap(item.haul, sku)
+            XCTAssertEqual(haul.total.amountCents, 1200, sku)
+            XCTAssertEqual(haul.itemCount, 3, sku)
+            XCTAssertEqual(haul.itemsAdded, 3, sku)
+            hauls.insert(haul.id)
         }
+        XCTAssertEqual(hauls.count, 1, "the batch is one haul")
 
         // Every item is in the inventory, ready to list.
         app.tabRail.buttons["Inventory"].tap()
@@ -111,7 +119,8 @@ final class BatchListingUITests: XCTestCase {
         keepScreenshot("Batch")
     }
 
-    /// The first item's cost, split across the haul, then one tap per item. Returns the SKUs.
+    /// The first item's cost marked as one haul of the three, then one tap per item. Returns the
+    /// SKUs.
     private func reviewEveryItem() throws -> [String] {
         let review = app.buttons["batch.review"]
         XCTAssertTrue(waitForLabel(of: review, prefix: "Review 3 items"), review.label)
@@ -127,14 +136,18 @@ final class BatchListingUITests: XCTestCase {
         app.buttons["keypad.2"].tap()
         let cost = app.staticTexts["batchReview.cost.1"]
         XCTAssertEqual(cost.label, "$12")
-        let split = app.buttons["batchReview.splitCost.1"]
-        XCTAssertTrue(split.waitForExistence(timeout: 5))
-        XCTAssertEqual(split.label, "Split $12.00 across 3 items, $4.00 each")
-        split.tap()
+        let haul = app.buttons["batchReview.haulCost.1"]
+        XCTAssertTrue(haul.waitForExistence(timeout: 5))
+        XCTAssertEqual(haul.label, "One $12 haul of 3 items, $4.00 each")
+        haul.tap()
         XCTAssertTrue(waitForLabel(of: cost, prefix: "$4"), cost.label)
-        // Applied once: the card says so instead of offering to split the share again.
+        XCTAssertEqual(
+            app.staticTexts["batchReview.haulSummary.1"].label,
+            "$4.00 each, from a $12 haul of 3",
+        )
+        // Applied once: the card says so instead of offering to mark the haul again.
         XCTAssertTrue(app.descendants(matching: .any)["batchReview.costApplied.1"].waitForExistence(timeout: 5))
-        XCTAssertFalse(split.exists)
+        XCTAssertFalse(haul.exists)
         keepScreenshot("Batch review")
 
         for number in 1 ... 3 {

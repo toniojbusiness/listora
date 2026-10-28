@@ -257,6 +257,15 @@ struct SavedItem: Decodable {
     let status: String
     let details: SavedDetails
     let fieldProvenance: [String: String]
+    let haul: SavedHaul?
+}
+
+/// The parts of the contract's `Haul` the test checks.
+struct SavedHaul: Decodable {
+    let id: String
+    let total: SavedMoney
+    let itemCount: Int
+    let itemsAdded: Int
 }
 
 struct SavedDetails: Decodable {

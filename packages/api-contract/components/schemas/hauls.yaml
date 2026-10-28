@@ -1,0 +1,120 @@
+Haul:
+  type: object
+  description: |
+    Items bought together for one price, such as 30 items from the bins for $50
+    (docs/features/hauls.md). Each item in the haul costs its share of `total`: the total
+    split over `itemCount`, with the leftover cents on the items that joined first, so a full
+    haul's items add back up to the total. The server keeps each item's `details.cost` equal to
+    its share, and a `replaceItem` that changes it is refused while the item is in a haul.
+  required: [id, total, itemCount, itemsAdded, eachCost, createdAt, updatedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    total:
+      $ref: './common.yaml#/Money'
+      description: What the whole haul cost.
+    itemCount:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 10000
+      description: |
+        How many items the haul had. Never fewer than `itemsAdded`: an item joining a haul
+        whose count is reached adds one to it.
+    itemsAdded:
+      type: integer
+      format: int32
+      minimum: 0
+      description: The items in Listora that are part of the haul.
+    eachCost:
+      $ref: './common.yaml#/Money'
+      description: |
+        `total` over `itemCount`, to the nearest cent, to show ("$1.67 each"). Each item's own
+        cost is its share, which is this or within a cent of it.
+    purchaseDate:
+      type: string
+      format: date
+      description: When it was bought; every item in the haul takes it.
+    purchaseSource:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Where it was bought; every item in the haul takes it.
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+HaulPage:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      description: Newest first.
+      items:
+        $ref: '#/Haul'
+    nextCursor:
+      type: string
+      description: Present when there are more results.
+HaulCreate:
+  type: object
+  required: [total, itemCount]
+  properties:
+    total:
+      $ref: './common.yaml#/Money'
+    itemCount:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 10000
+    purchaseDate:
+      type: string
+      format: date
+    purchaseSource:
+      type: string
+      minLength: 1
+      maxLength: 200
+    itemIds:
+      type: array
+      description: |
+        Items that join the haul at once, in this order (a batch's items, in haul order). An
+        item in another haul moves to this one.
+      maxItems: 1000
+      uniqueItems: true
+      items:
+        $ref: './common.yaml#/Id'
+HaulReplace:
+  type: object
+  description: |
+    Full replacement of the haul's total, count, date, and place: a property left out is
+    cleared. Every item in the haul gets its new share.
+  required: [total, itemCount]
+  properties:
+    total:
+      $ref: './common.yaml#/Money'
+    itemCount:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 10000
+    purchaseDate:
+      type: string
+      format: date
+    purchaseSource:
+      type: string
+      minLength: 1
+      maxLength: 200
+HaulItemsAdd:
+  type: object
+  required: [itemIds]
+  properties:
+    itemIds:
+      type: array
+      description: |
+        Items that join the haul, in this order, after the items already in it. An item in
+        another haul moves to this one; an item already in this one stays where it is.
+      minItems: 1
+      maxItems: 1000
+      uniqueItems: true
+      items:
+        $ref: './common.yaml#/Id'

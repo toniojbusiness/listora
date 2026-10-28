@@ -176,6 +176,8 @@ function rowStub(): Parameters<typeof detailsFromRow>[0] {
     pre_archive_status: null,
     refresh_cadence: null,
     refresh_custom_hours: null,
+    haul_id: null,
+    haul_joined_at: null,
     ...columnsFromDetails({}),
   };
 }

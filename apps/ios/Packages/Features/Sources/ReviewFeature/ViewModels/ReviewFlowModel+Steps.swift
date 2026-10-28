@@ -130,25 +130,11 @@ extension ReviewFlowModel {
 
     // MARK: Cost
 
-    /// Continue from the cost screen: saves the cost, date, and source (or clears the cost when
-    /// skipped), then opens the price screen.
+    /// Continue from the cost screen: saves the cost, date, and source, or the item's place in a
+    /// haul (or clears the cost when skipped), then opens the price screen.
     func continueToPrice(skippingCost: Bool = false) async {
-        let cents = skippingCost ? nil : cost.amount.cents
-        let date = Self.day(cost.purchaseDate)
-        let source = cost.source.trimmingCharacters(in: .whitespacesAndNewlines)
         await perform { () async throws(APIFailure) in
-            _ = try await replace { _, details in
-                var details = details
-                details.cost = cents.map { Money(amountCents: $0, currency: .usd) }
-                if !skippingCost {
-                    details.purchaseDate = date
-                    details.purchaseSource = source.isEmpty ? nil : source
-                }
-                return details
-            }
-            if !skippingCost, !source.isEmpty {
-                recentSources.remember(source)
-            }
+            try await saveCost(skipping: skippingCost)
             showsPrice = true
         }
         if showsPrice {
