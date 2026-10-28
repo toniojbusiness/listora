@@ -42,6 +42,9 @@ final class SaleFlowUITests: XCTestCase {
         let stamp = app.descendants(matching: .any)["item.soldStamp"]
         XCTAssertTrue(stamp.waitForExistence(timeout: 10), "the sold item has no sold stamp")
         XCTAssertTrue(stamp.label.hasPrefix("Sold for $") && stamp.label.hasSuffix(" on Depop"), stamp.label)
+        // Mark as sold was below the fold: back to the tag and the string at the top.
+        app.swipeDown()
+        app.swipeDown()
         keepScreenshot("Sold, the string to eBay cut")
         let sale = app.buttons["item.sale"]
         for _ in 0 ..< 4 where !sale.isHittable {
