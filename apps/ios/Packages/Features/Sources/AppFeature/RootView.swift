@@ -126,6 +126,7 @@ public struct RootView: View {
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
                 Task { await dependencies.inventory.attention.refresh() }
+                Task { await dependencies.features.refresh() }
             } else if phase == .background {
                 PhoneBackgroundWork.schedule()
             }
@@ -250,6 +251,12 @@ extension RootView {
         )
     }
 
+    /// Settings > Listing refresh, only while refresh passed live somewhere (verified-features.md).
+    private var listingRefreshScreen: (@MainActor () -> AnyView)? {
+        guard let screen = dependencies.inventory.refreshSettingsScreen() else { return nil }
+        return { screen }
+    }
+
     private var settings: some View {
         SettingsView(
             content: SettingsContent(
@@ -268,7 +275,7 @@ extension RootView {
                 linkAccounts: { AnyView(LinkAccountsView(model: dependencies.linkAccounts)) },
                 marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },
                 imports: { dependencies.importsScreen() },
-                listingRefresh: { dependencies.inventory.refreshSettingsScreen() ?? AnyView(EmptyView()) },
+                listingRefresh: listingRefreshScreen,
                 notifications: {
                     AnyView(NotificationSettingsView(
                         today: dependencies.today,

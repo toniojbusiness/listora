@@ -20,6 +20,9 @@ sold item made the same way when Listora had no listing for it ([sales.md](sales
 | `apps/worker/src/features/listing-imports.ts`                    | The worker's `listing_import_apply` job                               |
 | `ImportFeature` (iOS)                                            | Settings > Import your listings, and the questions screen             |
 
+Imports are offered only from marketplaces whose imports passed live (Depop and Mercari today,
+[verified-features.md](verified-features.md)). Starting one elsewhere is refused.
+
 ## How it works
 
 1. **Starting** (`startListingImport`, `POST /v1/imports`): only on a marketplace linked by

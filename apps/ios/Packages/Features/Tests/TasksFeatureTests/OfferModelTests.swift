@@ -138,14 +138,14 @@ struct OfferModelTests {
         #expect(await service.checkRequests == 1)
         #expect(phone.runs == 1)
 
+        // A read that failed is the owner's to fix (read-health.md): the seller sees no error,
+        // even from a server that still sends one.
         await service.setChecks([OfferFixtures.decode([
-            "marketplace": "poshmark", "status": "failed",
-            "message": "Poshmark's offers page has changed, so Listora couldn't read your offers there.",
+            "marketplace": "depop", "status": "failed",
+            "message": "Listora couldn't read your offers on Depop's offers page.",
         ])])
         await inbox.checkOffers()
         #expect(phone.runs == 1)
-        #expect(inbox.offerProblems == [
-            "Poshmark's offers page has changed, so Listora couldn't read your offers there.",
-        ])
+        #expect(inbox.offerChecks.map(\.status) == ["failed"])
     }
 }

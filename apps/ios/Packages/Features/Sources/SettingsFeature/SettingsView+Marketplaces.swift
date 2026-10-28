@@ -38,7 +38,7 @@ extension SettingsView {
                     NavigationLink(value: SettingsDestination.imports) {
                         ListRow(
                             "Import your listings",
-                            subtitle: "Bring what you already have for sale on Depop, Poshmark, and Mercari.",
+                            subtitle: "Bring in what you already have for sale on your marketplaces.",
                             systemImage: "square.and.arrow.down",
                         )
                     }

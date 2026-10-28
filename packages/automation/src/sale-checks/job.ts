@@ -48,7 +48,7 @@ import { readFailure, recordReadFailed, recordReadSucceeded } from '../read-heal
 import { saleCheckError, saleCheckErrorMessage } from './health.ts';
 import { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './interval.ts';
 import { orderEventPayload, queueSaleOrder } from './orders.ts';
-import { queueSaleCheckForPhone, type SaleCheckJobPayload } from './schedule.ts';
+import { checksSales, queueSaleCheckForPhone, type SaleCheckJobPayload } from './schedule.ts';
 import { queueSoldItemPhotos } from './sold-photos.ts';
 
 export interface SaleCheckDependencies {
@@ -154,6 +154,11 @@ export async function prepareSaleCheck(
     (found.status !== 'connected' && found.status !== 'degraded')
   ) {
     log.debug({ status: found.status }, 'the connection cannot be checked now');
+    return null;
+  }
+  if (kind === 'scheduled' && !checksSales(found.marketplace)) {
+    // A check queued before its marketplace's checks were hidden (verified-features.md).
+    log.debug({ marketplace: found.marketplace }, 'sale checks are not shown on this marketplace');
     return null;
   }
   const key = { accountId: payload.accountId, connectionId: payload.connectionId };

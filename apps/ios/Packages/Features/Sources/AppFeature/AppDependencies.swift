@@ -64,6 +64,9 @@ public struct AppDependencies {
     /// Sync now, the pull to refresh, and the sync on opening the app, with its indicator
     /// (docs/features/sync.md).
     public let sync: SyncModel
+    /// What the app shows of each marketplace: only the features that passed live
+    /// (docs/features/verified-features.md).
+    public let features: MarketplaceFeatures
 
     public init(
         configuration: AppConfiguration,
@@ -110,6 +113,7 @@ public struct AppDependencies {
             onSignIn: showSignIn, phoneWork: phone.runner,
         )
         Self.wire(inventory, review, phone, packCheck)
+        features = Self.makeFeatures(apiClient, inventory)
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,

@@ -14805,9 +14805,9 @@ public struct Client: APIProtocol {
     }
     /// List the marketplaces Listora imports listings from, each with its latest import
     ///
-    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-    /// import can start now (the marketplace is linked, none is under way) or why not, and its
-    /// newest import with its progress and summary.
+    /// One entry per marketplace Listora imports from (those whose imports passed live,
+    /// docs/features/verified-features.md): whether an import can start now (the marketplace is
+    /// linked, none is under way) or why not, and its newest import with its progress and summary.
     ///
     ///
     /// - Remark: HTTP `GET /v1/imports`.
@@ -15404,7 +15404,7 @@ public struct Client: APIProtocol {
     }
     /// When each marketplace's offers were last read
     ///
-    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    /// One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     ///
     /// - Remark: HTTP `GET /v1/offer-checks`.
     /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
@@ -16101,6 +16101,90 @@ public struct Client: APIProtocol {
                     case "application/json":
                         body = try await converter.getResponseBodyAsJSON(
                             Components.Schemas.SyncStatus.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// What Listora shows the seller of each marketplace
+    ///
+    /// Each marketplace's features that passed a live end-to-end test on a real account
+    /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+    /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+    /// `features`; anything else is hidden, and the server never queues its checks either. The
+    /// same for every account.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-features`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
+    public func listMarketplaceFeatures(_ input: Operations.ListMarketplaceFeatures.Input) async throws -> Operations.ListMarketplaceFeatures.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.ListMarketplaceFeatures.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/marketplace-features",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.ListMarketplaceFeatures.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.MarketplaceFeatureList.self,
                             from: responseBody,
                             transforming: { value in
                                 .json(value)

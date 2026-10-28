@@ -3,6 +3,7 @@
  * `Tenant` and filters on its account. Tasks are created by the operation engine (an assisted
  * step) and finished here, through the engine's own commands when they belong to an operation.
  */
+import { OFFER_MARKETPLACES, readsOffers } from '@listora/automation';
 import type {
   DbExecutor,
   DbTransaction,
@@ -118,6 +119,25 @@ export async function listTaskRows(
   filter: TaskListFilter,
 ): Promise<TaskRow[]> {
   let query = taskQuery(db, tenant);
+  // An offer on a marketplace whose offers Listora doesn't show (verified-features.md).
+  const hidden = OFFER_MARKETPLACES.filter((marketplace) => !readsOffers(marketplace));
+  if (hidden.length > 0) {
+    query = query.where((eb) =>
+      eb.or([
+        eb('task.offer_id', 'is', null),
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('marketplace_offer as offer')
+              .select('offer.id')
+              .whereRef('offer.account_id', '=', 'task.account_id')
+              .whereRef('offer.id', '=', 'task.offer_id')
+              .where('offer.marketplace', 'in', hidden),
+          ),
+        ),
+      ]),
+    );
+  }
   if (filter.statuses && filter.statuses.length > 0) {
     query = query.where('task.status', 'in', filter.statuses);
   }

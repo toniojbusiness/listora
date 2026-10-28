@@ -13,6 +13,7 @@ import {
   createMarketplaceAdapters,
   EbayNotificationVerifier,
   EbayOAuthClient,
+  useMarketplaceFeatures,
 } from '@listora/marketplaces';
 import { scaledRetryPolicy } from '@listora/operations';
 import { graphilePhotoJobs } from '@listora/photos';
@@ -30,6 +31,8 @@ import { createInviteeDirectory } from './invites/create-directory.ts';
 const SHUTDOWN_DRAIN_MS = 10_000;
 
 const config = loadApiConfig();
+// Only the features that passed live, unless the stack runs on the fakes (MARKETPLACE_FEATURES).
+useMarketplaceFeatures(config.marketplaces.features);
 const logger = createLogger({ service: 'api', level: config.logLevel });
 const pool = createPool({
   connectionString: config.databaseUrl,

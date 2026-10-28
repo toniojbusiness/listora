@@ -10,6 +10,7 @@ export { answerImportQuestion, AnswerRefusedError } from './resolve.ts';
 export type { AnswerRefusal, ImportAnswer } from './resolve.ts';
 export {
   IMPORT_MARKETPLACES,
+  importableMarketplaces,
   ImportRefusedError,
   importsFrom,
   startListingImport,

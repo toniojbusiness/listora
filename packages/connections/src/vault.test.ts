@@ -232,7 +232,15 @@ describe('loadMarketplaceConfig', () => {
       ebay: undefined,
       depop: undefined,
       tokenVault: undefined,
+      features: 'verified',
     });
+  });
+
+  it('reads MARKETPLACE_FEATURES, refusing all beside Cognito sign-in', () => {
+    expect(loadMarketplaceConfig({ MARKETPLACE_FEATURES: 'all' }).features).toBe('all');
+    expect(() =>
+      loadMarketplaceConfig({ MARKETPLACE_FEATURES: 'all', AUTH_DRIVER: 'cognito' }),
+    ).toThrow(/MARKETPLACE_FEATURES=all/);
   });
 
   it('reads eBay with or without a token vault, and connects eBay when its RuName is known', () => {

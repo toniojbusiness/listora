@@ -45,6 +45,11 @@ can do, and its listings show refresh as unavailable. The engine's own guard ref
 one too (`enqueueOperation`), so a refresh can never reach it by another way. Tests run only
 against the fake sites.
 
+**Hidden until a refresh passes live.** No marketplace's refresh has run on a real account yet,
+so sellers see none of it ([verified-features.md](verified-features.md)): `canRefresh` is
+false, the schedule queues nothing, and the app hides Settings > Listing refresh and the item's
+Refresh this item. The local stacks and tests run it on the fakes (`MARKETPLACE_FEATURES=all`).
+
 The capability is the adapters' own `refresh` flag (`MarketplaceCapabilities.refresh`): an
 automation adapter has it when its scripts have a `refresh` script, never in assisted mode
 (`checkCapabilities` refuses an assisted or bulk-file refresh), and the shared conformance suite

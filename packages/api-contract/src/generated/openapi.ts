@@ -2488,9 +2488,9 @@ export interface paths {
         };
         /**
          * List the marketplaces Listora imports listings from, each with its latest import
-         * @description One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-         *     import can start now (the marketplace is linked, none is under way) or why not, and its
-         *     newest import with its progress and summary.
+         * @description One entry per marketplace Listora imports from (those whose imports passed live,
+         *     docs/features/verified-features.md): whether an import can start now (the marketplace is
+         *     linked, none is under way) or why not, and its newest import with its progress and summary.
          */
         get: operations["listListingImports"];
         put?: never;
@@ -2589,7 +2589,7 @@ export interface paths {
         };
         /**
          * When each marketplace's offers were last read
-         * @description One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+         * @description One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
          */
         get: operations["listOfferChecks"];
         put?: never;
@@ -2698,6 +2698,30 @@ export interface paths {
          *     that run on the seller's iPhone wait for it to claim them.
          */
         post: operations["requestSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace-features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What Listora shows the seller of each marketplace
+         * @description Each marketplace's features that passed a live end-to-end test on a real account
+         *     (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+         *     screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+         *     `features`; anything else is hidden, and the server never queues its checks either. The
+         *     same for every account.
+         */
+        get: operations["listMarketplaceFeatures"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6177,14 +6201,18 @@ export interface components {
             offerAmount: components["schemas"]["Money"];
             counter?: components["schemas"]["Money"];
         };
-        /** @description When Listora last read the seller's offers on one marketplace, and how that went. */
+        /**
+         * @description When Listora last read the seller's offers on one marketplace, and how that went. Only
+         *     marketplaces whose offer reads passed live are listed (docs/features/verified-features.md).
+         *     A read that failed carries no error for the seller: it goes to the owner's alerts
+         *     (docs/features/read-health.md).
+         */
         OfferCheck: {
             marketplace: components["schemas"]["Marketplace"];
-            /** @description `waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`). */
+            /** @description `waiting` (a read waits for the iPhone), `ok`, or `failed` (the last read did not get through). */
             status: string;
             /** @description When a read last succeeded. */
             checkedAt?: components["schemas"]["Timestamp"];
-            message?: string;
         };
         OfferCheckList: {
             data: components["schemas"]["OfferCheck"][];
@@ -6219,6 +6247,29 @@ export interface components {
         /** @description Each linked marketplace Listora reads by signing in, in marketplace order. */
         SyncStatus: {
             data: components["schemas"]["SyncMarketplace"][];
+        };
+        /**
+         * @description A `KnownMarketplaceFeature`, or one added after this client was built. Clients ignore a
+         *     feature they do not know (they show nothing for it).
+         */
+        MarketplaceFeature: components["schemas"]["KnownMarketplaceFeature"];
+        /**
+         * @description `sales_history`: the seller's past sales read from the marketplace. `sale_checks`: new
+         *     sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
+         *     buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
+         *     offer from Listora. `listing_import`: importing the seller's existing listings.
+         *     `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
+         *     listing's details from Listora (`reviseListing`).
+         * @enum {string}
+         */
+        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise";
+        MarketplaceFeatures: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description The features of this marketplace that passed a live end-to-end test. */
+            features: components["schemas"]["MarketplaceFeature"][];
+        };
+        MarketplaceFeatureList: {
+            data: components["schemas"]["MarketplaceFeatures"][];
         };
     };
     responses: {
@@ -6751,6 +6802,10 @@ export type SyncState = components['schemas']['SyncState'];
 export type KnownSyncState = components['schemas']['KnownSyncState'];
 export type SyncMarketplace = components['schemas']['SyncMarketplace'];
 export type SyncStatus = components['schemas']['SyncStatus'];
+export type MarketplaceFeature = components['schemas']['MarketplaceFeature'];
+export type KnownMarketplaceFeature = components['schemas']['KnownMarketplaceFeature'];
+export type MarketplaceFeatures = components['schemas']['MarketplaceFeatures'];
+export type MarketplaceFeatureList = components['schemas']['MarketplaceFeatureList'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -10694,6 +10749,27 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listMarketplaceFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every marketplace, each with its verified features. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceFeatureList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -10795,3 +10871,4 @@ export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
 export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];
+export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise"];

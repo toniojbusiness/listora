@@ -30,6 +30,7 @@ import {
 } from '@listora/db';
 import {
   answerShown,
+  isFeatureVerified,
   isOfferMarketplace,
   MARKETPLACE_NAMES,
   OFFER_RULES,
@@ -87,9 +88,14 @@ export function offerQuote(marketplace: Marketplace, priceCents: number, at: Dat
   return { priceCents, feesCents, netCents: priceCents - feesCents };
 }
 
-/** Which answers the offer takes on its marketplace (none on a read-only connection). */
+/**
+ * Which answers the offer takes on its marketplace: none on a read-only connection, and none
+ * where answers have not passed live yet (docs/features/verified-features.md), so the app
+ * shows no Accept, Decline, or Counter there and the seller answers in the marketplace's app.
+ */
 export function offerActions(marketplace: Marketplace, readOnly = false): OfferAction[] {
   if (!isOfferMarketplace(marketplace) || readOnly) return [];
+  if (!isFeatureVerified(marketplace, 'offer_answers')) return [];
   return OFFER_RULES[marketplace].counter
     ? ['accept', 'decline', 'counter']
     : ['accept', 'decline'];
@@ -186,6 +192,9 @@ export async function requestOfferAnswer(
         'unavailable',
         `Listora only reads this ${name} account, so it can't answer its offers. Answer this one in ${name}.`,
       );
+    }
+    if (offerActions(offer.marketplace).length === 0) {
+      throw new OfferAnswerRefusedError('unavailable', `Answer this offer in ${name}.`);
     }
     if (!offerActions(offer.marketplace).includes(input.action)) {
       throw new OfferAnswerRefusedError('invalid', `${name} doesn't take that answer to offers.`);
@@ -326,14 +335,18 @@ export async function prepareOfferAnswer(
 export async function refuseOfferAnswer(
   db: DbExecutor,
   prepared: Pick<PreparedOfferAnswer, 'accountId' | 'responseId' | 'marketplace'>,
+  reason: 'read_only' | 'unavailable' = 'read_only',
 ): Promise<void> {
   const name = MARKETPLACE_NAMES[prepared.marketplace];
   await db
     .updateTable('offer_response')
     .set({
       status: 'failed',
-      error_code: 'read_only',
-      error_message: `Listora only reads this ${name} account, so it can't answer its offers. Answer this one in ${name}.`,
+      error_code: reason,
+      error_message:
+        reason === 'read_only'
+          ? `Listora only reads this ${name} account, so it can't answer its offers. Answer this one in ${name}.`
+          : `Answer this offer in ${name}.`,
       retryable: false,
       finished_at: sql<Date>`now()`,
     })

@@ -1227,9 +1227,9 @@ public protocol APIProtocol: Sendable {
     func getSaleExplanation(_ input: Operations.GetSaleExplanation.Input) async throws -> Operations.GetSaleExplanation.Output
     /// List the marketplaces Listora imports listings from, each with its latest import
     ///
-    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-    /// import can start now (the marketplace is linked, none is under way) or why not, and its
-    /// newest import with its progress and summary.
+    /// One entry per marketplace Listora imports from (those whose imports passed live,
+    /// docs/features/verified-features.md): whether an import can start now (the marketplace is
+    /// linked, none is under way) or why not, and its newest import with its progress and summary.
     ///
     ///
     /// - Remark: HTTP `GET /v1/imports`.
@@ -1277,7 +1277,7 @@ public protocol APIProtocol: Sendable {
     func answerListingImportQuestion(_ input: Operations.AnswerListingImportQuestion.Input) async throws -> Operations.AnswerListingImportQuestion.Output
     /// When each marketplace's offers were last read
     ///
-    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    /// One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     ///
     /// - Remark: HTTP `GET /v1/offer-checks`.
     /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
@@ -1339,6 +1339,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/sync`.
     /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)`.
     func requestSync(_ input: Operations.RequestSync.Input) async throws -> Operations.RequestSync.Output
+    /// What Listora shows the seller of each marketplace
+    ///
+    /// Each marketplace's features that passed a live end-to-end test on a real account
+    /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+    /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+    /// `features`; anything else is hidden, and the server never queues its checks either. The
+    /// same for every account.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-features`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
+    func listMarketplaceFeatures(_ input: Operations.ListMarketplaceFeatures.Input) async throws -> Operations.ListMarketplaceFeatures.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -3455,9 +3467,9 @@ extension APIProtocol {
     }
     /// List the marketplaces Listora imports listings from, each with its latest import
     ///
-    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-    /// import can start now (the marketplace is linked, none is under way) or why not, and its
-    /// newest import with its progress and summary.
+    /// One entry per marketplace Listora imports from (those whose imports passed live,
+    /// docs/features/verified-features.md): whether an import can start now (the marketplace is
+    /// linked, none is under way) or why not, and its newest import with its progress and summary.
     ///
     ///
     /// - Remark: HTTP `GET /v1/imports`.
@@ -3541,7 +3553,7 @@ extension APIProtocol {
     }
     /// When each marketplace's offers were last read
     ///
-    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    /// One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     ///
     /// - Remark: HTTP `GET /v1/offer-checks`.
     /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
@@ -3638,6 +3650,20 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)`.
     public func requestSync(headers: Operations.RequestSync.Input.Headers) async throws -> Operations.RequestSync.Output {
         try await requestSync(Operations.RequestSync.Input(headers: headers))
+    }
+    /// What Listora shows the seller of each marketplace
+    ///
+    /// Each marketplace's features that passed a live end-to-end test on a real account
+    /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+    /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+    /// `features`; anything else is hidden, and the server never queues its checks either. The
+    /// same for every account.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-features`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
+    public func listMarketplaceFeatures(headers: Operations.ListMarketplaceFeatures.Input.Headers = .init()) async throws -> Operations.ListMarketplaceFeatures.Output {
+        try await listMarketplaceFeatures(Operations.ListMarketplaceFeatures.Input(headers: headers))
     }
 }
 

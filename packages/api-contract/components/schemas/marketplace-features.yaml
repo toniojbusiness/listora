@@ -1,0 +1,39 @@
+MarketplaceFeature:
+  description: |
+    A `KnownMarketplaceFeature`, or one added after this client was built. Clients ignore a
+    feature they do not know (they show nothing for it).
+  anyOf:
+    - $ref: '#/KnownMarketplaceFeature'
+    - type: string
+      maxLength: 64
+KnownMarketplaceFeature:
+  type: string
+  description: |
+    `sales_history`: the seller's past sales read from the marketplace. `sale_checks`: new
+    sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
+    buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
+    offer from Listora. `listing_import`: importing the seller's existing listings.
+    `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
+    listing's details from Listora (`reviseListing`).
+  enum: [sales_history, sale_checks, offers, offer_answers, listing_import, listing_refresh, revise]
+MarketplaceFeatures:
+  type: object
+  required: [marketplace, features]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    features:
+      type: array
+      maxItems: 20
+      description: The features of this marketplace that passed a live end-to-end test.
+      items:
+        $ref: '#/MarketplaceFeature'
+MarketplaceFeatureList:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      maxItems: 20
+      items:
+        $ref: '#/MarketplaceFeatures'

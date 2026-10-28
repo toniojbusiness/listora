@@ -9,7 +9,8 @@
 import { sql } from 'kysely';
 
 import type { DbExecutor, Marketplace, SaleCheckReason, SaleCheckRunKind } from '@listora/db';
-import { inTransaction } from '@listora/db';
+import { inTransaction, MARKETPLACES } from '@listora/db';
+import { isFeatureVerified } from '@listora/marketplaces';
 
 /** The browser runner's task that checks one connection for sales (job.ts). */
 export const SALE_CHECK_TASK = 'automation_sale_check';
@@ -69,14 +70,24 @@ export async function scheduleSaleCheck(
 }
 
 /**
+ * Whether Listora checks the marketplace's sales for sellers: only where its sale checks passed
+ * live (docs/features/verified-features.md). The operator's sold-history read is not gated.
+ */
+export function checksSales(marketplace: Marketplace): boolean {
+  return isFeatureVerified(marketplace, 'sale_checks');
+}
+
+/**
  * Adds the connection's check job (or, with `kind` `history`, its read of the sold history)
- * unless one is already waiting or running; returns whether it added one.
+ * unless one is already waiting or running; returns whether it added one. A sale check of a
+ * marketplace whose checks have not passed live is never added.
  */
 export async function enqueueSaleCheck(
   executor: DbExecutor,
   check: ScheduledCheck,
   kind: SaleCheckRunKind = 'scheduled',
 ): Promise<boolean> {
+  if (kind === 'scheduled' && !checksSales(check.marketplace)) return false;
   const connection = await executor
     .selectFrom('marketplace_connection')
     .select('runs_on')
@@ -151,6 +162,7 @@ export async function requestSaleCheck(
   executor: DbExecutor,
   request: { accountId: string; marketplace: Marketplace; reason?: 'email' | 'offer' | 'sync' },
 ): Promise<boolean> {
+  if (!checksSales(request.marketplace)) return false;
   return inTransaction(executor, async (trx) => {
     const connection = await trx
       .selectFrom('marketplace_connection')
@@ -217,6 +229,8 @@ export async function requestSaleHistoryRead(
  * for a check (`requestSaleCheck`).
  */
 export async function dueSaleChecks(executor: DbExecutor, limit = 100): Promise<ScheduledCheck[]> {
+  const checked = MARKETPLACES.filter(checksSales);
+  if (checked.length === 0) return [];
   const rows = await executor
     .selectFrom('sale_check_schedule as schedule')
     .innerJoin('marketplace_connection as connection', (join) =>
@@ -228,6 +242,7 @@ export async function dueSaleChecks(executor: DbExecutor, limit = 100): Promise<
     .where('connection.mode', '=', 'automation')
     .where('connection.status', 'in', ['connected', 'degraded'])
     .where('connection.runs_on', '=', 'cloud')
+    .where('schedule.marketplace', 'in', checked)
     .where('schedule.next_check_at', '<=', sql<Date>`now()`)
     .orderBy('schedule.next_check_at')
     .limit(limit)
