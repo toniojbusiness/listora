@@ -8,7 +8,11 @@ import { LocalDiskStorage } from '@listora/storage';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { buildApp, type AppDependencies } from './app.ts';
-import { acceptedEncoding, COMPRESS_THRESHOLD_BYTES } from './compression.ts';
+import {
+  acceptedEncoding,
+  COMPRESS_THRESHOLD_BYTES,
+  COMPRESSION_OPT_IN_HEADER,
+} from './compression.ts';
 import { offlineDependencies, TEST_AUTH_SECRET } from './test-support.ts';
 
 describe('response compression', () => {
@@ -57,7 +61,7 @@ describe('response compression', () => {
     const response = await start().inject({
       method: 'GET',
       url: '/test/large',
-      headers: { 'accept-encoding': 'gzip, deflate, br' },
+      headers: { 'accept-encoding': 'gzip, deflate, br', [COMPRESSION_OPT_IN_HEADER]: 'accepted' },
     });
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-encoding']).toBe('br');
@@ -71,15 +75,31 @@ describe('response compression', () => {
     const response = await start().inject({
       method: 'GET',
       url: '/test/large',
-      headers: { 'accept-encoding': 'gzip' },
+      headers: { 'accept-encoding': 'gzip', [COMPRESSION_OPT_IN_HEADER]: 'accepted' },
     });
     expect(response.headers['content-encoding']).toBe('gzip');
     expect(JSON.parse(gunzipSync(response.rawPayload).toString())).toEqual(large);
   });
 
   it('sends the answer as it is to a client that accepts no encoding', async () => {
-    const response = await start().inject({ method: 'GET', url: '/test/large' });
+    const response = await start().inject({
+      method: 'GET',
+      url: '/test/large',
+      headers: { [COMPRESSION_OPT_IN_HEADER]: 'accepted' },
+    });
     expect(response.headers['content-encoding']).toBeUndefined();
+    expect(response.json()).toEqual(large);
+  });
+
+  it('sends the answer as it is to a client that does not ask for compression', async () => {
+    // The app builds from before compression: URLSession accepts br and gzip on its own.
+    const response = await start().inject({
+      method: 'GET',
+      url: '/test/large',
+      headers: { 'accept-encoding': 'gzip, deflate, br' },
+    });
+    expect(response.headers['content-encoding']).toBeUndefined();
+    expect(response.headers.vary).toContain(COMPRESSION_OPT_IN_HEADER);
     expect(response.json()).toEqual(large);
   });
 
@@ -87,7 +107,7 @@ describe('response compression', () => {
     const response = await start().inject({
       method: 'GET',
       url: '/health/live',
-      headers: { 'accept-encoding': 'br, gzip' },
+      headers: { 'accept-encoding': 'br, gzip', [COMPRESSION_OPT_IN_HEADER]: 'accepted' },
     });
     expect(response.payload.length).toBeLessThan(COMPRESS_THRESHOLD_BYTES);
     expect(response.headers['content-encoding']).toBeUndefined();
@@ -105,7 +125,7 @@ describe('response compression', () => {
     const response = await built.inject({
       method: 'GET',
       url: '/storage/public/photos/test.jpg',
-      headers: { 'accept-encoding': 'br, gzip' },
+      headers: { 'accept-encoding': 'br, gzip', [COMPRESSION_OPT_IN_HEADER]: 'accepted' },
     });
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toBe('image/jpeg');

@@ -3,6 +3,16 @@ import { brotliCompress, constants, gzip } from 'node:zlib';
 
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
+/**
+ * The request header a client sends, with the value `accepted`, to have its answers compressed.
+ * Only clients that ask get compressed answers, whatever their `Accept-Encoding`, so the iPhone
+ * app builds (whose URLSession accepts br and gzip on its own) keep getting
+ * every answer as they did. The app does not ask yet: with compressed answers, the iPhone's phone
+ * work stalled in the UI tests (PhoneExecutionUITests timed out on every such run, even with the
+ * phone's own routes uncompressed), and why is not yet understood (docs/features/performance.md).
+ */
+export const COMPRESSION_OPT_IN_HEADER = 'x-listora-compression';
+
 /** Answers smaller than this go as they are: compressing them gains less than it costs. */
 export const COMPRESS_THRESHOLD_BYTES = 1024;
 
@@ -21,9 +31,9 @@ const gzipped = promisify(gzip);
 type Encoding = 'br' | 'gzip';
 
 /**
- * Compresses every answer of at least `COMPRESS_THRESHOLD_BYTES` whose type is compressible
- * (docs/features/performance.md, "Response compression"): brotli, or gzip for a client that
- * accepts only that. API Gateway's HTTP API does not compress, and the app's URLSession asks
+ * Compresses every answer of at least `COMPRESS_THRESHOLD_BYTES` whose type is compressible, for
+ * a client that asks (`COMPRESSION_OPT_IN_HEADER`; docs/features/performance.md, "Response
+ * compression"): brotli, or gzip for a client that accepts only that. API Gateway's HTTP API does not compress, and the app's URLSession asks
  * for both and decodes them itself. A hook on the root, so it covers every route whenever it
  * was registered; photos and other binary bodies are never compressed. Request bodies are not
  * decompressed: every client sends its JSON as it is.
@@ -35,6 +45,7 @@ export function registerCompression(app: FastifyInstance): void {
     const body = typeof payload === 'string' ? Buffer.from(payload) : payload;
     if (body.length < COMPRESS_THRESHOLD_BYTES) return payload;
     reply.header('vary', varyWithEncoding(reply.getHeader('vary')));
+    if (request.headers[COMPRESSION_OPT_IN_HEADER] !== 'accepted') return payload;
     const encoding = acceptedEncoding(request.headers['accept-encoding']);
     if (encoding === null) return payload;
     const compressed =
@@ -83,8 +94,10 @@ function varyWithEncoding(current: ReturnType<FastifyReply['getHeader']>): strin
     .split(',')
     .map((value) => value.trim())
     .filter((value) => value !== '');
-  if (values.some((value) => value === '*' || value.toLowerCase() === 'accept-encoding')) {
-    return values.join(', ');
-  }
-  return [...values, 'accept-encoding'].join(', ');
+  if (values.includes('*')) return values.join(', ');
+  const present = new Set(values.map((value) => value.toLowerCase()));
+  return [
+    ...values,
+    ...['accept-encoding', COMPRESSION_OPT_IN_HEADER].filter((name) => !present.has(name)),
+  ].join(', ');
 }
