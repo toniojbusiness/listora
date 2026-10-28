@@ -415,6 +415,13 @@ export interface ListingDetails {
   categoryRef: string | null;
   /** Its category's names, top level first (`["Women", "Dresses", "Maxi"]`). */
   categoryPath: string[];
+  /** Its colours in Listora's terms (packages/analysis `COLORS`), the ones Listora knows. */
+  colors: string[];
+  /**
+   * The price before the marketplace's markdown, when the listing is marked down (`priceCents`
+   * is then the reduced price a buyer pays now); `null` when it is not.
+   */
+  originalPriceCents: number | null;
   /** The SKU Listora's line at the end of its text names, when it has one (sku-line). */
   sku: string | null;
 }

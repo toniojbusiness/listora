@@ -151,6 +151,8 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
         condition: 'pre_owned_excellent',
         categoryRef: null,
         categoryPath: [],
+        colors: [],
+        originalPriceCents: null,
         sku: null,
         ...details,
       },
@@ -227,10 +229,13 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
     const importId = await imported('depop', [
       listing(
         'dress-1',
+        // Marked down on Depop from $40.00.
         { title: null, description: 'Floral maxi dress, worn once.\nFits like a small.' },
         {
           categoryRef: 'Women > Dresses > Casual dresses',
           categoryPath: ['Women', 'Dresses', 'Casual dresses'],
+          colors: ['pink', 'cream'],
+          originalPriceCents: 4000,
         },
       ),
     ]);
@@ -254,10 +259,13 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
       size_label: 'S',
       size_system: 'letter',
       condition: 'pre_owned_excellent',
-      list_price_cents: 3400,
+      colors: ['pink', 'cream'],
+      // Never a sale price: the item lists elsewhere at the price before the markdown.
+      list_price_cents: 4000,
     });
     expect(item?.field_provenance).toMatchObject({
       title: 'marketplace',
+      colors: 'marketplace',
       listPrice: 'marketplace',
     });
     expect(entries).toMatchObject([{ outcome: 'imported', item_id: item?.id }]);
@@ -282,6 +290,7 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
       status: 'active',
       external_listing_id: 'dress-1',
       external_url: 'https://marketplace.test/dress-1',
+      // The price the listing shows on Depop now.
       price_cents: 3400,
       category_ref: 'Women > Dresses > Casual dresses',
       remote_revision: 1_761_000_000_000,
