@@ -179,8 +179,22 @@ describe('the Today summary (real Postgres)', () => {
 
   it("never shows Listora's own sale-check problems, which are the owner's to fix", async () => {
     const accountId = await harness.account();
-    const failing = await harness.connection(accountId, 'depop', { mode: 'automation' });
-    const overdue = await harness.connection(accountId, 'mercari', { mode: 'automation' });
+    const automation = async (marketplace: 'depop' | 'mercari') =>
+      (
+        await harness.db
+          .insertInto('marketplace_connection')
+          .values({
+            account_id: accountId,
+            marketplace,
+            mode: 'automation',
+            status: 'connected',
+            token_ciphertext: Buffer.from('sealed session'),
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const failing = await automation('depop');
+    const overdue = await automation('mercari');
     await harness.db
       .insertInto('sale_check_schedule')
       .values([
