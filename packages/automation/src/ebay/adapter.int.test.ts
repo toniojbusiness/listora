@@ -548,6 +548,8 @@ describe('eBay automation adapter on the fake eBay site', () => {
           condition: null,
           categoryRef: null,
           categoryPath: [],
+          colors: [],
+          originalPriceCents: null,
           sku: null,
         },
       });

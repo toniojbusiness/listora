@@ -39,6 +39,8 @@ export interface TaskRow {
   item_title: string | null;
   /** For a delist after a sale, the marketplace the item sold on. */
   sold_on: Marketplace | null;
+  /** The offer an `answer_offer` task is about. */
+  offer_id: string | null;
 }
 
 /** Urgent tasks first, then high, then normal. */
@@ -85,6 +87,7 @@ function taskQuery(db: DbExecutor, tenant: Tenant) {
       'item.sku as item_sku',
       'item.title as item_title',
       'sale.marketplace as sold_on',
+      'task.offer_id as offer_id',
     ])
     .where('task.account_id', '=', tenant.accountId);
 }

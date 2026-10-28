@@ -14,6 +14,10 @@ import type {
   AutomatedMarketplace,
   LabelReadRequest,
   ListingRef,
+  OfferAnswerRequest,
+  OfferRef,
+  RemoteOffer,
+  RemoteOfferState,
   OperationRequest,
   ListingsPage,
   RemoteListingState,
@@ -31,6 +35,13 @@ export type WriteResult =
   | { type: 'applied'; externalListingId?: string; revision?: number }
   /** The marketplace refused it (a validation message on its form): retrying cannot help. */
   | { type: 'rejected'; code: string; message: string; fixHint?: string };
+
+/** What an offer answer's script reports when it ran to its end (docs/features/offers.md). */
+export type OfferAnswerResult =
+  /** The marketplace took the answer; a read of the offer still has to show it. */
+  | { type: 'applied' }
+  /** The marketplace refused it (the offer moved on, a counter out of its range). */
+  | { type: 'refused'; code: string; message: string };
 
 export type WriteScript<P extends AssistedListingPayload> = (
   op: OperationRequest<P>,
@@ -66,6 +77,15 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
   listings?: (cursor: string | null, step: StepRunner) => Promise<ListingsPage>;
   /** The orders' shipping labels from their order pages, for Pack check. Only reads. */
   labels?: (orders: readonly LabelReadRequest[], step: StepRunner) => Promise<RemoteOrderLabel[]>;
+  /** The offers on the seller's listings that wait on the seller or the buyer. Only reads. */
+  offers?: (step: StepRunner) => Promise<RemoteOffer[]>;
+  /** One offer as its page shows it now. Only reads. */
+  offer?: (ref: OfferRef, step: StepRunner) => Promise<RemoteOfferState>;
+  /**
+   * Sends the seller's answer to an offer: only its last step mutates, and it stops (a
+   * `PageChangedError`) when the offer shows another amount than the seller confirmed.
+   */
+  answerOffer?: (request: OfferAnswerRequest, step: StepRunner) => Promise<OfferAnswerResult>;
 }
 
 /** The script sets: one per automation adapter (the fake site's stands in for any marketplace). */
@@ -100,7 +120,10 @@ export type ScriptCall<P extends AssistedListingPayload = AssistedListingPayload
   | { script: 'orders'; since: string | null }
   /** `cursor`: `null` for the first page, else the `next` of the page before. */
   | { script: 'listings'; cursor: string | null }
-  | { script: 'labels'; orders: LabelReadRequest[] };
+  | { script: 'labels'; orders: LabelReadRequest[] }
+  | { script: 'offers' }
+  | { script: 'offer'; ref: OfferRef }
+  | { script: 'answerOffer'; request: OfferAnswerRequest };
 
 /**
  * Whether an earlier attempt of the operation may have posted or changed the listing, so a
@@ -115,7 +138,9 @@ export function mayHaveAppliedBefore(
 
 /** Whether the call may change anything: only a write script's may. */
 export function isWriteCall(call: ScriptCall): boolean {
-  return (WRITE_SCRIPTS as readonly string[]).includes(call.script);
+  return (
+    call.script === 'answerOffer' || (WRITE_SCRIPTS as readonly string[]).includes(call.script)
+  );
 }
 
 /** Runs the call's script from `scripts`; throws when the set has no such script. */
@@ -154,6 +179,21 @@ export async function runScriptCall<P extends AssistedListingPayload>(
       const labels = scripts.labels;
       if (labels === undefined) throw new Error('these scripts read no order labels');
       return labels(call.orders, step);
+    }
+    case 'offers': {
+      const offers = scripts.offers;
+      if (offers === undefined) throw new Error('these scripts read no offers');
+      return offers(step);
+    }
+    case 'offer': {
+      const offer = scripts.offer;
+      if (offer === undefined) throw new Error('these scripts read no offers');
+      return offer(call.ref, step);
+    }
+    case 'answerOffer': {
+      const answer = scripts.answerOffer;
+      if (answer === undefined) throw new Error('these scripts answer no offers');
+      return answer(call.request, step);
     }
     default:
       return assertNever(call, 'script call');

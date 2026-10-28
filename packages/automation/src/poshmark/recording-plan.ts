@@ -103,6 +103,8 @@ export const poshmarkRecordingPlan: RecordingPlan = {
       mode: 'read',
       script: () => (step) => present(scripts.orders)(null, step),
     },
+    // No `offers` entry yet: Active Offers kept its list loading in the recorder's background tab
+    // (2026-10-27), so its read stopped there (docs/features/offers.md, open items).
     shape('women-tops', {
       department: 'women',
       category: 'clothing/tops/t_shirts',

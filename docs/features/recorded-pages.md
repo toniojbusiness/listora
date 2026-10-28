@@ -15,14 +15,15 @@ The code is in `packages/automation/src/recordings/`; each marketplace's plan is
 
 Each marketplace's plan lists its entries (`plans.ts`); each is one recording:
 
-| Entry      | Page                                   | Script                                                     |
-| ---------- | -------------------------------------- | ---------------------------------------------------------- |
-| `hub`      | A page only the signed-in seller sees  | The adapter's health check                                 |
-| `listings` | The seller's shop, closet, or listings | The adapter's `listings` read (imports and drift checks)   |
-| `listing`  | One of the seller's listings for sale  | The adapter's read-back of it                              |
-| `edit`     | That listing's edit page               | Opening the editor (Poshmark's also reads its private SKU) |
-| `sold`     | The seller's sold items                | The adapter's sale check (`orders`)                        |
-| `form-*`   | The sell form, one per form shape      | The create's own form filling, without photos, never sent  |
+| Entry      | Page                                        | Script                                                             |
+| ---------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| `hub`      | A page only the signed-in seller sees       | The adapter's health check                                         |
+| `listings` | The seller's shop, closet, or listings      | The adapter's `listings` read (imports and drift checks)           |
+| `listing`  | One of the seller's listings for sale       | The adapter's read-back of it                                      |
+| `edit`     | That listing's edit page                    | Opening the editor (Poshmark's also reads its private SKU)         |
+| `sold`     | The seller's sold items                     | The adapter's sale check (`orders`)                                |
+| `offers`   | The buyers' offers on the seller's listings | The adapter's offers read ([offers.md](offers.md)); where recorded |
+| `form-*`   | The sell form, one per form shape           | The create's own form filling, without photos, never sent          |
 
 The form shapes are each marketplace's distinct forms: on Depop the 17 department and size-list
 shapes ([depop-automation.md](depop-automation.md#live-verification)), on Mercari each size group

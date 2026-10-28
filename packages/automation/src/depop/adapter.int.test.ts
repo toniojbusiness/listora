@@ -576,13 +576,17 @@ describe('Depop automation adapter on the fake Depop site', () => {
       fake.seed({ description: 'Not mine.', priceCents: 900, seller: 'someone-else' });
       const hashtagged = fake.seed({
         description: 'Cord cap.\n\nSKU: AJ-000001\n\n#vintage',
+        // Marked down from $20.00.
         priceCents: 1250,
+        originalPriceCents: 2000,
         category: ['Women', 'Dresses', 'Casual dresses'],
         size: 'S',
-        brand: 'Zara',
+        brand: "Levi's",
         condition: 'used_like_new',
+        colours: ['Blue', 'Khaki'],
         photos: ['front.jpg', 'back.jpg'],
       });
+      const unbranded = fake.seed({ description: 'Plain tee.', priceCents: 900, brand: null });
 
       const listings = [];
       let cursor: string | null = null;
@@ -595,7 +599,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
       } while (cursor !== null);
       expect(pages).toBeGreaterThan(1);
       expect(new Set(listings.map((listing) => listing.externalListingId))).toEqual(
-        new Set([...slugs, hashtagged]),
+        new Set([...slugs, hashtagged, unbranded]),
       );
       expect(listings.find((listing) => listing.externalListingId === hashtagged)).toEqual({
         found: true,
@@ -610,14 +614,22 @@ describe('Depop automation adapter on the fake Depop site', () => {
         refreshedAt: expect.any(String) as string,
         details: {
           photoUrls: [`${fake.url}/media/front.jpg`, `${fake.url}/media/back.jpg`],
-          brand: 'Zara',
+          // The brand's name, not Depop's slug of it (`levi-s`).
+          brand: "Levi's",
           size: 'S',
           condition: 'pre_owned_excellent',
-          categoryRef: 'Women > Dresses > Casual dresses',
-          categoryPath: ['Women', 'Dresses', 'Casual dresses'],
+          // Depop's ids, which name the product type; its names stop at the category.
+          categoryRef: 'womenswear/dresses/casual-dresses',
+          categoryPath: ['Womenswear', 'Dresses'],
+          colors: ['blue'],
+          originalPriceCents: 2000,
           sku: 'AJ-000001',
         },
       });
+      // Depop's "Other" is no brand.
+      expect(
+        listings.find((listing) => listing.externalListingId === unbranded)?.details,
+      ).toMatchObject({ brand: null, originalPriceCents: null });
       // Only reads: nothing on Depop changed.
       expect(fake.requests.filter((request) => request.method !== 'GET')).toEqual([]);
     });

@@ -10,6 +10,9 @@ public final class TasksEnvironment {
     let service: any TasksService
     let pasteboard: any Pasteboard
     let photoSaver: any PhotoSaving
+    let offers: any OffersService
+    /// Runs this phone's waiting marketplace work now (an offer's answer).
+    let runPhoneWork: @MainActor () -> Void
     /// Opens the sign-in, for a signed-out screen's Sign in button.
     let onSignIn: @MainActor () -> Void
 
@@ -17,30 +20,40 @@ public final class TasksEnvironment {
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
         onSignIn: @escaping @MainActor () -> Void = {},
+        runPhoneWork: @escaping @MainActor () -> Void = {},
     ) {
         self.init(
             service: APITasksService(client: apiClient.client),
+            offers: APIOffersService(client: apiClient.client),
             reminders: UserNotificationReminders(),
             pasteboard: SystemPasteboard(),
             photoSaver: PhotoLibrarySaver(),
             isSignedIn: { accessTokens.grant != nil },
             onSignIn: onSignIn,
+            runPhoneWork: runPhoneWork,
         )
     }
 
     init(
         service: any TasksService,
+        offers: any OffersService = NoOffers(),
         reminders: any TaskReminding,
         pasteboard: any Pasteboard,
         photoSaver: any PhotoSaving,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
         onSignIn: @escaping @MainActor () -> Void = {},
+        runPhoneWork: @escaping @MainActor () -> Void = {},
     ) {
         self.service = service
+        self.offers = offers
         self.pasteboard = pasteboard
         self.photoSaver = photoSaver
         self.onSignIn = onSignIn
-        inbox = TaskInboxModel(service: service, reminders: reminders, isSignedIn: isSignedIn)
+        self.runPhoneWork = runPhoneWork
+        inbox = TaskInboxModel(
+            service: service, offers: offers, reminders: reminders, isSignedIn: isSignedIn,
+            runPhoneWork: runPhoneWork,
+        )
     }
 
     private var notificationRouter: TaskNotificationRouter?
@@ -54,7 +67,10 @@ public final class TasksEnvironment {
     }
 
     func makeDetailModel(task: UserTask) -> TaskDetailModel {
-        TaskDetailModel(task: task, service: service, pasteboard: pasteboard, photoSaver: photoSaver)
+        TaskDetailModel(
+            task: task, service: service, pasteboard: pasteboard, photoSaver: photoSaver,
+            offers: offers, runPhoneWork: runPhoneWork,
+        )
     }
 
     /// The task an operation waits on, as a sheet's content: the item screen opens it from the

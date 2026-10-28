@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
@@ -31,8 +32,17 @@ public struct TasksView: View {
                         Task { await inbox.load() }
                     }
                 }
-                .task { await inbox.load() }
-                .refreshable { await inbox.load() }
+                .task {
+                    await inbox.load()
+                    await inbox.checkOffers()
+                }
+                .refreshable {
+                    await inbox.checkOffers()
+                    await inbox.load()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .phoneWorkFinished)) { _ in
+                    Task { await inbox.load() }
+                }
         }
         .toast($toast)
     }
@@ -79,6 +89,11 @@ public struct TasksView: View {
 
     private var list: some View {
         List {
+            ForEach(inbox.offerProblems, id: \.self) { problem in
+                Banner("Offers not read", message: problem, tone: .failed, identifier: "tasks.offersProblem")
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+            }
             if !inbox.urgent.isEmpty {
                 Section {
                     ForEach(inbox.urgent, id: \.id, content: row)
@@ -90,7 +105,7 @@ public struct TasksView: View {
                 Section {
                     ForEach(inbox.others, id: \.id, content: row)
                 } header: {
-                    SectionHeader("To do", subtitle: "Finish each one in the marketplace's app, then tap Done.")
+                    SectionHeader("To do", subtitle: "Finish each one here or in the marketplace's app.")
                 }
             }
         }

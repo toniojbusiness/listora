@@ -79,6 +79,8 @@ tags:
     description: The activity timeline of items and marketplace actions, and how each sale was found (docs/features/activity.md).
   - name: imports
     description: Importing the seller's existing listings from a linked marketplace, and the questions it asks (docs/features/imports.md).
+  - name: offers
+    description: Buyers' offers on the seller's listings, read from the marketplaces, and the seller's answers to them (docs/features/offers.md).
 
 paths:
   /health/live:
@@ -273,6 +275,14 @@ paths:
     $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}~1questions'
   /v1/imports/{importId}/questions/{questionId}/answer:
     $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}~1questions~1{questionId}~1answer'
+  /v1/offer-checks:
+    $ref: './paths/offers.yaml#/~1v1~1offer-checks'
+  /v1/offers/{offerId}:
+    $ref: './paths/offers.yaml#/~1v1~1offers~1{offerId}'
+  /v1/offers/{offerId}/quote:
+    $ref: './paths/offers.yaml#/~1v1~1offers~1{offerId}~1quote'
+  /v1/offers/{offerId}/responses:
+    $ref: './paths/offers.yaml#/~1v1~1offers~1{offerId}~1responses'
 
 components:
   securitySchemes:
@@ -312,6 +322,8 @@ components:
       $ref: './components/parameters.yaml#/SaleId'
     TaskId:
       $ref: './components/parameters.yaml#/TaskId'
+    OfferId:
+      $ref: './components/parameters.yaml#/OfferId'
     InviteId:
       $ref: './components/parameters.yaml#/InviteId'
     MarketplacePath:
@@ -1112,3 +1124,28 @@ components:
       $ref: './components/schemas/imports.yaml#/ImportAnswerKind'
     ListingImportAnswer:
       $ref: './components/schemas/imports.yaml#/ListingImportAnswer'
+    # ---------------------------------------------------------------- offers
+    OfferAction:
+      $ref: './components/schemas/offers.yaml#/OfferAction'
+    KnownOfferAction:
+      $ref: './components/schemas/offers.yaml#/KnownOfferAction'
+    OfferQuote:
+      $ref: './components/schemas/offers.yaml#/OfferQuote'
+    OfferResponseStatus:
+      $ref: './components/schemas/offers.yaml#/OfferResponseStatus'
+    KnownOfferResponseStatus:
+      $ref: './components/schemas/offers.yaml#/KnownOfferResponseStatus'
+    OfferResponse:
+      $ref: './components/schemas/offers.yaml#/OfferResponse'
+    OfferResponseError:
+      $ref: './components/schemas/offers.yaml#/OfferResponseError'
+    Offer:
+      $ref: './components/schemas/offers.yaml#/Offer'
+    OfferCounterRange:
+      $ref: './components/schemas/offers.yaml#/OfferCounterRange'
+    OfferAnswer:
+      $ref: './components/schemas/offers.yaml#/OfferAnswer'
+    OfferCheck:
+      $ref: './components/schemas/offers.yaml#/OfferCheck'
+    OfferCheckList:
+      $ref: './components/schemas/offers.yaml#/OfferCheckList'

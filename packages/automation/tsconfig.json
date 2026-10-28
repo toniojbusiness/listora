@@ -16,6 +16,7 @@
     { "path": "../marketplaces" },
     { "path": "../operations" },
     { "path": "../pack-check" },
+    { "path": "../pricing" },
     { "path": "../push" },
     { "path": "../sales" }
   ],

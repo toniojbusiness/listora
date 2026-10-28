@@ -63,6 +63,16 @@ export class PoshmarkSite {
     return `${this.origin}/order/sales/${encodeURIComponent(orderId)}`;
   }
 
+  /** The seller's active offers ("Active Offers"), as a buyer and as the seller. */
+  offers(): string {
+    return `${this.origin}/offers/my_offers`;
+  }
+
+  /** One offer's page, where the seller answers it. */
+  offer(offerId: string): string {
+    return `${this.origin}/offers/${encodeURIComponent(offerId)}`;
+  }
+
   /** A seller's closet page. */
   closet(username: string, query: ClosetQuery): string {
     const url = new URL(`${this.origin}/closet/${encodeURIComponent(username)}`);

@@ -54,6 +54,7 @@ import {
   subcategoriesOf,
   type PoshmarkDepartment,
 } from '../catalog.ts';
+import { FakeOfferDesk, fakeOfferPageBody } from '../../fake-offers/fake-offers.ts';
 import { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from '../../fake-photos/fake-photos.ts';
 import { MAX_POSHMARK_COLORS } from '../colors.ts';
 import { POSHMARK_CONDITIONS, type PoshmarkConditionCode } from '../conditions.ts';
@@ -73,7 +74,13 @@ export type FakePoshmarkAction =
   /** GET /closet/<username> */
   | 'closet'
   /** POST /share-listing/<id> */
-  | 'share';
+  | 'share'
+  /** GET /offers/my_offers */
+  | 'offers'
+  /** GET /offers/<id> */
+  | 'offer'
+  /** POST /offers/<id>/answer */
+  | 'answer_offer';
 
 export type FakePoshmarkFault =
   /** A visible CAPTCHA widget instead of the page. */
@@ -185,6 +192,8 @@ export class FakePoshmark {
   readonly #faults: (FakePoshmarkFaultRule & { remaining: number })[] = [];
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly requests: FakePoshmarkRequest[] = [];
+  /** Buyers' offers on the seller's listings, and the answers the fake took. */
+  readonly offers = new FakeOfferDesk();
   /** The newest change time, to the second: every change gets a later second (see `#tick`). */
   #clock = 0;
   #url = '';
@@ -598,7 +607,103 @@ export class FakePoshmark {
         this.#change(stored, { updatedAt: this.#tick() });
         return { status: 302, headers: { location: listingPath(stored.current) } };
       }
+      case 'offers':
+        return { status: 200, body: this.#offersPage(seller) };
+      case 'offer': {
+        const offer = this.offers.get(route.id ?? '');
+        return {
+          status: offer === undefined ? 404 : 200,
+          body: page(
+            'Offer - Poshmark',
+            fakeOfferPageBody(offer, `/offers/${route.id ?? ''}`, url.searchParams.get('confirm')),
+            seller,
+          ),
+        };
+      }
+      case 'answer_offer': {
+        const id = route.id ?? '';
+        const answered = this.offers.answer(
+          id,
+          form?.text('action') ?? '',
+          form?.text('counter') ?? null,
+        );
+        if (answered.status === 303) return { status: 303, headers: { location: `/offers/${id}` } };
+        return {
+          status: answered.status,
+          body: page(
+            'Offer - Poshmark',
+            fakeOfferPageBody(this.offers.get(id), `/offers/${id}`, null, answered.message),
+            seller,
+          ),
+        };
+      }
     }
+  }
+
+  /** Active Offers, as Poshmark embeds it: the buyers' offers on the seller's listings. */
+  #offersPage(seller: string | null): string {
+    const offers = this.offers.list();
+    const empty = (subtitle: string) => ({
+      type: 'info_message',
+      data: [{ text: { title: 'No Active Offers', subtitle } }],
+    });
+    const story = (title: string, type: string, content: Record<string, unknown>) => ({
+      header: { layout: 'TEXT_HEADER', title },
+      story_type: type,
+      content,
+      footer: null,
+    });
+    const sale =
+      offers.length === 0
+        ? empty('Buyers can privately negotiate on your listings.')
+        : {
+            type: 'offer_summary_list',
+            data: offers.map((offer) => ({
+              offer_id: offer.id,
+              post_id: offer.listingId,
+              listing_title: offer.listingTitle,
+              offer_amount: { val: (offer.amountCents / 100).toFixed(2), currency_code: 'USD' },
+              listing_price: { val: (offer.listPriceCents / 100).toFixed(2), currency_code: 'USD' },
+              ...(offer.shippingCents === null
+                ? {}
+                : {
+                    shipping_price: {
+                      val: (offer.shippingCents / 100).toFixed(2),
+                      currency_code: 'USD',
+                    },
+                  }),
+              buyer: { username: offer.buyer },
+              waiting_on: offer.status === 'pending' ? 'seller' : 'buyer',
+              created_at: offer.createdAt,
+              expires_at: offer.expiresAt,
+              offer_url: `/offers/${offer.id}`,
+            })),
+          };
+    return page(
+      'Active Offers - Poshmark',
+      '<h1>Active Offers</h1><div data-test="active-offer-section"></div>',
+      seller,
+      {
+        $_order_activity: {
+          orderActivity: {
+            activeOffers: [
+              story(
+                'FOR PURCHASE',
+                'purchase_offer_summaries',
+                empty('Offers allow you to negotiate.'),
+              ),
+              story('FOR SALE', 'sale_offer_summaries', sale),
+            ],
+            activeOffersMeta: {
+              offers_pending_response_count: {
+                waiting_on_seller: offers.filter((offer) => offer.status === 'pending').length,
+                waiting_on_buyer: offers.filter((offer) => offer.status === 'countered').length,
+              },
+            },
+          },
+        },
+      },
+    );
   }
 
   #closet(username: string, url: URL, seller: string | null): Reply {
@@ -742,6 +847,18 @@ function matchRoute(method: string, path: string): Route | null {
   const listing = /^\/listing\/(?:.*-)?([^/-]+)$/.exec(path);
   if (method === 'GET' && listing?.[1] !== undefined) {
     return { method, action: 'listing', id: listing[1], private: false };
+  }
+  if (method === 'GET' && path === '/offers/my_offers') {
+    return { method, action: 'offers', id: null, private: true };
+  }
+  const offer = /^\/offers\/([\w-]+)(\/answer)?$/.exec(path);
+  if (offer?.[1] !== undefined) {
+    if (method === 'GET' && offer[2] === undefined) {
+      return { method, action: 'offer', id: offer[1], private: true };
+    }
+    if (method === 'POST' && offer[2] !== undefined) {
+      return { method, action: 'answer_offer', id: offer[1], private: true };
+    }
   }
   const closet = /^\/closet\/([\w.-]+)$/.exec(path);
   if (method === 'GET' && closet?.[1] !== undefined) {

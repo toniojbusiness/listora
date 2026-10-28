@@ -37,6 +37,13 @@ import type {
 import type { CurrencyCode } from '@listora/shared';
 
 import type { ItemCondition, ItemSnapshot, ListingVariant } from './content.ts';
+import type {
+  OfferAnswerOutcome,
+  OfferAnswerRequest,
+  OfferRef,
+  RemoteOffer,
+  RemoteOfferState,
+} from './offers.ts';
 
 /**
  * How a marketplace supports a capability: through its official API, by browser automation in
@@ -392,6 +399,18 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
     orders: readonly LabelReadRequest[],
     ctx: AdapterContext,
   ): Promise<RemoteOrderLabel[]>;
+  /**
+   * The offers buyers made on the seller's listings that the marketplace shows as open
+   * (docs/features/offers.md). Only reads. Throws when the marketplace cannot be read.
+   */
+  listOffers?(ctx: AdapterContext): Promise<RemoteOffer[]>;
+  /** One offer as the marketplace shows it now: the read-back of an answer. Only reads. */
+  readOffer?(ref: OfferRef, ctx: AdapterContext): Promise<RemoteOfferState>;
+  /**
+   * Sends the seller's answer to an offer, once. Never throws for a marketplace's answer; a
+   * `sent` answer is done only once `readOffer` shows it.
+   */
+  answerOffer?(request: OfferAnswerRequest, ctx: AdapterContext): Promise<OfferAnswerOutcome>;
 }
 
 /** An order whose label Pack check reads: its marketplace id and the listings that sold in it. */
@@ -433,6 +452,13 @@ export interface ListingDetails {
   categoryRef: string | null;
   /** Its category's names, top level first (`["Women", "Dresses", "Maxi"]`). */
   categoryPath: string[];
+  /** Its colours in Listora's terms (packages/analysis `COLORS`), the ones Listora knows. */
+  colors: string[];
+  /**
+   * The price before the marketplace's markdown, when the listing is marked down (`priceCents`
+   * is then the reduced price a buyer pays now); `null` when it is not.
+   */
+  originalPriceCents: number | null;
   /** The SKU Listora's line at the end of its text names, when it has one (sku-line). */
   sku: string | null;
 }

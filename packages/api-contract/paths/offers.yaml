@@ -1,0 +1,120 @@
+/v1/offer-checks:
+  get:
+    tags: [offers]
+    operationId: listOfferChecks
+    summary: When each marketplace's offers were last read
+    description: One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    responses:
+      '200':
+        description: The reads.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/offers.yaml#/OfferCheckList'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [offers]
+    operationId: requestOfferChecks
+    summary: Read the seller's offers now
+    description: |
+      Asks for a read of the offers on each linked marketplace (only reads; nothing changes on a
+      marketplace). The reads run on the seller's iPhone, at most one per marketplace every 10
+      minutes however often this is called. Each pending offer becomes an `answer_offer` task.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The reads, with the ones now waiting for the iPhone.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/offers.yaml#/OfferCheckList'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/offers/{offerId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OfferId'
+  get:
+    tags: [offers]
+    operationId: getOffer
+    summary: Get an offer and the newest answer to it
+    responses:
+      '200':
+        description: The offer.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/offers.yaml#/Offer'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/offers/{offerId}/quote:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OfferId'
+  get:
+    tags: [offers]
+    operationId: getOfferQuote
+    summary: What a price on the offer gives the seller after fees
+    description: For the counteroffer's confirmation; an estimate from Listora's fee tables, with no marketplace call.
+    parameters:
+      - name: priceCents
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 100000000
+    responses:
+      '200':
+        description: The estimate.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/offers.yaml#/OfferQuote'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/offers/{offerId}/responses:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OfferId'
+  post:
+    tags: [offers]
+    operationId: answerOffer
+    summary: Accept, decline, or counter an offer
+    description: |
+      The seller's confirmed answer, sent once from their iPhone and shown as done only once a
+      read of the offer on the marketplace shows it (`OfferResponse`). An accepted offer then
+      goes through the normal sale flow when the marketplace shows it sold. `409` when the offer
+      no longer waits on the seller or an answer is already under way
+      (`invalid_state_transition`), or Listora can't answer offers on that connection
+      (`marketplace_action_unavailable`); `422` when the amount moved or the counter is out of
+      range.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/offers.yaml#/OfferAnswer'
+    responses:
+      '202':
+        description: The answer, waiting for the iPhone.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/offers.yaml#/OfferResponse'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

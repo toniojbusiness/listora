@@ -305,6 +305,8 @@ export function createEbayScripts(
             condition: null,
             categoryRef: null,
             categoryPath: [],
+            colors: [],
+            originalPriceCents: null,
             sku: null,
           },
         })),

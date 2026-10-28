@@ -17,6 +17,8 @@ struct TaskPresentation: Equatable, Sendable {
         case reviewMatch
         /// An item sold twice: cancel the later order on its marketplace.
         case resolveDoubleSale
+        /// A buyer's offer: accept, decline, or counter it (docs/features/offers.md).
+        case answerOffer
         /// A kind added after this build.
         case unknown
     }
@@ -39,6 +41,7 @@ struct TaskPresentation: Equatable, Sendable {
         case .reconnect: .reconnect
         case .reviewMatch: .reviewMatch
         case .resolveDoubleSale: .resolveDoubleSale
+        case .answerOffer: .answerOffer
         case nil: .unknown
         }
         marketplaceName = task.marketplace.map { Self.name(of: $0) } ?? "the marketplace"
@@ -57,8 +60,9 @@ struct TaskPresentation: Equatable, Sendable {
         case .reconnect: "Done"
         case .resolveDoubleSale: "Done - I canceled it"
         case .confirmSale: isSaleEmail ? "Confirm - it sold" : nil
-        // A review is answered by picking the item (the candidates' buttons) or `rejectTitle`.
-        case .reviewMatch, .unknown: nil
+        // A review is answered by picking the item (the candidates' buttons) or `rejectTitle`;
+        // an offer by its answers, done only once the marketplace shows them.
+        case .reviewMatch, .answerOffer, .unknown: nil
         }
     }
 
@@ -70,7 +74,10 @@ struct TaskPresentation: Equatable, Sendable {
 
     /// What dismissing says it does; a sale email's task records nothing, an operation's fails.
     var dismissMessage: String {
-        isSaleEmail
+        if kind == .answerOffer {
+            return "Listora hides it until the buyer changes it. The offer stays open on \(marketplaceName)."
+        }
+        return isSaleEmail
             ? "Listora won't record the sale or delist the item anywhere."
             : "Listora won't count it as done. The item shows this step as not done, with a Retry."
     }
@@ -81,6 +88,7 @@ struct TaskPresentation: Equatable, Sendable {
         case .list: "Open \(marketplaceName)"
         case .edit, .delist: "Open the listing on \(marketplaceName)"
         case .resolveDoubleSale: "Open the order on \(marketplaceName)"
+        case .answerOffer: "Open in \(marketplaceName)"
         case .confirmSale, .reconnect, .reviewMatch, .unknown: "Open \(marketplaceName)"
         }
     }
@@ -122,6 +130,9 @@ struct TaskPresentation: Equatable, Sendable {
             [.saleEmail] + (hasCandidates ? [.pickItem] : [])
         case .confirmSale, .reconnect, .reviewMatch, .unknown:
             hasLink ? [.open(title: "Open \(marketplaceName)")] : []
+        // The offer's own section (`OfferTaskView`) holds its answers and Open in.
+        case .answerOffer:
+            []
         }
     }
 
@@ -135,6 +146,7 @@ struct TaskPresentation: Equatable, Sendable {
         case .reconnect: "link"
         case .reviewMatch: "questionmark.circle"
         case .resolveDoubleSale: "exclamationmark.2"
+        case .answerOffer: "tag"
         case .unknown: "exclamationmark.circle"
         }
     }

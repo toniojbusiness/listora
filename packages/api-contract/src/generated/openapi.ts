@@ -2429,6 +2429,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/offer-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * When each marketplace's offers were last read
+         * @description One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+         */
+        get: operations["listOfferChecks"];
+        put?: never;
+        /**
+         * Read the seller's offers now
+         * @description Asks for a read of the offers on each linked marketplace (only reads; nothing changes on a
+         *     marketplace). The reads run on the seller's iPhone, at most one per marketplace every 10
+         *     minutes however often this is called. Each pending offer becomes an `answer_offer` task.
+         */
+        post: operations["requestOfferChecks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/offers/{offerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offerId: components["parameters"]["OfferId"];
+            };
+            cookie?: never;
+        };
+        /** Get an offer and the newest answer to it */
+        get: operations["getOffer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/offers/{offerId}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offerId: components["parameters"]["OfferId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What a price on the offer gives the seller after fees
+         * @description For the counteroffer's confirmation; an estimate from Listora's fee tables, with no marketplace call.
+         */
+        get: operations["getOfferQuote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/offers/{offerId}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offerId: components["parameters"]["OfferId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept, decline, or counter an offer
+         * @description The seller's confirmed answer, sent once from their iPhone and shown as done only once a
+         *     read of the offer on the marketplace shows it (`OfferResponse`). An accepted offer then
+         *     goes through the normal sale flow when the marketplace shows it sold. `409` when the offer
+         *     no longer waits on the seller or an answer is already under way
+         *     (`invalid_state_transition`), or Listora can't answer offers on that connection
+         *     (`marketplace_action_unavailable`); `422` when the amount moved or the counter is out of
+         *     range.
+         */
+        post: operations["answerOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4084,10 +4179,12 @@ export interface components {
          *     a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
          *     history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
          *     listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
-         *     orders that still need a package, for Pack check.
+         *     orders that still need a package, for Pack check. `offer_check`: a read-only read of the
+         *     offers on the seller's listings. `offer_response`: the seller's confirmed answer to an
+         *     offer, and the read of the offer that confirms it.
          * @enum {string}
          */
-        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check" | "sale_history" | "listing_import" | "label_read";
+        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check" | "sale_history" | "listing_import" | "label_read" | "offer_check" | "offer_response";
         PhoneRunClaim: {
             installationId: components["schemas"]["Id"];
             /** Format: int32 */
@@ -4657,9 +4754,14 @@ export interface components {
         /**
          * @description `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
          *     task's sale is the later one) and completes the task.
+         *
+         *     `answer_offer`: a buyer's offer waits on the seller (`offer`); the seller answers it with
+         *     `answerOffer` (or in the marketplace's app, `deepLink`). The task closes by itself once the
+         *     answer is read back or the marketplace no longer shows the offer waiting; `completeTask`
+         *     refuses it, and `dismissTask` only hides it (the offer stays open on the marketplace).
          * @enum {string}
          */
-        KnownUserTaskKind: "list_manually" | "delist_manually" | "edit_manually" | "confirm_sale" | "reconnect" | "review_match" | "resolve_double_sale";
+        KnownUserTaskKind: "list_manually" | "delist_manually" | "edit_manually" | "confirm_sale" | "reconnect" | "review_match" | "resolve_double_sale" | "answer_offer";
         /** @enum {string} */
         UserTaskStatus: "open" | "completed" | "dismissed";
         /**
@@ -4697,6 +4799,8 @@ export interface components {
              */
             saleId?: components["schemas"]["Id"];
             saleEmail?: components["schemas"]["UserTaskSaleEmail"];
+            /** @description For an `answer_offer` task, the offer and the newest answer to it. */
+            offer?: components["schemas"]["Offer"];
             /**
              * Format: uri
              * @description Opens the right screen in the marketplace app or site.
@@ -5651,6 +5755,118 @@ export interface components {
             /** @description For `same_item`, the candidate it is. */
             itemId?: components["schemas"]["Id"];
         };
+        /** @description An `KnownOfferAction`, or one added after this client was built. */
+        OfferAction: components["schemas"]["KnownOfferAction"];
+        /**
+         * @description The seller's answer to an offer. `accept`: on Poshmark it sells the listing at once (the
+         *     buyer paid when they offered); on Depop the buyer then buys at that price.
+         *     `decline`: the offer ends. `counter`: the seller asks for another price (more than the
+         *     offer, less than the listing's price), and the offer waits on the buyer.
+         * @enum {string}
+         */
+        KnownOfferAction: "accept" | "decline" | "counter";
+        /** @description What the seller gets for a price on the offer's marketplace, after its fees (an estimate from Listora's fee tables). */
+        OfferQuote: {
+            price: components["schemas"]["Money"];
+            fees: components["schemas"]["Money"];
+            net: components["schemas"]["Money"];
+        };
+        /** @description A `KnownOfferResponseStatus`, or one added after this client was built. */
+        OfferResponseStatus: components["schemas"]["KnownOfferResponseStatus"];
+        /**
+         * @description `queued`: waiting for the seller's iPhone. `running`: the iPhone is answering it.
+         *     `verifying`: it may have reached the marketplace, and Listora reads the offer to confirm.
+         *     `succeeded`: a read of the offer shows the answer. `failed`: see `error`.
+         * @enum {string}
+         */
+        KnownOfferResponseStatus: "queued" | "running" | "verifying" | "succeeded" | "failed";
+        /**
+         * @description The seller's answer to an offer. It is sent once, from the seller's iPhone, and is
+         *     `succeeded` only when a read of the offer on the marketplace shows it; it is never sent
+         *     again once it may have reached the marketplace.
+         */
+        OfferResponse: {
+            id: components["schemas"]["Id"];
+            action: components["schemas"]["OfferAction"];
+            status: components["schemas"]["OfferResponseStatus"];
+            /** @description For example "Accepting on your iPhone..." or "Accepted (confirmed by Poshmark)". */
+            statusText: string;
+            offerAmount: components["schemas"]["Money"];
+            counter?: components["schemas"]["Money"];
+            /** @description What the confirmation showed the seller would get after fees (zero for a decline). */
+            net: components["schemas"]["Money"];
+            error?: components["schemas"]["OfferResponseError"];
+            createdAt: components["schemas"]["Timestamp"];
+            finishedAt?: components["schemas"]["Timestamp"];
+        };
+        OfferResponseError: {
+            code: string;
+            message: string;
+            /** @description Whether answering again from Listora can help (it never can once the answer may have reached the marketplace). */
+            retryable: boolean;
+        };
+        /** @description An offer a buyer made on one of the seller's listings, as the seller's own session last read it. */
+        Offer: {
+            id: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description `pending` (waits on the seller), `accepted`, `declined`, `countered`, or `closed` (no longer shown waiting on the seller). */
+            status: string;
+            /** @description The buyer's offer (after a confirmed counter, the seller's price). */
+            amount: components["schemas"]["Money"];
+            listPrice?: components["schemas"]["Money"];
+            listingTitle?: string;
+            /** @description The buyer's public username on the marketplace, as the offer shows it. */
+            buyerName?: string;
+            /** @description How many listings the offer covers (a bundle), when more than one. */
+            listingCount?: number;
+            /** @description What the buyer pays for shipping under the offer, when it says. */
+            shipping?: components["schemas"]["Money"];
+            madeAt?: components["schemas"]["Timestamp"];
+            expiresAt?: components["schemas"]["Timestamp"];
+            /**
+             * Format: uri
+             * @description The offer's page on the marketplace (Open in Poshmark).
+             */
+            url?: string;
+            /** @description The answers Listora can send now; empty while one is under way or once the offer no longer waits on the seller. */
+            actions: components["schemas"]["OfferAction"][];
+            /** @description What accepting does on this marketplace, in the seller's words. */
+            acceptNote: string;
+            /** @description What accepting gives the seller after fees. */
+            accept: components["schemas"]["OfferQuote"];
+            counterRange?: components["schemas"]["OfferCounterRange"];
+            /** @description The newest answer from Listora, if any. */
+            response?: components["schemas"]["OfferResponse"];
+            firstSeenAt: components["schemas"]["Timestamp"];
+            lastSeenAt: components["schemas"]["Timestamp"];
+        };
+        /** @description A counteroffer is more than `above` and, when `below` is present, less than it. */
+        OfferCounterRange: {
+            above: components["schemas"]["Money"];
+            below?: components["schemas"]["Money"];
+        };
+        /**
+         * @description The seller's confirmed answer. `offerAmount` is the offer's amount the confirmation showed:
+         *     an offer the buyer changed since is `422 validation_failed`. `counter` is required for a
+         *     counter and refused otherwise.
+         */
+        OfferAnswer: {
+            action: components["schemas"]["KnownOfferAction"];
+            offerAmount: components["schemas"]["Money"];
+            counter?: components["schemas"]["Money"];
+        };
+        /** @description When Listora last read the seller's offers on one marketplace, and how that went. */
+        OfferCheck: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description `waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`). */
+            status: string;
+            /** @description When a read last succeeded. */
+            checkedAt?: components["schemas"]["Timestamp"];
+            message?: string;
+        };
+        OfferCheckList: {
+            data: components["schemas"]["OfferCheck"][];
+        };
     };
     responses: {
         /** @description Any error. See `KnownErrorCode` for the codes and their HTTP statuses. */
@@ -5772,6 +5988,7 @@ export interface components {
         AuthorizationId: components["schemas"]["Id"];
         SaleId: components["schemas"]["Id"];
         TaskId: components["schemas"]["Id"];
+        OfferId: components["schemas"]["Id"];
         InviteId: components["schemas"]["Id"];
         MarketplacePath: components["schemas"]["KnownMarketplace"];
         /** @description The app installation's id, which it keeps in its Keychain. */
@@ -6154,6 +6371,18 @@ export type ListingImportQuestion = components['schemas']['ListingImportQuestion
 export type ListingImportQuestions = components['schemas']['ListingImportQuestions'];
 export type ImportAnswerKind = components['schemas']['ImportAnswerKind'];
 export type ListingImportAnswer = components['schemas']['ListingImportAnswer'];
+export type OfferAction = components['schemas']['OfferAction'];
+export type KnownOfferAction = components['schemas']['KnownOfferAction'];
+export type OfferQuote = components['schemas']['OfferQuote'];
+export type OfferResponseStatus = components['schemas']['OfferResponseStatus'];
+export type KnownOfferResponseStatus = components['schemas']['KnownOfferResponseStatus'];
+export type OfferResponse = components['schemas']['OfferResponse'];
+export type OfferResponseError = components['schemas']['OfferResponseError'];
+export type Offer = components['schemas']['Offer'];
+export type OfferCounterRange = components['schemas']['OfferCounterRange'];
+export type OfferAnswer = components['schemas']['OfferAnswer'];
+export type OfferCheck = components['schemas']['OfferCheck'];
+export type OfferCheckList = components['schemas']['OfferCheckList'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -6177,6 +6406,7 @@ export type ParameterOperationId = components['parameters']['OperationId'];
 export type ParameterAuthorizationId = components['parameters']['AuthorizationId'];
 export type ParameterSaleId = components['parameters']['SaleId'];
 export type ParameterTaskId = components['parameters']['TaskId'];
+export type ParameterOfferId = components['parameters']['OfferId'];
 export type ParameterInviteId = components['parameters']['InviteId'];
 export type ParameterMarketplacePath = components['parameters']['MarketplacePath'];
 export type ParameterInstallationId = components['parameters']['InstallationId'];
@@ -9638,6 +9868,151 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listOfferChecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reads. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferCheckList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    requestOfferChecks: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reads, with the ones now waiting for the iPhone. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferCheckList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getOffer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                offerId: components["parameters"]["OfferId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The offer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Offer"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getOfferQuote: {
+        parameters: {
+            query: {
+                priceCents: number;
+            };
+            header?: never;
+            path: {
+                offerId: components["parameters"]["OfferId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The estimate. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferQuote"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    answerOffer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                offerId: components["parameters"]["OfferId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OfferAnswer"];
+            };
+        };
+        responses: {
+            /** @description The answer, waiting for the iPhone. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OfferResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -9699,7 +10074,7 @@ export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<co
 export const knownExecutionLocationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownExecutionLocation"]> = ["cloud", "phone"];
 export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DevicePlatform"]> = ["ios"];
 export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
-export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history", "listing_import", "label_read"];
+export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history", "listing_import", "label_read", "offer_check", "offer_response"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
@@ -9709,7 +10084,7 @@ export const knownRelistDecisionValues: ReadonlyArray<FlattenedDeepRequired<comp
 export const knownFeeTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeType"]> = ["marketplace", "payment", "shipping_label", "promotion", "tax", "other"];
 export const feeSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FeeSource"]> = ["actual", "estimated"];
 export const knownProfitGranularityValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProfitGranularity"]> = ["day", "week", "month"];
-export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale"];
+export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale", "answer_offer"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];
 export const knownUserTaskSaleEmailReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskSaleEmailReason"]> = ["ask_before_delist", "ambiguous_match", "unknown_format"];
@@ -9736,3 +10111,5 @@ export const knownSaleCheckHealthValues: ReadonlyArray<FlattenedDeepRequired<com
 export const knownListingImportStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingImportStatus"]> = ["reading", "importing", "finished"];
 export const knownImportMatchReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImportMatchReason"]> = ["sku", "photo_and_title", "photo", "title"];
 export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ImportAnswerKind"]> = ["same_item", "new_item", "skip"];
+export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
+export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
