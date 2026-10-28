@@ -34,7 +34,7 @@ import {
   type PageEvidence,
 } from '../safety/evidence.ts';
 import { originForLog, sanitizeMessage } from '../safety/redaction.ts';
-import { PageChangedError } from './errors.ts';
+import { MarketplaceError, PageChangedError } from './errors.ts';
 import type {
   ApiGetOptions,
   ApiResponse,
@@ -401,6 +401,12 @@ export class ScriptSession implements AutomationSession {
       };
     }
     if (signal.aborted) return error(step, 'aborted', 'the run was stopped');
+    if (thrown instanceof MarketplaceError) {
+      return {
+        ...error(step, 'server_error', sanitizeMessage(thrown.message, this.#typed)),
+        screenshotKey: await this.#screenshot(),
+      };
+    }
     if (thrown instanceof PageChangedError) {
       return {
         ...error(step, 'element_missing', sanitizeMessage(thrown.message, this.#typed)),
@@ -543,10 +549,23 @@ export function apiGetScript(url: string, bearerCookie: string | null): string {
       const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(name + '='));
       if (pair !== undefined) headers.authorization = 'Bearer ' + decodeURIComponent(pair.slice(name.length + 1));
     }
-    const response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+    let response;
+    try {
+      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+    } catch (error) {
+      return { status: null, failed: String(error) };
+    }
     const text = await response.text();
     return { status: response.status, retryAfter: response.headers.get('retry-after'), text: text.length > ${String(API_BODY_LIMIT)} ? null : text };
   })()`;
+}
+
+/** How many times a read of a marketplace's API is tried when the page couldn't make it. */
+const API_ATTEMPTS = 2;
+
+/** Whether the page's request never got an answer (`fetch` rejected: the network, or a page load). */
+function fetchFailed(answer: unknown): boolean {
+  return answer !== null && typeof answer === 'object' && 'failed' in answer;
 }
 
 function apiAnswer(answer: unknown): {
@@ -742,12 +761,21 @@ class Driver implements PageDriver {
       throw new StepError('script_error', "the script asked for an API outside the marketplace's");
     }
     this.#active();
-    // A read the page's own scripts would make, paced like the actions around it.
-    await this.#session.pacing.wait('action', this.#signal);
-    const answer = await this.#query((backend) =>
-      backend.read(apiGetScript(target.href, options.bearerCookie ?? null)),
-    );
-    this.#active();
+    let answer: unknown;
+    for (let attempt = 1; ; attempt += 1) {
+      // A read the page's own scripts would make, paced like the actions around it.
+      await this.#session.pacing.wait('action', this.#signal);
+      answer = await this.#query((backend) =>
+        backend.read(apiGetScript(target.href, options.bearerCookie ?? null)),
+      );
+      this.#active();
+      // A request the page couldn't make (seen right after a Depop Post, 2026-10-27, while the
+      // page was still on its way to the next one) is a GET, so it is made once more.
+      if (!fetchFailed(answer)) break;
+      if (attempt === API_ATTEMPTS) {
+        throw new StepError('script_error', `the page couldn't reach the marketplace's API`);
+      }
+    }
     const { status, text, retryAfterSeconds } = apiAnswer(answer);
     const body = jsonOrNull(text);
     if (status === 429) {

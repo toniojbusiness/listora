@@ -11,8 +11,11 @@
  */
 import type { PhoneStep } from './progress.ts';
 
-/** Why a host call failed, as the app reports it. */
-export const HOST_FAILURES = ['timeout', 'unreachable', 'blocked', 'closed'] as const;
+/**
+ * Why a host call failed, as the app reports it. `navigated`: the page loaded another document
+ * while a page function ran, so the function's answer was lost with the old one.
+ */
+export const HOST_FAILURES = ['timeout', 'unreachable', 'blocked', 'closed', 'navigated'] as const;
 export type HostFailure = (typeof HOST_FAILURES)[number];
 
 /** The main frame, as the app last saw it. */

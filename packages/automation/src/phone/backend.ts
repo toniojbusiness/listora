@@ -40,7 +40,12 @@ export class BridgeBackend implements PageBackend {
   }
 
   async click(selector: string): Promise<void> {
-    await this.#page(CLICK, { selector });
+    try {
+      await this.#page(CLICK, { selector });
+    } catch (thrown) {
+      // The click itself loaded the next page before the page function could answer: done.
+      if (!navigated(thrown)) throw thrown;
+    }
     this.#state = await this.#call('navigation', () => this.#host.settle(this.#waitMs));
   }
 
@@ -83,7 +88,7 @@ export class BridgeBackend implements PageBackend {
     selector: string,
     state: 'attached' | 'detached' | 'visible' | 'hidden',
   ): Promise<void> {
-    await this.#page(WAIT_FOR, { selector, state });
+    await this.#look(WAIT_FOR, { selector, state });
   }
 
   async waitForPath(pattern: RegExp): Promise<void> {
@@ -123,27 +128,27 @@ export class BridgeBackend implements PageBackend {
   }
 
   async count(selector: string): Promise<number> {
-    return expectNumber(await this.#page(QUERY, { selector, what: 'count', name: null }));
+    return expectNumber(await this.#look(QUERY, { selector, what: 'count', name: null }));
   }
 
   async text(selector: string): Promise<string | null> {
-    return expectText(await this.#page(QUERY, { selector, what: 'text', name: null }));
+    return expectText(await this.#look(QUERY, { selector, what: 'text', name: null }));
   }
 
   async texts(selector: string): Promise<string[]> {
-    return expectTexts(await this.#page(QUERY, { selector, what: 'texts', name: null }));
+    return expectTexts(await this.#look(QUERY, { selector, what: 'texts', name: null }));
   }
 
   async attribute(selector: string, name: string): Promise<string | null> {
-    return expectText(await this.#page(QUERY, { selector, what: 'attribute', name }));
+    return expectText(await this.#look(QUERY, { selector, what: 'attribute', name }));
   }
 
   async value(selector: string): Promise<string | null> {
-    return expectText(await this.#page(QUERY, { selector, what: 'value', name: null }));
+    return expectText(await this.#look(QUERY, { selector, what: 'value', name: null }));
   }
 
   async attributes(selector: string, name: string): Promise<(string | null)[]> {
-    const values = await this.#page(QUERY, { selector, what: 'attributes', name });
+    const values = await this.#look(QUERY, { selector, what: 'attributes', name });
     if (!Array.isArray(values)) throw new PageBackendError('other', 'the page sent no list');
     return values.map(expectText);
   }
@@ -157,19 +162,39 @@ export class BridgeBackend implements PageBackend {
   async inspect(script: string): Promise<InspectedPage> {
     // The URL a script reads after an action is the one its inspection saw.
     this.#state = await this.#call('navigation', () => this.#host.state());
-    return (await this.#call('element', () =>
-      this.#host.evaluate(`return ${script};`, {}, this.#waitMs + HOST_MARGIN_MS),
-    )) as InspectedPage;
+    return (await this.#look(`return ${script};`, {}, false)) as InspectedPage;
   }
 
   read(script: string): Promise<unknown> {
-    return this.#call('element', () =>
-      this.#host.evaluate(`return ${script};`, {}, this.#waitMs + HOST_MARGIN_MS),
-    );
+    return this.#look(`return ${script};`, {}, false);
   }
 
   screenshot(): Promise<string | null> {
     return Promise.resolve(null);
+  }
+
+  /**
+   * Evaluates one of dom.ts's functions that only reads the page. One a navigation cut short
+   * (the page a click or the site itself was loading took over) is run again on the new page
+   * once it has loaded, within the step's wait: reading changes nothing. `waits`: the function
+   * is given the step's wait (dom.ts's functions take it; a script's own read does not).
+   */
+  async #look(body: string, args: Record<string, unknown>, waits = true): Promise<unknown> {
+    const end = Date.now() + this.#waitMs;
+    for (;;) {
+      try {
+        return await (waits
+          ? this.#page(body, args)
+          : this.#call('element', () =>
+              this.#host.evaluate(body, args, this.#waitMs + HOST_MARGIN_MS),
+            ));
+      } catch (thrown) {
+        if (!navigated(thrown) || Date.now() >= end) throw thrown;
+      }
+      this.#state = await this.#call('navigation', () =>
+        this.#host.settle(Math.max(0, end - Date.now())),
+      );
+    }
   }
 
   /** Evaluates one of dom.ts's functions with the step's wait. */
@@ -193,6 +218,11 @@ export class BridgeBackend implements PageBackend {
   }
 }
 
+/** Whether a page function failed because the page loaded another document while it ran. */
+function navigated(thrown: unknown): boolean {
+  return thrown instanceof PageBackendError && thrown.message === 'navigated';
+}
+
 function backendError(thrown: unknown, kind: 'element' | 'navigation'): PageBackendError {
   const message = thrown instanceof Error ? thrown.message : String(thrown);
   if (message.startsWith('element_timeout'))
@@ -207,7 +237,9 @@ function backendError(thrown: unknown, kind: 'element' | 'navigation'): PageBack
           : 'element_timeout'
         : failure === 'closed'
           ? 'closed'
-          : 'unreachable';
+          : failure === 'navigated'
+            ? 'other'
+            : 'unreachable';
   return new PageBackendError(mapped, message);
 }
 

@@ -1053,6 +1053,9 @@ const PRICE_DIALOG = `<div class="modal listing-price-suggestion-modal" style="d
 </div>`;
 
 /** Runs the listing editor in the page, as Poshmark's own scripts do. */
+/** How long after the rest of an edit page's form its price section is drawn. */
+const EDIT_PRICE_DRAWN_MS = 2_000;
+
 const EDITOR_SCRIPT = `(() => {
   const data = JSON.parse(document.getElementById('editor-data').textContent);
   const { catalog, colors, conditions, availabilities } = data;
@@ -1336,6 +1339,15 @@ const EDITOR_SCRIPT = `(() => {
     update.addEventListener('click', () => {
       form.querySelector('#share-step').hidden = false;
     });
+    // An edit page draws its price section a moment after the rest of the form (seen on the
+    // captain's session, 2026-10-27); the form keeps the listing's prices meanwhile.
+    const pricing = price.closest('section');
+    const held = [price, original].map((field) =>
+      make('input', { type: 'hidden', name: field.name, value: field.value }, []),
+    );
+    pricing.replaceWith(...held);
+    setTimeout(() => held[0].replaceWith(pricing), ${String(EDIT_PRICE_DRAWN_MS)});
+    setTimeout(() => held[1].remove(), ${String(EDIT_PRICE_DRAWN_MS)});
   }
 
   render();
