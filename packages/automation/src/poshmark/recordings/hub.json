@@ -6,7 +6,7 @@
   "host": "phone",
   "recordedOn": "2026-10-27",
   "input": null,
-  "result": { "ok": true, "value": null },
+  "result": { "ok": true, "value": "redacteduser3" },
   "steps": ["find the seller"],
   "events": [{ "op": "goto", "url": "https://poshmark.com/create-listing", "state": 0 }],
   "states": [

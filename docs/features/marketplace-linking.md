@@ -163,9 +163,39 @@ the listings of the shop that was unlinked:
   nothing that is still listed there.
 - A database check keeps a marked listing off every connection.
 
-**Relink** on a row that is still linked replaces the session of the same connection, and its
-listings stay on it: Listora can't tell yet which shop a session signed into, so linking another
-shop goes through Unlink first ([follow-ups](#follow-ups)).
+**Relink** on a row that is still linked replaces the session of the same connection. Its
+listings stay on it while the session signs into the same shop; when its check finds another
+shop, they leave it as on an unlink ([The shop a connection holds](#the-shop-a-connection-holds)).
+
+### The shop a connection holds
+
+A connection records the seller its session is signed in as (`marketplace_connection.external_user_id`,
+which already held an API connection's seller id), so a session for another shop never changes the
+listings of the shop the connection held (audit M3, [security.md](security.md#audit-of-2026-10-28)):
+
+- **Which seller.** The session check's health script returns the signed-in seller's handle,
+  trimmed and lower-cased (`sellerIdentity`): Depop's username from the header's Likes link
+  (`/<username>/likes/`), Poshmark's username from its page data, the fake site's account. Mercari
+  (its account page shows only a display name, neither unique nor fixed) and eBay (Seller Hub is
+  not read for it yet) return `null`: the seller stays unknown, never guessed. On the phone, an
+  older runtime returns nothing, which the server reads as unknown too.
+- **Recording it** (`recordConnectionSeller` in `@listora/operations`, in the transaction that
+  records the passed check, so only the newest link's check says): the first seller seen is
+  recorded; the same seller changes nothing; **another seller** fails every change still waiting
+  on the connection's listings (`shop_changed`: "Your Depop login is for another shop than the
+  one this listing is on, so Listora didn't change it. Listora will find the listing again when
+  you link its shop.") and detaches the listings as an unlink does (marked as from the previous
+  shop, so an import of a shop that has them takes them back). A failed check records nothing.
+- **Before every write.** A write script (and an offer answer) on a connection whose seller is
+  known carries it as `expectedSeller`: before its first step, the call runs the health script
+  and, when the page shows another seller, changes nothing and answers `rejected`
+  `seller_mismatch` ("Listora is signed in to another shop than the one linked, so it changed
+  nothing. Link the shop again in Link accounts, then try again."), a failure the seller sees,
+  never a retry. A page that doesn't show the seller is not proof of another one: the write goes
+  ahead as before. This closes the window between a relink and its check, and catches a session
+  that changed under the connection on the phone. It costs one read of the account page per
+  write; a runtime older than it ignores `expectedSeller`.
+- **Read only follows the seller** ([read-only.md](read-only.md#the-shop-not-the-row)).
 
 ## The session check (`packages/automation/src/session-checks/`)
 
@@ -225,7 +255,15 @@ and the runner checks the session against the fake site in local headless Chromi
 - `packages/automation/src/session-checks/session-checks.int.test.ts`: the runner's check in real
   Chromium against the fake site: passed, rejected, CAPTCHA, retries then failure, a browser that
   cannot start (its temporary directory not writable, as on Fargate on 2026-10-25), no adapter,
-  and a replaced link.
+  a replaced link, and the seller it records (a relink on the same row with another shop's
+  session gives up the previous shop's listings).
+- `packages/operations/src/shop-identity.int.test.ts`: the first seller, the same one, another
+  one (waiting changes failed, listings detached), and a seller kept read only.
+  `packages/automation/src/adapter/script-call.test.ts`: a write or an offer answer changes
+  nothing when another seller is signed in, and goes ahead when the seller is unknown or not
+  shown. `packages/automation/src/phone/answers.test.ts`: the phone's seller, and an older
+  runtime's answer without one. The recorded Depop and Poshmark hubs
+  (`recordings/recordings.int.test.ts`) return the seller's (redacted) handle.
 - `CoreTests/SignInLinkTests.swift`: the sign-in link rule (genuine Depop links accepted;
   look-alikes, other sites, other schemes, user info, other ports, and overlong links refused)
   and the Share Extension handoff (once only, only while a page waits, only the marketplace's
@@ -254,6 +292,5 @@ and the runner checks the session against the fake site in local headless Chromi
 
 - The `reconnect` task's deep link (`listora://connections/<marketplace>`) does not open Link
   accounts yet; the app handles no `listora://` links so far.
-- The session check could read which shop a session signed into (Poshmark's health read already
-  finds the seller's username), so that **Relink** of a still-linked row with another shop's
-  session detaches the previous shop's listings as an unlink does.
+- Read the seller on Mercari (an id from its page data, not the display name) and on eBay's
+  Seller Hub, so their connections know their shop too.

@@ -351,7 +351,7 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     };
     expect(typeof state.auth.identity).toBe('string');
     expect(state.userCookies.userInfo?.dh).toBe('shape_check');
-    expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok' });
+    expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok', sellerId: 'listora_closet' });
   });
 
   it("reads each page's data from its global once the script that embedded it removed itself", async () => {
@@ -371,7 +371,7 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     } finally {
       await browser.close();
     }
-    expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok' });
+    expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok', sellerId: 'listora_closet' });
   });
 
   it("reads the seller's listings for sale with what an import needs, and finds sold items for sale checks", async () => {

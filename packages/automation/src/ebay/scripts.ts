@@ -243,8 +243,11 @@ export function createEbayScripts(
       // Found by SKU: not finding it is no proof the listing is gone.
       return (await findBySku(step, listingSku(ref))) ?? { found: false, authoritative: false };
     },
-    health: (step) =>
-      step('open Seller Hub', { mutates: false }, (page) => openOverview(page, site)),
+    health: async (step) => {
+      await step('open Seller Hub', { mutates: false }, (page) => openOverview(page, site));
+      // Seller Hub's seller is not read yet (no recording of it): unknown, never a guess.
+      return null;
+    },
     orders: async (since, step) => {
       const orders = new Map<string, RemoteOrder>();
       let offset = 0;

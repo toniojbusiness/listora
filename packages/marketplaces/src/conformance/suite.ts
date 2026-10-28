@@ -235,7 +235,12 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
 
     it('checks the connection without throwing', async () => {
       const health = await adapter.healthCheck(ctx());
-      expect(health).toEqual({ status: 'ok' });
+      // An automation adapter also names the seller its session is signed in as.
+      expect(health).toEqual(
+        health.status === 'ok' && 'sellerId' in health
+          ? { status: 'ok', sellerId: expect.stringMatching(/^\S{1,255}$/) as unknown }
+          : { status: 'ok' },
+      );
     });
 
     const unsupported = WRITE_KINDS.filter((kind) => modeOf(kind) === 'unsupported');
@@ -633,7 +638,7 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         market().failNext('health', { type: 'rate_limited' });
         expect(await adapter.healthCheck(ctx())).toMatchObject({ status: 'degraded' });
         expect(await offline().healthCheck(ctx())).toMatchObject({ status: 'degraded' });
-        expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok' });
+        expect(await adapter.healthCheck(ctx())).toMatchObject({ status: 'ok' });
       });
     });
   }

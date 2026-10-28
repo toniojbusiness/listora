@@ -163,6 +163,13 @@ export interface ConnectionRef {
    * session, so its marketplace is served assisted until the seller logs in again.
    */
   status: ConnectionStatus;
+  /**
+   * The marketplace seller whose shop the connection holds, as its session check last read it
+   * (`marketplace_connection.external_user_id`); unknown (`null` or absent) until a check has
+   * read one. A write script checks it on the page before it changes anything
+   * (docs/features/marketplace-linking.md#the-shop-a-connection-holds).
+   */
+  sellerId?: string | null;
 }
 
 export interface AdapterContext {
@@ -295,7 +302,11 @@ export type Outcome =
  * `ok` also means "nothing to check" for an assisted marketplace.
  */
 export type Health =
-  | { status: 'ok' }
+  /**
+   * `sellerId`: the seller the session is signed in as, when the marketplace's page shows it (an
+   * automation connection's session check records it); absent when it doesn't say.
+   */
+  | { status: 'ok'; sellerId?: string }
   | {
       status: Exclude<ConnectionStatus, 'connected'>;
       /** Stable machine-readable reason, for example `unreachable` or `rate_limited`. */

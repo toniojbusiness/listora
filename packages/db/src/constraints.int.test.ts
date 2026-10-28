@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from './database.ts';
 import { createInventoryItem } from './items.ts';
 import { jsonb } from './json.ts';
-import type { AiAnalysisTable, PhotoTable } from './schema.ts';
+import type { AiAnalysisTable, MarketplaceConnectionTable, PhotoTable } from './schema.ts';
 import {
   createMigratedDatabase,
   expectPgError,
@@ -884,6 +884,107 @@ describe('schema constraints (real Postgres)', () => {
         .where('account_id', '=', accountId)
         .execute();
       expect(held).toEqual([]);
+    });
+
+    it('keeps read only by seller: a protected shop, and a seller the account kept read only', async () => {
+      const accountId = await insertAccount(db, 'RS');
+      const link = async (externalUserId: string | null = null) =>
+        db
+          .insertInto('marketplace_connection')
+          .values({
+            account_id: accountId,
+            marketplace: 'depop',
+            mode: 'automation',
+            token_ciphertext: Buffer.from('session'),
+            external_user_id: externalUserId,
+          })
+          .returning(['id', 'read_only'])
+          .executeTakeFirstOrThrow();
+      const set = (id: string, values: Updateable<MarketplaceConnectionTable>) =>
+        db
+          .updateTable('marketplace_connection')
+          .set(values)
+          .where('id', '=', id)
+          .returning(['read_only', 'external_user_id'])
+          .executeTakeFirstOrThrow();
+      const unlink = (id: string) =>
+        db.deleteFrom('marketplace_connection').where('id', '=', id).execute();
+
+      // A seller the account kept read only: a connection that comes to hold it is read only again.
+      const first = await link();
+      await set(first.id, { external_user_id: 'rs-live-shop', read_only: true });
+      await set(first.id, { external_user_id: 'rs-test-shop' });
+      // The owner lets Listora change the test shop: only that seller is forgotten.
+      expect(await set(first.id, { read_only: false })).toMatchObject({ read_only: false });
+      expect(await set(first.id, { external_user_id: 'rs-live-shop' })).toMatchObject({
+        read_only: true,
+      });
+      await set(first.id, { read_only: false });
+      expect(await set(first.id, { external_user_id: 'rs-test-shop' })).toMatchObject({
+        read_only: false,
+      });
+      expect(
+        await db
+          .selectFrom('read_only_seller')
+          .select('seller_id')
+          .where('account_id', '=', accountId)
+          .execute(),
+      ).toEqual([]);
+      await unlink(first.id);
+
+      // A protected shop known only by its connection: read only whatever sets it, and it learns
+      // the seller from the connection's first recorded seller.
+      const held = await link();
+      const shop = await db
+        .insertInto('protected_seller')
+        .values({ marketplace: 'depop', connection_id: held.id, reason: 'test shop' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      try {
+        expect(await set(held.id, { read_only: false })).toMatchObject({ read_only: true });
+        await set(held.id, { external_user_id: 'rs-protected-shop' });
+        expect(
+          await db
+            .selectFrom('protected_seller')
+            .select('seller_id')
+            .where('id', '=', shop.id)
+            .executeTakeFirstOrThrow(),
+        ).toEqual({ seller_id: 'rs-protected-shop' });
+        // From then on the seller is protected, on any connection of any account.
+        await unlink(held.id);
+        await db.deleteFrom('marketplace_read_only').where('account_id', '=', accountId).execute();
+        await db.deleteFrom('read_only_seller').where('account_id', '=', accountId).execute();
+        expect((await link('rs-protected-shop')).read_only).toBe(true);
+        const elsewhere = await insertAccount(db, 'RT');
+        const theirs = await db
+          .insertInto('marketplace_connection')
+          .values({
+            account_id: elsewhere,
+            marketplace: 'depop',
+            mode: 'automation',
+            token_ciphertext: Buffer.from('session'),
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        expect(await set(theirs.id, { external_user_id: 'rs-protected-shop' })).toMatchObject({
+          read_only: true,
+        });
+        // The same handle on another marketplace is another seller.
+        const other = await db
+          .insertInto('marketplace_connection')
+          .values({
+            account_id: elsewhere,
+            marketplace: 'mercari',
+            mode: 'automation',
+            token_ciphertext: Buffer.from('session'),
+            external_user_id: 'rs-protected-shop',
+          })
+          .returning('read_only')
+          .executeTakeFirstOrThrow();
+        expect(other.read_only).toBe(false);
+      } finally {
+        await db.deleteFrom('protected_seller').where('id', '=', shop.id).execute();
+      }
     });
 
     it('links auto-delist operations to their delist run', async () => {

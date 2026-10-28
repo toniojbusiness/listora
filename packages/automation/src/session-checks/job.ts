@@ -5,7 +5,10 @@
  * accepted it. The app shows the marketplace as linked only after a passed check, so a session
  * that does not work is never reported as linked.
  *
- * - **Passed**: the health script read the seller's account page.
+ * - **Passed**: the health script read the seller's account page. The seller it showed is
+ *   recorded on the connection (`recordConnectionSeller`): another one than before means the
+ *   session now signs into another shop, whose listings and waiting changes the connection
+ *   gives up (docs/features/marketplace-linking.md#the-shop-a-connection-holds).
  * - **Failed, relink**: the marketplace rejected the session or showed a check automation must
  *   not pass. The runner's session handling has already discarded the session and asked the
  *   seller to log in again (the vault's `markNeedsRelink`).
@@ -30,6 +33,7 @@ import {
   type Health,
   type MarketplaceAdapter,
 } from '@listora/marketplaces';
+import { recordConnectionSeller } from '@listora/operations';
 import { assertNever, type Logger } from '@listora/shared';
 
 import { isAutomatedMarketplace, type AutomatedMarketplace } from '../profiles.ts';
@@ -175,7 +179,13 @@ export async function recordSessionCheck(
   const { attempt } = prepared;
   const failure = healthFailure(health);
   if (failure === null) {
-    await record(deps, payload, attempt, 'passed');
+    await record(
+      deps,
+      payload,
+      attempt,
+      'passed',
+      health.status === 'ok' ? (health.sellerId ?? null) : null,
+    );
     return 'passed';
   }
   if (health.status === 'degraded' && attempt < SESSION_CHECK_ATTEMPTS) {
@@ -191,19 +201,48 @@ export async function recordSessionCheck(
   return 'failed';
 }
 
+/**
+ * Records the check's result and, for a passed check that read the seller (`sellerId`), the
+ * seller the connection holds, together: only the newest link's check says which shop it is.
+ */
 async function record(
   deps: Pick<SessionCheckDependencies, 'db' | 'logger'>,
   payload: SessionCheckJobPayload,
   attempt: number,
   result: 'passed' | Failure,
+  sellerId: string | null = null,
 ): Promise<void> {
-  const recorded = await finish(deps.db, payload, attempt, result);
-  deps.logger
-    .child({ task: 'session_check', connectionId: payload.connectionId })
-    .info(
-      { result: result === 'passed' ? 'passed' : result.code, attempt, recorded },
-      'session check finished',
+  const log = deps.logger.child({ task: 'session_check', connectionId: payload.connectionId });
+  const { recorded, seller } = await inTransaction(deps.db, async (trx) => {
+    const finished = await finish(trx, payload, attempt, result);
+    return {
+      recorded: finished,
+      seller:
+        finished && sellerId !== null
+          ? await recordConnectionSeller(trx, payload, sellerId)
+          : undefined,
+    };
+  });
+  if (seller?.changed === true || seller?.becameReadOnly === true) {
+    // Ids and counts only: the seller's handle is marketplace data, never logged.
+    log.warn(
+      {
+        shopChanged: seller.changed,
+        becameReadOnly: seller.becameReadOnly,
+        refusedOperations: seller.refused.length,
+      },
+      'the seller the session check read changed the connection',
     );
+  }
+  log.info(
+    {
+      result: result === 'passed' ? 'passed' : result.code,
+      attempt,
+      recorded,
+      sellerKnown: sellerId !== null,
+    },
+    'session check finished',
+  );
 }
 
 function healthFailure(health: Health): Failure | null {

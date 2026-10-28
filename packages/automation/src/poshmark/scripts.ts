@@ -14,6 +14,7 @@ import type {
 
 import {
   mayHaveAppliedBefore,
+  sellerIdentity,
   type AutomationScripts,
   type WriteResult,
 } from '../adapter/script-call.ts';
@@ -500,9 +501,7 @@ export function createPoshmarkScripts(
       // Found by SKU: a missing page is no proof the listing is gone.
       return remote.found ? remote : { found: false, authoritative: false };
     },
-    health: async (step) => {
-      await seller(step);
-    },
+    health: async (step) => sellerIdentity(await seller(step)),
     orders: async (since, step) => {
       const username = await seller(step);
       const soldAt = (listing: ListingRecord): Date =>

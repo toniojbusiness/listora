@@ -12,7 +12,13 @@
  */
 import { sql, type RawBuilder } from 'kysely';
 
-import { inTransaction, type DbExecutor, type Marketplace, type OperationKind } from '@listora/db';
+import {
+  inTransaction,
+  type DbExecutor,
+  type DbTransaction,
+  type Marketplace,
+  type OperationKind,
+} from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 
 import { removeOperationJob } from './jobs.ts';
@@ -46,6 +52,26 @@ export function readOnlyMessage(marketplace: Marketplace): string {
 export function readOnlyUnlinkMessage(marketplace: Marketplace): string {
   const name = MARKETPLACE_NAMES[marketplace];
   return `Your ${name} account is read only, so Listora won't unlink it. To unlink it, turn off Read only for ${name} in Link accounts first.`;
+}
+
+/**
+ * What the owner is told when turning Read only off is refused: the connection holds a protected
+ * shop, which Listora only ever reads (docs/features/read-only.md#protected-shops).
+ */
+export function protectedShopMessage(marketplace: Marketplace): string {
+  const name = MARKETPLACE_NAMES[marketplace];
+  return `This ${name} shop is protected, so Listora will only ever read it and Read only stays on.`;
+}
+
+/** Turning Read only off was refused: the connection holds a protected shop. Nothing changed. */
+export class ProtectedShopError extends Error {
+  readonly marketplace: Marketplace;
+
+  constructor(marketplace: Marketplace) {
+    super(protectedShopMessage(marketplace));
+    this.name = 'ProtectedShopError';
+    this.marketplace = marketplace;
+  }
 }
 
 /** A change was asked for on a listing whose connection is read only; nothing was queued. */
@@ -149,7 +175,8 @@ export async function assertWritableListing(
  * Turns the connection's read-only flag on or off (the seller's choice in Link accounts). Turning
  * it on also fails every change still waiting to be sent to its listings (queued, or waiting to
  * retry) with the read-only error, so the seller sees at once that it won't happen; a step under
- * way finishes its read-back, and the engine sends nothing after it. Returns the connection's
+ * way finishes its read-back, and the engine sends nothing after it. Turning it off is refused
+ * (`ProtectedShopError`) for a connection that holds a protected shop. Returns the connection's
  * marketplace and the failed operations' ids, oldest first, or `undefined` when the account has
  * no such connection.
  */
@@ -159,6 +186,16 @@ export async function setConnectionReadOnly(
   readOnly: boolean,
 ): Promise<{ marketplace: Marketplace; refused: string[] } | undefined> {
   return inTransaction(executor, async (trx) => {
+    if (!readOnly) {
+      const held = await trx
+        .selectFrom('marketplace_connection')
+        .select(['marketplace', holdsProtectedShop('marketplace_connection').as('protected')])
+        .where('account_id', '=', target.accountId)
+        .where('id', '=', target.connectionId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (held?.protected === true) throw new ProtectedShopError(held.marketplace);
+    }
     const connection = await trx
       .updateTable('marketplace_connection')
       .set({ read_only: readOnly })
@@ -168,39 +205,75 @@ export async function setConnectionReadOnly(
       .executeTakeFirst();
     if (connection === undefined) return undefined;
     if (!readOnly) return { marketplace: connection.marketplace, refused: [] };
-
-    const waiting = await trx
-      .selectFrom('marketplace_operation as op')
-      .innerJoin('marketplace_listing as listing', (join) =>
-        join
-          .onRef('listing.account_id', '=', 'op.account_id')
-          .onRef('listing.id', '=', 'op.listing_id'),
-      )
-      .selectAll('op')
-      .$narrowType<Tracked>()
-      .where('op.account_id', '=', target.accountId)
-      .where('op.status', 'in', ['queued', 'retrying'])
-      .where('op.kind', 'not in', READ_KINDS)
-      .where(listingIsReadOnly('listing'))
-      .orderBy('op.created_at')
-      .orderBy('op.id')
-      .forUpdate('op')
-      .execute();
-    const refused: string[] = [];
-    for (const op of waiting) {
-      await transitionOperation(
-        trx,
-        op,
-        {
-          to: 'failed',
-          error: { code: READ_ONLY_ERROR, message: readOnlyMessage(connection.marketplace) },
-        },
-        { action: 'read_only' },
-      );
-      await removeOperationJob(trx, op.id);
-      await removePhoneWork(trx, op);
-      refused.push(op.id);
-    }
+    const refused = await failWaitingWrites(trx, {
+      accountId: target.accountId,
+      listings: listingIsReadOnly('listing'),
+      error: { code: READ_ONLY_ERROR, message: readOnlyMessage(connection.marketplace) },
+      action: 'read_only',
+    });
     return { marketplace: connection.marketplace, refused };
   });
+}
+
+/**
+ * Whether the connection `alias` names holds a protected shop (`protected_seller`), as a SQL
+ * expression; the database keeps such a connection read only whatever sets it.
+ */
+export function holdsProtectedShop(alias: string): RawBuilder<boolean> {
+  const connection = (column: string) => sql.ref(`${alias}.${column}`);
+  return sql<boolean>`exists (
+    select 1 from protected_seller as shop
+    where shop.marketplace = ${connection('marketplace')}
+      and (
+        shop.seller_id = ${connection('external_user_id')}
+        or (shop.seller_id is null and shop.connection_id = ${connection('id')})
+      )
+  )`;
+}
+
+/**
+ * Fails every change still waiting to be sent (queued, or waiting to retry) to the account's
+ * listings that `listings` selects (a SQL condition on `listing`), with `error`: a step under way
+ * finishes its read-back, and the engine sends nothing after it. Returns the failed operations'
+ * ids, oldest first.
+ */
+export async function failWaitingWrites(
+  trx: DbTransaction,
+  target: {
+    accountId: string;
+    listings: RawBuilder<boolean>;
+    error: { code: string; message: string };
+    action: string;
+  },
+): Promise<string[]> {
+  const waiting = await trx
+    .selectFrom('marketplace_operation as op')
+    .innerJoin('marketplace_listing as listing', (join) =>
+      join
+        .onRef('listing.account_id', '=', 'op.account_id')
+        .onRef('listing.id', '=', 'op.listing_id'),
+    )
+    .selectAll('op')
+    .$narrowType<Tracked>()
+    .where('op.account_id', '=', target.accountId)
+    .where('op.status', 'in', ['queued', 'retrying'])
+    .where('op.kind', 'not in', READ_KINDS)
+    .where(target.listings)
+    .orderBy('op.created_at')
+    .orderBy('op.id')
+    .forUpdate('op')
+    .execute();
+  const refused: string[] = [];
+  for (const op of waiting) {
+    await transitionOperation(
+      trx,
+      op,
+      { to: 'failed', error: target.error },
+      { action: target.action },
+    );
+    await removeOperationJob(trx, op.id);
+    await removePhoneWork(trx, op);
+    refused.push(op.id);
+  }
+  return refused;
 }
