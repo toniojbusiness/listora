@@ -125,9 +125,32 @@ final class BulkActionsUITests: XCTestCase {
         for sku in skus {
             let row = app.buttons["inventory.row.\(sku)"]
             try require(row.waitForExistence(timeout: 10), "no row for \(sku)")
-            row.tap()
+            tapRow(row)
         }
         try require(app.staticTexts["\(skus.count) selected"].waitForExistence(timeout: 5), "not \(skus.count) chosen")
+    }
+
+    /// Taps a row in select mode at its photo, a quarter of the way down the card, once that
+    /// point is clear of the bars: the grid's cards are tall, and a tap at the middle of one low on
+    /// the screen landed on the selection bar's padding and chose nothing.
+    private func tapRow(_ row: XCUIElement) {
+        let bar = app.buttons["inventory.bulk.list"]
+        let scroll = app.scrollViews.firstMatch
+        var point: CGFloat {
+            row.frame.minY + row.frame.height / 4
+        }
+        for _ in 0 ..< 6 {
+            let bottom = (bar.exists ? bar.frame.minY : app.windows.firstMatch.frame.maxY) - 80
+            let top = app.navigationBars.firstMatch.frame.maxY + 20
+            if point > bottom {
+                scroll.swipeUp(velocity: .slow)
+            } else if point < top {
+                scroll.swipeDown(velocity: .slow)
+            } else {
+                break
+            }
+        }
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
     }
 
     private func start() throws {
