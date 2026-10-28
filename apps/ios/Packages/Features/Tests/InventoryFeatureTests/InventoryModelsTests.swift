@@ -284,5 +284,6 @@ extension DetailTiming {
         longestPoll: .milliseconds(50),
         sendAttempts: 3,
         sendRetryDelay: .milliseconds(1),
+        endWait: .milliseconds(200),
     )
 }

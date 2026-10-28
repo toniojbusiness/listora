@@ -4,7 +4,7 @@
  * `@listora/operations`.
  */
 import type { DbExecutor, OperationStatus } from '@listora/db';
-import { sql } from 'kysely';
+import { sql, type NotNull } from 'kysely';
 
 import type { OperationRow } from '../listings/repository.ts';
 import type { Tenant } from '../tenancy.ts';
@@ -21,6 +21,7 @@ function operationQuery(db: DbExecutor, tenant: Tenant) {
         .onRef('listing.id', '=', 'op.listing_id'),
     )
     .selectAll('op')
+    .$narrowType<{ listing_id: NotNull }>()
     .select(['listing.item_id as item_id', 'listing.marketplace as marketplace'])
     .where('op.account_id', '=', tenant.accountId);
 }

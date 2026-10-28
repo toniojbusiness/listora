@@ -47,6 +47,7 @@ import {
   operationPriority,
   transitionOperation,
   type OperationRow,
+  type Tracked,
 } from './transitions.ts';
 
 interface NewOperationBase {
@@ -116,12 +117,15 @@ export async function enqueueOperation(
       })
       .onConflict((conflict) => conflict.columns(['account_id', 'idempotency_key']).doNothing())
       .returningAll()
+      .$narrowType<Tracked>()
       .executeTakeFirst();
 
     if (inserted === undefined) {
       const existing = await trx
         .selectFrom('marketplace_operation')
         .selectAll()
+        .where('listing_id', 'is not', null)
+        .$narrowType<Tracked>()
         .where('account_id', '=', input.accountId)
         .where('idempotency_key', '=', input.idempotencyKey)
         .executeTakeFirstOrThrow();
@@ -307,6 +311,8 @@ export async function cancelMootOperations(
     const waiting = await trx
       .selectFrom('marketplace_operation')
       .selectAll()
+      .where('listing_id', 'is not', null)
+      .$narrowType<Tracked>()
       .where('account_id', '=', target.accountId)
       .where('listing_id', '=', target.listingId)
       .where('status', 'in', ['queued', 'retrying'])
@@ -349,6 +355,8 @@ export async function cancelUnsentDelists(
     const waiting = await trx
       .selectFrom('marketplace_operation')
       .selectAll()
+      .where('listing_id', 'is not', null)
+      .$narrowType<Tracked>()
       .where('account_id', '=', target.accountId)
       .where('delist_run_id', '=', target.delistRunId)
       .where('status', 'in', ['queued', 'retrying', 'needs_user_action'])
@@ -481,6 +489,8 @@ export async function lockOperation(
   const op = await trx
     .selectFrom('marketplace_operation')
     .selectAll()
+    .where('listing_id', 'is not', null)
+    .$narrowType<Tracked>()
     .where('account_id', '=', target.accountId)
     .where('id', '=', target.operationId)
     .forUpdate()

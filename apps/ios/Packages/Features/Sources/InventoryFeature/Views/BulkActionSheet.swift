@@ -57,8 +57,9 @@ struct BulkActionSheet: View {
                     note("Listora relists every ended listing of these items, and shows each as listed once its "
                         + "marketplace confirms. An item with no ended listing is left as it is.")
                 case .delete:
-                    note("Deletes these items from Listora for good. An item that is still on a marketplace, or "
-                        + "has sales, is kept: end its listings first, or archive it.")
+                    note("Deletes these items from Listora for good. If one is still listed on a marketplace, "
+                        + "Listora asks whether to end those listings first or leave them up. An item that has "
+                        + "sold is kept: archive it instead.")
                 }
             }
             .padding(Spacing.md)
@@ -214,13 +215,33 @@ struct BulkActionSheet: View {
                     isPresented: $isConfirmingDelete,
                     titleVisibility: .visible,
                 ) {
-                    Button("Delete", role: .destructive) { Task { await model.run(.delete) } }
-                        .accessibilityIdentifier("bulk.delete.confirm")
+                    if model.listedItems == 0 {
+                        Button("Delete", role: .destructive) { Task { await model.run(.delete(.notListed)) } }
+                            .accessibilityIdentifier("bulk.delete.confirm")
+                    } else {
+                        Button("End listings, then delete", role: .destructive) {
+                            Task { await model.run(.delete(.endListingsFirst)) }
+                        }
+                        .accessibilityIdentifier("bulk.delete.endFirst")
+                        Button("Remove from Listora only", role: .destructive) {
+                            Task { await model.run(.delete(.leaveListings)) }
+                        }
+                        .accessibilityIdentifier("bulk.delete.leaveListings")
+                    }
                     Button("Keep them", role: .cancel) {}
                 } message: {
-                    Text("Their photos and details leave Listora. This can't be undone.")
+                    Text(deleteMessage)
                 }
         }
+    }
+
+    /// What the delete confirmation says: what leaves Listora, and for a listed item, the choice.
+    private var deleteMessage: String {
+        let listed = model.listedItems
+        guard listed > 0 else { return "Their photos and details leave Listora. This can't be undone." }
+        let which = model.total == 1 ? "It is" : listed == 1 ? "1 of them is" : "\(listed) of them are"
+        return "\(which) still listed on a marketplace. End those listings first, or remove "
+            + "\(model.total == 1 ? "it" : "them") from Listora only and leave the listings up. This can't be undone."
     }
 
     private var listTitle: String {

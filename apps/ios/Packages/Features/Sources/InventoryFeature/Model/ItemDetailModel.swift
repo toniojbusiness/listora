@@ -271,12 +271,15 @@ struct DetailTiming: Sendable {
     /// Sends of one action when the connection drops before an answer.
     var sendAttempts: Int
     var sendRetryDelay: Duration
+    /// How long a delete waits for the marketplaces to confirm the listings it ended first.
+    var endWait: Duration
 
     static let standard = DetailTiming(
         poll: .seconds(1),
         longestPoll: .seconds(15),
         sendAttempts: 3,
         sendRetryDelay: .seconds(1),
+        endWait: .seconds(120),
     )
 }
 

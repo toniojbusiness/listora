@@ -115,6 +115,7 @@ import {
   transitionOperation,
   type OperationError,
   type OperationRow,
+  type Tracked,
 } from './transitions.ts';
 
 export interface StepDependencies {
@@ -361,6 +362,8 @@ export async function loadClaimedStep(
     const op = await trx
       .selectFrom('marketplace_operation')
       .selectAll()
+      .where('listing_id', 'is not', null)
+      .$narrowType<Tracked>()
       .where('account_id', '=', ref.accountId)
       .where('id', '=', ref.operationId)
       .executeTakeFirst();
@@ -470,6 +473,8 @@ async function claimStep(
     const op = await trx
       .selectFrom('marketplace_operation')
       .selectAll()
+      .where('listing_id', 'is not', null)
+      .$narrowType<Tracked>()
       .where('account_id', '=', payload.accountId)
       .where('id', '=', payload.operationId)
       .forUpdate()
@@ -945,6 +950,8 @@ async function hurryOlderChecks(
   const waiting = await trx
     .selectFrom('marketplace_operation')
     .selectAll()
+    .where('listing_id', 'is not', null)
+    .$narrowType<Tracked>()
     .where('account_id', '=', delist.account_id)
     .where('listing_id', '=', delist.listing_id)
     .where('status', '=', 'verifying')
@@ -989,6 +996,8 @@ async function supersedeUserSteps(
   const older = await trx
     .selectFrom('marketplace_operation')
     .selectAll()
+    .where('listing_id', 'is not', null)
+    .$narrowType<Tracked>()
     .where('account_id', '=', delist.account_id)
     .where('listing_id', '=', delist.listing_id)
     .where('status', 'in', ['needs_user_action', 'queued', 'retrying'])
@@ -1583,6 +1592,8 @@ async function recordResult(
     const op = await trx
       .selectFrom('marketplace_operation')
       .selectAll()
+      .where('listing_id', 'is not', null)
+      .$narrowType<Tracked>()
       .where('account_id', '=', ctx.op.account_id)
       .where('id', '=', ctx.op.id)
       .forUpdate()
