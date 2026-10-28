@@ -30,11 +30,13 @@ import {
 } from '@listora/db';
 import {
   answerShown,
-  isFeatureVerified,
+  isFeatureOn,
   isOfferMarketplace,
+  loadFeatureGate,
   MARKETPLACE_NAMES,
   OFFER_RULES,
   type ConnectionRef,
+  type FeatureGate,
   type MarketplaceAdapter,
   type OfferAnswerOutcome,
   type OfferAnswerRequest,
@@ -93,9 +95,13 @@ export function offerQuote(marketplace: Marketplace, priceCents: number, at: Dat
  * where answers have not passed live yet (docs/features/verified-features.md), so the app
  * shows no Accept, Decline, or Counter there and the seller answers in the marketplace's app.
  */
-export function offerActions(marketplace: Marketplace, readOnly = false): OfferAction[] {
+export function offerActions(
+  marketplace: Marketplace,
+  gate: FeatureGate,
+  readOnly = false,
+): OfferAction[] {
   if (!isOfferMarketplace(marketplace) || readOnly) return [];
-  if (!isFeatureVerified(marketplace, 'offer_answers')) return [];
+  if (!isFeatureOn(marketplace, 'offer_answers', gate)) return [];
   return OFFER_RULES[marketplace].counter
     ? ['accept', 'decline', 'counter']
     : ['accept', 'decline'];
@@ -193,10 +199,11 @@ export async function requestOfferAnswer(
         `Listora only reads this ${name} account, so it can't answer its offers. Answer this one in ${name}.`,
       );
     }
-    if (offerActions(offer.marketplace).length === 0) {
+    const answers = offerActions(offer.marketplace, await loadFeatureGate(trx, input.accountId));
+    if (answers.length === 0) {
       throw new OfferAnswerRefusedError('unavailable', `Answer this offer in ${name}.`);
     }
-    if (!offerActions(offer.marketplace).includes(input.action)) {
+    if (!answers.includes(input.action)) {
       throw new OfferAnswerRefusedError('invalid', `${name} doesn't take that answer to offers.`);
     }
     let counterCents: number | null = null;

@@ -10,7 +10,12 @@ import {
   type ListingImportTable,
   type Marketplace,
 } from '@listora/db';
-import { isFeatureVerified, MARKETPLACE_NAMES } from '@listora/marketplaces';
+import {
+  isFeatureOn,
+  loadFeatureGate,
+  MARKETPLACE_NAMES,
+  type FeatureGate,
+} from '@listora/marketplaces';
 import type { Selectable } from 'kysely';
 
 /**
@@ -24,19 +29,20 @@ export const IMPORT_MARKETPLACES = [
 ] as const satisfies readonly Marketplace[];
 
 /**
- * Whether Listora imports the marketplace's listings for sellers: one it can import from whose
- * imports passed live (docs/features/verified-features.md).
+ * Whether Listora imports the marketplace's listings for the account: one it can import from
+ * whose imports passed live (docs/features/verified-features.md), or any in the account's Test
+ * mode (docs/features/test-mode.md).
  */
-export function importsFrom(marketplace: Marketplace): boolean {
+export function importsFrom(marketplace: Marketplace, gate: FeatureGate): boolean {
   return (
     (IMPORT_MARKETPLACES as readonly string[]).includes(marketplace) &&
-    isFeatureVerified(marketplace, 'listing_import')
+    isFeatureOn(marketplace, 'listing_import', gate)
   );
 }
 
-/** The marketplaces whose listings Listora imports for sellers, in `IMPORT_MARKETPLACES` order. */
-export function importableMarketplaces(): Marketplace[] {
-  return IMPORT_MARKETPLACES.filter(importsFrom);
+/** The marketplaces whose listings Listora imports for the account, in `IMPORT_MARKETPLACES` order. */
+export function importableMarketplaces(gate: FeatureGate): Marketplace[] {
+  return IMPORT_MARKETPLACES.filter((marketplace) => importsFrom(marketplace, gate));
 }
 
 export type ListingImportRow = Selectable<ListingImportTable>;
@@ -63,7 +69,7 @@ export async function startListingImport(
   request: { accountId: string; marketplace: Marketplace },
 ): Promise<ListingImportRow> {
   const name = MARKETPLACE_NAMES[request.marketplace];
-  if (!importsFrom(request.marketplace)) {
+  if (!importsFrom(request.marketplace, await loadFeatureGate(executor, request.accountId))) {
     throw new ImportRefusedError('unsupported', `Listora can't import ${name} listings yet.`);
   }
   return inTransaction(executor, async (trx) => {

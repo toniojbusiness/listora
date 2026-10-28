@@ -3784,7 +3784,9 @@ paths:
         (docs/features/verified-features.md). The app shows a feature of a marketplace (its
         screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
         `features`; anything else is hidden, and the server never queues its checks either. The
-        same for every account.
+        same for every account, except the deployment owner's in Test mode
+        (docs/features/test-mode.md): it gets every built feature, and `testing` names the ones
+        on only for the test. `testMode` is present only for an account that may turn it on.
       responses:
         '200':
           description: Every marketplace, each with its verified features.
@@ -3792,6 +3794,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MarketplaceFeatureList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/marketplace-features/test-mode:
+    put:
+      tags:
+        - marketplace-features
+      operationId: setTestMode
+      summary: Turn Test mode on or off
+      description: |
+        Test mode (docs/features/test-mode.md) gives the deployment owner's account every
+        marketplace feature that is built but has not passed live, to live-test it; each run of one
+        is recorded in the owner's log. Only the owner or an admin of the owner's account may turn
+        it on; for any other account Test mode does not exist (`404`). A read-only connection stays
+        read-only in Test mode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestModeReplace'
+      responses:
+        '200':
+          description: Every marketplace's features under the saved setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketplaceFeatureList'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
 components:
@@ -10845,7 +10878,17 @@ components:
         features:
           type: array
           maxItems: 20
-          description: The features of this marketplace that passed a live end-to-end test.
+          description: |
+            The features of this marketplace the account is shown: those that passed a live
+            end-to-end test, or in Test mode every built one.
+          items:
+            $ref: '#/components/schemas/MarketplaceFeature'
+        testing:
+          type: array
+          maxItems: 20
+          description: |
+            In Test mode only: the features of `features` on only for the test (not verified). The
+            app tags each "Testing".
           items:
             $ref: '#/components/schemas/MarketplaceFeature'
     MarketplaceFeatureList:
@@ -10858,3 +10901,23 @@ components:
           maxItems: 20
           items:
             $ref: '#/components/schemas/MarketplaceFeatures'
+        testMode:
+          $ref: '#/components/schemas/TestMode'
+    TestMode:
+      type: object
+      description: |
+        Test mode (docs/features/test-mode.md), present only for an account that may turn it on:
+        the owner or an admin of the deployment owner's account. Off until turned on.
+      required:
+        - 'on'
+      properties:
+        'on':
+          type: boolean
+    TestModeReplace:
+      type: object
+      additionalProperties: false
+      required:
+        - 'on'
+      properties:
+        'on':
+          type: boolean

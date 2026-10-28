@@ -2717,10 +2717,36 @@ export interface paths {
          *     (docs/features/verified-features.md). The app shows a feature of a marketplace (its
          *     screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
          *     `features`; anything else is hidden, and the server never queues its checks either. The
-         *     same for every account.
+         *     same for every account, except the deployment owner's in Test mode
+         *     (docs/features/test-mode.md): it gets every built feature, and `testing` names the ones
+         *     on only for the test. `testMode` is present only for an account that may turn it on.
          */
         get: operations["listMarketplaceFeatures"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace-features/test-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Turn Test mode on or off
+         * @description Test mode (docs/features/test-mode.md) gives the deployment owner's account every
+         *     marketplace feature that is built but has not passed live, to live-test it; each run of one
+         *     is recorded in the owner's log. Only the owner or an admin of the owner's account may turn
+         *     it on; for any other account Test mode does not exist (`404`). A read-only connection stays
+         *     read-only in Test mode.
+         */
+        put: operations["setTestMode"];
         post?: never;
         delete?: never;
         options?: never;
@@ -6265,11 +6291,30 @@ export interface components {
         KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise";
         MarketplaceFeatures: {
             marketplace: components["schemas"]["Marketplace"];
-            /** @description The features of this marketplace that passed a live end-to-end test. */
+            /**
+             * @description The features of this marketplace the account is shown: those that passed a live
+             *     end-to-end test, or in Test mode every built one.
+             */
             features: components["schemas"]["MarketplaceFeature"][];
+            /**
+             * @description In Test mode only: the features of `features` on only for the test (not verified). The
+             *     app tags each "Testing".
+             */
+            testing?: components["schemas"]["MarketplaceFeature"][];
         };
         MarketplaceFeatureList: {
             data: components["schemas"]["MarketplaceFeatures"][];
+            testMode?: components["schemas"]["TestMode"];
+        };
+        /**
+         * @description Test mode (docs/features/test-mode.md), present only for an account that may turn it on:
+         *     the owner or an admin of the deployment owner's account. Off until turned on.
+         */
+        TestMode: {
+            on: boolean;
+        };
+        TestModeReplace: {
+            on: boolean;
         };
     };
     responses: {
@@ -6806,6 +6851,8 @@ export type MarketplaceFeature = components['schemas']['MarketplaceFeature'];
 export type KnownMarketplaceFeature = components['schemas']['KnownMarketplaceFeature'];
 export type MarketplaceFeatures = components['schemas']['MarketplaceFeatures'];
 export type MarketplaceFeatureList = components['schemas']['MarketplaceFeatureList'];
+export type TestMode = components['schemas']['TestMode'];
+export type TestModeReplace = components['schemas']['TestModeReplace'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -10767,6 +10814,33 @@ export interface operations {
                     "application/json": components["schemas"]["MarketplaceFeatureList"];
                 };
             };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    setTestMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestModeReplace"];
+            };
+        };
+        responses: {
+            /** @description Every marketplace's features under the saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceFeatureList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };

@@ -14,13 +14,13 @@
  * per fresh period (its idempotency key), so two workers never queue two.
  */
 import { inTransaction, type Db, type DbTransaction, type Marketplace } from '@listora/db';
-import { operationMode, type AdapterLookup } from '@listora/marketplaces';
+import { operationMode, SELLER_FEATURES, type AdapterLookup } from '@listora/marketplaces';
 import { enqueueOperation } from '@listora/operations';
 import type { Logger } from '@listora/shared';
 import { sql } from 'kysely';
 
 import { dueAt, effectiveCadence, inQuietWindow, intervalHours } from './cadence.ts';
-import { loadRefreshFacts, refreshMarketplaces } from './schedule.ts';
+import { loadRefreshFacts, REFRESH_MARKETPLACES, refreshMarketplaces } from './schedule.ts';
 import { loadRefreshSettings, quietWindowOf } from './settings.ts';
 
 export const LISTING_REFRESH_TASK = 'listing_refresh';
@@ -64,15 +64,25 @@ export async function runListingRefreshes(
   deps: ListingRefreshDependencies,
 ): Promise<ListingRefreshResult> {
   const now = deps.now?.() ?? new Date();
-  const marketplaces = refreshMarketplaces();
-  if (marketplaces.length === 0) return { queued: 0 };
+  const marketplaces = refreshMarketplaces(SELLER_FEATURES);
   const connections = await deps.db
     .selectFrom('marketplace_connection')
     .select(['id', 'account_id', 'marketplace', 'mode', 'status'])
     .where('status', 'in', ['connected', 'degraded'])
     // A read-only connection never gets a write queued, whatever its adapter can do (read-only.md).
     .where('read_only', '=', false)
-    .where('marketplace', 'in', marketplaces)
+    // Where refresh passed live, or in an account's Test mode (docs/features/test-mode.md).
+    .where((eb) =>
+      eb.or([
+        ...(marketplaces.length === 0 ? [] : [eb('marketplace', 'in', marketplaces)]),
+        eb(
+          'account_id',
+          'in',
+          eb.selectFrom('account').select('account.id').where('account.test_mode', '=', true),
+        ),
+      ]),
+    )
+    .where('marketplace', 'in', REFRESH_MARKETPLACES)
     .orderBy('id')
     .execute();
   let queued = 0;

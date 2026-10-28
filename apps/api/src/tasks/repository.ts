@@ -14,6 +14,7 @@ import type {
   UserTaskStatus,
   UserTaskUrgency,
 } from '@listora/db';
+import { loadFeatureGate } from '@listora/marketplaces';
 import { sql } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
@@ -120,7 +121,8 @@ export async function listTaskRows(
 ): Promise<TaskRow[]> {
   let query = taskQuery(db, tenant);
   // An offer on a marketplace whose offers Listora doesn't show (verified-features.md).
-  const hidden = OFFER_MARKETPLACES.filter((marketplace) => !readsOffers(marketplace));
+  const gate = await loadFeatureGate(db, tenant.accountId);
+  const hidden = OFFER_MARKETPLACES.filter((marketplace) => !readsOffers(marketplace, gate));
   if (hidden.length > 0) {
     query = query.where((eb) =>
       eb.or([

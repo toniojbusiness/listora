@@ -4,14 +4,21 @@ import { MARKETPLACES } from '@listora/db';
 
 import {
   FEATURE_REQUIRES,
+  featuresOn,
+  isFeatureInTesting,
+  isFeatureOn,
   isFeatureVerified,
   loadMarketplaceFeatures,
   MARKETPLACE_FEATURES,
   MarketplaceFeaturesConfigError,
+  marketplacesWith,
+  SELLER_FEATURES,
   useMarketplaceFeatures,
   VERIFIED_FEATURES,
-  verifiedFeatures,
 } from './features.ts';
+
+const verifiedFeatures = (marketplace: (typeof MARKETPLACES)[number]) =>
+  featuresOn(marketplace, SELLER_FEATURES);
 
 describe('marketplace features (docs/features/verified-features.md)', () => {
   afterEach(() => {
@@ -55,6 +62,23 @@ describe('marketplace features (docs/features/verified-features.md)', () => {
     }
     useMarketplaceFeatures('all');
     expect(verifiedFeatures('poshmark')).toEqual([...MARKETPLACE_FEATURES]);
+  });
+
+  it('gives an account in Test mode every built feature, tagging the ones not verified', () => {
+    useMarketplaceFeatures('verified');
+    const testing = { testMode: true };
+    expect(featuresOn('poshmark', testing)).toEqual([...MARKETPLACE_FEATURES]);
+    expect(isFeatureOn('depop', 'revise', testing)).toBe(true);
+    expect(isFeatureOn('depop', 'revise', SELLER_FEATURES)).toBe(false);
+    // A verified feature is no test; one on only because of Test mode is.
+    expect(isFeatureInTesting('depop', 'offers', testing)).toBe(false);
+    expect(isFeatureInTesting('depop', 'offer_answers', testing)).toBe(true);
+    expect(isFeatureInTesting('depop', 'offer_answers', SELLER_FEATURES)).toBe(false);
+    expect(marketplacesWith('offers', ['depop', 'poshmark'], SELLER_FEATURES)).toEqual(['depop']);
+    expect(marketplacesWith('offers', ['depop', 'poshmark'], testing)).toEqual([
+      'depop',
+      'poshmark',
+    ]);
   });
 
   it('reads MARKETPLACE_FEATURES, verified unless set, and never all beside Cognito', () => {

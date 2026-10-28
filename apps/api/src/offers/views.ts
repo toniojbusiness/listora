@@ -13,7 +13,13 @@ import type {
   OfferResponseStatus,
   OfferStatus,
 } from '@listora/db';
-import { isOfferMarketplace, MARKETPLACE_NAMES, OFFER_RULES } from '@listora/marketplaces';
+import {
+  isOfferMarketplace,
+  loadFeatureGate,
+  MARKETPLACE_NAMES,
+  OFFER_RULES,
+  type FeatureGate,
+} from '@listora/marketplaces';
 
 import type { Tenant } from '../tenancy.ts';
 
@@ -60,7 +66,8 @@ export async function offerViews(
   now: Date,
 ): Promise<Map<string, Offer>> {
   // Only the offers of marketplaces whose offers Listora shows (verified-features.md).
-  const marketplaces = offerMarketplaces();
+  const gate = await loadFeatureGate(db, tenant.accountId);
+  const marketplaces = offerMarketplaces(gate);
   if (offerIds.length === 0 || marketplaces.length === 0) return new Map();
   const [offers, responses] = await Promise.all([
     db
@@ -115,10 +122,17 @@ export async function offerViews(
   for (const response of responses) {
     if (!newest.has(response.offer_id)) newest.set(response.offer_id, response);
   }
-  return new Map(offers.map((offer) => [offer.id, offerView(offer, newest.get(offer.id), now)]));
+  return new Map(
+    offers.map((offer) => [offer.id, offerView(offer, newest.get(offer.id), gate, now)]),
+  );
 }
 
-function offerView(row: OfferRow, response: ResponseRow | undefined, now: Date): Offer {
+function offerView(
+  row: OfferRow,
+  response: ResponseRow | undefined,
+  gate: FeatureGate,
+  now: Date,
+): Offer {
   const details =
     typeof row.details === 'object' && row.details !== null
       ? (row.details as Record<string, unknown>)
@@ -129,7 +143,7 @@ function offerView(row: OfferRow, response: ResponseRow | undefined, now: Date):
   const open =
     row.status === 'pending' && (row.expires_at === null || row.expires_at > now) && !answering;
   const accept = offerQuote(row.marketplace, row.amount_cents, now);
-  const answers = offerActions(row.marketplace);
+  const answers = offerActions(row.marketplace, gate);
   const name = MARKETPLACE_NAMES[row.marketplace];
   return {
     id: row.id,
@@ -230,7 +244,7 @@ function responseStatusText(
 
 /** When each linked marketplace's offers were read, and how the newest read went. */
 export async function offerCheckViews(db: DbExecutor, tenant: Tenant): Promise<OfferCheck[]> {
-  const marketplaces = offerMarketplaces();
+  const marketplaces = offerMarketplaces(await loadFeatureGate(db, tenant.accountId));
   if (marketplaces.length === 0) return [];
   const rows = await db
     .selectFrom('marketplace_connection as connection')

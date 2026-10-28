@@ -22,13 +22,15 @@ import type { Tenant } from '../tenancy.ts';
 
 /**
  * A listing with the mode and status of its connection (null when it has none), whether it is
- * read only (docs/features/read-only.md), and its item's status.
+ * read only (docs/features/read-only.md), its item's status, and whether its account is in Test
+ * mode (docs/features/test-mode.md).
  */
 export type ListingRow = Selectable<MarketplaceListingTable> & {
   connection_mode: ConnectionMode | null;
   connection_status: ConnectionStatus | null;
   read_only: boolean;
   item_status: ItemStatus;
+  test_mode: boolean;
 };
 
 export type OperationRow = Selectable<MarketplaceOperationTable>;
@@ -46,12 +48,14 @@ function listingQuery(db: DbExecutor, tenant: Tenant) {
         .onRef('item.account_id', '=', 'listing.account_id')
         .onRef('item.id', '=', 'listing.item_id'),
     )
+    .innerJoin('account', 'account.id', 'listing.account_id')
     .selectAll('listing')
     .select([
       'connection.mode as connection_mode',
       'connection.status as connection_status',
       listingIsReadOnly('listing').as('read_only'),
       'item.status as item_status',
+      'account.test_mode',
     ])
     .where('listing.account_id', '=', tenant.accountId);
 }

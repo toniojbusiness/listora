@@ -34,11 +34,12 @@ import {
   type SaleCheckReason,
   type SaleCheckRunKind,
 } from '@listora/db';
-import type {
-  AdapterLookup,
-  ConnectionRef,
-  MarketplaceAdapter,
-  RemoteOrder,
+import {
+  loadFeatureGate,
+  type AdapterLookup,
+  type ConnectionRef,
+  type MarketplaceAdapter,
+  type RemoteOrder,
 } from '@listora/marketplaces';
 import { recordInboundEvent } from '@listora/sales';
 import type { Logger } from '@listora/shared';
@@ -156,7 +157,10 @@ export async function prepareSaleCheck(
     log.debug({ status: found.status }, 'the connection cannot be checked now');
     return null;
   }
-  if (kind === 'scheduled' && !checksSales(found.marketplace)) {
+  if (
+    kind === 'scheduled' &&
+    !checksSales(found.marketplace, await loadFeatureGate(db, payload.accountId))
+  ) {
     // A check queued before its marketplace's checks were hidden (verified-features.md).
     log.debug({ marketplace: found.marketplace }, 'sale checks are not shown on this marketplace');
     return null;

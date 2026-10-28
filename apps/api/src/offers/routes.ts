@@ -11,6 +11,7 @@ import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
 import type { Tenant } from '../tenancy.ts';
 import type { DbExecutor } from '@listora/db';
+import { loadFeatureGate } from '@listora/marketplaces';
 
 import { offerCheckViews, offerViews, responseView } from './views.ts';
 
@@ -47,7 +48,7 @@ export function registerOfferRoutes(app: FastifyInstance, deps: OfferRouteDepend
       .where('id', '=', params.offerId)
       .executeTakeFirst();
     if (offer === undefined) throw notFound('Offer');
-    if (offerActions(offer.marketplace).length === 0) {
+    if (offerActions(offer.marketplace, await loadFeatureGate(db, tenant.accountId)).length === 0) {
       throw new ApiError('marketplace_action_unavailable', "Listora doesn't answer these offers.");
     }
     const quote = offerQuote(offer.marketplace, query.priceCents, deps.now());

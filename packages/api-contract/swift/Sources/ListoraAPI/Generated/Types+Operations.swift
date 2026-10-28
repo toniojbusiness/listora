@@ -25183,7 +25183,9 @@ public enum Operations {
     /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
     /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
     /// `features`; anything else is hidden, and the server never queues its checks either. The
-    /// same for every account.
+    /// same for every account, except the deployment owner's in Test mode
+    /// (docs/features/test-mode.md): it gets every built feature, and `testing` names the ones
+    /// on only for the test. `testMode` is present only for an account that may turn it on.
     ///
     ///
     /// - Remark: HTTP `GET /v1/marketplace-features`.
@@ -25266,6 +25268,199 @@ public enum Operations {
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
             /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Turn Test mode on or off
+    ///
+    /// Test mode (docs/features/test-mode.md) gives the deployment owner's account every
+    /// marketplace feature that is built but has not passed live, to live-test it; each run of one
+    /// is recorded in the owner's log. Only the owner or an admin of the owner's account may turn
+    /// it on; for any other account Test mode does not exist (`404`). A read-only connection stays
+    /// read-only in Test mode.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/marketplace-features/test-mode`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)`.
+    public enum SetTestMode {
+        public static let id: Swift.String = "setTestMode"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/marketplace-features/test-mode/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SetTestMode.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SetTestMode.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.SetTestMode.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/marketplace-features/test-mode/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/marketplace-features/test-mode/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.TestModeReplace)
+            }
+            public var body: Operations.SetTestMode.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.SetTestMode.Input.Headers = .init(),
+                body: Operations.SetTestMode.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/marketplace-features/test-mode/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/marketplace-features/test-mode/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.MarketplaceFeatureList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.MarketplaceFeatureList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SetTestMode.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SetTestMode.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Every marketplace's features under the saved setting.
+            ///
+            /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.SetTestMode.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.SetTestMode.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)

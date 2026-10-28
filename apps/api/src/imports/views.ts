@@ -16,7 +16,7 @@ import {
   titleFrom,
   type ListingImportRow,
 } from '@listora/imports';
-import { MARKETPLACE_NAMES } from '@listora/marketplaces';
+import { loadFeatureGate, MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { parsePhotoDerivatives } from '@listora/photos';
 import type { Selectable } from 'kysely';
 
@@ -68,7 +68,7 @@ export async function importMarketplaces(
   tenant: Tenant,
 ): Promise<ListingImportMarketplace[]> {
   // Only marketplaces whose imports passed live (verified-features.md).
-  const marketplaces = importableMarketplaces();
+  const marketplaces = importableMarketplaces(await loadFeatureGate(db, tenant.accountId));
   if (marketplaces.length === 0) return [];
   const connections = await db
     .selectFrom('marketplace_connection')

@@ -1345,12 +1345,26 @@ public protocol APIProtocol: Sendable {
     /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
     /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
     /// `features`; anything else is hidden, and the server never queues its checks either. The
-    /// same for every account.
+    /// same for every account, except the deployment owner's in Test mode
+    /// (docs/features/test-mode.md): it gets every built feature, and `testing` names the ones
+    /// on only for the test. `testMode` is present only for an account that may turn it on.
     ///
     ///
     /// - Remark: HTTP `GET /v1/marketplace-features`.
     /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
     func listMarketplaceFeatures(_ input: Operations.ListMarketplaceFeatures.Input) async throws -> Operations.ListMarketplaceFeatures.Output
+    /// Turn Test mode on or off
+    ///
+    /// Test mode (docs/features/test-mode.md) gives the deployment owner's account every
+    /// marketplace feature that is built but has not passed live, to live-test it; each run of one
+    /// is recorded in the owner's log. Only the owner or an admin of the owner's account may turn
+    /// it on; for any other account Test mode does not exist (`404`). A read-only connection stays
+    /// read-only in Test mode.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/marketplace-features/test-mode`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)`.
+    func setTestMode(_ input: Operations.SetTestMode.Input) async throws -> Operations.SetTestMode.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -3657,13 +3671,35 @@ extension APIProtocol {
     /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
     /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
     /// `features`; anything else is hidden, and the server never queues its checks either. The
-    /// same for every account.
+    /// same for every account, except the deployment owner's in Test mode
+    /// (docs/features/test-mode.md): it gets every built feature, and `testing` names the ones
+    /// on only for the test. `testMode` is present only for an account that may turn it on.
     ///
     ///
     /// - Remark: HTTP `GET /v1/marketplace-features`.
     /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
     public func listMarketplaceFeatures(headers: Operations.ListMarketplaceFeatures.Input.Headers = .init()) async throws -> Operations.ListMarketplaceFeatures.Output {
         try await listMarketplaceFeatures(Operations.ListMarketplaceFeatures.Input(headers: headers))
+    }
+    /// Turn Test mode on or off
+    ///
+    /// Test mode (docs/features/test-mode.md) gives the deployment owner's account every
+    /// marketplace feature that is built but has not passed live, to live-test it; each run of one
+    /// is recorded in the owner's log. Only the owner or an admin of the owner's account may turn
+    /// it on; for any other account Test mode does not exist (`404`). A read-only connection stays
+    /// read-only in Test mode.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/marketplace-features/test-mode`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)`.
+    public func setTestMode(
+        headers: Operations.SetTestMode.Input.Headers = .init(),
+        body: Operations.SetTestMode.Input.Body
+    ) async throws -> Operations.SetTestMode.Output {
+        try await setTestMode(Operations.SetTestMode.Input(
+            headers: headers,
+            body: body
+        ))
     }
 }
 

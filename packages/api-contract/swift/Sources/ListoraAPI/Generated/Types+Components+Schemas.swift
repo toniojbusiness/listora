@@ -15098,40 +15098,104 @@ extension Components {
         public struct MarketplaceFeatures: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures/marketplace`.
             public var marketplace: Components.Schemas.Marketplace
-            /// The features of this marketplace that passed a live end-to-end test.
+            /// The features of this marketplace the account is shown: those that passed a live
+            /// end-to-end test, or in Test mode every built one.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures/features`.
             public var features: [Components.Schemas.MarketplaceFeature]
+            /// In Test mode only: the features of `features` on only for the test (not verified). The
+            /// app tags each "Testing".
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures/testing`.
+            public var testing: [Components.Schemas.MarketplaceFeature]?
             /// Creates a new `MarketplaceFeatures`.
             ///
             /// - Parameters:
             ///   - marketplace:
-            ///   - features: The features of this marketplace that passed a live end-to-end test.
+            ///   - features: The features of this marketplace the account is shown: those that passed a live
+            ///   - testing: In Test mode only: the features of `features` on only for the test (not verified). The
             public init(
                 marketplace: Components.Schemas.Marketplace,
-                features: [Components.Schemas.MarketplaceFeature]
+                features: [Components.Schemas.MarketplaceFeature],
+                testing: [Components.Schemas.MarketplaceFeature]? = nil
             ) {
                 self.marketplace = marketplace
                 self.features = features
+                self.testing = testing
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
                 case features
+                case testing
             }
         }
         /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList`.
         public struct MarketplaceFeatureList: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList/data`.
             public var data: [Components.Schemas.MarketplaceFeatures]
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList/testMode`.
+            public var testMode: Components.Schemas.TestMode?
             /// Creates a new `MarketplaceFeatureList`.
             ///
             /// - Parameters:
             ///   - data:
-            public init(data: [Components.Schemas.MarketplaceFeatures]) {
+            ///   - testMode:
+            public init(
+                data: [Components.Schemas.MarketplaceFeatures],
+                testMode: Components.Schemas.TestMode? = nil
+            ) {
                 self.data = data
+                self.testMode = testMode
             }
             public enum CodingKeys: String, CodingKey {
                 case data
+                case testMode
+            }
+        }
+        /// Test mode (docs/features/test-mode.md), present only for an account that may turn it on:
+        /// the owner or an admin of the deployment owner's account. Off until turned on.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TestMode`.
+        public struct TestMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TestMode/on`.
+            public var on: Swift.Bool
+            /// Creates a new `TestMode`.
+            ///
+            /// - Parameters:
+            ///   - on:
+            public init(on: Swift.Bool) {
+                self.on = on
+            }
+            public enum CodingKeys: String, CodingKey {
+                case on
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TestModeReplace`.
+        public struct TestModeReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TestModeReplace/on`.
+            public var on: Swift.Bool
+            /// Creates a new `TestModeReplace`.
+            ///
+            /// - Parameters:
+            ///   - on:
+            public init(on: Swift.Bool) {
+                self.on = on
+            }
+            public enum CodingKeys: String, CodingKey {
+                case on
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.on = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .on
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "on"
+                ])
             }
         }
     }
