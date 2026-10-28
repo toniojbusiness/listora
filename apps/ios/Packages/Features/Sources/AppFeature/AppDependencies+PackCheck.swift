@@ -6,8 +6,8 @@ import PhoneExecutionFeature
 import SalesFeature
 import SwiftUI
 
-/// Pack check's place in the app (docs/features/pack-check.md): Sales > Pack orders, and the
-/// item screen's sticker.
+/// The Sales tab, and Pack check's place in the app (docs/features/pack-check.md): Sales > Pack
+/// orders, and the item screen's sticker.
 extension AppDependencies {
     static func makePackCheck(
         _ apiClient: APIClient,
@@ -23,6 +23,23 @@ extension AppDependencies {
             scannedCodes: launchOptions.scannedCodes,
             defaults: defaults,
         )
+    }
+
+    /// Sales: the feed, each sale, and its delists, which run at once on this phone and show the
+    /// phone's progress.
+    static func makeSales(
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+        _ showSignIn: @escaping @MainActor () -> Void,
+        _ phone: PhoneExecutionEnvironment,
+        _ packCheck: PackCheckEnvironment,
+    ) -> SalesEnvironment {
+        let sales = SalesEnvironment(
+            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
+            packOrders: packCheck.ordersEntry,
+        )
+        sales.phoneProgress = phone.runner
+        return sales
     }
 }
 

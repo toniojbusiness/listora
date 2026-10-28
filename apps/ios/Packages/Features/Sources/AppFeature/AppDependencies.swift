@@ -124,23 +124,6 @@ public struct AppDependencies {
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
     }
 
-    /// Sales: the feed, each sale, and its delists, which run at once on this phone and show the
-    /// phone's progress.
-    private static func makeSales(
-        _ apiClient: APIClient,
-        _ accessTokens: AccessTokenStore,
-        _ showSignIn: @escaping @MainActor () -> Void,
-        _ phone: PhoneExecutionEnvironment,
-        _ packCheck: PackCheckEnvironment,
-    ) -> SalesEnvironment {
-        let sales = SalesEnvironment(
-            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
-            packOrders: packCheck.ordersEntry,
-        )
-        sales.phoneProgress = phone.runner
-        return sales
-    }
-
     /// Marketplaces: each connection's health, and where its automated steps run.
     private static func makeMarketplaces(
         _ apiClient: APIClient,
