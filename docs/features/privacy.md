@@ -80,9 +80,11 @@ attached expires from storage after 7 days.
 
 Pack check's package photos ([pack-check.md](pack-check.md#package-photo)) go the same way: the app
 re-encodes them, the server keeps only its own re-encoded `listing` image and deletes the upload.
-They show the buyer's address on the label, so they are deleted with the account (their keys are
-in the deletion's objects), when the seller removes one, and when an order is unpacked. Pack
-check keeps a buyer's first name only, never their full name or address.
+They show the buyer's address on the label, so they are private objects the app reads only
+through hour-long signed URLs, never cached, and they are deleted with the account (their keys
+are in the deletion's objects), when the seller removes one, when an order is unpacked, and 60
+days after the sale shipped (the worker's hourly `pack_photos` job). Pack check keeps a buyer's
+first name only, never their full name or address.
 
 ## Retention
 
@@ -100,10 +102,13 @@ and at most 50 batches per rule a run:
 | Deletion completion records                                 | 2 years                              | No personal data                                                                                                                            |
 
 Kept elsewhere, by the code that writes them: automation screenshots 14 days and run records
-90 days (the automation dispatcher, [automation.md](automation.md)), idempotency records 24 hours,
-deleted identities 48 hours ([auth.md](auth.md#account-deletion)), raw sale emails 90 days and
+90 days (the automation dispatcher, [automation.md](automation.md)), package photos 60 days after
+the sale shipped ([pack-check.md](pack-check.md#package-photo)), idempotency records 24 hours (their
+responses sealed under the client's Idempotency-Key), deleted identities 48 hours
+([auth.md](auth.md#account-deletion)), raw sale emails that could not be processed 14 days and
 unattached uploads 7 days (storage lifecycle rules, [infra.md](infra.md)), and CloudWatch logs 1
-week (personal), 1 month (staging), and 3 months (prod).
+week (personal), 1 month (staging), and 3 months (prod). The database logs slow statements
+without their bind parameters, so no person's values reach those logs.
 
 `operation_event` and `ai_usage_event` are append-only: a trigger rejects every direct update and
 delete. The retention job may delete expired rows of one of them because it names that table in

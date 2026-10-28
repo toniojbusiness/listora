@@ -10,7 +10,11 @@
   "steps": ["find the seller", "read closet page 1"],
   "events": [
     { "op": "goto", "url": "https://poshmark.com/create-listing", "state": 0 },
-    { "op": "goto", "url": "https://poshmark.com/closet/redacteduser3?availability=sold_out", "state": 1 }
+    {
+      "op": "goto",
+      "url": "https://poshmark.com/closet/redacteduser3?availability=sold_out",
+      "state": 1
+    }
   ],
   "states": [
     {

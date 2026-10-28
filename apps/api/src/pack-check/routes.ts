@@ -234,9 +234,10 @@ async function viewContext(
   now: Date,
 ): Promise<PackViewContext> {
   const itemIds = [...new Set(orders.flatMap((order) => order.items.map((item) => item.itemId)))];
-  const photoKeys = orders.flatMap((order) =>
-    order.pack?.photoKey == null ? [] : [order.pack.photoKey],
-  );
+  const photoKeys = orders.flatMap((order) => {
+    const key = order.pack?.photoKey ?? null;
+    return key === null ? [] : [key];
+  });
   const [covers, reads, photoUrls] = await Promise.all([
     coverPhotoRows(db, tenant, itemIds),
     db

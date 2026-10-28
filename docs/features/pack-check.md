@@ -134,9 +134,32 @@ sheet of 30 (Avery 5160).
 One optional photo of the open package with its label visible, for a claim: the app re-encodes
 it without metadata (at most 1600 px) and uploads it through an upload session; `addPackPhoto`
 decodes and re-encodes it again (`processImage`'s `listing` image: upright, no EXIF, no
-location), stores it under an unguessable public name like an item's listing photos, and deletes
-the upload. It shows in the sale's "How Listora found it" (the activity's `package` entries) and
-in the packing screen; `removePackPhoto` deletes it, to take another.
+location), stores it, and deletes the upload. It shows in the sale's "How Listora found it" (the
+activity's `package` entries) and in the packing screen; `removePackPhoto` deletes it, to take
+another.
+
+It shows the buyer's name and address on the label, so it is private
+(`packages/pack-check/src/photos.ts`):
+
+- **Stored privately**, under `pack/<random>/package.jpg` (never `public/`, so the CDN cannot
+  serve it), with `Cache-Control: private, no-store`.
+- **Read through a signed URL.** Every answer that shows it (`PackOrder.pack.photoUrl`, the
+  activity's `photoUrl`) carries a URL signed for that request that lasts an hour
+  (`PACK_PHOTO_URL_SECONDS`, `ObjectStorage.signedReadUrl`): an S3 presigned GET in production,
+  never through CloudFront, answered `private, no-store`; the API's signed `/storage/` GET
+  locally. A leaked URL stops working within the hour, and no shared cache keeps the photo.
+- **Deleted 60 days after the sale shipped** (`PACK_PHOTO_RETENTION_DAYS`; after it was packed,
+  for a sale never marked shipped), past the marketplaces' claim windows, by the worker's hourly
+  `pack_photos` job (`expirePackPhotos`), which deletes the object and then clears the record. A
+  storage lifecycle rule deletes any `pack/` object after 180 days as a backstop.
+- **The photos taken before were public** (`public/<random>/package.jpg`, served by CloudFront
+  with a year's cache). The same job, which the worker also queues at every start so it runs
+  right after a deploy, moves each one (`movePublicPackPhotos`): it copies the photo to its
+  private key, deletes the public object, asks CloudFront to drop that path
+  (`ObjectStorage.invalidatePublic`; only the worker may, `STORAGE_CDN_DISTRIBUTION_ID`), and
+  then names the private key in the record. Each step is safe to repeat, so a failure leaves the
+  rest to the next run; a photo an older API process saved during the deploy is moved within the
+  hour.
 
 ## Packing slip
 
@@ -195,7 +218,8 @@ Migration `20261028105844_pack_check_order_state`: `sale_label.order_state` (`to
 `shipped`, `canceled`; null when the page doesn't say) and `label_expires_at`.
 
 All of it is deleted with the account (the package photos with it); the photos also go when the
-seller removes them or unpacks the order.
+seller removes them or unpacks the order, and 60 days after the sale shipped
+([Package photo](#package-photo)).
 
 ## Open items
 
@@ -208,6 +232,4 @@ seller removes them or unpacks the order.
 - An order whose label was read is not read again, so one shipped outside Pack check stays on the
   list until the seller packs or ships it in Listora.
 - The label's expiry is recorded but not shown yet ("label expires Nov 24").
-- Delivering package photos through signed URLs instead of unguessable public ones, once storage
-  has signed reads.
 - eBay's labels (its Fulfillment API) are not read; eBay orders are packed with the photo check.

@@ -56,8 +56,8 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
     };
   });
   const pack = order.pack;
-  const packPhotoUrl =
-    pack?.photoKey == null ? undefined : context.packPhotoUrls.get(pack.photoKey);
+  const packPhotoKey = pack?.photoKey ?? null;
+  const packPhotoUrl = packPhotoKey === null ? undefined : context.packPhotoUrls.get(packPhotoKey);
   return {
     saleId: order.saleId,
     marketplace: order.marketplace,

@@ -313,8 +313,8 @@ describe('recordings', () => {
       expect(buyer).toMatch(/^PublicUser:9\d+$/);
       expect(data[buyer]).toMatchObject({
         __typename: 'PublicUser',
-        name: expect.stringMatching(/^RedactedName\d+$/),
-        username: expect.stringMatching(/^redacteduser\d+$/),
+        name: expect.stringMatching(/^RedactedName\d+$/) as unknown,
+        username: expect.stringMatching(/^redacteduser\d+$/) as unknown,
       });
     });
 

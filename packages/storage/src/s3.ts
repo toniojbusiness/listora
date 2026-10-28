@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
+import { CreateInvalidationCommand, type CloudFrontClient } from '@aws-sdk/client-cloudfront';
 import {
   DeleteObjectCommand,
   GetObjectCommand,

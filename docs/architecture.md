@@ -87,7 +87,7 @@ apps/
                 check, item analysis, batch items' analysis start, photo processing, trust
                 metrics, the daily connection health check, the delist SLA, push delivery, sale
                 fees, the morning summary, sale email ingest, sale-check health, listing
-                imports, the listing refresh schedule); and the
+                imports, the listing refresh schedule, package photos); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
@@ -113,8 +113,8 @@ packages/
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator, deletion
                 completion records, Postgres notifications (LISTEN) (@listora/db)
-  storage/      Object storage: local-disk driver with signed upload URLs, S3 driver, checked
-                purges (@listora/storage)
+  storage/      Object storage: local-disk driver with signed upload and read URLs, S3 driver
+                (presigned reads, CloudFront invalidation), checked purges (@listora/storage)
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
@@ -151,7 +151,8 @@ packages/
   listing-refresh/ Listing refresh: the cadence and quiet-window rules, the settings, each live
                 listing's next and last refresh, the paced schedule (@listora/listing-refresh)
   pack-check/   Pack check: label scans and their verdicts, the to-ship list, packing (one label
-                per package), label reads' records, the setting (@listora/pack-check)
+                per package), label reads' records, the setting, private package photos and
+                their job (@listora/pack-check)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
@@ -292,7 +293,9 @@ src/
   takes, so a deletion that commits meanwhile cannot be missed).
 - **Idempotency.** A POST runs in one transaction that takes an advisory lock on (account,
   key) and stores its successful response in `idempotency_record` together with the change,
-  so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. Each
+  so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. A record
+  is found by the key's SHA-256 and its response is sealed (AES-256-GCM) under a key derived from
+  the Idempotency-Key, so the table never holds a readable response (an invite's code). Each
   stored response also deletes up to 100 expired records (any account, oldest first, skipping
   rows another request holds), so the table stays about one retention period in size.
 - **Errors and logs.** Every error is the contract's `ErrorResponse`; unexpected failures are
@@ -379,7 +382,9 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   (decision D12), so every member of an account creates SKUs with the same prefix.
 - **API:** `idempotency_record` (the stored first successful response per account and
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
-  batches by later POSTs once expired).
+  batches by later POSTs once expired). `key` is the key's SHA-256 and `response_ciphertext` the
+  sealed response (migration `20261028145156_idempotency_sealed`); `response_body` is only a
+  record's from before then.
 - **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
   automation runs and sale-check schedules in [automation.md](features/automation.md#data), and
   sale-check records and health in [activity.md](features/activity.md#data);
