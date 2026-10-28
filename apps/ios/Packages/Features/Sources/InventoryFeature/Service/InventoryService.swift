@@ -165,21 +165,6 @@ struct APIInventoryService: InventoryService {
         }
     }
 
-    func waitForChange(itemID: String, after: String?, waitSeconds: Int) async throws(APIFailure) -> ItemChangeWait {
-        let output = try await call {
-            try await client.waitForItemChange(
-                path: .init(itemId: itemID),
-                query: .init(after: after, waitSeconds: Int32(max(1, min(20, waitSeconds)))),
-            )
-        }
-        switch output {
-        case let .ok(response): return try body { try response.body.json }
-        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
-        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
-        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
-        }
-    }
-
     func operations(listingID: String) async throws(APIFailure) -> [Operation] {
         let output = try await call {
             try await client.listOperations(query: .init(listingId: listingID, limit: 50))
