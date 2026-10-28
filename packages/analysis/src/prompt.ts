@@ -2,14 +2,16 @@
  * Prompt assembly. The system prompt is stable (providers cache it with the schema), so it
  * holds every rule and vocabulary and nothing about one item; the per-request prompt carries
  * the item's evidence: which image is which photo, the on-device reads, the deterministic tag
- * facts, and, for an escalation, the first analysis.
+ * facts, the seller's own description style when they saved one, and, for an escalation, the
+ * first analysis.
  */
 import type { AiImage } from '@listora/ai';
 import type { AnalysisResult } from '@listora/api-contract';
 import { parseTagText, type TagFacts, type TagField } from '@listora/tag-parse';
 
 import { MAX_TAG_CROPS, selectAnalysisPhotos, type AnalysisInput } from './input.ts';
-import { MARKETPLACE_COPY_LIMITS as LIMITS } from './marketplace-copy.ts';
+import { DEFAULT_DEPOP_DESCRIPTION_STYLE } from './description-style.ts';
+import { DEPOP_DRAFT_LENGTH, MARKETPLACE_COPY_LIMITS as LIMITS } from './marketplace-copy.ts';
 import { CATEGORY_TREE, COLORS, MATERIALS, PATTERNS } from './vocabulary.ts';
 
 function list(values: readonly string[]): string {
@@ -64,13 +66,21 @@ Listing copy
 - variants, one per marketplace:
   - ebay: a keyword title of at most ${String(LIMITS.ebay.title)} characters (brand, item type, key
     attributes, size; no filler words or punctuation runs) and a factual description.
-  - depop: style-forward, casual copy that fits in ${String(LIMITS.depop.description)} characters
-    together with up to ${String(LIMITS.depop.hashtags)} hashtags (lowercase, without the #); no email
-    addresses. The title is a short headline.
+  - depop: style-forward, casual copy in the Depop description style below that fits in
+    ${String(DEPOP_DRAFT_LENGTH)} characters together with up to ${String(LIMITS.depop.hashtags)} hashtags (lowercase, without the #,
+    in hashtags and never in the description); no email addresses. The title is a short
+    headline.
   - poshmark: fashion copy (brand, style, fit, how to wear it); title at most
     ${String(LIMITS.poshmark.title)} characters, description at most ${String(LIMITS.poshmark.description)}.
   - mercari: plain, factual copy; title at most ${String(LIMITS.mercari.title)} characters,
     description at most ${String(LIMITS.mercari.description)}.
+
+Depop description style
+- The request's "depopStyle", when it has one, is the seller's own style: follow it instead of
+  the default below. Either style shapes only the wording and layout of the depop variant; the
+  rules above still hold (accuracy, every flaw named, the limits, hashtags in their own field).
+- The default style:
+${DEFAULT_DEPOP_DESCRIPTION_STYLE}
 
 Price
 - priceEstimate is your guess of a fair US resale price in cents (low, mid, high), from the
@@ -156,6 +166,7 @@ export function buildAnalysisRequest(
       })),
     })),
     parsedTagFacts: parsedFactsForPrompt(tagFacts),
+    ...(input.depopStyle === undefined ? {} : { depopStyle: input.depopStyle }),
     ...(options.firstAnalysis === undefined ? {} : { firstAnalysis: options.firstAnalysis }),
   };
   return {

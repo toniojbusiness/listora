@@ -73,6 +73,28 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/account/profile`.
     /// - Remark: Generated from `#/paths//v1/account/profile/put(replaceProfile)`.
     func replaceProfile(_ input: Operations.ReplaceProfile.Input) async throws -> Operations.ReplaceProfile.Output
+    /// Get my description style
+    ///
+    /// How the item analysis writes the account's listing copy. An account that never saved its
+    /// own style gets Listora's default, with `depopIsDefault` true, so Settings can show it as the
+    /// starting point.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/get(getDescriptionStyle)`.
+    func getDescriptionStyle(_ input: Operations.GetDescriptionStyle.Input) async throws -> Operations.GetDescriptionStyle.Output
+    /// Replace my description style
+    ///
+    /// Saves the seller's own style, which the item analyses requested from then on follow
+    /// (analyses already made keep their copy). A style left out goes back to Listora's default.
+    /// The server trims the text; one that is blank after trimming is `422 validation_failed`.
+    /// The style belongs to the account, so a member who is not its owner or an admin gets
+    /// `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/put(replaceDescriptionStyle)`.
+    func replaceDescriptionStyle(_ input: Operations.ReplaceDescriptionStyle.Input) async throws -> Operations.ReplaceDescriptionStyle.Output
     /// List items
     ///
     /// Newest first. Filters combine with AND.
@@ -1327,6 +1349,38 @@ extension APIProtocol {
         body: Operations.ReplaceProfile.Input.Body
     ) async throws -> Operations.ReplaceProfile.Output {
         try await replaceProfile(Operations.ReplaceProfile.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get my description style
+    ///
+    /// How the item analysis writes the account's listing copy. An account that never saved its
+    /// own style gets Listora's default, with `depopIsDefault` true, so Settings can show it as the
+    /// starting point.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/get(getDescriptionStyle)`.
+    public func getDescriptionStyle(headers: Operations.GetDescriptionStyle.Input.Headers = .init()) async throws -> Operations.GetDescriptionStyle.Output {
+        try await getDescriptionStyle(Operations.GetDescriptionStyle.Input(headers: headers))
+    }
+    /// Replace my description style
+    ///
+    /// Saves the seller's own style, which the item analyses requested from then on follow
+    /// (analyses already made keep their copy). A style left out goes back to Listora's default.
+    /// The server trims the text; one that is blank after trimming is `422 validation_failed`.
+    /// The style belongs to the account, so a member who is not its owner or an admin gets
+    /// `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/put(replaceDescriptionStyle)`.
+    public func replaceDescriptionStyle(
+        headers: Operations.ReplaceDescriptionStyle.Input.Headers = .init(),
+        body: Operations.ReplaceDescriptionStyle.Input.Body
+    ) async throws -> Operations.ReplaceDescriptionStyle.Output {
+        try await replaceDescriptionStyle(Operations.ReplaceDescriptionStyle.Input(
             headers: headers,
             body: body
         ))

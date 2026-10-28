@@ -91,6 +91,8 @@ paths:
     $ref: './paths/account.yaml#/~1v1~1account'
   /v1/account/profile:
     $ref: './paths/account.yaml#/~1v1~1account~1profile'
+  /v1/account/description-style:
+    $ref: './paths/account.yaml#/~1v1~1account~1description-style'
   /v1/items:
     $ref: './paths/items.yaml#/~1v1~1items'
   /v1/items/{itemId}:
@@ -417,6 +419,10 @@ components:
       $ref: './components/schemas/account.yaml#/Profile'
     ProfileReplace:
       $ref: './components/schemas/account.yaml#/ProfileReplace'
+    DescriptionStyle:
+      $ref: './components/schemas/account.yaml#/DescriptionStyle'
+    DescriptionStyleReplace:
+      $ref: './components/schemas/account.yaml#/DescriptionStyleReplace'
     # ---------------------------------------------------------------- health
     HealthCheckStatus:
       $ref: './components/schemas/health.yaml#/HealthCheckStatus'

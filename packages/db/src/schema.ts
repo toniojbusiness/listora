@@ -1092,6 +1092,17 @@ export interface TodaySummarySettingTable {
   updated_at: UpdatedAt;
 }
 
+// Description style ---------------------------------------------------------------------------
+
+/** The seller's own description style, one per account (docs/features/description-style.md). */
+export interface DescriptionStyleTable {
+  account_id: string;
+  /** How to write the Depop draft, replacing Listora's default style. */
+  depop: string;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Sale emails ---------------------------------------------------------------------------------
 
 /** An account's forwarding address and email sale settings (docs/features/email-sales.md). */
@@ -1316,6 +1327,7 @@ export interface Database {
   listing_import_entry: ListingImportEntryTable;
   today_summary_setting: TodaySummarySettingTable;
   listing_refresh_setting: ListingRefreshSettingTable;
+  description_style: DescriptionStyleTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;
   pack_check_setting: PackCheckSettingTable;

@@ -697,6 +697,7 @@ const COLUMNS = {
     'created_at',
     'updated_at',
   ],
+  description_style: ['account_id', 'depop', 'created_at', 'updated_at'],
   item_batch: [
     'id',
     'account_id',

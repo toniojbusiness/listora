@@ -185,3 +185,12 @@ extension Operations.ReplaceProfile.Output.Forbidden: ErrorResponseCarrying {
         }
     }
 }
+
+/// `replaceDescriptionStyle`'s `403`: a member may not change the account's description style.
+extension Operations.ReplaceDescriptionStyle.Output.Forbidden: ErrorResponseCarrying {
+    public var errorResponse: Components.Schemas.ErrorResponse {
+        switch body {
+        case let .json(response): response
+        }
+    }
+}

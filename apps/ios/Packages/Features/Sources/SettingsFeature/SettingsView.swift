@@ -67,6 +67,8 @@ public struct SettingsView: View {
     private let accountDeletion: AccountDeletionModel?
     /// Settings > People: invites; shown only to the account that may invite.
     let invites: InvitesModel?
+    /// Settings > Description style: how Listora's AI writes the seller's Depop drafts.
+    let descriptionStyle: DescriptionStyleModel?
     let screens: SettingsScreens
     /// The marketplaces' health, on the Linked marketplaces row.
     let marketplacesSummary: SettingsSummary?
@@ -83,6 +85,7 @@ public struct SettingsView: View {
         account: SettingsAccount? = nil,
         accountDeletion: AccountDeletionModel? = nil,
         invites: InvitesModel? = nil,
+        descriptionStyle: DescriptionStyleModel? = nil,
         screens: SettingsScreens = SettingsScreens(),
         marketplacesSummary: SettingsSummary? = nil,
         saleEmailsSummary: SettingsSummary? = nil,
@@ -95,6 +98,7 @@ public struct SettingsView: View {
         self.account = account
         self.accountDeletion = accountDeletion
         self.invites = invites
+        self.descriptionStyle = descriptionStyle
         self.screens = screens
         self.marketplacesSummary = marketplacesSummary
         self.saleEmailsSummary = saleEmailsSummary
@@ -190,7 +194,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var sellingSection: some View {
-        if screens.notifications != nil || screens.saleEmails != nil || screens.packCheck != nil {
+        if showsSellingSection {
             Section {
                 if screens.notifications != nil {
                     NavigationLink(value: SettingsDestination.notifications) {
@@ -222,6 +226,7 @@ public struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings.packCheck")
                 }
+                descriptionStyleRow
             } header: {
                 SectionHeader("Selling")
             }
@@ -303,10 +308,8 @@ extension SettingsView {
             }
         case .linkAccounts, .marketplaces, .imports, .listingRefresh, .notifications, .saleEmails, .packCheck:
             screens.screen(for: destination)
-        case .people:
-            if let invites {
-                InvitesView(model: invites)
-            }
+        case .people, .descriptionStyle:
+            accountScreen(for: destination)
         case .help:
             HelpView(supportEmail: content.supportEmail, version: content.fullVersion)
         case let .legal(kind):

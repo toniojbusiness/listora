@@ -27,7 +27,8 @@ profile API in `apps/api/src/profile/`.
   delisting" ([email-sales.md](email-sales.md)), and, when iOS has notifications off for Listora,
   a banner with the way to iOS Settings. Sale emails shows the forwarding address and its setup,
   or the server's words that this Listora receives no email yet; its row shows the server's
-  forwarding status.
+  forwarding status. Description style is how Listora's AI writes the seller's Depop drafts
+  ([description-style.md](description-style.md)).
 - **People** (only for the account that set this Listora up): Invite people, the owner's invites
   and who joined through them ([invites.md](invites.md)); its row says how many people joined.
 - **Support**: Help and contact (common questions, and an email to `SUPPORT_EMAIL` when the build
