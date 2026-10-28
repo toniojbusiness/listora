@@ -242,7 +242,6 @@ extension RunsOn {
             phone: execution.location.value1 == .phone,
             installationID: execution.deviceInstallationId,
             deviceName: execution.deviceName,
-            waiting: Int(execution.waiting ?? 0),
         )
     }
 }

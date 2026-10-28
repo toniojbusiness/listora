@@ -96,7 +96,8 @@ thing.
 - **Statuses in plain words.** API connections show Connected, Reconnect needed, Access removed,
   or Connection problem; an assisted marketplace with no linked account shows Not linked, and its
   card says it works in assisted mode. The card also shows the mode (API, Automation, Assisted)
-  and when the marketplace last accepted Listora's access (`lastOkAt`).
+  and where its automated steps run, but not when the marketplace last accepted Listora's access
+  (`lastOkAt`) or how much work waits for the phone: those are the support views'.
 - **Retry check.** `requestConnectionCheck` (`POST /v1/connections/{marketplace}/checks`) notes
   `check_requested_at` and queues `connection_health_check`, the daily check for that one
   connection, in the request's transaction. Until the worker finishes it (`last_checked_at`

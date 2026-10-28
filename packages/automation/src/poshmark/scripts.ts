@@ -75,6 +75,39 @@ const SOLD_PAGES = 5;
 /** Order pages one label read opens at most, for labels the sales list does not show. */
 export const MAX_SALE_PAGES = 5;
 
+/**
+ * Fills in the details of a new or changed listing, one step per part of the form (a create, a
+ * revise, and the recordings of the form's shapes, docs/features/recorded-pages.md).
+ */
+export async function fillListing(
+  step: StepRunner,
+  payload: PoshmarkListingPayload,
+): Promise<void> {
+  const { catalog, size, condition } = payload;
+  if (catalog === null || size === null || condition === null) {
+    // Validation refuses such a payload before any attempt; this guards the form all the same.
+    throw new Error('the listing has no Poshmark catalog, size, or condition');
+  }
+  await step('fill in the title and description', { mutates: false, timeScale: 2 }, (page) =>
+    fillText(page, payload),
+  );
+  await step('fill in the prices', { mutates: false, timeScale: 2 }, (page) =>
+    fillPrices(page, payload),
+  );
+  await step('fill in the brand', { mutates: false, timeScale: 2 }, (page) =>
+    fillBrand(page, payload.brand),
+  );
+  await step('choose the category', { mutates: false, timeScale: 2 }, (page) =>
+    chooseCatalog(page, catalog),
+  );
+  await step('choose the size and condition', { mutates: false, timeScale: 2 }, (page) =>
+    chooseSizeAndCondition(page, size, condition),
+  );
+  await step('choose the colors', { mutates: false, timeScale: 2 }, (page) =>
+    chooseColors(page, payload.colors),
+  );
+}
+
 export interface PoshmarkScriptOptions {
   /** The site the scripts drive: Poshmark, or its stand-in in development and tests. */
   site: PoshmarkSite;
@@ -197,33 +230,6 @@ export function createPoshmarkScripts(
         ? { type: 'applied', externalListingId: id }
         : { type: 'applied', externalListingId: id, revision: revision(record, 'listing page') };
     });
-  }
-
-  /** Fills in the details of a new or changed listing, one step per part of the form. */
-  async function fillListing(step: StepRunner, payload: PoshmarkListingPayload): Promise<void> {
-    const { catalog, size, condition } = payload;
-    if (catalog === null || size === null || condition === null) {
-      // Validation refuses such a payload before any attempt; this guards the form all the same.
-      throw new Error('the listing has no Poshmark catalog, size, or condition');
-    }
-    await step('fill in the title and description', { mutates: false, timeScale: 2 }, (page) =>
-      fillText(page, payload),
-    );
-    await step('fill in the prices', { mutates: false, timeScale: 2 }, (page) =>
-      fillPrices(page, payload),
-    );
-    await step('fill in the brand', { mutates: false, timeScale: 2 }, (page) =>
-      fillBrand(page, payload.brand),
-    );
-    await step('choose the category', { mutates: false, timeScale: 2 }, (page) =>
-      chooseCatalog(page, catalog),
-    );
-    await step('choose the size and condition', { mutates: false, timeScale: 2 }, (page) =>
-      chooseSizeAndCondition(page, size, condition),
-    );
-    await step('choose the colors', { mutates: false, timeScale: 2 }, (page) =>
-      chooseColors(page, payload.colors),
-    );
   }
 
   /**

@@ -78,7 +78,7 @@ const SETTLED: readonly string[] = ['succeeded', 'failed', 'canceled', 'done', '
 export async function loadSaleExplanation(
   db: DbExecutor,
   sale: { accountId: string; saleId: string },
-  options: { limit?: number } = {},
+  options: { limit?: number; forSeller?: boolean } = {},
 ): Promise<SaleExplanation | undefined> {
   const row = await db
     .selectFrom('sale')
@@ -134,7 +134,11 @@ export async function loadSaleExplanation(
         };
   const [delists, entries] = await Promise.all([
     saleDelists(db, sale),
-    loadActivity(db, { ...sale, limit: options.limit ?? 200 }),
+    loadActivity(db, {
+      ...sale,
+      limit: options.limit ?? 200,
+      ...(options.forSeller === undefined ? {} : { forSeller: options.forSeller }),
+    }),
   ]);
   return {
     saleId: row.id,
@@ -143,7 +147,7 @@ export async function loadSaleExplanation(
     soldAt: row.sold_at,
     recordedAt: row.created_at,
     detectionSource: row.detection_source,
-    detection: saleDetectionWords(row.detection_source, row.marketplace, check),
+    detection: saleDetectionWords(row.detection_source, row.marketplace),
     check,
     reportedAt: row.reported_at,
     delists,

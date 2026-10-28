@@ -132,9 +132,7 @@ export function describeAutomationSession(input: AutomationSessionInput): Automa
       statusDisplay: {
         tone: 'checking',
         label: 'Checking on your iPhone...',
-        detail:
-          retrying(name, check) ??
-          `Open Listora on your iPhone to finish checking your ${name} sign-in.`,
+        detail: `Open Listora on your iPhone to finish checking your ${name} sign-in.`,
       },
       canCheck: false,
     };
@@ -148,7 +146,7 @@ export function describeAutomationSession(input: AutomationSessionInput): Automa
       statusDisplay: {
         tone: 'checking',
         label: 'Checking...',
-        detail: retrying(name, check) ?? `Listora is checking that ${name} accepts your sign-in.`,
+        detail: `Listora is checking that ${name} accepts your sign-in.`,
       },
       canCheck: false,
     };
@@ -164,13 +162,6 @@ export function describeAutomationSession(input: AutomationSessionInput): Automa
     issue,
     canCheck: true,
   };
-}
-
-/** For a check that tries again after an attempt that didn't get through, that it does. */
-function retrying(name: string, check: SessionCheckState): string | null {
-  return check.attempts === 0
-    ? null
-    : `Listora couldn't check your ${name} sign-in on its last try and tries again in a moment.`;
 }
 
 /** Why a session that is not linked and not being checked is not confirmed. */

@@ -4845,11 +4845,12 @@ export interface components {
          *     `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
          *     seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
          *     `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-         *     the item's floor) or a relist suggested. `sale_checks`: a marketplace whose sale checks fail
-         *     or stopped running, so its sales are not being seen.
+         *     the item's floor) or a relist suggested. Every card is something the seller can do: Listora's
+         *     own background problems (sale checks that fail or stall) are for the owner's alerts and the
+         *     support views, never a card.
          * @enum {string}
          */
-        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "sale_checks" | "review_drafts" | "stale_listing";
+        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "review_drafts" | "stale_listing";
         /**
          * @description A `KnownTodayUrgency`, or a level added after this client was built, which clients show
          *     like `normal`.
@@ -4923,14 +4924,6 @@ export interface components {
             displayName?: string;
             status: components["schemas"]["ConnectionStatus"];
         };
-        /** @description A `sale_checks` card's connection and its problem. */
-        TodaySaleChecks: {
-            connectionId: components["schemas"]["Id"];
-            marketplace: components["schemas"]["Marketplace"];
-            health: components["schemas"]["SaleCheckHealth"];
-            since: components["schemas"]["Timestamp"];
-            lastSucceededAt?: components["schemas"]["Timestamp"];
-        };
         /**
          * @description A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
          *     clients show through the card's `detail` and action.
@@ -4965,7 +4958,7 @@ export interface components {
         /**
          * @description One thing that needs the seller. A card exists only while its work is not done, so it is
          *     gone from the next summary once the work is finished. The kind's own property (`shipment`,
-         *     `delist`, `connection`, `saleChecks`, `staleListing`, or `drafts`) carries its facts.
+         *     `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
          */
         TodayCard: {
             /** @description Stable while the card's work is the same, for example `ship:<saleItemId>`. */
@@ -4979,7 +4972,6 @@ export interface components {
             shipment?: components["schemas"]["TodayShipment"];
             delist?: components["schemas"]["TodayDelist"];
             connection?: components["schemas"]["TodayConnection"];
-            saleChecks?: components["schemas"]["TodaySaleChecks"];
             staleListing?: components["schemas"]["TodayStaleListing"];
             drafts?: components["schemas"]["TodayDrafts"];
         };
@@ -5918,7 +5910,6 @@ export type TodayShipment = components['schemas']['TodayShipment'];
 export type TodayLocation = components['schemas']['TodayLocation'];
 export type TodayDelist = components['schemas']['TodayDelist'];
 export type TodayConnection = components['schemas']['TodayConnection'];
-export type TodaySaleChecks = components['schemas']['TodaySaleChecks'];
 export type TodayStaleSuggestion = components['schemas']['TodayStaleSuggestion'];
 export type KnownTodayStaleSuggestion = components['schemas']['KnownTodayStaleSuggestion'];
 export type TodayStaleListing = components['schemas']['TodayStaleListing'];
@@ -9420,7 +9411,7 @@ export const knownInviteStatusValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const knownInviteActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownInviteAction"]> = ["revoke", "restore"];
 export const knownInviteRedemptionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownInviteRedemptionStatus"]> = ["ready", "email_verification_sent"];
 export const knownSaleEmailStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleEmailStatus"]> = ["unavailable", "not_set_up", "confirming", "working"];
-export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "sale_checks", "review_drafts", "stale_listing"];
+export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "review_drafts", "stale_listing"];
 export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];
 export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];
 export const knownTodayStaleSuggestionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayStaleSuggestion"]> = ["price_drop", "relist"];

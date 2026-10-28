@@ -236,9 +236,7 @@ struct RunsOnLabel: View {
     let installationID: String
 
     var body: some View {
-        let waiting = runsOn.waiting == 1 ? "1 waiting" : "\(runsOn.waiting) waiting"
-        let text = runsOn.text(thisInstallation: installationID)
-        let shown = runsOn.waiting > 0 ? "\(text) · \(waiting)" : text
+        let shown = runsOn.text(thisInstallation: installationID)
         Label(shown, systemImage: runsOn.phone ? "iphone" : "cloud")
             .font(Typography.caption)
             .foregroundStyle(Palette.textSecondary)

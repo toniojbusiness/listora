@@ -204,16 +204,6 @@ struct MarketplaceRowView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("marketplaces.\(row.id).detail")
             }
-            if let lastOkAt = row.lastOkAt {
-                Label {
-                    Text("Last checked OK \(lastOkAt, format: .relative(presentation: .named))")
-                } icon: {
-                    Image(systemName: "clock")
-                }
-                .font(Typography.footnote)
-                .foregroundStyle(Palette.textSecondary)
-                .accessibilityIdentifier("marketplaces.\(row.id).lastOk")
-            }
             if let execution = row.execution {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                     Label(execution.text, systemImage: execution.onPhone ? "iphone" : "cloud")

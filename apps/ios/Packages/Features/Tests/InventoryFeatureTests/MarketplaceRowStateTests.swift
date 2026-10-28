@@ -9,7 +9,7 @@ struct MarketplaceRowStateTests {
     func `shows the server's status exactly, with its tone`() {
         for (label, tone, expected) in [
             ("Active (confirmed by eBay)", Schemas.KnownStatusTone.success, MarketplaceRowState.Tone.success),
-            ("Delisting... retry 2 of 6", .inProgress, .inProgress),
+            ("Delisting...", .inProgress, .inProgress),
             ("Delist failed - Retry", .failed, .failed),
             ("Checking...", .checking, .checking),
             ("Action needed - delist on Poshmark", .actionNeeded, .actionNeeded),
@@ -84,16 +84,16 @@ struct MarketplaceRowStateTests {
     }
 
     @Test
-    func `offers Try now on a change waiting to try again, and says when it will`() throws {
+    func `offers Try now on a change waiting to try again`() throws {
         let now = Fixtures.date
         let calendar = Calendar.current
         let later = try #require(calendar.date(byAdding: .minute, value: 10, to: now))
-        var retrying = Fixtures.operation(status: .retrying, label: "Delisting... retry 1 of 5", tone: .inProgress)
+        var retrying = Fixtures.operation(status: .retrying, label: "Delisting...", tone: .inProgress)
         retrying.nextAttemptAt = later
         let row = MarketplaceRowState(
             marketplace: .ebay,
             listing: Fixtures.listing(
-                label: "Delisting... retry 1 of 5",
+                label: "Delisting...",
                 tone: .inProgress,
                 actions: [],
                 latest: retrying,
@@ -102,11 +102,6 @@ struct MarketplaceRowStateTests {
             now: now,
         )
         #expect(row.actions == [.tryNow(operationID: Fixtures.operationID)])
-        let time = later.formatted(
-            date: calendar.isDate(later, inSameDayAs: now) ? .omitted : .abbreviated,
-            time: .shortened,
-        )
-        #expect(row.scheduleLabel == "Waiting to retry at \(time)")
 
         var checking = Fixtures.operation(status: .verifying, label: "Checking...", tone: .checking)
         checking.nextAttemptAt = later
@@ -116,14 +111,13 @@ struct MarketplaceRowStateTests {
             connection: Fixtures.connection(.ebay, mode: "api"),
             now: now,
         )
-        #expect(check.scheduleLabel == "Checking again at \(time)")
         #expect(check.actions == [.tryNow(operationID: Fixtures.operationID)])
 
         // Once the attempt is due it runs (or waits on this iPhone): nothing to try now.
         let due = MarketplaceRowState(
             marketplace: .ebay,
             listing: Fixtures.listing(
-                label: "Delisting... retry 1 of 5",
+                label: "Delisting...",
                 tone: .inProgress,
                 actions: [],
                 latest: retrying,
@@ -132,7 +126,6 @@ struct MarketplaceRowStateTests {
             now: later.addingTimeInterval(1),
         )
         #expect(due.actions.isEmpty)
-        #expect(due.scheduleLabel == nil)
     }
 
     @Test

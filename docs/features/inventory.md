@@ -102,21 +102,21 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   (`retryOperation`). Change price warns, without refusing, when the new price is below the
   item's floor on that marketplace (`getItemPricing`), as the price screen does. End listing
   asks for the reason on its own card, so the confirmation opens at the button. A change waiting
-  to try again says when ("Waiting to retry at 9:41 PM", or "Checking again at" for a check
-  between read-backs) and offers Try now (`tryOperationNow`), which runs that attempt at once.
+  to try again offers Try now (`tryOperationNow`), which runs that attempt at once; when it is
+  next tried is Listora's, not shown.
   When two or more marketplaces can take the same change, Relist all and End all (with one
   reason for all) queue it on each at once; each card then shows how its own change goes, and a
   marketplace Listora couldn't reach is named in the notice.
 - **Work on this iPhone**: while the phone runs a listing's change, that listing's card shows
   the step it is on, its number, and about how long is left ([phone-execution.md](phone-execution.md)).
-- **Activity**: the item's timeline, newest first: every step of every marketplace action, each
-  browser session on the iPhone or in the cloud with its steps and their times, its tasks, sales,
-  the checks that saw them, and its delists ([activity.md](activity.md)).
+- **Activity**: the item's timeline, newest first: every step of every marketplace action, its
+  tasks, sales, and delists ([activity.md](activity.md)). Browser sessions, sale checks, and step
+  timings are Listora's diagnostics, for the operator's timeline only.
 
 ## Never show success the server has not confirmed
 
 - Every status the app shows is the server's `statusDisplay` label, unchanged ("Active
-  (confirmed by eBay)", "Delisting... retry 2 of 6", "Delist failed - Retry", "Checking...",
+  (confirmed by eBay)", "Delisting...", "Delist failed - Retry", "Checking...",
   "Action needed - delist on Poshmark", "Done (you confirmed)"). The app never sets a status
   itself: after an action it reads the item back and shows what the server says, which is
   "Publishing..." or "Delisting..." until the engine has verified the change on the marketplace.

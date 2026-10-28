@@ -16,9 +16,10 @@ import {
 } from './views.ts';
 
 /**
- * The activity timeline (docs/features/activity.md): `listItemActivity` and
- * `listOperationActivity`, newest first, read from the records the server, the browser runner,
- * and the phone keep; and `getSaleExplanation`, how a sale was found and what it started.
+ * The seller's activity timeline (docs/features/activity.md): `listItemActivity` and
+ * `listOperationActivity`, newest first, and `getSaleExplanation`, how a sale was found and what
+ * it started. Only what the seller did or can act on: Listora's own diagnostics (browser
+ * sessions, sale checks, step timings) are the operator's (`admin activity`).
  */
 export interface ActivityRouteDependencies extends RouteDependencies {
   /** Package photos' URLs. */
@@ -37,6 +38,7 @@ export function registerActivityRoutes(
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
     const entries = await loadActivity(db, {
       ...filter,
+      forSeller: true,
       ...(query.cursor === undefined ? {} : { to: decodeActivityCursor(query.cursor) }),
       limit: limit + 1,
     });
@@ -64,10 +66,14 @@ export function registerActivityRoutes(
   });
 
   contractRoute(app, deps, 'getSaleExplanation', async ({ tenant, db, params }) => {
-    const explanation = await loadSaleExplanation(db, {
-      accountId: tenant.accountId,
-      saleId: params.saleId,
-    });
+    const explanation = await loadSaleExplanation(
+      db,
+      {
+        accountId: tenant.accountId,
+        saleId: params.saleId,
+      },
+      { forSeller: true },
+    );
     if (explanation === undefined) throw notFound('Sale');
     return { status: 200, body: saleExplanationView(explanation, deps.storage) };
   });

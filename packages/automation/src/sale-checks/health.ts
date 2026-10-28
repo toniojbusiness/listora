@@ -3,10 +3,10 @@
  * connection's schedule keeps whether its sale checks work. A check that works makes it
  * `healthy`; `alertAfterFailures` failed checks in a row make it `failing` (job.ts records
  * both); a check `overdueMs` past due that has not run makes it `overdue` (this job). Either
- * problem shows a Today card and, once per problem, a notification naming the marketplace and
- * the reason, so the seller knows sales there are not being seen and why.
- *
- * The words for a problem live here, so the Today card and the notification say the same.
+ * problem raises the owner's `sale-checks-unhealthy` alarm and shows in the support views
+ * (`admin sale-checks`). It is Listora's to fix, so the seller is told only when they can fix
+ * it: once per problem, a notification asks them to open Listora when the checks run on their
+ * iPhone and it has not been opened. Nothing else reaches Today or a notification.
  */
 import { sql } from 'kysely';
 
@@ -100,53 +100,32 @@ export interface SaleCheckProblem {
   runsOn: ExecutionLocation;
 }
 
-/** The title and detail of a problem, the same on Today and in the notification. */
-export function saleCheckProblemWords(
-  problem: SaleCheckProblem,
-  now: Date,
-): { title: string; detail: string } {
-  const name = MARKETPLACE_NAMES[problem.marketplace];
-  const consequence = `Until it can, a sale on ${name} is not delisted elsewhere automatically.`;
-  if (problem.health === 'failing') {
-    const reason = problem.lastErrorMessage ?? `Listora couldn't read your ${name} sales.`;
-    return {
-      title: `Listora can't check ${name} for sales`,
-      detail: `The last ${String(problem.failuresInARow)} checks failed: ${reason} Listora keeps trying. ${consequence}`,
-    };
-  }
-  const since =
-    problem.lastSucceededAt === null
-      ? 'yet'
-      : `in ${elapsed(now.getTime() - problem.lastSucceededAt.getTime())}`;
-  const ask =
-    problem.runsOn === 'phone'
-      ? `Open Listora on your iPhone so it can check.`
-      : 'Listora keeps trying.';
-  return {
-    title: `Listora hasn't checked ${name} for sales ${since}`,
-    detail: `${ask} ${consequence}`,
-  };
-}
-
-/** The notification for a problem, sent once per problem. */
+/**
+ * The seller's notification for a problem, or null when there is nothing they can do about it.
+ * The one problem only the seller can fix is checks that run on their iPhone and are overdue
+ * because Listora has not been opened there; a check that fails is Listora's own problem.
+ */
 export function saleCheckProblemNotification(
   accountId: string,
   problem: SaleCheckProblem,
-  now: Date,
-): PushNotification {
-  const words = saleCheckProblemWords(problem, now);
+): PushNotification | null {
+  if (problem.runsOn !== 'phone' || problem.health !== 'overdue') return null;
+  const name = MARKETPLACE_NAMES[problem.marketplace];
   return {
     accountId,
     category: SALE_CHECKS_CATEGORY,
-    title: words.title,
-    body: words.detail,
+    title: `Open Listora to keep ${name} in sync`,
+    body: `Listora checks your ${name} sales from your iPhone. Open the app so a sale there is delisted everywhere else.`,
     urgency: 'normal',
     threadId: `sale_checks:${problem.marketplace}`,
     data: { connectionId: problem.connectionId, marketplace: problem.marketplace },
   };
 }
 
-/** The connections of an account whose sale checks have a problem, while they still work. */
+/**
+ * The connections of an account whose sale checks have a problem, while they still work: the
+ * support views' and the health task's, never a screen the seller sees.
+ */
 export async function loadSaleCheckProblems(
   db: DbExecutor,
   accountId: string,
@@ -196,9 +175,10 @@ export interface SaleCheckHealthDependencies {
 }
 
 /**
- * One round of the scheduled task: marks the checks that are overdue, then announces every
- * problem not announced yet, one notification per problem (the schedule's `alerted_at`, set in
- * the transaction that queues it). Returns how many it marked and announced.
+ * One round of the scheduled task: marks the checks that are overdue, then settles every problem
+ * not settled yet (the schedule's `alerted_at`): one notification for a problem the seller can
+ * fix, queued in the transaction that sets it, and none for the rest. Returns how many it marked
+ * and how many sellers it told.
  */
 export async function runSaleCheckHealth(
   deps: SaleCheckHealthDependencies,
@@ -257,7 +237,9 @@ export async function runSaleCheckHealth(
         (candidate) => candidate.connectionId === row.connection_id,
       );
       if (problem === undefined) return false;
-      await enqueuePush(trx, saleCheckProblemNotification(row.account_id, problem, now), {
+      const notification = saleCheckProblemNotification(row.account_id, problem);
+      if (notification === null) return false;
+      await enqueuePush(trx, notification, {
         key: `sale_checks:${row.connection_id}:${String(claimed.unhealthy_since.getTime())}`,
       });
       log.warn(
@@ -276,13 +258,4 @@ export async function runSaleCheckHealth(
     if (sent) alerted += 1;
   }
   return { overdue: marked.rows.length, alerted };
-}
-
-/** A duration in whole hours (or minutes under an hour), for "in 8 hours". */
-function elapsed(ms: number): string {
-  const minutes = Math.max(1, Math.floor(ms / 60_000));
-  if (minutes < 60) return minutes === 1 ? '1 minute' : `${String(minutes)} minutes`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return hours === 1 ? '1 hour' : `${String(hours)} hours`;
-  return `${String(Math.floor(hours / 24))} days`;
 }

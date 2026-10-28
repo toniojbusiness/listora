@@ -67,25 +67,19 @@ describe('describeAutomationSession', () => {
     });
   });
 
-  it('says when it waits for the phone, and when it tries again after an attempt that failed', () => {
+  it('says when it waits for the phone, never that an attempt failed and is tried again', () => {
     const waiting = { linked: true, checkWaiting: true };
-    expect(session(check(), {}, NOW, waiting).statusDisplay).toEqual({
+    const onPhone = {
       tone: 'checking',
       label: 'Checking on your iPhone...',
       detail: 'Open Listora on your iPhone to finish checking your Poshmark sign-in.',
-    });
-    const retrying = {
-      tone: 'checking',
-      detail:
-        "Listora couldn't check your Poshmark sign-in on its last try and tries again in a moment.",
     };
-    expect(session(check({ attempts: 1 }), {}, NOW, waiting).statusDisplay).toEqual({
-      ...retrying,
-      label: 'Checking on your iPhone...',
-    });
+    expect(session(check(), {}, NOW, waiting).statusDisplay).toEqual(onPhone);
+    expect(session(check({ attempts: 1 }), {}, NOW, waiting).statusDisplay).toEqual(onPhone);
     expect(session(check({ attempts: 2 })).statusDisplay).toEqual({
-      ...retrying,
+      tone: 'checking',
       label: 'Checking...',
+      detail: 'Listora is checking that Poshmark accepts your sign-in.',
     });
   });
 
