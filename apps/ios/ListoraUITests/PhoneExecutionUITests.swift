@@ -7,7 +7,7 @@ import XCTest
 /// own session; the server decides every result from what the phone reports.
 @MainActor
 final class PhoneExecutionUITests: XCTestCase {
-    private let app = XCUIApplication()
+    let app = XCUIApplication()
     private var stack: E2EStack?
 
     override func setUp() async throws {
@@ -23,14 +23,14 @@ final class PhoneExecutionUITests: XCTestCase {
     }
 
     /// Keeps a screenshot in the test results, for reviewing the screens.
-    private func snapshot(_ name: String) {
+    func snapshot(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
     }
 
-    private func element(_ identifier: String) -> XCUIElement {
+    func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
@@ -179,7 +179,7 @@ final class PhoneExecutionUITests: XCTestCase {
 
     /// The local stack, with Depop unlinked: no session, and no work waiting for a phone that
     /// an earlier test linked it on.
-    private func freshStack() async throws -> E2EStack {
+    func freshStack() async throws -> E2EStack {
         let stack = try E2EStack.fromEnvironment()
         self.stack = stack
         try await stack.clearDepopChecks()
@@ -187,7 +187,7 @@ final class PhoneExecutionUITests: XCTestCase {
         return stack
     }
 
-    private func launch(_ stack: E2EStack, reset: Bool) {
+    func launch(_ stack: E2EStack, reset: Bool) {
         app.launchEnvironment = [
             "LISTORA_RESET_LOCAL_DATA": reset ? "1" : "0",
             "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
@@ -197,7 +197,7 @@ final class PhoneExecutionUITests: XCTestCase {
         app.launch()
     }
 
-    private func openLinkAccounts() {
+    func openLinkAccounts() {
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 30), "no Settings\n\(app.debugDescription)")
         settings.tap()
@@ -212,7 +212,7 @@ final class PhoneExecutionUITests: XCTestCase {
 
     /// Signs in on the fake Depop in the app's sign-in page, runs `before` once signed in, and
     /// hands the session over; then waits until the phone's check says Linked.
-    private func link(
+    func link(
         waitForLinked: Bool = true,
         before: () async throws -> Void = {},
     ) async throws {
@@ -245,7 +245,7 @@ final class PhoneExecutionUITests: XCTestCase {
     }
 
     /// Polls `condition` every second until it holds.
-    private func waitFor(
+    func waitFor(
         _ what: String,
         timeout: TimeInterval = 30,
         _ condition: () async throws -> Bool,

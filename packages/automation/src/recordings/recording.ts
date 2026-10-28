@@ -23,7 +23,15 @@ export const RECORDED_MARKETPLACES = ['depop', 'mercari', 'poshmark'] as const;
 export type RecordedMarketplace = (typeof RECORDED_MARKETPLACES)[number];
 
 /** The kinds of page a recording is of. */
-export const RECORDED_PAGES = ['hub', 'shop', 'listing', 'edit', 'sell-form', 'sold'] as const;
+export const RECORDED_PAGES = [
+  'hub',
+  'shop',
+  'listing',
+  'edit',
+  'sell-form',
+  'sold',
+  'offers',
+] as const;
 export type RecordedPage = (typeof RECORDED_PAGES)[number];
 
 /**

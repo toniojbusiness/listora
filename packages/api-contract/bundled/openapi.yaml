@@ -77,6 +77,8 @@ tags:
     description: The activity timeline of items and marketplace actions, and how each sale was found (docs/features/activity.md).
   - name: imports
     description: Importing the seller's existing listings from a linked marketplace, and the questions it asks (docs/features/imports.md).
+  - name: offers
+    description: Buyers' offers on the seller's listings, read from the marketplaces, and the seller's answers to them (docs/features/offers.md).
 paths:
   /health/live:
     get:
@@ -3286,6 +3288,131 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/offer-checks:
+    get:
+      tags:
+        - offers
+      operationId: listOfferChecks
+      summary: When each marketplace's offers were last read
+      description: One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+      responses:
+        '200':
+          description: The reads.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferCheckList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - offers
+      operationId: requestOfferChecks
+      summary: Read the seller's offers now
+      description: |
+        Asks for a read of the offers on each linked marketplace (only reads; nothing changes on a
+        marketplace). The reads run on the seller's iPhone, at most one per marketplace every 10
+        minutes however often this is called. Each pending offer becomes an `answer_offer` task.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The reads, with the ones now waiting for the iPhone.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferCheckList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/offers/{offerId}:
+    parameters:
+      - $ref: '#/components/parameters/OfferId'
+    get:
+      tags:
+        - offers
+      operationId: getOffer
+      summary: Get an offer and the newest answer to it
+      responses:
+        '200':
+          description: The offer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/offers/{offerId}/quote:
+    parameters:
+      - $ref: '#/components/parameters/OfferId'
+    get:
+      tags:
+        - offers
+      operationId: getOfferQuote
+      summary: What a price on the offer gives the seller after fees
+      description: For the counteroffer's confirmation; an estimate from Listora's fee tables, with no marketplace call.
+      parameters:
+        - name: priceCents
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100000000
+      responses:
+        '200':
+          description: The estimate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferQuote'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/offers/{offerId}/responses:
+    parameters:
+      - $ref: '#/components/parameters/OfferId'
+    post:
+      tags:
+        - offers
+      operationId: answerOffer
+      summary: Accept, decline, or counter an offer
+      description: |
+        The seller's confirmed answer, sent once from their iPhone and shown as done only once a
+        read of the offer on the marketplace shows it (`OfferResponse`). An accepted offer then
+        goes through the normal sale flow when the marketplace shows it sold. `409` when the offer
+        no longer waits on the seller or an answer is already under way
+        (`invalid_state_transition`), or Listora can't answer offers on that connection
+        (`marketplace_action_unavailable`); `422` when the amount moved or the counter is out of
+        range.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferAnswer'
+      responses:
+        '202':
+          description: The answer, waiting for the iPhone.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfferResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
 components:
   securitySchemes:
     bearerAuth:
@@ -3386,6 +3513,12 @@ components:
         $ref: '#/components/schemas/Id'
     TaskId:
       name: taskId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    OfferId:
+      name: offerId
       in: path
       required: true
       schema:
@@ -6800,7 +6933,9 @@ components:
         a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
         history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
         listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
-        orders that still need a package, for Pack check.
+        orders that still need a package, for Pack check. `offer_check`: a read-only read of the
+        offers on the seller's listings. `offer_response`: the seller's confirmed answer to an
+        offer, and the read of the offer that confirms it.
       enum:
         - operation
         - session_check
@@ -6808,6 +6943,8 @@ components:
         - sale_history
         - listing_import
         - label_read
+        - offer_check
+        - offer_response
     PhoneRunClaim:
       type: object
       additionalProperties: false
@@ -7834,6 +7971,11 @@ components:
       description: |
         `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
         task's sale is the later one) and completes the task.
+
+        `answer_offer`: a buyer's offer waits on the seller (`offer`); the seller answers it with
+        `answerOffer` (or in the marketplace's app, `deepLink`). The task closes by itself once the
+        answer is read back or the marketplace no longer shows the offer waiting; `completeTask`
+        refuses it, and `dismissTask` only hides it (the offer stays open on the marketplace).
       enum:
         - list_manually
         - delist_manually
@@ -7842,6 +7984,7 @@ components:
         - reconnect
         - review_match
         - resolve_double_sale
+        - answer_offer
     UserTaskStatus:
       type: string
       enum:
@@ -7925,6 +8068,9 @@ components:
             for `resolve_double_sale`, the later sale.
         saleEmail:
           $ref: '#/components/schemas/UserTaskSaleEmail'
+        offer:
+          $ref: '#/components/schemas/Offer'
+          description: For an `answer_offer` task, the offer and the newest answer to it.
         deepLink:
           type: string
           format: uri
@@ -9646,3 +9792,231 @@ components:
         itemId:
           $ref: '#/components/schemas/Id'
           description: For `same_item`, the candidate it is.
+    OfferAction:
+      description: An `KnownOfferAction`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOfferAction'
+        - type: string
+          maxLength: 64
+    KnownOfferAction:
+      type: string
+      description: |
+        The seller's answer to an offer. `accept`: on Poshmark it sells the listing at once (the
+        buyer paid when they offered); on Depop the buyer then buys at that price.
+        `decline`: the offer ends. `counter`: the seller asks for another price (more than the
+        offer, less than the listing's price), and the offer waits on the buyer.
+      enum:
+        - accept
+        - decline
+        - counter
+    OfferQuote:
+      type: object
+      description: What the seller gets for a price on the offer's marketplace, after its fees (an estimate from Listora's fee tables).
+      required:
+        - price
+        - fees
+        - net
+      properties:
+        price:
+          $ref: '#/components/schemas/Money'
+        fees:
+          $ref: '#/components/schemas/Money'
+        net:
+          $ref: '#/components/schemas/Money'
+    OfferResponseStatus:
+      description: A `KnownOfferResponseStatus`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOfferResponseStatus'
+        - type: string
+          maxLength: 64
+    KnownOfferResponseStatus:
+      type: string
+      description: |
+        `queued`: waiting for the seller's iPhone. `running`: the iPhone is answering it.
+        `verifying`: it may have reached the marketplace, and Listora reads the offer to confirm.
+        `succeeded`: a read of the offer shows the answer. `failed`: see `error`.
+      enum:
+        - queued
+        - running
+        - verifying
+        - succeeded
+        - failed
+    OfferResponse:
+      type: object
+      description: |
+        The seller's answer to an offer. It is sent once, from the seller's iPhone, and is
+        `succeeded` only when a read of the offer on the marketplace shows it; it is never sent
+        again once it may have reached the marketplace.
+      required:
+        - id
+        - action
+        - status
+        - statusText
+        - offerAmount
+        - net
+        - createdAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        action:
+          $ref: '#/components/schemas/OfferAction'
+        status:
+          $ref: '#/components/schemas/OfferResponseStatus'
+        statusText:
+          type: string
+          maxLength: 300
+          description: For example "Accepting on your iPhone..." or "Accepted (confirmed by Poshmark)".
+        offerAmount:
+          $ref: '#/components/schemas/Money'
+        counter:
+          $ref: '#/components/schemas/Money'
+        net:
+          $ref: '#/components/schemas/Money'
+          description: What the confirmation showed the seller would get after fees (zero for a decline).
+        error:
+          $ref: '#/components/schemas/OfferResponseError'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        finishedAt:
+          $ref: '#/components/schemas/Timestamp'
+    OfferResponseError:
+      type: object
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        retryable:
+          type: boolean
+          description: Whether answering again from Listora can help (it never can once the answer may have reached the marketplace).
+    Offer:
+      type: object
+      description: An offer a buyer made on one of the seller's listings, as the seller's own session last read it.
+      required:
+        - id
+        - marketplace
+        - status
+        - amount
+        - actions
+        - acceptNote
+        - accept
+        - firstSeenAt
+        - lastSeenAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        status:
+          type: string
+          maxLength: 64
+          description: '`pending` (waits on the seller), `accepted`, `declined`, `countered`, or `closed` (no longer shown waiting on the seller).'
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: The buyer's offer (after a confirmed counter, the seller's price).
+        listPrice:
+          $ref: '#/components/schemas/Money'
+        listingTitle:
+          type: string
+          maxLength: 200
+        buyerName:
+          type: string
+          maxLength: 100
+          description: The buyer's public username on the marketplace, as the offer shows it.
+        listingCount:
+          type: integer
+          minimum: 1
+          description: How many listings the offer covers (a bundle), when more than one.
+        shipping:
+          $ref: '#/components/schemas/Money'
+          description: What the buyer pays for shipping under the offer, when it says.
+        madeAt:
+          $ref: '#/components/schemas/Timestamp'
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+        url:
+          type: string
+          format: uri
+          description: The offer's page on the marketplace (Open in Poshmark).
+        actions:
+          type: array
+          description: The answers Listora can send now; empty while one is under way or once the offer no longer waits on the seller.
+          items:
+            $ref: '#/components/schemas/OfferAction'
+        acceptNote:
+          type: string
+          maxLength: 300
+          description: What accepting does on this marketplace, in the seller's words.
+        accept:
+          $ref: '#/components/schemas/OfferQuote'
+          description: What accepting gives the seller after fees.
+        counterRange:
+          $ref: '#/components/schemas/OfferCounterRange'
+        response:
+          $ref: '#/components/schemas/OfferResponse'
+          description: The newest answer from Listora, if any.
+        firstSeenAt:
+          $ref: '#/components/schemas/Timestamp'
+        lastSeenAt:
+          $ref: '#/components/schemas/Timestamp'
+    OfferCounterRange:
+      type: object
+      description: A counteroffer is more than `above` and, when `below` is present, less than it.
+      required:
+        - above
+      properties:
+        above:
+          $ref: '#/components/schemas/Money'
+        below:
+          $ref: '#/components/schemas/Money'
+    OfferAnswer:
+      type: object
+      additionalProperties: false
+      description: |
+        The seller's confirmed answer. `offerAmount` is the offer's amount the confirmation showed:
+        an offer the buyer changed since is `422 validation_failed`. `counter` is required for a
+        counter and refused otherwise.
+      required:
+        - action
+        - offerAmount
+      properties:
+        action:
+          $ref: '#/components/schemas/KnownOfferAction'
+        offerAmount:
+          $ref: '#/components/schemas/Money'
+        counter:
+          $ref: '#/components/schemas/Money'
+    OfferCheck:
+      type: object
+      description: When Listora last read the seller's offers on one marketplace, and how that went.
+      required:
+        - marketplace
+        - status
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        status:
+          type: string
+          maxLength: 64
+          description: '`waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`).'
+        checkedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When a read last succeeded.
+        message:
+          type: string
+          maxLength: 500
+    OfferCheckList:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OfferCheck'

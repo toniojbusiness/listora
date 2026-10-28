@@ -20,19 +20,27 @@ public final class TaskInboxModel {
     private(set) var phase: Phase = .loading
     /// Open tasks, urgent first, then oldest first (the server's order).
     private(set) var tasks: [UserTask] = []
+    /// When each linked marketplace's offers were last read, and how that went.
+    private(set) var offerChecks: [OfferCheck] = []
 
     private let service: any TasksService
+    private let offers: any OffersService
+    private let runPhoneWork: @MainActor () -> Void
     private let reminders: any TaskReminding
     private let isSignedIn: @MainActor () -> Bool
     private let now: @Sendable () -> Date
 
     init(
         service: any TasksService,
+        offers: any OffersService = NoOffers(),
         reminders: any TaskReminding,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
+        runPhoneWork: @escaping @MainActor () -> Void = {},
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
         self.service = service
+        self.offers = offers
+        self.runPhoneWork = runPhoneWork
         self.reminders = reminders
         self.isSignedIn = isSignedIn
         self.now = now
@@ -83,6 +91,26 @@ public final class TaskInboxModel {
             await load()
             try? await Task.sleep(for: interval)
         }
+    }
+
+    /// The seller opened Tasks: asks this iPhone to read the buyers' offers (the server reads
+    /// each marketplace at most every 10 minutes, read-only), and runs that work now. An offer
+    /// waiting on the seller then shows up as a task.
+    public func checkOffers() async {
+        guard isSignedIn() else { return }
+        do {
+            offerChecks = try await offers.requestChecks(idempotencyKey: UUID().uuidString)
+            if offerChecks.contains(where: { $0.status == "waiting" }) {
+                runPhoneWork()
+            }
+        } catch {
+            // The tasks still show; the offers' line says nothing new.
+        }
+    }
+
+    /// Offers that could not be read, in the server's words.
+    var offerProblems: [String] {
+        offerChecks.compactMap { $0.status == "failed" ? $0.message : nil }
     }
 
     /// Takes a finished task off the list at once; the next load confirms it with the server.

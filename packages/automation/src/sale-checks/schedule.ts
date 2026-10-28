@@ -148,7 +148,7 @@ export async function queueSaleCheckForPhone(
  */
 export async function requestSaleCheck(
   executor: DbExecutor,
-  request: { accountId: string; marketplace: Marketplace },
+  request: { accountId: string; marketplace: Marketplace; reason?: 'email' | 'offer' },
 ): Promise<boolean> {
   return inTransaction(executor, async (trx) => {
     const connection = await trx
@@ -165,7 +165,7 @@ export async function requestSaleCheck(
       connectionId: connection.id,
       marketplace: request.marketplace,
     };
-    await scheduleSaleCheck(trx, { ...check, at: 'now', reason: 'email' });
+    await scheduleSaleCheck(trx, { ...check, at: 'now', reason: request.reason ?? 'email' });
     await enqueueSaleCheck(trx, check);
     return true;
   });

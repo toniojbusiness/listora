@@ -47,6 +47,8 @@ extension Components {
         public typealias SaleId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/TaskId`.
         public typealias TaskId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/OfferId`.
+        public typealias OfferId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/InviteId`.
         public typealias InviteId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/MarketplacePath`.

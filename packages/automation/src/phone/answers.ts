@@ -128,6 +128,41 @@ const labels = z
   )
   .max(100);
 
+const isoTime = z.iso.datetime({ offset: true }).nullable();
+
+/** An offer as the phone read it (docs/features/offers.md): only what Tasks shows of it. */
+const offer = z.object({
+  externalOfferId: z.string().min(1).max(255),
+  externalListingId: z.string().min(1).max(255).nullable(),
+  listingTitle: z.string().max(5_000).nullable(),
+  amountCents: z.number().int().min(1),
+  listPriceCents: z.number().int().min(1).nullable(),
+  buyerName: z.string().min(1).max(100).nullable(),
+  turn: z.enum(['seller', 'buyer']),
+  madeAt: isoTime,
+  expiresAt: isoTime,
+  url: z
+    .url({ protocol: /^https?$/ })
+    .max(2_000)
+    .nullable(),
+  listingCount: z.number().int().min(1).max(500).nullable(),
+  shippingCents: z.number().int().min(0).nullable(),
+});
+
+const offerState = z.discriminatedUnion('found', [
+  z.object({ found: z.literal(false) }),
+  z.object({
+    found: z.literal(true),
+    offer,
+    status: z.enum(['pending', 'accepted', 'declined', 'countered']),
+  }),
+]);
+
+const offerAnswer = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('applied') }),
+  z.object({ type: z.literal('refused'), code: short, message: z.string().min(1).max(1_000) }),
+]);
+
 /** What each script's value is. */
 function valueSchema(call: ScriptCall): z.ZodType {
   switch (call.script) {
@@ -155,6 +190,12 @@ function valueSchema(call: ScriptCall): z.ZodType {
       });
     case 'labels':
       return labels;
+    case 'offers':
+      return z.array(offer).max(500);
+    case 'offer':
+      return offerState;
+    case 'answerOffer':
+      return offerAnswer;
   }
 }
 

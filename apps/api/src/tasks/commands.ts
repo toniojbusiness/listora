@@ -30,6 +30,7 @@ const COMPLETION_FIELDS = {
   confirm_sale: ['saleCorrection'],
   review_match: ['matchedItemId', 'matchedListingId', 'rejectMatch'],
   resolve_double_sale: [],
+  answer_offer: [],
 } as const satisfies Record<string, readonly (keyof UserTaskCompletion)[]>;
 
 type KnownKind = keyof typeof COMPLETION_FIELDS;
@@ -59,6 +60,13 @@ export async function completeUserTask(
     );
   }
   checkCompletionFields(task.kind, completion);
+  if (task.kind === 'answer_offer') {
+    // Done only when the answer is read back from the marketplace, never on the seller's word.
+    throw new ApiError(
+      'invalid_state_transition',
+      'Answer the offer with Accept, Decline, or Counter. The task closes once the marketplace shows your answer.',
+    );
+  }
   const linked =
     task.kind === 'list_manually' && completion.externalUrl !== undefined
       ? await linkTaskListing(trx, tenant, task, completion.externalUrl)
