@@ -4,7 +4,8 @@
  * marketplace's verified features; a feature not verified (Poshmark's offers and sales today,
  * offer answers everywhere) queues no check, and shows no row, button, or error anywhere the
  * seller looks (Sync, Tasks, Import listings); and a failed read of a verified feature carries no
- * error for the seller.
+ * error for the seller. Revise (editing a live listing's details) is offered nowhere and refused
+ * before it is queued, while the item and draft listings stay editable.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -211,5 +212,77 @@ describe('marketplace features (real Postgres, verified features)', () => {
       body: { marketplace: 'poshmark' },
     });
     expect(refused.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('offers no revise of a live listing and refuses one, while the item and drafts stay editable', async () => {
+    const { token, accountId, ids } = await seller(['depop']);
+    const created = await api.call('createItem', {
+      token,
+      body: {
+        details: { title: 'Wool scarf', listPrice: { amountCents: 4000, currency: 'USD' } },
+      },
+    });
+    expect(created.status).toBe(201);
+    const variant = {
+      title: 'Wool scarf',
+      description: 'Soft and warm.',
+      price: { amountCents: 4000, currency: 'USD' },
+    } as const;
+    const live = await api.db
+      .insertInto('marketplace_listing')
+      .values({
+        account_id: accountId,
+        item_id: created.body.id,
+        connection_id: ids.depop ?? '',
+        marketplace: 'depop',
+        status: 'active',
+        title: variant.title,
+        description: variant.description,
+        price_cents: variant.price.amountCents,
+        external_url: 'https://www.depop.com/products/scarf/',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+
+    const listing = await api.call('getListing', { token, params: { listingId: live.id } });
+    expect(listing.status).toBe(200);
+    const actions = listing.body.availableActions.map((available) => available.action);
+    expect(actions).not.toContain('revise');
+    expect(actions).toContain('change_price');
+
+    const refused = await api.call('reviseListing', {
+      token,
+      params: { listingId: live.id },
+      body: { variant: { ...variant, title: 'Wool scarf, red' } },
+    });
+    expect(refused.status).toBe(409);
+    expect(refused.error).toMatchObject({ code: 'marketplace_action_unavailable' });
+    const operations = await api.db
+      .selectFrom('marketplace_operation')
+      .select('kind')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(operations).toEqual([]);
+
+    // A draft listing (of another item: one listing per marketplace) still edits.
+    const other = await api.call('createItem', {
+      token,
+      body: {
+        details: { title: 'Wool hat', listPrice: { amountCents: 2000, currency: 'USD' } },
+      },
+    });
+    const draft = await api.call('createListing', {
+      token,
+      params: { itemId: other.body.id },
+      body: { marketplace: 'depop', variant },
+    });
+    expect(draft.status).toBe(201);
+    const replaced = await api.call('replaceListingDraft', {
+      token,
+      params: { listingId: draft.body.id },
+      body: { variant: { ...variant, title: 'Wool scarf, red' } },
+    });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.variant?.title).toBe('Wool scarf, red');
   });
 });

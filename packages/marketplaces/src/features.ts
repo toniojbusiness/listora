@@ -24,6 +24,8 @@ export const MARKETPLACE_FEATURES = [
   'listing_import',
   /** Refreshing live listings on a schedule. */
   'listing_refresh',
+  /** Editing a live listing's details (title, description, aspects) from Listora. */
+  'revise',
 ] as const;
 export type MarketplaceFeature = (typeof MARKETPLACE_FEATURES)[number];
 

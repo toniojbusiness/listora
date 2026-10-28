@@ -10877,7 +10877,8 @@ components:
         sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
         buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
         offer from Listora. `listing_import`: importing the seller's existing listings.
-        `listing_refresh`: refreshing live listings on a schedule.
+        `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
+        listing's details from Listora (`reviseListing`).
       enum:
         - sales_history
         - sale_checks
@@ -10885,6 +10886,7 @@ components:
         - offer_answers
         - listing_import
         - listing_refresh
+        - revise
     MarketplaceFeatures:
       type: object
       required:
