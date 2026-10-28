@@ -27,11 +27,16 @@ Poshmark offer reads failed and showed the seller an error. Now Poshmark offers 
 | `offer_answers`   | Accept, Decline, and Counter from Listora                             | `offerActions` (an offer shows no answers, "Answer this offer in Depop."), `requestOfferAnswer`, the phone's claim |
 | `listing_import`  | Importing existing listings as items                                  | `importsFrom` (Import listings, starting one, Sync's listing reads)                                                |
 | `listing_refresh` | Refreshing live listings on a schedule                                | `canRefresh` and the refresh schedule; the app hides Settings > Listing refresh and the item's Refresh this item   |
+| `revise`          | Editing a live listing's details (title, description, aspects)        | `availableActions` (a live listing offers no `revise`), so `reviseListing` is refused before anything is queued    |
 
-Listing actions (publish, price, end, relist, and revise) are not on this list. They already
-show as done only after a read-back, and a failure shows with Retry
-([operations.md](operations.md)). The live results for each one are below, and gating them is a
-question for the captain.
+Revise is on the list because it has not run live on any marketplace. Hiding it leaves the
+seller's own edits alone: the Listora item and draft listings still edit, and nothing changes on
+a marketplace until the seller publishes. The app has no edit-live-listing screen (it never
+showed `revise` from `availableActions`), so hiding it needs no new app build.
+
+The other listing actions (publish, price, end, relist) are not on this list. They passed live
+(below), show as done only after a read-back, and a failure shows with Retry
+([operations.md](operations.md)).
 
 ## How the gate works
 
@@ -88,6 +93,8 @@ The tests run like this:
     imports only from Depop and Mercari.
   - `phone/work.int.test.ts`: hidden work dropped unrun, and a hidden answer never sent.
   - `sale-checks.int.test.ts`: no check, overdue mark, or push for Poshmark.
+  - `marketplace-features.int.test.ts` also: no revise offered or queued on a live listing,
+    while a draft still edits.
   - `features.test.ts`: the list's evidence, what each feature requires, and the key.
   - `cadence.test.ts`: refresh unavailable.
   - `MarketplaceFeaturesTests` (iOS).
@@ -111,13 +118,14 @@ ever read.
 | Mercari     | `listing_import`               | **Verified** 2026-10-27: an import read all 11 of the captain's listings for sale                                                                     |
 | Mercari     | `offers`, answers              | Hidden: not built; Mercari's website shows no offers page ([offers.md](offers.md))                                                                    |
 | Mercari     | `listing_refresh`              | Hidden: no live refresh yet                                                                                                                           |
+| Every one   | `revise`                       | Hidden: no revise has run live on any marketplace (see below)                                                                                         |
 | Poshmark    | `offers`                       | Hidden: the live read failed (`element_missing`, 2026-10-28) on an account with no offers                                                             |
 | Poshmark    | `sales_history`, `sale_checks` | Hidden: the checks run and read 0, but the account has never sold, so finding a sale was never proven                                                 |
 | Poshmark    | `listing_import`               | Hidden: the only live run was on an empty closet                                                                                                      |
 | Poshmark    | answers, refresh               | Hidden: no live run                                                                                                                                   |
 | eBay        | every feature                  | Hidden: no eBay connection has run live                                                                                                               |
 
-Listing actions, as they ran live (not gated, see above):
+Listing actions, as they ran live (only revise is gated, see above):
 
 | Marketplace | Publish, price, end, relist              | Revise (details) |
 | ----------- | ---------------------------------------- | ---------------- |
@@ -131,7 +139,6 @@ its entry to `VERIFIED_FEATURES`, with the date and what the run proved, and add
 
 ## Open items
 
-- The captain confirms this list (asked in the pull request).
-- Whether the listing actions that haven't run live (revise everywhere, and every eBay
-  automation step) should fall back to assisted mode until they pass.
+- Whether the eBay listing actions that haven't run live should fall back to assisted mode
+  until they pass.
 - Pack check's label reads (live on Depop) and linking are not on the list yet.

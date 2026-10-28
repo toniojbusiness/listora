@@ -6258,10 +6258,11 @@ export interface components {
          *     sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
          *     buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
          *     offer from Listora. `listing_import`: importing the seller's existing listings.
-         *     `listing_refresh`: refreshing live listings on a schedule.
+         *     `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
+         *     listing's details from Listora (`reviseListing`).
          * @enum {string}
          */
-        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh";
+        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise";
         MarketplaceFeatures: {
             marketplace: components["schemas"]["Marketplace"];
             /** @description The features of this marketplace that passed a live end-to-end test. */
@@ -10870,4 +10871,4 @@ export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
 export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];
-export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh"];
+export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise"];
