@@ -50,6 +50,8 @@ describe('marketplace features (docs/features/verified-features.md)', () => {
     for (const marketplace of MARKETPLACES) {
       expect(isFeatureVerified(marketplace, 'offer_answers')).toBe(false);
       expect(isFeatureVerified(marketplace, 'listing_refresh')).toBe(false);
+      // Editing a live listing's details has not run live anywhere.
+      expect(isFeatureVerified(marketplace, 'revise')).toBe(false);
     }
     useMarketplaceFeatures('all');
     expect(verifiedFeatures('poshmark')).toEqual([...MARKETPLACE_FEATURES]);

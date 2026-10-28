@@ -15080,7 +15080,8 @@ extension Components {
         /// sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
         /// buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
         /// offer from Listora. `listing_import`: importing the seller's existing listings.
-        /// `listing_refresh`: refreshing live listings on a schedule.
+        /// `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
+        /// listing's details from Listora (`reviseListing`).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownMarketplaceFeature`.
@@ -15091,6 +15092,7 @@ extension Components {
             case offerAnswers = "offer_answers"
             case listingImport = "listing_import"
             case listingRefresh = "listing_refresh"
+            case revise = "revise"
         }
         /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures`.
         public struct MarketplaceFeatures: Codable, Hashable, Sendable {
