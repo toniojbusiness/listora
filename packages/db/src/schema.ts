@@ -45,6 +45,8 @@ import type {
   InboundEventResult,
   InboundEventSource,
   ItemStatus,
+  LabelCarrier,
+  LabelReadStatus,
   ListingImportMatch,
   ListingImportOutcome,
   ListingImportStatus,
@@ -55,6 +57,7 @@ import type {
   OperationOrigin,
   OperationStatus,
   ImageContentType,
+  PackMatch,
   PhoneWorkPurpose,
   PhotoRole,
   PhotoStatus,
@@ -67,6 +70,7 @@ import type {
   SaleCheckReason,
   SaleCheckRunKind,
   SaleDetectionSource,
+  SaleLabelSource,
   RelistDecision,
   SaleStatus,
   SessionCheckStatus,
@@ -1108,6 +1112,50 @@ export interface ItemBatchItemTable {
   updated_at: UpdatedAt;
 }
 
+// Pack check ----------------------------------------------------------------------------------
+
+/** Whether Pack check is on, one per account (docs/features/pack-check.md); off by default. */
+export interface PackCheckSettingTable {
+  account_id: string;
+  enabled: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** A sale's shipping label and buyer's first name, from its order page or the seller's scan. */
+export interface SaleLabelTable {
+  account_id: string;
+  sale_id: string;
+  /** Canonical (`canonicalTracking` in @listora/pack-check); set with `source` and `carrier`. */
+  tracking_number: Nullable<string>;
+  carrier: Nullable<LabelCarrier>;
+  source: Nullable<SaleLabelSource>;
+  buyer_first_name: Nullable<string>;
+  /** The last read of the order page; set with `read_at`. */
+  read_status: Nullable<LabelReadStatus>;
+  read_error: Nullable<string>;
+  read_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** A packed order: one per sale, and one per label (the duplicate-print guard). */
+export interface SalePackTable {
+  account_id: string;
+  sale_id: string;
+  tracking_number: string;
+  matched_by: PackMatch;
+  /** Set exactly when `matched_by` is `sticker`. */
+  sticker_sku: Nullable<string>;
+  packed_by_user_id: Nullable<string>;
+  packed_at: Generated<Date>;
+  /** The package photo's storage key; set with `photo_added_at`. */
+  photo_key: Nullable<string>;
+  photo_added_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 /** Every table and view in the schema, keyed by name. */
 export interface Database {
   account: AccountTable;
@@ -1165,5 +1213,8 @@ export interface Database {
   today_summary_setting: TodaySummarySettingTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;
+  pack_check_setting: PackCheckSettingTable;
+  sale_label: SaleLabelTable;
+  sale_pack: SalePackTable;
   item_batch_item: ItemBatchItemTable;
 }

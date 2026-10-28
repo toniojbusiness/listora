@@ -1,0 +1,19 @@
+{
+  "name": "@listora/pack-check",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pack check: the to-ship list, shipping labels read from the marketplaces, label and sticker scans and their verdicts, packed orders, package photos, and the setting that turns it on.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/test-fixtures.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

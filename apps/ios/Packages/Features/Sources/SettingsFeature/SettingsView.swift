@@ -236,7 +236,7 @@ public struct SettingsView: View {
 
     @ViewBuilder
     private var sellingSection: some View {
-        if screens.notifications != nil || screens.saleEmails != nil {
+        if screens.notifications != nil || screens.saleEmails != nil || screens.packCheck != nil {
             Section {
                 if screens.notifications != nil {
                     NavigationLink(value: SettingsDestination.notifications) {
@@ -257,6 +257,16 @@ public struct SettingsView: View {
                         )
                     }
                     .accessibilityIdentifier("settings.saleEmails")
+                }
+                if screens.packCheck != nil {
+                    NavigationLink(value: SettingsDestination.packCheck) {
+                        ListRow(
+                            "Pack check",
+                            subtitle: "Check each package's label before it ships",
+                            systemImage: "shippingbox",
+                        )
+                    }
+                    .accessibilityIdentifier("settings.packCheck")
                 }
             } header: {
                 SectionHeader("Selling")
@@ -337,7 +347,7 @@ extension SettingsView {
             if let profile {
                 EditProfileView(model: profile)
             }
-        case .linkAccounts, .marketplaces, .imports, .notifications, .saleEmails:
+        case .linkAccounts, .marketplaces, .imports, .notifications, .saleEmails, .packCheck:
             screens.screen(for: destination)
         case .people:
             if let invites {

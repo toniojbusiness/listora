@@ -3,6 +3,26 @@ import Core
 import Foundation
 import SwiftUI
 
+/// The way into Pack check's to-ship list from the Sales tab (another feature's screen, handed
+/// over by `AppDependencies`): shown only while Pack check is on.
+@MainActor
+public struct PackOrdersEntry {
+    let isShown: @MainActor () -> Bool
+    let screen: @MainActor () -> AnyView
+    /// Reads the setting again (each time the Sales tab shows).
+    let refresh: @MainActor () async -> Void
+
+    public init(
+        isShown: @escaping @MainActor () -> Bool,
+        screen: @escaping @MainActor () -> AnyView,
+        refresh: @escaping @MainActor () async -> Void = {},
+    ) {
+        self.isShown = isShown
+        self.screen = screen
+        self.refresh = refresh
+    }
+}
+
 /// Everything the sales screens need, built once at launch by `AppDependencies`. The item screen
 /// reaches "Mark as sold" and a sale through ``markSold(_:onRecorded:)`` and ``saleScreen(saleID:)``.
 @MainActor
@@ -14,6 +34,8 @@ public final class SalesEnvironment {
     let isSignedIn: @MainActor () -> Bool
     /// Opens the sign-in, for a signed-out screen's Sign in button.
     let onSignIn: @MainActor () -> Void
+    /// Pack check's to-ship list, while Pack check is on.
+    let packOrders: PackOrdersEntry?
     /// The work this iPhone runs now, which a sale's delists show while the phone works on them.
     public weak var phoneProgress: (any PhoneWorkProgressSource)?
 
@@ -23,6 +45,7 @@ public final class SalesEnvironment {
         accessTokens: AccessTokenStore,
         onSignIn: @escaping @MainActor () -> Void = {},
         phoneWork: (any PhoneWorkTrigger)? = nil,
+        packOrders: PackOrdersEntry? = nil,
     ) {
         self.init(
             service: APISalesService(client: apiClient.client) { [weak phoneWork] in
@@ -31,6 +54,7 @@ public final class SalesEnvironment {
             profitService: APIProfitService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
             onSignIn: onSignIn,
+            packOrders: packOrders,
         )
     }
 
@@ -40,7 +64,9 @@ public final class SalesEnvironment {
         timing: SalesTiming = .standard,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
         onSignIn: @escaping @MainActor () -> Void = {},
+        packOrders: PackOrdersEntry? = nil,
     ) {
+        self.packOrders = packOrders
         self.service = service
         self.profitService = profitService
         self.timing = timing

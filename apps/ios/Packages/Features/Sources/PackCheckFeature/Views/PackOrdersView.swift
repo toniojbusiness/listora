@@ -1,0 +1,223 @@
+import DesignSystem
+import ListoraAPI
+import SwiftUI
+
+/// The to-ship list: one card per order that still needs a package, then the ones packed today.
+/// "Pack all" goes through every unpacked order in turn; a card packs just that one.
+struct PackOrdersView: View {
+    let environment: PackCheckEnvironment
+    @Bindable var model: PackOrdersModel
+    @State private var session: PackSessionModel?
+
+    var body: some View {
+        content
+            .background(Palette.background)
+            .navigationTitle("Pack orders")
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await model.refresh() }
+            .refreshable { await model.refresh() }
+            .fullScreenCover(item: sessionBinding) { session in
+                PackSessionView(model: session, scanSource: environment.scanSource) {
+                    self.session = nil
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch model.phase {
+        case .loading:
+            SkeletonList(count: 3, label: "Loading the orders to pack")
+        case .signedOut:
+            EmptyStateView(
+                systemImage: "person.crop.circle.badge.questionmark",
+                title: "Sign in to pack your orders",
+                message: "Your sales to ship show up here once you sign in.",
+            )
+        case let .failed(message):
+            EmptyStateView(
+                systemImage: "exclamationmark.triangle",
+                tone: .failed,
+                title: "Orders unavailable",
+                message: message,
+                action: .init("Try again", systemImage: "arrow.clockwise") { Task { await model.load() } },
+            )
+        case .loaded:
+            if model.orders.isEmpty {
+                EmptyStateView(
+                    systemImage: "shippingbox",
+                    title: "Nothing to pack",
+                    message: "When an item sells, its order shows up here to pack.",
+                )
+                .accessibilityIdentifier("pack.empty")
+            } else {
+                list
+            }
+        }
+    }
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+                if model.readingLabels > 0 {
+                    Banner(
+                        "Reading shipping labels",
+                        message: "Your iPhone is reading \(readingCount) from the marketplaces. "
+                            + "It only reads; nothing changes there.",
+                        tone: .inProgress,
+                    )
+                }
+                if !model.unpacked.isEmpty {
+                    Button {
+                        start(model.unpacked)
+                    } label: {
+                        Label(
+                            model.unpacked.count == 1 ? "Pack 1 order" : "Pack all \(model.unpacked.count) orders",
+                            systemImage: "barcode.viewfinder",
+                        )
+                    }
+                    .buttonStyle(ListoraButtonStyle(.primary))
+                    .accessibilityIdentifier("pack.startAll")
+                    SectionHeader("To pack", subtitle: "\(model.unpacked.count) not packed")
+                    ForEach(model.unpacked, id: \.saleId) { order in
+                        Button { start([order]) } label: { PackOrderCard(order: order) }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("pack.order.\(order.items.first?.sku ?? order.saleId)")
+                    }
+                }
+                if !model.packed.isEmpty {
+                    SectionHeader("Packed today")
+                    ForEach(model.packed, id: \.saleId) { order in
+                        Button { start([order]) } label: { PackOrderCard(order: order) }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("pack.order.\(order.items.first?.sku ?? order.saleId)")
+                    }
+                }
+            }
+            .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// "a label", "3 labels".
+    private var readingCount: String {
+        model.readingLabels == 1 ? "a label" : "\(model.readingLabels) labels"
+    }
+
+    private func start(_ orders: [PackOrder]) {
+        session = PackSessionModel(orders: orders, service: environment.service) { [model] order in
+            model.replace(order)
+        }
+    }
+
+    private var sessionBinding: Binding<PackSessionModel?> {
+        Binding(get: { session }, set: { session = $0 })
+    }
+}
+
+extension PackSessionModel: Identifiable {
+    nonisolated var id: ObjectIdentifier {
+        ObjectIdentifier(self)
+    }
+}
+
+/// One order on the to-ship list: what to pull from the shelf, who it goes to, and its label.
+struct PackOrderCard: View {
+    let order: PackOrder
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            ItemPhoto(url: order.items.first?.thumbnailUrl, side: 64)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(order.items.first?.title ?? order.description)
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.textPrimary)
+                    .lineLimit(2)
+                Text(itemLine)
+                    .font(Typography.metadata)
+                    .foregroundStyle(Palette.textSecondary)
+                Text(buyerLine)
+                    .font(Typography.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+                StatusBadge(
+                    order.labelStatus.label,
+                    tone: StatusTone(order.labelStatus.tone),
+                    showsIcon: StatusTone(order.labelStatus.tone) != .neutral,
+                )
+                StatusBadge(
+                    order.packStatus.label,
+                    tone: StatusTone(order.packStatus.tone),
+                    showsIcon: StatusTone(order.packStatus.tone) != .neutral,
+                )
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle(.flat)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var itemLine: String {
+        var parts: [String] = []
+        if let item = order.items.first {
+            parts.append(item.sku)
+            if let shelf = item.location?.code {
+                parts.append("Shelf \(shelf)")
+            }
+        }
+        if order.items.count > 1 {
+            parts.append("+\(order.items.count - 1) more")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var buyerLine: String {
+        let marketplace = MarketplaceName.of(order.marketplace)
+        return order.buyerFirstName.map { "For \($0) on \(marketplace)" } ?? "Sold on \(marketplace)"
+    }
+}
+
+/// An item's photo, square, with a placeholder until it loads.
+struct ItemPhoto: View {
+    let url: String?
+    let side: CGFloat
+
+    var body: some View {
+        RemoteImage(url: url.flatMap(URL.init(string:))) {
+            Image(systemName: "photo")
+                .foregroundStyle(Palette.textSecondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Palette.surfaceSecondary)
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.medium))
+        .accessibilityHidden(true)
+    }
+}
+
+/// A marketplace's name as the seller knows it; an unknown one by its id.
+enum MarketplaceName {
+    static func of(_ marketplace: Components.Schemas.Marketplace) -> String {
+        switch marketplace.value1 {
+        case .ebay: "eBay"
+        case .depop: "Depop"
+        case .poshmark: "Poshmark"
+        case .mercari: "Mercari"
+        case nil: marketplace.value2 ?? "the marketplace"
+        }
+    }
+}
+
+extension StatusTone {
+    init(_ tone: Components.Schemas.StatusTone) {
+        switch tone.value1 {
+        case .success: self = .success
+        case .inProgress: self = .inProgress
+        case .checking: self = .checking
+        case .failed: self = .failed
+        case .actionNeeded: self = .actionNeeded
+        case .neutral, nil: self = .neutral
+        }
+    }
+}

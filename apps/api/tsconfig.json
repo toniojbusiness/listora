@@ -21,6 +21,7 @@
     { "path": "../../packages/email-sales" },
     { "path": "../../packages/marketplaces" },
     { "path": "../../packages/operations" },
+    { "path": "../../packages/pack-check" },
     { "path": "../../packages/photos" },
     { "path": "../../packages/pricing" },
     { "path": "../../packages/sales" },

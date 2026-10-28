@@ -81,6 +81,13 @@ struct E2EStack {
         return try JSONDecoder().decode(SoldItem.self, from: data)
     }
 
+    /// Pack check on, and two sold items to pack whose labels Listora read: order A's and order
+    /// B's (`POST /pack/orders`, the double-print fixtures).
+    func seedPackOrders() async throws -> [PackOrderSeed] {
+        let data = try await control("pack/orders", method: "POST", body: [:])
+        return try JSONDecoder().decode([PackOrderSeed].self, from: data)
+    }
+
     /// Makes the fake eBay fail the next matching request (`POST /ebay/faults`).
     func injectEbayFault(action: String, type: String, message: String? = nil) async throws {
         var fault: [String: Any] = ["type": type]
@@ -203,6 +210,13 @@ struct SavedListing: Decodable {
 
     let status: String
     let statusDisplay: StatusDisplay
+}
+
+struct PackOrderSeed: Decodable {
+    let id: String
+    let sku: String
+    let saleId: String
+    let trackingNumber: String
 }
 
 struct SoldItem: Decodable {

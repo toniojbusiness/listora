@@ -319,3 +319,45 @@ export async function recordSoldItem(
     return { ...item, saleId: sale.id, saleItemId: line.id };
   });
 }
+
+/**
+ * Pack check's to-ship list for the UI tests (docs/features/pack-check.md): Pack check on, and
+ * two sold items whose labels Listora read from the marketplace, order A's and order B's (the
+ * double-print fixtures of `@listora/pack-check/testing`), with the buyers' first names.
+ */
+export async function seedPackOrders(
+  db: Db,
+  items: readonly [SeededItem, SeededItem],
+  labels: readonly [string, string],
+): Promise<(SeededItem & { saleId: string; trackingNumber: string })[]> {
+  const seeded = [];
+  for (const [index, item] of items.entries()) {
+    const sold = await recordSoldItem(db, item);
+    const tracking = labels[index] ?? '';
+    const sale = await db
+      .selectFrom('sale')
+      .select('account_id')
+      .where('id', '=', sold.saleId)
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('pack_check_setting')
+      .values({ account_id: sale.account_id, enabled: true })
+      .onConflict((conflict) => conflict.column('account_id').doUpdateSet({ enabled: true }))
+      .execute();
+    await db
+      .insertInto('sale_label')
+      .values({
+        account_id: sale.account_id,
+        sale_id: sold.saleId,
+        tracking_number: tracking,
+        carrier: 'usps',
+        source: 'marketplace',
+        buyer_first_name: index === 0 ? 'Sarah' : 'Maya',
+        read_status: 'read',
+        read_at: new Date(),
+      })
+      .execute();
+    seeded.push({ ...item, saleId: sold.saleId, trackingNumber: tracking });
+  }
+  return seeded;
+}

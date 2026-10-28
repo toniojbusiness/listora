@@ -18,6 +18,7 @@ import type {
   AdapterContext,
   ConnectionRef,
   Health,
+  LabelReadRequest,
   ListingPayload,
   ListingRef,
   MarketplaceAdapter,
@@ -28,6 +29,7 @@ import type {
   RemoteListingState,
   ListingsPage,
   RemoteOrder,
+  RemoteOrderLabel,
   ValidationIssue,
 } from './adapter.ts';
 import type { ItemSnapshot, ListingVariant } from './content.ts';
@@ -158,6 +160,20 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
       );
     }
     return adapter.listListings(cursor, ctx);
+  }
+
+  /** The serving adapter's order labels; throws when it can't read them (an assisted one never can). */
+  readOrderLabels(
+    orders: readonly LabelReadRequest[],
+    ctx: AdapterContext,
+  ): Promise<RemoteOrderLabel[]> {
+    const adapter = this.adapterFor(ctx.connection);
+    if (adapter.readOrderLabels === undefined) {
+      return Promise.reject(
+        new Error(`the ${adapter.id} adapter for this connection reads no order labels`),
+      );
+    }
+    return adapter.readOrderLabels(orders, ctx);
   }
 
   /** The serving adapter's order fees; `unavailable` when it reports none (assisted). */
