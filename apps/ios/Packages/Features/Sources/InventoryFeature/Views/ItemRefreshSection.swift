@@ -50,9 +50,12 @@ final class ItemRefreshModel {
 
 struct ItemRefreshSection: View {
     @State private var model: ItemRefreshModel
+    /// Refresh shows only because of the owner's Test mode (docs/features/test-mode.md).
+    private let testing: Bool
 
-    init(itemID: String, service: any ListingRefreshService) {
+    init(itemID: String, service: any ListingRefreshService, testing: Bool = false) {
         _model = State(initialValue: ItemRefreshModel(itemID: itemID, service: service))
+        self.testing = testing
     }
 
     /// The named choices; a custom time is the account setting's (Settings > Listing refresh).
@@ -69,6 +72,9 @@ struct ItemRefreshSection: View {
                 }
             } label: {
                 ListRow("Refresh this item", subtitle: model.label, systemImage: "arrow.clockwise") {
+                    if testing {
+                        TestingTag()
+                    }
                     Image(systemName: "chevron.up.chevron.down")
                         .foregroundStyle(Palette.textSecondary)
                         .accessibilityHidden(true)

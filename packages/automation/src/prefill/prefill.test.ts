@@ -413,41 +413,47 @@ describe('the marketplace pre-fill', () => {
     );
   });
 
-  it('sends exactly what it shows, for every canonical category in every department', () => {
-    const canonical = Object.entries(CATEGORY_TREE).flatMap(([category, subcategories]) => [
-      category,
-      ...subcategories.map((subcategory) => `${category}/${subcategory}`),
-    ]);
-    let checked = 0;
-    for (const category of canonical) {
-      for (const department of ['women', 'men', 'unisex', 'kids']) {
-        const item = {
-          ...ITEM,
-          title: category.split('/').at(-1)?.replaceAll('_', ' ') ?? null,
-          category,
-          department,
-          sizeLabel: sizeFor(category, department),
-          sizeSystem: 'letter',
-        };
-        // The seller's girls-or-boys answer, where it is asked.
-        const result = prefill(item, { kids_gender: 'girls' });
-        for (const entry of result.marketplaces) {
-          const shown = field(entry, 'category').value;
-          if (shown === null) continue;
-          const sent = payloadOf(item, entry);
-          expect(sent.category, `${entry.marketplace} ${department} ${category}`).toEqual(
-            shown.path,
-          );
-          const size = entry.fields.find((candidate) => candidate.key === 'size')?.value;
-          if (size !== undefined && size !== null && entry.marketplace !== 'poshmark') {
-            expect(sent.size, `${entry.marketplace} ${department} ${category}`).toBe(size.value);
+  // An exhaustive sweep, CPU-bound: well under a second alone, but past the default 5 s when the
+  // whole suite saturates the machine, so it gets its own time.
+  it(
+    'sends exactly what it shows, for every canonical category in every department',
+    { timeout: 30_000 },
+    () => {
+      const canonical = Object.entries(CATEGORY_TREE).flatMap(([category, subcategories]) => [
+        category,
+        ...subcategories.map((subcategory) => `${category}/${subcategory}`),
+      ]);
+      let checked = 0;
+      for (const category of canonical) {
+        for (const department of ['women', 'men', 'unisex', 'kids']) {
+          const item = {
+            ...ITEM,
+            title: category.split('/').at(-1)?.replaceAll('_', ' ') ?? null,
+            category,
+            department,
+            sizeLabel: sizeFor(category, department),
+            sizeSystem: 'letter',
+          };
+          // The seller's girls-or-boys answer, where it is asked.
+          const result = prefill(item, { kids_gender: 'girls' });
+          for (const entry of result.marketplaces) {
+            const shown = field(entry, 'category').value;
+            if (shown === null) continue;
+            const sent = payloadOf(item, entry);
+            expect(sent.category, `${entry.marketplace} ${department} ${category}`).toEqual(
+              shown.path,
+            );
+            const size = entry.fields.find((candidate) => candidate.key === 'size')?.value;
+            if (size !== undefined && size !== null && entry.marketplace !== 'poshmark') {
+              expect(sent.size, `${entry.marketplace} ${department} ${category}`).toBe(size.value);
+            }
+            checked += 1;
           }
-          checked += 1;
         }
       }
-    }
-    expect(checked).toBeGreaterThan(canonical.length * 4 * 2);
-  });
+      expect(checked).toBeGreaterThan(canonical.length * 4 * 2);
+    },
+  );
 });
 
 describe('the pre-fill rankers', () => {

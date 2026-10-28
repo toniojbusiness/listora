@@ -14,6 +14,8 @@ struct MarketplacesSection: View {
     /// The work this iPhone runs now (one per marketplace), each shown on the card of the
     /// listing it is for.
     var phoneProgress: [PhoneWorkProgress] = []
+    /// An action that shows only because of the owner's Test mode (test-mode.md): tagged Testing.
+    var isTesting: (MarketplaceRowState.Action, String) -> Bool = { _, _ in false }
     let perform: (MarketplaceRowState.Action, MarketplaceRowState) -> Void
     /// Ends the row's listing, once the seller confirmed it and said why.
     let end: (EndReason, MarketplaceRowState) -> Void
@@ -66,6 +68,7 @@ struct MarketplacesSection: View {
                 progress: phoneProgress.first { progress in
                     progress.operationID != nil && progress.operationID == row.latestOperation?.id
                 },
+                isTesting: { action in isTesting(action, row.id) },
                 perform: { action in perform(action, row) },
                 end: { reason in end(reason, row) },
                 loadEvents: loadEvents,
@@ -95,6 +98,7 @@ private struct MarketplaceCard: View {
     let isBusy: Bool
     let isEnabled: Bool
     let progress: PhoneWorkProgress?
+    let isTesting: (MarketplaceRowState.Action) -> Bool
     let perform: (MarketplaceRowState.Action) -> Void
     let end: (EndReason) -> Void
     let loadEvents: (String) async -> Void
@@ -165,6 +169,7 @@ private struct MarketplaceCard: View {
                     listIsSecondary: listIsSecondary,
                     isBusy: isBusy,
                     isEnabled: isEnabled,
+                    isTesting: isTesting,
                     perform: perform,
                     end: end,
                 )
@@ -202,6 +207,7 @@ private struct ActionButtons: View {
     let listIsSecondary: Bool
     let isBusy: Bool
     let isEnabled: Bool
+    let isTesting: (MarketplaceRowState.Action) -> Bool
     let perform: (MarketplaceRowState.Action) -> Void
     let end: (EndReason) -> Void
     @State private var isConfirmingEnd = false
@@ -234,6 +240,9 @@ private struct ActionButtons: View {
         ForEach(actions, id: \.self) { action in
             button(action)
                 .buttonStyle(.listora(action == .end ? .destructive : .secondary, size: .compact))
+            if isTesting(action) {
+                TestingTag()
+            }
         }
     }
 
@@ -269,32 +278,12 @@ private struct ActionButtons: View {
     }
 }
 
-/// "View on eBay" and Share, for a listing with its marketplace link.
-private struct ListingLinks: View {
-    let url: URL
-    let row: MarketplaceRowState
-
-    var body: some View {
-        HStack(spacing: Spacing.xs) {
-            Link(destination: url) {
-                Label("View on \(row.name)", systemImage: "arrow.up.right.square")
-            }
-            .buttonStyle(.listora(.tertiary, size: .compact))
-            .accessibilityIdentifier("marketplace.\(row.id).view")
-            ShareLink(item: url) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-            .buttonStyle(.listora(.tertiary, size: .compact))
-            .accessibilityIdentifier("marketplace.\(row.id).share")
-        }
-    }
-}
-
 extension MarketplaceRowState.Action {
     var systemImage: String {
         switch self {
         case .list: "tag.fill"
         case .changePrice: "dollarsign.circle"
+        case .revise: "pencil"
         case .end: "xmark.circle"
         case .relist: "arrow.counterclockwise"
         case .check: "magnifyingglass"

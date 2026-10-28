@@ -42,6 +42,63 @@ struct MarketplaceFeaturesTests {
         await features.refresh()
         #expect(features.shows(.listingImport, on: "mercari"))
     }
+
+    @Test
+    func `a customer's list has no Test mode, and turning it on does nothing`() async {
+        let features = MarketplaceFeatures(load: { ["depop": ["offers"]] }, saveTestMode: { _ in
+            Issue.record("a customer never turns on Test mode")
+            return [:]
+        })
+        await features.refresh()
+        #expect(features.testMode == .unavailable)
+        await features.setTestMode(true)
+        #expect(features.testMode == .unavailable)
+        #expect(!features.isTesting(.offers, on: "depop"))
+    }
+
+    @Test
+    func `in Test mode every built feature shows, the untested ones tagged Testing`() async {
+        let all: Set = ["offers", "offer_answers", "listing_refresh", "revise"]
+        let features = MarketplaceFeatures(
+            load: { MarketplaceFeatures.List(shown: ["depop": ["offers"]], testMode: .off) },
+            saveTestMode: { enabled in
+                enabled ? MarketplaceFeatures.List(
+                    shown: ["depop": all, "poshmark": ["listing_refresh"]],
+                    testing: ["depop": ["offer_answers", "listing_refresh", "revise"], "poshmark": ["listing_refresh"]],
+                    testMode: .enabled,
+                ) : MarketplaceFeatures.List(shown: ["depop": ["offers"]], testMode: .off)
+            },
+        )
+        await features.refresh()
+        #expect(features.testMode == .off)
+        #expect(!features.shows(.revise, on: "depop"))
+
+        await features.setTestMode(true)
+        #expect(features.testMode == .enabled)
+        #expect(features.shows(.revise, on: "depop"))
+        #expect(features.isTesting(.revise, on: "depop"))
+        // A verified feature is no test.
+        #expect(features.shows(.offers, on: "depop"))
+        #expect(!features.isTesting(.offers, on: "depop"))
+        #expect(features.isTestingEverywhere(.listingRefresh))
+        #expect(!features.isTestingEverywhere(.offers))
+
+        await features.setTestMode(false)
+        #expect(features.testMode == .off)
+        #expect(!features.shows(.revise, on: "depop"))
+    }
+
+    @Test
+    func `a Test mode change that fails leaves the switch and says why`() async {
+        let features = MarketplaceFeatures(
+            load: { MarketplaceFeatures.List(shown: [:], testMode: .off) },
+            saveTestMode: { _ in throw Unreachable() },
+        )
+        await features.refresh()
+        await features.setTestMode(true)
+        #expect(features.testMode == .off)
+        #expect(features.testModeError == "Couldn't turn on Test mode. Try again.")
+    }
 }
 
 /// A flag the loader closure reads.

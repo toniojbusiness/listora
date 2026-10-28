@@ -113,7 +113,7 @@ public struct AppDependencies {
             onSignIn: showSignIn, phoneWork: phone.runner,
         )
         Self.wire(inventory, review, phone, packCheck)
-        features = Self.makeFeatures(apiClient, inventory)
+        features = Self.makeFeatures(apiClient, inventory, tasks)
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,

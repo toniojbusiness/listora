@@ -33,9 +33,21 @@ struct MarketplaceRowStateTests {
             listing: Fixtures.listing(label: "Delist failed - Retry", tone: .failed, latest: failed),
             connection: Fixtures.connection(.ebay, mode: "api"),
         )
-        #expect(row.actions == [.retry(operationID: Fixtures.operationID), .changePrice, .end, .check])
+        // Edit listing shows because the server offers revise (only where it passed live, or in the
+        // owner's Test mode, test-mode.md).
+        #expect(row.actions == [.retry(operationID: Fixtures.operationID), .changePrice, .revise, .end, .check])
         #expect(!row.isWorking)
         #expect(row.priceLabel == "$39.00")
+    }
+
+    @Test
+    func `offers no Edit listing where the server offers no revise`() {
+        let row = MarketplaceRowState(
+            marketplace: .ebay,
+            listing: Fixtures.listing(label: "Active", tone: .success, actions: [.changePrice, .end, .verify]),
+            connection: Fixtures.connection(.ebay, mode: "api"),
+        )
+        #expect(!row.actions.contains(.revise))
     }
 
     @Test

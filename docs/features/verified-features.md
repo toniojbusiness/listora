@@ -31,8 +31,9 @@ Poshmark offer reads failed and showed the seller an error. Now Poshmark offers 
 
 Revise is on the list because it has not run live on any marketplace. Hiding it leaves the
 seller's own edits alone: the Listora item and draft listings still edit, and nothing changes on
-a marketplace until the seller publishes. The app has no edit-live-listing screen (it never
-showed `revise` from `availableActions`), so hiding it needs no new app build.
+a marketplace until the seller publishes. The item screen's Edit listing (title and description)
+shows only when the server offers `revise`, so it shows only in the owner's Test mode until
+revise passes live ([test-mode.md](test-mode.md)).
 
 The other listing actions (publish, price, end, relist) are not on this list. They passed live
 (below), show as done only after a read-back, and a failure shows with Retry
@@ -41,8 +42,10 @@ The other listing actions (publish, price, end, relist) are not on this list. Th
 ## How the gate works
 
 - **One list, on the server.** `VERIFIED_FEATURES` records, for each marketplace, the features
-  that passed live, each with the date and what the run proved. `isFeatureVerified` answers for
-  every gate. The app gets the same list from `GET /v1/marketplace-features`, so changing what
+  that passed live, each with the date and what the run proved. Every gate asks
+  `isFeatureOn(marketplace, feature, gate)` with the account's gate (`loadFeatureGate`): the
+  verified features for every seller, and every built one for the owner's account in Test mode
+  ([test-mode.md](test-mode.md)), which is how a hidden feature gets its live run. The app gets the same list from `GET /v1/marketplace-features`, so changing what
   shows takes only a server deploy, with no new app build.
 - **Nothing hidden is queued.** Each hidden read stops before it is queued: Sync, Tasks' offer
   read, a forwarded sale email's check, linking, and the cloud dispatcher. Work queued before a
@@ -136,6 +139,8 @@ Listing actions, as they ran live (only revise is gated, see above):
 
 Mark a feature verified only after a live end-to-end run proves it. Make one change that adds
 its entry to `VERIFIED_FEATURES`, with the date and what the run proved, and adds its row here.
+A Test mode run's passed entry in the owner's log (`npm run admin -- feature-tests`,
+[test-mode.md](test-mode.md)) is that evidence; the list still changes only in a reviewed PR.
 
 ## Open items
 

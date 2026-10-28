@@ -25,7 +25,9 @@ These two rules from the product owner override every other design choice.
 
 Sellers see only what passed a live end-to-end test on a real account: every customer feature
 of a marketplace (offers, sales, imports, refresh) is hidden, and its checks never run, until
-[verified-features.md](features/verified-features.md) lists it as verified.
+[verified-features.md](features/verified-features.md) lists it as verified. The one exception
+is the deployment owner's account in Test mode ([test-mode.md](features/test-mode.md)), so every
+gate asks the account's `FeatureGate` (`isFeatureOn`), never the list alone.
 
 A seller can also make a linked account read only: then nothing may change it, and every new
 write path (a new operation kind, script, or automatic feature) must refuse or skip it as
@@ -275,7 +277,8 @@ src/
   sync/          Sync now: read-only checks of every linked marketplace, and what each found
                  (docs/features/sync.md)
   marketplace-features/  Each marketplace's features that passed live, the only ones the app
-                 shows (docs/features/verified-features.md)
+                 shows (docs/features/verified-features.md), and the owner's Test mode
+                 (docs/features/test-mode.md)
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
   perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
@@ -553,6 +556,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/offers.md](features/offers.md)                           | Buyers' offers in Tasks, and accepting, declining, or countering them          |
 | [features/sync.md](features/sync.md)                               | Sync now, the sync on opening the app, its indicator, and "Last synced"        |
 | [features/verified-features.md](features/verified-features.md)     | Sellers see only features that passed live: the list, its evidence, the gate   |
+| [features/test-mode.md](features/test-mode.md)                     | The owner's Test mode: live-testing hidden features, and the owner's log       |
 
 ### Former section numbers
 
