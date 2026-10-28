@@ -204,6 +204,21 @@ Connection:
       $ref: './phone.yaml#/ConnectionExecution'
     saleChecks:
       $ref: './activity.yaml#/ConnectionSaleChecks'
+    readOnly:
+      type: boolean
+      description: |
+        Listora only reads this account and never changes anything on it
+        (docs/features/read-only.md): every change to its listings is refused with
+        `409 connection_read_only`, and the delists after a sale skip it. False when the
+        marketplace has no connection; a server older than the setting leaves it out, which
+        means false.
+ConnectionReadOnlyChange:
+  type: object
+  additionalProperties: false
+  required: [readOnly]
+  properties:
+    readOnly:
+      type: boolean
 ConnectionList:
   type: object
   required: [data]

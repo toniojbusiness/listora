@@ -1319,6 +1319,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{marketplace}/read-only": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Make a connection read only, or let Listora change it again
+         * @description With `readOnly` true, Listora only reads the account (imports, listings, sold items,
+         *     sales, offers, sale checks) and never changes anything on it (docs/features/read-only.md):
+         *     every change to its listings is refused with `409 connection_read_only`, the changes
+         *     still waiting to be sent fail with that error at once, and the delists after a sale skip
+         *     it. `403 forbidden` for anyone but the account's owner; `404` when the marketplace has
+         *     no connection.
+         */
+        put: operations["setConnectionReadOnly"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connection-health": {
         parameters: {
             query?: never;
@@ -2532,14 +2559,15 @@ export interface components {
          *     402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
          *     `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
          *     `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-         *     `marketplace_action_unavailable`, `app_update_required`, `pack_refused` 409; `payload_too_large` 413; `validation_failed`,
+         *     `marketplace_action_unavailable`, `app_update_required`, `pack_refused`,
+         *     `connection_read_only` 409; `payload_too_large` 413; `validation_failed`,
          *     `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
          *     `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
          *     and `marketplace_authorization_failed` appear only inside a failed
          *     `ConnectionAuthorization`.
          * @enum {string}
          */
-        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "app_update_required" | "pack_refused" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
+        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "app_update_required" | "pack_refused" | "connection_read_only" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
         AccountDeletion: {
             deletedAt: components["schemas"]["Timestamp"];
             /** @description One entry per API marketplace connection the account had; assisted connections hold no access. */
@@ -3780,6 +3808,17 @@ export interface components {
             lastIssue?: components["schemas"]["ConnectionIssue"];
             execution?: components["schemas"]["ConnectionExecution"];
             saleChecks?: components["schemas"]["ConnectionSaleChecks"];
+            /**
+             * @description Listora only reads this account and never changes anything on it
+             *     (docs/features/read-only.md): every change to its listings is refused with
+             *     `409 connection_read_only`, and the delists after a sale skip it. False when the
+             *     marketplace has no connection; a server older than the setting leaves it out, which
+             *     means false.
+             */
+            readOnly?: boolean;
+        };
+        ConnectionReadOnlyChange: {
+            readOnly: boolean;
         };
         ConnectionList: {
             data: components["schemas"]["Connection"][];
@@ -3920,6 +3959,12 @@ export interface components {
             issue?: components["schemas"]["ConnectionIssue"];
             /** @description Where its automated steps run; present once it is linked. */
             execution?: components["schemas"]["ConnectionExecution"];
+            /**
+             * @description Listora only reads this account and never changes anything on it (the connection's
+             *     `readOnly`, set with `setConnectionReadOnly`). False when nothing is linked; a server
+             *     older than the setting leaves it out, which means false.
+             */
+            readOnly?: boolean;
         };
         MarketplaceSessionList: {
             data: components["schemas"]["MarketplaceSession"][];
@@ -5917,6 +5962,7 @@ export type ConnectionIssue = components['schemas']['ConnectionIssue'];
 export type ConnectionAction = components['schemas']['ConnectionAction'];
 export type KnownConnectionAction = components['schemas']['KnownConnectionAction'];
 export type Connection = components['schemas']['Connection'];
+export type ConnectionReadOnlyChange = components['schemas']['ConnectionReadOnlyChange'];
 export type ConnectionList = components['schemas']['ConnectionList'];
 export type ConnectionAuthorizationStatus = components['schemas']['ConnectionAuthorizationStatus'];
 export type ConnectionAuthorization = components['schemas']['ConnectionAuthorization'];
@@ -7981,6 +8027,35 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    setConnectionReadOnly: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionReadOnlyChange"];
+            };
+        };
+        responses: {
+            /** @description The connection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getConnectionHealth: {
         parameters: {
             query?: never;
@@ -9578,7 +9653,7 @@ export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<com
 export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];
 export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user", "marketplace"];
-export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "app_update_required", "pack_refused", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
+export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "app_update_required", "pack_refused", "connection_read_only", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
 export const healthCheckStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["HealthCheckStatus"]> = ["ok", "unavailable"];
 export const knownItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
 export const userSettableItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserSettableItemStatus"]> = ["draft", "ready", "archived"];

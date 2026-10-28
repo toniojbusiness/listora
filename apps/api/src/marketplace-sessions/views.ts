@@ -36,6 +36,8 @@ export interface SessionRow {
     execution?: ExecutionView | undefined;
     /** Present when they run on the phone (`phoneSessionState`). */
     phone?: { linked: boolean; checkWaiting: boolean } | undefined;
+    /** Listora never changes the account (docs/features/read-only.md). */
+    readOnly: boolean;
   } | null;
   /** The check of the newest linked session, when there is one. */
   check: SessionCheckState | null;
@@ -52,8 +54,8 @@ export function marketplaceSessionView(
     cookieDomains: [...profile.cookieDomains],
     emailsSignInLinks: profile.emailsSignInLinks,
   };
-  const base = { marketplace: row.marketplace, login };
   const { connection, check } = row;
+  const base = { marketplace: row.marketplace, login, readOnly: connection?.readOnly ?? false };
   if (connection === null || connection.mode === 'assisted') {
     return {
       ...base,

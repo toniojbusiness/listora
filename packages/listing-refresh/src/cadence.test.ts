@@ -101,7 +101,7 @@ describe("a listing's refresh", () => {
     listingId: 'listing-1',
     itemId: 'item-1',
     marketplace: 'poshmark',
-    connection: { id: 'connection-1', mode: 'automation', status: 'connected' },
+    connection: { id: 'connection-1', mode: 'automation', status: 'connected', readOnly: false },
     freshAt: ago(24 * HOUR),
     lastRefreshedAt: ago(24 * HOUR),
     itemCadence: null,
@@ -133,12 +133,21 @@ describe("a listing's refresh", () => {
     expect(canRefresh(fact)).toBe(true);
     expect(canRefresh({ ...fact, marketplace: 'ebay' })).toBe(false);
     expect(canRefresh({ ...fact, connection: null })).toBe(false);
+    // A read-only connection (a real shop that must not change) is never refreshed.
+    const readOnly = { id: 'c', mode: 'automation', status: 'connected', readOnly: true } as const;
+    expect(canRefresh({ ...fact, connection: readOnly })).toBe(false);
     expect(
-      canRefresh({ ...fact, connection: { id: 'c', mode: 'assisted', status: 'connected' } }),
+      canRefresh({
+        ...fact,
+        connection: { id: 'c', mode: 'assisted', status: 'connected', readOnly: false },
+      }),
     ).toBe(false);
     expect(
       listingRefresh(
-        { ...fact, connection: { id: 'c', mode: 'automation', status: 'reauth_required' } },
+        {
+          ...fact,
+          connection: { id: 'c', mode: 'automation', status: 'reauth_required', readOnly: false },
+        },
         account,
         null,
         NOW,

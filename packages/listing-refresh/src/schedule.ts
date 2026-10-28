@@ -39,7 +39,12 @@ export interface RefreshFact {
   listingId: string;
   itemId: string;
   marketplace: Marketplace;
-  connection: { id: string; mode: ConnectionMode; status: ConnectionStatus } | null;
+  connection: {
+    id: string;
+    mode: ConnectionMode;
+    status: ConnectionStatus;
+    readOnly: boolean;
+  } | null;
   /** When it was last fresh: live, a confirmed change, or a refresh (whatever came of it). */
   freshAt: Date;
   /** When a refresh was last confirmed. */
@@ -59,26 +64,14 @@ export type ListingRefresh =
   /** Listora can't refresh it here: the marketplace has no refresh, or no usable session. */
   | { state: 'unavailable'; lastAt: Date | null };
 
-/**
- * Whether a connection is read-only: Listora never queues a write of any kind on it, a refresh
- * included. STUB until the marketplace connections' read-only guard lands (task lstreadonly), whose
- * flag replaces it: until then every Depop session is treated as a real seller's shop that must
- * stay read-only (2026-10-28), so no Depop refresh can run before the guard exists.
- */
-export function isReadOnlyConnection(connection: { marketplace: Marketplace }): boolean {
-  return connection.marketplace === 'depop';
-}
-
 /** Whether Listora can refresh the listing under its connection now. */
-export function canRefresh(
-  fact: Pick<RefreshFact, 'marketplace' | 'connection'>,
-  readOnly: (connection: { marketplace: Marketplace }) => boolean = isReadOnlyConnection,
-): boolean {
+export function canRefresh(fact: Pick<RefreshFact, 'marketplace' | 'connection'>): boolean {
   const { connection } = fact;
   return (
     REFRESH_MARKETPLACES.includes(fact.marketplace) &&
     connection !== null &&
-    !readOnly({ marketplace: fact.marketplace }) &&
+    // A read-only connection (a real shop that must not change, read-only.md) gets no refresh.
+    !connection.readOnly &&
     connection.mode === 'automation' &&
     (connection.status === 'connected' || connection.status === 'degraded')
   );
@@ -115,6 +108,7 @@ export async function loadRefreshFacts(
     connection_id: string | null;
     mode: ConnectionMode | null;
     status: ConnectionStatus | null;
+    read_only: boolean | null;
     refresh_cadence: RefreshCadence | null;
     refresh_custom_hours: number | null;
     last_fresh_at: Date | null;
@@ -122,7 +116,7 @@ export async function loadRefreshFacts(
     busy: boolean;
   }>`
     select listing.id, listing.item_id, listing.marketplace, listing.listed_at,
-      listing.connection_id, connection.mode, connection.status,
+      listing.connection_id, connection.mode, connection.status, connection.read_only,
       item.refresh_cadence, item.refresh_custom_hours,
       (
         select max(op.created_at) from marketplace_operation op
@@ -159,7 +153,12 @@ export async function loadRefreshFacts(
     connection:
       row.connection_id === null || row.mode === null || row.status === null
         ? null
-        : { id: row.connection_id, mode: row.mode, status: row.status },
+        : {
+            id: row.connection_id,
+            mode: row.mode,
+            status: row.status,
+            readOnly: row.read_only === true,
+          },
     freshAt:
       row.last_fresh_at !== null && row.last_fresh_at > row.listed_at
         ? row.last_fresh_at

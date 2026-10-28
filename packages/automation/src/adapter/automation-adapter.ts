@@ -40,6 +40,7 @@ import {
   type ValidationIssue,
   type WriteOperationKind,
 } from '@listora/marketplaces';
+import { READ_ONLY_ERROR, readOnlyMessage } from '@listora/operations';
 import { assertNever, type Logger } from '@listora/shared';
 
 import type { AutomatedMarketplace, AutomationProfile } from '../profiles.ts';
@@ -236,8 +237,10 @@ export class AutomationAdapter<
           code: 'session_missing',
           message: `Log in to ${this.#name} again in the app to keep automating.`,
         };
+      // Only a write is refused on a read-only connection (`read_only`); a health check never is.
       case 'rate_limited':
       case 'busy':
+      case 'read_only':
         return this.#degraded(run.type);
       case 'ran':
         if (run.result.ok) return { status: 'ok' };
@@ -325,6 +328,8 @@ export class AutomationAdapter<
           message: `Listora is already working in your ${this.#name} account and will try again shortly.`,
           retryAfterMs: run.retryAfterMs,
         };
+      case 'read_only':
+        return this.#readOnly();
       case 'ran':
         return this.#scriptOutcome(op, run.result);
       default:
@@ -411,12 +416,20 @@ export class AutomationAdapter<
           case 'browser_unavailable':
           case 'script_error':
             return mutated ? unknown() : transient();
+          case 'read_only':
+            // The phone runtime refused the write before any step ran.
+            return { ...this.#readOnly(), excerpt };
           default:
             return assertNever(failure.code, 'script error code');
         }
       default:
         return assertNever(failure, 'script failure');
     }
+  }
+
+  /** A change refused because the connection is read only: nothing was sent. */
+  #readOnly(): Outcome {
+    return { type: 'rejected', code: READ_ONLY_ERROR, message: readOnlyMessage(this.id) };
   }
 
   #readValue<T>(run: SessionRun<T>, what: string): T {
@@ -434,6 +447,9 @@ export class AutomationAdapter<
           null,
           `Listora will ${what} on ${this.#name} again shortly.`,
         );
+      case 'read_only':
+        // Only a write is refused on a read-only connection; a read never is.
+        throw new AutomationReadError('read_only', null, readOnlyMessage(this.id));
       case 'ran':
         if (run.result.ok) return run.result.value;
         throw new AutomationReadError(

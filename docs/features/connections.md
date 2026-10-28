@@ -68,6 +68,9 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   marketplace's revocation endpoint (`OAuthGrantRevoker`). A connection still revoked 30 days
   later, never reconnected, has the rest of its data deleted as if it were unlinked
   ([privacy.md](privacy.md)).
+- **Read only.** The owner can make a connection read only (`setConnectionReadOnly`, the Read
+  only switch on Link accounts): Listora still reads the account but never changes it, and every
+  write path refuses ([read-only.md](read-only.md)).
 - **Unlinking.** `disconnectConnection` (`DELETE /v1/connections/{marketplace}`) deletes the
   connection and the marketplace data that came through it at once (`startConnectionDeletion`
   in `deletion.ts`: the tokens or session, the marketplace's user id and name, its automation
@@ -143,7 +146,8 @@ thing.
   (or the session linked), `last_ok_at`, `last_checked_at`, `check_requested_at` (a pending
   Retry check), and the latest problem's code, message, and time; `runs_on` and
   `phone_device_id`, where its automated steps run ([phone-execution.md](phone-execution.md#data)); `orders_polled_through`, the
-  eBay order poll's mark ([ebay-notifications.md](ebay-notifications.md)); a revoked connection
+  eBay order poll's mark ([ebay-notifications.md](ebay-notifications.md)); `read_only`
+  ([read-only.md](read-only.md)); a revoked connection
   holds no tokens; at most one per account and marketplace, which
   connecting keeps under the account's row lock) and `connection_authorization` (one connect
   attempt: the state's SHA-256, its expiry, and the result). The marketplace tables they serve

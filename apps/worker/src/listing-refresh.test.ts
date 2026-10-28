@@ -7,7 +7,7 @@ import {
   NoBrowserSessions,
 } from '@listora/automation';
 import { MARKETPLACES } from '@listora/db';
-import { canRefresh, isReadOnlyConnection } from '@listora/listing-refresh';
+import { canRefresh } from '@listora/listing-refresh';
 import { createMarketplaceAdapters, operationMode } from '@listora/marketplaces';
 import { createLogger } from '@listora/shared';
 
@@ -36,11 +36,16 @@ describe('which listings Listora refreshes', () => {
         const capabilities = adapters.capabilities(marketplace, connection);
         const mode =
           capabilities === undefined ? 'unsupported' : operationMode(capabilities, 'refresh');
-        // A read-only connection is never refreshed, whatever its adapter can do.
-        const writable = mode === 'automation' && !isReadOnlyConnection({ marketplace });
-        expect(writable, `${marketplace} ${JSON.stringify(connection)}`).toBe(
-          canRefresh({ marketplace, connection }),
+        const fact = { marketplace, connection: connection && { ...connection, readOnly: false } };
+        expect(mode === 'automation', `${marketplace} ${JSON.stringify(connection)}`).toBe(
+          canRefresh(fact),
         );
+        // A read-only connection is never refreshed, whatever its adapter can do.
+        if (connection !== null) {
+          expect(canRefresh({ marketplace, connection: { ...connection, readOnly: true } })).toBe(
+            false,
+          );
+        }
         expect(mode, "a refresh is never the seller's").not.toBe('assisted');
       }
     }

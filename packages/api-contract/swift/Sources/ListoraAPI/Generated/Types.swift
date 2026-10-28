@@ -630,6 +630,19 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/connections/{marketplace}/execution`.
     /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/execution/put(setConnectionExecution)`.
     func setConnectionExecution(_ input: Operations.SetConnectionExecution.Input) async throws -> Operations.SetConnectionExecution.Output
+    /// Make a connection read only, or let Listora change it again
+    ///
+    /// With `readOnly` true, Listora only reads the account (imports, listings, sold items,
+    /// sales, offers, sale checks) and never changes anything on it (docs/features/read-only.md):
+    /// every change to its listings is refused with `409 connection_read_only`, the changes
+    /// still waiting to be sent fail with that error at once, and the delists after a sale skip
+    /// it. `403 forbidden` for anyone but the account's owner; `404` when the marketplace has
+    /// no connection.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/connections/{marketplace}/read-only`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/read-only/put(setConnectionReadOnly)`.
+    func setConnectionReadOnly(_ input: Operations.SetConnectionReadOnly.Input) async throws -> Operations.SetConnectionReadOnly.Output
     /// The account's connection health summary
     ///
     /// Every marketplace's connection (as `listConnections`), what needs the seller's
@@ -2273,6 +2286,29 @@ extension APIProtocol {
         body: Operations.SetConnectionExecution.Input.Body
     ) async throws -> Operations.SetConnectionExecution.Output {
         try await setConnectionExecution(Operations.SetConnectionExecution.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Make a connection read only, or let Listora change it again
+    ///
+    /// With `readOnly` true, Listora only reads the account (imports, listings, sold items,
+    /// sales, offers, sale checks) and never changes anything on it (docs/features/read-only.md):
+    /// every change to its listings is refused with `409 connection_read_only`, the changes
+    /// still waiting to be sent fail with that error at once, and the delists after a sale skip
+    /// it. `403 forbidden` for anyone but the account's owner; `404` when the marketplace has
+    /// no connection.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/connections/{marketplace}/read-only`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/read-only/put(setConnectionReadOnly)`.
+    public func setConnectionReadOnly(
+        path: Operations.SetConnectionReadOnly.Input.Path,
+        headers: Operations.SetConnectionReadOnly.Input.Headers = .init(),
+        body: Operations.SetConnectionReadOnly.Input.Body
+    ) async throws -> Operations.SetConnectionReadOnly.Output {
+        try await setConnectionReadOnly(Operations.SetConnectionReadOnly.Input(
             path: path,
             headers: headers,
             body: body

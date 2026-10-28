@@ -20,7 +20,7 @@ import type { Logger } from '@listora/shared';
 import { sql } from 'kysely';
 
 import { dueAt, effectiveCadence, inQuietWindow, intervalHours } from './cadence.ts';
-import { isReadOnlyConnection, loadRefreshFacts, REFRESH_MARKETPLACES } from './schedule.ts';
+import { loadRefreshFacts, REFRESH_MARKETPLACES } from './schedule.ts';
 import { loadRefreshSettings, quietWindowOf } from './settings.ts';
 
 export const LISTING_REFRESH_TASK = 'listing_refresh';
@@ -50,8 +50,6 @@ export interface ListingRefreshDependencies {
   limits: (marketplace: Marketplace) => RunLimits | undefined;
   logger: Pick<Logger, 'info'>;
   now?: () => Date;
-  /** Read-only connections get no refresh (default `isReadOnlyConnection`); tests replace it. */
-  readOnly?: (connection: { marketplace: Marketplace }) => boolean;
 }
 
 export interface ListingRefreshResult {
@@ -70,14 +68,13 @@ export async function runListingRefreshes(
     .selectFrom('marketplace_connection')
     .select(['id', 'account_id', 'marketplace', 'mode', 'status'])
     .where('status', 'in', ['connected', 'degraded'])
+    // A read-only connection never gets a write queued, whatever its adapter can do (read-only.md).
+    .where('read_only', '=', false)
     .where('marketplace', 'in', [...REFRESH_MARKETPLACES])
     .orderBy('id')
     .execute();
   let queued = 0;
-  const readOnly = deps.readOnly ?? isReadOnlyConnection;
   for (const connection of connections) {
-    // A read-only connection never gets a write queued, whatever its adapter can do.
-    if (readOnly(connection)) continue;
     const adapter = deps.adapters(connection.marketplace);
     const limits = deps.limits(connection.marketplace);
     if (adapter === undefined || limits === undefined) continue;

@@ -67,6 +67,12 @@ export interface PhoneCallInput {
   callTimeoutMs: number;
   /** The rest of the pause since the seller's last session started, waited before this one. */
   startDelayMs: number;
+  /**
+   * The connection is read only (docs/features/read-only.md): the runtime refuses any write
+   * script, even one the server handed it, and runs nothing. A server older than it never sends
+   * it, and refuses write calls on such a connection itself.
+   */
+  readOnly?: boolean;
 }
 
 /** What the phone reports: the script ran (or stopped), and how. */
@@ -94,6 +100,7 @@ export async function runPhoneCall(
   host: PhoneHost,
   options: PhoneRuntimeOptions = {},
 ): Promise<PhoneCallOutput> {
+  if (input.readOnly === true && isWriteCall(input.call)) return readOnlyRefusal();
   const profile = phoneProfile(input);
   const pacing = new Pacing(profile.pacing, options.pacing);
   const photos = phonePhotos(host);
@@ -222,6 +229,26 @@ function phonePhotos(host: PhoneHost): PhotoSource {
       const bytes = fromBase64(photo.base64);
       if (bytes.length === 0) throw new Error('the photo is empty');
       return { name: photo.name, mimeType: photo.mimeType, bytes };
+    },
+  };
+}
+
+/** A write script refused on a read-only connection: no step ran, so nothing changed. */
+function readOnlyRefusal(): PhoneCallOutput {
+  return {
+    type: 'ran',
+    result: {
+      ok: false,
+      mutated: false,
+      steps: [],
+      failure: {
+        kind: 'error',
+        step: 'phone',
+        code: 'read_only',
+        message: 'the connection is read only, so the phone ran no write script',
+        retryAfterMs: null,
+        screenshotKey: null,
+      },
     },
   };
 }

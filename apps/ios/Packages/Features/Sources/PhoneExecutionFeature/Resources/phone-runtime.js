@@ -12275,6 +12275,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** How long one listing photo may take to download. */
 	const PHOTO_TIMEOUT_MS = 3e4;
 	async function runPhoneCall(input, host, options = {}) {
+		if (input.readOnly === true && isWriteCall(input.call)) return readOnlyRefusal();
 		const profile = phoneProfile(input);
 		const pacing = new Pacing(profile.pacing, options.pacing);
 		const photos = phonePhotos(host);
@@ -12418,6 +12419,25 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				bytes
 			};
 		} };
+	}
+	/** A write script refused on a read-only connection: no step ran, so nothing changed. */
+	function readOnlyRefusal() {
+		return {
+			type: "ran",
+			result: {
+				ok: false,
+				mutated: false,
+				steps: [],
+				failure: {
+					kind: "error",
+					step: "phone",
+					code: "read_only",
+					message: "the connection is read only, so the phone ran no write script",
+					retryAfterMs: null,
+					screenshotKey: null
+				}
+			}
+		};
 	}
 	/** A run that stopped at a check the seller completes on the phone, as the server reads it. */
 	function stoppedForCheck(result) {

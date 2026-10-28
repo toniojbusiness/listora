@@ -36,7 +36,12 @@ export type SessionRun<T> =
   /** The seller's account had its share of runs for now; nothing was opened. */
   | { type: 'rate_limited'; retryAfterMs: number }
   /** Another runner is using this seller's session right now; nothing was opened. */
-  | { type: 'busy'; retryAfterMs: number };
+  | { type: 'busy'; retryAfterMs: number }
+  /**
+   * The connection is read only and the call would change the marketplace, so nothing was opened
+   * (docs/features/read-only.md). Only a write call gets it; reads run as usual.
+   */
+  | { type: 'read_only' };
 
 export interface AutomationSessions {
   /**
