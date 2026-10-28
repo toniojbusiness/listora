@@ -5,9 +5,11 @@ import SwiftUI
 /// The seller's items and their status on every marketplace, with search and filters, as a grid
 /// of large photos or as a list (``InventoryLayout``). The items are read from the server each
 /// time the screen appears and on pull to refresh, so a newly saved item shows up right away.
-/// `header` sits above the list, below the search
-/// field: the app's banners (a marketplace connection that needs attention) come from the caller
-/// (AppFeature), since a feature never imports another.
+/// The quick filters stay under the search field, on the screen's own background, so the items
+/// scroll out of sight beneath them. `header` is the first thing in the list, under the quick
+/// filters, and scrolls away with it, so it never covers an item: the app's banners (a
+/// marketplace connection that needs attention) come from the caller (AppFeature), since a
+/// feature never imports another.
 public struct InventoryView<Header: View>: View {
     private let environment: InventoryEnvironment
     private let onAddItem: @MainActor () -> Void
@@ -33,11 +35,9 @@ public struct InventoryView<Header: View>: View {
         NavigationStack(path: $path) {
             content
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    VStack(spacing: 0) {
-                        if model.phase != .signedOut {
-                            QuickFilters(model: model, attention: environment.attention)
-                        }
-                        header
+                    if model.phase != .signedOut {
+                        QuickFilters(model: model, attention: environment.attention)
+                            .background(Palette.background)
                     }
                 }
                 .background(Palette.background)
@@ -126,9 +126,23 @@ public struct InventoryView<Header: View>: View {
     }
 
     private var content: some View {
-        phaseContent
-            .motion(value: model.phase)
-            .motion(value: layout)
+        Group {
+            if showsList {
+                list
+            } else {
+                VStack(spacing: 0) {
+                    header
+                    phaseContent
+                }
+            }
+        }
+        .motion(value: model.phase)
+        .motion(value: layout)
+    }
+
+    /// Whether the items are on screen (with `header` above them, in the list).
+    private var showsList: Bool {
+        model.phase != .signedOut && !model.items.isEmpty
     }
 
     @ViewBuilder
@@ -153,11 +167,7 @@ public struct InventoryView<Header: View>: View {
                 action: .init("Try again", systemImage: "arrow.clockwise") { Task { await model.load() } },
             )
         default:
-            if model.items.isEmpty {
-                empty
-            } else {
-                list
-            }
+            empty
         }
     }
 
@@ -218,42 +228,10 @@ public struct InventoryView<Header: View>: View {
 
     private var list: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                if model.hasMenuFilters {
-                    ActiveFilters(model: model)
-                }
-                switch layout {
-                case .grid:
-                    LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Spacing.lg) {
-                        ForEach(model.items, id: \.id) { item in
-                            link(to: item) { InventoryGridCell(
-                                item: item,
-                                isSelecting: model.isSelecting,
-                                isSelected: model.selection.contains(item.id),
-                            ) }
-                        }
-                        if model.isLoadingMore {
-                            SkeletonPhotoTile()
-                        }
-                    }
-                case .list:
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(model.items, id: \.id) { item in
-                            link(to: item) { InventoryRow(
-                                item: item,
-                                isSelecting: model.isSelecting,
-                                isSelected: model.selection.contains(item.id),
-                            ) }
-                        }
-                        if model.isLoadingMore {
-                            SkeletonRow().cardStyle(.ruled, padding: Spacing.sm)
-                        }
-                    }
-                    .frame(maxWidth: Layout.readableWidth)
-                    .frame(maxWidth: .infinity)
-                }
+            VStack(spacing: 0) {
+                header
+                itemStack
             }
-            .padding(Spacing.md)
         }
         .refreshable { await model.load() }
         // Every loaded page's photos are fetched at once (about 50 KB each), so scrolling finds
@@ -263,6 +241,46 @@ public struct InventoryView<Header: View>: View {
                 $0.coverPhoto?.urls.flatMap { URL(string: $0.thumbnail) }
             })
         }
+    }
+
+    /// The items as a grid or a list, under the menu's filters.
+    private var itemStack: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            if model.hasMenuFilters {
+                ActiveFilters(model: model)
+            }
+            switch layout {
+            case .grid:
+                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Spacing.lg) {
+                    ForEach(model.items, id: \.id) { item in
+                        link(to: item) { InventoryGridCell(
+                            item: item,
+                            isSelecting: model.isSelecting,
+                            isSelected: model.selection.contains(item.id),
+                        ) }
+                    }
+                    if model.isLoadingMore {
+                        SkeletonPhotoTile()
+                    }
+                }
+            case .list:
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(model.items, id: \.id) { item in
+                        link(to: item) { InventoryRow(
+                            item: item,
+                            isSelecting: model.isSelecting,
+                            isSelected: model.selection.contains(item.id),
+                        ) }
+                    }
+                    if model.isLoadingMore {
+                        SkeletonRow().cardStyle(.ruled, padding: Spacing.sm)
+                    }
+                }
+                .frame(maxWidth: Layout.readableWidth)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(Spacing.md)
     }
 }
 

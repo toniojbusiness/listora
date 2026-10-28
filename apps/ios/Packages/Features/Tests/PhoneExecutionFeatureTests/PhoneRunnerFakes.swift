@@ -184,6 +184,15 @@ final class FakeRuntime: PhoneRuntime {
     private(set) var finished: [String] = []
     /// What the runner said about keeping web views warm, in order.
     private(set) var warm: [Bool] = []
+    /// How many times the runner checked the runtime against the server's.
+    private(set) var refreshes = 0
+    /// Whether each check got the server's answer, in order; `true` once none are left.
+    var refreshAnswers: [Bool] = []
+
+    func refresh() async -> Bool {
+        refreshes += 1
+        return refreshAnswers.isEmpty ? true : refreshAnswers.removeFirst()
+    }
 
     func runtimeVersion() async throws -> Int {
         1

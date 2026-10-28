@@ -15,6 +15,9 @@ public struct TodayView<Settings: View>: View {
     @State private var model: TodayModel
     @State private var path: [TodayDestination] = []
     @State private var summarySettings: SummarySettingsModel?
+    /// Whether the app went to the background since Today last loaded, so coming back reloads it
+    /// (the launch's own activation is the screen's first load, not a second one).
+    @State private var leftForeground = false
     @Environment(\.scenePhase) private var scenePhase
 
     /// `onOpenDrafts` shows the drafts, which live in another tab, as `onAddItem` opens Add (the
@@ -65,7 +68,10 @@ public struct TodayView<Settings: View>: View {
                 // Runs each time the screen appears, including back from a card's screen.
                 .task { await model.load() }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active {
+                    if phase == .background {
+                        leftForeground = true
+                    } else if phase == .active, leftForeground {
+                        leftForeground = false
                         Task { await model.load() }
                     }
                 }
