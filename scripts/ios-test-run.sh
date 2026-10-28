@@ -38,6 +38,30 @@ failed_tests() {
   '
 }
 
+# The test classes a result bundle has results for, as -only-testing flags (target/class).
+ran_classes() {
+  xcrun xcresulttool get test-results tests --path "$1" --compact 2>/dev/null | jq -r '
+    def suites(target):
+      if .nodeType == "Test Suite" and ([.children[]? | select(.nodeType == "Test Case")] | length > 0) then
+        "-only-testing:\(target)/\(.name)"
+      else
+        (if (.nodeType // "" | test("test bundle$")) then .name else target end) as $t
+        | .children[]? | suites($t)
+      end;
+    .testNodes[] | suites("")
+  ' | sort -u
+}
+
+# The classes the command selects by name (-only-testing:<target>/<class>). A class missing from
+# every bundle never ran (the run stopped before it), which must not pass for a success.
+selected=$(printf '%s\n' "$@" | grep -E '^-only-testing:[^/]+/[^/]+$' | sort -u)
+never_ran() {
+  [[ -n $selected ]] || return 0
+  local ran
+  ran=$(for done_bundle in "${bundles[@]}"; do [[ -d $done_bundle ]] && ran_classes "$done_bundle"; done | sort -u)
+  comm -23 <(echo "$selected") <(echo "$ran")
+}
+
 rm -rf "$bundle"
 "${command[@]}" -resultBundlePath "$bundle"
 status=$?
@@ -52,7 +76,7 @@ done
 for ((attempt = 1; attempt <= reruns && status != 0; attempt++)); do
   last=${bundles[${#bundles[@]} - 1]}
   [[ -d $last ]] || break # the tests did not start: a build or setup failure, not a test
-  tests=$(failed_tests "$last")
+  tests=$( { failed_tests "$last"; never_ran; } | grep . | sort -u)
   [[ -n $tests ]] || break # failed without a failing test: nothing to re-run
   rerun=${bundle%.xcresult}-rerun-$attempt.xcresult
   IFS=$'\n' read -r -d '' -a selection <<<"$tests"
@@ -64,4 +88,12 @@ for ((attempt = 1; attempt <= reruns && status != 0; attempt++)); do
 done
 
 scripts/ios-test-summary.sh "$summary_file" "${bundles[@]}"
+missing=$(never_ran)
+if [[ -n $missing ]]; then
+  report="Never ran (the run stopped before them):"$'\n'"  ${missing//$'\n'/$'\n'  }"
+  report=${report//-only-testing:/}
+  echo "$report"
+  [[ -n $summary_file ]] && echo "$report" >>"$summary_file"
+  status=1
+fi
 exit $status
