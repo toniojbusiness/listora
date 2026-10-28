@@ -3,7 +3,7 @@
     tags: [offers]
     operationId: listOfferChecks
     summary: When each marketplace's offers were last read
-    description: One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    description: One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     responses:
       '200':
         description: The reads.

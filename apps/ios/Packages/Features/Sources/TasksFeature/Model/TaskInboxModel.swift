@@ -108,11 +108,6 @@ public final class TaskInboxModel {
         }
     }
 
-    /// Offers that could not be read, in the server's words.
-    var offerProblems: [String] {
-        offerChecks.compactMap { $0.status == "failed" ? $0.message : nil }
-    }
-
     /// Takes a finished task off the list at once; the next load confirms it with the server.
     func remove(taskID: String) {
         tasks.removeAll { $0.id == taskID }

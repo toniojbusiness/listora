@@ -89,11 +89,6 @@ public struct TasksView: View {
 
     private var list: some View {
         List {
-            ForEach(inbox.offerProblems, id: \.self) { problem in
-                Banner("Offers not read", message: problem, tone: .failed, identifier: "tasks.offersProblem")
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-            }
             if !inbox.urgent.isEmpty {
                 Section {
                     ForEach(inbox.urgent, id: \.id, content: row)

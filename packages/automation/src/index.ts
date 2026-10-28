@@ -236,6 +236,7 @@ export type {
   SoldItemPhotosJobPayload,
 } from './sale-checks/sold-photos.ts';
 export {
+  checksSales,
   dueSaleChecks,
   enqueueSaleCheck,
   queueSaleCheckForPhone,
@@ -314,8 +315,10 @@ export {
 export {
   OFFER_CHECK_MIN_GAP_MS,
   OFFER_MARKETPLACES,
+  offerMarketplaces,
   queueOfferCheck,
   queueOfferResponse,
+  readsOffers,
   requestOfferChecks,
 } from './offers/schedule.ts';
 export type { OfferCheckTarget } from './offers/schedule.ts';

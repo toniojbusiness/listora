@@ -136,6 +136,8 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       FAKE_DEPOP_SITE_URL: fakeDepop.url,
       // The phone's runs are recorded by the API, under the worker's retry delays.
       OPERATION_RETRY_DELAY_SCALE: '0.1',
+      // Every feature built, on the fakes, verified live or not (verified-features.md).
+      MARKETPLACE_FEATURES: 'all',
       TOKEN_ENCRYPTION_KEY: tokenKey.toString('base64'),
       ...(fakes === undefined ? {} : { ...fakes.env, ...ebayNotificationEnv(apiUrl) }),
     };

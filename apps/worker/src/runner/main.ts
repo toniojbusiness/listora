@@ -31,7 +31,7 @@ import {
 } from '@listora/automation';
 import { createTokenVault, SessionVault } from '@listora/connections';
 import { createDatabase } from '@listora/db';
-import { createMarketplaceAdapters } from '@listora/marketplaces';
+import { createMarketplaceAdapters, useMarketplaceFeatures } from '@listora/marketplaces';
 import { startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
@@ -59,6 +59,7 @@ if (process.argv[2] === 'self-test') {
 
 async function run(): Promise<void> {
   const config = loadRunnerConfig();
+  useMarketplaceFeatures(config.features);
   const logger = createLogger({ service: 'runner', level: config.logLevel });
   const settings = config.automation;
   const db = createDatabase({ connectionString: config.databaseUrl, max: 8 });

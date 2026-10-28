@@ -31,6 +31,7 @@ describe('loadApiConfig', () => {
         ebay: undefined,
         depop: undefined,
         tokenVault: undefined,
+        features: 'verified',
       },
       automation: loadAutomationSettings({}),
       emailIngest: loadEmailIngestConfig({}),

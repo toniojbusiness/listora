@@ -21,8 +21,12 @@ connection that works), read-only:
 - **Sales**: a sale check now (`sale_check_schedule.next_reason` `sync`), on the phone as
   `sale_check` phone work, or the browser runner's job in the cloud
   ([automation.md](automation.md)). A sale it finds starts its delists as any check's does.
-- **Offers**: a read of the buyers' offers on Poshmark and Depop (`requestOfferChecks`,
-  [offers.md](offers.md)).
+- **Offers**: a read of the buyers' offers (`requestOfferChecks`, [offers.md](offers.md)).
+
+Each read happens only where it passed live ([verified-features.md](verified-features.md)):
+Depop's sales, offers, and listings, and Mercari's sales and listings. Nothing of Poshmark is read.
+A marketplace with no verified read is not part of a sync, and its status is not shown.
+
 - **Listings**: once the seller imported a marketplace's listings, another import, which brings
   in what was listed there since and settles the rest at once ([imports.md](imports.md)). At most
   every 6 hours (`LISTING_SYNC_MIN_GAP_MS`): a read goes through every listing.

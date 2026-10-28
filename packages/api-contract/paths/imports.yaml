@@ -4,9 +4,9 @@
     operationId: listListingImports
     summary: List the marketplaces Listora imports listings from, each with its latest import
     description: |
-      One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-      import can start now (the marketplace is linked, none is under way) or why not, and its
-      newest import with its progress and summary.
+      One entry per marketplace Listora imports from (those whose imports passed live,
+      docs/features/verified-features.md): whether an import can start now (the marketplace is
+      linked, none is under way) or why not, and its newest import with its progress and summary.
     responses:
       '200':
         description: The marketplaces and their newest imports.

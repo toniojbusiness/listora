@@ -7,15 +7,32 @@
  * marketplace with offers may run there today, and its offers stay in the marketplace's app.
  *
  * A connection's offers are read when the seller asks: opening Tasks (at most once every 10
- * minutes) and syncing (docs/features/sync.md), never on a timer.
+ * minutes) and syncing (docs/features/sync.md), never on a timer; and only on a marketplace whose
+ * offer reads passed live (docs/features/verified-features.md): the others are never read.
  */
 import { sql } from 'kysely';
 
 import { inTransaction, type DbExecutor, type Marketplace } from '@listora/db';
-import { isOfferMarketplace, OFFER_RULES, type OfferMarketplace } from '@listora/marketplaces';
+import {
+  isFeatureVerified,
+  isOfferMarketplace,
+  marketplacesWith,
+  OFFER_RULES,
+  type OfferMarketplace,
+} from '@listora/marketplaces';
 
-/** The marketplaces whose offers Listora reads. */
+/** The marketplaces whose offers Listora can read (built; see `offerMarketplaces`). */
 export const OFFER_MARKETPLACES = Object.keys(OFFER_RULES) as OfferMarketplace[];
+
+/** The marketplaces whose offers Listora reads and shows: built, and verified live. */
+export function offerMarketplaces(): OfferMarketplace[] {
+  return marketplacesWith('offers', OFFER_MARKETPLACES);
+}
+
+/** Whether Listora reads and shows the marketplace's offers. */
+export function readsOffers(marketplace: Marketplace): marketplace is OfferMarketplace {
+  return isOfferMarketplace(marketplace) && isFeatureVerified(marketplace, 'offers');
+}
 
 /** The least time between two reads the seller asks for (opening Tasks; a sync asks sooner). */
 export const OFFER_CHECK_MIN_GAP_MS = 10 * 60_000;
@@ -39,7 +56,7 @@ export async function queueOfferCheck(
   executor: DbExecutor,
   target: OfferCheckTarget,
 ): Promise<boolean> {
-  if (!isOfferMarketplace(target.marketplace)) return false;
+  if (!readsOffers(target.marketplace)) return false;
   return inTransaction(executor, async (trx) => {
     const connection = await trx
       .selectFrom('marketplace_connection')
@@ -93,6 +110,8 @@ export async function requestOfferChecks(
   request: { accountId: string; minGapMs?: number },
 ): Promise<Marketplace[]> {
   const gapMs = request.minGapMs ?? OFFER_CHECK_MIN_GAP_MS;
+  const marketplaces = offerMarketplaces();
+  if (marketplaces.length === 0) return [];
   const connections = await executor
     .selectFrom('marketplace_connection as connection')
     .leftJoin('offer_check as oc', (join) =>
@@ -105,7 +124,7 @@ export async function requestOfferChecks(
     .where('connection.mode', '=', 'automation')
     .where('connection.status', 'in', ['connected', 'degraded'])
     .where('connection.runs_on', '=', 'phone')
-    .where('connection.marketplace', 'in', OFFER_MARKETPLACES)
+    .where('connection.marketplace', 'in', marketplaces)
     .where((eb) =>
       eb.or([
         eb('oc.requested_at', 'is', null),

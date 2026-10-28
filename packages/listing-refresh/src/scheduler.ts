@@ -20,7 +20,7 @@ import type { Logger } from '@listora/shared';
 import { sql } from 'kysely';
 
 import { dueAt, effectiveCadence, inQuietWindow, intervalHours } from './cadence.ts';
-import { loadRefreshFacts, REFRESH_MARKETPLACES } from './schedule.ts';
+import { loadRefreshFacts, refreshMarketplaces } from './schedule.ts';
 import { loadRefreshSettings, quietWindowOf } from './settings.ts';
 
 export const LISTING_REFRESH_TASK = 'listing_refresh';
@@ -64,13 +64,15 @@ export async function runListingRefreshes(
   deps: ListingRefreshDependencies,
 ): Promise<ListingRefreshResult> {
   const now = deps.now?.() ?? new Date();
+  const marketplaces = refreshMarketplaces();
+  if (marketplaces.length === 0) return { queued: 0 };
   const connections = await deps.db
     .selectFrom('marketplace_connection')
     .select(['id', 'account_id', 'marketplace', 'mode', 'status'])
     .where('status', 'in', ['connected', 'degraded'])
     // A read-only connection never gets a write queued, whatever its adapter can do (read-only.md).
     .where('read_only', '=', false)
-    .where('marketplace', 'in', [...REFRESH_MARKETPLACES])
+    .where('marketplace', 'in', marketplaces)
     .orderBy('id')
     .execute();
   let queued = 0;

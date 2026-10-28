@@ -339,11 +339,15 @@ extension ItemDetailView {
         refreshSection(for: item)
     }
 
-    /// The item's own refresh cadence, once it is live somewhere (listing-refresh.md).
+    /// The item's own refresh cadence, once it is live on a marketplace whose refresh passed live
+    /// (listing-refresh.md, verified-features.md).
     @ViewBuilder
     private func refreshSection(for item: Item) -> some View {
-        if let service = environment.refreshService,
-           item.listings.contains(where: { $0.status.value1 == .active })
+        if let service = environment.refreshService, let features = environment.features,
+           item.listings.contains(where: { listing in
+               let marketplace = listing.marketplace.value1?.rawValue ?? listing.marketplace.value2 ?? ""
+               return listing.status.value1 == .active && features.shows(.listingRefresh, on: marketplace)
+           })
         {
             ItemRefreshSection(itemID: item.id, service: service)
         }

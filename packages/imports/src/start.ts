@@ -10,7 +10,7 @@ import {
   type ListingImportTable,
   type Marketplace,
 } from '@listora/db';
-import { MARKETPLACE_NAMES } from '@listora/marketplaces';
+import { isFeatureVerified, MARKETPLACE_NAMES } from '@listora/marketplaces';
 import type { Selectable } from 'kysely';
 
 /**
@@ -23,8 +23,20 @@ export const IMPORT_MARKETPLACES = [
   'mercari',
 ] as const satisfies readonly Marketplace[];
 
+/**
+ * Whether Listora imports the marketplace's listings for sellers: one it can import from whose
+ * imports passed live (docs/features/verified-features.md).
+ */
 export function importsFrom(marketplace: Marketplace): boolean {
-  return (IMPORT_MARKETPLACES as readonly string[]).includes(marketplace);
+  return (
+    (IMPORT_MARKETPLACES as readonly string[]).includes(marketplace) &&
+    isFeatureVerified(marketplace, 'listing_import')
+  );
+}
+
+/** The marketplaces whose listings Listora imports for sellers, in `IMPORT_MARKETPLACES` order. */
+export function importableMarketplaces(): Marketplace[] {
+  return IMPORT_MARKETPLACES.filter(importsFrom);
 }
 
 export type ListingImportRow = Selectable<ListingImportTable>;

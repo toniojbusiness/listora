@@ -18,7 +18,7 @@ import {
 } from '@listora/automation';
 import { createOAuthClients, createTokenVault } from '@listora/connections';
 import { createDatabase } from '@listora/db';
-import { createMarketplaceAdapters } from '@listora/marketplaces';
+import { createMarketplaceAdapters, useMarketplaceFeatures } from '@listora/marketplaces';
 import { scaledRetryPolicy, startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
@@ -28,6 +28,8 @@ import { createConnectionWork } from './connections.ts';
 import { collectWorkerJobs, WORKER_FEATURES } from './features.ts';
 
 const config = loadWorkerConfig();
+// Only the features that passed live, unless the stack runs on the fakes (MARKETPLACE_FEATURES).
+useMarketplaceFeatures(config.marketplaces.features);
 const logger = createLogger({ service: 'worker', level: config.logLevel });
 const db = createDatabase({
   connectionString: config.databaseUrl,

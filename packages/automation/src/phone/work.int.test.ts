@@ -19,7 +19,11 @@ import { LocalTokenVault, SessionVault } from '@listora/connections';
 import { createInventoryItem, type Db } from '@listora/db';
 import { createLogger } from '@listora/shared';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
-import { createMarketplaceAdapters, type AdapterLookup } from '@listora/marketplaces';
+import {
+  createMarketplaceAdapters,
+  useMarketplaceFeatures,
+  type AdapterLookup,
+} from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 import {
   enqueueOperation,
@@ -1510,6 +1514,60 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     });
     expect(site.offers.answers).toEqual([]);
     await readOnly(false);
+  });
+
+  it('drops work of a feature not verified live unrun, and never sends an answer where answers are hidden', async () => {
+    const { offer } = await listingWithOffer();
+    await readOffers();
+    const row = await offerRow(offer.id);
+    // Asked for while every built feature showed (an earlier deploy), then hidden.
+    const { responseId } = await answerNow(row, 'accept');
+    const { id: poshmark } = await db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: accountId,
+        marketplace: 'poshmark',
+        mode: 'automation',
+        status: 'connected',
+        token_ciphertext: Buffer.from('sealed'),
+        runs_on: 'phone',
+        phone_device_id: deviceId,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('phone_work')
+      .values({
+        account_id: accountId,
+        connection_id: poshmark,
+        marketplace: 'poshmark',
+        purpose: 'offer_check',
+      })
+      .execute();
+    useMarketplaceFeatures('verified');
+    try {
+      await runPhone();
+    } finally {
+      useMarketplaceFeatures('all');
+    }
+    // Poshmark's offers never passed live: its queued read is gone, with no record of a failure.
+    expect(await work()).toEqual([]);
+    const poshmarkChecks = await db
+      .selectFrom('offer_check')
+      .select('last_outcome')
+      .where('account_id', '=', accountId)
+      .where('connection_id', '=', poshmark)
+      .execute();
+    expect(poshmarkChecks).toEqual([]);
+    // Depop's answers never passed live: the answer is refused before anything is sent.
+    expect(await responseRow(responseId)).toMatchObject({
+      status: 'failed',
+      error_code: 'unavailable',
+      error_message: 'Answer this offer in Depop.',
+      sent: false,
+    });
+    expect(site.offers.answers).toEqual([]);
+    await db.deleteFrom('marketplace_connection').where('id', '=', poshmark).execute();
   });
 
   it('hands an app on runtime 2 every call but the offers, which wait for its update', async () => {

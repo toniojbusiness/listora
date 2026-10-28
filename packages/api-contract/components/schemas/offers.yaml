@@ -167,7 +167,11 @@ OfferAnswer:
       $ref: './common.yaml#/Money'
 OfferCheck:
   type: object
-  description: When Listora last read the seller's offers on one marketplace, and how that went.
+  description: |
+    When Listora last read the seller's offers on one marketplace, and how that went. Only
+    marketplaces whose offer reads passed live are listed (docs/features/verified-features.md).
+    A read that failed carries no error for the seller: it goes to the owner's alerts
+    (docs/features/read-health.md).
   required: [marketplace, status]
   properties:
     marketplace:
@@ -175,13 +179,10 @@ OfferCheck:
     status:
       type: string
       maxLength: 64
-      description: '`waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`).'
+      description: '`waiting` (a read waits for the iPhone), `ok`, or `failed` (the last read did not get through).'
     checkedAt:
       $ref: './common.yaml#/Timestamp'
       description: When a read last succeeded.
-    message:
-      type: string
-      maxLength: 500
 OfferCheckList:
   type: object
   required: [data]
