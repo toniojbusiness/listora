@@ -160,7 +160,13 @@ let package = Package(
         ),
         .testTarget(
             name: "InventoryFeatureTests",
-            dependencies: ["InventoryFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+            dependencies: [
+                "InventoryFeature",
+                "Core",
+                "DesignSystem",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
         ),
         .testTarget(
             name: "SalesFeatureTests",

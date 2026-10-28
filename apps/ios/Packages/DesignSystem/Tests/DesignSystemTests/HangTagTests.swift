@@ -143,6 +143,29 @@ struct HangTagTests {
         }
     }
 
+    @Test
+    func `a tied string runs solid from the top down, and a cut one opens a gap in the middle`() {
+        let rect = CGRect(x: 0, y: 0, width: 16, height: 100)
+        #expect(SnippedString(tied: 1, cut: 0).path(in: rect).boundingRect.height == 100)
+        #expect(SnippedString(tied: 0.4, cut: 0).path(in: rect).boundingRect.maxY == 40, "tying from the top")
+        #expect(SnippedString(tied: 0, cut: 0).path(in: rect).isEmpty, "loose: nothing solid yet")
+        let cut = SnippedString(tied: 1, cut: 1).path(in: rect)
+        #expect(cut.boundingRect.height == 100, "both ends stay tied on")
+        #expect(!cut.cgPath.contains(CGPoint(x: 8, y: 50)))
+        let middle = cut.cgPath.copy(strokingWithWidth: Thread.width, lineCap: .butt, lineJoin: .miter, miterLimit: 1)
+        #expect(!middle.contains(CGPoint(x: 8, y: 50)), "the middle is snipped")
+        #expect(middle.contains(CGPoint(x: 8, y: 20)) && middle.contains(CGPoint(x: 8, y: 80)))
+    }
+
+    @Test
+    func `the sold stamp fits on the item's tag at every size`() {
+        everyVariant { width, typeSize, scheme in
+            let stamp = SoldStamp(price: "$1,250.00", marketplace: "Poshmark", lands: false)
+            let measured = size(of: stamp, width: width, typeSize: typeSize, scheme: scheme)
+            #expect(measured.width <= width - 2 * Spacing.md, "\(typeSize) at \(width): \(measured)")
+        }
+    }
+
     // MARK: Stamps and labels
 
     @Test
