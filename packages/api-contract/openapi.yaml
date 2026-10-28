@@ -43,6 +43,8 @@ tags:
     description: AI analysis of an item's photos (run once per photo set).
   - name: batches
     description: Batches of items photographed in one session, and where each item is.
+  - name: hauls
+    description: Items bought together for one price, and each one's share of it.
   - name: pricing
     description: Price suggestions with honest source labels.
   - name: listings
@@ -129,6 +131,14 @@ paths:
     $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1items~1{itemId}~1submit'
   /v1/item-batches/{batchId}/interaction:
     $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1interaction'
+  /v1/hauls:
+    $ref: './paths/hauls.yaml#/~1v1~1hauls'
+  /v1/hauls/{haulId}:
+    $ref: './paths/hauls.yaml#/~1v1~1hauls~1{haulId}'
+  /v1/hauls/{haulId}/items:
+    $ref: './paths/hauls.yaml#/~1v1~1hauls~1{haulId}~1items'
+  /v1/hauls/{haulId}/items/{itemId}:
+    $ref: './paths/hauls.yaml#/~1v1~1hauls~1{haulId}~1items~1{itemId}'
   /v1/usage:
     $ref: './paths/usage.yaml#/~1v1~1usage'
   /v1/items/{itemId}/voice-corrections:
@@ -318,6 +328,8 @@ components:
       $ref: './components/parameters.yaml#/SessionId'
     BatchId:
       $ref: './components/parameters.yaml#/BatchId'
+    HaulId:
+      $ref: './components/parameters.yaml#/HaulId'
     AnalysisId:
       $ref: './components/parameters.yaml#/AnalysisId'
     ListingId:
@@ -558,6 +570,17 @@ components:
       $ref: './components/schemas/batches.yaml#/ItemBatchItemInteraction'
     ItemBatchInteractionReplace:
       $ref: './components/schemas/batches.yaml#/ItemBatchInteractionReplace'
+    # ---------------------------------------------------------------- hauls
+    Haul:
+      $ref: './components/schemas/hauls.yaml#/Haul'
+    HaulPage:
+      $ref: './components/schemas/hauls.yaml#/HaulPage'
+    HaulCreate:
+      $ref: './components/schemas/hauls.yaml#/HaulCreate'
+    HaulReplace:
+      $ref: './components/schemas/hauls.yaml#/HaulReplace'
+    HaulItemsAdd:
+      $ref: './components/schemas/hauls.yaml#/HaulItemsAdd'
     # ---------------------------------------------------------------- pricing
     AiPriceEstimate:
       $ref: './components/schemas/pricing.yaml#/AiPriceEstimate'

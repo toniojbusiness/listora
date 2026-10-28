@@ -96,27 +96,82 @@ struct BatchReviewTests {
     }
 
     @Test
-    func `a haul's cost applies to every item left, the same each or split to the cent`() async {
-        #expect(BatchReviewModel.amounts(.each(500), count: 3) == [500, 500, 500])
-        #expect(BatchReviewModel.amounts(.total(1000), count: 3) == [334, 333, 333])
-        #expect(BatchReviewModel.amounts(.total(1000), count: 3).reduce(0, +) == 1000)
-        #expect(BatchReviewModel.amounts(.total(1000), count: 0).isEmpty)
-
+    func `the same cost applies to every item left, until the seller changes one`() async {
         await scriptAnalyzedItems()
         let model = model(items: 3, events: EventLog())
         await model.pageAppeared(0)
         let first = model.pages[0]
-        first.cost.amount = AmountEntry(cents: 4000)
+        first.cost.amount = AmountEntry(cents: 500)
         first.cost.source = "Estate sale"
-        model.applyCost(from: first, as: .total(4000))
+        model.applySameCost(from: first)
 
-        #expect(model.pages.map(\.cost.amount.cents) == [1334, 1333, 1333])
+        #expect(model.pages.map(\.cost.amount.cents) == [500, 500, 500])
         #expect(model.pages.map(\.cost.source) == ["Estate sale", "Estate sale", "Estate sale"])
-        // Applied: no page offers to apply its share again, until the seller changes it.
+        // Applied: no page offers to apply its cost again, until the seller changes it.
         #expect(model.pages.allSatisfy(model.hasAppliedCost))
         model.pages[1].cost.amount.press(.delete)
         #expect(!model.hasAppliedCost(model.pages[1]))
         #expect(model.hasAppliedCost(model.pages[2]))
+    }
+
+    @Test
+    func `the items left are marked as one haul in one step, each costing its share`() async throws {
+        await scriptAnalyzedItems()
+        let model = model(items: 3, events: EventLog())
+        await model.pageAppeared(0)
+        let first = model.pages[0]
+        first.cost.amount = AmountEntry(cents: 1000)
+        first.cost.source = "Goodwill Bins"
+
+        await model.markHaul(from: first)
+
+        let created = try #require(await harness.service.haulCreates.first)
+        #expect(await harness.service.haulCreates.count == 1)
+        #expect(created.total == Fixtures.usd(1000))
+        #expect(created.itemCount == 3)
+        #expect(created.itemIds == ["item-0", "item-1", "item-2"])
+        #expect(created.purchaseSource == "Goodwill Bins")
+        #expect(model.markedHaul?.id == "haul-1")
+        #expect(model.pages.allSatisfy { $0.cost.mode == .haul && $0.cost.haul?.id == "haul-1" })
+        #expect(model.pages.allSatisfy(model.hasAppliedCost))
+        #expect(first.haulSummary == "$3.33 each, from a $10 haul of 3")
+        #expect(RecentPurchaseSources(defaults: harness.defaults).sources == ["Goodwill Bins"])
+
+        // Approving writes no cost of its own: the haul set it.
+        await first.loadPricing()
+        await model.approve(first)
+        #expect(first.saved != nil)
+        #expect(await harness.service.replacements.allSatisfy { $0.details.cost == Fixtures.usd(334) })
+    }
+
+    @Test
+    func `a haul the server refused says why, and marking it again reuses its key`() async {
+        await scriptAnalyzedItems()
+        await harness.service.setCreateHaulAnswers([
+            .failure(.server(503, "unavailable", "Listora is busy. Try again.", retryable: true)),
+            .success(Fixtures.haul(totalCents: 1000, count: 2, added: 2)),
+        ])
+        let model = model(items: 2, events: EventLog())
+        await model.pageAppeared(0)
+        let first = model.pages[0]
+        first.cost.amount = AmountEntry(cents: 1000)
+
+        await model.markHaul(from: first)
+        #expect(model.haulError == "Listora is busy. Try again.")
+        #expect(model.markedHaul == nil)
+        #expect(model.pages.allSatisfy { $0.cost.mode == .item })
+
+        await model.markHaul(from: first)
+        #expect(model.haulError == nil)
+        #expect(model.markedHaul != nil)
+        let keys = await harness.service.calls.compactMap { call -> String? in
+            if case let .createHaul(key) = call {
+                return key
+            }
+            return nil
+        }
+        #expect(keys.count == 2)
+        #expect(Set(keys).count == 1)
     }
 
     @Test

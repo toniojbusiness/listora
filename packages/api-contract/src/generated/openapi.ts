@@ -571,6 +571,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/hauls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List hauls
+         * @description Newest first, so the cost screen offers the haul of the trip the seller is on.
+         */
+        get: operations["listHauls"];
+        put?: never;
+        /**
+         * Create a haul
+         * @description Records a haul's total and how many items it had, with `itemIds` joining it at once
+         *     (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+         *     it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+         */
+        post: operations["createHaul"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hauls/{haulId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        /** Get a haul */
+        get: operations["getHaul"];
+        /**
+         * Change a haul's total or count
+         * @description Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+         *     a new `version`). An `itemCount` below `itemsAdded` is `422`.
+         */
+        put: operations["replaceHaul"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hauls/{haulId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add items to a haul
+         * @description The items join the haul after the ones already in it, and every item in it gets its new
+         *     share. When the haul's count is reached, each new item adds one to it.
+         */
+        post: operations["addHaulItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hauls/{haulId}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take an item out of a haul
+         * @description The item keeps its last share as its cost, which the seller can then change; the items
+         *     still in the haul get their new shares. The haul's count stays as it is.
+         */
+        delete: operations["removeHaulItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/usage": {
         parameters: {
             query?: never;
@@ -2922,6 +3019,11 @@ export interface components {
             };
             /** @description Read-only; the location `details.storageLocationId` refers to. */
             storageLocation?: components["schemas"]["StorageLocationSummary"];
+            /**
+             * @description Read-only; the haul the item is part of. Its `details.cost` is then its share of the
+             *     haul, which only the haul changes (`replaceHaul`, `addHaulItems`, `removeHaulItem`).
+             */
+            haul?: components["schemas"]["Haul"];
             /** @description In display order; the first is the cover. */
             photos: components["schemas"]["Photo"][];
             listings: components["schemas"]["Listing"][];
@@ -3352,6 +3454,81 @@ export interface components {
         ItemBatchInteractionReplace: {
             batch: components["schemas"]["InteractionTotals"];
             items: components["schemas"]["ItemBatchItemInteraction"][];
+        };
+        /**
+         * @description Items bought together for one price, such as 30 items from the bins for $50
+         *     (docs/features/hauls.md). Each item in the haul costs its share of `total`: the total
+         *     split over `itemCount`, with the leftover cents on the items that joined first, so a full
+         *     haul's items add back up to the total. The server keeps each item's `details.cost` equal to
+         *     its share, and a `replaceItem` that changes it is refused while the item is in a haul.
+         */
+        Haul: {
+            id: components["schemas"]["Id"];
+            /** @description What the whole haul cost. */
+            total: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description How many items the haul had. Never fewer than `itemsAdded`: an item joining a haul
+             *     whose count is reached adds one to it.
+             */
+            itemCount: number;
+            /**
+             * Format: int32
+             * @description The items in Listora that are part of the haul.
+             */
+            itemsAdded: number;
+            /**
+             * @description `total` over `itemCount`, to the nearest cent, to show ("$1.67 each"). Each item's own
+             *     cost is its share, which is this or within a cent of it.
+             */
+            eachCost: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description When it was bought; every item in the haul takes it.
+             */
+            purchaseDate?: string;
+            /** @description Where it was bought; every item in the haul takes it. */
+            purchaseSource?: string;
+            createdAt: components["schemas"]["Timestamp"];
+            updatedAt: components["schemas"]["Timestamp"];
+        };
+        HaulPage: {
+            /** @description Newest first. */
+            data: components["schemas"]["Haul"][];
+            /** @description Present when there are more results. */
+            nextCursor?: string;
+        };
+        HaulCreate: {
+            total: components["schemas"]["Money"];
+            /** Format: int32 */
+            itemCount: number;
+            /** Format: date */
+            purchaseDate?: string;
+            purchaseSource?: string;
+            /**
+             * @description Items that join the haul at once, in this order (a batch's items, in haul order). An
+             *     item in another haul moves to this one.
+             */
+            itemIds?: components["schemas"]["Id"][];
+        };
+        /**
+         * @description Full replacement of the haul's total, count, date, and place: a property left out is
+         *     cleared. Every item in the haul gets its new share.
+         */
+        HaulReplace: {
+            total: components["schemas"]["Money"];
+            /** Format: int32 */
+            itemCount: number;
+            /** Format: date */
+            purchaseDate?: string;
+            purchaseSource?: string;
+        };
+        HaulItemsAdd: {
+            /**
+             * @description Items that join the haul, in this order, after the items already in it. An item in
+             *     another haul moves to this one; an item already in this one stays where it is.
+             */
+            itemIds: components["schemas"]["Id"][];
         };
         /**
          * @description A model's guess, not market data. `label` is always
@@ -6158,6 +6335,7 @@ export interface components {
         PhotoId: components["schemas"]["Id"];
         SessionId: components["schemas"]["Id"];
         BatchId: components["schemas"]["Id"];
+        HaulId: components["schemas"]["Id"];
         AnalysisId: components["schemas"]["Id"];
         ListingId: components["schemas"]["Id"];
         OperationId: components["schemas"]["Id"];
@@ -6269,6 +6447,11 @@ export type ItemBatchItemCreate = components['schemas']['ItemBatchItemCreate'];
 export type ItemBatchItemSubmit = components['schemas']['ItemBatchItemSubmit'];
 export type ItemBatchItemInteraction = components['schemas']['ItemBatchItemInteraction'];
 export type ItemBatchInteractionReplace = components['schemas']['ItemBatchInteractionReplace'];
+export type Haul = components['schemas']['Haul'];
+export type HaulPage = components['schemas']['HaulPage'];
+export type HaulCreate = components['schemas']['HaulCreate'];
+export type HaulReplace = components['schemas']['HaulReplace'];
+export type HaulItemsAdd = components['schemas']['HaulItemsAdd'];
 export type AiPriceEstimate = components['schemas']['AiPriceEstimate'];
 export type SoldDataSource = components['schemas']['SoldDataSource'];
 export type KnownSoldDataSource = components['schemas']['KnownSoldDataSource'];
@@ -6585,6 +6768,7 @@ export type ParameterItemId = components['parameters']['ItemId'];
 export type ParameterPhotoId = components['parameters']['PhotoId'];
 export type ParameterSessionId = components['parameters']['SessionId'];
 export type ParameterBatchId = components['parameters']['BatchId'];
+export type ParameterHaulId = components['parameters']['HaulId'];
 export type ParameterAnalysisId = components['parameters']['AnalysisId'];
 export type ParameterListingId = components['parameters']['ListingId'];
 export type ParameterOperationId = components['parameters']['OperationId'];
@@ -7478,6 +7662,188 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listHauls: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of hauls. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HaulPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createHaul: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaulCreate"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getHaul: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The haul. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceHaul: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaulReplace"];
+            };
+        };
+        responses: {
+            /** @description The updated haul. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    addHaulItems: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaulItemsAdd"];
+            };
+        };
+        responses: {
+            /** @description The haul with the items in it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    removeHaulItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The haul without the item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
     };

@@ -240,6 +240,10 @@ export interface InventoryItemTable {
   refresh_cadence: Nullable<RefreshCadence>;
   /** Hours between refreshes; only with `custom`. */
   refresh_custom_hours: Nullable<number>;
+  /** The haul the item is part of (docs/features/hauls.md); its cost is then its share. */
+  haul_id: Nullable<string>;
+  /** When it joined the haul, with `haul_id`: its place for the haul's leftover cents. */
+  haul_joined_at: NullableTimestamp;
 }
 
 export interface PhotoTable {
@@ -1145,6 +1149,22 @@ export interface SaleEmailInboxTable {
   updated_at: UpdatedAt;
 }
 
+// Hauls ---------------------------------------------------------------------------------------
+
+/** Items bought together for one price (docs/features/hauls.md). */
+export interface HaulTable {
+  id: Id;
+  account_id: string;
+  total_cents: number;
+  currency: Generated<CurrencyCode>;
+  /** How many items the haul had; never fewer than the items in it. */
+  item_count: number;
+  purchase_date: Nullable<DateString>;
+  purchase_source: Nullable<string>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Batch listing -------------------------------------------------------------------------------
 
 /** A haul photographed in one session (docs/features/batch.md). */
@@ -1388,4 +1408,5 @@ export interface Database {
   offer_response: OfferResponseTable;
   offer_check: OfferCheckTable;
   background_read_health: BackgroundReadHealthTable;
+  haul: HaulTable;
 }

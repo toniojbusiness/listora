@@ -3,7 +3,8 @@ import DesignSystem
 import SwiftUI
 
 /// What the seller paid for a batch item, on the in-app keypad, with where it was bought, and a
-/// way to apply it to every item still to approve: the same each, or the haul's total split.
+/// way to apply it to every item still to approve: the same each, or all of them marked as one
+/// haul whose total is split across them (docs/features/hauls.md).
 struct BatchCostCard: View {
     @Bindable var model: ReviewFlowModel
     let batch: BatchReviewModel
@@ -41,8 +42,21 @@ struct BatchCostCard: View {
                 .frame(minWidth: Layout.minimumTapTarget, minHeight: Layout.minimumTapTarget)
                 .accessibilityIdentifier("batchReview.editCost.\(number)")
             }
+            if model.cost.mode == .haul, let summary = model.haulSummary {
+                Text(summary)
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("batchReview.haulSummary.\(number)")
+            }
             if isEditing {
-                KeypadView { model.cost.amount.press($0) }
+                KeypadView { key in
+                    // Typing a price makes it this item's own, out of the haul.
+                    if model.cost.mode == .haul {
+                        model.cost.mode = .item
+                        model.cost.amount = AmountEntry()
+                    }
+                    model.cost.amount.press(key)
+                }
                 sourceChoices
             } else if !model.cost.source.isEmpty {
                 Text("From \(model.cost.source)")
@@ -56,6 +70,12 @@ struct BatchCostCard: View {
                     .accessibilityIdentifier("batchReview.costApplied.\(number)")
             } else if !model.cost.amount.isEmpty, batch.remaining.count > 1 {
                 applyToAll
+            }
+            if let error = batch.haulError {
+                Text(error)
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.danger)
+                    .accessibilityIdentifier("batchReview.haulError.\(number)")
             }
         }
         .cardStyle()
@@ -82,32 +102,33 @@ struct BatchCostCard: View {
         }
     }
 
-    /// The haul's cost for every item still to approve, in one tap: split across them, or the same
-    /// for each.
+    /// The haul's cost for every item still to approve, in one tap: all of them marked as one haul
+    /// whose total is split across them, or the same for each.
     private var applyToAll: some View {
         let count = batch.remaining.count
         let cents = model.cost.amount.cents ?? 0
-        let share = BatchReviewModel.amounts(.total(cents), count: count).last ?? 0
-        let total = Formatting.money(cents: cents)
-        let each = Formatting.money(cents: share)
+        let total = HaulPresentation.money(cents)
+        let each = Formatting.money(cents: HaulPresentation.eachCents(totalCents: cents, count: count))
         return VStack(alignment: .leading, spacing: Spacing.xs) {
             Label("Apply to all \(count) items", systemImage: "square.stack.3d.up.fill")
                 .font(Typography.emphasis)
                 .foregroundStyle(Palette.textPrimary)
             AdaptiveStack {
-                Button("Split \(total): \(each) each") {
+                Button("One \(total) haul: \(each) each") {
                     Haptics.play(.selection)
-                    batch.applyCost(from: model, as: .total(cents))
+                    Task { await batch.markHaul(from: model) }
                 }
                 .buttonStyle(.listora(.secondary, size: .compact))
-                .accessibilityLabel("Split \(total) across \(count) items, \(each) each")
-                .accessibilityIdentifier("batchReview.splitCost.\(number)")
-                Button("\(total) each") {
+                .loading(batch.isMarkingHaul)
+                .accessibilityLabel("One \(total) haul of \(count) items, \(each) each")
+                .accessibilityIdentifier("batchReview.haulCost.\(number)")
+                Button("\(Formatting.money(cents: cents)) each") {
                     Haptics.play(.selection)
-                    batch.applyCost(from: model, as: .each(cents))
+                    batch.applySameCost(from: model)
                 }
                 .buttonStyle(.listora(.tertiary, size: .compact))
-                .accessibilityLabel("\(total) for each of the \(count) items")
+                .disabled(batch.isMarkingHaul)
+                .accessibilityLabel("\(Formatting.money(cents: cents)) for each of the \(count) items")
                 .accessibilityIdentifier("batchReview.sameCost.\(number)")
             }
         }

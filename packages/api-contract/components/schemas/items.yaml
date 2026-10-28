@@ -206,6 +206,11 @@ Item:
     storageLocation:
       $ref: '#/StorageLocationSummary'
       description: Read-only; the location `details.storageLocationId` refers to.
+    haul:
+      $ref: './hauls.yaml#/Haul'
+      description: |
+        Read-only; the haul the item is part of. Its `details.cost` is then its share of the
+        haul, which only the haul changes (`replaceHaul`, `addHaulItems`, `removeHaulItem`).
     photos:
       type: array
       description: In display order; the first is the cover.

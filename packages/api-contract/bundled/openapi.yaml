@@ -43,6 +43,8 @@ tags:
     description: AI analysis of an item's photos (run once per photo set).
   - name: batches
     description: Batches of items photographed in one session, and where each item is.
+  - name: hauls
+    description: Items bought together for one price, and each one's share of it.
   - name: pricing
     description: Price suggestions with honest source labels.
   - name: listings
@@ -897,6 +899,156 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls:
+    get:
+      tags:
+        - hauls
+      operationId: listHauls
+      summary: List hauls
+      description: Newest first, so the cost screen offers the haul of the trip the seller is on.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of hauls.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HaulPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - hauls
+      operationId: createHaul
+      summary: Create a haul
+      description: |
+        Records a haul's total and how many items it had, with `itemIds` joining it at once
+        (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+        it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HaulCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls/{haulId}:
+    parameters:
+      - $ref: '#/components/parameters/HaulId'
+    get:
+      tags:
+        - hauls
+      operationId: getHaul
+      summary: Get a haul
+      responses:
+        '200':
+          description: The haul.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - hauls
+      operationId: replaceHaul
+      summary: Change a haul's total or count
+      description: |
+        Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+        a new `version`). An `itemCount` below `itemsAdded` is `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HaulReplace'
+      responses:
+        '200':
+          description: The updated haul.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls/{haulId}/items:
+    parameters:
+      - $ref: '#/components/parameters/HaulId'
+    post:
+      tags:
+        - hauls
+      operationId: addHaulItems
+      summary: Add items to a haul
+      description: |
+        The items join the haul after the ones already in it, and every item in it gets its new
+        share. When the haul's count is reached, each new item adds one to it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HaulItemsAdd'
+      responses:
+        '200':
+          description: The haul with the items in it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls/{haulId}/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/HaulId'
+      - $ref: '#/components/parameters/ItemId'
+    delete:
+      tags:
+        - hauls
+      operationId: removeHaulItem
+      summary: Take an item out of a haul
+      description: |
+        The item keeps its last share as its cost, which the seller can then change; the items
+        still in the haul get their new shares. The haul's count stays as it is.
+      responses:
+        '200':
+          description: The haul without the item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/usage:
@@ -3687,6 +3839,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    HaulId:
+      name: haulId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
     AnalysisId:
       name: analysisId
       in: path
@@ -4433,6 +4591,11 @@ components:
         storageLocation:
           $ref: '#/components/schemas/StorageLocationSummary'
           description: Read-only; the location `details.storageLocationId` refers to.
+        haul:
+          $ref: '#/components/schemas/Haul'
+          description: |
+            Read-only; the haul the item is part of. Its `details.cost` is then its share of the
+            haul, which only the haul changes (`replaceHaul`, `addHaulItems`, `removeHaulItem`).
         photos:
           type: array
           description: In display order; the first is the cover.
@@ -5332,6 +5495,139 @@ components:
           maxItems: 1000
           items:
             $ref: '#/components/schemas/ItemBatchItemInteraction'
+    Haul:
+      type: object
+      description: |
+        Items bought together for one price, such as 30 items from the bins for $50
+        (docs/features/hauls.md). Each item in the haul costs its share of `total`: the total
+        split over `itemCount`, with the leftover cents on the items that joined first, so a full
+        haul's items add back up to the total. The server keeps each item's `details.cost` equal to
+        its share, and a `replaceItem` that changes it is refused while the item is in a haul.
+      required:
+        - id
+        - total
+        - itemCount
+        - itemsAdded
+        - eachCost
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        total:
+          $ref: '#/components/schemas/Money'
+          description: What the whole haul cost.
+        itemCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          description: |
+            How many items the haul had. Never fewer than `itemsAdded`: an item joining a haul
+            whose count is reached adds one to it.
+        itemsAdded:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The items in Listora that are part of the haul.
+        eachCost:
+          $ref: '#/components/schemas/Money'
+          description: |
+            `total` over `itemCount`, to the nearest cent, to show ("$1.67 each"). Each item's own
+            cost is its share, which is this or within a cent of it.
+        purchaseDate:
+          type: string
+          format: date
+          description: When it was bought; every item in the haul takes it.
+        purchaseSource:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Where it was bought; every item in the haul takes it.
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    HaulPage:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          description: Newest first.
+          items:
+            $ref: '#/components/schemas/Haul'
+        nextCursor:
+          type: string
+          description: Present when there are more results.
+    HaulCreate:
+      type: object
+      required:
+        - total
+        - itemCount
+      properties:
+        total:
+          $ref: '#/components/schemas/Money'
+        itemCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+        purchaseDate:
+          type: string
+          format: date
+        purchaseSource:
+          type: string
+          minLength: 1
+          maxLength: 200
+        itemIds:
+          type: array
+          description: |
+            Items that join the haul at once, in this order (a batch's items, in haul order). An
+            item in another haul moves to this one.
+          maxItems: 1000
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+    HaulReplace:
+      type: object
+      description: |
+        Full replacement of the haul's total, count, date, and place: a property left out is
+        cleared. Every item in the haul gets its new share.
+      required:
+        - total
+        - itemCount
+      properties:
+        total:
+          $ref: '#/components/schemas/Money'
+        itemCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+        purchaseDate:
+          type: string
+          format: date
+        purchaseSource:
+          type: string
+          minLength: 1
+          maxLength: 200
+    HaulItemsAdd:
+      type: object
+      required:
+        - itemIds
+      properties:
+        itemIds:
+          type: array
+          description: |
+            Items that join the haul, in this order, after the items already in it. An item in
+            another haul moves to this one; an item already in this one stays where it is.
+          minItems: 1
+          maxItems: 1000
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
     AiPriceEstimate:
       type: object
       description: |
