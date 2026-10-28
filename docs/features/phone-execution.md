@@ -74,8 +74,13 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    stopped (the app was closed mid-call) and is recovered at once. The runner's per-seller rate
    limits and pause between sessions apply, counted in `automation_run` (`host = 'phone'`) with
    the runner's runs; the pause comes before a run's first call only, since its later calls (a
-   send's read-back) are the same visit. A device whose runtime speaks another call version is
-   told to update the app (`app_update_required`) and gets nothing. A claim that finds nothing
+   send's read-back) are the same visit. The server speaks runtime versions 2 and 3
+   (`SUPPORTED_PHONE_RUNTIME_VERSIONS`): each call names the version its phone last claimed with,
+   and a version-2 app (installed before offers) gets every call but the offers' reads and
+   answers, which wait for its update ([offers.md](offers.md)). The app also takes the server's
+   own runtime between runs (`getPhoneRuntime`), so it usually speaks the newest at once. A device
+   whose runtime speaks any other version is told to update the app (`app_update_required`) and
+   gets nothing. A claim that finds nothing
    says when to claim again (`nextClaimInSeconds`): when the device's next work is due (a check
    tried again after a failed attempt, a change the engine is about to hand over), at most 5
    seconds while marketplaces run on it (`PHONE_IDLE_CLAIM_SECONDS`), and 5 minutes when none

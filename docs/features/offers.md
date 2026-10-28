@@ -99,6 +99,10 @@ session no page of the offers buyers make (below).
 The invariant test (`packages/operations/src/invariant.test.ts`) checks that an answer's evidence
 is set in one place, right after a read-back that shows it.
 
+An app installed before offers (phone runtime version 2) keeps running every other marketplace
+step; offer reads and answers wait until it runs version 3, which it takes from the server
+between runs ([phone-execution.md](phone-execution.md)).
+
 ## In the app
 
 - **Tasks** asks for a read of the offers when it opens and on pull to refresh, runs the

@@ -1399,4 +1399,28 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(site.offers.answers).toEqual([]);
     await readOnly(false);
   });
+
+  it('hands an app on runtime 2 every call but the offers, which wait for its update', async () => {
+    await runPhone();
+    await db
+      .updateTable('app_device')
+      .set({ runtime_version: 2 })
+      .where('account_id', '=', accountId)
+      .where('id', '=', deviceId)
+      .execute();
+    const olderApp = { accountId, deviceId, runtimeVersion: 2 };
+    expect(await queueOfferCheck(db, { accountId, connectionId, marketplace: 'depop' })).toBe(true);
+    expect(await claimPhoneRun(phone, db, olderApp)).toBeNull();
+    expect((await work()).map((row) => row.purpose)).toEqual(['offer_check']);
+
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    const run = await claimPhoneRun(phone, db, olderApp);
+    expect(run?.purpose).toBe('operation');
+    expect((run?.call?.input as unknown as { runtimeVersion: number }).runtimeVersion).toBe(2);
+    await expect(claimPhoneRun(phone, db, { ...olderApp, runtimeVersion: 1 })).rejects.toThrow(
+      /needs an update/,
+    );
+  });
 });
