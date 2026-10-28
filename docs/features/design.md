@@ -210,6 +210,7 @@ are in [design/hangtag-screens/](design/hangtag-screens/).
     down over the dashed one) and its bead pulls tight once the marketplace confirms the listing
     is live.
   - With Reduce Motion, each of these is one cross-fade, and the bead does not move.
+    Sheets of the moments are in [design/hangtag-moments/](design/hangtag-moments/).
 - **The tab bar** (`TabRail`): a rail across the bottom with the five tabs under it, Inventory a
   hanger, and Add a clay tag hanging from the rail. It sits under the `TabView`, not in its safe
   area (an inset outside a tab's navigation stack does not reach the screens in it), so every
