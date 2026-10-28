@@ -62,6 +62,54 @@ struct RemoteImageTests {
         #expect(CountingPhotoServer.requests(for: url) == 1)
     }
 
+    @Test
+    func `a photo the server could not serve yet is asked for again, never answered from the cache`() async throws {
+        // A thumbnail asked for just after its upload, before the server made it, answers 404.
+        let url = try #require(URL(string: "https://photos.listora.test/\(UUID().uuidString)/thumbnail.jpg"))
+        let jpeg = try Data(contentsOf: Self.writeJPEG(width: 400, height: 300))
+        let (loader, _) = Self.cachingLoader()
+        let request = RemoteImageRequest(url: url, pixelWidth: 216, pixelHeight: 216)
+
+        #expect(await loader.image(for: request) == nil)
+        #expect(!loader.isOnDisk(url))
+
+        // Once the server has it, the next view to show it gets it.
+        CountingPhotoServer.serve(jpeg, at: url)
+        let image = try #require(await loader.image(for: request))
+        #expect(image.cgImage?.width == 288)
+        #expect(CountingPhotoServer.requests(for: url) == 2)
+    }
+
+    @Test
+    func `an error an earlier build cached is dropped, and the photo asked for again`() async throws {
+        let url = try #require(URL(string: "https://photos.listora.test/\(UUID().uuidString)/thumbnail.jpg"))
+        let jpeg = try Data(contentsOf: Self.writeJPEG(width: 400, height: 300))
+        let (loader, cache) = Self.cachingLoader()
+        let notFound = try #require(
+            HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: nil),
+        )
+        cache.storeCachedResponse(CachedURLResponse(response: notFound, data: Data()), for: URLRequest(url: url))
+        #expect(!loader.isOnDisk(url))
+        CountingPhotoServer.serve(jpeg, at: url)
+
+        let request = RemoteImageRequest(url: url, pixelWidth: 216, pixelHeight: 216)
+        let image = try #require(await loader.image(for: request))
+        #expect(image.cgImage?.height == 216)
+        #expect(CountingPhotoServer.requests(for: url) == 1)
+    }
+
+    /// A loader with a disk cache of its own, configured as the app's is.
+    private static func cachingLoader() -> (RemoteImageLoader, URLCache) {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let cache = URLCache(memoryCapacity: 1024 * 1024, diskCapacity: 10 * 1024 * 1024, directory: directory)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = cache
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.protocolClasses = [CountingPhotoServer.self]
+        return (RemoteImageLoader(configuration: configuration), cache)
+    }
+
     private static func writeJPEG(width: Int, height: Int) throws -> URL {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: {
             let format = UIGraphicsImageRendererFormat()
@@ -78,8 +126,9 @@ struct RemoteImageTests {
     }
 }
 
-/// Serves photos from memory and counts the requests for each, standing in for the photo CDN. A
-/// held photo is answered only when released.
+/// Serves photos from memory and counts the requests for each, standing in for the photo CDN: a
+/// photo it doesn't have answers 404, and every answer may be cached, as the CDN's are. A held
+/// photo is answered only when released.
 private final class CountingPhotoServer: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var photos: [URL: Data] = [:]
@@ -137,7 +186,7 @@ private final class CountingPhotoServer: URLProtocol, @unchecked Sendable {
             httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "image/jpeg"],
         ) {
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .allowed)
         }
         client?.urlProtocol(self, didLoad: data ?? Data())
         client?.urlProtocolDidFinishLoading(self)

@@ -78,7 +78,11 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    (`SUPPORTED_PHONE_RUNTIME_VERSIONS`): each call names the version its phone last claimed with,
    and a version-2 app (installed before offers) gets every call but the offers' reads and
    answers, which wait for its update ([offers.md](offers.md)). The app also takes the server's
-   own runtime between runs (`getPhoneRuntime`), so it usually speaks the newest at once. A device
+   own runtime between runs (`getPhoneRuntime`), so it usually speaks the newest at once: it asks
+   with the digest of the runtime it runs (`have`; the one the app ships until the server hands
+   out another), so the server sends the script (about 570 KB) only when it runs a different one,
+   once per app opening (and once per background run), and the app keeps a handed-out runtime in
+   its caches for the next launch, for its own build only (`RuntimeScripts`). A device
    whose runtime speaks any other version is told to update the app (`app_update_required`) and
    gets nothing. A claim that finds nothing
    says when to claim again (`nextClaimInSeconds`): when the device's next work is due (a check
@@ -179,7 +183,7 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
 
 - **While the app is open** it runs the work waiting for this phone at once, without its backoff
   (`appOpen`), then waits for its next work (`GET /v1/phone-runs/wait`, `waitForPhoneWork`) and
-  claims again as soon as the server answers, and whenever a marketplace's run ends
+  claims again as soon as the server answers that work may be ready, and whenever a marketplace's run ends
   (`PhoneRunner.follow`), even while other marketplaces run. The server answers the wait the
   moment work for the phone may be claimable: `phone_work` notifies the `phone_work` channel with
   the account's id when work is handed over, comes due, or its claim ends (a trigger), and the
@@ -193,7 +197,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   older server) sleeps what its last claim said: an app opened before any marketplace ran on it
   is told 5 minutes, and once the seller links one, 5 seconds or sooner. A trigger during a wait
   (linking, a change in the app) ends it. Nothing is claimed by a wait, so one the app gives up on
-  leaves nothing behind.
+  leaves nothing behind. A wait that ends with nothing ready claims nothing, but for a safety
+  claim every 5 minutes (`PhoneRunner.safetyClaim`), so the open, idle app makes about 3 small
+  requests a minute and the phone's radio can sleep between them.
 - **After a change in the app**: linking a marketplace, Check again, publishing, changing a
   price, ending, relisting, retrying, recording a sale, and choosing what to relist.
 - **A sync** ([sync.md](sync.md)): opening the app, Sync now, and a pull to refresh on Today or
@@ -272,7 +278,9 @@ side in 11 to 13 s.
   listening again after the connection is cut).
 - **App, unit** (`PhoneExecutionFeatureTests`): the runner's loop, the claim the moment the
   server answers the wait (at most one look a second, and the claim's own wait from a server
-  without one), marketplaces side by side and
+  without one), no claim after a wait that found nothing but the safety claim, the runtime
+  checked once per opening (again when the server didn't answer), the runtime the app names and
+  keeps (`RuntimeScriptsTests`), marketplaces side by side and
   one run per marketplace, the runs named in each claim, a free marketplace claiming at once,
   each marketplace's progress, warm web views while the app is open, retried answers,
   registration, and claiming again when the server says while the app is open; Link
