@@ -89,6 +89,7 @@ const SCRIPT_FOR_KIND = {
   end: 'end',
   relist: 'relist',
   mark_sold: 'markSold',
+  refresh: 'refresh',
 } as const satisfies Record<WriteOperationKind, WriteScriptName>;
 
 export interface AutomationAdapterOptions<P extends AssistedListingPayload> {
@@ -150,6 +151,8 @@ export class AutomationAdapter<
       delist: scripts.end === undefined ? assisted.delist : 'automation',
       relist: scripts.relist === undefined ? assisted.relist : 'automation',
       markSold: scripts.markSold === undefined ? assisted.markSold : 'automation',
+      // Never assisted: a refresh the seller had to do every few days would be a chore.
+      refresh: scripts.refresh === undefined ? 'none' : 'automation',
       verifyRead: 'automation',
       readFreshness: options.readFreshness,
       saleDetection:
@@ -524,8 +527,21 @@ export class AutomationAdapter<
     }
   }
 
-  /** The user's task for the step, from the assisted adapter, with why automation stepped back. */
+  /**
+   * The user's task for the step, from the assisted adapter, with why automation stepped back.
+   * A refresh has no task: it fails, visibly and with a Retry, so the seller is never asked to
+   * do Listora's scheduled work, and the schedule tries again later.
+   */
   async #assistedTask(op: OperationRequest<P>, why?: Excerpt): Promise<Outcome> {
+    if (op.kind === 'refresh') {
+      return {
+        type: 'rejected',
+        code: 'refresh_stopped',
+        message: `Listora couldn't refresh this listing on ${this.#name} this time.`,
+        fixHint: `Listora tries again on its next refresh, or you can retry now.`,
+        ...(why === undefined ? {} : { excerpt: why }),
+      };
+    }
     const outcome = await this.#options.assisted.execute(op);
     return why === undefined ? outcome : { ...outcome, excerpt: { ...outcome.excerpt, ...why } };
   }

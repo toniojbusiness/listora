@@ -126,6 +126,8 @@ export function operationTitle(
         : `Mark sold on ${name}`;
     case 'verify':
       return `Check the ${name} listing`;
+    case 'refresh':
+      return `Refresh on ${name}`;
     default:
       return assertNever(kind, 'operation kind');
   }

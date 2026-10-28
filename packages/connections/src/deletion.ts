@@ -12,7 +12,8 @@
  *   sale-check schedule, and the work waiting for the seller's iPhone (foreign-key cascades),
  *   and connect attempts lose their link;
  * - the listings' read-backs from the marketplace (`remote_snapshot`) and their link to the
- *   connection, so nothing can act on them through it again;
+ *   connection, so nothing can act on them through it again; they are marked as the unlinked
+ *   shop's (`shop_unlinked_at`), so the next link, which may be another shop, never takes them;
  * - the marketplace events about that seller in the account (webhook and poll payloads).
  *
  * The seller's own records stay: items, listings and their history, sales, and fees. Then it
@@ -115,7 +116,9 @@ export async function deleteConnectionData(
     .execute();
   const listings = await trx
     .updateTable('marketplace_listing')
-    .set({ connection_id: null, remote_snapshot: null })
+    // From now on they are the unlinked shop's: a later link (maybe of another shop) never
+    // takes them, unless its import finds them in that shop.
+    .set({ connection_id: null, remote_snapshot: null, shop_unlinked_at: sql<Date>`now()` })
     .where('account_id', '=', accountId)
     .where('connection_id', '=', connectionId)
     .executeTakeFirst();

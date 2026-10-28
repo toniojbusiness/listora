@@ -31,7 +31,8 @@ worker and the CDK alarms read it. A Graphile cron job (`trust_metrics`, once a 
 workers, filled in for up to an hour after downtime) computes them from committed rows, so a
 rolled-back change is never counted and every writer (worker steps, user confirmations through the
 API) is covered. For minute T it publishes the operations that settled in [T - 2 min, T - 1 min):
-`VerifiedSuccess` (1 or 0 per settled operation, so Average is the verified-success rate) per
+`VerifiedSuccess` (1 or 0 per settled operation but a scheduled refresh,
+[listing-refresh.md](listing-refresh.md), so Average is the verified-success rate) per
 marketplace and kind and per marketplace, `OperationFailed` per marketplace and kind,
 `DelistFailed`, `DelistLatency` from the recorded sale to the verified delist per marketplace
 (p50, p95), and `DelistEverywhereLatency` from the recorded sale to the last of its delists, once

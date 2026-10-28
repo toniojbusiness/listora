@@ -81,6 +81,8 @@ const COLUMNS = {
     'created_at',
     'updated_at',
     'pre_archive_status',
+    'refresh_cadence',
+    'refresh_custom_hours',
   ],
   photo: [
     'id',
@@ -269,6 +271,7 @@ const COLUMNS = {
     'user_confirmed_at',
     'condition',
     'hashtags',
+    'shop_unlinked_at',
   ],
   marketplace_operation: [
     'id',
@@ -676,6 +679,16 @@ const COLUMNS = {
     'created_at',
     'updated_at',
   ],
+  listing_refresh_setting: [
+    'account_id',
+    'cadence',
+    'custom_hours',
+    'quiet_start',
+    'quiet_end',
+    'time_zone',
+    'created_at',
+    'updated_at',
+  ],
   today_summary_setting: [
     'account_id',
     'enabled',
@@ -902,6 +915,8 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['subscription', 'plan', values.PLANS],
   ['entitlement', 'plan', values.PLANS],
   ['audit_log', 'actor_kind', values.AUDIT_ACTOR_KINDS],
+  ['listing_refresh_setting', 'cadence', values.REFRESH_CADENCES],
+  ['inventory_item', 'refresh_cadence', values.REFRESH_CADENCES],
 ];
 
 /** Parses the literals out of a normalized `CHECK ((col = ANY (ARRAY['a'::text, ...])))`. */

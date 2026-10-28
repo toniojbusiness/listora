@@ -125,7 +125,8 @@ describe('today (real Postgres)', () => {
       })
       .returning('id')
       .executeTakeFirstOrThrow();
-    const stale = await createInventoryItem(api.db, accountId(), {
+    // A listing live for weeks is no card: listing refresh keeps it fresh on its own.
+    const old = await createInventoryItem(api.db, accountId(), {
       title: 'Old cardigan',
       status: 'listed',
       list_price_cents: 4500,
@@ -135,7 +136,7 @@ describe('today (real Postgres)', () => {
       .insertInto('marketplace_listing')
       .values({
         account_id: accountId(),
-        item_id: stale.id,
+        item_id: old.id,
         marketplace: 'ebay',
         status: 'active',
         external_listing_id: 'stale-1',
@@ -147,12 +148,7 @@ describe('today (real Postgres)', () => {
     const response = await api.call('getToday', { token });
     expect(response.status).toBe(200);
     const { cards } = response.body;
-    expect(cards.map((card) => card.kind)).toEqual([
-      'ship',
-      'reconnect',
-      'review_drafts',
-      'stale_listing',
-    ]);
+    expect(cards.map((card) => card.kind)).toEqual(['ship', 'reconnect', 'review_drafts']);
     expect(cards[0]).toEqual({
       id: `ship:${sold.saleItemId}`,
       kind: 'ship',
@@ -194,18 +190,6 @@ describe('today (real Postgres)', () => {
       action: { destination: 'drafts' },
       drafts: { count: 1 },
     });
-    expect(cards[3]).toMatchObject({
-      title: 'Old cardigan',
-      action: { label: 'Lower to $40', destination: 'item', itemId: stale.id },
-      staleListing: {
-        daysListed: 40,
-        price: { amountCents: 4500, currency: 'USD' },
-        floor: { amountCents: 3500, currency: 'USD' },
-        suggestion: 'price_drop',
-        suggestedPrice: { amountCents: 4000, currency: 'USD' },
-        marketplaces: ['ebay'],
-      },
-    });
     // Sales this week, without a profit until the sale's fees are recorded.
     expect(response.body.money.thisWeek).toMatchObject({
       sales: 1,
@@ -227,7 +211,7 @@ describe('today (real Postgres)', () => {
       .where('id', '=', connection.id)
       .execute();
     const after = await api.call('getToday', { token });
-    expect(after.body.cards.map((card) => card.kind)).toEqual(['review_drafts', 'stale_listing']);
+    expect(after.body.cards.map((card) => card.kind)).toEqual(['review_drafts']);
   });
 
   it("never shows another account's cards", async () => {

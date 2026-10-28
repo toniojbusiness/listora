@@ -29,7 +29,8 @@
     "@listora/sales": "*",
     "@listora/shared": "*",
     "@listora/storage": "*",
-    "@listora/today": "*"
+    "@listora/today": "*",
+    "@listora/listing-refresh": "*"
   },
   "devDependencies": {
     "@listora/testing": "*",

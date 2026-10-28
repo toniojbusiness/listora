@@ -152,6 +152,13 @@ private struct MarketplaceCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("marketplace.\(row.id).lastChange")
             }
+            if let refresh = row.refreshLine {
+                Label(refresh, systemImage: "arrow.clockwise")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("marketplace.\(row.id).refresh")
+            }
             if !row.actions.isEmpty {
                 ActionButtons(
                     row: row,

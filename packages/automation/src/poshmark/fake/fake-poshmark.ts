@@ -26,6 +26,8 @@
  *   GET  /listing/<title>-<id>       a listing's public page (also /listing/<id>); 404 once deleted
  *   GET  /edit-listing/<id>          its edit form (its seller's session only)
  *   POST /edit-listing/<id>          update it
+ *   POST /share-listing/<id>         share it to the seller's followers (the listing page's Share,
+ *                                    then To My Followers); it moves the listing's `updated_at`
  *   GET  /closet/<username>          a closet: ?availability=all|available|sold_out|not_for_sale,
  *                                    &sort_by=added_desc, &query=, &max_id=
  */
@@ -71,6 +73,8 @@ export type FakePoshmarkAction =
   | 'listing'
   /** GET /closet/<username> */
   | 'closet'
+  /** POST /share-listing/<id> */
+  | 'share'
   /** GET /offers/my_offers */
   | 'offers'
   /** GET /offers/<id> */
@@ -585,13 +589,24 @@ export class FakePoshmark {
             : stored.current;
         return {
           status: 200,
-          body: page(`${shown.title} | Poshmark`, listingBody(shown), seller, {
+          body: page(`${shown.title} | Poshmark`, listingBody(shown, seller), seller, {
             $_listing_details: { listingDetails: listingRecord(shown, this.url) },
           }),
         };
       }
       case 'closet':
         return this.#closet(route.id ?? '', url, seller);
+      case 'share': {
+        // As on Poshmark: only an available listing shares, and a share moves it to the top of
+        // the seller's followers' feeds without changing it.
+        const stored = this.#own(route.id, seller);
+        if (stored === undefined) return { status: 404, body: notFound(seller) };
+        if (stored.current.inventory !== 'available' || stored.current.reviewing) {
+          return { status: 302, headers: { location: listingPath(stored.current) } };
+        }
+        this.#change(stored, { updatedAt: this.#tick() });
+        return { status: 302, headers: { location: listingPath(stored.current) } };
+      }
       case 'offers':
         return { status: 200, body: this.#offersPage(seller) };
       case 'offer': {
@@ -824,6 +839,10 @@ function matchRoute(method: string, path: string): Route | null {
   if (edit?.[1] !== undefined) {
     if (method === 'GET') return { method, action: 'edit_form', id: edit[1], private: true };
     if (method === 'POST') return { method, action: 'update', id: edit[1], private: true };
+  }
+  const share = /^\/share-listing\/([0-9a-f]{24})$/.exec(path);
+  if (method === 'POST' && share?.[1] !== undefined) {
+    return { method, action: 'share', id: share[1], private: true };
   }
   const listing = /^\/listing\/(?:.*-)?([^/-]+)$/.exec(path);
   if (method === 'GET' && listing?.[1] !== undefined) {
@@ -1514,7 +1533,7 @@ function listingRecord(listing: FakePoshmarkListing, origin: string): Record<str
   };
 }
 
-function listingBody(listing: FakePoshmarkListing): string {
+function listingBody(listing: FakePoshmarkListing, viewer: string | null): string {
   const badge =
     listing.inventory === 'sold_out'
       ? 'Sold'
@@ -1524,7 +1543,19 @@ function listingBody(listing: FakePoshmarkListing): string {
   return `<main data-test="listing"><h1 class="listing__title">${escape(listing.title)}</h1>
 <p class="listing__price">$${String(listing.priceCents / 100)}</p>
 ${badge === '' ? '' : `<span class="listing__status">${badge}</span>`}
-<div class="listing__description">${escape(listing.description)}</div></main>`;
+<div class="listing__description">${escape(listing.description)}</div>${
+    viewer === listing.seller && listing.inventory === 'available' ? shareControls(listing) : ''
+  }</main>`;
+}
+
+/**
+ * The listing page's Share, and its sheet's To My Followers, as the seller sees them on their own
+ * available listing.
+ */
+function shareControls(listing: FakePoshmarkListing): string {
+  return `<button type="button" data-et-name="share" onclick="document.getElementById('share-sheet').hidden=false">Share</button>
+<div id="share-sheet" class="share-modal" hidden><h3>Share this listing</h3>
+<form method="post" action="/share-listing/${listing.id}"><button type="submit" data-et-name="share_poshmark">To My Followers</button></form></div>`;
 }
 
 /**

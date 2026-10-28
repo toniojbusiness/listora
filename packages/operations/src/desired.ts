@@ -17,6 +17,7 @@ const STATUS_FOR_KIND = {
   revise: undefined,
   price: undefined,
   verify: undefined,
+  refresh: undefined,
 } as const satisfies Record<OperationKind, RemoteListingStatus | undefined>;
 
 /**
@@ -43,6 +44,14 @@ export function validateDesiredState(kind: OperationKind, value: unknown): Desir
   }
   if (kind === 'price' && desired.priceCents === undefined) {
     throw new InvalidOperationError('A price operation must set priceCents');
+  }
+  if (kind === 'refresh') {
+    const fields = Object.keys(desiredStateToJson(desired));
+    if (fields.length !== 1 || desired.refreshedAfter === undefined) {
+      throw new InvalidOperationError('A refresh operation sets only refreshedAfter');
+    }
+  } else if (desired.refreshedAfter !== undefined) {
+    throw new InvalidOperationError(`A ${kind} operation cannot set refreshedAfter`);
   }
   return desired;
 }

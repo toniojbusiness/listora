@@ -1,10 +1,12 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
 
 /// The Sales tab: all the seller's sales in total and per marketplace, recent sales, newest sold
 /// first, with what each one sold for and its profit, and the way to the profit dashboard. The
-/// list is read from the server each time it appears and on pull to refresh.
+/// list is read from the server each time it appears, after a sync, and on pull to refresh,
+/// which syncs the marketplaces too.
 public struct SalesView<Settings: View>: View {
     private let environment: SalesEnvironment
     private let settings: Settings
@@ -39,6 +41,9 @@ public struct SalesView<Settings: View>: View {
                     ProfitView(model: environment.makeProfitModel(), onSignIn: environment.onSignIn)
                 }
                 .toolbar {
+                    if let syncButton = environment.syncButton {
+                        ToolbarItem(placement: .topBarTrailing) { syncButton() }
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         NavigationLink(value: ProfitRoute()) {
                             Label("Profit", systemImage: "chart.bar.xaxis")
@@ -51,7 +56,17 @@ public struct SalesView<Settings: View>: View {
                     await environment.packOrders?.refresh()
                     await model.load()
                 }
-                .refreshable { await model.load() }
+                // A pull to refresh syncs the marketplaces too (docs/features/sync.md).
+                .refreshable {
+                    await environment.sync?.syncNow()
+                    await model.load()
+                }
+                // A sync that ended may have found sales.
+                .onChange(of: environment.sync?.isSyncing ?? false) { _, syncing in
+                    if !syncing {
+                        Task { await model.load() }
+                    }
+                }
         }
         .celebration(trigger: model.newSaleID)
     }

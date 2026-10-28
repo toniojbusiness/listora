@@ -15,6 +15,7 @@ import {
 import { BATCH_ITEM_ANALYSIS_TASK } from '@listora/batches';
 import { CONNECTION_DELETION_TASK } from '@listora/connections';
 import { EMAIL_INGEST_TASK } from '@listora/email-sales';
+import { LISTING_REFRESH_TASK } from '@listora/listing-refresh';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK, THUMBNAIL_REFRESH_TASK } from '@listora/photos';
@@ -86,6 +87,7 @@ describe('worker feature discovery', () => {
       'ebay-sync',
       'email-sales',
       'listing-imports',
+      'listing-refresh',
       'phone-work',
       'photos',
       'push',
@@ -121,6 +123,7 @@ describe('worker feature discovery', () => {
       AUTO_DELIST_SLA_TASK,
       DATA_RETENTION_TASK,
       EMAIL_INGEST_TASK,
+      LISTING_REFRESH_TASK,
       PHONE_WATCH_TASK,
       SALE_CHECK_HEALTH_TASK,
       TODAY_SUMMARY_TASK,

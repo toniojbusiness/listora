@@ -31,7 +31,6 @@ import {
   type ScheduledCheck,
 } from './sale-checks/schedule.ts';
 import { LISTING_IMPORT_READ_TASK } from './imports/schedule.ts';
-import { queueDueOfferChecks } from './offers/schedule.ts';
 import { SESSION_CHECK_TASK } from './session-checks/schedule.ts';
 
 /** The worker's scheduled task, every minute. */
@@ -91,8 +90,6 @@ export class AutomationDispatcher {
       if (await enqueueSaleCheck(db, check)) added += 1;
     }
     if (added > 0) this.#log.info({ added }, 'sale checks due');
-    const offerChecks = await queueDueOfferChecks(db);
-    if (offerChecks > 0) this.#log.info({ offerChecks }, 'offer reads due');
     await this.#startRunnerIfNeeded();
     await this.#prune();
   }

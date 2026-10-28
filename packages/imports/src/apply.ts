@@ -2,7 +2,9 @@
  * Settling an import's entries (docs/features/imports.md): the worker's `listing_import_apply`
  * job, run after every page the import reads. Each listing it read becomes one of:
  *
- * - `already_listed`: Listora already has that listing (by its id on the marketplace);
+ * - `already_listed`: Listora already has that listing (by its id on the marketplace); one from
+ *   an unlinked shop (`shop_unlinked_at`) joins the import's connection, since the linked shop
+ *   showed it;
  * - `merged`: a listing of the item it is the same as (match.ts: its SKU line, else its title
  *   and photos), whose details stay as they are;
  * - `imported`: a new item with the listing's details and photos, listed there;
@@ -142,12 +144,14 @@ async function decide(
   if (current?.outcome !== 'pending') return 'settled';
   const existing = await trx
     .selectFrom('marketplace_listing')
-    .select(['id', 'item_id'])
+    .select(['id', 'item_id', 'shop_unlinked_at'])
     .where('account_id', '=', entry.account_id)
     .where('marketplace', '=', entry.marketplace)
     .where('external_listing_id', '=', entry.external_listing_id)
     .executeTakeFirst();
   if (existing !== undefined) {
+    // It was on a shop that was unlinked, and the linked shop shows it: it is this shop's.
+    if (existing.shop_unlinked_at !== null) await rejoin(trx, entry, existing.id);
     await settle(trx, entry, 'already_listed', {
       itemId: existing.item_id,
       listingId: existing.id,
@@ -287,6 +291,26 @@ export async function insertItemPhotos(
   }
 }
 
+/** Puts a listing from an unlinked shop back on the import's connection. */
+async function rejoin(trx: DbTransaction, entry: EntryRow, listingId: string): Promise<void> {
+  const { connection_id: connectionId } = await importConnection(trx, entry);
+  await trx
+    .updateTable('marketplace_listing')
+    .set({ connection_id: connectionId, shop_unlinked_at: null })
+    .where('account_id', '=', entry.account_id)
+    .where('id', '=', listingId)
+    .execute();
+}
+
+function importConnection(trx: DbTransaction, entry: EntryRow) {
+  return trx
+    .selectFrom('listing_import')
+    .select('connection_id')
+    .where('account_id', '=', entry.account_id)
+    .where('id', '=', entry.import_id)
+    .executeTakeFirstOrThrow();
+}
+
 /**
  * The listing on its marketplace, as the import read it: active, confirmed by that read. `null`
  * when the item already has a live listing there (one per item and marketplace).
@@ -306,12 +330,7 @@ export async function insertListing(
     .where('status', 'not in', ['ended', 'sold'])
     .executeTakeFirst();
   if (live !== undefined) return null;
-  const connection = await trx
-    .selectFrom('listing_import')
-    .select('connection_id')
-    .where('account_id', '=', entry.account_id)
-    .where('id', '=', entry.import_id)
-    .executeTakeFirstOrThrow();
+  const connection = await importConnection(trx, entry);
   const columns = importedListingColumns(entry.marketplace, listing);
   const inserted = await trx
     .insertInto('marketplace_listing')

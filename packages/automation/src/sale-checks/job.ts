@@ -536,9 +536,9 @@ async function finish(
         alertAfterFailures?: number;
       },
 ): Promise<void> {
-  // A forwarded email or an accepted offer that asked for a check while this one ran keeps its
-  // sooner time.
-  const askedMeanwhile = sql<boolean>`(next_reason in ('email', 'offer') and next_check_at > last_started_at)`;
+  // A forwarded email, an accepted offer, or the seller's sync that asked for a check while this
+  // one ran keeps its sooner time.
+  const askedMeanwhile = sql<boolean>`(next_reason in ('email', 'offer', 'sync') and next_check_at > last_started_at)`;
   const health =
     result.outcome === 'succeeded'
       ? {

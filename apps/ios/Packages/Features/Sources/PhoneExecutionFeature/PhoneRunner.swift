@@ -48,7 +48,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     /// Why the last claim didn't get through; `nil` once one does.
     private var claimProblem: String?
     /// Why a marketplace's run last stopped early; `nil` once a run gets through.
-    private var runProblem: String?
+    var runProblem: String?
     public private(set) var lastRunAt: Date?
     /// How long until the next look while the app is open, as Listora said after its last claim.
     var nextLook: Duration?
@@ -336,54 +336,24 @@ extension PhoneRunner {
             track(run)
             timings.begin(run.marketplace)
             let answer: Data
+            var ran = true
             do {
                 answer = try await runtime.run(call.input, marketplace: run.marketplace)
             } catch {
-                timings.finish(run.marketplace, completed: false)
-                // The call never ran: the server recovers the work when this phone next asks for
-                // work, or once its claim lapses.
-                runProblem = "Listora couldn't run this on your iPhone."
-                return false
+                // The server hears why: the work fails visibly and waits its backoff, never handed
+                // straight back (unsent, the work is recovered at the next claim or lease lapse).
+                answer = Self.notRun(error)
+                ran = false
             }
-            timings.finish(run.marketplace, completed: Self.ranToTheEnd(answer))
-            guard let next = await send(answer, for: call, of: run, installationID: id) else { break }
+            timings.finish(run.marketplace, completed: ran && Self.ranToTheEnd(answer))
+            let next = await send(answer, for: call, of: run, installationID: id)
+            if !ran {
+                runProblem = "Listora couldn't run this on your iPhone."
+            }
+            guard let next else { return ran }
             run = next
         }
         return true
-    }
-
-    /// Answers a call, trying again a few times while Listora can't be reached (the answer is
-    /// idempotent); `nil` when the run is over, or the answer could not be sent.
-    private func send(
-        _ answer: Data,
-        for call: PhoneRun.Call,
-        of run: PhoneRun,
-        installationID: String,
-    ) async -> PhoneRun? {
-        for attempt in 1 ... 3 {
-            do {
-                let next = try await service.answer(
-                    runID: run.id,
-                    index: call.index,
-                    answer: answer,
-                    installationID: installationID,
-                )
-                runProblem = nil
-                return next
-            } catch {
-                let unreachable = error.statusCode == nil || (error.statusCode ?? 0) >= 500
-                guard unreachable, attempt < 3 else {
-                    if !unreachable {
-                        // The run is over (404) or moved on (409): claim the next.
-                        return nil
-                    }
-                    runProblem = error.message
-                    return nil
-                }
-                try? await sleep(.seconds(attempt * 2))
-            }
-        }
-        return nil
     }
 
     private func register(_ id: String, _ version: Int) async throws(APIFailure) {

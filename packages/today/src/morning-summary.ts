@@ -141,8 +141,6 @@ function summaryParts(cards: readonly TodayCard[]): string[] {
   const drafts = of('review_drafts')[0];
   if (drafts !== undefined) parts.push(`review ${plural(drafts.count, 'draft')}`);
 
-  const stale = of('stale_listing');
-  if (stale.length > 0) parts.push(`freshen up ${plural(stale.length, 'old listing')}`);
   return parts;
 }
 

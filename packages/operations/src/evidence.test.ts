@@ -23,6 +23,7 @@ const remote: RemoteListingState = {
   priceCents: 4500,
   currency: 'USD',
   revision: 7,
+  refreshedAt: null,
 };
 
 describe('confirmByReadBack', () => {
@@ -150,6 +151,7 @@ describe('confirmEveryReadBack', () => {
       priceCents: null,
       currency: null,
       revision: 7,
+      refreshedAt: null,
     };
     const result = confirmByReadBack({ status: 'ended' }, ended, CURRENT);
     if (!result.matches) throw new Error('expected a proof');

@@ -33,7 +33,7 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(app.tabRail.buttons["Today"].isSelected)
         let ship = card(StubAPIServer.shipCardID)
         XCTAssertTrue(ship.waitForExistence(timeout: 10), "no ship card")
-        XCTAssertTrue(app.staticTexts["4 things need you"].exists)
+        XCTAssertTrue(app.staticTexts["3 things need you"].exists)
         XCTAssertTrue(ship.staticTexts["Ship Lululemon Align pant"].exists)
         XCTAssertTrue(ship.staticTexts["Urgent"].exists)
         XCTAssertTrue(ship.staticTexts["B-12 · Garage shelf 3"].exists)
@@ -48,12 +48,6 @@ final class TodayUITests: XCTestCase {
         action(StubAPIServer.reconnectCardID).tap()
         XCTAssertTrue(app.navigationBars["Marketplaces"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-
-        // The stale listing offers the price drop and opens the item.
-        let lower = action(StubAPIServer.staleCardID)
-        scroll(to: lower)
-        XCTAssertEqual(lower.label, "Lower to $40")
-        XCTAssertTrue(card(StubAPIServer.staleCardID).staticTexts["Listed 45 days"].exists)
 
         // The drafts card opens the drafts: this iPhone has none, so the server's, in Inventory.
         let drafts = action(StubAPIServer.draftsCardID)

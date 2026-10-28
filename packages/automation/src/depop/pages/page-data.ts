@@ -86,6 +86,7 @@ export function productRead(record: ProductRecord, site: DepopSite, page: string
       priceCents: dollars(record.price, page),
       currency: 'USD',
       revision: revision(record.dateUpdated, page),
+      refreshedAt: new Date(revision(record.dateUpdated, page)).toISOString(),
     },
     sku,
   };

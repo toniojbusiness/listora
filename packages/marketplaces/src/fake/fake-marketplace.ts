@@ -12,6 +12,7 @@
  *   POST  /:marketplace/listings/:id/end      end (409 `already_ended` when it is not active)
  *   POST  /:marketplace/listings/:id/relist   relist an ended listing
  *   POST  /:marketplace/listings/:id/mark-sold
+ *   POST  /:marketplace/listings/:id/refresh  refresh an active listing in place (`refreshedAt`)
  *   GET   /:marketplace/health                a cheap call for connection health checks
  *
  * A create needs one to 24 photo URLs, and a title of at most 80 characters, like eBay.
@@ -45,9 +46,12 @@ export interface FakeListing {
   /** Photo URLs in posting order. */
   photoUrls: string[];
   revision: number;
+  /** When the listing last showed as fresh: its create, or its latest refresh (ISO 8601). */
+  refreshedAt: string;
 }
 
-export type FakeAction = 'create' | 'update' | 'end' | 'relist' | 'mark_sold' | 'read' | 'health';
+export type FakeAction =
+  'create' | 'update' | 'end' | 'relist' | 'mark_sold' | 'refresh' | 'read' | 'health';
 
 export type FakeFault =
   /** 429 with an optional `Retry-After`; nothing is applied. */
@@ -215,7 +219,7 @@ export class FakeMarketplace {
   /** Adds a listing directly, as if it had been created on the marketplace earlier. */
   seed(
     marketplace: Marketplace,
-    listing: Omit<FakeListing, 'id' | 'url' | 'revision'>,
+    listing: Omit<FakeListing, 'id' | 'url' | 'revision' | 'refreshedAt'>,
   ): FakeListing {
     const created = this.#create(marketplace, listing, null);
     created.previous = created.current;
@@ -473,17 +477,29 @@ export class FakeMarketplace {
         }
         this.#change(stored, { status: 'sold' });
         return { status: 200, body: { listing: stored.current } };
+      case 'refresh':
+        if (stored.current.status !== 'active') {
+          throw new HttpError(409, 'not_active', 'Only active listings can be refreshed');
+        }
+        this.#change(stored, { refreshedAt: new Date().toISOString() });
+        return { status: 200, body: { listing: stored.current } };
     }
   }
 
   #create(
     marketplace: Marketplace,
-    fields: Omit<FakeListing, 'id' | 'url' | 'revision'>,
+    fields: Omit<FakeListing, 'id' | 'url' | 'revision' | 'refreshedAt'>,
     idempotencyKey: string | null,
   ): StoredListing {
     const id = `${marketplace.toUpperCase()}-${String(this.#nextId++).padStart(6, '0')}`;
     const stored: StoredListing = {
-      current: { ...fields, id, url: `${this.#url}/${marketplace}/listings/${id}`, revision: 1 },
+      current: {
+        ...fields,
+        id,
+        url: `${this.#url}/${marketplace}/listings/${id}`,
+        revision: 1,
+        refreshedAt: new Date().toISOString(),
+      },
       previous: null,
       idempotencyKey,
     };
@@ -575,12 +591,13 @@ function resolveRoute(
   if (verb === 'end') return 'end';
   if (verb === 'relist') return 'relist';
   if (verb === 'mark-sold') return 'mark_sold';
+  if (verb === 'refresh') return 'refresh';
   return undefined;
 }
 
 function validateCreate(
   body: Record<string, unknown>,
-): Omit<FakeListing, 'id' | 'url' | 'revision'> {
+): Omit<FakeListing, 'id' | 'url' | 'revision' | 'refreshedAt'> {
   const {
     sku,
     title,

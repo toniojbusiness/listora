@@ -46,6 +46,7 @@ function perfectMatch(op: OperationRow): RemoteListingState {
     priceCents: desired.priceCents ?? null,
     currency: 'USD',
     revision: null,
+    refreshedAt: null,
   };
 }
 

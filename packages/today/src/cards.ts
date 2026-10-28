@@ -4,8 +4,8 @@
  * queries in summary.ts load the facts, so every rule is tested without a database.
  *
  * A card exists only while its work is not done, so a card disappears by itself once the seller
- * (or Listora) finishes it: a shipped item, a completed delist, a working connection, a listing
- * that changed, a reviewed draft. Every card is something the seller can do: Listora's own
+ * (or Listora) finishes it: a shipped item, a completed delist, a working connection, a reviewed
+ * draft. Every card is something the seller can do: Listora's own
  * background problems (sale checks that fail or stall) go to the owner's alerts and the support
  * views, never to Today.
  */
@@ -16,13 +16,7 @@ import type { StatusDisplay } from '@listora/operations';
 import type { CurrencyCode } from '@listora/shared';
 
 /** In the order the screen groups cards of equal urgency. */
-export const TODAY_CARD_KINDS = [
-  'delist',
-  'ship',
-  'reconnect',
-  'review_drafts',
-  'stale_listing',
-] as const;
+export const TODAY_CARD_KINDS = ['delist', 'ship', 'reconnect', 'review_drafts'] as const;
 export type TodayCardKind = (typeof TODAY_CARD_KINDS)[number];
 
 /** Most urgent first. */
@@ -40,17 +34,7 @@ export const TODAY_RULES = {
   shipSoonWithinMs: 72 * 60 * 60_000,
   /** A sale without a ship-by date is high once it is this old. */
   shipUndatedHighAfterMs: 2 * 24 * 60 * 60_000,
-  /** A listing live this long ... */
-  staleListedDays: 30,
-  /** ... with no listing change (create, revise, price, relist) for this long is stale. */
-  staleQuietDays: 14,
-  /** A price drop suggests this much off, rounded down to whole dollars, never below the floor. */
-  priceDropPercent: 10,
-  /** Stale listings shown at most, oldest first: suggestions, not a to-do list. */
-  maxStaleCards: 5,
 } as const;
-
-const DAY_MS = 24 * 60 * 60_000;
 
 /** The item a card is about, as the seller knows it. */
 export interface TodayItemRef {
@@ -106,32 +90,13 @@ export interface ReconnectCard extends CardBase {
   status: 'reauth_required' | 'revoked';
 }
 
-export type StaleSuggestion =
-  /** Lower the price to `priceCents`, which is never below the item's floor. */
-  | { kind: 'price_drop'; priceCents: number }
-  /** No price drop is possible (at the floor, or no floor is known): relist instead. */
-  | { kind: 'relist' };
-
-export interface StaleListingCard extends CardBase {
-  kind: 'stale_listing';
-  item: TodayItemRef;
-  /** When its oldest live listing went live. */
-  listedAt: Date;
-  daysListed: number;
-  currency: CurrencyCode;
-  priceCents: number;
-  floorCents: number | null;
-  suggestion: StaleSuggestion;
-  marketplaces: Marketplace[];
-}
-
 export interface ReviewDraftsCard extends CardBase {
   kind: 'review_drafts';
   count: number;
   oldestCreatedAt: Date;
 }
 
-export type TodayCard = ShipCard | DelistCard | ReconnectCard | StaleListingCard | ReviewDraftsCard;
+export type TodayCard = ShipCard | DelistCard | ReconnectCard | ReviewDraftsCard;
 
 const LABEL_MAX_LENGTH = 60;
 
@@ -271,85 +236,6 @@ export function reconnectCard(fact: ConnectionFact): ReconnectCard {
   };
 }
 
-// Stale listings ------------------------------------------------------------------------------
-
-/** A listed item with at least one live listing. */
-export interface ListedFact {
-  item: TodayItemRef;
-  currency: CurrencyCode;
-  /** The item's list price, else its lowest live listing price; null when neither is known. */
-  priceCents: number | null;
-  floorCents: number | null;
-  /** When its oldest live listing went live. */
-  listedAt: Date;
-  /** The newest listing change (create, revise, price, relist) on any of its listings. */
-  lastChangeAt: Date | null;
-  marketplaces: Marketplace[];
-}
-
-export function isStale(fact: Pick<ListedFact, 'listedAt' | 'lastChangeAt'>, now: Date): boolean {
-  const listedFor = now.getTime() - fact.listedAt.getTime();
-  if (listedFor < TODAY_RULES.staleListedDays * DAY_MS) return false;
-  if (fact.lastChangeAt === null) return true;
-  return now.getTime() - fact.lastChangeAt.getTime() >= TODAY_RULES.staleQuietDays * DAY_MS;
-}
-
-/**
- * A price drop of `priceDropPercent`, rounded down to whole dollars and raised to the floor; a
- * relist when that is no drop at all (the price is at or below its floor) or no floor is known,
- * since Listora never suggests a price it cannot check against the floor.
- */
-export function staleSuggestion(priceCents: number, floorCents: number | null): StaleSuggestion {
-  if (floorCents === null) return { kind: 'relist' };
-  const dropped = Math.floor((priceCents * (100 - TODAY_RULES.priceDropPercent)) / 100 / 100) * 100;
-  const suggested = Math.max(dropped, floorCents);
-  return suggested < priceCents
-    ? { kind: 'price_drop', priceCents: suggested }
-    : { kind: 'relist' };
-}
-
-export function staleListingCard(fact: ListedFact, now: Date): StaleListingCard | null {
-  if (fact.priceCents === null || !isStale(fact, now)) return null;
-  const daysListed = Math.floor((now.getTime() - fact.listedAt.getTime()) / DAY_MS);
-  const suggestion = staleSuggestion(fact.priceCents, fact.floorCents);
-  const quiet = `Listed ${String(daysListed)} days with no changes.`;
-  let detail: string;
-  let label: string;
-  switch (suggestion.kind) {
-    case 'price_drop':
-      detail = `${quiet} Try ${formatMoney(suggestion.priceCents, fact.currency)}${
-        fact.floorCents === null
-          ? ''
-          : `, still above your ${formatMoney(fact.floorCents, fact.currency)} floor`
-      }.`;
-      label = `Lower to ${formatMoney(suggestion.priceCents, fact.currency)}`;
-      break;
-    case 'relist':
-      detail =
-        fact.floorCents === null
-          ? `${quiet} Relisting can bring it back to the top of search.`
-          : `${quiet} It's at its floor price, so relisting can bring it back to the top of search.`;
-      label = 'Review listing';
-      break;
-  }
-  return {
-    kind: 'stale_listing',
-    id: `stale:${fact.item.id}`,
-    urgency: 'normal',
-    title: itemLabel(fact.item),
-    detail,
-    action: { label, destination: 'item', itemId: fact.item.id, saleId: null, connectionId: null },
-    item: fact.item,
-    listedAt: fact.listedAt,
-    daysListed,
-    currency: fact.currency,
-    priceCents: fact.priceCents,
-    floorCents: fact.floorCents,
-    suggestion,
-    marketplaces: fact.marketplaces,
-  };
-}
-
 // Drafts --------------------------------------------------------------------------------------
 
 export interface DraftsFact {
@@ -385,7 +271,7 @@ export function reviewDraftsCard(fact: DraftsFact): ReviewDraftsCard | null {
 
 /**
  * Most urgent first; within one urgency by kind (`TODAY_CARD_KINDS`), and within one kind in the
- * order given (the queries sort each kind: soonest ship-by, oldest delist, longest listed).
+ * order given (the queries sort each kind: soonest ship-by, oldest delist).
  */
 export function orderCards(cards: readonly TodayCard[]): TodayCard[] {
   const rank = <T extends string>(values: readonly T[], value: T): number => values.indexOf(value);

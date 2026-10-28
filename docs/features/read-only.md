@@ -91,6 +91,13 @@ from the owner's own test shop, which relinking the account's Depop left under t
 connection. Without a connection no session, not even a read, ever runs for it there, and it
 stays read only through the account's Depop connection. Only Listora's record changes.
 
+Migration `20261028133845_depop_shop_stray_listings` detaches the other three (ended, with no
+Depop listing id), so the live shop's connection holds only its own 118 listings, and marks all
+four as from the previous shop, so relinking the live shop never takes them back
+([marketplace-linking.md](marketplace-linking.md#relinking-another-shop)). It names each listing
+by id, account, connection, and marketplace and checks its state; its down migration does
+nothing.
+
 ## Tests
 
 - `operations/src/read-only.int.test.ts`: every write kind refused and nothing queued, a check
