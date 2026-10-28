@@ -101,8 +101,12 @@ final class ShareExtensionUITests: XCTestCase {
         let confirm = safari.buttons["share.confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         XCTAssertTrue(safari.staticTexts["Link to AJ-000184?"].exists)
-        // Nothing is recorded until the user confirms.
-        XCTAssertFalse(server.requests.contains { $0.method == "POST" })
+        // Nothing is recorded until the user confirms. Only the link counts: the app also posts
+        // on its own (a sync starts when it opens).
+        let isLink = { (request: StubAPIServer.Request) in
+            request.method == "POST" && request.path.hasSuffix("/listing-links")
+        }
+        XCTAssertFalse(server.requests.contains(where: isLink))
         snapshot("2-confirm")
         confirm.tap()
 
@@ -112,7 +116,7 @@ final class ShareExtensionUITests: XCTestCase {
         XCTAssertFalse(status.label.localizedCaseInsensitiveContains("confirmed by"))
         snapshot("3-linked")
 
-        let link = try XCTUnwrap(server.requests.first { $0.method == "POST" })
+        let link = try XCTUnwrap(server.requests.first(where: isLink))
         XCTAssertEqual(link.path, "/v1/items/\(StubAPIServer.itemId)/listing-links")
         XCTAssertEqual(link.headers["authorization"], "Bearer ui-test-token")
         XCTAssertNotNil(link.headers["idempotency-key"])
