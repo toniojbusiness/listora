@@ -147,6 +147,42 @@ describe('read-only connections in the API (real Postgres)', () => {
     expect((await listing()).body).toMatchObject({ status: 'active' });
   });
 
+  it("never lists the read-only shop's items elsewhere, nor anything on the shop", async () => {
+    await setReadOnly(true);
+    const { itemId } = (await listing()).body;
+    const variant = {
+      title: 'Wool scarf',
+      description: 'A warm scarf.',
+      price: { amountCents: 1500, currency: 'USD' as const },
+    };
+    const crossed = await api.call('createListing', {
+      token,
+      params: { itemId },
+      body: { marketplace: 'poshmark', variant },
+    });
+    expect(crossed.status).toBe(409);
+    expect(crossed.error).toMatchObject({
+      code: 'connection_read_only',
+      message:
+        "This item comes from your read-only Depop account, so Listora won't list it anywhere else. To list it elsewhere, turn off Read only for Depop in Link accounts.",
+    });
+    const other = await createInventoryItem(api.db, accountId, { title: 'Linen shirt' });
+    const onShop = await api.call('createListing', {
+      token,
+      params: { itemId: other.id },
+      body: { marketplace: 'depop', variant },
+    });
+    expect(onShop.status).toBe(409);
+    expect(onShop.error).toMatchObject({ code: 'connection_read_only' });
+    const drafts = await api.db
+      .selectFrom('marketplace_listing')
+      .select('id')
+      .where('account_id', '=', accountId)
+      .where('status', '=', 'draft')
+      .execute();
+    expect(drafts).toEqual([]);
+  });
+
   it('lets Listora change the shop again once the owner turns Read only off', async () => {
     await setReadOnly(true);
     expect((await setReadOnly(false)).body).toMatchObject({ readOnly: false });

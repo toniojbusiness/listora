@@ -70,6 +70,48 @@ export function listingIsReadOnly(alias: string): RawBuilder<boolean> {
   )`;
 }
 
+/** Whether the account's connection on the marketplace is read only. */
+export async function isReadOnlyMarketplace(
+  db: DbExecutor,
+  target: { accountId: string; marketplace: Marketplace },
+): Promise<boolean> {
+  const row = await db
+    .selectFrom('marketplace_connection')
+    .select('id')
+    .where('account_id', '=', target.accountId)
+    .where('marketplace', '=', target.marketplace)
+    .where('read_only', '=', true)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+/**
+ * The marketplace of a read-only listing of the item, or `undefined` when it has none. An item
+ * from a read-only account is never put on another marketplace (the API refuses it): Listora
+ * would then have to change that account when it sells elsewhere, or the other one when it sells
+ * there.
+ */
+export async function readOnlySource(
+  db: DbExecutor,
+  target: { accountId: string; itemId: string },
+): Promise<Marketplace | undefined> {
+  const row = await db
+    .selectFrom('marketplace_listing as listing')
+    .select('listing.marketplace')
+    .where('listing.account_id', '=', target.accountId)
+    .where('listing.item_id', '=', target.itemId)
+    .where(listingIsReadOnly('listing'))
+    .orderBy('listing.id')
+    .executeTakeFirst();
+  return row?.marketplace;
+}
+
+/** What the seller is told when an item from a read-only account would go to another marketplace. */
+export function readOnlyItemMessage(source: Marketplace): string {
+  const name = MARKETPLACE_NAMES[source];
+  return `This item comes from your read-only ${name} account, so Listora won't list it anywhere else. To list it elsewhere, turn off Read only for ${name} in Link accounts.`;
+}
+
 /** The listing's marketplace and whether it is read only; `undefined` when there is no listing. */
 export async function readOnlyListing(
   db: DbExecutor,

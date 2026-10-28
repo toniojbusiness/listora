@@ -9,3 +9,14 @@ set read_only = true
 where id = '01a1810e-62e9-723f-8a5a-19e2f44ce59e'
   and account_id = '01a1755b-25e4-780b-8bff-07839b296f3e'
   and marketplace = 'depop';
+
+-- One listing under that connection is not the shop's: it was posted from the owner's own test
+-- shop, and relinking the account's Depop left it under the live shop's connection. It loses its
+-- connection, so no session (not even a read) ever runs for it there; it stays read only by the
+-- account's Depop connection.
+update marketplace_listing
+set connection_id = null
+where id = '01a17fd5-d9e5-768d-87df-f6707cf05b83'
+  and account_id = '01a1755b-25e4-780b-8bff-07839b296f3e'
+  and connection_id = '01a1810e-62e9-723f-8a5a-19e2f44ce59e'
+  and marketplace = 'depop';

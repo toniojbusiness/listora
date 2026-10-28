@@ -49,7 +49,10 @@ public struct LinkAccountsView: View {
                                 },
                             ),
                             onConfirmUnlink: { Task { await model.confirmUnlink(link) } },
-                            onReadOnly: { readOnly in Task { await model.requestReadOnly(link, readOnly) } },
+                            readOnly: Binding(
+                                get: { link.readOnly },
+                                set: { readOnly in Task { await model.requestReadOnly(link, readOnly) } },
+                            ),
                             confirmingWritable: Binding(
                                 get: { model.confirmingWritable == link },
                                 set: {
@@ -117,7 +120,8 @@ private struct LinkAccountRow: View {
     /// The confirmation, attached to this row's Unlink button so it opens next to it.
     @Binding var confirmingUnlink: Bool
     let onConfirmUnlink: () -> Void
-    let onReadOnly: (Bool) -> Void
+    /// The server's setting; setting it asks the model to change it.
+    @Binding var readOnly: Bool
     /// The confirmation before Listora may change a read-only account again.
     @Binding var confirmingWritable: Bool
     let onConfirmWritable: () -> Void
@@ -261,7 +265,7 @@ private struct LinkAccountRow: View {
     /// Read only: on, Listora only reads the account. The switch shows the server's setting and
     /// moves once the server has the change.
     private var readOnlySwitch: some View {
-        Toggle(isOn: Binding(get: { link.readOnly }, set: onReadOnly)) {
+        Toggle(isOn: $readOnly) {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("Read only")
                     .font(Typography.body)

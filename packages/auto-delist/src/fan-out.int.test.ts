@@ -173,6 +173,22 @@ describe('the delist fan-out', () => {
       ]);
       expect(otherStart).toMatchObject({ type: 'delist_started', delists: 0 });
       expect(await itemStatus(other.id)).toBe('sold');
+
+      // A sale on the read-only account delists nothing on the account's other marketplaces.
+      const crossed = await listedEverywhere();
+      const depopSale = await harness.sale('depop', [
+        { itemId: crossed.item.id, listingId: crossed.depop },
+      ]);
+      const [depopStart] = await fanOut(depopSale, 'depop', [
+        { itemId: crossed.item.id, listingId: crossed.depop },
+      ]);
+      expect(depopStart).toMatchObject({ type: 'delist_started', delists: 0 });
+      const queued = await harness.db
+        .selectFrom('marketplace_operation')
+        .select('id')
+        .where('listing_id', 'in', [crossed.ebay, crossed.poshmark, crossed.mercari])
+        .execute();
+      expect(queued).toEqual([]);
     } finally {
       await harness.db
         .updateTable('marketplace_connection')

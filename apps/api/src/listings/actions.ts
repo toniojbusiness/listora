@@ -25,8 +25,11 @@ import {
 import type { ConnectionRef, DesiredListingState, ListingContent } from '@listora/marketplaces';
 import {
   enqueueOperation,
+  isReadOnlyMarketplace,
   isWriteKind,
+  readOnlyItemMessage,
   readOnlyMessage,
+  readOnlySource,
   type NewOperation,
 } from '@listora/operations';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -173,6 +176,7 @@ export function registerListingActionRoutes(
       assertListable(item, 'listed');
       const { marketplace } = body;
       const name = marketplaceName(marketplace);
+      await assertNotFromReadOnly(trx, tenant, item.id, marketplace);
       if (await hasLiveListingOn(trx, tenant, item.id, marketplace)) {
         throw new ApiError('already_exists', `${item.sku} already has a ${name} listing.`);
       }
@@ -250,6 +254,7 @@ export function registerListingActionRoutes(
   contractRoute(app, deps, 'publishListing', async ({ tenant, db, params, request }) => {
     const { trx, row, item } = await prepareAction(db, tenant, params.listingId, 'publish', views);
     assertListable(item, 'published');
+    await assertNotFromReadOnly(trx, tenant, item.id, row.marketplace);
     const variant = variantView(row);
     if (variant === undefined)
       throw new ApiError('invalid_state_transition', 'Add a title and a price first.');
@@ -412,6 +417,26 @@ export async function relistListing(
     { kind: 'relist', content },
     'listing.relist_requested',
   );
+}
+
+/**
+ * Refuses a listing on `marketplace` for an item from a read-only account, and any listing on a
+ * read-only marketplace (docs/features/read-only.md): Listora never crosses such an item to the
+ * account's other marketplaces, nor lists anything on a read-only one.
+ */
+async function assertNotFromReadOnly(
+  trx: DbTransaction,
+  tenant: Tenant,
+  itemId: string,
+  marketplace: Marketplace,
+): Promise<void> {
+  if (await isReadOnlyMarketplace(trx, { accountId: tenant.accountId, marketplace })) {
+    throw new ApiError('connection_read_only', readOnlyMessage(marketplace));
+  }
+  const source = await readOnlySource(trx, { accountId: tenant.accountId, itemId });
+  if (source !== undefined && source !== marketplace) {
+    throw new ApiError('connection_read_only', readOnlyItemMessage(source));
+  }
 }
 
 /** The request's Idempotency-Key, which `contractRoute` requires on every POST. */

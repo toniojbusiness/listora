@@ -21,6 +21,7 @@
  *    listing that cannot be live (ended or sold, or a draft never sent, with nothing in flight)
  *    needs no delist, and neither does one on a read-only connection
  *    (docs/features/read-only.md): Listora never changes that account, so it gets no task either.
+ *    A sale on a read-only account delists nothing anywhere: its items are never listed elsewhere.
  * 6. **Push.** One time-sensitive notification says what Listora delists and what the seller
  *    has to. A run with nothing to delist is completed at once and the item is `sold`.
  *
@@ -41,6 +42,7 @@ import { operationMode, type AdapterLookup, type OperationMode } from '@listora/
 import {
   cancelMootOperations,
   enqueueOperation,
+  isReadOnlyMarketplace,
   listingIsReadOnly,
   UNFINISHED_STATUSES,
 } from '@listora/operations';
@@ -155,13 +157,18 @@ async function startItem(
     .returning('id')
     .executeTakeFirstOrThrow();
 
-  const targets = await prepareTargets(trx, {
+  const prepared = await prepareTargets(trx, {
     accountId,
     itemId: item.id,
     saleId: sale.saleId,
     soldOn: sale.marketplace,
     adapters: deps.adapters,
   });
+  // A sale on a read-only account (docs/features/read-only.md) changes nothing on the account's
+  // other marketplaces either: an item from that account is never listed on them.
+  const targets = (await isReadOnlyMarketplace(trx, { accountId, marketplace: sale.marketplace }))
+    ? []
+    : prepared;
   for (const target of targets) {
     await enqueueOperation(trx, {
       accountId,

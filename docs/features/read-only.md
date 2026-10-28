@@ -49,6 +49,12 @@ Code:
    runtime refuses a write script with it before any step runs (`read_only`, nothing mutated).
    The runtime is served by the server, so the phone runs the new rule without an app update.
 
+**Items never cross.** An item from a read-only account is never listed on the account's other
+marketplaces, and nothing new is listed on a read-only one: creating or publishing such a listing
+is refused with `409 connection_read_only` ("This item comes from your read-only Depop account,
+so Listora won't list it anywhere else."). So Listora never has to change the read-only account
+when the item sells elsewhere, or the other accounts when it sells there.
+
 A refused change is a failure the seller sees, with a Retry that works once they turn Read only
 off (`error.retryable` stays true; Retry is refused while it is on).
 
@@ -58,7 +64,8 @@ Automatic features skip a read-only listing silently and queue nothing for it: n
 task, and no word about it in a notification.
 
 - **Delists after a sale** (`@listora/auto-delist`): a listing on a read-only connection gets no
-  delist; an item whose only other listings are read only is simply sold.
+  delist; an item whose only other listings are read only is simply sold; and a sale on the
+  read-only account delists nothing on the account's other marketplaces.
 - **Features to come** (the automatic listing refresh, offers): they queue through
   `enqueueOperation`, so a write they forget to filter is refused there, which would fail their
   transaction. Each must leave out read-only listings itself: select with `listingIsReadOnly` and
@@ -75,17 +82,24 @@ personal deployment: a real seller's live Depop shop with real buyers, linked on
 its id, account, and marketplace, so it changes nothing in any other database, and its down
 migration does nothing, so reverting it never makes the shop writable again.
 
+The same migration detaches one stray listing record from that connection: a listing posted
+from the owner's own test shop, which relinking the account's Depop left under the live shop's
+connection. Without a connection no session, not even a read, ever runs for it there, and it
+stays read only through the account's Depop connection. Only Listora's record changes.
+
 ## Tests
 
 - `operations/src/read-only.int.test.ts`: every write kind refused and nothing queued, a check
   allowed, a listing without a connection, a change queued before the setting failed by the engine
   without sending, the waiting changes failed when it is turned on, Retry refused until it is off.
-- `auto-delist/src/fan-out.int.test.ts`: the fan-out skips a read-only listing silently.
+- `auto-delist/src/fan-out.int.test.ts`: the fan-out skips a read-only listing silently, and a
+  sale on the read-only account delists nothing elsewhere.
 - `automation/src/adapter/runner-sessions.int.test.ts`, `automation/src/phone/work.int.test.ts`,
   and `automation/src/phone/read-only.test.ts`: the runner, the phone's dispatch (also mid-run),
   and the phone runtime refuse write scripts and still run reads.
 - `apps/api/src/connections/read-only.int.test.ts` and `apps/api/src/listings/views.test.ts`: the
-  setting, both screens, the owner rule, the actions offered, and the `409`s.
+  setting, both screens, the owner rule, the actions offered, the `409`s, and items never
+  crossing to another marketplace.
 - The app: `ReadOnlyLinkTests` and `APIMarketplaceSessionServiceTests`.
 
 ## Data
