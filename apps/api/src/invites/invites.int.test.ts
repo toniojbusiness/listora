@@ -40,8 +40,11 @@ describe('invites (real Postgres)', () => {
     return created.body;
   }
 
-  function redeem(code: string, email: string) {
-    return api.call('redeemInvite', { body: { code, email } });
+  function redeem(code: string, email: string, source = '198.51.100.7') {
+    return api.call('redeemInvite', {
+      body: { code, email },
+      headers: { 'x-forwarded-for': source },
+    });
   }
 
   async function inviteState(id: string, token = owner) {
@@ -103,6 +106,18 @@ describe('invites (real Postgres)', () => {
         .where('id', '=', created.invite.id)
         .executeTakeFirstOrThrow();
       expect(JSON.stringify(row)).not.toContain(created.code.replaceAll('-', ''));
+      // Nor in the stored answer a retry replays: it is sealed under the Idempotency-Key.
+      const stored = await api.db
+        .selectFrom('idempotency_record')
+        .selectAll()
+        .where('operation_id', '=', 'createInvite')
+        .execute();
+      expect(stored.length).toBeGreaterThan(0);
+      for (const record of stored) {
+        const text = `${JSON.stringify(record.response_body)} ${record.response_ciphertext?.toString('latin1') ?? ''}`;
+        expect(text).not.toContain(created.code);
+        expect(text).not.toContain(created.code.replaceAll('-', ''));
+      }
     });
 
     it('signs an invitee up with their own email into their own, new account', async () => {
@@ -475,12 +490,18 @@ describe('invites (real Postgres)', () => {
     }
     expect(limited.status).toBe(429);
     expect(limited.error.retryAfterSeconds).toBeGreaterThan(0);
-    // Even a right code waits.
-    expect((await redeem(code, someone())).status).toBe(429);
+    // Only that source waits: anyone else's wrong code is still just wrong, and the address a
+    // client puts first in X-Forwarded-For is not the one counted.
+    expect((await redeem('ZZZZ-ZZZZ-ZZZZ-ZZZY', someone(), '203.0.113.9')).status).toBe(404);
+    expect(
+      (await redeem('ZZZZ-ZZZZ-ZZZZ-ZZZY', someone(), '203.0.113.9, 198.51.100.7')).status,
+    ).toBe(429);
+    // A right code is never refused, even from the limited source.
+    expect((await redeem(code, someone())).status).toBe(200);
     const start = api.clock.now;
     try {
       api.clock.now = start + 16 * 60_000;
-      expect((await redeem(code, someone())).status).toBe(200);
+      expect((await redeem('ZZZZ-ZZZZ-ZZZZ-ZZZY', someone())).status).toBe(404);
     } finally {
       api.clock.now = start;
     }

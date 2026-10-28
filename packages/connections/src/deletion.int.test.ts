@@ -317,6 +317,8 @@ describe('connection deletion (real Postgres)', () => {
       put: (key, body, options) => storage.put(key, body, options),
       list: (prefix, limit) => storage.list(prefix, limit),
       publicUrl: (key) => storage.publicUrl(key),
+      signedReadUrl: (key, expiresAt) => storage.signedReadUrl(key, expiresAt),
+      invalidatePublic: (keys) => storage.invalidatePublic(keys),
       delete: () => Promise.reject(new Error('SlowDown')),
     };
     const deps = harness({ storage: failing, now: () => Date.now() + 9 * 86_400_000 });

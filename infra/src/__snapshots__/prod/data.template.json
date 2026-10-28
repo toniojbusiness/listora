@@ -17,7 +17,9 @@
         "Family": "postgres18",
         "Parameters": {
           "rds.force_ssl": "1",
-          "log_min_duration_statement": "1000"
+          "log_min_duration_statement": "1000",
+          "log_parameter_max_length": "0",
+          "log_parameter_max_length_on_error": "0"
         }
       }
     },

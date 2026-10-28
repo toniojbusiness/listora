@@ -50,6 +50,10 @@ export class DataStack extends ListoraStack {
         'rds.force_ssl': '1',
         // Statements slower than one second are logged for diagnosis.
         log_min_duration_statement: '1000',
+        // Without their bind parameters: those are sellers' and buyers' values (names,
+        // addresses, codes), and the logs go to CloudWatch. Errors log none either.
+        log_parameter_max_length: '0',
+        log_parameter_max_length_on_error: '0',
       },
     });
 

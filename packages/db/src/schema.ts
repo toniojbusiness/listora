@@ -456,6 +456,17 @@ export interface MarketplaceConnectionTable {
   updated_at: UpdatedAt;
 }
 
+/**
+ * A marketplace that is read only on the account: kept by triggers while its connection is read
+ * only and after the connection is deleted, so every new connection of it starts read only
+ * (docs/features/read-only.md#unlinking-and-relinking). Removed only when the setting is turned off.
+ */
+export interface MarketplaceReadOnlyTable {
+  account_id: string;
+  marketplace: Marketplace;
+  created_at: CreatedAt;
+}
+
 /** One attempt to connect a marketplace account over OAuth (the `state` is stored hashed). */
 export interface ConnectionAuthorizationTable {
   id: Id;
@@ -762,11 +773,15 @@ export interface AuditLogTable {
  */
 export interface IdempotencyRecordTable {
   account_id: string;
+  /** The Idempotency-Key's SHA-256 (hex); the key itself in records stored before sealing. */
   key: string;
   operation_id: string;
   request_hash: string;
   response_status: number;
+  /** Null once sealed: only records stored before `response_ciphertext` hold the response. */
   response_body: NullableJsonb<JsonValue>;
+  /** The response sealed under a key derived from the Idempotency-Key (apps/api/src/idempotency.ts). */
+  response_ciphertext: Nullable<Buffer>;
   created_at: CreatedAt;
   expires_at: Timestamp;
 }
@@ -1326,6 +1341,7 @@ export interface Database {
   ai_account_block: AiAccountBlockTable;
   ai_control_audit: AiControlAuditTable;
   marketplace_connection: MarketplaceConnectionTable;
+  marketplace_read_only: MarketplaceReadOnlyTable;
   connection_authorization: ConnectionAuthorizationTable;
   marketplace_listing: MarketplaceListingTable;
   marketplace_operation: MarketplaceOperationTable;

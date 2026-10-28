@@ -6,9 +6,10 @@
  * few days without one long transaction.
  *
  * Kept elsewhere, by the code that writes them: automation screenshots (14 days) and run records
- * (90 days, the automation dispatcher), idempotency records (24 hours, later POSTs), raw sale
- * emails (90 days, a storage lifecycle rule), and deleted identities (48 hours, later
- * deletions).
+ * (90 days, the automation dispatcher), package photos (60 days after the sale shipped, the
+ * `pack_photos` job in @listora/pack-check), idempotency records (24 hours, later POSTs), raw
+ * sale emails that could not be processed (14 days, a storage lifecycle rule), and deleted
+ * identities (48 hours, later deletions).
  */
 import { startConnectionDeletion } from '@listora/connections';
 import { inTransaction, type Db, type DbTransaction } from '@listora/db';

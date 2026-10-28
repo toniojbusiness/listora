@@ -1,0 +1,5 @@
+drop trigger marketplace_connection_keep_read_only on marketplace_connection;
+drop function keep_marketplace_read_only();
+drop trigger marketplace_connection_inherit_read_only on marketplace_connection;
+drop function inherit_marketplace_read_only();
+drop table marketplace_read_only;

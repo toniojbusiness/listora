@@ -598,6 +598,26 @@
               "Sid": "ScaleBrowserRunner"
             },
             {
+              "Action": "cloudfront:CreateInvalidation",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudfront::111111111111:distribution/",
+                    {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-staging-storage",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefPhotoCdn9B72B83D83991ACC"
+                      }
+                    }
+                  ]
+                ]
+              },
+              "Sid": "InvalidatePhotoCdn"
+            },
+            {
               "Action": "kms:Decrypt",
               "Condition": {
                 "StringEquals": {
@@ -758,6 +778,16 @@
               {
                 "Name": "EMAIL_SES_REGION",
                 "Value": "us-east-1"
+              },
+              {
+                "Name": "STORAGE_CDN_DISTRIBUTION_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-staging-storage",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefPhotoCdn9B72B83D83991ACC"
+                  }
+                }
               },
               {
                 "Name": "BROWSER_RUNNER_LAUNCH",

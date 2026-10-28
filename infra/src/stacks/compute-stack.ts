@@ -46,6 +46,8 @@ export interface ComputeStackProps extends ListoraStackProps {
   readonly photoBucket: s3.IBucket;
   /** The photo CloudFront distribution's domain name; it serves the bucket's `public/` keys. */
   readonly photoCdnDomain: string;
+  /** That distribution's id: the worker invalidates the public package photos it moves. */
+  readonly photoCdnDistributionId: string;
   readonly inboundMailBucket: s3.IBucket;
   /** The queue of received sale emails and their domain; absent without a domain. */
   readonly saleEmail?: { readonly inboundDomain: string; readonly queue: sqs.IQueue };
@@ -165,6 +167,7 @@ export class ComputeStack extends ListoraStack {
         bucket: props.photoBucket.bucketName,
         region: target.region,
         publicBaseUrl: `https://${props.photoCdnDomain}`,
+        cdnDistributionId: props.photoCdnDistributionId,
       },
       signIn: signInResources(
         settings.signIn,
@@ -259,6 +262,22 @@ export class ComputeStack extends ListoraStack {
         props.inboundMailBucket.grantDelete(role, `${INBOUND_MAIL_PREFIX}*`);
         props.saleEmail?.queue.grantConsumeMessages(role);
         role.addToPrincipalPolicy(startRunner(this.runnerServiceArn(environment)));
+        // Package photos (docs/features/pack-check.md): the CDN drops its copies of the public
+        // ones the worker moved to private keys.
+        role.addToPrincipalPolicy(
+          new iam.PolicyStatement({
+            sid: 'InvalidatePhotoCdn',
+            actions: ['cloudfront:CreateInvalidation'],
+            resources: [
+              this.formatArn({
+                service: 'cloudfront',
+                region: '',
+                resource: 'distribution',
+                resourceName: props.photoCdnDistributionId,
+              }),
+            ],
+          }),
+        );
         // Owner alerts about failing background reads, from the alert sender to the alarm email.
         if (target.alarmEmail !== undefined) {
           role.addToPrincipalPolicy(alertSendStatement(this, target, target.alarmEmail));

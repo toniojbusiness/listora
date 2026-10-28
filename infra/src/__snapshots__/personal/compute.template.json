@@ -169,6 +169,26 @@
               "Sid": "ScaleBrowserRunner"
             },
             {
+              "Action": "cloudfront:CreateInvalidation",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudfront::333333333333:distribution/",
+                    {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-personal-storage",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefPhotoCdn9B72B83D83991ACC"
+                      }
+                    }
+                  ]
+                ]
+              },
+              "Sid": "InvalidatePhotoCdn"
+            },
+            {
               "Action": "ses:SendEmail",
               "Condition": {
                 "StringEquals": {
@@ -559,6 +579,16 @@
               {
                 "Name": "EMAIL_INGEST",
                 "Value": "off"
+              },
+              {
+                "Name": "STORAGE_CDN_DISTRIBUTION_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-storage",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefPhotoCdn9B72B83D83991ACC"
+                  }
+                }
               },
               {
                 "Name": "COGNITO_USER_POOL_ID",

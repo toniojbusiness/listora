@@ -80,7 +80,7 @@ function asList(value: unknown): unknown[] {
 
 /** Any resources, for the names of the variables a container gets. */
 const ANY_RESOURCES: ServiceResources = {
-  photoStorage: { bucket: '', region: '', publicBaseUrl: '' },
+  photoStorage: { bucket: '', region: '', publicBaseUrl: '', cdnDistributionId: '' },
   signIn: { driver: 'dev' },
   runner: { cluster: '', service: '', region: '' },
   tokenKeyArn: '',
@@ -235,7 +235,12 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         }),
       });
       t.hasResourceProperties('AWS::RDS::DBParameterGroup', {
-        Parameters: Match.objectLike({ 'rds.force_ssl': '1' }),
+        Parameters: Match.objectLike({
+          'rds.force_ssl': '1',
+          // Slow statements are logged without their values (people's data).
+          log_parameter_max_length: '0',
+          log_parameter_max_length_on_error: '0',
+        }),
       });
       t.hasResourceProperties('AWS::SecretsManager::Secret', {
         Name: `listora/${environment}/database`,
@@ -270,6 +275,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
               Match.objectLike({ Prefix: 'uploads/', ExpirationInDays: 7 }),
               // The browser runner's screenshots, which the worker deletes after 14 days.
               Match.objectLike({ Prefix: 'automation/', ExpirationInDays: 30 }),
+              // Package photos, which the worker deletes 60 days after the sale shipped.
+              Match.objectLike({ Prefix: 'pack/', ExpirationInDays: 180 }),
             ],
           },
         }),
@@ -961,6 +968,10 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           containers.includes('worker') && dns !== undefined,
         );
         expect(policy.includes('ecs:UpdateService')).toBe(containers.includes('worker'));
+        // Dropping the photo CDN's copies of moved package photos: the worker only.
+        expect(policy.includes('cloudfront:CreateInvalidation')).toBe(
+          containers.includes('worker'),
+        );
         // Every task seals; only the worker opens marketplace tokens, and never a browser session
         // (only the runner opens those).
         expect(policy).toContain('"Action":"kms:GenerateDataKey"');

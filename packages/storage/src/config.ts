@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+import { CloudFrontClient } from '@aws-sdk/client-cloudfront';
 import { assertNever } from '@listora/shared';
 
 import { LocalDiskStorage } from './local.ts';
@@ -28,6 +29,8 @@ export type StorageConfig =
       readonly region: string;
       readonly endpoint: string | undefined;
       readonly publicBaseUrl: string;
+      /** The CloudFront distribution at `publicBaseUrl`; only the worker invalidates it. */
+      readonly cdnDistributionId: string | undefined;
     };
 
 export class StorageConfigError extends Error {
@@ -84,8 +87,12 @@ export function loadStorageConfig(env: NodeJS.ProcessEnv = process.env): Storage
       if (!isHttpUrl(publicBaseUrl)) {
         issues.push('STORAGE_PUBLIC_BASE_URL must be an http(s) URL when STORAGE_DRIVER is s3');
       }
+      const cdnDistributionId = env['STORAGE_CDN_DISTRIBUTION_ID'];
+      if (cdnDistributionId !== undefined && !/^[A-Z0-9]{8,32}$/.test(cdnDistributionId)) {
+        issues.push('STORAGE_CDN_DISTRIBUTION_ID must be a CloudFront distribution id');
+      }
       if (issues.length > 0) throw new StorageConfigError(issues);
-      return { driver: known, bucket, region, endpoint, publicBaseUrl };
+      return { driver: known, bucket, region, endpoint, publicBaseUrl, cdnDistributionId };
     }
     default:
       return assertNever(known);
@@ -108,6 +115,15 @@ export function createStorage(config: StorageConfig): ObjectStorage {
         }),
         bucket: config.bucket,
         publicBaseUrl: config.publicBaseUrl,
+        ...(config.cdnDistributionId === undefined
+          ? {}
+          : {
+              cdn: {
+                // CloudFront's API is global, served from us-east-1.
+                client: new CloudFrontClient({ region: 'us-east-1' }),
+                distributionId: config.cdnDistributionId,
+              },
+            }),
       });
     default:
       return assertNever(config);

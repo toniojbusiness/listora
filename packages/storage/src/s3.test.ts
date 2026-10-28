@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import type { CloudFrontClient } from '@aws-sdk/client-cloudfront';
 import { describe, expect, it } from 'vitest';
 
 import { createS3Client, S3Storage } from './s3.ts';
@@ -196,6 +197,62 @@ describe('S3Storage', () => {
       s3.put('uploads/acct/file', BODY, { contentType: 'image/jpeg' }),
     ).rejects.toThrow();
     await expect(s3.list('uploads/acct/')).rejects.toThrow();
+  });
+
+  describe('signed reads and the CDN', () => {
+    const sent: unknown[] = [];
+    const cdnClient = {
+      send: (command: { input: unknown }) => {
+        sent.push(command.input);
+        return Promise.resolve({});
+      },
+    } as unknown as CloudFrontClient;
+    const s3 = new S3Storage({
+      client: createS3Client({ region: 'us-east-1', credentials: FAKE_CREDENTIALS }),
+      bucket: 'listora-photos',
+      publicBaseUrl: 'https://cdn.example.com',
+      cdn: { client: cdnClient, distributionId: 'E2EXAMPLE0001' },
+      now: () => NOW,
+    });
+
+    it('presigns a GET of S3 itself, for a while, answered private and uncached', async () => {
+      const url = new URL(
+        await s3.signedReadUrl('pack/abc/package.jpg', new Date(NOW.getTime() + 3_600_000)),
+      );
+      expect(url.hostname).toBe('listora-photos.s3.us-east-1.amazonaws.com');
+      expect(url.pathname).toBe('/pack/abc/package.jpg');
+      expect(url.searchParams.get('X-Amz-Expires')).toBe('3600');
+      expect(url.searchParams.get('response-cache-control')).toBe('private, no-store');
+      await expect(s3.signedReadUrl('pack/abc/package.jpg', NOW)).rejects.toThrow(RangeError);
+      await expect(
+        s3.signedReadUrl('../etc/passwd', new Date(NOW.getTime() + 60_000)),
+      ).rejects.toThrow();
+    });
+
+    it('asks CloudFront to drop public keys by their paths, the same request each time', async () => {
+      sent.length = 0;
+      await s3.invalidatePublic(['public/abc/package.jpg', 'public/def/package.jpg']);
+      await s3.invalidatePublic(['public/abc/package.jpg', 'public/def/package.jpg']);
+      expect(sent).toHaveLength(2);
+      expect(sent[0]).toEqual({
+        DistributionId: 'E2EXAMPLE0001',
+        InvalidationBatch: {
+          CallerReference: expect.stringMatching(/^[0-9a-f]{64}$/) as unknown,
+          Paths: { Quantity: 2, Items: ['/abc/package.jpg', '/def/package.jpg'] },
+        },
+      });
+      expect(sent[1]).toEqual(sent[0]);
+      await s3.invalidatePublic([]);
+      expect(sent).toHaveLength(2);
+      await expect(s3.invalidatePublic(['pack/abc/package.jpg'])).rejects.toThrow('public/');
+    });
+
+    it('refuses to invalidate without a distribution, rather than skip it', async () => {
+      const { storage: plain } = storage();
+      await expect(plain.invalidatePublic(['public/abc/package.jpg'])).rejects.toThrow(
+        'STORAGE_CDN_DISTRIBUTION_ID',
+      );
+    });
   });
 
   it('serves only public keys at the CloudFront URL, whose origin path is /public', () => {

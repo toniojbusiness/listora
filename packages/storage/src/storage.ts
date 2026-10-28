@@ -99,6 +99,35 @@ export interface ObjectStorage {
   list(prefix: string, limit?: number): Promise<string[]>;
   /** The URL anyone can read a public key at (see `PUBLIC_KEY_PREFIX`). */
   publicUrl(key: string): string;
+  /**
+   * A short-lived URL that reads one object, private or not, until `expiresAt` (at most
+   * `MAX_SIGNED_READ_SECONDS` away), answered with `Cache-Control: private, no-store`
+   * (`PRIVATE_CACHE_CONTROL`) so no shared cache keeps it. Never through the CDN: it is how a
+   * signed-in client reads what only its account may see (a package photo with the buyer's
+   * label).
+   */
+  signedReadUrl(key: string, expiresAt: Date): Promise<string>;
+  /**
+   * Asks the CDN that serves public keys to drop its copies of these (deleted or moved) keys,
+   * so their URLs stop answering before the cache would let them expire. Resolves once the
+   * request is accepted; the local driver has no CDN and does nothing.
+   */
+  invalidatePublic(keys: readonly string[]): Promise<void>;
+}
+
+/** What a private object is served with: no cache, shared or not, keeps a copy. */
+export const PRIVATE_CACHE_CONTROL = 'private, no-store';
+
+/** The longest a signed read URL lasts. */
+export const MAX_SIGNED_READ_SECONDS = 24 * 60 * 60;
+
+/** The seconds until `expiresAt`; throws unless 1 to `MAX_SIGNED_READ_SECONDS`. */
+export function signedReadSeconds(expiresAt: Date, now: Date): number {
+  const seconds = Math.floor((expiresAt.getTime() - now.getTime()) / 1000);
+  if (seconds < 1 || seconds > MAX_SIGNED_READ_SECONDS) {
+    throw new RangeError('a signed read URL must expire between 1 second and 24 hours from now');
+  }
+  return seconds;
 }
 
 /** The SHA-256 checksum header S3 verifies (base64 of the digest); the local driver mirrors it. */

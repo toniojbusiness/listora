@@ -18,6 +18,7 @@ import { EMAIL_INGEST_TASK } from '@listora/email-sales';
 import { LISTING_REFRESH_TASK } from '@listora/listing-refresh';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
+import { PACK_PHOTOS_CRONTAB, PACK_PHOTOS_TASK } from '@listora/pack-check';
 import { PHOTO_PROCESSING_TASK, THUMBNAIL_REFRESH_TASK } from '@listora/photos';
 import { BACKGROUND_PUSH_TASK, PUSH_TASK } from '@listora/push';
 import { DATA_RETENTION_TASK } from '@listora/retention';
@@ -89,6 +90,7 @@ describe('worker feature discovery', () => {
       'email-sales',
       'listing-imports',
       'listing-refresh',
+      'pack-photos',
       'phone-work',
       'photos',
       'push',
@@ -110,6 +112,7 @@ describe('worker feature discovery', () => {
         ITEM_ANALYSIS_TASK,
         LISTING_IMPORT_APPLY_TASK,
         LISTING_RESYNC_TASK,
+        PACK_PHOTOS_TASK,
         PHOTO_PROCESSING_TASK,
         THUMBNAIL_REFRESH_TASK,
         PUSH_TASK,
@@ -130,7 +133,7 @@ describe('worker feature discovery', () => {
       SALE_CHECK_HEALTH_TASK,
       TODAY_SUMMARY_TASK,
     ]);
-    expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);
+    expect(crontab).toEqual([PACK_PHOTOS_CRONTAB, TRUST_METRICS_CRONTAB]);
   });
 
   it('imports modules in file name order and skips tests', async () => {

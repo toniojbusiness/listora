@@ -225,6 +225,7 @@ const COLUMNS = {
     'phone_device_id',
     'read_only',
   ],
+  marketplace_read_only: ['account_id', 'marketplace', 'created_at'],
   connection_authorization: [
     'id',
     'account_id',
@@ -480,6 +481,7 @@ const COLUMNS = {
     'response_body',
     'created_at',
     'expires_at',
+    'response_ciphertext',
   ],
   deleted_identity: ['auth_provider', 'auth_subject_sha256', 'deleted_at'],
   account_deletion: [

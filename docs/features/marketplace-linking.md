@@ -28,6 +28,9 @@ flow end to end.
    [privacy.md](privacy.md)): the row shows `Not linked` once the server answered. Items,
    listings, and sales stay, and listings stay on the marketplace. The next link, which may be
    another shop, never takes those listings ([Relinking another shop](#relinking-another-shop)).
+   A read-only account is never unlinked: the server answers `409 connection_read_only` until the
+   owner turns Read only off, and the row shows that message with Try again
+   ([read-only.md](read-only.md#unlinking-and-relinking)).
 
 Marketplaces (Settings > Marketplaces) shows the same status in the same words for the same
 connection, with Retry check where Link accounts offers Check again: both screens render one

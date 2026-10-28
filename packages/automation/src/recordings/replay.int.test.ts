@@ -245,10 +245,14 @@ describe.each(RECORDING_HOSTS)('recorded pages, through the %s backend', (host) 
     expect(recording.result).toMatchObject({
       ok: true,
       // The private part's text is a placeholder in the result and on the page alike.
-      value: { seller: 'user1', done: 'Name1', api: { products: [{ slug: 'user1-blue-tee' }] } },
+      value: {
+        seller: 'redacteduser1',
+        done: 'RedactedName1',
+        api: { products: [{ slug: 'redacteduser1-blue-tee' }] },
+      },
     });
-    expect(text).toContain('>Name1</h1');
-    expect(text).toContain(String.raw`href=\"/user1/\"`);
+    expect(text).toContain('>RedactedName1</h1');
+    expect(text).toContain(String.raw`href=\"/redacteduser1/\"`);
     expect(text).toContain('https://images.recorded.invalid/1.jpg');
     expect(unredacted(live, ['jdoe_seller'])).toEqual(
       expect.arrayContaining([
