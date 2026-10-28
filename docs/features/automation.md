@@ -78,8 +78,9 @@ from the app
 - **Safety rules** (`safety/`, `profiles.ts`). Pacing: a random delay before every action and
   keystroke, and between a seller's sessions, per marketplace (`AUTOMATION_<MARKETPLACE>_*`),
   never below the floors in `profiles.ts`. The default is a practiced seller's pace
-  (`DEFAULT_PACING`: 0.45 to 1.1 s before each action, 45 to 130 ms per keystroke, 2 to 4 s
-  between sessions; [phone-execution.md](phone-execution.md#speed) has the measurements). Rate limits: runs per hour and per day per seller,
+  (`DEFAULT_PACING`: 0.3 s before each action, the floor, 45 to 130 ms per keystroke, 2 to 4 s
+  between sessions; a read-only connection keeps the 0.45 to 1.1 s of before 2026-10-28,
+  `readOnlyPacing` in [read-only.md](read-only.md); [phone-execution.md](phone-execution.md#speed) has the measurements). Rate limits: runs per hour and per day per seller,
   counted in `automation_run` across every runner. Checks: a CAPTCHA widget, a bot-check page
   (titles, wording, a 403), a verification-code step, a login page or password field, or a page
   off the marketplace's own origins (`challenges.ts`) stops the run at once. Nothing after it

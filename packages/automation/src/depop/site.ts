@@ -24,13 +24,22 @@ export const DEPOP_SITE_URL = 'https://www.depop.com';
 export const DEPOP_API_URL = 'https://webapi.depop.com';
 
 /**
- * Depop's pacing: 0.3 to 0.8 seconds before each action (agreed with the captain, 2026-10-27,
- * against the default 0.8 to 2.5), still a person's pace and never below `PACING_FLOOR`.
+ * Depop's pacing: 0.3 seconds before each action, the floor (`PACING_FLOOR`; the captain's
+ * call, 2026-10-28), still a person's pace.
  */
 export const DEPOP_PACING: PacingSettings = {
-  actionDelayMs: [300, 800],
+  actionDelayMs: [300, 300],
   keystrokeDelayMs: [40, 120],
   sessionGapMs: [5_000, 20_000],
+};
+
+/**
+ * A read-only Depop connection's pace (a production shop Listora only reads): 0.3 to 0.8 seconds
+ * before each action, as Depop's reads were paced before 2026-10-28.
+ */
+export const DEPOP_READ_ONLY_PACING: PacingSettings = {
+  ...DEPOP_PACING,
+  actionDelayMs: [300, 800],
 };
 
 /**

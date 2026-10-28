@@ -5850,13 +5850,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	const DEPOP_API_URL = "https://webapi.depop.com";
 	/**
-	* Depop's pacing: 0.3 to 0.8 seconds before each action (agreed with the captain, 2026-10-27,
-	* against the default 0.8 to 2.5), still a person's pace and never below `PACING_FLOOR`.
+	* Depop's pacing: 0.3 seconds before each action, the floor (`PACING_FLOOR`; the captain's
+	* call, 2026-10-28), still a person's pace.
 	*/
 	const DEPOP_PACING = {
-		actionDelayMs: [300, 800],
+		actionDelayMs: [300, 300],
 		keystrokeDelayMs: [40, 120],
 		sessionGapMs: [5e3, 2e4]
+	};
+	/**
+	* A read-only Depop connection's pace (a production shop Listora only reads): 0.3 to 0.8 seconds
+	* before each action, as Depop's reads were paced before 2026-10-28.
+	*/
+	const DEPOP_READ_ONLY_PACING = {
+		...DEPOP_PACING,
+		actionDelayMs: [300, 800]
 	};
 	/**
 	* The site a script set drives: Depop and its web API, or a stand-in in development and tests,
@@ -11523,15 +11531,20 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 
 // src/profiles.ts
 /**
-	* The pace of a practiced seller: about a second between actions, a quick typist's keystrokes,
-	* and a few seconds between sessions (measured on the real sites, 2026-10-27: at the earlier
-	* 0.8 to 2.5 s per action, pacing alone was most of a listing's minute;
-	* docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
+	* The pace of a practiced seller: 0.3 s before each action (the floor, `PACING_FLOOR`; the
+	* captain's call, 2026-10-28, on the efficiency audit: at 0.45 to 1.1 s pacing was about half
+	* of a listing), a quick typist's keystrokes, and a few seconds between sessions
+	* (docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
 	*/
 	const DEFAULT_PACING = {
-		actionDelayMs: [450, 1100],
+		actionDelayMs: [300, 300],
 		keystrokeDelayMs: [45, 130],
 		sessionGapMs: [2e3, 4e3]
+	};
+	/** The default pace before 2026-10-28, which read-only connections keep (`readOnlyPacing`). */
+	const READ_ONLY_PACING = {
+		...DEFAULT_PACING,
+		actionDelayMs: [450, 1100]
 	};
 	/** Well inside what one busy seller does by hand. */
 	const DEFAULT_LIMITS = {
@@ -11547,6 +11560,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://poshmark.com/login",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: {
 				loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in)(\/|$)/i],
@@ -11566,6 +11580,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://www.mercari.com/login/",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: MERCARI_CHALLENGE_SIGNS,
 			privateSelectors: MERCARI_PRIVATE_SELECTORS,
@@ -11580,6 +11595,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://www.depop.com/login/",
 			emailsSignInLinks: true,
 			pacing: DEPOP_PACING,
+			readOnlyPacing: DEPOP_READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: DEPOP_CHALLENGE_SIGNS,
 			privateSelectors: DEPOP_PRIVATE_SELECTORS,
@@ -11598,6 +11614,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://signin.ebay.com/signin/",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: EBAY_CHALLENGE_SIGNS,
 			privateSelectors: EBAY_PRIVATE_SELECTORS,

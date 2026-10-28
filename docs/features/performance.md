@@ -31,8 +31,8 @@ them; the tools below are in the repository.
 Numbers below are from an Apple M-series laptop running Postgres 18 locally, on a busy machine
 (load average around 14 on 12 cores), so single runs are noisy; before and after were measured
 in alternating rounds and the steady rounds are quoted. Production adds the network and runs on
-much smaller hardware (0.25 vCPU for the API and the worker together in the personal
-environment), so read them as relative.
+much smaller hardware (0.5 vCPU for the API and the worker together in the personal
+environment, 0.25 vCPU until 2026-10-28), so read them as relative.
 
 ## API and database
 
@@ -119,7 +119,7 @@ Throughput is bounded by the marketplaces, not the worker: an operation step is 
 call followed by a read-back one retry delay later, so 5 slots keep 5 marketplace calls in
 flight. Photo processing, the heaviest local job, takes 28 ms of wall time and about 200 ms of
 CPU for a 2048 x 1536 upload (6 libvips threads; 43 ms with 1), with a peak of about 240 MB
-for the process, so the personal environment's 0.25 vCPU processes an item's 6 photos in about
+for the process, so the personal environment's 0.25 vCPU of then processed an item's 6 photos in about
 5 s. The derivatives of such an upload take about 1.5 MB (original 898 KB, listing 463 KB,
 AI 165 KB, thumbnail 20 KB at the 400 px of then; the 640 px thumbnail of now is about 2.5
 times that).

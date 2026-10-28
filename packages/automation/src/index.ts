@@ -106,6 +106,7 @@ export {
   isAutomatedMarketplace,
   LIMITS_CEILING,
   PACING_FLOOR,
+  READ_ONLY_PACING,
   standInProfile,
 } from './profiles.ts';
 export type {

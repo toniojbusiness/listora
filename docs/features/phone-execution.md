@@ -221,8 +221,8 @@ next look, the pause again); a listing spent most of its minute in pacing (0.8 t
 every action); a retry after a failure waited its backoff even with the app open; and the
 marketplaces ran one after another. What makes them fast now:
 
-- pacing of a practiced seller (`DEFAULT_PACING`, [automation.md](automation.md)): 0.45 to 1.1 s
-  per action, 2 to 4 s between sessions, and no pause inside a run;
+- pacing of a practiced seller (`DEFAULT_PACING`, [automation.md](automation.md)): 0.3 s per
+  action (0.45 to 1.1 s until 2026-10-28, which read-only connections keep), 2 to 4 s between sessions, and no pause inside a run;
 - no lookup before a create unless an earlier attempt may have posted
   ([operations.md](operations.md), idempotent re-execution);
 - marketplaces side by side, delists first, each in a warm web view;

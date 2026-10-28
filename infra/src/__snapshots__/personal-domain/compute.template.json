@@ -774,7 +774,7 @@
             "StopTimeout": 30
           }
         ],
-        "Cpu": "256",
+        "Cpu": "512",
         "ExecutionRoleArn": {
           "Fn::GetAtt": [
             "apptaskExecutionRole73129190",

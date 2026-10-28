@@ -14,6 +14,7 @@ import {
   DEPOP_CHALLENGE_SIGNS,
   DEPOP_PACING,
   DEPOP_PRIVATE_SELECTORS,
+  DEPOP_READ_ONLY_PACING,
 } from './depop/site.ts';
 import { EBAY_CHALLENGE_SIGNS, EBAY_PRIVATE_SELECTORS } from './ebay/site.ts';
 import { MERCARI_CHALLENGE_SIGNS, MERCARI_PRIVATE_SELECTORS } from './mercari/site.ts';
@@ -75,6 +76,12 @@ export interface AutomationProfile {
    */
   readonly emailsSignInLinks: boolean;
   readonly pacing: PacingSettings;
+  /**
+   * The gentler pace of a read-only connection's reads (docs/features/read-only.md): a
+   * production shop Listora only reads keeps the pace its reads had before the faster
+   * `pacing` (2026-10-28), whatever `AUTOMATION_<MARKETPLACE>_PACE_MS` says.
+   */
+  readonly readOnlyPacing: PacingSettings;
   readonly limits: RunLimits;
   readonly challenges: ChallengeSigns;
   /** Elements screenshots black out besides every form field (names, addresses, messages). */
@@ -96,16 +103,19 @@ export interface AutomationProfile {
 }
 
 /**
- * The pace of a practiced seller: about a second between actions, a quick typist's keystrokes,
- * and a few seconds between sessions (measured on the real sites, 2026-10-27: at the earlier
- * 0.8 to 2.5 s per action, pacing alone was most of a listing's minute;
- * docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
+ * The pace of a practiced seller: 0.3 s before each action (the floor, `PACING_FLOOR`; the
+ * captain's call, 2026-10-28, on the efficiency audit: at 0.45 to 1.1 s pacing was about half
+ * of a listing), a quick typist's keystrokes, and a few seconds between sessions
+ * (docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
  */
 export const DEFAULT_PACING: PacingSettings = {
-  actionDelayMs: [450, 1100],
+  actionDelayMs: [300, 300],
   keystrokeDelayMs: [45, 130],
   sessionGapMs: [2_000, 4_000],
 };
+
+/** The default pace before 2026-10-28, which read-only connections keep (`readOnlyPacing`). */
+export const READ_ONLY_PACING: PacingSettings = { ...DEFAULT_PACING, actionDelayMs: [450, 1100] };
 
 /** Well inside what one busy seller does by hand. */
 export const DEFAULT_LIMITS: RunLimits = { runsPerHour: 30, runsPerDay: 200 };
@@ -137,6 +147,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     loginUrl: 'https://poshmark.com/login',
     emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
+    readOnlyPacing: READ_ONLY_PACING,
     limits: DEFAULT_LIMITS,
     challenges: COMMON_SIGNS,
     privateSelectors: [],
@@ -152,6 +163,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     loginUrl: 'https://www.mercari.com/login/',
     emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
+    readOnlyPacing: READ_ONLY_PACING,
     limits: DEFAULT_LIMITS,
     challenges: MERCARI_CHALLENGE_SIGNS,
     privateSelectors: MERCARI_PRIVATE_SELECTORS,
@@ -167,6 +179,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     loginUrl: 'https://www.depop.com/login/',
     emailsSignInLinks: true,
     pacing: DEPOP_PACING,
+    readOnlyPacing: DEPOP_READ_ONLY_PACING,
     limits: DEFAULT_LIMITS,
     challenges: DEPOP_CHALLENGE_SIGNS,
     privateSelectors: DEPOP_PRIVATE_SELECTORS,
@@ -184,6 +197,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     loginUrl: 'https://signin.ebay.com/signin/',
     emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
+    readOnlyPacing: READ_ONLY_PACING,
     limits: DEFAULT_LIMITS,
     challenges: EBAY_CHALLENGE_SIGNS,
     privateSelectors: EBAY_PRIVATE_SELECTORS,

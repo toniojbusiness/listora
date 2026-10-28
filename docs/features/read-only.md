@@ -26,6 +26,11 @@ Code:
   but the reads (`isWriteCall` in `@listora/automation`: `create`, `revise`, `price`, `end`,
   `relist`, `markSold`). Both lists name the reads, so a kind or script added later (a refresh,
   an offer answer, a share) is a write until it is listed as a read.
+- **Its reads keep the gentler pace** of before 2026-10-28 (`readOnlyPacing` in
+  `packages/automation/src/profiles.ts`): 0.3 to 0.8 s before each action on Depop and 0.45 to
+  1.1 s elsewhere, where a connection that can write waits the 0.3 s floor. The server hands the
+  phone that pace with each call on a read-only connection (`issueCall`), whatever
+  `AUTOMATION_<MARKETPLACE>_PACE_MS` says.
 
 ## Where a write is refused
 
