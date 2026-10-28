@@ -106,6 +106,9 @@ from the app
   key paths and value types only). No username, name, id, or typed value survives. It is never
   stored. It is how a page module gets fixed against a real page that only a seller's own
   session can see.
+- **Recorded pages** ([recorded-pages.md](recorded-pages.md)). The Poshmark, Mercari, and Depop
+  scripts are tested against recordings of the real pages, made read-only in the seller's own
+  signed-in Chrome and redacted, besides the fake sites below.
 - **Poshmark** (`poshmark/`, [poshmark.md](poshmark.md)) is automated on poshmark.com, or on the
   fake Poshmark with `FAKE_POSHMARK_URL`. With only `FAKE_AUTOMATION_SITE_URL` set, development
   drives the fake site instead, so a development setup never drives a real marketplace.

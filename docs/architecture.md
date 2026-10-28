@@ -424,7 +424,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 - Every marketplace adapter passes the shared conformance suite against its fake, and its payloads,
   validation results, and assisted tasks are pinned by golden files
   ([marketplaces.md](features/marketplaces.md#adapter-model)). Sample listing content for tests in
-  any workspace comes from `@listora/marketplaces/testing`.
+  any workspace comes from `@listora/marketplaces/testing`. The Depop, Poshmark, and Mercari
+  scripts also run against recordings of the real pages, every form shape included
+  ([recorded-pages.md](features/recorded-pages.md)); a page module change is tested there, not
+  only on its fake.
 - **API contract.** `packages/api-contract` (the root `openapi.yaml` and the per-resource files it
   references) is the only place an endpoint or payload shape is defined. The server imports its
   types from `@listora/api-contract` and the iOS app uses the generated `ListoraAPI` Swift package.
@@ -492,6 +495,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/threat-model.md](features/threat-model.md)               | Assets, trust boundaries, the main threats, and where each is mitigated        |
 | [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups  |
 | [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI              |
+| [features/recorded-pages.md](features/recorded-pages.md)           | Scripts tested on recorded real pages: the recorder, redaction, the replay     |
 
 ### Former section numbers
 

@@ -6015,7 +6015,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
 	* in the order given; `null` leaves the listing's photos as they are (an edit).
 	*/
-	async function fillListing$2(page, payload, sku, photos) {
+	async function fillListing$3(page, payload, sku, photos) {
 		await awaitElement$1(page, LISTING_FORM$2.form, FORM$2, FORM$2);
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		let brand = await fillPicks(page, payload);
@@ -6974,7 +6974,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				timeScale: 4
 			}, async (page) => {
 				await openSellForm$1(page, site);
-				await fillListing$2(page, payload, sku, files);
+				await fillListing$3(page, payload, sku, files);
 				await expectSubmit(page, "post");
 			});
 			const result = await step("post", {
@@ -7013,7 +7013,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					mutates: false,
 					timeScale: 4
 				}, async (page) => {
-					await fillListing$2(page, payload, listingSku(op.listing), null);
+					await fillListing$3(page, payload, listingSku(op.listing), null);
 					await expectSubmit(page, "save");
 				});
 				return step("save", {
@@ -7427,7 +7427,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* uploaded in the order given; `null` leaves the listing's photos as they are (a revise or a
 	* relist).
 	*/
-	async function fillListing$1(page, payload, sku, photos) {
+	async function fillListing$2(page, payload, sku, photos) {
 		await expectElement$1(page, LISTING_FORM$1.form, FORM$1, FORM$1);
 		if (payload.categoryId === null) throw new Error("a listing without a category passed validation");
 		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$1(FORM$1, `is not in category ${payload.categoryId}`);
@@ -7647,7 +7647,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
 				await step("fill in the listing", { mutates: false }, async (page) => {
 					await openNewListingForm(page, site, categoryId);
-					await fillListing$1(page, payload, listingSku(op.listing), files);
+					await fillListing$2(page, payload, listingSku(op.listing), files);
 				});
 				return step("list it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
@@ -7656,7 +7656,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editable(op, step, payload.categoryId);
 				if (!("itemId" in opened)) return opened;
-				await step("fill in the changes", { mutates: false }, (page) => fillListing$1(page, payload, listingSku(op.listing), null));
+				await step("fill in the changes", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
 				return step("revise it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
 			price: async (op, step) => {
@@ -7702,7 +7702,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				const found = await earlier(op, step);
 				if (found !== null) return found;
 				if (await step("open the relist form", { mutates: false }, (page) => openListingForm(page, site, "RelistItem", itemId, payload.categoryId)) === "not_editable") throw changed$1("relist form", "shows no listing form for an ended listing");
-				await step("fill in the listing", { mutates: false }, (page) => fillListing$1(page, payload, listingSku(op.listing), null));
+				await step("fill in the listing", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
 				return step("list it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
 			read: async (ref, step) => {
@@ -8213,7 +8213,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* `imei_required` when the category's form asks for a phone's IMEI, which Listora doesn't have:
 	* nothing is sent.
 	*/
-	async function fillListing(page, payload, sku, photos) {
+	async function fillListing$1(page, payload, sku, photos) {
 		await expectElement(page, LISTING_FORM.form, FORM, FORM);
 		if (await page.exists(LISTING_FORM.templatesTip)) await page.click(LISTING_FORM.templatesTip);
 		if (photos !== null) {
@@ -8935,7 +8935,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (await step("fill in the listing", {
 				mutates: false,
 				timeScale: 3
-			}, (page) => fillListing(page, payload, sku, files)) === "imei_required") return imeiRequired();
+			}, (page) => fillListing$1(page, payload, sku, files)) === "imei_required") return imeiRequired();
 			const result = await step("list", {
 				mutates: true,
 				timeScale: 3
@@ -8960,7 +8960,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (await step("fill in the changes", {
 					mutates: false,
 					timeScale: 3
-				}, (page) => fillListing(page, payload, listingSku(op.listing), null)) === "imei_required") return imeiRequired();
+				}, (page) => fillListing$1(page, payload, listingSku(op.listing), null)) === "imei_required") return imeiRequired();
 				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			price: async (op, step) => {
@@ -9883,6 +9883,38 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	const NEW_WAIT_MS = 5e3;
 	/** Sold-item pages read per sale check (48 each, the newest sales among them). */
 	const SOLD_PAGES = 5;
+	/**
+	* Fills in the details of a new or changed listing, one step per part of the form (a create, a
+	* revise, and the recordings of the form's shapes, docs/features/recorded-pages.md).
+	*/
+	async function fillListing(step, payload) {
+		const { catalog, size, condition } = payload;
+		if (catalog === null || size === null || condition === null) throw new Error("the listing has no Poshmark catalog, size, or condition");
+		await step("fill in the title and description", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => fillText(page, payload));
+		await step("fill in the prices", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => fillPrices(page, payload));
+		await step("fill in the brand", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => fillBrand(page, payload.brand));
+		await step("choose the category", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => chooseCatalog(page, catalog));
+		await step("choose the size and condition", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => chooseSizeAndCondition(page, size, condition));
+		await step("choose the colors", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => chooseColors(page, payload.colors));
+	}
 	function createPoshmarkScripts(options) {
 		const { site } = options;
 		const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
@@ -9969,35 +10001,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					revision: revision(record, "listing page")
 				};
 			});
-		}
-		/** Fills in the details of a new or changed listing, one step per part of the form. */
-		async function fillListing(step, payload) {
-			const { catalog, size, condition } = payload;
-			if (catalog === null || size === null || condition === null) throw new Error("the listing has no Poshmark catalog, size, or condition");
-			await step("fill in the title and description", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => fillText(page, payload));
-			await step("fill in the prices", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => fillPrices(page, payload));
-			await step("fill in the brand", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => fillBrand(page, payload.brand));
-			await step("choose the category", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => chooseCatalog(page, catalog));
-			await step("choose the size and condition", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => chooseSizeAndCondition(page, size, condition));
-			await step("choose the colors", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => chooseColors(page, payload.colors));
 		}
 		/**
 		* Saves the open form; Poshmark's validation messages are a rejection in its own words. An
