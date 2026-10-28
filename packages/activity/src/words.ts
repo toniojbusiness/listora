@@ -48,7 +48,7 @@ export function operationEventMessage(
     case 'queued':
       return event.from_status === 'failed' ? 'You asked Listora to try again.' : 'Queued.';
     case 'running':
-      return `Working on it with ${name} (attempt ${String(event.attempt)}).`;
+      return `Working on it with ${name}.`;
     case 'retrying':
       return `${error ?? `${name} didn't take the change.`} Listora will try again.`;
     case 'verifying':
@@ -334,17 +334,11 @@ export function orderDetail(result: InboundEventResult | null, error: string | n
 }
 
 /** How Listora learned of a sale. */
-export function saleDetectionWords(
-  source: SaleDetectionSource,
-  marketplace: Marketplace,
-  check: { host: AutomationRunHost } | null,
-): string {
+export function saleDetectionWords(source: SaleDetectionSource, marketplace: Marketplace): string {
   const name = MARKETPLACE_NAMES[marketplace];
   switch (source) {
     case 'poll':
-      return check === null
-        ? `Found by a sale check of ${name}.`
-        : `Found by a sale check of ${name} ${check.host === 'phone' ? 'on your iPhone' : "in Listora's cloud browser"}.`;
+      return `Listora found it on ${name}.`;
     case 'webhook':
       return `${name} told Listora about it.`;
     case 'email':

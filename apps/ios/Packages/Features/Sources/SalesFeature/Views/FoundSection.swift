@@ -3,8 +3,8 @@ import ListoraAPI
 import SwiftUI
 
 /// How Listora found the sale and what it then did on each other marketplace
-/// (docs/features/activity.md): which check saw it, where and when, when it was recorded, and
-/// each delist with its result and when it settled. The words are the server's.
+/// (docs/features/activity.md): when it sold and each delist's result, in the server's words.
+/// Which check saw it, where it ran, and its timings are Listora's diagnostics, not the seller's.
 struct FoundSection: View {
     let explanation: SaleExplanation
 
@@ -35,9 +35,6 @@ struct FoundSection: View {
                             .font(Typography.subheadline)
                             .foregroundStyle(Palette.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(FoundSectionContent.delistTiming(delist))
-                            .font(Typography.metadata)
-                            .foregroundStyle(Palette.textSecondary)
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("sale.found.delist.\(delist.marketplace.value1?.rawValue ?? "other")")
@@ -59,25 +56,7 @@ struct FoundSectionContent {
     let facts: [Fact]
 
     init(_ explanation: SaleExplanation) {
-        var facts: [Fact] = [Fact(label: "Sold", value: Self.time(explanation.soldAt))]
-        if let check = explanation.check {
-            let place = check.host.value1 == .phone ? "On your iPhone" : "In Listora's cloud browser"
-            facts.append(Fact(label: "Seen by a sale check", value: "\(place), \(Self.time(check.startedAt))"))
-            if let seen = check.ordersSeen {
-                facts.append(Fact(label: "That check saw", value: seen == 1 ? "1 sold order" : "\(seen) sold orders"))
-            }
-        } else if let reported = explanation.reportedAt {
-            facts.append(Fact(label: "Reported", value: Self.time(reported)))
-        }
-        facts.append(Fact(label: "Recorded", value: Self.time(explanation.recordedAt)))
-        self.facts = facts
-    }
-
-    /// "Started 2:41 PM, done 2:43 PM", or "Started 2:41 PM" while it runs.
-    static func delistTiming(_ delist: Components.Schemas.SaleDelist) -> String {
-        let started = "Started \(time(delist.startedAt))"
-        guard let settled = delist.settledAt else { return started }
-        return "\(started), settled \(time(settled))"
+        facts = [Fact(label: "Sold", value: Self.time(explanation.soldAt))]
     }
 
     private static func time(_ date: Date) -> String {

@@ -138,14 +138,13 @@ export function delistResultState(
 /**
  * One listing's honest label: `Delisted (confirmed by eBay)` only after a read-back,
  * `Done (you confirmed)` only after the user's confirmation, and otherwise the operation's own
- * progress (`Delisting... retry 2 of 6`, `Checking...`, `Action needed - delist on Poshmark`,
+ * progress (`Delisting...`, `Checking...`, `Action needed - delist on Poshmark`,
  * `Delist failed - Retry`).
  */
 export function describeDelistResult(input: {
   marketplace: Marketplace;
   listingStatus: ListingStatus;
   operation: DelistOperationFacts;
-  maxAttempts: number;
 }): StatusDisplay {
   const name = MARKETPLACE_NAMES[input.marketplace];
   const state = delistResultState(input.operation);
@@ -164,7 +163,6 @@ export function describeDelistResult(input: {
     marketplace: input.marketplace,
     listingStatus: input.listingStatus,
     operation: input.operation,
-    maxAttempts: input.maxAttempts,
   });
 }
 
@@ -363,7 +361,6 @@ export async function loadDelistRuns(
         marketplace: op.marketplace,
         listingStatus: op.listing_status,
         operation,
-        maxAttempts: max,
       }),
       userTaskId: taskFor.get(op.id) ?? null,
       updatedAt: op.updated_at,

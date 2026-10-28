@@ -342,7 +342,7 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     await clearJobs();
   });
 
-  it('records why a check failed; checks failing in a row tell the seller once, until one works', async () => {
+  it("records why a check failed; checks failing in a row are the owner's, never the seller's", async () => {
     const { connectionId } = await link();
     site.inject({ action: 'orders', fault: { type: 'server_error' }, times: 2 });
 
@@ -366,15 +366,9 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     ]);
 
     const health = { db: database.db, settings: SETTINGS, logger: silentLogger };
-    expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 1 });
-    expect(await pushes()).toEqual([
-      expect.objectContaining({
-        title: "Listora can't check Mercari for sales",
-        body: expect.stringContaining('Mercari had a problem showing your sales.') as unknown,
-      }),
-    ]);
-    // Told once per problem.
+    // Nothing the seller can do: the owner's alarm and the support views have it, not a push.
     expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 0 });
+    expect(await pushes()).toEqual([]);
     expect((await schedule(connectionId)).alerted_at).toBeInstanceOf(Date);
 
     // A check that works ends the problem.
@@ -389,7 +383,7 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     await clearJobs();
   });
 
-  it('calls a check overdue when it has not run long past due, and says so once', async () => {
+  it('calls a check overdue when it has not run long past due, and asks only a phone to open Listora', async () => {
     const { connectionId } = await link();
     const health = { db: database.db, settings: SETTINGS, logger: silentLogger };
     // Due now: within the grace.
@@ -399,9 +393,20 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
       where connection_id = ${connectionId}`.execute(database.db);
     await runSaleCheckHealth(health);
     expect(await schedule(connectionId)).toMatchObject({ health: 'overdue' });
+    // Overdue in Listora's cloud is Listora's to fix: the seller is told nothing.
+    expect(await pushes()).toEqual([]);
+    // Overdue on the seller's iPhone means Listora has not been opened there: ask, once.
+    await sql`update marketplace_connection set runs_on = 'phone' where id = ${connectionId}`.execute(
+      database.db,
+    );
+    await sql`update sale_check_schedule set alerted_at = null where connection_id = ${connectionId}`.execute(
+      database.db,
+    );
+    expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 1 });
     expect(await pushes()).toEqual([
-      expect.objectContaining({ title: "Listora hasn't checked Mercari for sales yet" }),
+      expect.objectContaining({ title: 'Open Listora to keep Mercari in sync' }),
     ]);
+    expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 0 });
     // A connection only the seller can fix has its own reconnect card: no second alarm.
     await sql`update marketplace_connection set status = 'reauth_required', token_ciphertext = null
       where id = ${connectionId}`.execute(database.db);

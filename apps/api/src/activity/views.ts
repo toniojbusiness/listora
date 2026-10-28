@@ -6,7 +6,10 @@ import type { ActivityEntry, SaleExplanation } from '@listora/activity';
 
 import { ApiError } from '../errors.ts';
 
-/** The contract's `ActivityEntry`: absent instead of null, words within their limits. */
+/**
+ * The contract's `ActivityEntry` as the seller sees it: absent instead of null, words within
+ * their limits, and none of Listora's diagnostics (step timings, error codes, run references).
+ */
 export function activityEntryView(entry: ActivityEntry): ContractEntry {
   return {
     id: entry.id,
@@ -21,39 +24,10 @@ export function activityEntryView(entry: ActivityEntry): ContractEntry {
     ...(entry.listingId === null ? {} : { listingId: entry.listingId }),
     ...(entry.operationId === null ? {} : { operationId: entry.operationId }),
     ...(entry.saleId === null ? {} : { saleId: entry.saleId }),
-    ...(entry.durationMs === null ? {} : { durationMs: Math.max(0, entry.durationMs) }),
-    ...(entry.steps === null || entry.steps.length === 0
-      ? {}
-      : {
-          steps: entry.steps.slice(0, 100).map((step) => ({
-            name: step.name.slice(0, 100),
-            ...(step.durationMs === null ? {} : { durationMs: step.durationMs }),
-          })),
-        }),
-    ...(entry.error === null
-      ? {}
-      : {
-          error: {
-            code: entry.error.code.slice(0, 100),
-            message: entry.error.message.slice(0, 1000),
-          },
-        }),
-    ...(entry.reference === null
-      ? {}
-      : {
-          reference: {
-            ...(entry.reference.runId === null ? {} : { runId: entry.reference.runId }),
-            ...(entry.reference.saleCheckId === null
-              ? {}
-              : { saleCheckId: entry.reference.saleCheckId }),
-            screenshot: entry.reference.screenshot,
-          },
-        }),
   };
 }
 
 export function saleExplanationView(explanation: SaleExplanation): ContractExplanation {
-  const { check } = explanation;
   return {
     saleId: explanation.saleId,
     marketplace: explanation.marketplace,
@@ -64,20 +38,6 @@ export function saleExplanationView(explanation: SaleExplanation): ContractExpla
     recordedAt: explanation.recordedAt.toISOString(),
     detectionSource: explanation.detectionSource,
     detection: explanation.detection,
-    ...(check === null
-      ? {}
-      : {
-          check: {
-            id: check.id,
-            kind: check.kind,
-            host: check.host,
-            startedAt: check.startedAt.toISOString(),
-            ...(check.finishedAt === null ? {} : { finishedAt: check.finishedAt.toISOString() }),
-            ...(check.ordersSeen === null ? {} : { ordersSeen: check.ordersSeen }),
-            ...(check.newOrders === null ? {} : { newOrders: check.newOrders }),
-            ...(check.runId === null ? {} : { runId: check.runId }),
-          },
-        }),
     ...(explanation.reportedAt === null
       ? {}
       : { reportedAt: explanation.reportedAt.toISOString() }),
@@ -89,15 +49,6 @@ export function saleExplanationView(explanation: SaleExplanation): ContractExpla
       ...(delist.taskId === null ? {} : { taskId: delist.taskId }),
       status: delist.status,
       result: delist.result.slice(0, 1000),
-      ...(delist.attempts === null ? {} : { attempts: delist.attempts }),
-      ...(delist.error === null
-        ? {}
-        : {
-            error: {
-              code: delist.error.code.slice(0, 100),
-              message: delist.error.message.slice(0, 1000),
-            },
-          }),
       startedAt: delist.startedAt.toISOString(),
       ...(delist.settledAt === null ? {} : { settledAt: delist.settledAt.toISOString() }),
     })),

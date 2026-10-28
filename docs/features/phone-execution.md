@@ -97,8 +97,8 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    lapsed run and a read-back decides. A check waits for the phone again. A call never answered
    is finished in `automation_run` as canceled.
 5. **Waiting too long.** An operation that waits for the phone longer than 24 hours fails with
-   `phone_unavailable` and a Retry. Until then its status says so: "Delisting... waiting on your
-   iPhone (12 minutes)", with a detail asking the seller to open Listora.
+   `phone_unavailable` and a Retry. Until then its status says what the seller can do: "Delisting... open
+   Listora on your iPhone", with a detail asking them to open it (how long it waited is not shown).
 
 ## The phone runtime
 

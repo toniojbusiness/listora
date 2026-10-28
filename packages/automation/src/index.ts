@@ -183,7 +183,6 @@ export {
   SALE_CHECKS_CATEGORY,
   saleCheckErrorMessage,
   saleCheckProblemNotification,
-  saleCheckProblemWords,
 } from './sale-checks/health.ts';
 export type { SaleCheckHealthDependencies, SaleCheckProblem } from './sale-checks/health.ts';
 export { runSaleCheck } from './sale-checks/job.ts';

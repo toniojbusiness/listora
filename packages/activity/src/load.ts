@@ -48,6 +48,12 @@ export interface ActivityFilter {
   to?: Date;
   /** At most this many entries, newest first. */
   limit: number;
+  /**
+   * The seller's timeline: only what they did or can act on (item changes, marketplace actions,
+   * sales, delists, tasks). Browser sessions, sale checks, and orders are Listora's own
+   * diagnostics, for the operator's timeline (`admin activity`) only.
+   */
+  forSeller?: boolean;
 }
 
 type Scope = 'operation' | 'item' | 'sale' | 'all';
@@ -65,16 +71,15 @@ export async function loadActivity(
   filter: ActivityFilter,
 ): Promise<ActivityEntry[]> {
   const scope = scopeOf(filter);
-  const sources: Promise<ActivityEntry[]>[] = [
-    operationEvents(db, filter),
-    browserSessions(db, filter, scope),
-    tasks(db, filter),
-  ];
+  const diagnostics = filter.forSeller !== true;
+  const sources: Promise<ActivityEntry[]>[] = [operationEvents(db, filter), tasks(db, filter)];
+  if (diagnostics) sources.push(browserSessions(db, filter, scope));
   if (scope !== 'operation') {
-    sources.push(sales(db, filter), saleChecks(db, filter, scope), delistRuns(db, filter));
+    sources.push(sales(db, filter), delistRuns(db, filter));
+    if (diagnostics) sources.push(saleChecks(db, filter, scope));
     if (filter.marketplace === undefined || scope !== 'all') sources.push(itemChanges(db, filter));
   }
-  if (scope === 'sale' || scope === 'all') sources.push(orders(db, filter));
+  if (diagnostics && (scope === 'sale' || scope === 'all')) sources.push(orders(db, filter));
   const entries = (await Promise.all(sources)).flat();
   return entries
     .sort((a, b) => b.at.getTime() - a.at.getTime() || b.id.localeCompare(a.id))
@@ -380,11 +385,6 @@ async function orders(db: DbExecutor, filter: ActivityFilter): Promise<ActivityE
 async function sales(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEntry[]> {
   const rows = await db
     .selectFrom('sale')
-    .leftJoin('sale_check_run as check', (join) =>
-      join
-        .onRef('check.account_id', '=', 'sale.account_id')
-        .onRef('check.id', '=', 'sale.sale_check_run_id'),
-    )
     .select((eb) => [
       'sale.id',
       'sale.marketplace',
@@ -393,7 +393,6 @@ async function sales(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEn
       'sale.sold_at',
       'sale.created_at',
       'sale.sale_check_run_id',
-      'check.host as check_host',
       eb
         .selectFrom('sale_item')
         .select(sql<number>`coalesce(sum(sale_item.sale_price_cents), 0)::bigint`.as('total'))
@@ -442,11 +441,7 @@ async function sales(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEn
       outcome: 'info',
       marketplace: row.marketplace,
       title: `Sold on ${MARKETPLACE_NAMES[row.marketplace]} for ${dollars(total)}${order}`,
-      detail: saleDetectionWords(
-        row.detection_source,
-        row.marketplace,
-        row.check_host === null ? null : { host: row.check_host },
-      ),
+      detail: saleDetectionWords(row.detection_source, row.marketplace),
       itemId: filter.itemId ?? row.first_item_id ?? null,
       saleId: row.id,
       reference:

@@ -14,7 +14,6 @@ struct LinkAccountsPhoneTests {
             phone: true,
             installationID: "install-1",
             deviceName: nil,
-            waiting: 1,
         )
         let service = FakeSessionService(
             list: [.depop(.notLinked)],
@@ -50,7 +49,6 @@ struct LinkAccountsPhoneTests {
             phone: false,
             installationID: nil,
             deviceName: nil,
-            waiting: 0,
         )
         let service = FakeSessionService(
             list: [.depop(.notLinked)],
@@ -75,7 +73,6 @@ struct LinkAccountsPhoneTests {
             phone: true,
             installationID: "other",
             deviceName: "Sam's iPhone",
-            waiting: 0,
         )
         #expect(there.text(thisInstallation: "install-1") == "Runs on Sam's iPhone")
     }

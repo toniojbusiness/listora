@@ -12,7 +12,6 @@ import {
   describeListingStatus,
   describeOperation,
   relistMode,
-  waitedFor,
   type ListingStatusInput,
 } from './status-display.ts';
 
@@ -67,11 +66,7 @@ describe('describeListingStatus', () => {
           successEvidence: null,
         }),
       },
-      {
-        tone: 'in_progress',
-        label: 'Delisting... retry 2 of 6',
-        detail: 'Depop is limiting requests right now.',
-      },
+      { tone: 'in_progress', label: 'Delisting...' },
     ],
     [
       'a failed delist',
@@ -176,15 +171,20 @@ describe('describeListingStatus', () => {
     expect(describeListingStatus(input)).toEqual(expected);
   });
 
-  it('counts retries against the policy it is given', () => {
+  it("never shows the seller a retry's count or its last error: Listora is still on it", () => {
     expect(
       describeListingStatus({
         marketplace: 'ebay',
         listingStatus: 'active',
-        operation: operation({ kind: 'price', status: 'retrying', successEvidence: null }),
-        maxAttempts: 4,
-      }).label,
-    ).toBe('Updating price... retry 1 of 3');
+        operation: operation({
+          kind: 'price',
+          status: 'retrying',
+          attempts: 2,
+          errorMessage: 'eBay took too long to answer.',
+          successEvidence: null,
+        }),
+      }),
+    ).toEqual({ tone: 'in_progress', label: 'Updating price...' });
   });
 
   it('says "confirmed by" only for a read-back, and "you confirmed" only for the user', () => {
@@ -269,7 +269,7 @@ describe('describeOperation', () => {
     }
   });
 
-  it('says a step waits on the seller iPhone, and for how long, never that it is done', () => {
+  it('asks the seller to open Listora for a step that waits on their iPhone, never that it is done', () => {
     const now = new Date('2026-10-26T12:00:00.000Z');
     const since = new Date(now.getTime() - 12 * 60_000);
     const waiting = (status: 'queued' | 'retrying' | 'verifying', running = false) =>
@@ -281,10 +281,10 @@ describe('describeOperation', () => {
       });
     expect(waiting('queued')).toEqual({
       tone: 'in_progress',
-      label: 'Delisting... waiting on your iPhone (12 min)',
-      detail: 'Open Listora on your iPhone to finish this on Depop. It has waited 12 min.',
+      label: 'Delisting... open Listora on your iPhone',
+      detail: 'Open Listora on your iPhone to finish this on Depop.',
     });
-    expect(waiting('verifying').label).toBe('Checking... waiting on your iPhone (12 min)');
+    expect(waiting('verifying').label).toBe('Checking... open Listora on your iPhone');
     expect(waiting('retrying', true)).toEqual({
       tone: 'in_progress',
       label: 'Delisting on your iPhone...',
@@ -322,17 +322,15 @@ describe('describeOperation', () => {
           nextAttemptAt,
         }),
         now,
-        maxAttempts: 6,
       });
-    // The app shows when (the time is the seller's), with Try now.
+    // The app offers Try now; the attempt count and its time are the support views'.
     expect(retrying(new Date(now.getTime() + 3 * 60_000))).toEqual({
       tone: 'in_progress',
-      label: 'Publishing... retry 1 of 5',
-      detail: 'Depop took too long to answer.',
+      label: 'Publishing...',
     });
-    // Due for 2 minutes and the phone hasn't taken it: it waits on the phone since it was due.
+    // Due and the phone hasn't taken it: it waits on the phone.
     expect(retrying(new Date(now.getTime() - 2 * 60_000)).label).toBe(
-      'Publishing... waiting on your iPhone (2 min)',
+      'Publishing... open Listora on your iPhone',
     );
   });
 
@@ -354,14 +352,5 @@ describe('describeOperation', () => {
     expect(relisting('mercari', null)).toBe('Relisting (new listing)...');
     // eBay relists under a new id of its own.
     expect(relisting('ebay', '110012345678')).toBe('Relisting...');
-  });
-
-  it('writes how long something waited in plain words', () => {
-    expect(waitedFor(20_000)).toBe('less than a minute');
-    expect(waitedFor(59 * 60_000)).toBe('59 min');
-    expect(waitedFor(2 * 3_600_000)).toBe('2 h');
-    expect(waitedFor(3 * 3_600_000 + 5 * 60_000)).toBe('3 h 5 min');
-    expect(waitedFor(26 * 3_600_000)).toBe('1 day');
-    expect(waitedFor(80 * 3_600_000)).toBe('3 days');
   });
 });

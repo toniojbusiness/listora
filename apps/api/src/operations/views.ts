@@ -82,7 +82,6 @@ export function operationView(
         phoneWait: phoneWait ?? null,
         nextAttemptAt: op.next_attempt_at,
       },
-      maxAttempts: MAX_ATTEMPTS,
     }),
     attempt: op.attempts,
     maxAttempts: MAX_ATTEMPTS,

@@ -24,17 +24,6 @@ struct MarketplaceRowTests {
     }
 
     @Test
-    func `shows when the connection last checked out`() throws {
-        let row = try MarketplaceRow(connection: connection(
-            status: "connected",
-            tone: "success",
-            label: "Connected",
-            lastOkAt: "2026-10-24T05:41:00Z",
-        ))
-        #expect(row.lastOkAt == Date(timeIntervalSince1970: 1_792_820_460))
-    }
-
-    @Test
     func `a marketplace that is not connected offers to connect it`() throws {
         let row = try MarketplaceRow(connection: connection(
             status: "not_connected",

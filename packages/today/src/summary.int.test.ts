@@ -177,6 +177,40 @@ describe('the Today summary (real Postgres)', () => {
     expect(cards.map((card) => card.title)).toEqual(['Reconnect eBay']);
   });
 
+  it("never shows Listora's own sale-check problems, which are the owner's to fix", async () => {
+    const accountId = await harness.account();
+    const failing = await harness.connection(accountId, 'depop', { mode: 'automation' });
+    const overdue = await harness.connection(accountId, 'mercari', { mode: 'automation' });
+    await harness.db
+      .insertInto('sale_check_schedule')
+      .values([
+        {
+          account_id: accountId,
+          connection_id: failing,
+          marketplace: 'depop',
+          next_check_at: ago(HOUR),
+          next_reason: 'retry',
+          failures_in_a_row: 3,
+          last_error_code: 'element_missing',
+          last_error_message: "Depop's sold items page has changed, so Listora couldn't read it.",
+          health: 'failing',
+          unhealthy_since: ago(3 * HOUR),
+        },
+        {
+          account_id: accountId,
+          connection_id: overdue,
+          marketplace: 'mercari',
+          next_check_at: ago(DAY),
+          next_reason: 'scheduled',
+          health: 'overdue',
+          unhealthy_since: ago(DAY),
+        },
+      ])
+      .execute();
+    const summary = await loadToday(harness.db, accountId, now());
+    expect(summary.cards).toEqual([]);
+  });
+
   it('counts the drafts into one card', async () => {
     const accountId = await harness.account();
     await harness.item(accountId, { status: 'draft' });

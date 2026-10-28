@@ -60,14 +60,9 @@ final class ItemActivityModel {
     }
 }
 
-/// One activity line as the screen shows it: the server's words, who did it, when, how long it
-/// took, and a browser session's steps.
+/// One activity line as the screen shows it: the server's words, who did it, and when. Where
+/// Listora ran it and how long it took are Listora's diagnostics, not the seller's.
 struct ActivityRowContent: Equatable, Identifiable {
-    struct Step: Equatable, Hashable {
-        let name: String
-        let duration: String?
-    }
-
     let id: String
     let title: String
     let detail: String?
@@ -75,8 +70,6 @@ struct ActivityRowContent: Equatable, Identifiable {
     let source: String
     let tone: StatusTone
     let systemImage: String
-    let duration: String?
-    let steps: [Step]
 
     init(_ entry: ActivityEntry) {
         id = entry.id
@@ -86,20 +79,14 @@ struct ActivityRowContent: Equatable, Identifiable {
         source = Self.source(entry)
         tone = Self.tone(entry.outcome)
         systemImage = Self.systemImage(entry)
-        duration = entry.durationMs.map { Self.duration(milliseconds: Int($0)) }
-        steps = (entry.steps ?? []).map { step in
-            Step(name: step.name, duration: step.durationMs.map { Self.duration(milliseconds: Int($0)) })
-        }
     }
 
     /// Who did it, in the seller's words.
     private static func source(_ entry: ActivityEntry) -> String {
         switch entry.source.value1 {
-        case .iphone: "On your iPhone"
-        case .cloudBrowser: "Listora's cloud browser"
         case .you: "You"
         case .marketplace: entry.marketplace.map { marketplaceName($0) } ?? "The marketplace"
-        case .listora, nil: "Listora"
+        case .listora, .iphone, .cloudBrowser, nil: "Listora"
         }
     }
 
@@ -116,27 +103,12 @@ struct ActivityRowContent: Equatable, Identifiable {
 
     private static func systemImage(_ entry: ActivityEntry) -> String {
         switch entry.kind.value1 {
-        case .browserSession: entry.source.value1 == .iphone ? "iphone" : "globe"
-        case .saleCheck: "magnifyingglass"
-        case .order: "doc.text"
         case .sale: "dollarsign.circle"
         case .delist: "tag.slash"
         case .task: "person.crop.circle.badge.exclamationmark"
         case .operation: "arrow.triangle.2.circlepath"
-        case .item, nil: "pencil"
+        case .item, .browserSession, .saleCheck, .order, nil: "pencil"
         }
-    }
-
-    /// "850 ms", "12.3 s", "2 min 5 s".
-    static func duration(milliseconds: Int) -> String {
-        if milliseconds < 1000 {
-            return "\(milliseconds) ms"
-        }
-        if milliseconds < 60000 {
-            return (Double(milliseconds) / 1000).formatted(.number.precision(.fractionLength(1))) + " s"
-        }
-        let seconds = (milliseconds + 500) / 1000
-        return "\(seconds / 60) min \(seconds % 60) s"
     }
 
     private static func marketplaceName(_ marketplace: Components.Schemas.Marketplace) -> String {

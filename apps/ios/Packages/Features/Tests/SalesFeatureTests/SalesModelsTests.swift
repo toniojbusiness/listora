@@ -212,7 +212,7 @@ struct SalesModelsTests {
         #expect(model.explanation == nil)
         service.explanation = saleExplanation()
         await model.load()
-        #expect(model.explanation?.detection == "Found by a sale check of Mercari on your iPhone.")
+        #expect(model.explanation?.detection == "Listora found it on Mercari.")
     }
 
     @Test

@@ -936,8 +936,6 @@ components:
       $ref: './components/schemas/today.yaml#/TodayDelist'
     TodayConnection:
       $ref: './components/schemas/today.yaml#/TodayConnection'
-    TodaySaleChecks:
-      $ref: './components/schemas/today.yaml#/TodaySaleChecks'
     TodayStaleSuggestion:
       $ref: './components/schemas/today.yaml#/TodayStaleSuggestion'
     KnownTodayStaleSuggestion:

@@ -62,7 +62,6 @@ struct TodayCardContent: Equatable, Identifiable {
         case .ship: Self.ship(card, now: now, calendar: calendar)
         case .delist: Self.delist(card)
         case .reconnect: Self.reconnect(card)
-        case .saleChecks: Self.saleChecks(card)
         case .reviewDrafts: Self.drafts(card, calendar: calendar)
         case .staleListing: Self.stale(card)
         case nil: KindContent(systemImage: "sparkles")
@@ -104,19 +103,6 @@ struct TodayCardContent: Equatable, Identifiable {
         var content = KindContent(systemImage: "link.badge.plus", iconTone: .actionNeeded)
         if let name = card.connection?.displayName {
             content.facts.append(Fact(text: name, systemImage: "person.crop.circle"))
-        }
-        return content
-    }
-
-    /// A marketplace whose sale checks fail or stopped running: its sales are not being seen.
-    private static func saleChecks(_ card: TodayCard) -> KindContent {
-        var content = KindContent(systemImage: "eye.slash.fill", iconTone: .actionNeeded)
-        if let checks = card.saleChecks {
-            let name = TodayFormatting
-                .marketplaceName(checks.marketplace.value1?.rawValue ?? checks.marketplace.value2 ?? "")
-            let label = checks.health.value1 == .failing ? "Sale checks failing" : "Sale checks overdue"
-            content.status = Badge(label: label, tone: .actionNeeded)
-            content.facts.append(Fact(text: name, systemImage: "tag"))
         }
         return content
     }

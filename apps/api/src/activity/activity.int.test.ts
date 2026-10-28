@@ -262,20 +262,10 @@ describe('activity (real Postgres)', () => {
     expect(other.status).toBe(404);
   });
 
-  it('shows a marketplace whose sale checks fail on Today and with its connection', async () => {
-    const connectionId = await mercari('failing');
+  it('keeps failing sale checks off Today, on the connection for support', async () => {
+    await mercari('failing');
     const today = await api.call('getToday', { token });
-    const card = today.body.cards.find((candidate) => candidate.kind === 'sale_checks');
-    expect(card).toMatchObject({
-      id: `sale_checks:${connectionId}`,
-      urgency: 'high',
-      title: "Listora can't check Mercari for sales",
-      detail: expect.stringContaining(
-        "Mercari's sold items page has changed, so Listora couldn't read it.",
-      ) as unknown,
-      action: { destination: 'marketplaces', connectionId },
-      saleChecks: { connectionId, marketplace: 'mercari', health: 'failing' },
-    });
+    expect(today.body.cards.map((card) => card.kind)).not.toContain('sale_checks');
     const connections = await api.call('listConnections', { token });
     expect(
       connections.body.data.find((connection) => connection.marketplace === 'mercari')?.saleChecks,
@@ -286,9 +276,5 @@ describe('activity (real Postgres)', () => {
         message: "Mercari's sold items page has changed, so Listora couldn't read it.",
       },
     });
-
-    await mercari('healthy');
-    const caughtUp = await api.call('getToday', { token });
-    expect(caughtUp.body.cards.some((candidate) => candidate.kind === 'sale_checks')).toBe(false);
   });
 });
