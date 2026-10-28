@@ -249,6 +249,7 @@ extension RootView {
             },
             accountDeletion: dependencies.settings.accountDeletion,
             invites: dependencies.settings.invites,
+            descriptionStyle: dependencies.settings.descriptionStyle,
             screens: SettingsScreens(
                 linkAccounts: { AnyView(LinkAccountsView(model: dependencies.linkAccounts)) },
                 marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },

@@ -17,3 +17,5 @@ export {
 export type { ImportRefusal, ListingImportRow } from './start.ts';
 export { importWords } from './summary.ts';
 export type { ImportWords } from './summary.ts';
+export { createSoldItem, SOLD_ITEM_PHOTOS, soldItemMaker } from './sold.ts';
+export type { PreparedSoldItem, SoldItemDependencies } from './sold.ts';

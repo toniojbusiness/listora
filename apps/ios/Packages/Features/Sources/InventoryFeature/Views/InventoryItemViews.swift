@@ -138,11 +138,9 @@ struct InventoryGridCell: View {
         Color.clear
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-                // The listing size: the thumbnail is too small to fill a cell sharply.
-                PhotoView(
-                    url: item.coverPhoto?.urls?.listing ?? item.coverPhoto?.urls?.thumbnail,
-                    cornerRadius: Radius.small,
-                )
+                // The thumbnail is sized to fill the widest cell sharply; the listing photo is
+                // ten times its bytes.
+                PhotoView(url: item.coverPhoto?.urls?.thumbnail, cornerRadius: Radius.small)
             }
             .overlay(alignment: .topLeading) {
                 Chip(item.status.label)

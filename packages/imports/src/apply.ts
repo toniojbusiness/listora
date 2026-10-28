@@ -244,15 +244,35 @@ export async function createItem(
       ) as JsonObject,
     ),
   });
+  await insertItemPhotos(deps, trx, entry.account_id, item.id, photos);
+  const listingId = await insertListing(trx, entry, listing, item.id);
+  if (listingId === null) throw new Error('a new item already has a listing there');
+  await syncItemListedStatus(trx, entry.account_id, item.id);
+  await audit(trx, entry, item.id, 'item.imported', { photos: photos.length });
+  await settle(trx, entry, 'imported', { itemId: item.id, listingId });
+  return item.id;
+}
+
+/**
+ * A new item's photos, cover first: each stored as an upload and processed by the photo pipeline
+ * like any other.
+ */
+export async function insertItemPhotos(
+  deps: Pick<ImportApplyDependencies, 'storage' | 'photoJobs'>,
+  trx: DbTransaction,
+  accountId: string,
+  itemId: string,
+  photos: readonly ImportedPhoto[],
+): Promise<void> {
   const jobs = deps.photoJobs ?? graphilePhotoJobs;
   for (const [position, photo] of photos.entries()) {
-    const key = storageKeys.upload(entry.account_id, randomUUID());
+    const key = storageKeys.upload(accountId, randomUUID());
     await deps.storage.put(key, photo.jpeg, { contentType: 'image/jpeg' });
     const row = await trx
       .insertInto('photo')
       .values({
-        account_id: entry.account_id,
-        item_id: item.id,
+        account_id: accountId,
+        item_id: itemId,
         position,
         role: position === 0 ? 'front' : 'detail',
         storage_key: key,
@@ -263,14 +283,8 @@ export async function createItem(
       })
       .returning('id')
       .executeTakeFirstOrThrow();
-    await jobs.enqueue(trx, { accountId: entry.account_id, photoId: row.id });
+    await jobs.enqueue(trx, { accountId, photoId: row.id });
   }
-  const listingId = await insertListing(trx, entry, listing, item.id);
-  if (listingId === null) throw new Error('a new item already has a listing there');
-  await syncItemListedStatus(trx, entry.account_id, item.id);
-  await audit(trx, entry, item.id, 'item.imported', { photos: photos.length });
-  await settle(trx, entry, 'imported', { itemId: item.id, listingId });
-  return item.id;
 }
 
 /**
@@ -387,15 +401,19 @@ export async function matchCandidates(
   }));
 }
 
-/** The listing's photos, in order; one that can't be fetched or read is left out. */
-async function fetchPhotos(
-  deps: ImportApplyDependencies,
+/**
+ * The listing's photos, in order (the first `limit`); one that can't be fetched or read is left
+ * out.
+ */
+export async function fetchPhotos(
+  deps: Pick<ImportApplyDependencies, 'photos'>,
   listing: ListedListing,
   log: Logger,
+  limit = listing.details.photoUrls.length,
 ): Promise<ImportedPhoto[]> {
   const signal = AbortSignal.timeout(PHOTOS_TIMEOUT_MS);
   const photos: ImportedPhoto[] = [];
-  for (const url of listing.details.photoUrls) {
+  for (const url of listing.details.photoUrls.slice(0, limit)) {
     try {
       photos.push(await importedPhoto(await deps.photos.fetch(url, signal)));
     } catch (error) {

@@ -72,6 +72,7 @@ export async function ordersToRead(
     .where('sale.account_id', '=', accountId)
     .where('sale.marketplace', '=', marketplace)
     .where('sale.status', 'in', OPEN_SALE_STATUSES)
+    .where('sale.detection_source', '<>', 'history')
     .where('sale.external_order_id', 'is not', null)
     .where('sale.sold_at', '>', new Date(now.getTime() - LABEL_READ_DAYS * 86_400_000))
     .where('pack.sale_id', 'is', null)

@@ -49,7 +49,7 @@ switch needs no data migration ([depop.md](depop.md), "SKUs are listing ids").
 | Relist     | Posts a **new listing** from the listing's content, under a new slug. A listing still on sale is left as it is.         | The new product reads for sale (`active`)      |
 | Mark sold  | Not automated: after a sale elsewhere, the auto-delist ends the Depop listing                                           |                                                |
 | Read       | The product's page (for its 410), then the seller's own product from Depop's web API, as the edit page loads it         |                                                |
-| Sale check | The seller's sold items (`/sellinghub/sold-items/`): its no-sales note reads as none; sales fail visibly (not mapped)   |                                                |
+| Sale check | The seller's receipts (what the sold items page loads), each sale's listing from the seller's sold listings             |                                                |
 | Listings   | The seller's listings for sale from Depop's web API, as the selling hub loads them, 24 at a time, up to 25 pages        |                                                |
 | Health     | The selling hub (`/sellinghub/`)                                                                                        |                                                |
 
@@ -63,8 +63,14 @@ switch needs no data migration ([depop.md](depop.md), "SKUs are listing ids").
 - `listListings` reports each listing exactly as a read by its slug would, with its revision.
   Sold and deleted listings are not among those for sale. It reports `complete: false` when the
   page limit is reached.
-- A sale check reports each sold item as one order. Its id is the product slug: Listora lists one
-  of each item, so a Depop listing sells once.
+- A sale check reports each purchase as one order, named by Depop's purchase id (a bundle is one
+  order with each item at what it sold for), as its receipt shows it (`sales.ts`,
+  `pages/receipts.ts`): the sale time, what the buyer paid (an accepted offer is less than the
+  listing's price), Depop's fees (what it paid less what the seller is paid, `seller_amount`),
+  and whether it shipped. A refunded or canceled purchase is no sale, and a
+  listing the seller marked as sold has no receipt: it sold somewhere else. Each line's listing
+  (its slug, text, photos, and size) comes from the seller's sold listings, for the sold item
+  Listora makes of a sale it had no listing for ([sales.md](sales.md#sales-history)).
 - **Boost is never turned on.** The sell form's "Boost your listing" adds a 12% fee when the item
   sells. Listora turns it off if Depop drew it on (a test listing on the captain's account once
   came out boosted), and checks it is off before posting.
@@ -82,8 +88,18 @@ through `PageDriver.apiGet` ([automation.md](automation.md#how-it-works)), only 
   `description`, its `pricing` (the price a buyer pays now, `final_price_key`), and its
   `updated_at`. Only its seller gets it; Depop answers 404 for a product it deleted.
 - **The seller's listings**: `GET /api/v1/shop/products/?statusFilter=selling` (and `sold`), what
-  the selling hub loads: newest first, 24 at a time with a cursor, each with its `status`,
-  `description`, `price`, and `dateUpdated`.
+  the selling hub loads: newest first, 24 at a time with a cursor, each with its `id`, `status`,
+  `description`, `price`, `sizes`, `pictures`, and `dateUpdated`. A sold listing's status is
+  `PURCHASED` (a buyer bought it; `STATUS_PURCHASED` in its edit data) or `MARKED_AS_SOLD`.
+- **The seller's receipts**: `GET /presentation/api/v1/receipts/?role=seller&limit=24`, what the
+  sold items page loads, newest first, the next page `&after=<page_info.last>`: each purchase's
+  `purchase_id`, `status` (`shipping_pending`, `shipped`, `delivered_pending_feedback`,
+  `delivered`, `refunded`), `sold_timestamp`, `items_amount`, `seller_amount`, `is_bundle`, and
+  `line_items`
+  (each its `product_id`, text, and photo); one receipt
+  (`/presentation/api/v1/receipts/<purchase id>/`) gives a bundle's `lines` with each one's
+  `slug` and `product_amount`. Receipts also name the buyer and where it ships; Listora reads
+  only the buyer's first name and the parcel's tracking, for Pack check.
 
 A read opens the product's page first: a 410 Gone there is the definitive absence the end is
 confirmed by, and a 404 never counts (it could be a listing not visible yet, as Depop says of its
@@ -286,7 +302,8 @@ depop/
   taxonomy/        Depop's category tree and form fields (taxonomy.json), its schema, its refresh
   pages/           one module per page or API, with its selectors and data keys:
                    hub-page, listing-form (the sell and edit form), product-page, edit-page,
-                   sold-items-page, api (the web API reads); page-data and flight-data read data
+                   receipts and api (the web API reads); page-data and flight-data read data
+  sales.ts         the seller's sales, from the receipts and the sold listings
   fake/            the fake Depop site, its conformance driver, its CLI
 ```
 
@@ -305,13 +322,14 @@ module's selectors or data keys, or refreshing the taxonomy.
 
 The tests never send traffic to Depop. They run in a real headless Chromium against the fake
 Depop site (`fake/fake-depop-site.ts`, its pages in `fake/fake-depop-pages.ts`). The fake copies
-Depop's pages and API as the seller's session showed them (2026-10-26 and 27): the selling hub,
+Depop's pages and API as the seller's session showed them (2026-10-26 to 28): the selling hub,
 the product page's streamed rows and schema.org price with Delete listing and its dialog, the
 sell and edit form with every product type of the taxonomy (category groups, size lists, the
 brand search, the condition, every item detail's picker with its Remove buttons, Boost,
 photos that show as added a moment after they are picked, and Depop's item info from them where a
 field is empty), the Done page after Post, a 410 for a product deleted for good, the sold items
-page, and the web API's reads of the seller's own product and listings (with the session's token
+page and its receipts (a purchase's offer price, a bundle, shipped, canceled) and a listing marked
+as sold, and the web API's reads of the seller's own product and listings (with the session's token
 as the bearer token, which its pages keep in the `access_token` cookie). It can also inject each
 failure:
 
@@ -394,8 +412,17 @@ listing. Once, the read right after a Post failed in the page ("Failed to fetch"
 was still on its way to the next one, so the run didn't know the listing it had made; a read of
 Depop's API the page couldn't make is now made once more ([automation.md](automation.md)).
 
-Still to verify: a sale check with a sale (the account has none), and a run on the iPhone itself
-(the web API's reads from the app's web view).
+**A seller with sales** (2026-10-28, read-only, on a seller's own shop the captain connected: a
+background tab of the Mac's signed-in Chrome, through the machine-wide Depop pacing): before
+this change, the sale check refused her sold items page, which listed receipts ("lists sales in
+a way Listora cannot read yet"), so none of her sales reached Listora, and the import reads only
+listings for sale. Listora's own sale check (the phone runtime's page backend, the history read)
+then read every sale her receipts show, a refunded one left out, each item at what the buyer
+paid (the receipts' totals to the cent) and with its sold listing, and whether it shipped; her
+listings marked as sold have no receipt and were left out. Her data stays off the repository:
+the tests use invented receipts in the fake's real shape.
+
+Still to verify: a run on the iPhone itself (the web API's reads from the app's web view).
 
 When the live site differs, the step stops before it sends anything and the user does it, so a
 change can never cause a false success. The run logs what the page has instead

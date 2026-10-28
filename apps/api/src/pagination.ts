@@ -25,3 +25,37 @@ export function decodeCursor(cursor: string): string {
   }
   return id;
 }
+
+const TIME_CURSOR_VERSION = 't1';
+
+/** Where a page ordered by a time, newest first, ended: the last row's time and id. */
+export interface TimeCursor {
+  /** To the millisecond, as the page's order compares it. */
+  at: Date;
+  id: string;
+}
+
+/** Opaque cursor for keyset pagination by a time and then the id (newest first). */
+export function encodeTimeCursor(cursor: TimeCursor): string {
+  return Buffer.from(`${TIME_CURSOR_VERSION}:${String(cursor.at.getTime())}:${cursor.id}`).toString(
+    'base64url',
+  );
+}
+
+/** The time and id a cursor continues after; `400 invalid_request` for anything else. */
+export function decodeTimeCursor(cursor: string): TimeCursor {
+  const [version, time, id] = Buffer.from(cursor, 'base64url').toString('utf8').split(':');
+  const at = Number(time);
+  if (
+    version !== TIME_CURSOR_VERSION ||
+    !Number.isSafeInteger(at) ||
+    id === undefined ||
+    !UUID.test(id)
+  ) {
+    throw new ApiError(
+      'invalid_request',
+      'The page cursor is not valid. Start from the first page.',
+    );
+  }
+  return { at: new Date(at), id };
+}

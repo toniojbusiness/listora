@@ -34,6 +34,8 @@ final class StubAPIServer: @unchecked Sendable {
     var askBeforeDelist = false
     /// The names `GET /v1/account/profile` answers, as the last `PUT` saved them.
     var profileNames: [String: String] = [:]
+    /// The seller's own Depop style, as the last `PUT /v1/account/description-style` saved it.
+    var depopStyle: String?
     /// Invites: the unverified invitee redeemed once, the owner created an invite, revoked Maria.
     var inviteeVerified = false
     var newInviteCreated = false
@@ -174,6 +176,7 @@ final class StubAPIServer: @unchecked Sendable {
             return respondToLinkAccounts(method: request.method, path: path)
                 ?? respondToSaleEmails(method: request.method, path: path, body: request.body)
                 ?? respondToProfile(method: request.method, path: path, body: request.body)
+                ?? respondToDescriptionStyle(method: request.method, path: path, body: request.body)
                 ?? respondToInvites(method: request.method, path: path, body: request.body)
                 ?? respondToDevSignIn(request, path: path)
                 ?? Self.http(

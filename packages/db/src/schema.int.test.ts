@@ -559,6 +559,7 @@ const COLUMNS = {
     'health',
     'unhealthy_since',
     'alerted_at',
+    'history_until',
   ],
   sale_check_run: [
     'id',
@@ -684,6 +685,7 @@ const COLUMNS = {
     'created_at',
     'updated_at',
   ],
+  description_style: ['account_id', 'depop', 'created_at', 'updated_at'],
   item_batch: [
     'id',
     'account_id',

@@ -3,11 +3,13 @@
  * function takes the request's `Tenant` and filters on its account.
  */
 import type { DelistRunStatus as ContractDelistRunStatus } from '@listora/api-contract';
-import type { DbExecutor, DelistRunStatus, SaleStatus } from '@listora/db';
-import type { Selectable } from 'kysely';
+import type { DbExecutor, DelistRunStatus, Marketplace, SaleStatus } from '@listora/db';
+import { STANDING_SALE_STATUSES } from '@listora/sales';
+import { sql, type Selectable } from 'kysely';
 
 import type { FeeLineTable, SaleItemTable, SaleTable, UserTaskTable } from '@listora/db';
 
+import type { TimeCursor } from '../pagination.ts';
 import type { Tenant } from '../tenancy.ts';
 
 export type SaleRow = Selectable<SaleTable>;
@@ -39,14 +41,18 @@ export interface SaleListFilter {
   statuses: readonly SaleStatus[] | undefined;
   /** Sales with a delist run whose stored status (the SLA job's, at most a minute old) is one of these. */
   delistStatuses: readonly ContractDelistRunStatus[] | undefined;
-  /** Return only sales recorded before this one (keyset pagination). */
-  beforeId: string | undefined;
+  /** Return only sales after this one in the feed's order (keyset pagination). */
+  after: TimeCursor | undefined;
   limit: number;
 }
 
+/** How the feed compares sale times: to the millisecond, as its cursor keeps them. */
+const SOLD_AT_MS = sql<Date>`date_trunc('milliseconds', sale.sold_at)`;
+
 /**
- * Newest first. Sale ids are UUIDv7, so id order is the order Listora recorded them in. Returns
- * up to `limit + 1` rows so the caller can tell whether another page exists.
+ * Newest sold first, then newest recorded (sale ids are UUIDv7, in the order Listora recorded
+ * them), so a sales history recorded at once still lists by when each sold. Returns up to
+ * `limit + 1` rows so the caller can tell whether another page exists.
  */
 export async function listSaleRows(
   db: DbExecutor,
@@ -83,8 +89,12 @@ export async function listSaleRows(
       ),
     );
   }
-  if (filter.beforeId !== undefined) query = query.where('id', '<', filter.beforeId);
+  if (filter.after !== undefined) {
+    const { at, id } = filter.after;
+    query = query.where(sql<boolean>`(${SOLD_AT_MS}, sale.id) < (${at}, ${id}::uuid)`);
+  }
   return query
+    .orderBy(SOLD_AT_MS, 'desc')
     .orderBy('id', 'desc')
     .limit(filter.limit + 1)
     .execute();
@@ -187,4 +197,77 @@ export async function pendingRelistSale(
     .orderBy('sale.id', 'desc')
     .limit(1)
     .executeTakeFirst();
+}
+
+/** One marketplace's standing sales, all time: orders, items, and revenue. */
+export interface MarketplaceSalesRow {
+  marketplace: Marketplace;
+  salesCount: number;
+  itemsSold: number;
+  /** The sale prices plus the shipping buyers paid, in cents. */
+  revenueCents: number;
+  firstSoldAt: Date;
+}
+
+/**
+ * Every marketplace's standing sales (detected, confirmed, or shipped), all time: one row per
+ * marketplace with a sale, in no particular order.
+ */
+export async function marketplaceSalesRows(
+  db: DbExecutor,
+  tenant: Tenant,
+): Promise<MarketplaceSalesRow[]> {
+  const [orders, items] = await Promise.all([
+    db
+      .selectFrom('sale')
+      .select((eb) => [
+        'marketplace',
+        eb.fn.countAll<string>().as('sales'),
+        eb.fn.min('sold_at').as('first_sold_at'),
+        eb.fn.sum<string>('shipping_charged_cents').as('shipping'),
+      ])
+      .where('account_id', '=', tenant.accountId)
+      .where('status', 'in', STANDING_SALE_STATUSES)
+      .groupBy('marketplace')
+      .execute(),
+    db
+      .selectFrom('sale_item')
+      .innerJoin('sale', (join) =>
+        join
+          .onRef('sale.account_id', '=', 'sale_item.account_id')
+          .onRef('sale.id', '=', 'sale_item.sale_id'),
+      )
+      .select((eb) => [
+        'sale.marketplace',
+        eb.fn.countAll<string>().as('items'),
+        eb.fn.sum<string>('sale_item.sale_price_cents').as('prices'),
+      ])
+      .where('sale_item.account_id', '=', tenant.accountId)
+      .where('sale.status', 'in', STANDING_SALE_STATUSES)
+      .groupBy('sale.marketplace')
+      .execute(),
+  ]);
+  const sold = new Map(items.map((row) => [row.marketplace, row]));
+  return orders.map((row) => ({
+    marketplace: row.marketplace,
+    salesCount: Number(row.sales),
+    itemsSold: Number(sold.get(row.marketplace)?.items ?? 0),
+    revenueCents: Number(sold.get(row.marketplace)?.prices ?? 0) + Number(row.shipping),
+    firstSoldAt: row.first_sold_at,
+  }));
+}
+
+/** The marketplaces the account has a connection to that is not revoked. */
+export async function connectedMarketplaces(
+  db: DbExecutor,
+  tenant: Tenant,
+): Promise<Marketplace[]> {
+  const rows = await db
+    .selectFrom('marketplace_connection')
+    .select('marketplace')
+    .distinct()
+    .where('account_id', '=', tenant.accountId)
+    .where('status', '<>', 'revoked')
+    .execute();
+  return rows.map((row) => row.marketplace);
 }

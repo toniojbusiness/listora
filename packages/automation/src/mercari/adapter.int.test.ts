@@ -565,13 +565,29 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
       expect(recent.map((order) => order.externalOrderId).sort()).toEqual(
         [done, waiting, fresh].sort(),
       );
+      // In progress: Mercari doesn't say whether it shipped. Its listing's page gives the sold
+      // item Listora would make of it its photos and details.
       expect(recent.find((order) => order.externalOrderId === fresh)).toEqual({
         externalOrderId: fresh,
         soldAt: expect.any(Date) as unknown,
         items: [
-          { externalListingId: fresh, title: 'Fresh sale', priceCents: 3000, currency: 'USD' },
+          {
+            externalListingId: fresh,
+            title: 'Fresh sale',
+            priceCents: 3000,
+            currency: 'USD',
+            listing: expect.objectContaining({
+              externalListingId: fresh,
+              status: 'sold',
+              details: expect.objectContaining({
+                photoUrls: [expect.stringContaining(`/media/${fresh ?? ''}-`) as unknown],
+              }) as unknown,
+            }) as unknown,
+          },
         ],
       });
+      // The sold tab's are done: shipped.
+      expect(recent.find((order) => order.externalOrderId === done)?.shipped).toBe(true);
       expect(await own.listOrdersSince(null, ctx())).toHaveLength(4);
     } finally {
       await shop.close();

@@ -676,7 +676,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     ).toBeNull();
   });
 
-  it('fails a phone sale check visibly when Depop shows a sale, and hands nothing to the sale intake', async () => {
+  it('reads a Depop sale on the phone from its receipt, and hands it to the sale intake', async () => {
     await runPhone();
     const listingId = await newListing();
     const create = await enqueue(listingId, 'create');
@@ -692,34 +692,33 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       true,
     );
     await runPhone();
-    // Depop's sold items page names a sale's receipt, not its listing: the check fails, and is
-    // tried again, rather than guess which listing sold (a wrong guess would delist it).
+    // Depop's receipt names the purchase and the product it sold, which its sold listings name
+    // by slug: the order of Listora's listing, handed over once.
     const schedule = await db
       .selectFrom('sale_check_schedule')
       .select(['last_outcome', 'next_reason'])
       .where('account_id', '=', accountId)
       .where('connection_id', '=', connectionId)
       .executeTakeFirstOrThrow();
-    expect(schedule).toEqual({ last_outcome: 'failed', next_reason: 'retry' });
-    const [run] = await db
-      .selectFrom('automation_run')
-      .select(['outcome', 'error_code'])
-      .where('account_id', '=', accountId)
-      .where('host', '=', 'phone')
-      .where('purpose', '=', 'sale_check')
-      .orderBy('started_at', 'desc')
-      .limit(1)
-      .execute();
-    expect(run).toEqual({ outcome: 'failed', error_code: 'element_missing' });
+    expect(schedule).toEqual({ last_outcome: 'succeeded', next_reason: 'scheduled' });
     const events = await db
       .selectFrom('inbound_event')
-      .select(['source', 'provider_event_id'])
+      .select(['source', 'provider_event_id', 'payload'])
       .where('account_id', '=', accountId)
       .execute();
-    expect(events).toEqual([]);
+    expect(events).toEqual([
+      {
+        source: 'poll',
+        provider_event_id: `order:${String(site.purchaseIdOf(slug ?? ''))}`,
+        payload: expect.objectContaining({
+          shipped: false,
+          items: [expect.objectContaining({ externalListingId: slug }) as unknown],
+        }) as unknown,
+      },
+    ]);
   });
 
-  it("reads the sold history on the phone read-only, and records each check with the phone's step times, failed or not", async () => {
+  it("reads the sold history on the phone read-only, and records each check with the phone's step times", async () => {
     await runPhone();
     const listingId = await newListing();
     const create = await enqueue(listingId, 'create');
@@ -773,10 +772,8 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     ).toEqual([
       // The first sale check after linking saw nothing sold yet.
       { kind: 'scheduled', host: 'phone', outcome: 'succeeded', orders_seen: 0, new_orders: 0 },
-      // Depop's sold items page lists sales in a way Listora doesn't read yet
-      // (depop/pages/sold-items-page.ts): the read fails visibly rather than guess which
-      // listing sold, and still hands nothing to the sale intake.
-      { kind: 'history', host: 'phone', outcome: 'failed', orders_seen: null, new_orders: null },
+      // The history read saw the sale, and handed nothing to the sale intake.
+      { kind: 'history', host: 'phone', outcome: 'succeeded', orders_seen: 1, new_orders: 0 },
     ]);
     // The phone said how long each step took.
     const session = await db
@@ -1087,7 +1084,8 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       .values({
         account_id: accountId,
         marketplace: 'depop',
-        external_order_id: slug,
+        // A Depop order is named by its purchase id, as its receipt names it.
+        external_order_id: String(site.purchaseIdOf(slug)),
         sold_at: new Date(),
         detection_source: 'poll',
       })

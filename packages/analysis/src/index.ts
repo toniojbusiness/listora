@@ -8,13 +8,25 @@ export {
 } from './analyze.ts';
 export type { AnalysisOutcome, AnalyzeOptions } from './analyze.ts';
 export { AnalysisConfigError, loadAnalysisConfig } from './config.ts';
+export {
+  DEFAULT_DEPOP_DESCRIPTION_STYLE,
+  loadDescriptionStyle,
+  MAX_DESCRIPTION_STYLE_LENGTH,
+  saveDescriptionStyle,
+} from './description-style.ts';
+export type { DescriptionStyle } from './description-style.ts';
 export type { AnalysisConfig } from './config.ts';
 export { MAX_ANALYSIS_PHOTOS, MAX_TAG_CROPS, selectAnalysisPhotos } from './input.ts';
 export type { AnalysisInput, AnalysisPhoto } from './input.ts';
 export { runItemAnalysis } from './job.ts';
 export type { AnalysisJobDependencies, AnalysisJobOutcome } from './job.ts';
 export { loadAnalysisInput } from './load-input.ts';
-export { depopDescription, HASHTAG, MARKETPLACE_COPY_LIMITS } from './marketplace-copy.ts';
+export {
+  DEPOP_DRAFT_LENGTH,
+  depopDescription,
+  HASHTAG,
+  MARKETPLACE_COPY_LIMITS,
+} from './marketplace-copy.ts';
 export type { MarketplaceCopyLimits } from './marketplace-copy.ts';
 export {
   decodeAnalysisAnswer,

@@ -893,6 +893,11 @@ export interface SaleCheckScheduleTable {
   unhealthy_since: NullableTimestamp;
   /** When the seller was told about the current problem. */
   alerted_at: NullableTimestamp;
+  /**
+   * Where the connection's sales history ends (docs/features/sales.md): a sale that sold before
+   * it is recorded only (detection source `history`), one after it is acted on.
+   */
+  history_until: Generated<Date>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -1063,6 +1068,17 @@ export interface TodaySummarySettingTable {
   time_zone: Nullable<string>;
   /** The local date of the latest summary sent. */
   last_sent_on: Nullable<DateString>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+// Description style ---------------------------------------------------------------------------
+
+/** The seller's own description style, one per account (docs/features/description-style.md). */
+export interface DescriptionStyleTable {
+  account_id: string;
+  /** How to write the Depop draft, replacing Listora's default style. */
+  depop: string;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -1290,6 +1306,7 @@ export interface Database {
   listing_import: ListingImportTable;
   listing_import_entry: ListingImportEntryTable;
   today_summary_setting: TodaySummarySettingTable;
+  description_style: DescriptionStyleTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;
   pack_check_setting: PackCheckSettingTable;

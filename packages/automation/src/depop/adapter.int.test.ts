@@ -523,9 +523,9 @@ describe('Depop automation adapter on the fake Depop site', () => {
     });
 
     it('in a sale check, which fails and is retried after the relink', async () => {
-      inject('sold', { type: 'login_challenge' });
+      inject('receipts', { type: 'bot_check' });
       await expect(adapter.listOrdersSince(null, ctx())).rejects.toThrow('Depop');
-      expect(sessions.challenges).toEqual(['login_challenge']);
+      expect(sessions.challenges).toEqual(['bot_check']);
     });
   });
 
@@ -640,11 +640,90 @@ describe('Depop automation adapter on the fake Depop site', () => {
     });
   });
 
-  it('fails a sale check when the sold items page lists sales, rather than guess which sold', async () => {
-    await withSite({}, async (fake, own) => {
-      // A sale's row names its receipt, not its listing: a wrong guess would delist that one.
-      fake.sell(fake.seed({ description: 'Tote bag.', priceCents: 5000 }));
+  it("reads each sale from Depop's receipts: what the buyer paid, its listing, whether it shipped", async () => {
+    await withSite({ pageSize: 2 }, async (fake, own) => {
+      const at = (hoursAgo: number) => new Date(Date.now() - hoursAgo * 3_600_000);
+      const offer = fake.seed({
+        description: 'Denim jacket\nLight wash.',
+        priceCents: 4500,
+        size: 'M',
+        photos: ['front.jpg', 'back.jpg'],
+      });
+      const offerSoldAt = at(5);
+      fake.sell(offer, offerSoldAt, undefined, { paidCents: 3800 });
+      const shipped = fake.seed({ description: 'Wool scarf.', priceCents: 2000 });
+      fake.sell(shipped, at(4), undefined, { status: 'shipped' });
+      // Sold somewhere else: no receipt, so no Depop sale.
+      fake.markAsSold(fake.seed({ description: 'Cord cap.', priceCents: 1250 }), at(3));
+      const canceled = fake.seed({ description: 'Silk top.', priceCents: 3000 });
+      fake.sell(canceled, at(2), undefined, { status: 'cancelled' });
+      const tee = fake.seed({ description: 'Band tee.', priceCents: 1500 });
+      const skirt = fake.seed({ description: 'Mini skirt.', priceCents: 2500 });
+      const bundle = fake.sellBundle(
+        [
+          { slug: tee, paidCents: 1200 },
+          { slug: skirt, paidCents: 2000 },
+        ],
+        at(1),
+      );
       fake.seed({ description: 'Still for sale.', priceCents: 1000 });
+
+      const orders = await own.listOrdersSince(null, ctx());
+      expect(orders.map((order) => order.externalOrderId)).toEqual([
+        String(bundle),
+        String(fake.purchaseIdOf(shipped)),
+        String(fake.purchaseIdOf(offer)),
+      ]);
+      const [both, scarf, jacket] = orders;
+      // A bundle is one order, each item at what it sold for (its receipt says so).
+      expect(
+        both?.items.map(({ externalListingId, priceCents }) => [externalListingId, priceCents]),
+      ).toEqual([
+        [tee, 1200],
+        [skirt, 2000],
+      ]);
+      expect(both?.shipped).toBe(false);
+      expect(scarf?.shipped).toBe(true);
+      // An accepted offer: what the buyer paid, not the listing's price.
+      expect(jacket).toEqual({
+        externalOrderId: String(fake.purchaseIdOf(offer)),
+        soldAt: offerSoldAt,
+        shipped: false,
+        // What the buyer paid less what the seller is paid: Depop's fees, from the receipt.
+        fees: [
+          { kind: 'marketplace', description: "Depop's fees", amountCents: 380, currency: 'USD' },
+        ],
+        items: [
+          {
+            externalListingId: offer,
+            title: 'Denim jacket',
+            priceCents: 3800,
+            currency: 'USD',
+            listing: expect.objectContaining({
+              externalListingId: offer,
+              status: 'sold',
+              description: 'Denim jacket\nLight wash.',
+              details: expect.objectContaining({
+                size: 'M',
+                photoUrls: [`${fake.url}/media/front.jpg`, `${fake.url}/media/back.jpg`],
+              }) as unknown,
+            }) as unknown,
+          },
+        ],
+      });
+      // Since a time: only the sales after it.
+      expect(
+        (await own.listOrdersSince(at(4.5), ctx())).map((order) => order.externalOrderId),
+      ).toEqual([String(bundle), String(fake.purchaseIdOf(shipped))]);
+      // Only reads: nothing on Depop changed.
+      expect(fake.requests.filter((request) => request.method !== 'GET')).toEqual([]);
+    });
+  });
+
+  it('fails a sale check visibly when a receipt is not as Listora knows it, rather than guess', async () => {
+    await withSite({}, async (fake, own) => {
+      fake.sell(fake.seed({ description: 'Tote bag.', priceCents: 5000 }));
+      fake.inject({ action: 'receipts', fault: { type: 'redesigned' } });
       await expect(own.listOrdersSince(null, ctx())).rejects.toThrow('element_missing');
     });
   });

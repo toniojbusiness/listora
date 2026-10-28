@@ -1128,7 +1128,7 @@
 	function time$1(args) {
 		return new RegExp(`^${timeSource(args)}$`);
 	}
-	function datetime(args) {
+	function datetime$1(args) {
 		const opts = ["Z"];
 		if (args.offset) opts.push(`([+-](?:[01]\\d|2[0-3]):[0-5]\\d)`);
 		const qualified = `${timeSource({
@@ -1782,7 +1782,7 @@
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISODateTime = /*@__PURE__*/ $constructor("$ZodISODateTime", (inst, def) => {
-		def.pattern ?? (def.pattern = datetime(def));
+		def.pattern ?? (def.pattern = datetime$1(def));
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISODate = /*@__PURE__*/ $constructor("$ZodISODate", (inst, def) => {
@@ -5754,6 +5754,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return _superRefine(fn, params);
 	}
 
+// ../../node_modules/zod/v4/classic/iso.js
+	function datetime(params) {
+		return _isoDateTime(ZodISODateTime, params);
+	}
+
 // ../marketplaces/src/ebay/description.ts
 	const ENTITIES = {
 		amp: "&",
@@ -6022,7 +6027,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 	const ANSWER_MS$1 = 45e3;
-	const LOOK_EVERY_MS$4 = 500;
+	const LOOK_EVERY_MS$3 = 500;
 	/**
 	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
 	* its options while closed and shows them through a style variable (`--display: block`), so
@@ -6205,7 +6210,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				message: "Depop didn't take the listing: it marked a field as needing a fix."
 			};
 			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
-			await lookAgain$1(page, LOOK_EVERY_MS$4);
+			await lookAgain$1(page, LOOK_EVERY_MS$3);
 		}
 	}
 	/** The product a page links to (the Done page's link to the new listing), when it links one. */
@@ -6391,20 +6396,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** One product, as the API's list of the seller's own listings gives it. */
 	const productRecordSchema$1 = object({
 		slug: string().regex(DEPOP_SLUG),
-		/** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
+		/** `ONSALE`, `SOLD` or `PURCHASED`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
 		status: string(),
 		/** The whole listing text: copy, Listora's SKU line, hashtags. */
 		description: string(),
 		price,
 		/** Depop's last change to the product, to the second. */
 		dateUpdated: string()
-	});
-	/** One sold item, as the sold items page embeds it (no buyer details are read). */
-	const soldItemSchema = object({
-		slug: string().regex(DEPOP_SLUG),
-		description: string(),
-		price,
-		soldAt: string()
 	});
 	/**
 	* Depop's product statuses, as the Selling API names them too (`STATUS_ONSALE`, ...). Deleted
@@ -6414,6 +6412,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const STATUSES$3 = {
 		ONSALE: "active",
 		SOLD: "sold",
+		PURCHASED: "sold",
 		MARKED_AS_SOLD: "sold",
 		DELETED: "ended",
 		BANNED: "ended"
@@ -6477,7 +6476,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*   answers 410 for).
 	* - `GET /api/v1/shop/products/?statusFilter=selling` (and `sold`): the seller's own listings,
 	*   newest first, as the selling hub loads them, 24 at a time with a cursor; each with its
-	*   `status`, `description`, `price`, and `dateUpdated`.
+	*   `id`, `status`, `description`, `price` (the listing's: a buyer may have paid less, which
+	*   the receipt shows), `sizes`, `pictures`, and `dateUpdated`.
 	*
 	* Only reads: every change goes through Depop's own pages. A shape Listora doesn't know throws
 	* `PageChangedError`, as a page does.
@@ -6487,7 +6487,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const API$2 = "web API";
 	/** One page of the seller's own listings. */
 	const PAGE_SIZE$1 = 24;
-	const amount = object({ amount: string() });
+	const amount$1 = object({ amount: string() });
 	const editListingSchema = object({
 		slug: string().regex(DEPOP_SLUG),
 		status: string(),
@@ -6498,7 +6498,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			final_price_key: string().optional()
 		}).catchall(unknown())
 	});
-	const priceSchema = object({ price_breakdown: object({ price: amount }) });
+	const priceSchema = object({ price_breakdown: object({ price: amount$1 }) });
 	const feedSchema = object({
 		meta: object({
 			cursor: string().nullable(),
@@ -6510,6 +6510,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const STATUSES$2 = {
 		STATUS_ONSALE: "active",
 		STATUS_SOLD: "sold",
+		STATUS_PURCHASED: "sold",
 		STATUS_MARKED_AS_SOLD: "sold",
 		STATUS_DELETED: "ended",
 		STATUS_BANNED: "ended"
@@ -6543,7 +6544,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				status,
 				title: null,
 				description,
-				priceCents: cents$1(price),
+				priceCents: cents$2(price),
 				currency: "USD",
 				revision: revision$1(product.updated_at, API$2)
 			},
@@ -6577,7 +6578,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 	/** A US dollar amount (`"18.00"`) in cents. */
-	function cents$1(value) {
+	function cents$2(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
 		if (match?.[1] === void 0) throw changed$2(API$2, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
@@ -6875,7 +6876,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the one that offers this slug.
 	*/
 structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application/ld+json\"]" };
-	const PAGE$12 = "product page";
+	const PAGE$11 = "product page";
 	/** The product as the page's first query loaded it. */
 	const productRecordSchema = object({
 		slug: string().regex(DEPOP_SLUG),
@@ -6942,13 +6943,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let status;
 		let text;
 		if (records.length > 0) {
-			const product = expectShape$1(productRecordSchema, records[0], PAGE$12);
+			const product = expectShape$1(productRecordSchema, records[0], PAGE$11);
 			status = STATUSES$1[product.status];
-			if (status === void 0) throw changed$2(PAGE$12, "shows a product status Listora does not know");
+			if (status === void 0) throw changed$2(PAGE$11, "shows a product status Listora does not know");
 			text = product.description;
 		} else {
 			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
-			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$12, "has none of the product data Listora reads");
+			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$11, "has none of the product data Listora reads");
 			text = offer.description;
 		}
 		const priceCents = offer.priceCents;
@@ -6977,20 +6978,20 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return [];
 			}
 		});
-		if (blocks.length === 0) throw changed$2(PAGE$12, "has no product data (structured data)");
+		if (blocks.length === 0) throw changed$2(PAGE$11, "has no product data (structured data)");
 		const own = blocks.find((block) => {
 			const read = structuredDataSchema.safeParse(block);
 			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
 		});
 		if (own === void 0) {
-			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$12, "offers a different product");
-			expectShape$1(structuredDataSchema, blocks[0], PAGE$12);
-			throw changed$2(PAGE$12, "has none of the product data Listora reads");
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$11, "offers a different product");
+			expectShape$1(structuredDataSchema, blocks[0], PAGE$11);
+			throw changed$2(PAGE$11, "has none of the product data Listora reads");
 		}
-		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$12);
-		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$12, "shows a price that is not in US dollars");
+		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$11);
+		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$11, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
-		if (match?.[1] === void 0) throw changed$2(PAGE$12, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$2(PAGE$11, "shows a price Listora can't read");
 		return {
 			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
 			...offers.availability === void 0 ? {} : { availability: offers.availability },
@@ -7035,46 +7036,112 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 
 // src/depop/pages/receipts.ts
 /**
-	* The seller's receipts, as Depop's sold items page loads them (read on the captain's session,
-	* 2026-10-27): `GET /presentation/api/v1/receipts/?role=seller&limit=12` answers
-	* `{"objects": [...], "page_info": {"has_more": false}}`, one receipt per sale, newest first.
-	* Pack check reads each sale's shipping label and buyer's first name from them
-	* (docs/features/pack-check.md, "Reading labels").
+	* The seller's receipts, as Depop's sold items page loads them: one per purchase, newest first,
+	* from `GET /presentation/api/v1/receipts/?role=seller&limit=<n>` (`{"objects": [...],
+	* "page_info": {"has_more", "first", "last"}}`; the next page `&after=<last>`), and one receipt
+	* with its lines from `GET /presentation/api/v1/receipts/<purchase id>/`. Read on a seller's own
+	* session with sales (2026-10-28). A receipt is a sale on Depop: its `purchase_id`, its
+	* `sold_timestamp`, its `status` (`shipping_pending` until it ships, then `shipped`), what the
+	* buyer paid for the items (`items_amount`, after an accepted offer or a bundle discount: less
+	* than the listings' prices), what the seller is paid for them after Depop's fees
+	* (`seller_amount`), and its `line_items`, each naming its product by `product_id` with the
+	* product's text and photo. A listing the seller marked as sold has no receipt.
 	*
-	* That account has no sale, so only the empty answer is known; a receipt's own fields are not.
-	* A receipt is matched to an order by its id or by a product slug it names, and only fields
-	* whose names say what they are count: `tracking_number` (or `trackingNumber`) for the label,
-	* and the buyer's `first_name`. A receipt that names neither an id nor a slug is a page Listora
-	* doesn't know (`PageChangedError`), which ends the read visibly and logs the structure, so the
-	* reader is fixed from a real receipt instead of guessing. Only reads.
+	* Sale checks read every receipt (sold-items.ts), and Pack check each one's shipping label and
+	* the buyer's first name (docs/features/pack-check.md, "Reading labels"). Nothing else of the
+	* buyer is read: no name, address, or message is kept. Only reads.
 	*/
 	const TOKEN_COOKIE$1 = "access_token";
 	const API$1 = "receipts API";
 	const PAGE_SIZE = 24;
+	/** A dollar amount as the receipts show it (`"18.00"`). */
+	const amount = string().regex(/^\d+(\.\d{1,2})?$/);
+	const receiptSchema = object({
+		purchase_id: number().int().positive(),
+		status: string(),
+		sold_timestamp: datetime({ offset: true }),
+		currency: string(),
+		items_amount: amount,
+		seller_amount: amount.nullish(),
+		is_bundle: boolean(),
+		line_items: array(object({
+			product_id: number().int().positive(),
+			description: string(),
+			picture_url: string().nullish()
+		}).catchall(unknown())).min(1)
+	}).catchall(unknown());
 	const receiptsSchema = object({
-		objects: array(record(string(), unknown())),
+		objects: array(unknown()),
 		page_info: object({
 			has_more: boolean(),
-			end_cursor: string().nullish()
+			last: string().nullish()
 		}).catchall(unknown())
 	});
+	const receiptDetailSchema = object({
+		purchase_id: number().int().positive(),
+		lines: array(object({
+			product_id: number().int().positive(),
+			slug: string().nullish(),
+			product_amount: amount
+		}).catchall(unknown())).min(1)
+	}).catchall(unknown());
 	/** One page of the seller's receipts, and the cursor of the next (`null` after the last). */
 	async function readReceipts(page, site, cursor) {
 		const query = new URLSearchParams({
 			role: "seller",
 			limit: String(PAGE_SIZE)
 		});
-		if (cursor !== null) query.set("cursor", cursor);
+		if (cursor !== null) query.set("after", cursor);
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
 		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for the receipts`);
 		const shown = expectShape$1(receiptsSchema, answer.body, API$1);
-		const receipts = shown.objects.map(receiptLabel);
-		const next = shown.page_info.has_more ? shown.page_info.end_cursor ?? null : null;
+		const receipts = shown.objects.map((receipt) => readReceipt(receipt));
+		const next = shown.page_info.has_more ? shown.page_info.last ?? null : null;
 		if (shown.page_info.has_more && next === null) throw changed$2(API$1, "has more receipts but no cursor");
 		return {
 			receipts,
 			next
 		};
+	}
+	/** What each line of a purchase sold for, and its product's slug, by product id. */
+	async function readReceiptLines(page, site, purchaseId) {
+		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/${encodeURIComponent(purchaseId)}/`, { bearerCookie: TOKEN_COOKIE$1 });
+		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for a receipt`);
+		const shown = expectShape$1(receiptDetailSchema, answer.body, API$1);
+		return new Map(shown.lines.map((line) => [line.product_id, {
+			slug: line.slug ?? null,
+			priceCents: cents$1(line.product_amount)
+		}]));
+	}
+	/** A receipt as Listora reads it; a shape Listora doesn't know throws `PageChangedError`. */
+	function readReceipt(value) {
+		const receipt = expectShape$1(receiptSchema, value, API$1);
+		if (receipt.currency !== "USD") throw changed$2(API$1, "shows a sale that is not in US dollars");
+		return {
+			purchaseId: String(receipt.purchase_id),
+			soldAt: new Date(receipt.sold_timestamp),
+			state: receiptState(receipt.status),
+			itemsCents: cents$1(receipt.items_amount),
+			sellerCents: receipt.seller_amount === void 0 || receipt.seller_amount === null ? null : cents$1(receipt.seller_amount),
+			isBundle: receipt.is_bundle,
+			lines: receipt.line_items.map((line) => ({
+				productId: line.product_id,
+				description: line.description,
+				pictureUrl: line.picture_url ?? null
+			})),
+			label: receiptLabel(receipt)
+		};
+	}
+	/**
+	* A receipt's status in Listora's terms: waiting to ship, shipped (and on to delivered), or
+	* canceled or refunded (no longer a sale). One Listora hasn't seen reads as unknown.
+	*/
+	function receiptState(status) {
+		const shown = status.toLowerCase();
+		if (shown === "shipping_pending") return "to_ship";
+		if (/cancel|refund/.test(shown)) return "canceled";
+		if (/shipped|transit|deliver|complete/.test(shown)) return "shipped";
+		return "unknown";
 	}
 	/** The receipt's ids, product slugs, label, and buyer's first name, by their field names. */
 	function receiptLabel(receipt) {
@@ -7088,7 +7155,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return {
 			ids,
 			slugs,
-			trackingNumber: trackingField(receipt),
+			trackingNumber: texts(fieldValues(receipt["parcels"], ["reference"]))[0] ?? trackingField(receipt),
 			buyerFirstName: buyerFirstName(receipt)
 		};
 	}
@@ -7106,31 +7173,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			buyerFirstName: receipt.buyerFirstName
 		};
 	}
-
-// src/depop/pages/sold-items-page.ts
-	const SOLD_ITEMS_PAGE = {
-		/** The note a seller without sales sees. */
-		none: `p:text-is("Once you've made a sale, you'll be able to see your receipt here.")`,
-		/** A sale's row links to its receipt (not the page's own address, which a menu may link). */
-		receipt: "a[href^=\"/sellinghub/sold-items/\"]:not([href=\"/sellinghub/sold-items/\"])"
-	};
-	const PAGE$11 = "sold items page";
-	/** How long the list may take to draw. */
-	const DRAW_MS$1 = 1e4;
-	const LOOK_EVERY_MS$3 = 500;
-	/** Opens the seller's sold items and reads them. */
-	async function readSoldItemsPage(page, site, pageNumber) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.sold(pageNumber)));
-		const end = Date.now() + DRAW_MS$1;
-		for (;;) {
-			if (await page.exists(SOLD_ITEMS_PAGE.none)) return {
-				items: [],
-				hasMore: false
-			};
-			if (await page.exists(SOLD_ITEMS_PAGE.receipt)) throw changed$2(PAGE$11, "lists sales in a way Listora cannot read yet");
-			if (Date.now() >= end) throw changed$2(PAGE$11, "shows neither sales nor its no-sales note");
-			await lookAgain$1(page, LOOK_EVERY_MS$3);
-		}
+	/** A dollar amount (`"18.00"`) in cents. */
+	function cents$1(value) {
+		const [dollars = "0", fraction = ""] = value.split(".");
+		return Number(dollars) * 100 + Number(fraction.padEnd(2, "0"));
 	}
 
 // src/adapter/offer-fields.ts
@@ -7576,14 +7622,126 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return Number.isNaN(date.getTime()) ? null : date.toISOString();
 	}
 
+// src/depop/sales.ts
+/** Pages of receipts (24 each) one sale check goes through at most, newest first. */
+	const SALE_CHECK_RECEIPT_PAGES = 5;
+	/** Pages the sales history (a check with no `since`) goes through at most: 600 sales. */
+	const HISTORY_RECEIPT_PAGES = 25;
+	/** Pages of sold listings (24 each) looked through for the receipts' products at most. */
+	const SOLD_LISTING_PAGES = 30;
+	/** The longest title a sale's line gets from its text (Depop's listings have none). */
+	const TITLE_LIMIT = 80;
+	async function readSales$1({ site, step, since }) {
+		const receipts = await readSaleReceipts({
+			site,
+			step,
+			since
+		});
+		if (receipts.length === 0) return [];
+		const products = await soldListings({
+			site,
+			step
+		}, new Set(receipts.flatMap((receipt) => receipt.lines.map((line) => line.productId))));
+		const orders = [];
+		for (const receipt of receipts) {
+			const prices = receipt.lines.length === 1 ? null : await step("read a sale", { mutates: false }, (page) => readReceiptLines(page, site, receipt.purchaseId));
+			const items = receipt.lines.map((line) => {
+				const product = products.get(line.productId);
+				const shown = prices?.get(line.productId);
+				if (prices !== null && shown === void 0) throw changed$2("receipts API", "shows a bundle without what one of its items sold for");
+				const priceCents = shown?.priceCents ?? receipt.itemsCents;
+				return {
+					externalListingId: product?.state.externalListingId ?? shown?.slug ?? null,
+					title: firstLine(line.description),
+					priceCents,
+					currency: "USD",
+					...product === void 0 ? {} : { listing: soldListing(product) }
+				};
+			});
+			orders.push({
+				externalOrderId: receipt.purchaseId,
+				soldAt: receipt.soldAt,
+				items,
+				...receipt.state === "unknown" ? {} : { shipped: receipt.state === "shipped" },
+				...receipt.sellerCents === null ? {} : { fees: receiptFees(receipt, receipt.sellerCents) }
+			});
+		}
+		return orders;
+	}
+	/** The receipts of sales that stand, newest first, back to `since`. */
+	async function readSaleReceipts({ site, step, since }) {
+		const receipts = [];
+		const pages = since === null ? 25 : 5;
+		let cursor = null;
+		for (let number = 1; number <= pages; number += 1) {
+			const shown = await step("read your sales", { mutates: false }, async (page) => {
+				await onDepop(page, site);
+				return readReceipts(page, site, cursor);
+			});
+			let older = false;
+			for (const receipt of shown.receipts) {
+				if (since !== null && receipt.soldAt < since) {
+					older = true;
+					continue;
+				}
+				if (receipt.state !== "canceled") receipts.push(receipt);
+			}
+			if (shown.next === null || older) break;
+			cursor = shown.next;
+		}
+		return receipts;
+	}
+	/** The seller's sold listings with these product ids, newest first, by id. */
+	async function soldListings({ site, step }, wanted) {
+		const found = /* @__PURE__ */ new Map();
+		let cursor = null;
+		for (let number = 1; number <= 30 && found.size < wanted.size; number += 1) {
+			const shown = await step("read your sold items", { mutates: false }, async (page) => {
+				await onDepop(page, site);
+				return readOwnListings(page, site, "sold", cursor);
+			});
+			for (const product of shown.products) {
+				const id = product.record["id"];
+				if (typeof id === "number" && wanted.has(id)) found.set(id, product);
+			}
+			if (shown.next === null) break;
+			cursor = shown.next;
+		}
+		return found;
+	}
+	/**
+	* Depop's fees on a purchase, as its receipt shows them: what the items sold for less what the
+	* seller is paid (the payment processing and Boost fees, and anything else Depop keeps). None
+	* when the seller is paid it all.
+	*/
+	function receiptFees(receipt, sellerCents) {
+		const kept = receipt.itemsCents - sellerCents;
+		return kept > 0 ? [{
+			kind: "marketplace",
+			description: "Depop's fees",
+			amountCents: kept,
+			currency: "USD"
+		}] : [];
+	}
+	/** A sold listing as the list of sold listings shows it: its text, photos, and size. */
+	function soldListing(product) {
+		return {
+			...product.state,
+			details: listingDetails$2({}, product.record, product.sku)
+		};
+	}
+	/** A line's title: the first line of its text, within the title limit. */
+	function firstLine(text) {
+		const line = text.split(/\r?\n/).map((part) => part.trim()).find((part) => part !== "");
+		return line === void 0 ? null : line.replace(/\s+/g, " ").slice(0, TITLE_LIMIT);
+	}
+
 // src/depop/scripts.ts
 /**
 	* Pages of the seller's newest listings for sale (24 each) a lookup by SKU looks through. A
 	* listing whose slug Listora never learned is one it just posted, so it is among the newest.
 	*/
 	const SKU_LOOKUP_PAGES = 1;
-	/** Pages of sold items one sale check goes through at most (newest first). */
-	const MAX_SOLD_PAGES$2 = 5;
 	function createDepopScripts(options) {
 		const { site } = options;
 		const notListed = () => ({
@@ -7764,28 +7922,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 			},
 			health: (step) => step("open the selling hub", { mutates: false }, (page) => openHub(page, site)),
-			orders: async (since, step) => {
-				const orders = [];
-				for (let number = 1; number <= 5; number += 1) {
-					const shown = await step("read the sold items", { mutates: false }, (page) => readSoldItemsPage(page, site, number));
-					for (const item of shown.items) {
-						if (since !== null && item.soldAt < since) continue;
-						orders.push({
-							externalOrderId: item.slug,
-							soldAt: item.soldAt,
-							items: [{
-								externalListingId: item.slug,
-								title: null,
-								priceCents: item.priceCents,
-								currency: "USD"
-							}]
-						});
-					}
-					const oldest = shown.items.at(-1)?.soldAt ?? null;
-					if (!shown.hasMore || since !== null && oldest !== null && oldest < since) break;
-				}
-				return orders;
-			},
+			orders: (since, step) => readSales$1({
+				site,
+				step,
+				since
+			}),
 			labels: async (orders, step) => {
 				const receipts = [];
 				let cursor = null;
@@ -7794,7 +7935,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 						await onDepop(page, site);
 						return readReceipts(page, site, cursor);
 					});
-					receipts.push(...shown.receipts);
+					receipts.push(...shown.receipts.map((receipt) => receipt.label));
 					const missing = orders.some((order) => !orderLabel(order, receipts).found);
 					if (shown.next === null || !missing) break;
 					cursor = shown.next;
@@ -9596,6 +9737,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* show (newest first).
 	*/
 	const MAX_SOLD_READS = 12;
+	/** The sales history's (a check with no `since`) pages and listing pages per tab at most. */
+	const HISTORY_SOLD_PAGES$1 = 25;
+	const HISTORY_SOLD_READS = 60;
 	/** Order pages one label read opens at most. */
 	const MAX_LABEL_READS = 10;
 	function createMercariScripts(options) {
@@ -9783,21 +9927,28 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			orders: async (since, step) => {
 				const orders = [];
 				const soldPath = await step("find the sales tab", { mutates: false }, (page) => salesTabPath(page, site));
+				const maxPages = since === null ? 25 : 5;
+				const maxReads = since === null ? 60 : 12;
 				for (const tab of ["in_progress", "sold"]) {
 					let reads = 0;
-					tab: for (let number = 1; number <= 5; number += 1) {
+					tab: for (let number = 1; number <= maxPages; number += 1) {
 						const shown = await step(`read the ${tab.replace("_", " ")} sales`, { mutates: false }, (page) => readListingsPage(page, site, tab, number, tab === "sold" ? soldPath : void 0));
 						for (const row of shown.rows) {
 							if (since !== null && row.changedBy !== null && row.changedBy < since) break tab;
 							let { soldAt, priceCents, title } = row;
+							let listing;
 							if (soldAt === null || priceCents === null) {
-								if (reads === 12) break tab;
+								if (reads === maxReads) break tab;
 								reads += 1;
 								const read = await step("read the sale", { mutates: false }, (page) => readItem(page, site, row.id));
 								soldAt ??= read.soldAt;
 								if (read.state.found) {
 									priceCents ??= read.state.priceCents;
 									title ||= read.state.title ?? "";
+									listing = {
+										...read.state,
+										details: listingDetails$1(read.record ?? {}, read.records ?? {}, read.sku)
+									};
 								}
 							}
 							if (soldAt === null || priceCents === null) continue;
@@ -9805,11 +9956,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 							orders.push({
 								externalOrderId: row.id,
 								soldAt,
+								...tab === "sold" ? { shipped: true } : {},
 								items: [{
 									externalListingId: row.id,
 									title: title === "" ? null : title,
 									priceCents,
-									currency: "USD"
+									currency: "USD",
+									...listing === void 0 ? {} : { listing }
 								}]
 							});
 						}
@@ -10807,6 +10960,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	const NEW_WAIT_MS = 5e3;
 	/** Sold-item pages read per sale check (48 each, the newest sales among them). */
 	const SOLD_PAGES = 5;
+	/** Sold-item pages the sales history (a check with no `since`) reads at most: 1,200 sales. */
+	const HISTORY_SOLD_PAGES = 25;
 	/** Order pages one label read opens at most, for labels the sales list does not show. */
 	const MAX_SALE_PAGES = 5;
 	/**
@@ -11079,6 +11234,22 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			} catch {}
 			return result;
 		}
+		/**
+		* A sold listing as its closet record shows it, with its photos and details, for a sale of a
+		* listing Listora doesn't have; none when the record doesn't read as one (the sale itself still
+		* does).
+		*/
+		function soldListing(record) {
+			try {
+				return { listing: {
+					...remoteListing(record, site, "closet page"),
+					details: listingDetails(record)
+				} };
+			} catch (error) {
+				if (error instanceof PageChangedError) return {};
+				throw error;
+			}
+		}
 		return {
 			create: (op, step) => createListing(op, step),
 			revise: async (op, step) => {
@@ -11130,7 +11301,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			orders: async (since, step) => {
 				const username = await seller(step);
 				const soldAt = (listing) => new Date(listing.inventory.status_changed_at ?? listing.updated_at);
-				const { listings } = await closet(step, username, { availability: "sold_out" }, { maxPages: SOLD_PAGES });
+				const { listings } = await closet(step, username, { availability: "sold_out" }, { maxPages: since === null ? HISTORY_SOLD_PAGES : SOLD_PAGES });
 				return listings.flatMap((listing) => {
 					const at = soldAt(listing);
 					if (Number.isNaN(at.getTime()) || since !== null && at < since) return [];
@@ -11141,7 +11312,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 							externalListingId: listing.id,
 							title: listing.title,
 							priceCents: cents(listing.price_amount.val, "closet page"),
-							currency: "USD"
+							currency: "USD",
+							...soldListing(listing)
 						}]
 					}];
 				});

@@ -2,9 +2,9 @@ import DesignSystem
 import ListoraAPI
 import SwiftUI
 
-/// The Sales tab: recent sales, newest first, with what each one sold for and its profit, and the
-/// way to the profit dashboard. The list is read from the server each time it appears and on
-/// pull to refresh.
+/// The Sales tab: all the seller's sales in total and per marketplace, recent sales, newest sold
+/// first, with what each one sold for and its profit, and the way to the profit dashboard. The
+/// list is read from the server each time it appears and on pull to refresh.
 public struct SalesView<Settings: View>: View {
     private let environment: SalesEnvironment
     private let settings: Settings
@@ -99,6 +99,10 @@ public struct SalesView<Settings: View>: View {
     private var list: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+                if let summary = model.summary, summary.total.salesCount > 0 {
+                    SalesSummaryView(summary: summary)
+                        .padding(.bottom, Spacing.xs)
+                }
                 if environment.packOrders?.isShown() == true {
                     NavigationLink(value: PackOrdersRoute()) {
                         ListRow(

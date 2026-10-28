@@ -686,6 +686,56 @@ extension Components {
                 case businessName
             }
         }
+        /// How the item analysis writes the account's listing copy: instructions for the model, in the
+        /// seller's words. Listora's default is the structure that works on Depop (a title line with the
+        /// size and a color emoji, an enthusiastic paragraph, a bulleted spec list, a hedged condition
+        /// sentence, and 4-5 hashtags with the brand first).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DescriptionStyle`.
+        public struct DescriptionStyle: Codable, Hashable, Sendable {
+            /// The style the Depop draft is written in, the seller's own or Listora's default.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DescriptionStyle/depop`.
+            public var depop: Swift.String
+            /// True when `depop` is Listora's default, because the seller never saved their own.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DescriptionStyle/depopIsDefault`.
+            public var depopIsDefault: Swift.Bool
+            /// Creates a new `DescriptionStyle`.
+            ///
+            /// - Parameters:
+            ///   - depop: The style the Depop draft is written in, the seller's own or Listora's default.
+            ///   - depopIsDefault: True when `depop` is Listora's default, because the seller never saved their own.
+            public init(
+                depop: Swift.String,
+                depopIsDefault: Swift.Bool
+            ) {
+                self.depop = depop
+                self.depopIsDefault = depopIsDefault
+            }
+            public enum CodingKeys: String, CodingKey {
+                case depop
+                case depopIsDefault
+            }
+        }
+        /// The seller's own style; one left out goes back to Listora's default.
+        ///
+        /// - Remark: Generated from `#/components/schemas/DescriptionStyleReplace`.
+        public struct DescriptionStyleReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DescriptionStyleReplace/depop`.
+            public var depop: Swift.String?
+            /// Creates a new `DescriptionStyleReplace`.
+            ///
+            /// - Parameters:
+            ///   - depop:
+            public init(depop: Swift.String? = nil) {
+                self.depop = depop
+            }
+            public enum CodingKeys: String, CodingKey {
+                case depop
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/HealthCheckStatus`.
         @frozen public enum HealthCheckStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case ok = "ok"
@@ -1589,19 +1639,19 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/PhotoUrls`.
         public struct PhotoUrls: Codable, Hashable, Sendable {
-            /// 400 px long edge.
+            /// 640 px long edge; the app's lists and grids.
             ///
             /// - Remark: Generated from `#/components/schemas/PhotoUrls/thumbnail`.
             public var thumbnail: Swift.String
-            /// 1600 px long edge; what marketplaces fetch.
+            /// 1600 px long edge; what marketplaces fetch, and the app's item screen.
             ///
             /// - Remark: Generated from `#/components/schemas/PhotoUrls/listing`.
             public var listing: Swift.String
             /// Creates a new `PhotoUrls`.
             ///
             /// - Parameters:
-            ///   - thumbnail: 400 px long edge.
-            ///   - listing: 1600 px long edge; what marketplaces fetch.
+            ///   - thumbnail: 640 px long edge; the app's lists and grids.
+            ///   - listing: 1600 px long edge; what marketplaces fetch, and the app's item screen.
             public init(
                 thumbnail: Swift.String,
                 listing: Swift.String
@@ -7642,12 +7692,130 @@ extension Components {
                 ])
             }
         }
+        /// `history`: found in the seller's sales history when the marketplace was connected; it sold
+        /// before then, so Listora never asks to ship it.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownSaleDetectionSource`.
         @frozen public enum KnownSaleDetectionSource: String, Codable, Hashable, Sendable, CaseIterable {
             case webhook = "webhook"
             case poll = "poll"
             case email = "email"
             case manual = "manual"
+            case history = "history"
+        }
+        /// The seller's sales that stand, all time: in total, and the seller's own totals on each
+        /// marketplace in the fixed `KnownMarketplace` order. Only totals: no ranking or share, so no
+        /// marketplace's performance is presented relative to another's (eBay's API License Agreement
+        /// restricts that without eBay's consent).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SalesSummary`.
+        public struct SalesSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SalesSummary/total`.
+            public var total: Components.Schemas.SalesTotals
+            /// Each marketplace with a sale or a connected account, in the fixed `KnownMarketplace`
+            /// order (never ranked); a connected one without a sale has zeros.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SalesSummary/marketplaces`.
+            public var marketplaces: [Components.Schemas.MarketplaceSales]
+            /// When the earliest of the sales sold. Absent without a sale.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SalesSummary/firstSoldAt`.
+            public var firstSoldAt: Components.Schemas.Timestamp?
+            /// Creates a new `SalesSummary`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - marketplaces: Each marketplace with a sale or a connected account, in the fixed `KnownMarketplace`
+            ///   - firstSoldAt: When the earliest of the sales sold. Absent without a sale.
+            public init(
+                total: Components.Schemas.SalesTotals,
+                marketplaces: [Components.Schemas.MarketplaceSales],
+                firstSoldAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.total = total
+                self.marketplaces = marketplaces
+                self.firstSoldAt = firstSoldAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case marketplaces
+                case firstSoldAt
+            }
+        }
+        /// A number of sales and what they brought in.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SalesTotals`.
+        public struct SalesTotals: Codable, Hashable, Sendable {
+            /// Orders (a bundle is one).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SalesTotals/salesCount`.
+            public var salesCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/SalesTotals/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// The sale prices plus the shipping buyers paid, as the profit dashboard counts it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SalesTotals/revenue`.
+            public var revenue: Components.Schemas.Money
+            /// Creates a new `SalesTotals`.
+            ///
+            /// - Parameters:
+            ///   - salesCount: Orders (a bundle is one).
+            ///   - itemsSold:
+            ///   - revenue: The sale prices plus the shipping buyers paid, as the profit dashboard counts it.
+            public init(
+                salesCount: Swift.Int32,
+                itemsSold: Swift.Int32,
+                revenue: Components.Schemas.Money
+            ) {
+                self.salesCount = salesCount
+                self.itemsSold = itemsSold
+                self.revenue = revenue
+            }
+            public enum CodingKeys: String, CodingKey {
+                case salesCount
+                case itemsSold
+                case revenue
+            }
+        }
+        /// The seller's own totals on one marketplace.
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSales`.
+        public struct MarketplaceSales: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSales/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSales/salesCount`.
+            public var salesCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSales/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSales/revenue`.
+            public var revenue: Components.Schemas.Money
+            /// Creates a new `MarketplaceSales`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - salesCount:
+            ///   - itemsSold:
+            ///   - revenue:
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                salesCount: Swift.Int32,
+                itemsSold: Swift.Int32,
+                revenue: Components.Schemas.Money
+            ) {
+                self.marketplace = marketplace
+                self.salesCount = salesCount
+                self.itemsSold = itemsSold
+                self.revenue = revenue
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case salesCount
+                case itemsSold
+                case revenue
+            }
         }
         /// `completed`: every other listing is delisted (confirmed by the marketplace's read-back)
         /// or done (the user confirmed). `needs_attention`: a delist failed, waits for the user, or

@@ -84,7 +84,7 @@ private final class FakeSalesService: SalesService, @unchecked Sendable {
     }
 
     func sellableItems(search _: String) async throws(APIFailure) -> [Schemas.ItemSummary] {
-        [summary(id: "item-2", sku: "AJ-000002"), summary(id: "item-1", sku: "AJ-000001")]
+        [itemSummary(id: "item-2", sku: "AJ-000002"), itemSummary(id: "item-1", sku: "AJ-000001")]
     }
 
     func record(_ sale: NewSale, idempotencyKey: String) async throws(APIFailure) -> Schemas.Sale {
@@ -118,7 +118,7 @@ private func usd(_ cents: Int64) -> Schemas.Money {
     .init(amountCents: cents, currency: .usd)
 }
 
-private func summary(id: String, sku: String) -> Schemas.ItemSummary {
+private func itemSummary(id: String, sku: String) -> Schemas.ItemSummary {
     .init(
         id: id,
         sku: sku,

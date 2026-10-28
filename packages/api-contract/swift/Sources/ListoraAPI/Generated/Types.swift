@@ -73,6 +73,28 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/account/profile`.
     /// - Remark: Generated from `#/paths//v1/account/profile/put(replaceProfile)`.
     func replaceProfile(_ input: Operations.ReplaceProfile.Input) async throws -> Operations.ReplaceProfile.Output
+    /// Get my description style
+    ///
+    /// How the item analysis writes the account's listing copy. An account that never saved its
+    /// own style gets Listora's default, with `depopIsDefault` true, so Settings can show it as the
+    /// starting point.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/get(getDescriptionStyle)`.
+    func getDescriptionStyle(_ input: Operations.GetDescriptionStyle.Input) async throws -> Operations.GetDescriptionStyle.Output
+    /// Replace my description style
+    ///
+    /// Saves the seller's own style, which the item analyses requested from then on follow
+    /// (analyses already made keep their copy). A style left out goes back to Listora's default.
+    /// The server trims the text; one that is blank after trimming is `422 validation_failed`.
+    /// The style belongs to the account, so a member who is not its owner or an admin gets
+    /// `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/put(replaceDescriptionStyle)`.
+    func replaceDescriptionStyle(_ input: Operations.ReplaceDescriptionStyle.Input) async throws -> Operations.ReplaceDescriptionStyle.Output
     /// List items
     ///
     /// Newest first. Filters combine with AND.
@@ -698,7 +720,7 @@ public protocol APIProtocol: Sendable {
     func linkMarketplaceSession(_ input: Operations.LinkMarketplaceSession.Input) async throws -> Operations.LinkMarketplaceSession.Output
     /// List sales
     ///
-    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+    /// The sales feed, newest sold first, each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -717,6 +739,16 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/post(createSale)`.
     func createSale(_ input: Operations.CreateSale.Input) async throws -> Operations.CreateSale.Output
+    /// Get the seller's sales, in total and per marketplace
+    ///
+    /// Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+    /// marketplace: the sales the seller's connected marketplaces showed (their sales history
+    /// included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sales/summary`.
+    /// - Remark: Generated from `#/paths//v1/sales/summary/get(getSalesSummary)`.
+    func getSalesSummary(_ input: Operations.GetSalesSummary.Input) async throws -> Operations.GetSalesSummary.Output
     /// Get a sale and its delist run
     ///
     /// - Remark: HTTP `GET /v1/sales/{saleId}`.
@@ -1285,6 +1317,38 @@ extension APIProtocol {
         body: Operations.ReplaceProfile.Input.Body
     ) async throws -> Operations.ReplaceProfile.Output {
         try await replaceProfile(Operations.ReplaceProfile.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get my description style
+    ///
+    /// How the item analysis writes the account's listing copy. An account that never saved its
+    /// own style gets Listora's default, with `depopIsDefault` true, so Settings can show it as the
+    /// starting point.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/get(getDescriptionStyle)`.
+    public func getDescriptionStyle(headers: Operations.GetDescriptionStyle.Input.Headers = .init()) async throws -> Operations.GetDescriptionStyle.Output {
+        try await getDescriptionStyle(Operations.GetDescriptionStyle.Input(headers: headers))
+    }
+    /// Replace my description style
+    ///
+    /// Saves the seller's own style, which the item analyses requested from then on follow
+    /// (analyses already made keep their copy). A style left out goes back to Listora's default.
+    /// The server trims the text; one that is blank after trimming is `422 validation_failed`.
+    /// The style belongs to the account, so a member who is not its owner or an admin gets
+    /// `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/description-style`.
+    /// - Remark: Generated from `#/paths//v1/account/description-style/put(replaceDescriptionStyle)`.
+    public func replaceDescriptionStyle(
+        headers: Operations.ReplaceDescriptionStyle.Input.Headers = .init(),
+        body: Operations.ReplaceDescriptionStyle.Input.Body
+    ) async throws -> Operations.ReplaceDescriptionStyle.Output {
+        try await replaceDescriptionStyle(Operations.ReplaceDescriptionStyle.Input(
             headers: headers,
             body: body
         ))
@@ -2402,7 +2466,7 @@ extension APIProtocol {
     }
     /// List sales
     ///
-    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+    /// The sales feed, newest sold first, each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -2436,6 +2500,18 @@ extension APIProtocol {
             headers: headers,
             body: body
         ))
+    }
+    /// Get the seller's sales, in total and per marketplace
+    ///
+    /// Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+    /// marketplace: the sales the seller's connected marketplaces showed (their sales history
+    /// included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sales/summary`.
+    /// - Remark: Generated from `#/paths//v1/sales/summary/get(getSalesSummary)`.
+    public func getSalesSummary(headers: Operations.GetSalesSummary.Input.Headers = .init()) async throws -> Operations.GetSalesSummary.Output {
+        try await getSalesSummary(Operations.GetSalesSummary.Input(headers: headers))
     }
     /// Get a sale and its delist run
     ///

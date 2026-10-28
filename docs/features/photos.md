@@ -16,8 +16,9 @@
   photo `failed` with a reason the user can read). Only a file that starts like a JPEG reaches
   the decoder, and one larger than 4096 x 4096 pixels is refused, so a small file cannot decode
   into hundreds of megabytes. Then it turns the photo upright and writes, one at a time, metadata-free
-  sRGB JPEGs: `original` (full size) and `ai` (1024 px) privately, and `thumbnail` (400 px)
-  and `listing` (1600 px) under an unguessable public key. It stores their keys, sizes, and
+  sRGB JPEGs: `original` (full size) and `ai` (1024 px) privately, and `thumbnail` (640 px,
+  what the app's lists and grids show) and `listing` (1600 px, what marketplaces fetch and the
+  item screen shows) under an unguessable public key. It stores their keys, sizes, and
   hashes in `photo.derivatives`, the upright size, and a 64-bit DCT pHash, then deletes the
   upload, which may carry GPS. In S3, an upload left more than 7 days (never attached) expires. Every step is safe to rerun. The API adds the job to the job
   queue (Graphile Worker, `graphilePhotoJobs`, job key `photoJobKey`) in the transaction that
@@ -27,6 +28,15 @@
   deployed, both use the S3 photo bucket (`infra/src/containers.ts`). Photo and analysis jobs
   run in a pool of their own (`WORKER_TASK_CONCURRENCY`), so a slow AI call never holds a
   slot an operation step, such as an urgent delist, needs.
+- **Thumbnail refresh** (`refreshThumbnails`, task `photo_thumbnail_refresh`). When a
+  derivative size grows (the thumbnail went from 400 px to 640 px on 2026-10-28, so the Inventory
+  grid no longer needs the listing image), photos processed before keep the smaller one until
+  this job makes it again from their private `original`. The worker queues one pass at every
+  start (`queueThumbnailRefresh`, one pending pass at a time); each run refreshes 25 photos in id
+  order and queues the next batch, so a pass ends on its own and an up-to-date platform costs one
+  query a start. A refreshed thumbnail gets a new public key (the old URL may be cached for a
+  year), the row switches to it only if it still points at the old one, and then the old object
+  is deleted. A photo whose original is missing or unreadable keeps its old thumbnail.
 - **Photo-set hash.** `itemPhotoSet` returns an item's photos in order and `photoSetHash`
   (from `@listora/shared`) over their upload sha256s, the key analysis is idempotent by. The
   hash sorts the sha256s, so reordering the photos or choosing another cover keeps the

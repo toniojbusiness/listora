@@ -19,13 +19,17 @@ public struct RemoteImageRequest: Hashable, Sendable {
 /// through a disk cache sized for a large inventory, decoded off the main actor at the size they
 /// fill, and kept in memory, so a row scrolled back into view shows its photo in the same frame
 /// instead of downloading and decoding it again. Public photo URLs are immutable (a reprocessed
-/// photo gets new ones), so a cached copy is always the right one.
-/// Unchecked: its only state is an NSCache and a URLSession, both thread-safe.
+/// photo gets new ones), so a cached copy is always the right one. A photo is downloaded once at
+/// a time: a view that asks while a prefetch of it is on the way waits for that download.
+/// Unchecked: its state is an NSCache and a URLSession, both thread-safe, and the downloads on
+/// the way, behind a lock.
 public final class RemoteImageLoader: @unchecked Sendable {
     public static let shared = RemoteImageLoader()
 
     private let session: URLSession
     private let memory = NSCache<NSString, UIImage>()
+    private let lock = NSLock()
+    private var downloads: [URL: Task<Data?, Never>] = [:]
 
     public init(configuration: URLSessionConfiguration = RemoteImageLoader.defaultConfiguration()) {
         session = URLSession(configuration: configuration)
@@ -34,7 +38,7 @@ public final class RemoteImageLoader: @unchecked Sendable {
     }
 
     /// The shared URLCache's default 10 MB of disk holds a few hundred thumbnails; this one holds
-    /// every thumbnail of a 2,000-item inventory (about 30 KB each) and the recent listing photos.
+    /// every thumbnail of a 2,000-item inventory (about 65 KB each) and the recent listing photos.
     public static func defaultConfiguration() -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.default
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
@@ -60,10 +64,7 @@ public final class RemoteImageLoader: @unchecked Sendable {
         if let cached = cachedImage(for: request) {
             return cached
         }
-        guard let (data, response) = try? await session.data(from: request.url) else { return nil }
-        if let http = response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
-            return nil
-        }
+        guard let data = await download(request.url, priority: .userInitiated).value else { return nil }
         let image = await Task.detached(priority: .userInitiated) {
             Self.decode(data, filling: request)
         }.value
@@ -71,6 +72,47 @@ public final class RemoteImageLoader: @unchecked Sendable {
             memory.setObject(image, forKey: Self.key(request), cost: cgImage.bytesPerRow * cgImage.height)
         }
         return image
+    }
+
+    /// Downloads `urls` into the disk cache, so their views show them without waiting for the
+    /// network: the thumbnails of a page of items before the seller scrolls to them, or an item's
+    /// photos before they are swiped to. Photos already cached or on the way are skipped.
+    public func prefetch(_ urls: [URL]) {
+        for url in urls where !isOnDisk(url) {
+            _ = download(url, priority: .utility)
+        }
+    }
+
+    /// Whether `url`'s photo is in the disk cache, so loading it needs no network.
+    public func isOnDisk(_ url: URL) -> Bool {
+        session.configuration.urlCache?.cachedResponse(for: URLRequest(url: url)) != nil
+    }
+
+    /// The download of `url`: the one on the way, or a new one. Its bytes, or nil when the
+    /// photo cannot be fetched (the next request tries again).
+    func download(_ url: URL, priority: TaskPriority) -> Task<Data?, Never> {
+        lock.withLock {
+            if let download = downloads[url] {
+                return download
+            }
+            let download = Task(priority: priority) { [session] () -> Data? in
+                guard let (data, response) = try? await session.data(from: url) else { return nil }
+                if let http = response as? HTTPURLResponse, !(200 ..< 300).contains(http.statusCode) {
+                    return nil
+                }
+                return data
+            }
+            downloads[url] = download
+            Task { [weak self] in
+                _ = await download.value
+                self?.finished(url)
+            }
+            return download
+        }
+    }
+
+    private func finished(_ url: URL) {
+        lock.withLock { downloads[url] = nil }
     }
 
     /// Decodes at the smallest size that still fills `request` (never larger than the photo).
@@ -114,19 +156,26 @@ public final class RemoteImageLoader: @unchecked Sendable {
 /// A photo from the server, filling exactly the space it is given (like a color) and clipped to
 /// it, with `placeholder` while it loads or when there is none. Use it instead of `AsyncImage`,
 /// which keeps no decoded copy and downloads a photo again each time its row comes back.
+/// `preview` is a smaller copy of the same photo (its thumbnail) to show while a large one
+/// downloads, when the list the seller came from has cached it: the photo appears at once and
+/// sharpens when the large one arrives. A preview that would need the network is not fetched.
 public struct RemoteImage<Placeholder: View>: View {
     private let url: URL?
+    private let preview: URL?
     private let loader: RemoteImageLoader
     private let placeholder: Placeholder
     @State private var loaded: (request: RemoteImageRequest, image: UIImage)?
+    @State private var previewed: (request: RemoteImageRequest, image: UIImage)?
     @Environment(\.displayScale) private var displayScale
 
     public init(
         url: URL?,
+        preview: URL? = nil,
         loader: RemoteImageLoader = .shared,
         @ViewBuilder placeholder: () -> Placeholder,
     ) {
         self.url = url
+        self.preview = preview == url ? nil : preview
         self.loader = loader
         self.placeholder = placeholder()
     }
@@ -142,18 +191,16 @@ public struct RemoteImage<Placeholder: View>: View {
     }
 
     private func content(size: CGSize) -> some View {
-        let request = url.map {
-            RemoteImageRequest(
-                url: $0,
-                pixelWidth: Int((size.width * displayScale).rounded(.up)),
-                pixelHeight: Int((size.height * displayScale).rounded(.up)),
-            )
-        }
+        let request = request(url, size: size)
+        let previewRequest = self.request(preview, size: size)
         let image = request.flatMap { request in
             loaded?.request == request ? loaded?.image : loader.cachedImage(for: request)
         }
+        let previewImage = previewRequest.flatMap { request in
+            previewed?.request == request ? previewed?.image : loader.cachedImage(for: request)
+        }
         return ZStack {
-            if let image {
+            if let image = image ?? previewImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -165,9 +212,29 @@ public struct RemoteImage<Placeholder: View>: View {
         // A frame measured as zero on the first layout loads nothing; the real size loads again.
         .task(id: request) {
             guard let request, request.pixelWidth > 0, request.pixelHeight > 0, image == nil else { return }
-            if let fetched = await loader.image(for: request), !Task.isCancelled {
+            if let previewRequest, previewImage == nil, !loader.isOnDisk(request.url),
+               loader.isOnDisk(previewRequest.url)
+            {
+                async let fetched = loader.image(for: request)
+                if let shown = await loader.image(for: previewRequest), !Task.isCancelled {
+                    previewed = (previewRequest, shown)
+                }
+                if let fetched = await fetched, !Task.isCancelled {
+                    loaded = (request, fetched)
+                }
+            } else if let fetched = await loader.image(for: request), !Task.isCancelled {
                 loaded = (request, fetched)
             }
+        }
+    }
+
+    private func request(_ url: URL?, size: CGSize) -> RemoteImageRequest? {
+        url.map {
+            RemoteImageRequest(
+                url: $0,
+                pixelWidth: Int((size.width * displayScale).rounded(.up)),
+                pixelHeight: Int((size.height * displayScale).rounded(.up)),
+            )
         }
     }
 }
