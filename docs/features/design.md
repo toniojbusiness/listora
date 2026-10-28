@@ -170,7 +170,9 @@ marketplace" is something you see. The study, its mockups, and the recommendatio
 the repository (the firstmate `lstdesign` report). It is built in three steps: the design
 system (this section), the screens (Today's string, the Inventory rail, the item's marketplaces,
 List everywhere), and the moments (the sold stamp, strings cut on auto-delist, knots tied as each
-marketplace confirms).
+marketplace confirms). Before and after sheets of the design system step are in
+[design/hangtag/](design/hangtag/): main before it, and this step, on the iPhone 17 in light and
+dark mode and at the largest text size in dark mode.
 
 - **Tags and strings only where they carry meaning**: the day's cards, the item and its
   marketplaces, the rail of items, an empty state, the tab bar. Everywhere else, bigger type,
