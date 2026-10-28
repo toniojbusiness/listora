@@ -108,7 +108,9 @@ export type FakeMercariFault =
   /** A read serves the listing as it was before its latest change. */
   | { type: 'stale_read' }
   /** The page without the elements the adapter reads, as after a site redesign. */
-  | { type: 'redesigned' };
+  | { type: 'redesigned' }
+  /** On a listings tab (`listings`): its placeholder rows stay, as when Mercari's query never answers. */
+  | { type: 'rows_never_drawn' };
 
 export interface FakeMercariFaultRule {
   action: FakeMercariAction;
@@ -169,7 +171,14 @@ export interface FakeMercariOptions {
   imeiCategories?: readonly string[];
   /** Categories the dialog no longer offers, as when Mercari drops one after a catalog read. */
   withoutCategories?: readonly string[];
+  /**
+   * How the seller's listing tabs are drawn (default `desktop`): Mercari's desktop table, or the
+   * mobile layout it shows a touch screen such as the iPhone app's web view (read 2026-10-28).
+   */
+  layout?: FakeMercariLayout;
 }
+
+export type FakeMercariLayout = 'desktop' | 'mobile';
 
 /** Mercari's own brand for an item without one, or one its list doesn't have. */
 export const FAKE_MERCARI_NO_BRAND = 'No brand / Not sure';
@@ -223,6 +232,7 @@ export class FakeMercariSite {
   readonly #server: Server;
   readonly #pageSize: number;
   readonly #listedPageLinksItem: boolean;
+  readonly #layout: FakeMercariLayout;
   readonly #formOptions: Pick<SellFormOptions, 'imeiCategories' | 'withoutCategories'>;
   readonly #items = new Map<string, StoredItem>();
   readonly #deleted = new Set<string>();
@@ -240,6 +250,7 @@ export class FakeMercariSite {
   private constructor(options: FakeMercariOptions) {
     this.#pageSize = options.pageSize ?? 10;
     this.#listedPageLinksItem = options.listedPageLinksItem ?? true;
+    this.#layout = options.layout ?? 'desktop';
     this.#formOptions = {
       imeiCategories: options.imeiCategories ?? [],
       withoutCategories: options.withoutCategories ?? [],
@@ -490,6 +501,7 @@ export class FakeMercariSite {
       case 'listing_error':
       case 'slow':
       case 'stale_read':
+      case 'rows_never_drawn':
       case undefined:
         break;
     }
@@ -688,7 +700,13 @@ export class FakeMercariSite {
         const more = rows.length > number * this.#pageSize;
         return {
           status: 200,
-          body: page('Listings | Mercari', listingsPage(tab, pageRows, number, more)),
+          body: page(
+            'Listings | Mercari',
+            listingsPage(tab, pageRows, number, more, {
+              layout: this.#layout,
+              drawn: fault?.type !== 'rows_never_drawn',
+            }),
+          ),
         };
       }
     }
@@ -1140,17 +1158,28 @@ const SHOWN_DAY = new Intl.DateTimeFormat('en-US', {
 });
 
 /**
- * A tab of the seller's listings, as Mercari's are (read 2026-10-26 and 27): drawn by script
- * once the document is ready, and an empty tab shows `ZeroListings` instead of rows. A tab is a
- * table (`Listings`) whose rows draw a moment after it, once Mercari's own query answers, each
- * with its listing's link (the title as its text), its price, and the day it last changed
- * ("Updated"). A sold row shows no sale time: that is on the listing's page.
+ * How long Mercari's placeholder rows show while its query for a tab's rows runs (on the phone,
+ * about a second, read 2026-10-28).
+ */
+const PLACEHOLDER_MS = 600;
+
+/**
+ * A tab of the seller's listings, as Mercari's are (read 2026-10-26 to 28): drawn by script once
+ * the document is ready, and an empty tab shows `ZeroListings` instead of rows. In the desktop
+ * layout a tab is a table (`Listings`) whose rows draw a moment after it, once Mercari's own query
+ * answers, each with its listing's link (the title as its text), its price, and the day it last
+ * changed ("Updated"). The mobile layout is a list of `ListItem`s: while the query runs, three
+ * placeholder rows (`ListingRow`s that link to nothing), then the rows, which link to their
+ * listing through the photo (`ProductThumbWrapper`) and the title, with no `ItemLink` or
+ * `ItemPrice`, or `ZeroListings` in their place. A sold row shows no sale time: that is on the
+ * listing's page.
  */
 function listingsPage(
   tab: MercariListingTab,
   rows: readonly FakeMercariItem[],
   number: number,
   more: boolean,
+  shown: { layout: FakeMercariLayout; drawn: boolean },
 ): string {
   const path = tab === 'sold' ? SALES_TAB_PATH : `/mypage/listings/${tab}/`;
   const next = more
@@ -1158,10 +1187,32 @@ function listingsPage(
     : '';
   const draw = (into: string, html: string, afterMs: number): string =>
     `setTimeout(() => { document.getElementById(${JSON.stringify(into)}).innerHTML = ${scriptJson(html)}; }, ${String(afterMs)});`;
-  if (rows.length === 0) {
-    const empty = draw('tab', '<div data-testid="ZeroListings">No listings yet</div>', DRAW_MS);
-    return `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>${empty}</script>`;
+  const empty = '<div data-testid="ZeroListings">No listings yet</div>';
+  const shell = (script: string): string =>
+    `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>${script}</script>`;
+  if (shown.layout === 'mobile') {
+    const placeholders =
+      '<ul id="rows">' +
+      '<li data-testid="ListItem"><div data-testid="ListingRow"><div style="height:76px"></div></div></li>'.repeat(
+        3,
+      ) +
+      '</ul><div id="more"></div>';
+    const items = rows
+      .map(
+        (item) =>
+          `<li data-testid="ListItem"><div data-testid="ListingRow"><a data-testid="ProductThumbWrapper" href="/us/item/${item.id}/"><img alt="${escape(item.title)}""></a>` +
+          `<a data-testid="RowItemWithMeta" href="/us/item/${item.id}/"><p>${escape(item.title)}</p></a>` +
+          `<a data-testid="ViewOrderButton" href="/transaction/order_status/${item.id}/">View order</a></div></li>`,
+      )
+      .join('');
+    const drawn = shown.drawn
+      ? rows.length === 0
+        ? draw('tab', empty, DRAW_MS + PLACEHOLDER_MS)
+        : `${draw('rows', items, DRAW_MS + PLACEHOLDER_MS)} ${draw('more', next, DRAW_MS + PLACEHOLDER_MS)}`
+      : '';
+    return shell(`${draw('tab', placeholders, DRAW_MS)} ${drawn}`);
   }
+  if (rows.length === 0) return shell(shown.drawn ? draw('tab', empty, DRAW_MS) : '');
   const items = rows
     .map(
       (item) =>
@@ -1170,8 +1221,10 @@ function listingsPage(
     .join('');
   const table =
     '<table data-testid="Listings"><thead><tr><th>Item</th><th>Price</th><th>Updated</th></tr></thead><tbody id="rows"></tbody></table><div id="more"></div>';
-  const script = `setTimeout(() => { document.getElementById('tab').innerHTML = ${scriptJson(table)}; ${draw('rows', items, 200)} ${draw('more', next, 200)} }, ${String(DRAW_MS)});`;
-  return `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>${script}</script>`;
+  const drawn = shown.drawn ? `${draw('rows', items, 200)} ${draw('more', next, 200)}` : '';
+  return shell(
+    `setTimeout(() => { document.getElementById('tab').innerHTML = ${scriptJson(table)}; ${drawn} }, ${String(DRAW_MS)});`,
+  );
 }
 
 interface SellFormOptions {

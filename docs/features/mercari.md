@@ -42,6 +42,11 @@ read to say what became of it.
   wait to ship. Each sale carries the listing its page shows (photos and details), for the sold
   item Listora makes of a sale it had no listing for ([sales.md](sales.md#sales-history)). The
   first check, the sales history, reads up to 25 pages of each tab and 60 listing pages.
+- A tab is read once its rows are drawn: rows that each link to their listing, or Mercari's
+  empty-tab note (`ZeroListings`). Mercari draws them from its own query after the page loads,
+  and in its mobile layout it shows placeholder rows that link to nothing until then. A tab that
+  shows neither within 8 seconds fails the step (`element_missing`) and the check is tried
+  again; it is never read as a tab without sales.
 
 **Freshness.** The listing page's last-updated time (`updated`, in seconds, in the page's
 `__NEXT_DATA__` record `ItemDetail:<id>`) is the listing's revision, in milliseconds. Mercari changes it with every edit. Automated changes are always seconds apart
@@ -293,8 +298,14 @@ and from the iPhone, on Listora's own test listing:
   seller's active listings.
 - **Sale check** (Mac): the sold tab's rows show no sale time, only the day the row last changed
   ("Updated", `11/16/24`); the sale's time is the item page's `lastSoldAt`. On the iPhone, Mercari
-  draws the tabs in its mobile layout, whose rows link to their listing only through the photo
-  (`ProductThumbWrapper`) and show no title or price; those come from the item page.
+  draws the tabs in its mobile layout, which it picks for a touch screen whatever the page's width
+  (read 2026-10-28 on the seller's session: a 1280-pixel page with touch got it, one without did
+  not). Its rows (`li[data-testid="ListItem"]`) link to their listing through the photo
+  (`ProductThumbWrapper`) and the title (`RowItemWithMeta`) and show no `ItemLink` or price; the
+  title and price come from the item page. While its query runs (about a second), it shows three
+  placeholder `ListingRow`s that link to nothing, then the rows or `ZeroListings`; the desktop
+  layout shows its table without rows instead. Reading those placeholders as rows failed every
+  phone sale check from 2026-10-27 at "read the in progress sales".
 
 **Full cycles on real items** (2026-10-27, Mac, phone runtime, normal pacing): five of the
 seller's own items, each listed as a test listing, then List, its read-back with the listing's

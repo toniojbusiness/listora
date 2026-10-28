@@ -153,7 +153,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   the marketplace, the call, and each step's milliseconds).
 - **The marketplace page** is an off-screen `WKWebView` with a data store of its own, filled
   with the cookies the phone keeps. It asks for desktop pages at a desktop size, as Safari's
-  "Request Desktop Website" does, so the marketplaces serve the pages the scripts read. It is
+  "Request Desktop Website" does, so the marketplaces serve the pages the scripts read. A page
+  that picks its layout by the screen's touch rather than its width still draws its mobile one:
+  Mercari's listing tabs do ([mercari.md](mercari.md)), so its scripts read both layouts. It is
   WebKit, as it says: no disguised user agent, no fingerprint changes, no proxy. The main frame
   may load only the marketplace's own origins; a window the site opens is not opened.
 - **Checks are handed to the seller.** A CAPTCHA, a bot check, a login code, or a sign-in page
