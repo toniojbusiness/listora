@@ -45,7 +45,7 @@ public struct TabRail<ID: Hashable>: View {
 
     /// How far the tag rises above the rail, and its string above the tag.
     private static var tagRise: CGFloat {
-        26
+        22
     }
 
     /// A tab's height, the system tab bar's.
@@ -86,7 +86,8 @@ public struct TabRail<ID: Hashable>: View {
             }
         }
         .padding(.horizontal, Spacing.xs)
-        .padding(.top, Spacing.xxs)
+        // The strip above the rail holds the tag's top and its eyelet, so the screen above ends
+        // clear of the tag: nothing is ever hidden behind it.
         .background(alignment: .top) {
             ZStack(alignment: .top) {
                 Rectangle()
@@ -96,6 +97,7 @@ public struct TabRail<ID: Hashable>: View {
                     .fill(Palette.rail)
                     .frame(height: 2.5)
                     .padding(.horizontal, Spacing.xs)
+                    .padding(.top, Self.tagRise)
             }
             .accessibilityHidden(true)
         }
@@ -171,13 +173,12 @@ public struct TabRail<ID: Hashable>: View {
             }
         }
         .elevation(.low)
-        .padding(.top, -Self.tagRise)
         .contentShape(shape)
     }
 }
 
-/// Which screens of a tab want the rail out of the way (a flow with its own bottom bar, select
-/// mode). One per tab: a screen that hides it hides it only in its own tab.
+/// Which screens want the rail out of the way (a flow with its own bottom bar, select mode). A
+/// screen counts only while it shows, so switching tabs away from it brings the rail back.
 @MainActor
 @Observable
 final class TabRailVisibility {
@@ -217,29 +218,31 @@ private struct TabRailHost<ID: Hashable>: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
-            .toolbar(.hidden, for: .tabBar)
-            .environment(visibility)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                // The rail steps aside for the keyboard, as the system's tab bar stays under it.
-                if !visibility.isHidden, !isKeyboardShown {
-                    TabRail(items, selection: $selection)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+        // Under the tabs, not in their safe area: an inset outside a tab's navigation stack does
+        // not reach the screens inside it, so their bottom bars and lists would end behind the rail.
+        VStack(spacing: 0) {
+            content
+                .environment(visibility)
+            // The rail steps aside for the keyboard, as the system's tab bar stays under it.
+            if !visibility.isHidden, !isKeyboardShown {
+                TabRail(items, selection: $selection)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .animation(Motion.animation(Motion.standard, reduceMotion: reduceMotion), value: visibility.isHidden)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                isKeyboardShown = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                isKeyboardShown = false
-            }
+        }
+        .animation(Motion.animation(Motion.standard, reduceMotion: reduceMotion), value: visibility.isHidden)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardShown = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardShown = false
+        }
     }
 }
 
 extension View {
-    /// Shows `items` on a ``TabRail`` under this tab's screen, in place of the system tab bar.
-    /// Apply it to each tab's content inside a `TabView`, which keeps owning `selection`.
+    /// Shows `items` on a ``TabRail`` under a `TabView`, in place of the system tab bar, which
+    /// each tab's content hides (`.toolbar(.hidden, for: .tabBar)`); the `TabView` keeps owning
+    /// `selection`.
     public func tabRail<ID: Hashable>(_ items: [TabRailItem<ID>], selection: Binding<ID>) -> some View {
         modifier(TabRailHost(items: items, selection: selection))
     }

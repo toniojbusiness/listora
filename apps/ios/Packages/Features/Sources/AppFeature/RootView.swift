@@ -106,10 +106,11 @@ public struct RootView: View {
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) {
                     // The tab rail stands in for the system tab bar, which TabView still drives.
                     screen(for: tab)
-                        .tabRail(railItems, selection: $selection)
+                        .toolbar(.hidden, for: .tabBar)
                 }
             }
         }
+        .tabRail(railItems, selection: $selection)
         .tint(Palette.brand.color)
         // Deleting the account keeps its result on screen; closing Settings then shows the sign-in.
         .sheet(isPresented: $showsSettings, onDismiss: { dependencies.signIn.finishSignOut() }, content: { settings })

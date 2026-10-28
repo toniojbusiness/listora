@@ -183,15 +183,18 @@ marketplace confirms).
 - **Type**: Fraunces for headings and prices, SF Pro for everything you read, SF Mono for text
   read off a tag.
 - **The tab bar** (`TabRail`): a rail across the bottom with the five tabs under it, Inventory a
-  hanger, and Add a clay tag hanging from the rail. It is solid, so content never shows through
-  it. The system tab bar is hidden; `TabView` still owns the tabs and their state. Each tab is a
-  button, the current one selected, and a badge is read as the tab's value ("2 need you", "1 open
-  task"). It does not carry SwiftUI's tab bar trait, which makes UI tests see every icon and
-  title inside a tab as another button of the same name. Its labels stop growing at the largest text sizes,
-  with the large content viewer on a long press, like the system's. It steps aside for the
-  keyboard, for the review flow (`tabRailHidden()`), and for Inventory's select mode. UI tests
-  find it as `app.tabRail` (`ListoraUITests/TabRail.swift`): `app.tabBars` finds only UIKit's.
-  Tapping the current tab again does not pop to its first screen, as the system bar did.
+  hanger, and Add a clay tag hanging from the rail. It sits under the `TabView`, not in its safe
+  area (an inset outside a tab's navigation stack does not reach the screens in it), so every
+  screen, its bottom bar included, ends above the rail and the tag's strip: nothing scrolls under
+  it or hides behind the tag. The system tab bar is hidden; `TabView` still owns the tabs and
+  their state. Each tab is a button, the current one selected, and a badge is read as the tab's
+  value ("2 need you", "1 open task"). It does not carry SwiftUI's tab bar trait, which makes UI
+  tests see every icon and title inside a tab as another button of the same name. Its labels stop
+  growing at the largest text sizes, with the large content viewer on a long press, like the
+  system's. It steps aside for the keyboard, for the review flow (`tabRailHidden()`), and for
+  Inventory's select mode. UI tests find it as `app.tabRail` (`ListoraUITests/TabRail.swift`):
+  `app.tabBars` finds only UIKit's. Tapping the current tab again does not pop to its first
+  screen, as the system bar did.
 
 ## Screenshots
 
