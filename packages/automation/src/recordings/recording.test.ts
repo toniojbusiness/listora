@@ -186,20 +186,27 @@ describe('recordings', () => {
       expect(text).not.toMatch(
         /jdoe|Jane|Doe|gmail|71283912|415-555-0199|Elm St|media\.depop\.com|eyJ|Zx9/,
       );
-      expect(redacted.input).toBe('user1-blue-tee');
+      expect(redacted.input).toBe('redacteduser1-blue-tee');
       expect(redacted.result).toEqual({
         ok: true,
-        value: { listings: [{ externalListingId: 'user1-blue-tee', priceCents: 4500 }] },
+        value: { listings: [{ externalListingId: 'redacteduser1-blue-tee', priceCents: 4500 }] },
       });
-      expect(redacted.states[0]?.lines[0]).toBe('<a href="/products/user1-blue-tee/"');
+      expect(redacted.states[0]?.lines[0]).toBe('<a href="/products/redacteduser1-blue-tee/"');
       expect(redacted.states[0]?.data).toEqual({
         __STATE__: {
-          user: { id: 90000001, name: 'Name1', email: 'user1@example.com', address: 'Redacted' },
+          user: {
+            id: 90000001,
+            name: 'RedactedName1',
+            email: 'redacteduser1@example.com',
+            address: 'Redacted',
+          },
           messages: { PostalCode: 'Postal code', Email: 'Email', city: 'City' },
         },
       });
       expect(redacted.api[0]?.json).toMatchObject({
-        products: [{ slug: 'user1-blue-tee', seller_id: 90000001, access_token: 'REDACTED' }],
+        products: [
+          { slug: 'redacteduser1-blue-tee', seller_id: 90000001, access_token: 'REDACTED' },
+        ],
       });
       expect(redacted.api[0]?.url).toBe('https://webapi.depop.com/api/v1/shop/90000001/products/');
       expect(report).toMatchObject({ user: 1, image: 2 });
@@ -212,7 +219,9 @@ describe('recordings', () => {
       );
       expect(lines).toContain('555-555-0100');
       expect(lines).toMatch(/name="csrf" value="REDACTED\d+"/);
-      expect(redacted.states[0]?.url).toBe('https://www.depop.com/user1/?session_token=REDACTED1');
+      expect(redacted.states[0]?.url).toBe(
+        'https://www.depop.com/redacteduser1/?session_token=REDACTED1',
+      );
     });
 
     it('finds what a recording still holds, without repeating it', () => {
@@ -228,6 +237,91 @@ describe('recordings', () => {
         ]),
       );
       expect(problems.join(' ')).not.toMatch(/jdoe|Jane|gmail/);
+    });
+  });
+
+  describe('redaction of people in a normalized cache', () => {
+    // Mercari's sold page: an Apollo cache, as JSON inside a page script, escaped once. The buyer
+    // is an entry of its own under a normalized key, and its handle is Mercari's default
+    // `user<digits>`, which a placeholder once looked like.
+    const cache = {
+      'PrivateUser:900000001': { __typename: 'PrivateUser', id: 900000001, name: 'RedactedName1' },
+      'PublicUser:31415926': {
+        __typename: 'PublicUser',
+        id: 31415926,
+        photo: 'https://u-mercari-images.mercdn.net/members/31415926?1700000000',
+        name: 'Avery Quill',
+        username: 'user31415926',
+      },
+      'ItemDetail:m10000000001': {
+        __typename: 'ItemDetail',
+        seller: { __ref: 'PrivateUser:900000001' },
+        buyer: { __ref: 'PublicUser:31415926' },
+        status: 'sold_out',
+      },
+    };
+    const sold = recording({
+      marketplace: 'mercari',
+      name: 'sold',
+      page: 'sold',
+      states: [
+        {
+          url: 'https://www.mercari.com/mypage/listings/complete/',
+          status: 200,
+          data: {},
+          lines: [
+            '<script type="text/x-replay-flight"',
+            `>self.__next_f.push([1,${JSON.stringify(JSON.stringify(cache))}])</script`,
+            '>',
+          ],
+        },
+      ],
+    });
+    // The same cache in the page's data globals, as objects.
+    const global = recording({
+      ...sold,
+      states: [
+        { url: 'https://www.mercari.com/', status: 200, data: { __APOLLO__: cache }, lines: [] },
+      ],
+    });
+
+    it('finds the buyer, in the document and in the data, and replaces every trace', () => {
+      for (const live of [sold, global]) {
+        expect(unredacted(live)).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(/^a name value under its key \(name\)/),
+            expect.stringMatching(/^a user value under its key \(username\)/),
+            expect.stringMatching(/^an id value under its key \(id\)/),
+          ]),
+        );
+        const redacted = redactRecordings([live]).recordings[0] ?? live;
+        const text = JSON.stringify(redacted);
+        expect(text).not.toMatch(/Avery|Quill|31415926|mercdn/);
+        expect(text).toContain('RedactedName1');
+        expect(unredacted(redacted)).toEqual([]);
+      }
+    });
+
+    it('keeps the cache consistent: the buyer reference still names the buyer entry', () => {
+      const redacted = redactRecordings([global]).recordings[0] ?? global;
+      const data = redacted.states[0]?.data.__APOLLO__ as Record<string, Record<string, unknown>>;
+      const item = data['ItemDetail:m10000000001'];
+      const buyer = (item?.buyer as { __ref: string }).__ref;
+      expect(buyer).toMatch(/^PublicUser:9\d+$/);
+      expect(data[buyer]).toMatchObject({
+        __typename: 'PublicUser',
+        name: expect.stringMatching(/^RedactedName\d+$/),
+        username: expect.stringMatching(/^redacteduser\d+$/),
+      });
+    });
+
+    it('never takes a real handle shaped like an old placeholder for a placeholder', () => {
+      const handle = recording({
+        states: [
+          { url: 'https://www.depop.com/', status: 200, data: { username: 'user7' }, lines: [] },
+        ],
+      });
+      expect(unredacted(handle)).toEqual([expect.stringMatching(/^a user value/)]);
     });
   });
 
@@ -264,9 +358,9 @@ describe('recordings', () => {
     });
 
     it('generalizes ids in paths, and ignores generated ids and classes', () => {
-      expect(generalPath('https://www.depop.com/products/user1-levis-trucker-jacket-blue/')).toBe(
-        '/products/<id>/',
-      );
+      expect(
+        generalPath('https://www.depop.com/products/redacteduser1-levis-trucker-jacket-blue/'),
+      ).toBe('/products/<id>/');
       expect(generalPath('https://www.mercari.com/us/item/m12345678901/')).toBe('/us/item/<id>/');
       expect([
         ...elementKinds([

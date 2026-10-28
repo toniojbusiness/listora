@@ -8,8 +8,14 @@
  *   escaped) are collected, with the words the marketplace's plan knows identify the seller (the
  *   username in Depop's product slugs) and any the person recording adds. Every occurrence of
  *   each, anywhere in the recording (addresses, documents, data, selectors, results), becomes a
- *   placeholder of the same kind (`user1`, `Name1`, `user1@example.com`), the same one each
- *   time, so a slug, a link, and the data that names it still agree.
+ *   placeholder of the same kind (`redacteduser1`, `RedactedName1`, `redacteduser1@example.com`),
+ *   the same one each time, so a slug, a link, and the data that names it still agree. The
+ *   placeholders are in a namespace no site uses (Mercari's own default handles are
+ *   `user<digits>`), so a real value is never mistaken for one.
+ * - **People in a cache.** An object whose `__typename` names a user, profile, buyer, or seller
+ *   (`PublicUser`), or that sits under such a normalized key (Apollo's `"PublicUser:123"`), is a
+ *   person's: its name, username, id, and photo are redacted, in the data and in the JSON of the
+ *   document.
  * - **Credentials.** Values under keys that name a token, secret, password, session, or
  *   signature become `REDACTED`, as do JSON web tokens, long opaque tokens, and token-like query
  *   parameters.
@@ -21,7 +27,7 @@
  */
 import type { ExpandedRecording } from './recording.ts';
 
-type TermKind = 'user' | 'name' | 'email' | 'phone' | 'address' | 'id' | 'secret';
+type TermKind = 'user' | 'name' | 'email' | 'phone' | 'address' | 'id' | 'photo' | 'secret';
 /** A value found, its kind, and the key it was under (`null` for one given by name). */
 interface Term {
   kind: TermKind;
@@ -56,20 +62,51 @@ const IDENTITY_KEYS: readonly (readonly [RegExp, TermKind])[] = [
   ],
 ];
 
-/** A `name` under one of these keys is a person's. */
+/**
+ * A `name` under one of these keys is a person's. A normalized key's `:<id>` suffix
+ * (`PublicUser:123`) is dropped before the test.
+ */
 const PERSON_PARENT =
   /(user|seller|buyer|owner|profile|recipient|customer|member|account|creator|author|sender|shipping|billing|address|viewer|me)$/i;
+
+/** An object of one of these types (its `__typename`) is a person's. */
+const PERSON_TYPE = /user|profile|buyer|seller/i;
+
+/** A person object's own fields, by kind: whatever their keys, they name it. */
+const PERSON_FIELDS: Readonly<Record<string, TermKind>> = {
+  name: 'name',
+  username: 'user',
+  id: 'id',
+  photo: 'photo',
+  avatar: 'photo',
+  image: 'photo',
+  picture: 'photo',
+  photo_url: 'photo',
+  photoUrl: 'photo',
+  avatar_url: 'photo',
+  avatarUrl: 'photo',
+};
 
 /** Values that name nobody. */
 const NOT_A_NAME = new Set(['null', 'undefined', 'true', 'false', 'none', 'n/a', 'unknown']);
 
 /** What every redaction left: a value matching one of these is a placeholder. */
 const PLACEHOLDER =
-  /^(user\d+|Name\d+|user\d*@example\.com|555-555-01\d\d|Redacted|REDACTED\d*|9?0+\d{1,4}|id\d+)$/;
+  /^(redacteduser\d+|RedactedName\d+|(?:redacteduser\d+|user)@example\.com|555-555-01\d\d|Redacted|REDACTED\d*|9?0+\d{1,4}|redactedid\d+|https:\/\/images\.recorded\.invalid\/[\w.-]+)$/;
 
 /** `"key": "value"` in JSON text, escaped any number of times (Depop's payload is twice). */
 const KEYED_TEXT =
   /\\{0,7}"([A-Za-z][A-Za-z0-9_]{1,40})\\{0,7}"\s*:\s*(?:\\{0,7}"([^"\\]{1,200})\\{0,7}"|(\d{4,20})(?![\d.]))/g;
+
+/** `"__typename": "PublicUser"` in JSON text, escaped any number of times. */
+const KEYED_TYPENAME =
+  /\\{0,7}"__typename\\{0,7}"\s*:\s*\\{0,7}"([A-Za-z][A-Za-z0-9_]{0,60})\\{0,7}"/g;
+
+/** `"PublicUser:123": {` in JSON text: a normalized cache entry's key, and its object. */
+const NORMALIZED_ENTRY = /\\{0,7}"([A-Za-z][A-Za-z0-9_]{0,60}):[^"\\]{1,80}\\{0,7}"\s*:\s*\{/g;
+
+/** How far an object in JSON text may reach from its `__typename`, either way. */
+const OBJECT_REACH = 20_000;
 
 /** An HTML attribute naming a person (`data-username="..."`). */
 const KEYED_ATTRIBUTE =
@@ -257,16 +294,29 @@ export function unredacted(
 /** Every identity value in the recording, with its kind. */
 function collectTerms(value: unknown): Map<string, Term> {
   const terms = new Map<string, Term>();
-  const walk = (node: unknown, key: string | null, parent: string | null): void => {
+  const walk = (
+    node: unknown,
+    key: string | null,
+    parent: string | null,
+    person: boolean,
+  ): void => {
     if (typeof node === 'string') {
       if (key !== null) {
-        const kind = kindOf(key, parent);
+        const kind = kindOf(key, parent, person);
         if (kind !== null) addTerm(terms, node, kind, key);
       }
       for (const match of node.matchAll(KEYED_TEXT)) {
-        const kind = kindOf(match[1] ?? '', null);
+        const kind = kindOf(match[1] ?? '', null, false);
         const found = match[2] ?? match[3];
         if (kind !== null && found !== undefined) addTerm(terms, found, kind, match[1] ?? null);
+      }
+      for (const span of personSpans(node)) {
+        for (const match of span.matchAll(KEYED_TEXT)) {
+          const field = match[1] ?? '';
+          const kind = kindOf(field, null, true);
+          const found = match[2] ?? match[3];
+          if (kind !== null && found !== undefined) addTerm(terms, found, kind, field);
+        }
       }
       for (const match of node.matchAll(KEYED_ATTRIBUTE)) {
         const name = (match[1] ?? '').toLowerCase();
@@ -277,31 +327,101 @@ function collectTerms(value: unknown): Map<string, Term> {
       return;
     }
     if (typeof node === 'number') {
-      if (key !== null && kindOf(key, parent) === 'id' && Number.isSafeInteger(node)) {
-        addTerm(terms, String(node), 'id');
+      if (key !== null && kindOf(key, parent, person) === 'id' && Number.isSafeInteger(node)) {
+        addTerm(terms, String(node), 'id', key);
       }
       return;
     }
     if (Array.isArray(node)) {
-      for (const item of node) walk(item, key, parent);
+      for (const item of node) walk(item, key, parent, person);
       return;
     }
     if (node !== null && typeof node === 'object') {
-      for (const [name, child] of Object.entries(node)) walk(child, name, key);
+      const typename = (node as { __typename?: unknown }).__typename;
+      const own =
+        (typeof typename === 'string' && PERSON_TYPE.test(typename)) ||
+        (key !== null && PERSON_TYPE.test(normalizedType(key)));
+      for (const [name, child] of Object.entries(node)) walk(child, name, key, own);
     }
   };
-  walk(value, null, null);
+  walk(value, null, null, false);
   return terms;
 }
 
-function kindOf(key: string, parent: string | null): TermKind | null {
+/**
+ * `key`'s kind, if its value names someone. `parent` is the key of the object it is in, and
+ * `person` says whether that object is a person's (by its `__typename` or its normalized key).
+ */
+function kindOf(key: string, parent: string | null, person: boolean): TermKind | null {
   for (const [pattern, kind] of IDENTITY_KEYS) {
     if (!pattern.test(key)) continue;
     // A capitalized key is a label's (Depop's translations: `"PostalCode": "Postal code"`), not
     // a person's data, which the sites key in lower case; a credential is one either way.
     return /^[A-Z]/.test(key) && kind !== 'secret' ? null : kind;
   }
-  if (key === 'name' && parent !== null && PERSON_PARENT.test(parent)) return 'name';
+  if (person) {
+    const field = PERSON_FIELDS[key];
+    if (field !== undefined) return field;
+  }
+  if (key === 'name' && parent !== null && PERSON_PARENT.test(normalizedType(parent))) {
+    return 'name';
+  }
+  return null;
+}
+
+/** A normalized cache key's type: `PublicUser` for `PublicUser:123`; any other key as it is. */
+function normalizedType(key: string): string {
+  const colon = key.indexOf(':');
+  return colon > 0 ? key.slice(0, colon) : key;
+}
+
+/**
+ * The JSON text of each person object in `text` (escaped any number of times): one whose
+ * `__typename` names a user, profile, buyer, or seller, or one under such a normalized key.
+ * Its extent is found by counting braces, which no JSON escaping changes.
+ */
+function personSpans(text: string): string[] {
+  const starts = new Set<number>();
+  for (const match of text.matchAll(KEYED_TYPENAME)) {
+    if (!PERSON_TYPE.test(match[1] ?? '')) continue;
+    const start = enclosingBrace(text, match.index);
+    if (start !== null) starts.add(start);
+  }
+  for (const match of text.matchAll(NORMALIZED_ENTRY)) {
+    if (PERSON_TYPE.test(match[1] ?? '')) starts.add(match.index + match[0].length - 1);
+  }
+  const spans: string[] = [];
+  for (const start of starts) {
+    const end = matchingBrace(text, start);
+    if (end !== null) spans.push(text.slice(start, end + 1));
+  }
+  return spans;
+}
+
+function enclosingBrace(text: string, from: number): number | null {
+  let depth = 0;
+  for (let index = from - 1; index >= Math.max(0, from - OBJECT_REACH); index -= 1) {
+    const char = text[index];
+    if (char === '}') depth += 1;
+    else if (char === '{') {
+      if (depth === 0) return index;
+      depth -= 1;
+    }
+  }
+  return null;
+}
+
+function matchingBrace(text: string, start: number): number | null {
+  let depth = 0;
+  const limit = Math.min(text.length, start + OBJECT_REACH);
+  for (let index = start; index < limit; index += 1) {
+    const char = text[index];
+    if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
   return null;
 }
 
@@ -316,8 +436,10 @@ function addTerm(
   const bare = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (key !== null && bare(term) === bare(key)) return;
   const minimum = kind === 'secret' ? 8 : kind === 'id' ? 4 : 3;
-  // A private part's text may be a whole paragraph (a profile's introduction).
-  if (term.length < minimum || term.length > (kind === 'name' ? 2_000 : 200)) return;
+  // A private part's text may be a whole paragraph (a profile's introduction), and a photo's
+  // address a long signed one.
+  const maximum = kind === 'name' || kind === 'photo' ? 2_000 : 200;
+  if (term.length < minimum || term.length > maximum) return;
   if (NOT_A_NAME.has(term.toLowerCase()) || PLACEHOLDER.test(term)) return;
   if (kind === 'address' && /^\d{1,3}$/.test(term)) return;
   if (!terms.has(term)) terms.set(term, { kind, key });
@@ -326,11 +448,11 @@ function addTerm(
 function placeholderFor(kind: TermKind, number: number, term: string): string {
   switch (kind) {
     case 'user':
-      return `user${String(number)}`;
+      return `redacteduser${String(number)}`;
     case 'name':
-      return `Name${String(number)}`;
+      return `RedactedName${String(number)}`;
     case 'email':
-      return `user${String(number)}@example.com`;
+      return `redacteduser${String(number)}@example.com`;
     case 'phone':
       return `555-555-01${String(number % 100).padStart(2, '0')}`;
     case 'address':
@@ -342,7 +464,9 @@ function placeholderFor(kind: TermKind, number: number, term: string): string {
         return `9${String(number).padStart(Math.max(term.length - 1, 1), '0')}`;
       return /^[0-9a-f]+$/i.test(term)
         ? String(number).padStart(term.length, '0')
-        : `id${String(number)}`;
+        : `redactedid${String(number)}`;
+    case 'photo':
+      return `${REPLAY_IMAGE_ORIGIN}/person${String(number)}.jpg`;
     case 'secret':
       return 'REDACTED';
   }
