@@ -308,8 +308,10 @@ jobs:
     needs: [changes, ios-build]
     if: ${{ needs.changes.outputs.ios_ui == 'true' }}
     runs-on: macos-26
-    # A shard takes about 15 minutes of tests; the rest is room for re-runs of failed tests.
-    timeout-minutes: 40
+    # A shard takes about 15 to 25 minutes of tests. The rest is room for the re-runs of failed
+    # tests: a test that runs out its 5-minute allowance takes about 6.5 minutes a try, and a
+    # job cut off by its timeout uploads no summary of what failed.
+    timeout-minutes: 60
     strategy:
       # Every shard reports its own failures, not only the first one's.
       fail-fast: false
