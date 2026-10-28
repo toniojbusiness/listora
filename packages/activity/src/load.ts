@@ -7,7 +7,7 @@
  * stored twice, and it shows only what they keep: redacted excerpts, step names, codes, and the
  * ids operators search the logs by, never page content, typed values, or buyer data.
  */
-import { sql } from 'kysely';
+import { sql, type NotNull } from 'kysely';
 
 import type { DbExecutor, JsonArray, JsonValue, Marketplace } from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
@@ -79,6 +79,7 @@ export async function loadActivity(
     sources.push(sales(db, filter), delistRuns(db, filter));
     if (diagnostics) sources.push(saleChecks(db, filter, scope));
     if (filter.marketplace === undefined || scope !== 'all') sources.push(itemChanges(db, filter));
+    if (diagnostics && filter.marketplace === undefined) sources.push(deletedItems(db, filter));
   }
   if (diagnostics && (scope === 'sale' || scope === 'all')) sources.push(orders(db, filter));
   if (scope !== 'operation') sources.push(packages(db, filter));
@@ -107,11 +108,22 @@ async function operationEvents(db: DbExecutor, filter: ActivityFilter): Promise<
         .onRef('op.account_id', '=', 'event.account_id')
         .onRef('op.id', '=', 'event.operation_id'),
     )
-    .innerJoin('marketplace_listing as listing', (join) =>
+    .leftJoin('marketplace_listing as listing', (join) =>
       join
         .onRef('listing.account_id', '=', 'op.account_id')
         .onRef('listing.id', '=', 'op.listing_id'),
     )
+    .leftJoin('deleted_listing as deleted', (join) =>
+      join
+        .onRef('deleted.account_id', '=', 'op.account_id')
+        .onRef('deleted.id', '=', 'op.deleted_listing_id'),
+    )
+    .select((eb) => [
+      eb.fn.coalesce('listing.id', 'deleted.id').as('listing_id'),
+      eb.fn.coalesce('listing.item_id', 'deleted.item_id').as('item_id'),
+      eb.fn.coalesce('listing.marketplace', 'deleted.marketplace').as('marketplace'),
+    ])
+    .$narrowType<{ listing_id: NotNull; item_id: NotNull; marketplace: NotNull }>()
     .select([
       'event.id',
       'event.from_status',
@@ -123,20 +135,28 @@ async function operationEvents(db: DbExecutor, filter: ActivityFilter): Promise<
       'op.id as operation_id',
       'op.kind',
       'op.origin',
-      'listing.id as listing_id',
-      'listing.item_id',
-      'listing.marketplace',
     ])
     .$if(filter.accountId !== undefined, (q) =>
       q.where('event.account_id', '=', filter.accountId ?? ''),
     )
+    .$if(filter.forSeller === true, (q) => q.where('op.listing_id', 'is not', null))
     .$if(filter.operationId !== undefined, (q) => q.where('op.id', '=', filter.operationId ?? ''))
-    .$if(filter.itemId !== undefined, (q) => q.where('listing.item_id', '=', filter.itemId ?? ''))
+    .$if(filter.itemId !== undefined, (q) =>
+      q.where(
+        (eb) => eb.fn.coalesce('listing.item_id', 'deleted.item_id'),
+        '=',
+        filter.itemId ?? '',
+      ),
+    )
     .$if(filter.saleId !== undefined && filter.operationId === undefined, (q) =>
       q.where('op.delist_run_id', 'in', saleDelistRuns(db, filter)),
     )
     .$if(filter.marketplace !== undefined, (q) =>
-      q.where('listing.marketplace', '=', filter.marketplace ?? 'ebay'),
+      q.where(
+        (eb) => eb.fn.coalesce('listing.marketplace', 'deleted.marketplace'),
+        '=',
+        filter.marketplace ?? 'ebay',
+      ),
     )
     .$if(filter.from !== undefined, (q) =>
       q.where('event.created_at', '>=', filter.from ?? new Date(0)),
@@ -181,6 +201,15 @@ async function browserSessions(
         .onRef('listing.account_id', '=', 'op.account_id')
         .onRef('listing.id', '=', 'op.listing_id'),
     )
+    .leftJoin('deleted_listing as deleted', (join) =>
+      join
+        .onRef('deleted.account_id', '=', 'op.account_id')
+        .onRef('deleted.id', '=', 'op.deleted_listing_id'),
+    )
+    .select((eb) => [
+      eb.fn.coalesce('listing.id', 'deleted.id').as('listing_id'),
+      eb.fn.coalesce('listing.item_id', 'deleted.item_id').as('item_id'),
+    ])
     .select([
       'run.id',
       'run.marketplace',
@@ -196,8 +225,6 @@ async function browserSessions(
       'run.screenshot_key',
       'run.steps',
       'run.operation_id',
-      'listing.id as listing_id',
-      'listing.item_id',
     ])
     .$if(filter.accountId !== undefined, (q) =>
       q.where('run.account_id', '=', filter.accountId ?? ''),
@@ -208,7 +235,13 @@ async function browserSessions(
     .$if(filter.operationId !== undefined, (q) =>
       q.where('run.operation_id', '=', filter.operationId ?? ''),
     )
-    .$if(filter.itemId !== undefined, (q) => q.where('listing.item_id', '=', filter.itemId ?? ''))
+    .$if(filter.itemId !== undefined, (q) =>
+      q.where(
+        (eb) => eb.fn.coalesce('listing.item_id', 'deleted.item_id'),
+        '=',
+        filter.itemId ?? '',
+      ),
+    )
     .$if(scope === 'sale', (q) => q.where('op.delist_run_id', 'in', saleDelistRuns(db, filter)))
     .$if(filter.marketplace !== undefined, (q) =>
       q.where('run.marketplace', '=', filter.marketplace ?? 'ebay'),
@@ -749,6 +782,32 @@ async function itemChanges(db: DbExecutor, filter: ActivityFilter): Promise<Acti
       saleId: typeof saleId === 'string' ? saleId : null,
     };
   });
+}
+
+/**
+ * Items the seller deleted, by the id and title they had (`deleted_item`): their marketplace
+ * history stays on the operator's timeline, and only there.
+ */
+async function deletedItems(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEntry[]> {
+  if (filter.saleId !== undefined) return [];
+  const rows = await db
+    .selectFrom('deleted_item')
+    .select(['id', 'sku', 'title', 'deleted_at'])
+    .$if(filter.accountId !== undefined, (q) => q.where('account_id', '=', filter.accountId ?? ''))
+    .$if(filter.itemId !== undefined, (q) => q.where('id', '=', filter.itemId ?? ''))
+    .$if(filter.from !== undefined, (q) => q.where('deleted_at', '>=', filter.from ?? new Date(0)))
+    .$if(filter.to !== undefined, (q) => q.where('deleted_at', '<', filter.to ?? new Date()))
+    .orderBy('deleted_at', 'desc')
+    .limit(filter.limit)
+    .execute();
+  return rows.map((row) => ({
+    ...blank(`deleted_item:${row.id}`, row.deleted_at),
+    kind: 'item',
+    source: 'you',
+    title: 'Item deleted',
+    detail: row.title === null ? row.sku : `${row.sku}: ${row.title}`,
+    itemId: row.id,
+  }));
 }
 
 /** An entry with nothing but its id and time; each source fills in the rest. */

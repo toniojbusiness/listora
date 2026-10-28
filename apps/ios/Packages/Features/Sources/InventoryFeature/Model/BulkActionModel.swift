@@ -96,6 +96,12 @@ final class BulkActionModel: Identifiable {
         items.count
     }
 
+    /// How many of the items have a listing that may still be up on a marketplace, as the list
+    /// showed them (each item is read fresh when the change runs).
+    var listedItems: Int {
+        items.count { $0.listings.contains(where: \.status.mayBeLive) }
+    }
+
     var failedOutcomes: [BulkOutcome] {
         outcomes.filter { $0.result == .failed }
     }
@@ -181,8 +187,8 @@ final class BulkActionModel: Identifiable {
             }
         case let .changePrice(adjustment):
             return await changePrice(of: item, by: adjustment)
-        case .delete:
-            return await [delete(item)]
+        case let .delete(mode):
+            return await delete(item, mode)
         }
     }
 }

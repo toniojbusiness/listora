@@ -10,8 +10,10 @@ import {
   SkuAllocationError,
   type DbExecutor,
   type InventoryItem,
+  type Marketplace,
   type PreArchiveItemStatus,
 } from '@listora/db';
+import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
@@ -44,8 +46,10 @@ import {
   findItemBySku,
   hasLiveListing,
   hasSale,
+  inFlightOperationMarketplaces,
   insertItem,
   listItemRows,
+  liveListingMarketplaces,
   lockItem,
   storageLocationSummary,
   updateItem,
@@ -173,33 +177,17 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
     }),
   );
 
-  contractRoute(app, deps, 'deleteItem', async ({ tenant, db, params, request }) => {
+  contractRoute(app, deps, 'deleteItem', async ({ tenant, db, params, query, request }) => {
     const photos = await inTransaction(db, async (trx) => {
       // A haul's lock comes before its items' (hauls/routes.ts), so it is taken first.
       const haulId = (await findItem(trx, tenant, params.itemId))?.haul_id ?? null;
       if (haulId !== null) await lockHauls(trx, tenant, [haulId]);
       const row = await lockItem(trx, tenant, params.itemId);
       if (!row) throw notFound('Item');
-      if (await hasLiveListing(trx, tenant, row.id)) {
-        throw new ApiError(
-          'invalid_state_transition',
-          'This item is live on a marketplace. End its listings before deleting it.',
-        );
-      }
+      await assertDeletable(trx, tenant, row.id, query.leaveListings === true);
       // Read before the delete cascades to them, so their objects can be deleted afterwards.
       const itemPhotos = await listPhotoRows(trx, tenant, row.id);
-      try {
-        await deleteItem(trx, tenant, row.id);
-      } catch (error) {
-        if (isPgError(error, PG_ERROR.foreignKeyViolation)) {
-          throw new ApiError(
-            'invalid_state_transition',
-            'This item has marketplace or sales history, so it cannot be deleted. Archive it instead.',
-            { cause: error },
-          );
-        }
-        throw error;
-      }
+      await deleteItem(trx, tenant, row);
       // The item's own history goes with it, so this entry is not linked to the item.
       await writeAudit(trx, tenant, {
         action: 'item.deleted',
@@ -215,6 +203,49 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
     await deletePhotoObjects(deps.storage, photos, request.log);
     return { status: 204 };
   });
+}
+
+/**
+ * Refuses a delete that would lose something (contract: `deleteItem`): a sale's records, a change
+ * still on its way to a marketplace, or, unless the seller chose to leave them up, a listing that
+ * may be live. A listing already off its marketplace never stops it.
+ */
+async function assertDeletable(
+  db: DbExecutor,
+  tenant: Tenant,
+  itemId: string,
+  leaveListings: boolean,
+): Promise<void> {
+  if (await hasSale(db, tenant, itemId)) {
+    throw new ApiError(
+      'invalid_state_transition',
+      'This item was sold, so Listora keeps it with the sale. Archive it instead.',
+    );
+  }
+  const working = await inFlightOperationMarketplaces(db, tenant, itemId);
+  if (working.length > 0) {
+    throw new ApiError(
+      'invalid_state_transition',
+      `Listora is still working on this item on ${marketplaceNames(working)}. ` +
+        'Delete it once that is done, or cancel it.',
+    );
+  }
+  if (leaveListings) return;
+  const live = await liveListingMarketplaces(db, tenant, itemId);
+  if (live.length > 0) {
+    throw new ApiError(
+      'invalid_state_transition',
+      `This item is still listed on ${marketplaceNames(live)}. End those listings first, or ` +
+        'remove it from Listora only and leave them up.',
+    );
+  }
+}
+
+/** "Poshmark", "eBay and Poshmark": the marketplaces as the seller reads them. */
+function marketplaceNames(marketplaces: readonly Marketplace[]): string {
+  return new Intl.ListFormat('en', { type: 'conjunction' }).format(
+    marketplaces.map((marketplace) => MARKETPLACE_NAMES[marketplace]),
+  );
 }
 
 /** What the item's accepted analysis proposed, when it has one that completed. */

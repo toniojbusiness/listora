@@ -12,19 +12,33 @@ import {
   type JsonObject,
   type ListingStatus,
   type Marketplace,
+  type OperationStatus,
   type PreArchiveItemStatus,
 } from '@listora/db';
+import { cancelOperation, keepDeletedItemOperations } from '@listora/operations';
 import { sql } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
 import type { DetailColumns, FieldProvenance } from './details.ts';
 import type { PhotoRow } from '../photos/mapping.ts';
 
-/** Listing statuses that are not live on a marketplace (contract: `deleteItem`). */
+/**
+ * Listing statuses that are not live on a marketplace (contract: `deleteItem`): never posted,
+ * or already off it (ended, or sold and so no longer for sale).
+ */
 export const NOT_LIVE_LISTING_STATUSES = [
   'draft',
   'ended',
+  'sold',
 ] as const satisfies readonly ListingStatus[];
+
+/** Operation statuses whose work may still reach the marketplace. */
+const IN_FLIGHT_OPERATION_STATUSES = [
+  'queued',
+  'running',
+  'retrying',
+  'verifying',
+] as const satisfies readonly OperationStatus[];
 
 export async function findItem(
   db: DbExecutor,
@@ -255,21 +269,54 @@ export async function updateItem(
     .executeTakeFirst();
 }
 
-/** Whether any of the item's listings is live (anything but `draft` or `ended`). */
+/** The marketplaces where one of the item's listings may be live (`NOT_LIVE_LISTING_STATUSES`). */
+export async function liveListingMarketplaces(
+  db: DbExecutor,
+  tenant: Tenant,
+  itemId: string,
+): Promise<Marketplace[]> {
+  const rows = await db
+    .selectFrom('marketplace_listing')
+    .select('marketplace')
+    .distinct()
+    .where('account_id', '=', tenant.accountId)
+    .where('item_id', '=', itemId)
+    .where('status', 'not in', NOT_LIVE_LISTING_STATUSES)
+    .orderBy('marketplace')
+    .execute();
+  return rows.map((row) => row.marketplace);
+}
+
+/** Whether any of the item's listings may be live (`NOT_LIVE_LISTING_STATUSES`). */
 export async function hasLiveListing(
   db: DbExecutor,
   tenant: Tenant,
   itemId: string,
 ): Promise<boolean> {
-  const row = await db
-    .selectFrom('marketplace_listing')
-    .select('id')
-    .where('account_id', '=', tenant.accountId)
-    .where('item_id', '=', itemId)
-    .where('status', 'not in', NOT_LIVE_LISTING_STATUSES)
-    .limit(1)
-    .executeTakeFirst();
-  return row !== undefined;
+  return (await liveListingMarketplaces(db, tenant, itemId)).length > 0;
+}
+
+/** The marketplaces where a change to one of the item's listings is still in flight. */
+export async function inFlightOperationMarketplaces(
+  db: DbExecutor,
+  tenant: Tenant,
+  itemId: string,
+): Promise<Marketplace[]> {
+  const rows = await db
+    .selectFrom('marketplace_operation as operation')
+    .innerJoin('marketplace_listing as listing', (join) =>
+      join
+        .onRef('listing.account_id', '=', 'operation.account_id')
+        .onRef('listing.id', '=', 'operation.listing_id'),
+    )
+    .select('listing.marketplace')
+    .distinct()
+    .where('operation.account_id', '=', tenant.accountId)
+    .where('listing.item_id', '=', itemId)
+    .where('operation.status', 'in', IN_FLIGHT_OPERATION_STATUSES)
+    .orderBy('listing.marketplace')
+    .execute();
+  return rows.map((row) => row.marketplace);
 }
 
 /** Whether the item was sold in any marketplace order (whatever became of the order). */
@@ -285,24 +332,63 @@ export async function hasSale(db: DbExecutor, tenant: Tenant, itemId: string): P
 }
 
 /**
- * Deletes the item with its draft and ended listings; photos, analyses, and its audit history
- * go with it (foreign-key cascades). Marketplace history that must be kept (operations, sales)
- * makes the database refuse, which the caller reports as a conflict.
+ * Deletes the item with every listing of it, keeping the history of what was done on the
+ * marketplaces (docs/features/items.md, Deleting an item): what the item and each listing were go
+ * to `deleted_item` and `deleted_listing`, and each listing's operations move onto its
+ * `deleted_listing` row, with their events, browser sessions, and phone work. An operation still
+ * waiting for the seller is canceled first, since its task goes with the listing. Photos,
+ * analyses, tasks, and the item's own audit history go with the item (foreign-key cascades).
+ * Nothing changes on a marketplace: a listing still up there stays up, no longer tracked. The
+ * caller first refuses an item with a sale, whose records are kept, or with a change in flight.
  */
 export async function deleteItem(
   trx: DbTransaction,
   tenant: Tenant,
-  itemId: string,
+  item: Pick<InventoryItem, 'id' | 'sku' | 'title'>,
 ): Promise<void> {
+  const listings = trx
+    .selectFrom('marketplace_listing')
+    .select('id')
+    .where('account_id', '=', tenant.accountId)
+    .where('item_id', '=', item.id);
+  const waiting = await trx
+    .selectFrom('marketplace_operation')
+    .select('id')
+    .where('account_id', '=', tenant.accountId)
+    .where('listing_id', 'in', listings)
+    .where('status', '=', 'needs_user_action')
+    .execute();
+  for (const { id } of waiting) {
+    await cancelOperation(trx, {
+      accountId: tenant.accountId,
+      operationId: id,
+      reason: 'item_deleted',
+    });
+  }
+  await trx
+    .insertInto('deleted_item')
+    .values({ id: item.id, account_id: tenant.accountId, sku: item.sku, title: item.title })
+    .execute();
+  await trx
+    .insertInto('deleted_listing')
+    .columns(['id', 'account_id', 'item_id', 'marketplace', 'status', 'external_listing_id'])
+    .expression(
+      trx
+        .selectFrom('marketplace_listing')
+        .select(['id', 'account_id', 'item_id', 'marketplace', 'status', 'external_listing_id'])
+        .where('account_id', '=', tenant.accountId)
+        .where('item_id', '=', item.id),
+    )
+    .execute();
+  await keepDeletedItemOperations(trx, { accountId: tenant.accountId, itemId: item.id });
   await trx
     .deleteFrom('marketplace_listing')
     .where('account_id', '=', tenant.accountId)
-    .where('item_id', '=', itemId)
-    .where('status', 'in', NOT_LIVE_LISTING_STATUSES)
+    .where('item_id', '=', item.id)
     .execute();
   await trx
     .deleteFrom('inventory_item')
     .where('account_id', '=', tenant.accountId)
-    .where('id', '=', itemId)
+    .where('id', '=', item.id)
     .execute();
 }
