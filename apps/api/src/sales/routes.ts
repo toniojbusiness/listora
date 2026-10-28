@@ -16,10 +16,12 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { contractRoute } from '../contract/routes.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
 import type { ApiRouteContext } from '../features.ts';
+import { coverPhotoRows } from '../items/repository.ts';
 import { relistListing } from '../listings/actions.ts';
 import { itemListingRows } from '../listings/repository.ts';
 import { listingStates, listingView, type ListingViewContext } from '../listings/views.ts';
 import { decodeTimeCursor, DEFAULT_PAGE_SIZE, encodeTimeCursor } from '../pagination.ts';
+import { photoFromRow, type PublicUrls } from '../photos/mapping.ts';
 import type { Tenant } from '../tenancy.ts';
 import {
   connectedMarketplaces,
@@ -37,6 +39,9 @@ import { saleView, type RelistOptions } from './views.ts';
 /** How far ahead of the server's clock a hand-entered sale time may be (a phone's clock drifts). */
 const SOLD_AT_FUTURE_TOLERANCE_MS = 5 * 60_000;
 
+/** What a sale's view needs besides its rows: the listings' adapters and the photos' URLs. */
+type SaleViewContext = ListingViewContext & { urls: PublicUrls };
+
 /**
  * The sales feed (`listSales`, `getSale`), the seller's sales in total and per marketplace
  * (`getSalesSummary`), recording a sale by hand (`createSale`, "Mark sold"),
@@ -45,7 +50,7 @@ const SOLD_AT_FUTURE_TOLERANCE_MS = 5 * 60_000;
  * docs/features/sales.md.
  */
 export function registerSaleRoutes(app: FastifyInstance, deps: ApiRouteContext): void {
-  const views: ListingViewContext = { adapters: deps.connections.adapters };
+  const views: SaleViewContext = { adapters: deps.connections.adapters, urls: deps.storage };
 
   contractRoute(app, deps, 'listSales', async ({ tenant, db, query }) => {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
@@ -339,12 +344,7 @@ async function saleCommand<T>(command: () => Promise<T>): Promise<T> {
   }
 }
 
-async function oneSaleView(
-  db: DbExecutor,
-  tenant: Tenant,
-  saleId: string,
-  views: ListingViewContext,
-) {
+async function oneSaleView(db: DbExecutor, tenant: Tenant, saleId: string, views: SaleViewContext) {
   const sale = await findSale(db, tenant, saleId);
   if (!sale) throw notFound('Sale');
   const [view] = await saleViews(db, tenant, [sale], views);
@@ -356,7 +356,7 @@ export async function saleViews(
   db: DbExecutor,
   tenant: Tenant,
   sales: readonly SaleRow[],
-  views: ListingViewContext,
+  views: SaleViewContext,
 ) {
   const saleIds = sales.map((sale) => sale.id);
   const [items, fees, runs, doubleSales] = await Promise.all([
@@ -365,7 +365,17 @@ export async function saleViews(
     loadDelistRuns(db, tenant.accountId, { saleIds }),
     doubleSaleRows(db, tenant, { saleIds }),
   ]);
-  const options = await relistOptions(db, tenant, [...items.values()].flat(), views);
+  const allItems = [...items.values()].flat();
+  const [options, covers] = await Promise.all([
+    relistOptions(db, tenant, allItems, views),
+    coverPhotoRows(db, tenant, [...new Set(allItems.map((item) => item.item_id))]),
+  ]);
+  const thumbnails = new Map(
+    [...covers].flatMap(([itemId, cover]) => {
+      const thumbnail = photoFromRow(cover, views.urls).urls?.thumbnail;
+      return thumbnail === undefined ? [] : [[itemId, thumbnail] as const];
+    }),
+  );
   return sales.map((sale) =>
     saleView(
       sale,
@@ -374,6 +384,7 @@ export async function saleViews(
       runs.filter((run) => run.saleId === sale.id),
       doubleSales.filter((task) => task.sale_id === sale.id),
       options,
+      thumbnails,
     ),
   );
 }

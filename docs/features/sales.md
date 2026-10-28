@@ -35,6 +35,18 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
   earlier check dropped (`history:order:<id>`, before sold items existed). An app built before
   this keeps working (the phone's call protocol is unchanged): its checks send no sold listing,
   so such a sale's sold item has only the order's title and price until the app updates.
+- **A sold item without photos gets them later.** A check that reads an order already recorded,
+  with its sold listing's photos, while the order's sold item has no photo at all, stores the
+  order once more (`photos:order:<id>:<check>`, payload `purpose: 'photos'`) and queues
+  `automation_sold_item_photos` (`packages/automation/src/sale-checks/sold-photos.ts`). The
+  worker fetches up to 4 of them from the marketplace's image CDN (`soldItemPhotoMaker` in
+  `@listora/imports`, as an import fetches photos, outside any transaction) and adds them to the
+  item while it still has none, each processed like any photo (its 640 px thumbnail and listing
+  size, [photos.md](photos.md)); the event ends `processed`, or `ignored` when none could be
+  fetched or the item has photos by then, and the next check that reads the order tries again.
+  It reads no extra page: the photos are the ones the check's own read showed. Migration
+  `20261028133630_sold_item_photos` makes the next check of each Mercari and Poshmark connection
+  with such a sold item a full read once more, so the sales an older app recorded get theirs.
 - **A sale of a listing Listora doesn't have** (sold before Listora was connected, or listed on
   the marketplace itself) becomes a **sold item**: the worker's `automation_sale_order` job makes
   the item from the sold listing as the sold pages showed it (`soldItemMaker` in
@@ -165,9 +177,10 @@ of its latest sale that stands.
 - **Sales tab.** All your sales on a price tag (Hang Tag, [design.md](design.md)): the total
   across every marketplace in Fraunces, how many sales and items since when, and each marketplace
   on the tag's string, a bead each with its own sales and revenue (a marketplace without a sale
-  yet hangs on a loose string, "No sales yet"). Then recent sales, newest sold first, with price
-  and profit ("Est. profit" while fees are estimated), and the way to the profit dashboard
-  ([profit.md](profit.md)).
+  yet hangs on a loose string, "No sales yet"). Then recent sales, newest sold first, each with
+  its sold item's photo (the item's thumbnail, `SaleItem.thumbnailUrl`; the marketplace's initial
+  until it has one), price and profit ("Est. profit" while fees are estimated), and the way to
+  the profit dashboard ([profit.md](profit.md)).
 
 ## Local development
 
@@ -182,7 +195,10 @@ Tests: `packages/imports/src/sold.int.test.ts` (sold items from a check's orders
 without the listing, never joining an item, without photos),
 `packages/automation/src/sale-checks/sale-checks.int.test.ts` (the full history read and a
 dropped order handed over again), `packages/sales/src/same-order.int.test.ts`,
-`apps/api/src/sales/summary.int.test.ts`, and the app's `SalesSummaryTests`.
+`packages/imports/src/sold-photos.int.test.ts` (a sold item made without photos gets its sold
+listing's from a later full read, once; a CDN that doesn't give them, and the next try; an item
+that got photos meanwhile), `apps/api/src/sales/summary.int.test.ts` (with each sale item's
+thumbnail), and the app's `SalesSummaryTests` and `SalesModelsTests`.
 
 ## Data
 
@@ -199,6 +215,10 @@ Migration `20261028095905_sales_history`: `sale.detection_source` gains `history
 creation at linking, and the deploy for every existing connection); and every
 `sale_check_schedule.checked_through` is reset so each connection's next check reads its whole
 sales history. Down drops the column and turns `history` sales back into `poll` ones.
+
+Migration `20261028133630_sold_item_photos`: resets `sale_check_schedule.checked_through` of each
+Mercari and Poshmark connection whose account has a sale there of an item without photos, so its
+next check is a full read that brings their photos. Down does nothing.
 
 ## Open items
 

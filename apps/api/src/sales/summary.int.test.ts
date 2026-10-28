@@ -2,10 +2,11 @@
  * The seller's sales in total and per marketplace (`getSalesSummary`), and the sales feed's
  * order (`listSales`, newest sold first), against a real Postgres. Sales are recorded through
  * `recordSale`, as the worker records detected ones (a sales history read records many at once,
- * oldest last).
+ * oldest last), and each sale item's photo (`thumbnailUrl`), for the sale rows.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { jsonb } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import { changeSale, recordSale } from '@listora/sales';
 
@@ -180,5 +181,64 @@ describe("the seller's sales in total and per marketplace (real Postgres)", () =
     expect((await api.call('listSales', { token, query: { cursor: 'not-a-cursor' } })).status).toBe(
       400,
     );
+  });
+
+  it("shows each sold item's cover photo, small, once it is processed", async () => {
+    const [withPhoto, processing, without] = [
+      await item('Wool coat'),
+      await item('Knit beanie'),
+      await item('Rain jacket'),
+    ];
+    const derivative = (kind: string) => ({
+      key: `public/photos/${withPhoto}/${kind}.jpg`,
+      width: 640,
+      height: 640,
+      byteSize: 1000,
+      sha256: 'a'.repeat(64),
+    });
+    const photo = (itemId: string) => ({
+      account_id: accountId,
+      item_id: itemId,
+      position: 0,
+      role: 'front' as const,
+      storage_key: `uploads/${itemId}`,
+      width: 1200,
+      height: 1200,
+      sha256: 'b'.repeat(64),
+      phash: '0'.repeat(16),
+    });
+    await api.db
+      .insertInto('photo')
+      .values([
+        {
+          ...photo(withPhoto),
+          status: 'ready',
+          processed_at: new Date(),
+          derivatives: jsonb({
+            original: derivative('original'),
+            ai: derivative('ai'),
+            thumbnail: derivative('thumbnail'),
+            listing: derivative('listing'),
+          }),
+        },
+        photo(processing),
+      ])
+      .execute();
+    const saleId = await sold('mercari', new Date(), [
+      { itemId: withPhoto, priceCents: 5000 },
+      { itemId: processing, priceCents: 1000 },
+      { itemId: without, priceCents: 2000 },
+    ]);
+    const listed = await api.call('listSales', { token });
+    const sale = listed.body.data.find((each) => each.id === saleId);
+    const one = await api.call('getSale', { token, params: { saleId } });
+    for (const items of [sale?.items, one.body.items]) {
+      expect(items?.map((each) => [each.itemId, each.thumbnailUrl])).toEqual([
+        [withPhoto, expect.stringContaining(`/photos/${withPhoto}/thumbnail.jpg`) as unknown],
+        // Still processing, or no photo at all: no thumbnail yet.
+        [processing, undefined],
+        [without, undefined],
+      ]);
+    }
   });
 });

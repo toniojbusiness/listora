@@ -411,9 +411,18 @@ export async function fetchPhotos(
   log: Logger,
   limit = listing.details.photoUrls.length,
 ): Promise<ImportedPhoto[]> {
+  return fetchPhotoUrls(deps, listing.details.photoUrls.slice(0, limit), log);
+}
+
+/** Fetches photos from a marketplace's image URLs, in order, leaving out one that fails. */
+export async function fetchPhotoUrls(
+  deps: Pick<ImportApplyDependencies, 'photos'>,
+  urls: readonly string[],
+  log: Logger,
+): Promise<ImportedPhoto[]> {
   const signal = AbortSignal.timeout(PHOTOS_TIMEOUT_MS);
   const photos: ImportedPhoto[] = [];
-  for (const url of listing.details.photoUrls.slice(0, limit)) {
+  for (const url of urls) {
     try {
       photos.push(await importedPhoto(await deps.photos.fetch(url, signal)));
     } catch (error) {

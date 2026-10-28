@@ -26,6 +26,7 @@ import {
   operationEventSource,
   operationTitle,
   orderDetail,
+  orderPhotosDetail,
   orderSource,
   orderTitle,
   saleCheckDetail,
@@ -366,7 +367,10 @@ async function orders(db: DbExecutor, filter: ActivityFilter): Promise<ActivityE
       outcome: row.result === null ? 'in_progress' : row.result === 'failed' ? 'failed' : 'info',
       marketplace: row.marketplace,
       title: orderTitle(row.source, row.marketplace, orderId),
-      detail: orderDetail(row.result, row.error_message),
+      detail:
+        payloadString(row.payload, 'purpose') === 'photos'
+          ? orderPhotosDetail(row.result, row.error_message)
+          : orderDetail(row.result, row.error_message),
       error:
         row.result === 'failed'
           ? { code: 'order_unreadable', message: row.error_message ?? "Listora couldn't read it." }
