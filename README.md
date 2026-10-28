@@ -211,9 +211,10 @@ shards drift apart). The build uses the Xcode compilation cache (`IOS_COMPILATIO
 Makefile): unlike DerivedData, whose incremental build relies on file timestamps that a fresh
 checkout resets, it is keyed by file contents. Pushes to `main` save it and the app's SwiftPM
 checkouts; pull requests only restore them, which keeps the repository's cache space for the
-caches every run uses. The cache starts over once it passes 4 GB. Each test job boots the erased
-iPhone 17 simulator while the built tests download, and waits until it has finished booting
-before the tests. Every run, passed or failed, uploads each test job's results (`Unit.xcresult`,
+caches every run uses. The cache starts over once it passes 4 GB. Each test job boots one exact
+iPhone 17 simulator (`scripts/ios-ci-simulator.sh`: by its UDID, on the iOS runtime of the
+Xcode's SDK, since a runner has one "iPhone 17" per installed runtime) while the built tests
+download, and waits until it has booted and Xcode lists it before the tests. Every run, passed or failed, uploads each test job's results (`Unit.xcresult`,
 or `UI.xcresult` and its re-runs with the UI tests' screenshots and the stack's API and worker
 logs) and the failing-test summary, and puts the summary in the job summary, so a failure names
 its test instead of a bare `** TEST FAILED **`. `iOS checks` is the one result to require before

@@ -7,7 +7,15 @@ IOS_DIR := apps/ios
 IOS_PROJECT := $(IOS_DIR)/Listora.xcodeproj
 IOS_BUILD_DIR := $(CURDIR)/.build/ios
 IOS_SIMULATOR ?= iPhone 17
-IOS_DESTINATION := platform=iOS Simulator,name=$(IOS_SIMULATOR)
+# One exact device by its UDID instead of the name, which can match a device per installed iOS
+# runtime: CI sets it (scripts/ios-ci-simulator.sh).
+IOS_SIMULATOR_ID ?=
+comma := ,
+lparen := (
+rparen := )
+# How `simctl list` shows the device: "(<UDID>)", or the name indented before its UDID.
+IOS_SIMULATOR_MATCH := $(if $(IOS_SIMULATOR_ID),$(lparen)$(IOS_SIMULATOR_ID)$(rparen),    $(IOS_SIMULATOR) $(lparen))
+IOS_DESTINATION := platform=iOS Simulator$(comma)$(if $(IOS_SIMULATOR_ID),id=$(IOS_SIMULATOR_ID),name=$(IOS_SIMULATOR))
 
 # Every xcodebuild call keeps its SwiftPM checkouts and caches in .build/ios, including the ones
 # that only read build settings, because they resolve the packages too.
@@ -60,8 +68,8 @@ ios-generate:
 
 ## Check that the test simulator exists (it is reused, never created).
 ios-simulator:
-	@xcrun simctl list devices available | grep -q "    $(IOS_SIMULATOR) (" || { \
-		echo "error: no available '$(IOS_SIMULATOR)' simulator. Install the iOS runtime in Xcode > Settings > Components, or pass IOS_SIMULATOR='<device name>'." >&2; \
+	@xcrun simctl list devices available | grep -qF "$(IOS_SIMULATOR_MATCH)" || { \
+		echo "error: no available '$(or $(IOS_SIMULATOR_ID),$(IOS_SIMULATOR))' simulator. Install the iOS runtime in Xcode > Settings > Components, or pass IOS_SIMULATOR='<device name>'." >&2; \
 		exit 1; }
 
 ## Build the app, Share Extension, and packages for the simulator.

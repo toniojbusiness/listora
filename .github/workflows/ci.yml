@@ -245,6 +245,10 @@ jobs:
           if (( ${size_kb:-0} > 4 * 1024 * 1024 )); then rm -rf "$IOS_COMPILATION_CACHE"; echo 'Starting it over.'; fi
       - run: make ios-lint
       - run: make ios-check-ats
+      # The exact device the build targets (scripts/ios-ci-simulator.sh): a name alone can
+      # match one device per installed iOS runtime.
+      - name: Pick the iPhone 17 simulator
+        run: scripts/ios-ci-simulator.sh pick
       - id: build
         run: make ios-build-for-testing
       # Everything the tests run from: the app, the extension, every test bundle, and the
@@ -290,10 +294,7 @@ jobs:
       # one erased first. It boots (about two minutes) while the built tests download; the
       # tests start only once it has finished booting.
       - name: Start booting a clean iPhone 17 simulator
-        run: |
-          xcrun simctl shutdown all
-          xcrun simctl erase 'iPhone 17'
-          xcrun simctl boot 'iPhone 17'
+        run: scripts/ios-ci-simulator.sh start
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ios-built-tests
@@ -303,8 +304,8 @@ jobs:
           mkdir -p .build/ios/DerivedData/Build
           tar -xf .build/ios/built-tests.tar -C .build/ios/DerivedData/Build
           rm .build/ios/built-tests.tar
-      - name: Wait until the simulator has booted
-        run: xcrun simctl bootstatus 'iPhone 17' -b > /dev/null
+      - name: Wait until the simulator has booted and Xcode lists it
+        run: scripts/ios-ci-simulator.sh wait
       # Retries a failing test up to twice. It ends by naming the tests that failed and the ones
       # that passed only on a retry; the same summary goes into .build/ios/test-summary.txt.
       - run: make ios-unit-test IOS_PREBUILT=1 IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
@@ -356,10 +357,7 @@ jobs:
       # As in ios-unit: it boots while the built tests download. Started after the installs,
       # which it slowed down by as much as it saved.
       - name: Start booting a clean iPhone 17 simulator
-        run: |
-          xcrun simctl shutdown all
-          xcrun simctl erase 'iPhone 17'
-          xcrun simctl boot 'iPhone 17'
+        run: scripts/ios-ci-simulator.sh start
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ios-built-tests
@@ -369,8 +367,8 @@ jobs:
           mkdir -p .build/ios/DerivedData/Build
           tar -xf .build/ios/built-tests.tar -C .build/ios/DerivedData/Build
           rm .build/ios/built-tests.tar
-      - name: Wait until the simulator has booted
-        run: xcrun simctl bootstatus 'iPhone 17' -b > /dev/null
+      - name: Wait until the simulator has booted and Xcode lists it
+        run: scripts/ios-ci-simulator.sh wait
       # Runs the failed tests again, up to twice, and ends with the summary
       # (scripts/ios-test-run.sh).
       - run: make ios-ui-test IOS_PREBUILT=1 IOS_UI_SHARD="${{ matrix.shard }}/$IOS_UI_SHARDS" IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
