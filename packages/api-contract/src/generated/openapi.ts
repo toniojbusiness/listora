@@ -1894,6 +1894,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/pack-check/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the Pack check setting
+         * @description Whether Pack check is on (off until the seller turns it on).
+         */
+        get: operations["getPackCheckSettings"];
+        /**
+         * Turn Pack check on or off
+         * @description Turning it on asks for a read of the labels of the orders that still need a package
+         *     (`refreshPackLabels`).
+         */
+        put: operations["replacePackCheckSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pack-check/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the orders to pack
+         * @description The to-ship list: one order per sale that still stands and is not shipped, newest first,
+         *     with its items, the buyer's first name, its label, and whether it is packed (a packed order
+         *     stays a day). Computed from the account's own data, with no marketplace call.
+         */
+        get: operations["listPackOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pack-check/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the orders' shipping labels
+         * @description Asks for a read of the shipping labels of the orders that need one, from each
+         *     marketplace's own order pages through the seller's session (only reads; nothing changes on
+         *     a marketplace). The reads run on the seller's iPhone; the app runs them and lists the
+         *     orders again. An order is not read again sooner than the read rules allow, however often
+         *     this is called.
+         */
+        post: operations["refreshPackLabels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pack-check/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check a scanned label
+         * @description What a scanned shipping label (and optionally the item's sticker) means for the package
+         *     being packed (`saleId`), or, without one, which order the label is for. Only reads:
+         *     `packOrder` packs. At least one of `label` and `sticker` is needed (`422` otherwise);
+         *     an order that isn't the account's is `404`.
+         */
+        get: operations["checkPackScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pack-check/orders/{saleId}/pack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pack an order
+         * @description Records that the scanned label went on this order's package. The scan is checked again:
+         *     a label that is another order's, already on a package, or with another item's sticker is
+         *     `409 pack_refused` (its `message` says why), and so is a label Listora doesn't know
+         *     unless `photoCheck` says the seller checked it against the item's photo. An order that is
+         *     packed already, shipped, canceled, or returned is `409 invalid_state_transition`.
+         */
+        post: operations["packOrder"];
+        /**
+         * Unpack an order
+         * @description Takes the order off its package, to pack it again; its package photo goes too. An order
+         *     that isn't packed is `404`.
+         */
+        delete: operations["unpackOrder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pack-check/orders/{saleId}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add the package photo
+         * @description Keeps one photo of the open package with its label, for a claim. It is stored without its
+         *     metadata (no location). The order must be packed and have no photo yet
+         *     (`409 invalid_state_transition` otherwise: remove the photo first to take another); a file
+         *     that isn't a readable JPEG is `422`. The upload follows the upload session rules
+         *     (`409 upload_incomplete`, `upload_expired`, `already_exists` for a file already used).
+         */
+        post: operations["addPackPhoto"];
+        /**
+         * Remove the package photo
+         * @description Deletes the package photo, to take another. An order without one is `404`.
+         */
+        delete: operations["removePackPhoto"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/devices/{installationId}": {
         parameters: {
             query?: never;
@@ -2325,14 +2480,14 @@ export interface components {
          *     402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
          *     `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
          *     `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-         *     `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
+         *     `marketplace_action_unavailable`, `app_update_required`, `pack_refused` 409; `payload_too_large` 413; `validation_failed`,
          *     `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
          *     `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
          *     and `marketplace_authorization_failed` appear only inside a failed
          *     `ConnectionAuthorization`.
          * @enum {string}
          */
-        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "app_update_required" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
+        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "app_update_required" | "pack_refused" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
         AccountDeletion: {
             deletedAt: components["schemas"]["Timestamp"];
             /** @description One entry per API marketplace connection the account had; assisted connections hold no access. */
@@ -3822,10 +3977,11 @@ export interface components {
          *     or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
          *     a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
          *     history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
-         *     listings for sale, for an import.
+         *     listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
+         *     orders that still need a package, for Pack check.
          * @enum {string}
          */
-        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check" | "sale_history" | "listing_import";
+        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check" | "sale_history" | "listing_import" | "label_read";
         PhoneRunClaim: {
             installationId: components["schemas"]["Id"];
             /** Format: int32 */
@@ -4871,6 +5027,169 @@ export interface components {
             /** @description An IANA time zone name, for example `America/New_York` (the device's own). */
             timeZone: string;
         };
+        /** @description Whether Pack check is on. It is off until the seller turns it on in Settings. */
+        PackCheckSettings: {
+            enabled: boolean;
+        };
+        PackCheckSettingsReplace: {
+            enabled: boolean;
+        };
+        /** @description A `KnownLabelCarrier`, or one added after this client was built. */
+        LabelCarrier: components["schemas"]["KnownLabelCarrier"];
+        /**
+         * @description The carrier a tracking number's shape names; `other` when it can't tell.
+         * @enum {string}
+         */
+        KnownLabelCarrier: "usps" | "ups" | "fedex" | "dhl" | "other";
+        /** @description A `KnownLabelSource`, or one added after this client was built. */
+        LabelSource: components["schemas"]["KnownLabelSource"];
+        /**
+         * @description `marketplace`: read from the marketplace's own order page. `scan`: the seller scanned it
+         *     onto the order after the photo check, because Listora had no label for it.
+         * @enum {string}
+         */
+        KnownLabelSource: "marketplace" | "scan";
+        /** @description A `KnownPackMatch`, or one added after this client was built. */
+        PackMatch: components["schemas"]["KnownPackMatch"];
+        /**
+         * @description How Listora knew the label was this order's: `sticker` (the label and the item's sticker
+         *     both match), `label` (the label's tracking number matches), or `photo` (a label Listora
+         *     didn't know, which the seller checked against the item's photo).
+         * @enum {string}
+         */
+        KnownPackMatch: "sticker" | "label" | "photo";
+        /** @description Where the item is kept, for example shelf `B-12`. */
+        PackLocation: {
+            code: string;
+            label?: string;
+        };
+        /** @description One item of the order. */
+        PackItem: {
+            itemId: components["schemas"]["Id"];
+            sku: components["schemas"]["Sku"];
+            title?: string;
+            /** @description How Pack check names it, `black Shaka Wear tee, 2XL`. */
+            description: string;
+            sizeLabel?: string;
+            location?: components["schemas"]["PackLocation"];
+            /**
+             * Format: uri
+             * @description The item's cover photo, small; absent until a photo is processed.
+             */
+            thumbnailUrl?: string;
+            /**
+             * Format: uri
+             * @description The item's cover photo, large, for the photo check.
+             */
+            photoUrl?: string;
+        };
+        /** @description The order's shipping label. */
+        PackLabel: {
+            trackingNumber: string;
+            carrier: components["schemas"]["LabelCarrier"];
+            source: components["schemas"]["LabelSource"];
+        };
+        /** @description The order's package, once packed. */
+        PackRecord: {
+            packedAt: components["schemas"]["Timestamp"];
+            /** @description The label that went on the package. */
+            trackingNumber: string;
+            matchedBy: components["schemas"]["PackMatch"];
+            stickerSku?: components["schemas"]["Sku"];
+            /**
+             * @description The marketplace now shows another label for this order than the one packed (read after
+             *     the seller packed it with a label Listora didn't know): check the package again.
+             */
+            labelMismatch: boolean;
+            /**
+             * Format: uri
+             * @description The package photo, kept for a claim.
+             */
+            photoUrl?: string;
+            photoAddedAt?: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description One sale that still needs a package, as the to-ship list shows it: its items, the buyer's
+         *     first name, its label, and whether it is packed. `labelStatus` and `packStatus` are the
+         *     server's words; clients show them as given.
+         */
+        PackOrder: {
+            saleId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description The marketplace's order number (for Mercari and Depop, the listing's id). */
+            orderNumber?: string;
+            soldAt: components["schemas"]["Timestamp"];
+            shipBy?: components["schemas"]["Timestamp"];
+            /** @description How Pack check names the order, `the black Shaka Wear tee, 2XL`. */
+            description: string;
+            /** @description Only the first name, from the marketplace's order page. */
+            buyerFirstName?: string;
+            items: components["schemas"]["PackItem"][];
+            label?: components["schemas"]["PackLabel"];
+            labelStatus: components["schemas"]["StatusDisplay"];
+            pack?: components["schemas"]["PackRecord"];
+            packStatus: components["schemas"]["StatusDisplay"];
+        };
+        PackOrderList: {
+            /** @description Newest first; packed orders stay a day. */
+            data: components["schemas"]["PackOrder"][];
+            generatedAt: components["schemas"]["Timestamp"];
+        };
+        /** @description The label reads Listora asked for. */
+        PackLabelRefresh: {
+            /**
+             * Format: int32
+             * @description How many orders' labels will be read.
+             */
+            orders: number;
+            /** @description Where the reads run on this account's iPhone; the app runs them. */
+            marketplaces: components["schemas"]["Marketplace"][];
+        };
+        /** @description A `KnownPackScanVerdict`, or one added after this client was built. */
+        PackScanVerdict: components["schemas"]["KnownPackScanVerdict"];
+        /**
+         * @description `match`: the label is the order being packed's. `found`: with no order chosen, the label's
+         *     (or sticker's) order. `wrong_order`: the label is another order's. `already_packed`: the
+         *     label went on a package already. `sticker_mismatch`: the sticker is another item's.
+         *     `unknown_label`: no order has this label yet. `sticker_scanned`: a sticker where the label
+         *     goes. `not_a_label`: not a tracking number. A verdict this client doesn't know: show
+         *     `headline` and `detail`, and offer nothing.
+         * @enum {string}
+         */
+        KnownPackScanVerdict: "match" | "found" | "wrong_order" | "already_packed" | "sticker_mismatch" | "unknown_label" | "sticker_scanned" | "not_a_label";
+        /**
+         * @description What a scan means for the package on the table, in the server's words. Only `canPack`
+         *     lets the app offer Packed; only `canPhotoCheck` lets it offer the photo check of a label
+         *     Listora doesn't know.
+         */
+        PackScan: {
+            verdict: components["schemas"]["PackScanVerdict"];
+            tone: components["schemas"]["StatusTone"];
+            headline: string;
+            detail: string;
+            /** @description The scanned label's tracking number, when it can be one. */
+            trackingNumber?: string;
+            order?: components["schemas"]["PackOrder"];
+            expectedOrder?: components["schemas"]["PackOrder"];
+            packedOrder?: components["schemas"]["PackOrder"];
+            canPack: boolean;
+            canPhotoCheck: boolean;
+        };
+        PackOrderPack: {
+            /** @description What the camera read from the shipping label, or the number the seller typed. */
+            label: string;
+            /** @description What the camera read from the item's sticker. */
+            sticker?: string;
+            /**
+             * @description The seller compared the item with the order's photo and says this label, which Listora
+             *     doesn't know, is this order's.
+             */
+            photoCheck?: boolean;
+        };
+        PackPhotoAdd: {
+            /** @description A JPEG uploaded through an upload session. */
+            uploadFileId: components["schemas"]["Id"];
+        };
         /** @description A `KnownActivitySource`, or one added after this client was built. */
         ActivitySource: components["schemas"]["KnownActivitySource"];
         /**
@@ -4895,10 +5214,11 @@ export interface components {
          *     action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
          *     with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
          *     an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
-         *     delist after a sale. `task`: a task for the seller.
+         *     delist after a sale. `task`: a task for the seller. `package`: a package Pack check
+         *     packed, or its photo.
          * @enum {string}
          */
-        KnownActivityKind: "item" | "operation" | "browser_session" | "sale_check" | "order" | "sale" | "delist" | "task";
+        KnownActivityKind: "item" | "operation" | "browser_session" | "sale_check" | "order" | "sale" | "delist" | "task" | "package";
         /** @description One step of a browser session. */
         ActivityStep: {
             name: string;
@@ -4945,6 +5265,11 @@ export interface components {
             steps?: components["schemas"]["ActivityStep"][];
             error?: components["schemas"]["ActivityError"];
             reference?: components["schemas"]["ActivityReference"];
+            /**
+             * Format: uri
+             * @description A `package` entry's photo of the open package with its label, for a claim.
+             */
+            photoUrl?: string;
         };
         /** @description Newest first. */
         ActivityPage: {
@@ -5595,6 +5920,26 @@ export type TodayMoney = components['schemas']['TodayMoney'];
 export type Today = components['schemas']['Today'];
 export type TodaySummarySettings = components['schemas']['TodaySummarySettings'];
 export type TodaySummarySettingsReplace = components['schemas']['TodaySummarySettingsReplace'];
+export type PackCheckSettings = components['schemas']['PackCheckSettings'];
+export type PackCheckSettingsReplace = components['schemas']['PackCheckSettingsReplace'];
+export type LabelCarrier = components['schemas']['LabelCarrier'];
+export type KnownLabelCarrier = components['schemas']['KnownLabelCarrier'];
+export type LabelSource = components['schemas']['LabelSource'];
+export type KnownLabelSource = components['schemas']['KnownLabelSource'];
+export type PackMatch = components['schemas']['PackMatch'];
+export type KnownPackMatch = components['schemas']['KnownPackMatch'];
+export type PackLocation = components['schemas']['PackLocation'];
+export type PackItem = components['schemas']['PackItem'];
+export type PackLabel = components['schemas']['PackLabel'];
+export type PackRecord = components['schemas']['PackRecord'];
+export type PackOrder = components['schemas']['PackOrder'];
+export type PackOrderList = components['schemas']['PackOrderList'];
+export type PackLabelRefresh = components['schemas']['PackLabelRefresh'];
+export type PackScanVerdict = components['schemas']['PackScanVerdict'];
+export type KnownPackScanVerdict = components['schemas']['KnownPackScanVerdict'];
+export type PackScan = components['schemas']['PackScan'];
+export type PackOrderPack = components['schemas']['PackOrderPack'];
+export type PackPhotoAdd = components['schemas']['PackPhotoAdd'];
 export type ActivitySource = components['schemas']['ActivitySource'];
 export type KnownActivitySource = components['schemas']['KnownActivitySource'];
 export type ActivityOutcome = components['schemas']['ActivityOutcome'];
@@ -8344,6 +8689,266 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getPackCheckSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackCheckSettings"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replacePackCheckSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackCheckSettingsReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackCheckSettings"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listPackOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The orders. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOrderList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    refreshPackLabels: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reads asked for. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackLabelRefresh"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    checkPackScan: {
+        parameters: {
+            query?: {
+                /** @description What the camera read from the shipping label, or the number the seller typed. */
+                label?: string;
+                /** @description What the camera read from the item's sticker. */
+                sticker?: string;
+                /** @description The order being packed. */
+                saleId?: components["schemas"]["Id"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the scan means. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackScan"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    packOrder: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackOrderPack"];
+            };
+        };
+        responses: {
+            /** @description The order, packed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOrder"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    unpackOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order, not packed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOrder"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    addPackPhoto: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackPhotoAdd"];
+            };
+        };
+        responses: {
+            /** @description The order, with its photo. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOrder"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    removePackPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order, without a photo. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOrder"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     registerDevice: {
         parameters: {
             query?: never;
@@ -8742,7 +9347,7 @@ export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<com
 export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];
 export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user", "marketplace"];
-export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "app_update_required", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
+export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "app_update_required", "pack_refused", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
 export const healthCheckStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["HealthCheckStatus"]> = ["ok", "unavailable"];
 export const knownItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
 export const userSettableItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserSettableItemStatus"]> = ["draft", "ready", "archived"];
@@ -8788,7 +9393,7 @@ export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<co
 export const knownExecutionLocationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownExecutionLocation"]> = ["cloud", "phone"];
 export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DevicePlatform"]> = ["ios"];
 export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
-export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history", "listing_import"];
+export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history", "listing_import", "label_read"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
@@ -8810,9 +9415,13 @@ export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<compo
 export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];
 export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];
 export const knownTodayStaleSuggestionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayStaleSuggestion"]> = ["price_drop", "relist"];
+export const knownLabelCarrierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelCarrier"]> = ["usps", "ups", "fedex", "dhl", "other"];
+export const knownLabelSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelSource"]> = ["marketplace", "scan"];
+export const knownPackMatchValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPackMatch"]> = ["sticker", "label", "photo"];
+export const knownPackScanVerdictValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPackScanVerdict"]> = ["match", "found", "wrong_order", "already_packed", "sticker_mismatch", "unknown_label", "sticker_scanned", "not_a_label"];
 export const knownActivitySourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivitySource"]> = ["listora", "cloud_browser", "iphone", "you", "marketplace"];
 export const knownActivityOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityOutcome"]> = ["succeeded", "failed", "in_progress", "waiting", "info"];
-export const knownActivityKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityKind"]> = ["item", "operation", "browser_session", "sale_check", "order", "sale", "delist", "task"];
+export const knownActivityKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityKind"]> = ["item", "operation", "browser_session", "sale_check", "order", "sale", "delist", "task", "package"];
 export const knownSaleCheckRunKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleCheckRunKind"]> = ["scheduled", "history"];
 export const knownActivityHostValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityHost"]> = ["runner", "phone"];
 export const knownSaleDelistStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDelistStatus"]> = ["queued", "running", "retrying", "verifying", "succeeded", "failed", "needs_user_action", "canceled", "open", "done", "dismissed"];

@@ -37,8 +37,9 @@ KnownActivityKind:
     action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
     with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
     an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
-    delist after a sale. `task`: a task for the seller.
-  enum: [item, operation, browser_session, sale_check, order, sale, delist, task]
+    delist after a sale. `task`: a task for the seller. `package`: a package Pack check
+    packed, or its photo.
+  enum: [item, operation, browser_session, sale_check, order, sale, delist, task, package]
 ActivityStep:
   type: object
   description: One step of a browser session.
@@ -124,6 +125,10 @@ ActivityEntry:
       $ref: '#/ActivityError'
     reference:
       $ref: '#/ActivityReference'
+    photoUrl:
+      type: string
+      format: uri
+      description: A `package` entry's photo of the open package with its label, for a claim.
 ActivityPage:
   type: object
   description: Newest first.

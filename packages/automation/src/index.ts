@@ -242,3 +242,5 @@ export {
   type PrefillSource,
 } from './prefill/types.ts';
 export { AI_PICK_CONFIDENCE } from './prefill/choose.ts';
+export { LABEL_READ_MARKETPLACES, queueLabelReads } from './label-reads/queue.ts';
+export type { QueuedLabelRead } from './label-reads/queue.ts';

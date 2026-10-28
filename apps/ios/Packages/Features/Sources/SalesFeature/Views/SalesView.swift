@@ -32,6 +32,9 @@ public struct SalesView<Settings: View>: View {
                 .navigationDestination(for: SaleRoute.self) { route in
                     SaleDetailView(environment: environment, saleID: route.saleID)
                 }
+                .navigationDestination(for: PackOrdersRoute.self) { _ in
+                    environment.packOrders?.screen()
+                }
                 .navigationDestination(for: ProfitRoute.self) { _ in
                     ProfitView(model: environment.makeProfitModel(), onSignIn: environment.onSignIn)
                 }
@@ -44,7 +47,10 @@ public struct SalesView<Settings: View>: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) { settings }
                 }
-                .task { await model.load() }
+                .task {
+                    await environment.packOrders?.refresh()
+                    await model.load()
+                }
                 .refreshable { await model.load() }
         }
         .celebration(trigger: model.newSaleID)
@@ -93,6 +99,18 @@ public struct SalesView<Settings: View>: View {
     private var list: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+                if environment.packOrders?.isShown() == true {
+                    NavigationLink(value: PackOrdersRoute()) {
+                        ListRow(
+                            "Pack orders",
+                            subtitle: "Scan each label before it ships",
+                            systemImage: "shippingbox",
+                        )
+                        .cardStyle(.flat)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("sales.packOrders")
+                }
                 NavigationLink(value: ProfitRoute()) {
                     ProfitEntryRow()
                 }
@@ -208,3 +226,6 @@ private struct SaleRow: View {
         }
     }
 }
+
+/// Pack check's to-ship list, pushed from the Sales tab.
+private struct PackOrdersRoute: Hashable {}

@@ -6,11 +6,16 @@ import type { ActivityEntry, SaleExplanation } from '@listora/activity';
 
 import { ApiError } from '../errors.ts';
 
+/** Where a package photo is read from (the photo storage's public URLs). */
+export interface ActivityUrls {
+  publicUrl: (key: string) => string;
+}
+
 /**
  * The contract's `ActivityEntry` as the seller sees it: absent instead of null, words within
  * their limits, and none of Listora's diagnostics (step timings, error codes, run references).
  */
-export function activityEntryView(entry: ActivityEntry): ContractEntry {
+export function activityEntryView(entry: ActivityEntry, urls: ActivityUrls): ContractEntry {
   return {
     id: entry.id,
     at: entry.at.toISOString(),
@@ -24,10 +29,14 @@ export function activityEntryView(entry: ActivityEntry): ContractEntry {
     ...(entry.listingId === null ? {} : { listingId: entry.listingId }),
     ...(entry.operationId === null ? {} : { operationId: entry.operationId }),
     ...(entry.saleId === null ? {} : { saleId: entry.saleId }),
+    ...(entry.photoKey === null ? {} : { photoUrl: urls.publicUrl(entry.photoKey) }),
   };
 }
 
-export function saleExplanationView(explanation: SaleExplanation): ContractExplanation {
+export function saleExplanationView(
+  explanation: SaleExplanation,
+  urls: ActivityUrls,
+): ContractExplanation {
   return {
     saleId: explanation.saleId,
     marketplace: explanation.marketplace,
@@ -52,7 +61,7 @@ export function saleExplanationView(explanation: SaleExplanation): ContractExpla
       startedAt: delist.startedAt.toISOString(),
       ...(delist.settledAt === null ? {} : { settledAt: delist.settledAt.toISOString() }),
     })),
-    entries: explanation.entries.map(activityEntryView),
+    entries: explanation.entries.map((entry) => activityEntryView(entry, urls)),
   };
 }
 

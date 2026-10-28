@@ -9,6 +9,7 @@ import { DEFAULT_PAGE_SIZE } from '../pagination.ts';
 
 import {
   activityEntryView,
+  type ActivityUrls,
   decodeActivityCursor,
   encodeActivityCursor,
   saleExplanationView,
@@ -20,7 +21,15 @@ import {
  * it started. Only what the seller did or can act on: Listora's own diagnostics (browser
  * sessions, sale checks, step timings) are the operator's (`admin activity`).
  */
-export function registerActivityRoutes(app: FastifyInstance, deps: RouteDependencies): void {
+export interface ActivityRouteDependencies extends RouteDependencies {
+  /** Package photos' URLs. */
+  storage: ActivityUrls;
+}
+
+export function registerActivityRoutes(
+  app: FastifyInstance,
+  deps: ActivityRouteDependencies,
+): void {
   const page = async (
     db: Parameters<typeof loadActivity>[0],
     filter: Omit<ActivityFilter, 'limit' | 'to'>,
@@ -38,7 +47,7 @@ export function registerActivityRoutes(app: FastifyInstance, deps: RouteDependen
     return {
       status: 200 as const,
       body: {
-        data: shown.map(activityEntryView),
+        data: shown.map((entry) => activityEntryView(entry, deps.storage)),
         ...(entries.length > limit && last ? { nextCursor: encodeActivityCursor(last.at) } : {}),
       },
     };
@@ -66,6 +75,6 @@ export function registerActivityRoutes(app: FastifyInstance, deps: RouteDependen
       { forSeller: true },
     );
     if (explanation === undefined) throw notFound('Sale');
-    return { status: 200, body: saleExplanationView(explanation) };
+    return { status: 200, body: saleExplanationView(explanation, deps.storage) };
   });
 }

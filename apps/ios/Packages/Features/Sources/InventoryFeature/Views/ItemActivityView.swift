@@ -2,8 +2,7 @@ import DesignSystem
 import SwiftUI
 
 /// The item's activity: everything that happened to it, newest first, each line with who did it
-/// (Listora, your iPhone, Listora's cloud browser, you, the marketplace), when, and how it went.
-/// A browser session lists its steps and how long each took.
+/// (Listora, you, the marketplace), when, and how it went.
 struct ItemActivityView: View {
     @State private var model: ItemActivityModel
 

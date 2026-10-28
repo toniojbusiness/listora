@@ -15,6 +15,7 @@
     { "path": "../connections" },
     { "path": "../marketplaces" },
     { "path": "../operations" },
+    { "path": "../pack-check" },
     { "path": "../push" },
     { "path": "../sales" }
   ]
