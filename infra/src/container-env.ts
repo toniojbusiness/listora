@@ -31,6 +31,7 @@ const SMOKE_RESOURCES: ServiceResources = {
     bucket: 'listora-smoke-photos',
     region: 'us-east-1',
     publicBaseUrl: 'https://photos.smoke.invalid',
+    cdnDistributionId: 'E2SMOKETEST0001',
   },
   signIn: signInResources(
     signIn,
@@ -44,6 +45,7 @@ const SMOKE_RESOURCES: ServiceResources = {
   ),
   runner: { cluster: 'listora-smoke', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: 'alias/listora-smoke-tokens',
+  ownerAlerts: { environment: 'smoke' },
 };
 
 const [container, databaseUrl] = process.argv.slice(2);

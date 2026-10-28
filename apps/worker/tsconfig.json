@@ -19,6 +19,7 @@
     { "path": "../../packages/push" },
     { "path": "../../packages/auto-delist" },
     { "path": "../../packages/sales" },
+    { "path": "../../packages/pack-check" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/today" },
     { "path": "../../packages/listing-refresh" },
@@ -28,6 +29,7 @@
     { "path": "../../packages/batches" },
     { "path": "../../packages/retention" },
     { "path": "../../packages/automation" },
-    { "path": "../../packages/imports" }
+    { "path": "../../packages/imports" },
+    { "path": "../../packages/alerts" }
   ]
 }

@@ -12,6 +12,7 @@
   "dependencies": {
     "@listora/accounts": "*",
     "@listora/ai": "*",
+    "@listora/alerts": "*",
     "@listora/analysis": "*",
     "@listora/auto-delist": "*",
     "@listora/automation": "*",
@@ -23,6 +24,7 @@
     "@listora/marketplaces": "*",
     "@listora/observability": "*",
     "@listora/operations": "*",
+    "@listora/pack-check": "*",
     "@listora/photos": "*",
     "@listora/push": "*",
     "@listora/retention": "*",

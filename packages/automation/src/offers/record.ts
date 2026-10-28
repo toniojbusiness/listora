@@ -27,6 +27,7 @@ import { MARKETPLACE_NAMES, type RemoteOffer } from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
+import { readFailure, recordReadFailed, recordReadSucceeded } from '../read-health/health.ts';
 import type { OfferCheckTarget } from './schedule.ts';
 
 const OPEN_RESPONSE = ['queued', 'running', 'verifying'] as const;
@@ -104,6 +105,7 @@ export async function recordOffers(
       .where('account_id', '=', target.accountId)
       .where('connection_id', '=', target.connectionId)
       .execute();
+    await recordReadSucceeded(trx, { ...target, read: 'offer_check' });
     logger.info(
       {
         event: 'offers_read',
@@ -148,6 +150,7 @@ export async function recordOfferCheckFailure(
     .where('account_id', '=', target.accountId)
     .where('connection_id', '=', target.connectionId)
     .execute();
+  await recordReadFailed(db, { ...target, read: 'offer_check' }, readFailure(error));
 }
 
 /** The seller's words for why a read of their offers failed. */
@@ -164,7 +167,7 @@ export function offerReadErrorMessage(code: string, marketplace: Marketplace): s
     case 'stopped_for_check':
       return `${name} wants you to complete a check in Listora on your iPhone before it reads your offers.`;
     case 'element_missing':
-      return `${name}'s offers page has changed, so Listora couldn't read your offers there.`;
+      return `Listora couldn't read your offers on ${name}'s offers page.`;
     case 'rate_limited':
     case 'automation_paced':
     case 'automation_busy':

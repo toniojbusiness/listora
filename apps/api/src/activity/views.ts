@@ -6,9 +6,9 @@ import type { ActivityEntry, SaleExplanation } from '@listora/activity';
 
 import { ApiError } from '../errors.ts';
 
-/** Where a package photo is read from (the photo storage's public URLs). */
+/** Where each package photo is read from: its signed read URL, by key (`packPhotoUrls`). */
 export interface ActivityUrls {
-  publicUrl: (key: string) => string;
+  photoUrls: ReadonlyMap<string, string>;
 }
 
 /**
@@ -16,6 +16,7 @@ export interface ActivityUrls {
  * their limits, and none of Listora's diagnostics (step timings, error codes, run references).
  */
 export function activityEntryView(entry: ActivityEntry, urls: ActivityUrls): ContractEntry {
+  const photoUrl = entry.photoKey === null ? undefined : urls.photoUrls.get(entry.photoKey);
   return {
     id: entry.id,
     at: entry.at.toISOString(),
@@ -29,7 +30,7 @@ export function activityEntryView(entry: ActivityEntry, urls: ActivityUrls): Con
     ...(entry.listingId === null ? {} : { listingId: entry.listingId }),
     ...(entry.operationId === null ? {} : { operationId: entry.operationId }),
     ...(entry.saleId === null ? {} : { saleId: entry.saleId }),
-    ...(entry.photoKey === null ? {} : { photoUrl: urls.publicUrl(entry.photoKey) }),
+    ...(photoUrl === undefined ? {} : { photoUrl }),
   };
 }
 

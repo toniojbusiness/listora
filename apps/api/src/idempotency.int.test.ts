@@ -2,7 +2,7 @@ import { sql } from 'kysely';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { IDEMPOTENCY_SWEEP_BATCH } from './idempotency.ts';
+import { IDEMPOTENCY_SWEEP_BATCH, keyDigest, openResponse } from './idempotency.ts';
 import { createTestApi, type TestApi } from './test-support.ts';
 import type { Tenant } from './tenancy.ts';
 
@@ -139,7 +139,7 @@ describe('Idempotency-Key (real Postgres)', () => {
     await sql`
       update idempotency_record
       set created_at = now() - interval '25 hours', expires_at = now() - interval '1 hour'
-      where account_id = ${tenant.accountId} and key = ${key}
+      where account_id = ${tenant.accountId} and key = ${keyDigest(key)}
     `.execute(api.db);
     const later = await createItem(key, { title: 'Expires' });
     expect(later.status).toBe(201);
@@ -184,9 +184,61 @@ describe('Idempotency-Key (real Postgres)', () => {
       .selectFrom('idempotency_record')
       .select(sql<string>`extract(epoch from expires_at - created_at)`.as('seconds'))
       .where('account_id', '=', tenant.accountId)
-      .where('key', '=', key)
+      .where('key', '=', keyDigest(key))
       .executeTakeFirstOrThrow();
     expect(Number(row.seconds)).toBeGreaterThanOrEqual(24 * 60 * 60);
+  });
+
+  it('keeps neither the key nor a readable response, and replays the sealed one', async () => {
+    const key = crypto.randomUUID();
+    const first = await createItem(key, { title: 'Sealed scarf' });
+    const rows = await api.db
+      .selectFrom('idempotency_record')
+      .selectAll()
+      .where('account_id', '=', tenant.accountId)
+      .where('key', 'in', [key, keyDigest(key)])
+      .execute();
+    expect(rows).toHaveLength(1);
+    const [row] = rows;
+    expect(row?.key).toBe(keyDigest(key));
+    expect(row?.response_body).toBeNull();
+    expect(row?.response_ciphertext?.toString('latin1')).not.toContain('Sealed scarf');
+    expect(
+      openResponse(row?.response_ciphertext ?? Buffer.alloc(0), key, tenant.accountId),
+    ).toEqual(first.body);
+    // Only its own key opens it.
+    expect(() =>
+      openResponse(
+        row?.response_ciphertext ?? Buffer.alloc(0),
+        crypto.randomUUID(),
+        tenant.accountId,
+      ),
+    ).toThrow();
+    expect((await createItem(key, { title: 'Sealed scarf' })).body).toEqual(first.body);
+  });
+
+  it('still replays a record stored before responses were sealed', async () => {
+    // A real response and its request's hash, stored the old way: under the key, readable.
+    const first = crypto.randomUUID();
+    const stored = (await createItem(first, { title: 'Legacy' })).body;
+    const { request_hash: requestHash } = await api.db
+      .selectFrom('idempotency_record')
+      .select('request_hash')
+      .where('account_id', '=', tenant.accountId)
+      .where('key', '=', keyDigest(first))
+      .executeTakeFirstOrThrow();
+    const key = crypto.randomUUID();
+    const before = await itemCount();
+    await sql`
+      insert into idempotency_record
+        (account_id, key, operation_id, request_hash, response_status, response_body, expires_at)
+      values (${tenant.accountId}, ${key}, 'createItem', ${requestHash}, 201,
+        ${JSON.stringify(stored)}::jsonb, now() + interval '1 hour')
+    `.execute(api.db);
+    const replayed = await createItem(key, { title: 'Legacy' });
+    expect(replayed.status).toBe(201);
+    expect(replayed.body).toEqual(stored);
+    expect(await itemCount()).toBe(before);
   });
 
   it('requires the header on POST and caps its length', async () => {

@@ -106,6 +106,7 @@ export {
   isAutomatedMarketplace,
   LIMITS_CEILING,
   PACING_FLOOR,
+  READ_ONLY_PACING,
   standInProfile,
 } from './profiles.ts';
 export type {
@@ -185,6 +186,30 @@ export {
   saleCheckProblemNotification,
 } from './sale-checks/health.ts';
 export type { SaleCheckHealthDependencies, SaleCheckProblem } from './sale-checks/health.ts';
+export {
+  READ_ALERTS_SCHEDULE,
+  READ_ALERTS_TASK,
+  READ_HEALTH_DOC,
+  READ_NAMES,
+  readAlertEmail,
+  readFailure,
+  readFailureReason,
+  readProblem,
+  recordReadFailed,
+  recordReadSucceeded,
+  runReadAlerts,
+} from './read-health/health.ts';
+export type {
+  OwnerEmail,
+  OwnerMailer,
+  ReadAlert,
+  ReadAlertDependencies,
+  ReadAlertSettings,
+  ReadFailure,
+  ReadProblemReason,
+  ReadState,
+  ReadTarget,
+} from './read-health/health.ts';
 export { runSaleCheck } from './sale-checks/job.ts';
 export type { SaleCheckOrderRecord } from './sale-checks/job.ts';
 export {
@@ -200,6 +225,16 @@ export type {
   SoldItemSource,
 } from './sale-checks/orders.ts';
 export type { SaleCheckDependencies } from './sale-checks/job.ts';
+export {
+  addSoldItemPhotos,
+  isSoldItemPhotosJobPayload,
+  SOLD_ITEM_PHOTOS_TASK,
+} from './sale-checks/sold-photos.ts';
+export type {
+  SoldItemPhotoMaker,
+  SoldItemPhotosDependencies,
+  SoldItemPhotosJobPayload,
+} from './sale-checks/sold-photos.ts';
 export {
   dueSaleChecks,
   enqueueSaleCheck,

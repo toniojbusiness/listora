@@ -25,6 +25,7 @@ const PHOTO_STORAGE: PhotoStorage = {
   bucket: 'listora-staging-photos',
   region: 'us-east-1',
   publicBaseUrl: 'https://d111111abcdef8.cloudfront.net',
+  cdnDistributionId: 'E2EXAMPLE0001',
 };
 const TOKEN_KEY_ARN = 'arn:aws:kms:us-east-1:111122223333:key/0b6f7b3e-0000-4000-8000-000000000001';
 const USER_POOL = {
@@ -37,6 +38,10 @@ const RESOURCES: ServiceResources = {
   signIn: { driver: 'cognito', ...USER_POOL, inviteEmailVerification: 'ses' },
   runner: { cluster: 'listora-staging', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: TOKEN_KEY_ARN,
+  ownerAlerts: {
+    environment: 'staging',
+    email: { from: 'alerts@example.com', to: 'owner@example.com' },
+  },
 };
 
 /** What a task's process sees: the plain environment, the image's, and every injected secret. */
@@ -162,6 +167,11 @@ describe('container environment', () => {
       });
     }
     expect(containerEnvironment('migrate', DATABASE_URL)).not.toHaveProperty('STORAGE_DRIVER');
+    // Only the worker may invalidate the photo CDN (the public package photos it moves).
+    expect(loadWorkerConfig(taskEnvironment('worker')).storage).toMatchObject({
+      cdnDistributionId: PHOTO_STORAGE.cdnDistributionId,
+    });
+    expect(taskEnvironment('api')).not.toHaveProperty('STORAGE_CDN_DISTRIBUTION_ID');
   });
 
   it('is accepted by the migrate CLI config loader as-is, with only the database secret', () => {

@@ -35,7 +35,7 @@ snapshot diff.
 ### The personal environment
 
 The same stacks, image, and deploy workflow, with every hourly charge that one user does not need
-removed. It costs about $35 a month, or about $37 a month with browser automation, and $0.56 more
+removed. It costs about $43 a month, or about $44 a month with browser automation, and $0.56 more
 once a domain is added; [docs/features/costs.md](../docs/features/costs.md) has the line items, the
 alternatives each choice beat, and the levers left.
 
@@ -44,7 +44,7 @@ alternatives each choice beat, and the levers left.
 | Egress      | Tasks in private `app` subnets behind NAT gateways            | No `app` tier and no NAT: tasks run in the public subnets with a public IPv4 address, and their groups admit nothing from the internet                                                                                           |
 | API ingress | HTTPS ALB at `api.<domain>`, health-checked on `/health/live` | API Gateway HTTP API (TLS 1.2+, throttled) with a VPC link to the task, found through Cloud Map (SRV): at the execute-api URL and, with a domain, at `api.<domain>` too (`disableDefaultEndpoint` turns the execute-api URL off) |
 | Health      | The ALB's target health check                                 | The API container's own ECS health check on `/health/live`; the `app-running-tasks` alarm and the task-stopped rule replace the target-group alarms                                                                              |
-| Services    | `api` and `worker`, each its own service and task role        | One `app` service whose task runs both containers (0.25 vCPU, 1 GiB), with one task role holding both sets of grants                                                                                                             |
+| Services    | `api` and `worker`, each its own service and task role        | One `app` service whose task runs both containers (0.5 vCPU, 1 GiB), with one task role holding both sets of grants                                                                                                              |
 | Database    | `t4g.micro` single-AZ (staging), `t4g.medium` Multi-AZ (prod) | `t4g.micro` single-AZ, 20 to 50 GiB, 7-day backups, deletion protection                                                                                                                                                          |
 | Domain      | Required: the API certificate, SES inbound mail, and DKIM     | Optional: see [Without a domain](#without-a-domain)                                                                                                                                                                              |
 | Logs        | Rejected-traffic flow logs; 30 or 90 days                     | No flow logs; 7 days                                                                                                                                                                                                             |

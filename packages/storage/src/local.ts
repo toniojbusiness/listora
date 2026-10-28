@@ -13,6 +13,7 @@ import {
   hexToBase64,
   isStorageKey,
   listLimit,
+  signedReadSeconds,
   type ObjectStorage,
   type PutOptions,
   type StoredObjectInfo,
@@ -20,7 +21,10 @@ import {
   type UploadTargetRequest,
 } from './storage.ts';
 
-/** Where the API serves the local driver: signed uploads (PUT) and public objects (GET). */
+/**
+ * Where the API serves the local driver: signed uploads (PUT), public objects (GET), and signed
+ * reads of any object (GET with a signature).
+ */
 export const LOCAL_STORAGE_ROUTE_PREFIX = '/storage/';
 
 export interface LocalDiskStorageOptions {
@@ -41,6 +45,13 @@ export interface LocalUploadRequest {
   contentType: string | undefined;
   checksumSha256: string | undefined;
   body: Uint8Array;
+}
+
+/** A GET of a signed read URL, as the API received it. */
+export interface LocalReadRequest {
+  key: string;
+  expires: string | undefined;
+  signature: string | undefined;
 }
 
 export type LocalUploadResult =
@@ -187,6 +198,34 @@ export class LocalDiskStorage implements ObjectStorage {
     return `${this.#baseUrl}${LOCAL_STORAGE_ROUTE_PREFIX}${key}`;
   }
 
+  /** Like an S3 presigned GET: the URL's signature covers the key and the expiry. */
+  signedReadUrl(key: string, expiresAt: Date): Promise<string> {
+    assertStorageKey(key);
+    const now = this.#now();
+    const expires = String(Math.floor(now.getTime() / 1000) + signedReadSeconds(expiresAt, now));
+    const query = new URLSearchParams({ expires, signature: this.#signRead(key, expires) });
+    return Promise.resolve(
+      `${this.#baseUrl}${LOCAL_STORAGE_ROUTE_PREFIX}${key}?${query.toString()}`,
+    );
+  }
+
+  /** Whether a GET carries a signed read of its key that has not expired. */
+  acceptsRead(request: LocalReadRequest): boolean {
+    if (!isStorageKey(request.key)) return false;
+    const { expires, signature } = request;
+    if (expires === undefined || !/^\d{1,12}$/.test(expires) || signature === undefined) {
+      return false;
+    }
+    if (!safeEqual(this.#signRead(request.key, expires), signature)) return false;
+    return Number(expires) * 1000 > this.#now().getTime();
+  }
+
+  /** Nothing caches the local driver's public objects but the client itself. */
+  invalidatePublic(keys: readonly string[]): Promise<void> {
+    for (const key of keys) assertPublicKey(key);
+    return Promise.resolve();
+  }
+
   #path(key: string): string {
     assertStorageKey(key);
     return join(this.#rootDir, ...key.split('/'));
@@ -201,6 +240,12 @@ export class LocalDiskStorage implements ObjectStorage {
   ): string {
     return createHmac('sha256', this.#secret)
       .update(['PUT', key, expires, contentType, String(byteSize), checksum].join('\n'))
+      .digest('base64url');
+  }
+
+  #signRead(key: string, expires: string): string {
+    return createHmac('sha256', this.#secret)
+      .update(['GET', key, expires].join('\n'))
       .digest('base64url');
   }
 }

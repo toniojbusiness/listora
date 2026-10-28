@@ -46,6 +46,9 @@ import { phoneWorkAdapters } from './adapters.ts';
 import type { HandOffAnswer } from './host.ts';
 import { PHONE_RUNTIME_VERSION, runPhoneCall, type PhoneCallInput } from './runtime.ts';
 import { PlaywrightPhoneHost } from './test-host.ts';
+
+/** A read-only shop's pace in these tests: slower than `QUICK_PACING`, still quick to run. */
+const GENTLE_PACING = { ...QUICK_PACING, actionDelayMs: [5, 8] } as const;
 import {
   answerPhoneCall,
   claimPhoneRun,
@@ -58,6 +61,21 @@ import {
 import { listenForPhoneWork } from './signals.ts';
 
 const FAST_POLICY = { delaysMs: [10, 20, 30, 40, 50, 60], jitter: 0, random: () => 0.5 };
+
+/**
+ * The output as the app sends it: its web view hands back what the runtime returned as is, and
+ * a date in it (a sale's sold time) is not JSON, so the app had nothing it could send.
+ */
+function asTheAppSendsIt(output: unknown): unknown {
+  return containsDate(output) ? { type: 'not_run', message: 'invalidAnswer' } : output;
+}
+
+function containsDate(value: unknown): boolean {
+  if (value instanceof Date) return true;
+  if (Array.isArray(value)) return value.some(containsDate);
+  if (value !== null && typeof value === 'object') return Object.values(value).some(containsDate);
+  return false;
+}
 
 describe('phone runs (real Postgres, the phone runtime in headless Chromium)', () => {
   let database: MigratedDatabase;
@@ -87,7 +105,10 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     const loaded = loadAutomationSettings({ FAKE_DEPOP_SITE_URL: site.url });
     settings = {
       ...loaded,
-      profiles: { ...loaded.profiles, depop: { ...loaded.profiles.depop, pacing: QUICK_PACING } },
+      profiles: {
+        ...loaded.profiles,
+        depop: { ...loaded.profiles.depop, pacing: QUICK_PACING, readOnlyPacing: GENTLE_PACING },
+      },
     };
     const marketplaces = { fakeMarketplaceUrl: undefined, ebay: undefined, depop: undefined };
     const workerAdapters: AdapterLookup = createMarketplaceAdapters({
@@ -186,7 +207,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
           deviceId,
           runId: run.id,
           index: run.call.index,
-          answer: JSON.parse(JSON.stringify(output)),
+          answer: asTheAppSendsIt(output),
         });
       }
     }
@@ -445,6 +466,8 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     if (run === null || call === null || call === undefined) throw new Error('no call');
     const input = JSON.parse(JSON.stringify(call.input)) as PhoneCallInput;
     expect(input.call.script).toBe('read');
+    // A shop that can write is paced at its marketplace's quick pace.
+    expect(input.pacing).toEqual(QUICK_PACING);
     await readOnly();
     const host = new PlaywrightPhoneHost(await webData.newPage());
     const output = await runPhoneCall(input, host, { pacing: { random: () => 0 } });
@@ -454,7 +477,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       deviceId,
       runId: run.id,
       index: call.index,
-      answer: JSON.parse(JSON.stringify(output)),
+      answer: asTheAppSendsIt(output),
     });
     expect(next.call).toBeNull();
     expect(await operation(create.id)).toMatchObject({
@@ -474,7 +497,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     // Reads keep running, and the phone is told the shop is read only with each call.
     await requestSaleHistoryRead(db, { accountId, marketplace: 'depop' });
     const read = await claimPhoneRun(phone, db, device);
-    expect(read?.call?.input).toMatchObject({ readOnly: true, call: { script: 'orders' } });
+    // ...at the gentler read-only pace, not the quicker pace of a shop that can write.
+    expect(read?.call?.input).toMatchObject({
+      readOnly: true,
+      call: { script: 'orders' },
+      pacing: GENTLE_PACING,
+    });
   });
 
   it('wakes the waiting app the moment the engine hands it a delist, and looks every few seconds without signals', async () => {
@@ -920,7 +948,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
         deviceId,
         runId: run.id,
         index: run.call.index,
-        answer: JSON.parse(JSON.stringify(output)),
+        answer: asTheAppSendsIt(output),
       });
       if (run.call !== null) later.push(run.call.input.startDelayMs);
     }
@@ -1305,14 +1333,14 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       .execute();
 
   it("reads the seller's offers on the phone read-only: each pending one is a task, and one that goes away closes it", async () => {
-    const { listingId, itemId, priceCents, offer } = await listingWithOffer();
+    const { listingId, itemId, offer } = await listingWithOffer();
     await readOffers();
     const row = await offerRow(offer.id);
     expect(row).toMatchObject({
       status: 'pending',
       amount_cents: 2000,
-      // Depop's offers name no price: the listing's own.
-      list_price_cents: priceCents,
+      // Depop's offers name no price; its list of products with offers names each one's.
+      list_price_cents: 4500,
       buyer_name: 'jacketfan',
       listing_id: listingId,
       item_id: itemId,

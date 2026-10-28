@@ -29,7 +29,7 @@ import {
   type Marketplace,
 } from '@listora/db';
 import { findSaleEmailInbox, inboundDomainOf } from '@listora/email-sales';
-import { setConnectionReadOnly } from '@listora/operations';
+import { readOnlyUnlinkMessage, setConnectionReadOnly } from '@listora/operations';
 import {
   isMarketplace,
   MARKETPLACE_NAMES,
@@ -140,20 +140,33 @@ export function registerConnectionRoutes(
    * Unlinking: deletes the connection and the marketplace data that came through it at once
    * (`startConnectionDeletion`), and leaves the job that asks the marketplace to revoke the
    * grant, deletes the connection's screenshots, and records the checked deletion
-   * (docs/features/privacy.md). Listings stay on the marketplace.
+   * (docs/features/privacy.md). Listings stay on the marketplace. A read-only connection is
+   * never unlinked: the owner turns Read only off first, so an unlink and a relink are never a
+   * way around it (docs/features/read-only.md#unlinking-and-relinking).
    */
   contractRoute(app, deps, 'disconnectConnection', async ({ tenant, db, params, request }) => {
     const connection = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
     const started =
       connection === undefined
         ? undefined
-        : await inTransaction(db, (trx) =>
-            startConnectionDeletion(trx, {
+        : await inTransaction(db, async (trx) => {
+            // Under the row's lock, so a setting changed meanwhile is the one that counts.
+            const current = await trx
+              .selectFrom('marketplace_connection')
+              .select('read_only')
+              .where('account_id', '=', tenant.accountId)
+              .where('id', '=', connection.id)
+              .forUpdate()
+              .executeTakeFirst();
+            if (current?.read_only === true) {
+              throw new ApiError('connection_read_only', readOnlyUnlinkMessage(params.marketplace));
+            }
+            return startConnectionDeletion(trx, {
               accountId: tenant.accountId,
               connectionId: connection.id,
               reason: 'unlinked',
-            }),
-          );
+            });
+          });
     if (started === undefined) {
       throw new ApiError(
         'not_found',

@@ -5817,7 +5817,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 /**
 	* What a script throws when a page is not the way it expects: a field missing from the page's
 	* data, a status it does not know, a form without the button it submits with. The run ends as
-	* `element_missing` (the site may have changed), so a step that changed nothing goes to the
+	* `element_missing` (the page is not as the script expects), so a step that changed nothing goes to the
 	* user instead of being retried against a page that will not change back. The message is
 	* logged and stored, so it says what the script expected and never repeats page content.
 	*/
@@ -5850,13 +5850,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	const DEPOP_API_URL = "https://webapi.depop.com";
 	/**
-	* Depop's pacing: 0.3 to 0.8 seconds before each action (agreed with the captain, 2026-10-27,
-	* against the default 0.8 to 2.5), still a person's pace and never below `PACING_FLOOR`.
+	* Depop's pacing: 0.3 seconds before each action, the floor (`PACING_FLOOR`; the captain's
+	* call, 2026-10-28), still a person's pace.
 	*/
 	const DEPOP_PACING = {
-		actionDelayMs: [300, 800],
+		actionDelayMs: [300, 300],
 		keystrokeDelayMs: [40, 120],
 		sessionGapMs: [5e3, 2e4]
+	};
+	/**
+	* A read-only Depop connection's pace (a production shop Listora only reads): 0.3 to 0.8 seconds
+	* before each action, as Depop's reads were paced before 2026-10-28.
+	*/
+	const DEPOP_READ_ONLY_PACING = {
+		...DEPOP_PACING,
+		actionDelayMs: [300, 800]
 	};
 	/**
 	* The site a script set drives: Depop and its web API, or a stand-in in development and tests,
@@ -5957,7 +5965,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The failure for a Depop page that is not as the script expects. */
 	function changed$2(pageName, problem) {
-		return new PageChangedError(`Depop's ${pageName} ${problem}; the page may have changed.`);
+		return new PageChangedError(`Depop's ${pageName} ${problem}.`);
 	}
 	/**
 	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
@@ -6389,7 +6397,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const parsed = schema.safeParse(value);
 		if (parsed.success) return parsed.data;
 		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
-		throw new PageChangedError(`Depop's ${page} no longer has the ${path === "" ? "data" : path} Listora reads`);
+		throw new PageChangedError(`Depop's ${page} no longer has the ${path === "" ? "data" : path} Listora reads${keysOf(value)}`);
+	}
+	/**
+	* What the value has instead, by field names only (never values), so a changed page says how it
+	* changed: ` (it has: a, b)`.
+	*/
+	function keysOf(value) {
+		if (value === null || typeof value !== "object") return ` (it is ${value === null ? "null" : typeof value})`;
+		if (Array.isArray(value)) return " (it is a list)";
+		const keys = Object.keys(value).slice(0, 12);
+		return keys.length === 0 ? " (it is empty)" : ` (it has: ${keys.join(", ")})`;
 	}
 	const price = object({
 		priceAmount: string(),
@@ -7462,10 +7480,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* public scripts):
 	*
 	* - `GET /presentation/api/v1/offers/me/products/?after=<page_info.last>`: the products that have
-	*   offers (`{ objects, page_info: { has_more, last } }`; `cursor=` is ignored);
+	*   offers (`{ objects, page_info: { has_more, last } }`, each with `product_id`, `description`,
+	*   `price_amount`, and `variant_id`; `cursor=` is ignored);
 	* - per product, `GET /presentation/api/v1/products/<id>/offers/?active=true&include_size=true
-	*   &variant_id=<variant>&after=<last>`: its offers, each with `offer_id`, `offer_value`,
-	*   `offer_display_status`, `expires_at`, `can_make_counter_offer`, and the offerer's username.
+	*   &variant_id=<variant>&after=<last>`: the product with its offers under `offers` (not
+	*   `objects`; `page_info` may have only `has_more`), each with `offer_id`, `offer_value` (a
+	*   string), `offer_display_status`, `expires_at`, `can_make_counter_offer`, and
+	*   `offerer_username`.
 	*
 	* The Offers page counts the seller's own offers too: offers she sent to the people who liked a
 	* listing (`SENT_PRIVATE_OFFER`), most of a real shop's offers. Only an offer a buyer made waits
@@ -7479,12 +7500,22 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const TOKEN_COOKIE = "access_token";
 	/** Pages of products and of one product's offers a read follows at most. */
 	const MAX_PAGES = 10;
-	const pageSchema = object({
-		objects: array(record(string(), unknown())),
-		page_info: object({
-			has_more: boolean(),
-			last: union([string(), number()]).nullish()
-		}).catchall(unknown())
+	/** Pages of the seller's listings a read follows at most to name its products (24 a page). */
+	const MAX_LISTING_PAGES = 10;
+	const pageInfo = object({
+		has_more: boolean(),
+		last: union([string(), number()]).nullish()
+	}).catchall(unknown());
+	const records = array(record(string(), unknown()));
+	/** A page of the products with offers. */
+	const productsPageSchema = object({
+		objects: records,
+		page_info: pageInfo
+	});
+	/** A page of one product's offers: the product, its offers under `offers`. */
+	const offersPageSchema = object({
+		offers: records,
+		page_info: pageInfo
 	});
 	/** An offer's status: whose it is and how it stands. `null` for one Listora doesn't know. */
 	function depopOfferStatus(status) {
@@ -7501,7 +7532,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function readOffers$1(page, site) {
 		await onDepop(page, site);
 		const offers = [];
-		for (const product of await readProducts(page, site)) for (const record of await readProductOffers(page, site, product, true)) {
+		const products = await readProducts(page, site);
+		await nameListings(page, site, products);
+		for (const product of products) for (const record of await readProductOffers(page, site, product, true)) {
 			const offer = offerOf(record, product, site);
 			if (offer?.status === "pending") offers.push(offer.offer);
 		}
@@ -7516,7 +7549,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			id: ids.productId,
 			slug: ref.externalListingId,
 			title: null,
-			variantId: ids.variantId
+			variantId: ids.variantId,
+			priceCents: null
 		};
 		for (const active of [true, false]) for (const record of await readProductOffers(page, site, product, active)) {
 			const offer = offerOf(record, product, site);
@@ -7565,7 +7599,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let after = null;
 		for (let read = 0; read < MAX_PAGES; read += 1) {
 			const query = after === null ? "" : `?after=${encodeURIComponent(after)}`;
-			const shown = await apiPage(page, `${site.api}/presentation/api/v1/offers/me/products/${query}`);
+			const shown = await apiPage(page, `${site.api}/presentation/api/v1/offers/me/products/${query}`, productsPageSchema, "products with offers");
 			for (const object of shown.objects) {
 				const [id] = texts([object["id"], object["product_id"]]);
 				if (id === void 0) throw changed$2(API, "lists a product with offers without its id");
@@ -7573,7 +7607,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					id,
 					slug: texts([object["slug"], object["product_slug"]])[0] ?? null,
 					title: texts([object["title"], object["description"]])[0]?.split("\n")[0] ?? null,
-					variantId: texts([object["variant_id"]])[0] ?? null
+					variantId: texts([object["variant_id"]])[0] ?? null,
+					priceCents: dollarsToCents(object["price_amount"])
 				});
 			}
 			after = nextPage(shown);
@@ -7581,8 +7616,29 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		}
 		return products;
 	}
+	/**
+	* Depop's products with offers name each by its id only; the seller's listings for sale name
+	* the slug (Listora's id of a Depop listing) for each id. Read until every product has its slug,
+	* newest first, as its offers mostly are; one not found (sold since) stays without a listing.
+	*/
+	async function nameListings(page, site, products) {
+		const unnamed = new Map(products.filter((p) => p.slug === null).map((p) => [p.id, p]));
+		let cursor = null;
+		for (let read = 0; unnamed.size > 0 && read < MAX_LISTING_PAGES; read += 1) {
+			const shown = await readOwnListings(page, site, "selling", cursor);
+			for (const listing of shown.products) {
+				const [id] = texts([listing.record["id"]]);
+				const product = id === void 0 ? void 0 : unnamed.get(id);
+				if (product === void 0) continue;
+				product.slug = listing.state.externalListingId;
+				unnamed.delete(product.id);
+			}
+			cursor = shown.next;
+			if (cursor === null) break;
+		}
+	}
 	async function readProductOffers(page, site, product, active) {
-		const records = [];
+		const found = [];
 		let after = null;
 		for (let read = 0; read < MAX_PAGES; read += 1) {
 			const query = new URLSearchParams({
@@ -7591,17 +7647,17 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			});
 			if (product.variantId !== null) query.set("variant_id", product.variantId);
 			if (after !== null) query.set("after", after);
-			const shown = await apiPage(page, `${site.api}/presentation/api/v1/products/${encodeURIComponent(product.id)}/offers/?${query.toString()}`);
-			records.push(...shown.objects);
+			const shown = await apiPage(page, `${site.api}/presentation/api/v1/products/${encodeURIComponent(product.id)}/offers/?${query.toString()}`, offersPageSchema, "a product's offers");
+			found.push(...shown.offers);
 			after = nextPage(shown);
 			if (after === null) break;
 		}
-		return records;
+		return found;
 	}
-	async function apiPage(page, url) {
+	async function apiPage(page, url, schema, list) {
 		const answer = await page.apiGet(url, { bearerCookie: TOKEN_COOKIE });
 		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for offers`);
-		return expectShape$1(pageSchema, answer.body, API);
+		return expectShape$1(schema, answer.body, `${API} for ${list}`);
 	}
 	function nextPage(shown) {
 		const last = shown.page_info.last;
@@ -7630,7 +7686,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				externalListingId: product.slug,
 				listingTitle: product.title?.slice(0, 200) ?? null,
 				amountCents,
-				listPriceCents: dollarsToCents(record["original_price"] ?? record["product_price"]),
+				listPriceCents: dollarsToCents(record["original_price"] ?? record["product_price"]) ?? product.priceCents,
 				buyerName: buyerName?.slice(0, 100) ?? null,
 				turn: status === "pending" ? "seller" : "buyer",
 				madeAt: isoOrNull(texts([record["created_at"], record["created"]])[0]),
@@ -8115,7 +8171,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	/** The failure for an eBay page that is not as the script expects. */
 	function changed$1(pageName, problem) {
-		return new PageChangedError(`eBay's ${pageName} ${problem}; the page may have changed.`);
+		return new PageChangedError(`eBay's ${pageName} ${problem}.`);
 	}
 	/** A US dollar price as eBay shows it (`US $45.00`, `$1,045.00`) in cents; `null` otherwise. */
 	function parsePrice$1(text) {
@@ -8976,7 +9032,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	/** The failure for a Mercari page that is not as the script expects. */
 	function changed(pageName, problem) {
-		return new PageChangedError(`Mercari's ${pageName} ${problem}; the page may have changed.`);
+		return new PageChangedError(`Mercari's ${pageName} ${problem}.`);
 	}
 	/** Cents from a price as Mercari shows it: `$45`, `$1,250`, or `$45.00`. `null` otherwise. */
 	function parsePrice(shown) {
@@ -11523,15 +11579,20 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 
 // src/profiles.ts
 /**
-	* The pace of a practiced seller: about a second between actions, a quick typist's keystrokes,
-	* and a few seconds between sessions (measured on the real sites, 2026-10-27: at the earlier
-	* 0.8 to 2.5 s per action, pacing alone was most of a listing's minute;
-	* docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
+	* The pace of a practiced seller: 0.3 s before each action (the floor, `PACING_FLOOR`; the
+	* captain's call, 2026-10-28, on the efficiency audit: at 0.45 to 1.1 s pacing was about half
+	* of a listing), a quick typist's keystrokes, and a few seconds between sessions
+	* (docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
 	*/
 	const DEFAULT_PACING = {
-		actionDelayMs: [450, 1100],
+		actionDelayMs: [300, 300],
 		keystrokeDelayMs: [45, 130],
 		sessionGapMs: [2e3, 4e3]
+	};
+	/** The default pace before 2026-10-28, which read-only connections keep (`readOnlyPacing`). */
+	const READ_ONLY_PACING = {
+		...DEFAULT_PACING,
+		actionDelayMs: [450, 1100]
 	};
 	/** Well inside what one busy seller does by hand. */
 	const DEFAULT_LIMITS = {
@@ -11547,6 +11608,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://poshmark.com/login",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: {
 				loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in)(\/|$)/i],
@@ -11566,6 +11628,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://www.mercari.com/login/",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: MERCARI_CHALLENGE_SIGNS,
 			privateSelectors: MERCARI_PRIVATE_SELECTORS,
@@ -11580,6 +11643,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://www.depop.com/login/",
 			emailsSignInLinks: true,
 			pacing: DEPOP_PACING,
+			readOnlyPacing: DEPOP_READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: DEPOP_CHALLENGE_SIGNS,
 			privateSelectors: DEPOP_PRIVATE_SELECTORS,
@@ -11598,6 +11662,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			loginUrl: "https://signin.ebay.com/signin/",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: EBAY_CHALLENGE_SIGNS,
 			privateSelectors: EBAY_PRIVATE_SELECTORS,
@@ -13168,6 +13233,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** How long one listing photo may take to download. */
 	const PHOTO_TIMEOUT_MS = 3e4;
 	async function runPhoneCall(input, host, options = {}) {
+		return plainJson(await runWithHandOffs(input, host, options));
+	}
+	/**
+	* The output as the JSON the server reads: a script's value may hold dates (a sale's sold time),
+	* which the app's web view hands back as values its answer can't carry, so the phone would
+	* answer nothing. As JSON they are the ISO strings the server's answer schemas read.
+	*/
+	function plainJson(output) {
+		return JSON.parse(JSON.stringify(output));
+	}
+	async function runWithHandOffs(input, host, options) {
 		if (input.readOnly === true && isWriteCall(input.call)) return readOnlyRefusal();
 		const profile = phoneProfile(input);
 		const pacing = new Pacing(profile.pacing, options.pacing);

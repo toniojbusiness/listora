@@ -41,6 +41,12 @@
               "Id": "expire-automation-screenshots",
               "Prefix": "automation/",
               "Status": "Enabled"
+            },
+            {
+              "ExpirationInDays": 180,
+              "Id": "expire-package-photos",
+              "Prefix": "pack/",
+              "Status": "Enabled"
             }
           ]
         },
@@ -260,6 +266,11 @@
           "PhotosB9552D0D",
           "Arn"
         ]
+      }
+    },
+    "PublishOutputRefPhotoCdn9B72B83D83991ACC": {
+      "Value": {
+        "Ref": "PhotoCdn9B72B83D"
       }
     },
     "PublishOutputRefPhotosB9552D0DEC068679": {

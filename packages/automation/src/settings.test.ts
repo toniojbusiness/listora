@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEPOP_PACING } from './depop/site.ts';
-import { DEFAULT_LIMITS, DEFAULT_PACING, PACING_FLOOR } from './profiles.ts';
+import { DEPOP_PACING, DEPOP_READ_ONLY_PACING } from './depop/site.ts';
+import { DEFAULT_LIMITS, DEFAULT_PACING, PACING_FLOOR, READ_ONLY_PACING } from './profiles.ts';
 import { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 
 const HOUR = 3_600_000;
@@ -19,6 +19,7 @@ describe('loadAutomationSettings', () => {
         alertAfterFailures: 2,
         overdueMs: 6 * HOUR,
       },
+      readAlerts: { alertAfterFailures: 3, noSuccessMs: 24 * HOUR },
       fakeSiteUrl: undefined,
       fakePoshmarkUrl: undefined,
       fakeMercariSiteUrl: undefined,
@@ -29,21 +30,37 @@ describe('loadAutomationSettings', () => {
       expect(profile.pacing).toEqual(
         profile.marketplace === 'depop' ? DEPOP_PACING : DEFAULT_PACING,
       );
+      expect(profile.readOnlyPacing).toEqual(
+        profile.marketplace === 'depop' ? DEPOP_READ_ONLY_PACING : READ_ONLY_PACING,
+      );
       expect(profile.limits).toEqual(DEFAULT_LIMITS);
     }
     expect(settings.profiles.poshmark.origins).toContain('https://poshmark.com');
   });
 
-  it("paces like a practiced seller by default: quick, never at the floor's speed", () => {
-    const mean = ([min, max]: readonly [number, number]) => (min + max) / 2;
-    for (const kind of ['actionDelayMs', 'keystrokeDelayMs', 'sessionGapMs'] as const) {
-      expect(DEFAULT_PACING[kind][0]).toBeGreaterThanOrEqual(PACING_FLOOR[kind][0]);
-      expect(DEFAULT_PACING[kind][1]).toBeGreaterThan(DEFAULT_PACING[kind][0]);
+  it('paces like a practiced seller by default: the floor before each action, never faster', () => {
+    for (const pacing of [DEFAULT_PACING, DEPOP_PACING]) {
+      for (const kind of ['actionDelayMs', 'keystrokeDelayMs', 'sessionGapMs'] as const) {
+        expect(pacing[kind][0]).toBeGreaterThanOrEqual(PACING_FLOOR[kind][0]);
+      }
+      // The captain's call (2026-10-28): 0.3 s before each action.
+      expect(pacing.actionDelayMs).toEqual(PACING_FLOOR.actionDelayMs);
     }
-    // About a second per action, and a few seconds between sessions.
-    expect(mean(DEFAULT_PACING.actionDelayMs)).toBeLessThanOrEqual(1_000);
-    expect(mean(DEFAULT_PACING.actionDelayMs)).toBeGreaterThan(PACING_FLOOR.actionDelayMs[0]);
+    // A few seconds between sessions.
     expect(DEFAULT_PACING.sessionGapMs[1]).toBeLessThanOrEqual(5_000);
+  });
+
+  it('keeps the earlier, gentler pace for read-only connections, whatever PACE_MS says', () => {
+    // The pace each marketplace's reads had before the faster default.
+    expect(READ_ONLY_PACING.actionDelayMs).toEqual([450, 1100]);
+    expect(DEPOP_READ_ONLY_PACING.actionDelayMs).toEqual([300, 800]);
+    const settings = loadAutomationSettings({ AUTOMATION_DEPOP_PACE_MS: '300-300' });
+    expect(settings.profiles.depop.readOnlyPacing).toEqual(DEPOP_READ_ONLY_PACING);
+    for (const profile of Object.values(settings.profiles)) {
+      const [min, max] = profile.readOnlyPacing.actionDelayMs;
+      expect(min).toBeGreaterThanOrEqual(profile.pacing.actionDelayMs[0]);
+      expect(max).toBeGreaterThan(profile.pacing.actionDelayMs[1]);
+    }
   });
 
   it('sets pacing and limits per marketplace', () => {
@@ -56,6 +73,8 @@ describe('loadAutomationSettings', () => {
       SALE_CHECK_MIN_HOURS: '1.5',
       SALE_CHECK_ALERT_FAILURES: '3',
       SALE_CHECK_OVERDUE_HOURS: '12',
+      READ_ALERT_FAILURES: '5',
+      READ_ALERT_NO_SUCCESS_HOURS: '12',
     });
     expect(settings.profiles.poshmark.pacing.actionDelayMs).toEqual([1500, 4000]);
     expect(settings.profiles.poshmark.pacing.sessionGapMs).toEqual([10_000, 30_000]);
@@ -68,6 +87,7 @@ describe('loadAutomationSettings', () => {
       alertAfterFailures: 3,
       overdueMs: 12 * HOUR,
     });
+    expect(settings.readAlerts).toEqual({ alertAfterFailures: 5, noSuccessMs: 12 * HOUR });
   });
 
   it('refuses anything faster than the pacing floor or above the limit ceiling', () => {
@@ -81,6 +101,8 @@ describe('loadAutomationSettings', () => {
         SALE_CHECK_MIN_HOURS: '0.1',
         SALE_CHECK_MAX_HOURS: '6',
         SALE_CHECK_ALERT_FAILURES: '0',
+        READ_ALERT_FAILURES: '21',
+        READ_ALERT_NO_SUCCESS_HOURS: '0',
         AUTOMATION_STEP_TIMEOUT_MS: '20000',
         AUTOMATION_CALL_TIMEOUT_MS: '15000',
       });
@@ -97,6 +119,8 @@ describe('loadAutomationSettings', () => {
       'SALE_CHECK_MIN_HOURS must be a number of hours from 1 to 72',
       'SALE_CHECK_ALERT_FAILURES must be an integer from 1 to 10',
       'SALE_CHECK_MIN_HOURS, SALE_CHECK_DEFAULT_HOURS, and SALE_CHECK_MAX_HOURS must be in increasing order',
+      'READ_ALERT_FAILURES must be an integer from 1 to 20',
+      'READ_ALERT_NO_SUCCESS_HOURS must be a number of hours from 1 to 72',
     ]);
   });
 

@@ -24,6 +24,7 @@ import type { AutomationProfile } from '../profiles.ts';
 import { fakeSiteProfile, silentLogger, stubPhotos, testRunner } from '../test-support.ts';
 import { PUSH_TASK } from '@listora/push';
 
+import { runReadAlerts, type OwnerEmail } from '../read-health/health.ts';
 import { runSaleCheckHealth } from './health.ts';
 import { runSaleCheck } from './job.ts';
 import {
@@ -552,6 +553,70 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
       alerted_at: null,
       last_error_code: null,
     });
+    await clearJobs();
+  });
+
+  it("emails the owner at the third failure in a row, with the step and the reader's words", async () => {
+    const { connectionId } = await link();
+    site.inject({ action: 'orders', fault: { type: 'server_error' }, times: 3 });
+    const sent: OwnerEmail[] = [];
+    const alerts = () =>
+      runReadAlerts({
+        db: database.db,
+        settings: { alertAfterFailures: 3, noSuccessMs: 24 * HOUR },
+        mailer: {
+          send: (email) => {
+            sent.push(email);
+            return Promise.resolve();
+          },
+        },
+        environment: 'test',
+        logger: silentLogger,
+      });
+    const read = () =>
+      database.db
+        .selectFrom('background_read_health')
+        .selectAll()
+        .where('account_id', '=', accountId)
+        .where('connection_id', '=', connectionId)
+        .executeTakeFirstOrThrow();
+
+    await check(connectionId);
+    await check(connectionId);
+    expect(await alerts()).toEqual({ alerted: 0, failed: 0 });
+    await check(connectionId);
+    expect(await read()).toMatchObject({
+      read: 'sale_check',
+      marketplace: 'mercari',
+      failures_in_a_row: 3,
+      last_error_code: 'server_error',
+      last_succeeded_at: null,
+      owner_alerted_at: null,
+    });
+    expect(await alerts()).toEqual({ alerted: 1, failed: 0 });
+    const [email] = sent;
+    expect(email?.subject).toBe('[Listora test] Mercari sale check failed 3 times in a row');
+    const { last_error_step: step, last_error_detail: detail } = await read();
+    expect(step).not.toBeNull();
+    expect(detail).not.toBeNull();
+    expect(email?.text).toContain(`Step: ${String(step)}`);
+    expect(email?.text).toContain('Last error: server_error');
+    expect(email?.text).toContain(`Reader's words: ${String(detail)}`);
+    expect(email?.text).toContain('Last worked: never');
+    // Once per run of failures.
+    expect(await alerts()).toEqual({ alerted: 0, failed: 0 });
+    expect(sent).toHaveLength(1);
+    expect(await pushes()).toEqual([]);
+
+    // A check that works ends the run.
+    await check(connectionId);
+    const recovered = await read();
+    expect(recovered).toMatchObject({
+      failures_in_a_row: 0,
+      failing_since: null,
+      owner_alerted_at: null,
+    });
+    expect(recovered.last_succeeded_at).toBeInstanceOf(Date);
     await clearJobs();
   });
 

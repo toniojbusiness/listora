@@ -1206,7 +1206,9 @@ export interface paths {
          *     marketplace events, automation runs and their screenshots), and asks the marketplace to
          *     revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
          *     marketplace but Listora can no longer change or verify them until the account is
-         *     connected again. `404` when no account of the marketplace is linked.
+         *     connected again. `404` when no account of the marketplace is linked; `409
+         *     connection_read_only` while the account is read only (the owner turns Read only off
+         *     first, so an unlink and a relink never make it writable).
          */
         delete: operations["disconnectConnection"];
         options?: never;
@@ -4523,6 +4525,11 @@ export interface components {
             itemId: components["schemas"]["Id"];
             sku: string;
             title?: string;
+            /**
+             * Format: uri
+             * @description The item's cover photo, small; absent until a photo is processed.
+             */
+            thumbnailUrl?: string;
             /** @description The listing the item sold through, when known. Absent for a sale recorded without one. */
             listingId?: components["schemas"]["Id"];
             /** @description This item's part of the order's sale price (for a bundle, its share of the bundle price). */

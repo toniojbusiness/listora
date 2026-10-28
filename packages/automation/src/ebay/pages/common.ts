@@ -36,7 +36,7 @@ export async function expectElement(
 
 /** The failure for an eBay page that is not as the script expects. */
 export function changed(pageName: string, problem: string): PageChangedError {
-  return new PageChangedError(`eBay's ${pageName} ${problem}; the page may have changed.`);
+  return new PageChangedError(`eBay's ${pageName} ${problem}.`);
 }
 
 /** A US dollar price as eBay shows it (`US $45.00`, `$1,045.00`) in cents; `null` otherwise. */

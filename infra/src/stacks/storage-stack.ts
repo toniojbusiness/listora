@@ -19,6 +19,9 @@ export const AUTOMATION_SCREENSHOT_PREFIX = 'automation/';
 /** Private: photo files uploaded by the app, until the worker processes them (`storageKeys`). */
 export const UPLOAD_PREFIX = 'uploads/';
 
+/** Private: package photos, which show the buyer's label (`PACK_PHOTO_PREFIX`). */
+export const PACK_PHOTO_PREFIX = 'pack/';
+
 /**
  * The photo bucket and the CloudFront distribution marketplaces fetch listing images from.
  *
@@ -69,6 +72,13 @@ export class StorageStack extends ListoraStack {
           id: 'expire-automation-screenshots',
           prefix: AUTOMATION_SCREENSHOT_PREFIX,
           expiration: Duration.days(30),
+        },
+        {
+          // Package photos: the worker deletes each one 60 days after its sale shipped
+          // (PACK_PHOTO_RETENTION_DAYS), and this is the backstop.
+          id: 'expire-package-photos',
+          prefix: PACK_PHOTO_PREFIX,
+          expiration: Duration.days(180),
         },
       ],
     });

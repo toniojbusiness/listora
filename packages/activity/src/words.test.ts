@@ -10,6 +10,7 @@ import {
   operationEventSource,
   operationTitle,
   orderDetail,
+  orderPhotosDetail,
   saleCheckDetail,
   saleCheckTitle,
   saleDetectionWords,
@@ -53,9 +54,7 @@ describe('activity words', () => {
         failed_step: 'read the sold items',
         error_code: 'element_missing',
       }),
-    ).toBe(
-      "Stopped at “read the sold items”: the page wasn't what Listora knows (it may have changed).",
-    );
+    ).toBe("Stopped at “read the sold items”: the page wasn't what Listora expected.");
     expect(browserSessionDetail({ ...run, outcome: null })).toBe('Running now.');
     expect(browserSessionOutcome('canceled')).toBe('info');
     expect(browserSessionOutcome('challenge')).toBe('failed');
@@ -96,6 +95,11 @@ describe('activity words', () => {
     expect(saleDetectionWords('history', 'depop')).toBe('Found in your Depop sales history.');
     expect(saleDetectionWords('manual', 'depop')).toBe('You marked it sold.');
     expect(orderDetail('ignored', null)).toContain('recorded already');
+    // An order stored again for its sold items' photos never reads as a sale recorded.
+    expect(orderPhotosDetail('processed', null)).toBe(
+      "Its sold item got the sold listing's photos.",
+    );
+    expect(orderPhotosDetail('ignored', null)).toContain('none could be fetched');
   });
 
   it('words item changes, and anything new from its action name', () => {

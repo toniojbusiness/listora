@@ -55,6 +55,12 @@ Activity and sale detection (docs/features/activity.md):
   sale-history show <marketplace> --account ID
                        the newest history read and every sold order it saw
 
+Background read health (docs/features/read-health.md):
+  read-health [--account ID] [--marketplace M]
+                       every automation connection's sale checks, listing imports, and offer
+                       checks: when each last worked, how many failed in a row since, the last
+                       error's code, step, and words, and when the owner was emailed
+
 Options:
   --day YYYY-MM-DD    a UTC day
   --since, --until    a time (ISO 8601, for example 2026-10-26T18:00:00Z); --until excludes it
@@ -137,6 +143,12 @@ export type Command =
       readonly accountId: string | undefined;
       readonly marketplace: Marketplace | undefined;
       readonly limit: number;
+      readonly json: boolean;
+    }
+  | {
+      readonly name: 'read-health';
+      readonly accountId: string | undefined;
+      readonly marketplace: Marketplace | undefined;
       readonly json: boolean;
     }
   | {
@@ -332,6 +344,16 @@ export function parseCommand(argv: readonly string[], now: Date = new Date()): C
         accountId: optionalAccount(values),
         marketplace: optionalMarketplace(values),
         limit: parseLimit(values, 20),
+        json: values.json === true,
+      };
+    }
+    case 'read-health': {
+      expectArgs('read-health', action === undefined ? rest : [action, ...rest], 0);
+      allowOnly('read-health', values, ['account', 'marketplace', 'json']);
+      return {
+        name: 'read-health',
+        accountId: optionalAccount(values),
+        marketplace: optionalMarketplace(values),
         json: values.json === true,
       };
     }

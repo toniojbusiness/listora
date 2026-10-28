@@ -265,15 +265,16 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       backupRetentionDays: 7,
       performanceInsights: false,
     },
-    // One task runs both processes: 0.25 vCPU is the smallest Fargate size, and 1 GiB leaves
-    // the worker room to decode full-size photos.
-    services: { layout: 'combined', app: { cpu: 256, memoryMiB: 1024, minTasks: 1, maxTasks: 1 } },
+    // One task runs both processes: 0.5 vCPU (0.25, the smallest Fargate size, starved launches
+    // and photo bursts; docs/features/costs.md), and 1 GiB, valid for 0.5 vCPU, leaves the
+    // worker room to decode full-size photos.
+    services: { layout: 'combined', app: { cpu: 512, memoryMiB: 1024, minTasks: 1, maxTasks: 1 } },
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_WEEK,
     containerInsights: false,
     aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
-    // About $37 a month is expected (docs/features/costs.md); this is well past a normal month.
+    // About $44 a month is expected (docs/features/costs.md); this is well past a normal month.
     monthlyCostAlarmUsd: 50,
   },
 };

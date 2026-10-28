@@ -23,6 +23,7 @@ import {
   HTTP_API_THROTTLE,
   RUNNER_SERVICE_NAME,
 } from './stacks/compute-stack.ts';
+import { alertSender } from './stacks/alerts.ts';
 import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
 import { PLACEHOLDER_CONTEXT, PLACEHOLDER_SHAPES } from './placeholders.ts';
 import { stackList, synthesize } from './test-support.ts';
@@ -79,10 +80,11 @@ function asList(value: unknown): unknown[] {
 
 /** Any resources, for the names of the variables a container gets. */
 const ANY_RESOURCES: ServiceResources = {
-  photoStorage: { bucket: '', region: '', publicBaseUrl: '' },
+  photoStorage: { bucket: '', region: '', publicBaseUrl: '', cdnDistributionId: '' },
   signIn: { driver: 'dev' },
   runner: { cluster: '', service: '', region: '' },
   tokenKeyArn: '',
+  ownerAlerts: { environment: '', email: { from: '', to: '' } },
 };
 
 describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, overrides }) => {
@@ -233,7 +235,12 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         }),
       });
       t.hasResourceProperties('AWS::RDS::DBParameterGroup', {
-        Parameters: Match.objectLike({ 'rds.force_ssl': '1' }),
+        Parameters: Match.objectLike({
+          'rds.force_ssl': '1',
+          // Slow statements are logged without their values (people's data).
+          log_parameter_max_length: '0',
+          log_parameter_max_length_on_error: '0',
+        }),
       });
       t.hasResourceProperties('AWS::SecretsManager::Secret', {
         Name: `listora/${environment}/database`,
@@ -268,6 +275,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
               Match.objectLike({ Prefix: 'uploads/', ExpirationInDays: 7 }),
               // The browser runner's screenshots, which the worker deletes after 14 days.
               Match.objectLike({ Prefix: 'automation/', ExpirationInDays: 30 }),
+              // Package photos, which the worker deletes 60 days after the sale shipped.
+              Match.objectLike({ Prefix: 'pack/', ExpirationInDays: 180 }),
             ],
           },
         }),
@@ -720,6 +729,10 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
               ...(dns === undefined
                 ? {}
                 : { saleEmail: { inboundDomain: '', queueUrl: '', bucket: '', region: '' } }),
+              ownerAlerts: {
+                environment: '',
+                ...(target.alarmEmail === undefined ? {} : { email: { from: '', to: '' } }),
+              },
               signIn: signInResources(
                 settings.signIn,
                 settings.signIn.via === 'owner-pool'
@@ -779,6 +792,35 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       }
     });
 
+    it('lets the worker email the owner from the alert sender only, where alarms are emailed', () => {
+      const worker = Object.fromEntries(
+        (container('worker')['Environment'] as { Name: string; Value: unknown }[]).map((entry) => [
+          entry.Name,
+          entry.Value,
+        ]),
+      );
+      const sends = statements(t).filter((statement) =>
+        asList(statement['Action']).includes('ses:SendEmail'),
+      );
+      if (target.alarmEmail === undefined) {
+        expect(worker).toMatchObject({ OWNER_ALERTS: 'log', OWNER_ALERT_ENV: environment });
+        expect(sends).toEqual([]);
+        return;
+      }
+      const sender = alertSender(target);
+      expect(worker).toMatchObject({
+        OWNER_ALERTS: 'ses',
+        OWNER_ALERT_ENV: environment,
+        OWNER_ALERT_FROM: sender.address,
+        OWNER_ALERT_TO: target.alarmEmail,
+      });
+      expect(sends).toHaveLength(1);
+      expect(sends[0]).toMatchObject({
+        Effect: 'Allow',
+        Condition: { StringEquals: { 'ses:FromAddress': sender.address } },
+      });
+    });
+
     it('signs in with the user pool where there is one, and never with the dev driver there', () => {
       const env = (name: string) =>
         Object.fromEntries(
@@ -821,9 +863,11 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           expect(grant['Effect']).toBe('Allow');
           expect(JSON.stringify(grant['Resource'])).toContain('UserPool');
         }
-        // Invitees' addresses as SES identities, and nothing else at SES.
+        // Invitees' addresses as SES identities, and nothing else at SES but the owner alerts.
         const sesGrant = statements(t).filter((statement) =>
-          asList(statement['Action']).some((action) => String(action).startsWith('ses:')),
+          asList(statement['Action']).some(
+            (action) => String(action).startsWith('ses:') && action !== 'ses:SendEmail',
+          ),
         );
         if (settings.signIn.inviteEmailVerification === 'ses') {
           expect(sesGrant).toHaveLength(1);
@@ -924,6 +968,10 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           containers.includes('worker') && dns !== undefined,
         );
         expect(policy.includes('ecs:UpdateService')).toBe(containers.includes('worker'));
+        // Dropping the photo CDN's copies of moved package photos: the worker only.
+        expect(policy.includes('cloudfront:CreateInvalidation')).toBe(
+          containers.includes('worker'),
+        );
         // Every task seals; only the worker opens marketplace tokens, and never a browser session
         // (only the runner opens those).
         expect(policy).toContain('"Action":"kms:GenerateDataKey"');

@@ -107,6 +107,24 @@ jobs:
       PG_BIN_DIR: /usr/lib/postgresql/18/bin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Every new migration must sort after the newest one on main, or the live migration step
+      # refuses it (docs/architecture.md, Migrations). A pull request is checked against its base
+      # branch; a push to main against the commit before it, which catches two pull requests that
+      # each passed but merged in the wrong order, so main's CI fails before anything deploys.
+      - name: Check migration order
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || '' }}
+          BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          if [[ -n "$BASE_REF" ]]; then
+            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            scripts/check-migration-order.sh FETCH_HEAD
+          elif [[ -n "$BEFORE" && "$BEFORE" != 0000000000000000000000000000000000000000 ]]; then
+            git fetch --no-tags --depth=1 origin "$BEFORE"
+            scripts/check-migration-order.sh "$BEFORE"
+          else
+            echo "migration order: nothing to compare with"
+          fi
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc

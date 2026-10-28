@@ -215,7 +215,7 @@ export function browserSessionDetail(run: {
 function stopReason(code: string | null): string {
   switch (code) {
     case 'element_missing':
-      return "the page wasn't what Listora knows (it may have changed)";
+      return "the page wasn't what Listora expected";
     case 'rate_limited':
       return 'the marketplace asked Listora to slow down';
     case 'server_error':
@@ -334,6 +334,22 @@ export function orderDetail(result: InboundEventResult | null, error: string | n
       return 'Recorded as a sale.';
     case 'ignored':
       return 'Nothing to do: the sale was recorded already, or the order showed nothing to record.';
+    case 'failed':
+      return error ?? "Listora couldn't read it.";
+    default:
+      return assertNever(result, 'inbound event result');
+  }
+}
+
+/** An order a check stored again for its sold items' photos (`purpose: 'photos'`). */
+export function orderPhotosDetail(result: InboundEventResult | null, error: string | null): string {
+  switch (result) {
+    case null:
+      return "Waiting to add the sold listing's photos to its sold item.";
+    case 'processed':
+      return "Its sold item got the sold listing's photos.";
+    case 'ignored':
+      return 'No photos added: the item has photos already, or none could be fetched.';
     case 'failed':
       return error ?? "Listora couldn't read it.";
     default:

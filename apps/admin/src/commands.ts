@@ -17,6 +17,7 @@ import { assertNever, type Logger } from '@listora/shared';
 
 import { runActivityCommand } from './activity.ts';
 import { USAGE, type Command } from './args.ts';
+import { runReadHealthCommand } from './read-health.ts';
 import {
   describePeriod,
   formatCount,
@@ -406,6 +407,10 @@ export async function runCommand(command: Command, context: CommandContext): Pro
     case 'sale-history-read':
     case 'sale-history-show':
       await runActivityCommand(command, context);
+      return;
+
+    case 'read-health':
+      await runReadHealthCommand(command, context);
       return;
 
     default:

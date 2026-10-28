@@ -10,7 +10,11 @@
   `x-amz-checksum-sha256` of each upload, so storage itself refuses any other body: S3 with
   presigned PUTs, and the local driver (files in `.local/storage`) with HMAC-signed URLs that
   the API serves under `/storage/`. Keys under `public/` are readable by URL (CloudFront in
-  production); every other key is private and never served.
+  production); every other key is private, served only through a short-lived signed read
+  (`signedReadUrl`: an S3 presigned GET, or the local driver's signed `/storage/` GET), answered
+  `Cache-Control: private, no-store` (package photos, [pack-check.md](pack-check.md#package-photo)).
+  `invalidatePublic` asks CloudFront to drop public keys that were moved or deleted (only the
+  worker has the distribution, `STORAGE_CDN_DISTRIBUTION_ID`).
 - **Processing** (`processPhoto`, a job function under the task name `photo_processing`)
   verifies the upload's sha256, decodes it with `sharp` (a non-JPEG or broken file makes the
   photo `failed` with a reason the user can read). Only a file that starts like a JPEG reaches

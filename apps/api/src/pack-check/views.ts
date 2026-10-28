@@ -23,6 +23,8 @@ const CARRIER_NAMES = {
 export interface PackViewContext {
   covers: ReadonlyMap<string, PhotoRow>;
   storage: ObjectStorage;
+  /** The package photos' signed read URLs, by key (`packPhotoUrls`). */
+  packPhotoUrls: ReadonlyMap<string, string>;
   /** Whether a label read is waiting for the phone, per marketplace. */
   reading: ReadonlySet<string>;
   now: Date;
@@ -54,6 +56,8 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
     };
   });
   const pack = order.pack;
+  const packPhotoKey = pack?.photoKey ?? null;
+  const packPhotoUrl = packPhotoKey === null ? undefined : context.packPhotoUrls.get(packPhotoKey);
   return {
     saleId: order.saleId,
     marketplace: order.marketplace,
@@ -84,9 +88,7 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
             matchedBy: pack.matchedBy,
             ...(pack.stickerSku === null ? {} : { stickerSku: pack.stickerSku }),
             labelMismatch: labelMismatch(order),
-            ...(pack.photoKey === null
-              ? {}
-              : { photoUrl: context.storage.publicUrl(pack.photoKey) }),
+            ...(packPhotoUrl === undefined ? {} : { photoUrl: packPhotoUrl }),
             ...(pack.photoAddedAt === null
               ? {}
               : { photoAddedAt: pack.photoAddedAt.toISOString() }),

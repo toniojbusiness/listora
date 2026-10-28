@@ -74,8 +74,14 @@ data, API answers, and the JSON in the document), the words the plan knows ident
 (Depop's username in its slugs, Poshmark's closet name, Mercari's profile ids), the text of the
 profile's private parts (buyers' names, addresses, messages) and the plan's own (the seller's
 name and profile introduction), and any `--redact` word become
-placeholders (`user1`, `Name1`, `user1@example.com`), the same one everywhere, so a slug, a link,
-and the data that names it still agree. Credentials (values under token, secret, password,
+placeholders (`redacteduser1`, `RedactedName1`, `redacteduser1@example.com`), the same one
+everywhere, so a slug, a link, and the data that names it still agree. The placeholders use a
+namespace no site uses, so a real handle is never taken for one (Mercari's default handles are
+`user<digits>`, which the first placeholders, `user1`, resembled). An object whose `__typename`
+names a user, profile, buyer, or seller (`PublicUser`), or one under such a normalized cache key
+(Apollo's `"PublicUser:123"`, whose `:<id>` is dropped before the check), is a person's: its name,
+username, id, and photo are redacted, whether in the data or in the JSON inside the document.
+Credentials (values under token, secret, password,
 session, and signature keys; JSON web tokens; long opaque tokens; token query parameters), other
 email addresses and phone numbers, and every image address (the seller's photos and avatar) are
 replaced too. A recording that still holds anything of the kind (`unredacted`) is not written;

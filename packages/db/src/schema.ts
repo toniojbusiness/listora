@@ -32,6 +32,7 @@ import type {
   AutomationRunOutcome,
   AutomationRunPurpose,
   AuthProvider,
+  BackgroundRead,
   ChallengeKind,
   ConnectionAuthorizationStatus,
   ConnectionMode,
@@ -455,6 +456,17 @@ export interface MarketplaceConnectionTable {
   updated_at: UpdatedAt;
 }
 
+/**
+ * A marketplace that is read only on the account: kept by triggers while its connection is read
+ * only and after the connection is deleted, so every new connection of it starts read only
+ * (docs/features/read-only.md#unlinking-and-relinking). Removed only when the setting is turned off.
+ */
+export interface MarketplaceReadOnlyTable {
+  account_id: string;
+  marketplace: Marketplace;
+  created_at: CreatedAt;
+}
+
 /** One attempt to connect a marketplace account over OAuth (the `state` is stored hashed). */
 export interface ConnectionAuthorizationTable {
   id: Id;
@@ -761,11 +773,15 @@ export interface AuditLogTable {
  */
 export interface IdempotencyRecordTable {
   account_id: string;
+  /** The Idempotency-Key's SHA-256 (hex); the key itself in records stored before sealing. */
   key: string;
   operation_id: string;
   request_hash: string;
   response_status: number;
+  /** Null once sealed: only records stored before `response_ciphertext` hold the response. */
   response_body: NullableJsonb<JsonValue>;
+  /** The response sealed under a key derived from the Idempotency-Key (apps/api/src/idempotency.ts). */
+  response_ciphertext: Nullable<Buffer>;
   created_at: CreatedAt;
   expires_at: Timestamp;
 }
@@ -1233,6 +1249,29 @@ export interface OfferCheckTable {
   updated_at: UpdatedAt;
 }
 
+// Background read health ----------------------------------------------------------------------
+
+/**
+ * Whether one connection's background read works, one per connection and read
+ * (docs/features/read-health.md): the owner's alert and admin view, never the seller's.
+ */
+export interface BackgroundReadHealthTable {
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  read: BackgroundRead;
+  last_succeeded_at: NullableTimestamp;
+  last_failed_at: NullableTimestamp;
+  failures_in_a_row: Generated<number>;
+  failing_since: NullableTimestamp;
+  last_error_code: Nullable<string>;
+  last_error_step: Nullable<string>;
+  last_error_detail: Nullable<string>;
+  owner_alerted_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Pack check ----------------------------------------------------------------------------------
 
 /** Whether Pack check is on, one per account (docs/features/pack-check.md); off by default. */
@@ -1302,6 +1341,7 @@ export interface Database {
   ai_account_block: AiAccountBlockTable;
   ai_control_audit: AiControlAuditTable;
   marketplace_connection: MarketplaceConnectionTable;
+  marketplace_read_only: MarketplaceReadOnlyTable;
   connection_authorization: ConnectionAuthorizationTable;
   marketplace_listing: MarketplaceListingTable;
   marketplace_operation: MarketplaceOperationTable;
@@ -1347,4 +1387,5 @@ export interface Database {
   marketplace_offer: MarketplaceOfferTable;
   offer_response: OfferResponseTable;
   offer_check: OfferCheckTable;
+  background_read_health: BackgroundReadHealthTable;
 }

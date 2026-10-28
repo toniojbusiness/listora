@@ -86,13 +86,13 @@ apps/
                 src/features/ (account deletion, connection deletion, data retention, AI spend
                 check, item analysis, batch items' analysis start, photo processing, trust
                 metrics, the daily connection health check, the delist SLA, push delivery, sale
-                fees, the morning summary, sale email ingest, sale-check health, listing
-                imports, the listing refresh schedule); and the
+                fees, the morning summary, sale email ingest, sale-check health, background read
+                alerts, listing imports, the listing refresh schedule, package photos); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
-                and account blocks, marketplace data purges, the activity search and sale-check
-                health (@listora/admin)
+                and account blocks, marketplace data purges, the activity search, sale-check
+                health, and background read health (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
@@ -113,8 +113,8 @@ packages/
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator, deletion
                 completion records, Postgres notifications (LISTEN) (@listora/db)
-  storage/      Object storage: local-disk driver with signed upload URLs, S3 driver, checked
-                purges (@listora/storage)
+  storage/      Object storage: local-disk driver with signed upload and read URLs, S3 driver
+                (presigned reads, CloudFront invalidation), checked purges (@listora/storage)
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
@@ -126,8 +126,8 @@ packages/
                 with single-flight refresh, health checks, revocation, unlinking and its
                 deletion job (@listora/connections)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
-                automation adapter base, sale-check scheduling, records, and health, the runner
-                launcher, the
+                automation adapter base, sale-check scheduling, records, and health, background
+                read health and the owner's alerts (read-health/), the runner launcher, the
                 fake marketplace site, and the Poshmark, Mercari, Depop, and eBay adapters with
                 their fake sites (poshmark/, mercari/, depop/, ebay/); the marketplace pre-fill
                 over their category trees and forms (prefill/); reading buyers' offers and
@@ -151,13 +151,15 @@ packages/
   listing-refresh/ Listing refresh: the cadence and quiet-window rules, the settings, each live
                 listing's next and last refresh, the paced schedule (@listora/listing-refresh)
   pack-check/   Pack check: label scans and their verdicts, the to-ship list, packing (one label
-                per package), label reads' records, the setting (@listora/pack-check)
+                per package), label reads' records, the setting, private package photos and
+                their job (@listora/pack-check)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
                 (@listora/observability)
   alerts/       Operator email: alert emails for the alarm topic, the weekly health summary, the
-                SES mailer and its fake, the Lambda handlers and their bundle (@listora/alerts)
+                SES mailer and its fake, the worker's owner alert configuration, the Lambda
+                handlers and their bundle (@listora/alerts)
   retention/    Data retention: how long logs and raw payloads are kept, the daily job that
                 deletes what expired (@listora/retention)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
@@ -292,7 +294,9 @@ src/
   takes, so a deletion that commits meanwhile cannot be missed).
 - **Idempotency.** A POST runs in one transaction that takes an advisory lock on (account,
   key) and stores its successful response in `idempotency_record` together with the change,
-  so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. Each
+  so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. A record
+  is found by the key's SHA-256 and its response is sealed (AES-256-GCM) under a key derived from
+  the Idempotency-Key, so the table never holds a readable response (an invite's code). Each
   stored response also deletes up to 100 expired records (any account, oldest first, skipping
   rows another request holds), so the table stays about one retention period in size.
 - **Errors and logs.** Every error is the contract's `ErrorResponse`; unexpected failures are
@@ -379,10 +383,13 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   (decision D12), so every member of an account creates SKUs with the same prefix.
 - **API:** `idempotency_record` (the stored first successful response per account and
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
-  batches by later POSTs once expired).
+  batches by later POSTs once expired). `key` is the key's SHA-256 and `response_ciphertext` the
+  sealed response (migration `20261028172248_idempotency_sealed`); `response_body` is only a
+  record's from before then.
 - **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
-  automation runs and sale-check schedules in [automation.md](features/automation.md#data), and
-  sale-check records and health in [activity.md](features/activity.md#data);
+  automation runs and sale-check schedules in [automation.md](features/automation.md#data),
+  sale-check records and health in [activity.md](features/activity.md#data), and background read
+  health in [read-health.md](features/read-health.md#data);
   inventory, photos, and history in [items.md](features/items.md); batches in
   [batch.md](features/batch.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
@@ -412,10 +419,17 @@ db:migrate`; in AWS, the deploy runs them before new code starts, see
   (`date -u +%Y%m%d%H%M%S`), so branches written in parallel never pick the same name. The
   first migrations keep their four-digit numbers (`0001` to `0014`), which sort before every
   timestamp; no new numbered migration is added.
-- **Order.** Migrations apply in name order, and the migrator refuses to apply a migration that
-  sorts before one already applied (Kysely's default; it is never turned off). So at your final
-  rebase before merge, if `origin/main` has a migration with a later timestamp than yours,
-  rename yours (both files) to the current UTC time. Never rename a merged migration.
+- **Order.** Migrations apply in name order. Keep each new migration after the newest one on
+  `main`: at your final rebase before merge, if `origin/main` has a migration with a later
+  timestamp than yours, rename yours (both files) to the current UTC time. Never rename a
+  migration an environment has applied. CI checks this (`scripts/check-migration-order.sh`): a
+  pull request fails when a migration it adds does not sort after the newest one on its base
+  branch, and a push to `main` fails when one it adds does not sort after the newest one before
+  the push. Two pull requests can each pass and still merge in the other order, so the migrator
+  also runs with Kysely's `allowUnorderedMigrations`: a pending migration that sorts before one
+  an environment already applied is applied after it, instead of stopping the deploy. Every
+  migration must therefore work when applied after any migration merged beside it, which the
+  expand-then-contract rule ([infra.md](features/infra.md)) already requires.
 - **Checks.** `migrations.test.ts` checks that every migration has both files, that prefixes are
   unique, that timestamps are real UTC times, and that no numbered migration follows
   `0014_marketplace_connect`. The migration integration tests read the list from the directory, so a
@@ -505,6 +519,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                   |
 | [features/alerts.md](features/alerts.md)                           | Alert emails, the weekly health summary, backups, and the restore steps        |
 | [features/activity.md](features/activity.md)                       | The activity timeline, sale-check records and health, explaining a sale        |
+| [features/read-health.md](features/read-health.md)                 | The owner's email when a background read keeps failing, the read-health view   |
 | [features/ios.md](features/ios.md)                                 | iOS app conventions                                                            |
 | [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric     |
 | [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review      |

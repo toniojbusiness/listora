@@ -837,6 +837,55 @@ describe('schema constraints (real Postgres)', () => {
         .execute();
     });
 
+    it('starts every new connection of a read-only marketplace read only, until it is turned off', async () => {
+      const accountId = await insertAccount(db, 'RO');
+      const session = {
+        account_id: accountId,
+        marketplace: 'depop' as const,
+        mode: 'automation' as const,
+        token_ciphertext: Buffer.from('session'),
+      };
+      const link = async () =>
+        db
+          .insertInto('marketplace_connection')
+          .values(session)
+          .returning(['id', 'read_only'])
+          .executeTakeFirstOrThrow();
+      const unlink = (id: string) =>
+        db.deleteFrom('marketplace_connection').where('id', '=', id).execute();
+      const setReadOnly = (id: string, readOnly: boolean) =>
+        db
+          .updateTable('marketplace_connection')
+          .set({ read_only: readOnly })
+          .where('id', '=', id)
+          .execute();
+
+      const first = await link();
+      expect(first.read_only).toBe(false);
+      await setReadOnly(first.id, true);
+      // The connection goes (an unlink, the retention job, a purge); the setting stays.
+      await unlink(first.id);
+      const second = await link();
+      expect(second.read_only).toBe(true);
+      // Only the account's own marketplace: another account, or another marketplace, is unaffected.
+      const other = await db
+        .insertInto('marketplace_connection')
+        .values({ ...session, marketplace: 'mercari' })
+        .returning('read_only')
+        .executeTakeFirstOrThrow();
+      expect(other.read_only).toBe(false);
+      // Turned off, the next link is writable.
+      await setReadOnly(second.id, false);
+      await unlink(second.id);
+      expect((await link()).read_only).toBe(false);
+      const held = await db
+        .selectFrom('marketplace_read_only')
+        .selectAll()
+        .where('account_id', '=', accountId)
+        .execute();
+      expect(held).toEqual([]);
+    });
+
     it('links auto-delist operations to their delist run', async () => {
       await expectPgError(
         db

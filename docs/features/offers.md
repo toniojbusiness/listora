@@ -44,10 +44,12 @@ session no page of the offers buyers make (below).
     there are none. The read waits for the page's `active-offer-section`.
   - **Depop** (read on a real shop's session and in Depop's own scripts, 2026-10-28): the
     products with offers, `GET /presentation/api/v1/offers/me/products/?after=<page_info.last>`
-    (`cursor=` is ignored), then each product's offers,
-    `GET /presentation/api/v1/products/<id>/offers/?active=true&include_size=true&variant_id=<v>`,
-    each with `offer_id`, `offer_value`, `offer_display_status`, `expires_at`,
-    `can_make_counter_offer`, and the offerer's username. The Offers page counts the seller's
+    (`cursor=` is ignored; `objects`, each named by `product_id` with its price, but no slug, so
+    the seller's listings for sale name each product's listing), then each product's offers,
+    `GET /presentation/api/v1/products/<id>/offers/?active=true&include_size=true&variant_id=<v>`
+    (the product, with its offers under `offers`, not `objects`, and a `page_info` that may have
+    only `has_more`), each with `offer_id`, `offer_value` (a string), `offer_display_status`,
+    `expires_at`, `can_make_counter_offer`, and `offerer_username`. The Offers page counts the seller's
     own offers too: on that shop 38 of its 39 active offers were `SENT_PRIVATE_OFFER` (offers she
     sent to likers) and one `ACCEPTED`, with no buyer offer waiting (the hub's
     `seller_offers_to_review: 0`). Only a status ending in `RECEIVED` waits on the seller; the

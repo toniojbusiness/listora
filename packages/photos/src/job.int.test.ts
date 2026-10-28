@@ -368,5 +368,7 @@ function storageMethods(storage: ObjectStorage): ObjectStorage {
     delete: (key) => storage.delete(key),
     list: (prefix, limit) => storage.list(prefix, limit),
     publicUrl: (key) => storage.publicUrl(key),
+    signedReadUrl: (key, expiresAt) => storage.signedReadUrl(key, expiresAt),
+    invalidatePublic: (keys) => storage.invalidatePublic(keys),
   };
 }

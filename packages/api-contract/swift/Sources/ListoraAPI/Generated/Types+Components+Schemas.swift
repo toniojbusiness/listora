@@ -8203,6 +8203,10 @@ extension Components {
             public var sku: Swift.String
             /// - Remark: Generated from `#/components/schemas/SaleItem/title`.
             public var title: Swift.String?
+            /// The item's cover photo, small; absent until a photo is processed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/thumbnailUrl`.
+            public var thumbnailUrl: Swift.String?
             /// The listing the item sold through, when known. Absent for a sale recorded without one.
             ///
             /// - Remark: Generated from `#/components/schemas/SaleItem/listingId`.
@@ -8239,6 +8243,7 @@ extension Components {
             ///   - itemId:
             ///   - sku:
             ///   - title:
+            ///   - thumbnailUrl: The item's cover photo, small; absent until a photo is processed.
             ///   - listingId: The listing the item sold through, when known. Absent for a sale recorded without one.
             ///   - salePrice: This item's part of the order's sale price (for a bundle, its share of the bundle price).
             ///   - cost: What the item cost the seller. Absent when they never entered it.
@@ -8251,6 +8256,7 @@ extension Components {
                 itemId: Components.Schemas.Id,
                 sku: Swift.String,
                 title: Swift.String? = nil,
+                thumbnailUrl: Swift.String? = nil,
                 listingId: Components.Schemas.Id? = nil,
                 salePrice: Components.Schemas.Money,
                 cost: Components.Schemas.Money? = nil,
@@ -8263,6 +8269,7 @@ extension Components {
                 self.itemId = itemId
                 self.sku = sku
                 self.title = title
+                self.thumbnailUrl = thumbnailUrl
                 self.listingId = listingId
                 self.salePrice = salePrice
                 self.cost = cost
@@ -8276,6 +8283,7 @@ extension Components {
                 case itemId
                 case sku
                 case title
+                case thumbnailUrl
                 case listingId
                 case salePrice
                 case cost

@@ -141,6 +141,8 @@ export function saleView(
   runs: readonly DelistRunView[],
   doubleSales: readonly DoubleSaleTaskRow[],
   relistOptions: RelistOptions,
+  /** Each item's cover photo, small, once processed. */
+  thumbnails: ReadonlyMap<string, string> = new Map(),
 ): Sale {
   const money = moneyOfSale(sale, items, fees);
   const usd = (amountCents: number) => ({ amountCents, currency: sale.currency });
@@ -156,6 +158,7 @@ export function saleView(
         itemId: item.item_id,
         sku: item.sku,
         ...(item.title === null || item.title === '' ? {} : { title: item.title }),
+        ...thumbnailOf(thumbnails, item.item_id),
         ...(item.listing_id === null ? {} : { listingId: item.listing_id }),
         salePrice: { amountCents: item.sale_price_cents, currency: item.currency },
         ...optional('cost', item.cost_cents),
@@ -212,6 +215,14 @@ export function saleView(
     createdAt: sale.created_at.toISOString(),
     updatedAt: sale.updated_at.toISOString(),
   };
+}
+
+function thumbnailOf(
+  thumbnails: ReadonlyMap<string, string>,
+  itemId: string,
+): { thumbnailUrl?: string } {
+  const thumbnail = thumbnails.get(itemId);
+  return thumbnail === undefined ? {} : { thumbnailUrl: thumbnail };
 }
 
 function timestamp<K extends string>(key: K, at: Date | null): Partial<Record<K, string>> {
