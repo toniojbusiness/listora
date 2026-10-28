@@ -1589,19 +1589,19 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/PhotoUrls`.
         public struct PhotoUrls: Codable, Hashable, Sendable {
-            /// 400 px long edge.
+            /// 640 px long edge; the app's lists and grids.
             ///
             /// - Remark: Generated from `#/components/schemas/PhotoUrls/thumbnail`.
             public var thumbnail: Swift.String
-            /// 1600 px long edge; what marketplaces fetch.
+            /// 1600 px long edge; what marketplaces fetch, and the app's item screen.
             ///
             /// - Remark: Generated from `#/components/schemas/PhotoUrls/listing`.
             public var listing: Swift.String
             /// Creates a new `PhotoUrls`.
             ///
             /// - Parameters:
-            ///   - thumbnail: 400 px long edge.
-            ///   - listing: 1600 px long edge; what marketplaces fetch.
+            ///   - thumbnail: 640 px long edge; the app's lists and grids.
+            ///   - listing: 1600 px long edge; what marketplaces fetch, and the app's item screen.
             public init(
                 thumbnail: Swift.String,
                 listing: Swift.String

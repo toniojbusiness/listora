@@ -2876,12 +2876,12 @@ export interface components {
         PhotoUrls: {
             /**
              * Format: uri
-             * @description 400 px long edge.
+             * @description 640 px long edge; the app's lists and grids.
              */
             thumbnail: string;
             /**
              * Format: uri
-             * @description 1600 px long edge; what marketplaces fetch.
+             * @description 1600 px long edge; what marketplaces fetch, and the app's item screen.
              */
             listing: string;
         };

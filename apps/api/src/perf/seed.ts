@@ -114,7 +114,7 @@ export async function seedSyntheticSeller(
       jsonb_build_object(
         'original', jsonb_build_object('key', 'photos/' || item.id || '/' || p || '/original.jpg', 'width', 3024, 'height', 4032, 'byteSize', 1800000, 'sha256', md5(item.id::text || p) || md5(p || item.id::text)),
         'ai', jsonb_build_object('key', 'photos/' || item.id || '/' || p || '/ai.jpg', 'width', 768, 'height', 1024, 'byteSize', 150000, 'sha256', md5(item.id::text || p) || md5(p || item.id::text)),
-        'thumbnail', jsonb_build_object('key', 'public/' || md5(item.id::text || p) || '/thumbnail.jpg', 'width', 300, 'height', 400, 'byteSize', 30000, 'sha256', md5(item.id::text || p) || md5(p || item.id::text)),
+        'thumbnail', jsonb_build_object('key', 'public/' || md5(item.id::text || p) || '/thumbnail.jpg', 'width', 480, 'height', 640, 'byteSize', 65000, 'sha256', md5(item.id::text || p) || md5(p || item.id::text)),
         'listing', jsonb_build_object('key', 'public/' || md5(item.id::text || p) || '/listing.jpg', 'width', 1200, 'height', 1600, 'byteSize', 400000, 'sha256', md5(item.id::text || p) || md5(p || item.id::text))),
       'ready', item.created_at, item.created_at
     from inventory_item item, generate_series(0, ${photosPerItem - 1}) p
