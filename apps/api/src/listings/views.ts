@@ -13,6 +13,7 @@ import type { DbExecutor, Marketplace, OperationKind } from '@listora/db';
 import { operationMode, type AdapterRegistry } from '@listora/marketplaces';
 import {
   describeListingStatus,
+  isWriteKind,
   phoneWaits,
   REFUSED_CONTENT_ERROR,
   relistMode,
@@ -236,7 +237,8 @@ function listingActions(state: ListingState): KnownListingAction[] {
  * under the listing's connection: `api` (Listora does it and reads it back) or `assisted` (the
  * action creates a task in the user's task inbox, and only their confirmation finishes it).
  * An action the marketplace cannot do in either mode, such as checking an assisted listing, is
- * not offered.
+ * not offered, and neither is a change to a listing on a read-only connection
+ * (docs/features/read-only.md): only its check.
  */
 export function availableActions(
   state: ListingState,
@@ -250,6 +252,7 @@ export function availableActions(
   const capabilities = context.adapters.capabilities(row.marketplace, connection);
   if (capabilities === undefined) return [];
   return actionsForState(state).flatMap((action) => {
+    if (row.read_only && isWriteKind(ACTION_KIND[action])) return [];
     const mode = operationMode(capabilities, ACTION_KIND[action]);
     return mode === 'unsupported' ? [] : [{ action, mode }];
   });

@@ -251,4 +251,38 @@ describe('RunnerSessions (real Postgres, headless Chromium)', () => {
       ),
     ).toEqual({ type: 'no_session' });
   });
+
+  it('opens nothing for a write script on a read-only connection, and still runs reads', async () => {
+    await database.db
+      .updateTable('marketplace_connection')
+      .set({ read_only: true })
+      .where('id', '=', connection.id)
+      .execute();
+    let ran = false;
+    const write: SessionRequest = {
+      ...request('end'),
+      purpose: 'operation',
+      // Only the script's name decides; the runner never reaches the input.
+      call: { script: 'end', op: {} } as unknown as SessionRequest['call'],
+    };
+    expect(
+      await sessions().use(
+        write,
+        (session, s) => {
+          ran = true;
+          return session.read('account', account, s);
+        },
+        signal(),
+      ),
+    ).toEqual({ type: 'read_only' });
+    expect(ran).toBe(false);
+    expect(await runs()).toEqual([]);
+
+    const read = await sessions().use(
+      request(),
+      (session, s) => session.read('account', account, s),
+      signal(),
+    );
+    expect(read).toMatchObject({ type: 'ran', result: { ok: true, value: 'fake-seller' } });
+  });
 });

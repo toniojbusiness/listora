@@ -60,7 +60,8 @@ KnownErrorCode:
     402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
     `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
     `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-    `marketplace_action_unavailable`, `app_update_required`, `pack_refused` 409; `payload_too_large` 413; `validation_failed`,
+    `marketplace_action_unavailable`, `app_update_required`, `pack_refused`,
+    `connection_read_only` 409; `payload_too_large` 413; `validation_failed`,
     `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
     `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
     and `marketplace_authorization_failed` appear only inside a failed
@@ -82,6 +83,7 @@ KnownErrorCode:
     - marketplace_action_unavailable
     - app_update_required
     - pack_refused
+    - connection_read_only
     - payload_too_large
     - validation_failed
     - idempotency_key_reused

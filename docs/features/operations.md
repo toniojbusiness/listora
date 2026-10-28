@@ -9,6 +9,8 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    the same transaction**. Enqueueing the same key again returns the existing operation. The
    desired state names the fields a read-back must show, so an empty one is refused; for a
    content operation it comes from the content ([marketplaces.md](marketplaces.md#adapter-model)).
+   A change to a listing on a read-only connection is refused there, and again by the executor
+   before any send ([read-only.md](read-only.md)).
 2. **Execution.** One job runs one step. A step commits `running` before it can send anything, so a
    step cut short is detectable afterwards. No transaction stays open during a marketplace call, and
    a step records its result only if the operation is still exactly as the step found it. Jobs run

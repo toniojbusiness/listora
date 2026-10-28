@@ -203,6 +203,7 @@ async function sessionRows(
       'connection.last_error_at',
       'connection.granted_at',
       'connection.updated_at',
+      'connection.read_only',
       'check.status as check_status',
       'check.attempts',
       'check.failure_code',
@@ -226,6 +227,7 @@ async function sessionRows(
       lastErrorAt: row.last_error_at,
       linkedAt: row.granted_at,
       updatedAt: row.updated_at,
+      readOnly: row.read_only,
     },
     check:
       row.check_status === null || row.requested_at === null

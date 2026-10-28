@@ -23,6 +23,9 @@ public protocol MarketplaceSessionService: Sendable {
     /// Asks Listora to check the session it already holds again (the connection's Retry check);
     /// read the session afterwards for the check's status.
     func requestCheck(_ marketplace: String, idempotencyKey: String) async throws(APIFailure)
+    /// Makes the account read only, so Listora never changes anything on it, or lets Listora
+    /// change it again (docs/features/read-only.md); read the session afterwards for its state.
+    func setReadOnly(_ marketplace: String, _ readOnly: Bool) async throws(APIFailure)
 }
 
 /// `MarketplaceSessionService` on the Listora API.
@@ -124,6 +127,26 @@ public struct APIMarketplaceSessionService: MarketplaceSessionService {
         }
     }
 
+    public func setReadOnly(_ marketplace: String, _ readOnly: Bool) async throws(APIFailure) {
+        let path = try pathMarketplace(marketplace)
+        let output = try await call {
+            try await api.client.setConnectionReadOnly(
+                path: .init(marketplace: path),
+                body: .json(.init(readOnly: readOnly)),
+            )
+        }
+        switch output {
+        case .ok:
+            return
+        case let .notFound(response):
+            throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response):
+            throw APIFailure(statusCode: 422, response: response)
+        case let .default(status, response):
+            throw APIFailure(statusCode: status, response: response)
+        }
+    }
+
     private func pathMarketplace(_ marketplace: String) throws(APIFailure) -> Components.Schemas.KnownMarketplace {
         guard let known = Components.Schemas.KnownMarketplace(rawValue: marketplace) else {
             throw APIFailure(
@@ -187,6 +210,7 @@ extension MarketplaceLink {
             emailsSignInLinks: session.login.emailsSignInLinks ?? false,
             displayName: session.displayName,
             runsOn: session.execution.map(RunsOn.init),
+            readOnly: session.readOnly ?? false,
         )
     }
 

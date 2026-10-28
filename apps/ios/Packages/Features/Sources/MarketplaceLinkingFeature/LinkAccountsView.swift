@@ -4,9 +4,10 @@ import DesignSystem
 import SwiftUI
 
 /// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
-/// server's status, a one-tap Link or Relink that opens the marketplace's own sign-in page, and
-/// Unlink (after a confirmation), which deletes what Listora holds for that marketplace. Sale emails
-/// have their own screen (``SaleEmailsView``).
+/// server's status, a one-tap Link or Relink that opens the marketplace's own sign-in page, a Read
+/// only switch (Listora then never changes anything on that account; turning it off asks first),
+/// and Unlink (after a confirmation), which deletes what Listora holds for that marketplace. Sale
+/// emails have their own screen (``SaleEmailsView``).
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 
@@ -48,6 +49,19 @@ public struct LinkAccountsView: View {
                                 },
                             ),
                             onConfirmUnlink: { Task { await model.confirmUnlink(link) } },
+                            readOnly: Binding(
+                                get: { link.readOnly },
+                                set: { readOnly in Task { await model.requestReadOnly(link, readOnly) } },
+                            ),
+                            confirmingWritable: Binding(
+                                get: { model.confirmingWritable == link },
+                                set: {
+                                    if !$0 {
+                                        model.cancelWritable()
+                                    }
+                                },
+                            ),
+                            onConfirmWritable: { Task { await model.confirmWritable(link) } },
                         )
                     }
                 } footer: {
@@ -106,9 +120,15 @@ private struct LinkAccountRow: View {
     /// The confirmation, attached to this row's Unlink button so it opens next to it.
     @Binding var confirmingUnlink: Bool
     let onConfirmUnlink: () -> Void
+    /// The server's setting; setting it asks the model to change it.
+    @Binding var readOnly: Bool
+    /// The confirmation before Listora may change a read-only account again.
+    @Binding var confirmingWritable: Bool
+    let onConfirmWritable: () -> Void
 
     private var busy: Bool {
         progress == .sending || progress == .requestingCheck || progress == .unlinking
+            || progress == .changingReadOnly
     }
 
     var body: some View {
@@ -152,6 +172,9 @@ private struct LinkAccountRow: View {
                 RunsOnLabel(runsOn: runsOn, installationID: installationID)
                     .accessibilityIdentifier("linkAccounts.runsOn.\(link.marketplace)")
             }
+            if link.canSetReadOnly {
+                readOnlySwitch
+            }
             switch progress {
             case .sending:
                 Label("Sending your sign-in to Listora...", systemImage: "arrow.up.circle")
@@ -185,6 +208,16 @@ private struct LinkAccountRow: View {
                             .accessibilityIdentifier("linkAccounts.retryUnlink.\(link.marketplace)")
                     }
                 }
+            case .changingReadOnly:
+                Label("Saving...", systemImage: "lock")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("linkAccounts.savingReadOnly.\(link.marketplace)")
+            case let .readOnlyFailed(error):
+                Text(error.message)
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.danger)
+                    .accessibilityIdentifier("linkAccounts.readOnlyError.\(link.marketplace)")
             case let .failed(error):
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(error.message)
@@ -227,6 +260,37 @@ private struct LinkAccountRow: View {
         .padding(.vertical, Spacing.xxs)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("linkAccounts.row.\(link.marketplace)")
+    }
+
+    /// Read only: on, Listora only reads the account. The switch shows the server's setting and
+    /// moves once the server has the change.
+    private var readOnlySwitch: some View {
+        Toggle(isOn: $readOnly) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("Read only")
+                    .font(Typography.body)
+                Text("Listora will never change anything on this account")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+        .tint(Palette.brand.color)
+        .disabled(busy)
+        .accessibilityIdentifier("linkAccounts.readOnly.\(link.marketplace)")
+        .confirmationDialog(
+            "Let Listora change your \(link.name) account?",
+            isPresented: $confirmingWritable,
+            titleVisibility: .visible,
+        ) {
+            Button("Let Listora change it", action: onConfirmWritable)
+                .accessibilityIdentifier("linkAccounts.confirmWritable")
+            Button("Keep read only", role: .cancel) { confirmingWritable = false }
+        } message: {
+            Text(
+                "Listora can then list, update, and delist items on this \(link.name) account, "
+                    + "including the delists after a sale elsewhere.",
+            )
+        }
     }
 }
 

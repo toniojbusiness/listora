@@ -1,17 +1,19 @@
 /**
  * Browser sessions in the browser runner (decision D1). For each run, in order:
  *
- * 1. **One at a time per seller.** A Postgres advisory lock on the connection, held for the
+ * 1. **Read only.** A write script on a read-only connection (docs/features/read-only.md) opens
+ *    nothing and answers `read_only`.
+ * 2. **One at a time per seller.** A Postgres advisory lock on the connection, held for the
  *    whole run, so no two runners (an old one still stopping, say) ever act in the same
  *    seller's account at once.
- * 2. **The session**, loaded from the vault only here, after the lock.
- * 3. **The rate limit**: the seller's account gets at most the marketplace's runs per hour and
+ * 3. **The session**, loaded from the vault only here, after the lock.
+ * 4. **The rate limit**: the seller's account gets at most the marketplace's runs per hour and
  *    per day, counted in `automation_run` across every runner and restart. A run over it opens
  *    nothing and says when to try again.
- * 4. **The pause** since the account's last run started (the profile's `sessionGapMs`).
- * 5. **The run**, recorded in `automation_run` before the browser opens and finished with how
+ * 5. **The pause** since the account's last run started (the profile's `sessionGapMs`).
+ * 6. **The run**, recorded in `automation_run` before the browser opens and finished with how
  *    it ended: the failed step, the check it met, the redacted screenshot.
- * 6. **Afterwards**: a check automation must not pass discards the session and asks the seller
+ * 7. **Afterwards**: a check automation must not pass discards the session and asks the seller
  *    to relink (the vault); otherwise the cookies the marketplace refreshed are stored.
  */
 import { sql } from 'kysely';
@@ -29,6 +31,7 @@ import { assertNever, type Logger } from '@listora/shared';
 import { sameCookies, type LoadedSession, type SessionVault } from '@listora/connections';
 
 import { isAutomatedMarketplace, type AutomationProfile, type RunLimits } from '../profiles.ts';
+import { isWriteCall } from './script-call.ts';
 import { challengeMessage } from '../safety/challenges.ts';
 import { Pacing, type PacingOptions } from '../safety/pacing.ts';
 import { sanitizedError } from '../safety/redaction.ts';
@@ -68,11 +71,20 @@ export class RunnerSessions implements AutomationSessions {
     const { db } = this.#options;
     const connection = await db
       .selectFrom('marketplace_connection')
-      .select(['account_id', 'marketplace', 'mode'])
+      .select(['account_id', 'marketplace', 'mode', 'read_only'])
       .where('id', '=', request.connection.id)
       .executeTakeFirst();
     if (connection?.mode !== 'automation' || !isAutomatedMarketplace(connection.marketplace)) {
       return { type: 'no_session' };
+    }
+    // Listora never changes a read-only account (docs/features/read-only.md): a write script
+    // opens no browser, whatever asked for it.
+    if (connection.read_only && isWriteCall(request.call)) {
+      this.#log.warn(
+        { connectionId: request.connection.id, script: request.script },
+        'refused a write script on a read-only connection',
+      );
+      return { type: 'read_only' };
     }
     const profile = this.#options.profile(connection.marketplace);
     if (profile === undefined) return { type: 'no_session' };

@@ -26,6 +26,7 @@ const SCRIPT_ERROR_CODES = [
   'browser_unavailable',
   'script_error',
   'stopped_for_check',
+  'read_only',
 ] as const satisfies readonly ScriptErrorCode[];
 
 const short = z.string().min(1).max(100);

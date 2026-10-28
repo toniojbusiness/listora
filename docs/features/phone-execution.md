@@ -85,18 +85,21 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    apart), as Try now runs them (their history says `try_now`, `app_open`). A wait the
    marketplace asked for (a 429) or Listora's pacing set (`automation_paced`, `automation_busy`)
    stands.
-3. **Calls.** The server runs the work itself: the executor's phases, the adapters, and the
+3. **Read only.** A write script on a read-only connection is never handed to the phone: the
+   server answers it itself, and every call it does hand over says `readOnly`, which makes the
+   runtime refuse a write before any step ([read-only.md](read-only.md)).
+4. **Calls.** The server runs the work itself: the executor's phases, the adapters, and the
    checks' own code, with sessions answered from the phone's answers. The first script call
    without an answer is handed to the phone; the phone runs it and answers
    (`POST /v1/phone-runs/{runId}/calls/{index}`, idempotent); the server runs the work again
    from its start with one more answer. Work whose calls are all answered records its result
    there and then, by the same rules as the runner's (read-back before success, freshness,
    retries, the fallback to an assisted task).
-4. **Lapsed runs.** A phone that stops mid-run (the app killed, the phone offline) lets the
+5. **Lapsed runs.** A phone that stops mid-run (the app killed, the phone offline) lets the
    lease lapse. An operation step is recovered like any interrupted step: its job finds the
    lapsed run and a read-back decides. A check waits for the phone again. A call never answered
    is finished in `automation_run` as canceled.
-5. **Waiting too long.** An operation that waits for the phone longer than 24 hours fails with
+6. **Waiting too long.** An operation that waits for the phone longer than 24 hours fails with
    `phone_unavailable` and a Retry. Until then its status says what the seller can do: "Delisting... open
    Listora on your iPhone", with a detail asking them to open it (how long it waited is not shown).
 

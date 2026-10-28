@@ -5,6 +5,7 @@ import {
   InvalidOperationError,
   InvalidTransitionError,
   OperationNotFoundError,
+  ReadOnlyConnectionError,
   retryOperation,
   SupersededOperationError,
   tryOperationNow,
@@ -118,6 +119,9 @@ export async function engineCommand<T>(command: () => Promise<T>): Promise<T> {
 
 export function engineError(error: unknown): ApiError | undefined {
   if (error instanceof OperationNotFoundError) return notFound('Operation');
+  if (error instanceof ReadOnlyConnectionError) {
+    return new ApiError('connection_read_only', error.message, { cause: error });
+  }
   if (error instanceof SupersededOperationError) {
     return new ApiError(
       'invalid_state_transition',

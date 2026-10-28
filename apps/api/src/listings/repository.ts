@@ -15,15 +15,19 @@ import {
   type MarketplaceListingTable,
   type MarketplaceOperationTable,
 } from '@listora/db';
-import { REFUSED_CONTENT_ERROR } from '@listora/operations';
+import { listingIsReadOnly, REFUSED_CONTENT_ERROR } from '@listora/operations';
 import { sql, type Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
 
-/** A listing with the mode and status of its connection (null when it has none) and its item's status. */
+/**
+ * A listing with the mode and status of its connection (null when it has none), whether it is
+ * read only (docs/features/read-only.md), and its item's status.
+ */
 export type ListingRow = Selectable<MarketplaceListingTable> & {
   connection_mode: ConnectionMode | null;
   connection_status: ConnectionStatus | null;
+  read_only: boolean;
   item_status: ItemStatus;
 };
 
@@ -46,6 +50,7 @@ function listingQuery(db: DbExecutor, tenant: Tenant) {
     .select([
       'connection.mode as connection_mode',
       'connection.status as connection_status',
+      listingIsReadOnly('listing').as('read_only'),
       'item.status as item_status',
     ])
     .where('listing.account_id', '=', tenant.accountId);

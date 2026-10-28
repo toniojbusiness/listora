@@ -105,6 +105,7 @@ import {
   type PhoneQueueSettings,
 } from './phone-queue.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
+import { isWriteKind, READ_ONLY_ERROR, readOnlyListing, readOnlyMessage } from './read-only.ts';
 import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
 import { REFUSED_CONTENT_ERROR } from './status-display.ts';
@@ -532,6 +533,24 @@ async function claimStep(
     }
     const { base, runsOn } = loaded;
     const { listing, name, mode, canReadBack } = base;
+
+    // A change on a read-only connection is never sent (read-only.ts), whichever host would run
+    // it; one queued before the connection became read only fails here. Reading back what an
+    // earlier step may have sent (`running`, `verifying`) still runs: it only reads.
+    if (
+      (op.status === 'queued' || op.status === 'retrying') &&
+      isWriteKind(op.kind) &&
+      (await readOnlyListing(trx, { accountId: op.account_id, listingId: op.listing_id }))
+        ?.readOnly === true
+    ) {
+      await removePhoneWork(trx, op);
+      await transitionOperation(trx, op, {
+        to: 'failed',
+        error: { code: READ_ONLY_ERROR, message: readOnlyMessage(listing.marketplace) },
+      });
+      log.warn({ kind: op.kind }, 'refused a change on a read-only connection');
+      return null;
+    }
 
     // An automated step runs where its connection's steps run; everything else on the worker.
     const runsAt: 'runner' | 'phone' | null =
