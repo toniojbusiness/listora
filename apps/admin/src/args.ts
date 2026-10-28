@@ -61,6 +61,11 @@ Background read health (docs/features/read-health.md):
                        checks: when each last worked, how many failed in a row since, the last
                        error's code, step, and words, and when the owner was emailed
 
+Test mode (docs/features/test-mode.md):
+  feature-tests [--account ID] [--marketplace M] [--limit N]
+                       the owner's log: each run of a feature not verified live, in an
+                       account's Test mode, newest first, with its outcome and error
+
 Options:
   --day YYYY-MM-DD    a UTC day
   --since, --until    a time (ISO 8601, for example 2026-10-26T18:00:00Z); --until excludes it
@@ -149,6 +154,13 @@ export type Command =
       readonly name: 'read-health';
       readonly accountId: string | undefined;
       readonly marketplace: Marketplace | undefined;
+      readonly json: boolean;
+    }
+  | {
+      readonly name: 'feature-tests';
+      readonly accountId: string | undefined;
+      readonly marketplace: Marketplace | undefined;
+      readonly limit: number;
       readonly json: boolean;
     }
   | {
@@ -354,6 +366,17 @@ export function parseCommand(argv: readonly string[], now: Date = new Date()): C
         name: 'read-health',
         accountId: optionalAccount(values),
         marketplace: optionalMarketplace(values),
+        json: values.json === true,
+      };
+    }
+    case 'feature-tests': {
+      expectArgs('feature-tests', action === undefined ? rest : [action, ...rest], 0);
+      allowOnly('feature-tests', values, ['account', 'marketplace', 'limit', 'json']);
+      return {
+        name: 'feature-tests',
+        accountId: optionalAccount(values),
+        marketplace: optionalMarketplace(values),
+        limit: parseLimit(values, 50),
         json: values.json === true,
       };
     }

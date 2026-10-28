@@ -5,6 +5,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { useMarketplaceFeatures } from '@listora/marketplaces';
+
 import { InvalidOperationError } from './errors.ts';
 import { REFRESH_MAX_ATTEMPTS } from './policy.ts';
 import { FAST_POLICY, createEngineHarness, type EngineHarness } from './test-support.ts';
@@ -106,5 +108,47 @@ describe('refresh operations (real Postgres, fake marketplace)', () => {
     await expect(harness.enqueue(listing, 'refresh', { refreshedAfter: 'soon' })).rejects.toThrow(
       InvalidOperationError,
     );
+  });
+
+  it('records a refresh that ran in Test mode in the owner’s log (test-mode.md)', async () => {
+    const worker = await harness.startWorker({ policy: FAST_POLICY });
+    useMarketplaceFeatures('verified');
+    try {
+      const listing = await liveListing();
+      await harness.db
+        .updateTable('account')
+        .set({ test_mode: true })
+        .where('id', '=', harness.accountId)
+        .execute();
+      const refresh = await harness.enqueue(
+        listing,
+        'refresh',
+        { refreshedAfter: new Date(Date.now() - 1000).toISOString() },
+        { origin: 'auto_refresh' },
+      );
+      await harness.waitForStatus(refresh.id, SETTLED);
+      const runs = await harness.db
+        .selectFrom('feature_test_run')
+        .select(['marketplace', 'feature', 'outcome', 'subject_id'])
+        .where('account_id', '=', harness.accountId)
+        .execute();
+      // eBay's refresh has not passed live: the run is a test. The create before it is not.
+      expect(runs).toEqual([
+        {
+          marketplace: 'ebay',
+          feature: 'listing_refresh',
+          outcome: 'passed',
+          subject_id: refresh.id,
+        },
+      ]);
+    } finally {
+      useMarketplaceFeatures('all');
+      await harness.db
+        .updateTable('account')
+        .set({ test_mode: false })
+        .where('id', '=', harness.accountId)
+        .execute();
+      await worker.stop();
+    }
   });
 });

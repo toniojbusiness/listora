@@ -506,6 +506,44 @@ describe('activity and sale detection (real Postgres)', () => {
     ]);
   });
 
+  it('lists the Test mode runs, newest first, with their outcome and error', async () => {
+    const subject = '0199f0b4-0000-7000-8000-00000000c0de';
+    await db
+      .insertInto('feature_test_run')
+      .values([
+        {
+          account_id: alpha,
+          marketplace: 'poshmark',
+          feature: 'offers',
+          outcome: 'failed',
+          subject_id: subject,
+          error_code: 'element_missing',
+          detail: 'read the offers: no offer rows',
+          created_at: new Date('2026-10-28T10:00:00Z'),
+        },
+        {
+          account_id: alpha,
+          marketplace: 'depop',
+          feature: 'revise',
+          outcome: 'passed',
+          subject_id: subject,
+          created_at: new Date('2026-10-28T11:00:00Z'),
+        },
+      ])
+      .execute();
+    output = '';
+    const table = await run(['feature-tests', '--account', alpha]);
+    const lines = table.split('\n').filter((line) => line.includes('2026-10-28'));
+    expect(lines[0]).toContain('revise');
+    expect(lines[0]).toContain('passed');
+    expect(lines[1]).toContain('element_missing: read the offers: no offer rows');
+    output = '';
+    const json = JSON.parse(
+      await run(['feature-tests', '--account', alpha, '--marketplace', 'depop', '--json']),
+    ) as { feature: string; outcome: string }[];
+    expect(json.map(({ feature, outcome }) => [feature, outcome])).toEqual([['revise', 'passed']]);
+  });
+
   it('says plainly when a sale or a connection is missing', async () => {
     await expect(run(['sale-why', MISSING_ACCOUNT])).rejects.toThrow(CommandError);
     await expect(run(['sale-history', 'read', 'depop', '--account', alpha])).rejects.toThrow(

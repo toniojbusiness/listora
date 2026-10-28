@@ -104,6 +104,7 @@ describe("a listing's refresh", () => {
     itemId: 'item-1',
     marketplace: 'poshmark',
     connection: { id: 'connection-1', mode: 'automation', status: 'connected', readOnly: false },
+    testMode: false,
     freshAt: ago(24 * HOUR),
     lastRefreshedAt: ago(24 * HOUR),
     itemCadence: null,

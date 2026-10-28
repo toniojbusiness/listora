@@ -35,6 +35,7 @@ import {
   loadFeatureGate,
   MARKETPLACE_NAMES,
   OFFER_RULES,
+  recordFeatureTestRun,
   type ConnectionRef,
   type FeatureGate,
   type MarketplaceAdapter,
@@ -411,13 +412,13 @@ export async function recordOfferAnswer(
   const attempts = prepared.attempts + 1;
   const { outcome, read } = step;
   const status = await inTransaction(db, async (trx): Promise<OfferResponseStatus> => {
-    const update = (values: {
+    const update = async (values: {
       status: OfferResponseStatus;
       sent?: boolean;
       error?: { code: string; message: string; retryable: boolean };
       evidence?: true;
-    }) =>
-      trx
+    }) => {
+      await trx
         .updateTable('offer_response')
         .set({
           status: values.status,
@@ -439,6 +440,19 @@ export async function recordOfferAnswer(
         .where('id', '=', prepared.responseId)
         .where('status', 'in', OPEN)
         .execute();
+      // A settled answer in Test mode (docs/features/test-mode.md) goes in the owner's log.
+      if (values.status === 'succeeded' || values.status === 'failed') {
+        await recordFeatureTestRun(trx, {
+          accountId: prepared.accountId,
+          marketplace: prepared.marketplace,
+          feature: 'offer_answers',
+          outcome: values.status === 'succeeded' ? 'passed' : 'failed',
+          subjectId: prepared.responseId,
+          errorCode: values.error?.code ?? null,
+          detail: values.error?.message ?? null,
+        });
+      }
+    };
     const target = {
       accountId: prepared.accountId,
       connectionId: prepared.connectionId,

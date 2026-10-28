@@ -36,15 +36,23 @@ describe('which listings Listora refreshes', () => {
         const capabilities = adapters.capabilities(marketplace, connection);
         const mode =
           capabilities === undefined ? 'unsupported' : operationMode(capabilities, 'refresh');
-        const fact = { marketplace, connection: connection && { ...connection, readOnly: false } };
+        const fact = {
+          marketplace,
+          connection: connection && { ...connection, readOnly: false },
+          testMode: false,
+        };
         expect(mode === 'automation', `${marketplace} ${JSON.stringify(connection)}`).toBe(
           canRefresh(fact),
         );
         // A read-only connection is never refreshed, whatever its adapter can do.
         if (connection !== null) {
-          expect(canRefresh({ marketplace, connection: { ...connection, readOnly: true } })).toBe(
-            false,
-          );
+          expect(
+            canRefresh({
+              marketplace,
+              connection: { ...connection, readOnly: true },
+              testMode: true,
+            }),
+          ).toBe(false);
         }
         expect(mode, "a refresh is never the seller's").not.toBe('assisted');
       }

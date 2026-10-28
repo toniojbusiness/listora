@@ -19,7 +19,11 @@ import {
   type ExecutionLocation,
   type Marketplace,
 } from '@listora/db';
-import { MARKETPLACE_NAMES } from '@listora/marketplaces';
+import {
+  MARKETPLACE_NAMES,
+  recordFeatureTestRun,
+  type MarketplaceFeature,
+} from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
@@ -44,6 +48,13 @@ export const READ_NAMES: Readonly<Record<BackgroundRead, string>> = {
   sale_check: 'sale check',
   listing_import: 'listing import',
   offer_check: 'offer check',
+};
+
+/** The feature each read belongs to (docs/features/verified-features.md). */
+const READ_FEATURES: Readonly<Record<BackgroundRead, MarketplaceFeature>> = {
+  sale_check: 'sale_checks',
+  listing_import: 'listing_import',
+  offer_check: 'offers',
 };
 
 /** One connection's read. */
@@ -97,6 +108,25 @@ export async function recordReadSucceeded(db: DbExecutor, target: ReadTarget): P
       }),
     )
     .execute();
+  await recordReadTest(db, target, 'passed', null);
+}
+
+/** A read of a feature on only for Test mode goes in the owner's log (test-mode.md). */
+async function recordReadTest(
+  db: DbExecutor,
+  target: ReadTarget,
+  outcome: 'passed' | 'failed',
+  failure: ReadFailure | null,
+): Promise<void> {
+  await recordFeatureTestRun(db, {
+    accountId: target.accountId,
+    marketplace: target.marketplace,
+    feature: READ_FEATURES[target.read],
+    outcome,
+    subjectId: target.connectionId,
+    errorCode: failure?.code ?? null,
+    detail: failure === null ? null : [failure.step, failure.detail].filter(Boolean).join(': '),
+  });
 }
 
 /**
@@ -135,6 +165,7 @@ export async function recordReadFailed(
       }),
     )
     .execute();
+  await recordReadTest(db, target, 'failed', failure);
 }
 
 function clip(text: string | null, max: number): string | null {
