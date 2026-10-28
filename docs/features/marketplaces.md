@@ -208,6 +208,7 @@ produce each failure mode the suite asks for (`ConformanceMarketplace`).
   marketplace's condition when it differs from the item's, item specifics as an ordered
   `[{name, values}]` list, and hashtags; external ids, status, remote snapshot and
   newest seen revision, desired/applied version, `last_verified_at` for a read-back and
-  `user_confirmed_at` for the user's confirmation; a listing known only by a share short link
-  is unique by its URL), `marketplace_operation` (with the listing `content` a create, revise,
+  `user_confirmed_at` for the user's confirmation; `shop_unlinked_at` for a listing from an
+  unlinked shop, [marketplace-linking.md](marketplace-linking.md#relinking-another-shop); a
+  listing known only by a share short link is unique by its URL), `marketplace_operation` (with the listing `content` a create, revise,
   or relist publishes), and the append-only `operation_event`.

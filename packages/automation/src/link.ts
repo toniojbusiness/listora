@@ -2,8 +2,8 @@
  * Linking a marketplace for browser automation (decision D1): the seller logs into the
  * marketplace in the iPhone app, which hands Listora the session cookies (never the password).
  * In one transaction, the session vault stores them on the account's automation connection, the
- * account's listings on that marketplace without a connection join it (so their next steps are
- * automated), the runner is asked to check the session (session-checks/), and a first sale
+ * account's listings on that marketplace that were never on a shop join it (so their next steps
+ * are automated), the runner is asked to check the session (session-checks/), and a first sale
  * check is due at once. Relinking after a check takes the same way. The API's
  * `linkMarketplaceSession` endpoint calls this (docs/features/marketplace-linking.md).
  */
@@ -69,6 +69,9 @@ export async function linkAutomationSession(
       .where('account_id', '=', input.accountId)
       .where('marketplace', '=', input.marketplace)
       .where('connection_id', 'is', null)
+      // A listing from an unlinked shop stays out: this may be another shop
+      // (docs/features/marketplace-linking.md#relinking-another-shop).
+      .where('shop_unlinked_at', 'is', null)
       .execute();
     const check = { accountId: input.accountId, connectionId, marketplace: input.marketplace };
     // Added first, so the runner checks the session before it looks for sales.
