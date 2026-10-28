@@ -116,6 +116,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account/description-style": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my description style
+         * @description How the item analysis writes the account's listing copy. An account that never saved its
+         *     own style gets Listora's default, with `depopIsDefault` true, so Settings can show it as the
+         *     starting point.
+         */
+        get: operations["getDescriptionStyle"];
+        /**
+         * Replace my description style
+         * @description Saves the seller's own style, which the item analyses requested from then on follow
+         *     (analyses already made keep their copy). A style left out goes back to Listora's default.
+         *     The server trims the text; one that is blank after trimming is `422 validation_failed`.
+         *     The style belongs to the account, so a member who is not its owner or an admin gets
+         *     `403 forbidden`.
+         */
+        put: operations["replaceDescriptionStyle"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/items": {
         parameters: {
             query?: never;
@@ -2663,6 +2693,22 @@ export interface components {
         ProfileReplace: {
             displayName?: string;
             businessName?: string;
+        };
+        /**
+         * @description How the item analysis writes the account's listing copy: instructions for the model, in the
+         *     seller's words. Listora's default is the structure that works on Depop (a title line with the
+         *     size and a color emoji, an enthusiastic paragraph, a bulleted spec list, a hedged condition
+         *     sentence, and 4-5 hashtags with the brand first).
+         */
+        DescriptionStyle: {
+            /** @description The style the Depop draft is written in, the seller's own or Listora's default. */
+            depop: string;
+            /** @description True when `depop` is Listora's default, because the seller never saved their own. */
+            depopIsDefault: boolean;
+        };
+        /** @description The seller's own style; one left out goes back to Listora's default. */
+        DescriptionStyleReplace: {
+            depop?: string;
         };
         /** @enum {string} */
         HealthCheckStatus: "ok" | "unavailable";
@@ -5967,6 +6013,8 @@ export type AccountDeletion = components['schemas']['AccountDeletion'];
 export type MarketplaceAccessRevocation = components['schemas']['MarketplaceAccessRevocation'];
 export type Profile = components['schemas']['Profile'];
 export type ProfileReplace = components['schemas']['ProfileReplace'];
+export type DescriptionStyle = components['schemas']['DescriptionStyle'];
+export type DescriptionStyleReplace = components['schemas']['DescriptionStyleReplace'];
 export type HealthCheckStatus = components['schemas']['HealthCheckStatus'];
 export type HealthLive = components['schemas']['HealthLive'];
 export type HealthReady = components['schemas']['HealthReady'];
@@ -6477,6 +6525,62 @@ export interface operations {
                 };
             };
             /** @description The person may not change the account's business name (`forbidden`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getDescriptionStyle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The description style. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DescriptionStyle"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceDescriptionStyle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DescriptionStyleReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved description style. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DescriptionStyle"];
+                };
+            };
+            /** @description The person may not change the account's description style (`forbidden`). */
             403: {
                 headers: {
                     [name: string]: unknown;

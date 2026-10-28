@@ -26,6 +26,11 @@ export interface AnalysisInput {
   readonly photoSetHash: string;
   /** In display order; the first is the cover. */
   readonly photos: readonly AnalysisPhoto[];
+  /**
+   * The seller's own Depop description style (`description_style.depop`); absent means
+   * Listora's default, which the system prompt holds.
+   */
+  readonly depopStyle?: string;
 }
 
 /**

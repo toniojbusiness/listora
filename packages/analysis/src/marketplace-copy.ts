@@ -57,6 +57,15 @@ export const MARKETPLACE_COPY_LIMITS = {
   },
 } as const satisfies Record<KnownMarketplace, MarketplaceCopyLimits>;
 
+/**
+ * Characters the analysis aims the Depop copy and its hashtags at: Depop's 1,000 less the 71 the
+ * automation scripts keep free for the SKU line they add before the hashtags (`SKU_LINE_RESERVE`
+ * in @listora/automation, docs/features/depop-automation.md, "Finding a listing again"). The
+ * output schema still allows Depop's own limit, so a draft a little over this is a listing the
+ * seller shortens, never a failed analysis.
+ */
+export const DEPOP_DRAFT_LENGTH = 929;
+
 /** Hashtags as the model writes them: lowercase letters and digits, without the `#`. */
 export const HASHTAG = /^[a-z0-9]{1,30}$/;
 

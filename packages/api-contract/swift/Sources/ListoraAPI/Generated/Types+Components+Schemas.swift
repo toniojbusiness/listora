@@ -686,6 +686,56 @@ extension Components {
                 case businessName
             }
         }
+        /// How the item analysis writes the account's listing copy: instructions for the model, in the
+        /// seller's words. Listora's default is the structure that works on Depop (a title line with the
+        /// size and a color emoji, an enthusiastic paragraph, a bulleted spec list, a hedged condition
+        /// sentence, and 4-5 hashtags with the brand first).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DescriptionStyle`.
+        public struct DescriptionStyle: Codable, Hashable, Sendable {
+            /// The style the Depop draft is written in, the seller's own or Listora's default.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DescriptionStyle/depop`.
+            public var depop: Swift.String
+            /// True when `depop` is Listora's default, because the seller never saved their own.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DescriptionStyle/depopIsDefault`.
+            public var depopIsDefault: Swift.Bool
+            /// Creates a new `DescriptionStyle`.
+            ///
+            /// - Parameters:
+            ///   - depop: The style the Depop draft is written in, the seller's own or Listora's default.
+            ///   - depopIsDefault: True when `depop` is Listora's default, because the seller never saved their own.
+            public init(
+                depop: Swift.String,
+                depopIsDefault: Swift.Bool
+            ) {
+                self.depop = depop
+                self.depopIsDefault = depopIsDefault
+            }
+            public enum CodingKeys: String, CodingKey {
+                case depop
+                case depopIsDefault
+            }
+        }
+        /// The seller's own style; one left out goes back to Listora's default.
+        ///
+        /// - Remark: Generated from `#/components/schemas/DescriptionStyleReplace`.
+        public struct DescriptionStyleReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DescriptionStyleReplace/depop`.
+            public var depop: Swift.String?
+            /// Creates a new `DescriptionStyleReplace`.
+            ///
+            /// - Parameters:
+            ///   - depop:
+            public init(depop: Swift.String? = nil) {
+                self.depop = depop
+            }
+            public enum CodingKeys: String, CodingKey {
+                case depop
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/HealthCheckStatus`.
         @frozen public enum HealthCheckStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case ok = "ok"

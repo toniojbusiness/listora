@@ -1,8 +1,8 @@
 import XCTest
 
 /// Settings against `StubAPIServer`: the profile (names saved on the server, the email read-only),
-/// only what a seller needs in the list, the build's details behind a long press on the version,
-/// and the help and legal screens.
+/// the description style (saved, and back to the default), only what a seller needs in the list,
+/// the build's details behind a long press on the version, and the help and legal screens.
 @MainActor
 final class SettingsUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -76,6 +76,46 @@ final class SettingsUITests: XCTestCase {
         XCTAssertEqual(sent, ["displayName": "Sam Rivera", "businessName": "Second Spin Vintage"])
     }
 
+    func testEditsTheDescriptionStyleAndGoesBackToTheDefault() throws {
+        let server = try XCTUnwrap(server)
+        openSettings()
+        reveal(app.buttons["settings.descriptionStyle"]).tap()
+        XCTAssertTrue(app.navigationBars["Description style"].waitForExistence(timeout: 5))
+        // Listora's default fills the editor, with nothing to save yet.
+        XCTAssertTrue(element("descriptionStyle.default").waitForExistence(timeout: 5))
+        let editor = app.textViews["descriptionStyle.depop"].exists
+            ? app.textViews["descriptionStyle.depop"]
+            : app.textFields["descriptionStyle.depop"]
+        XCTAssertEqual(editor.value as? String, StubAPIServer.defaultDepopStyle)
+        XCTAssertFalse(app.buttons["descriptionStyle.save"].isEnabled, "nothing changed yet")
+
+        editor.tap()
+        editor.typeText(" Keep it short.")
+        app.buttons["descriptionStyle.save"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        let put = try XCTUnwrap(server.requests.last {
+            $0.method == "PUT" && $0.path == "/v1/account/description-style"
+        })
+        let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(put.body.utf8)) as? [String: String])
+        // The edited text, trimmed (where the cursor lands decides where the typing goes).
+        let depop = try XCTUnwrap(sent["depop"])
+        XCTAssertTrue(depop.contains("Keep it short."), depop)
+        XCTAssertNotEqual(depop, StubAPIServer.defaultDepopStyle)
+
+        // The seller's own style shows next time, with the way back to the default.
+        reveal(app.buttons["settings.descriptionStyle"]).tap()
+        let useDefault = app.buttons["descriptionStyle.useDefault"]
+        XCTAssertTrue(useDefault.waitForExistence(timeout: 5))
+        XCTAssertFalse(element("descriptionStyle.default").exists)
+        useDefault.tap()
+        XCTAssertTrue(element("descriptionStyle.default").waitForExistence(timeout: 5))
+        let reset = try XCTUnwrap(server.requests.last {
+            $0.method == "PUT" && $0.path == "/v1/account/description-style"
+        })
+        let cleared = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(reset.body.utf8)) as? [String: String])
+        XCTAssertEqual(cleared, [:], "a style left out goes back to the default")
+    }
+
     func testShowsOnlyWhatASellerNeedsAndHidesTheBuildsDetails() {
         openSettings()
         for row in [
@@ -83,6 +123,7 @@ final class SettingsUITests: XCTestCase {
             "settings.marketplaces",
             "settings.notifications",
             "settings.saleEmails",
+            "settings.descriptionStyle",
             "settings.people",
             "settings.help",
             "settings.privacy",

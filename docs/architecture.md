@@ -101,7 +101,8 @@ packages/
                 (@listora/ai)
   analysis/     Item analysis: canonical vocabulary, marketplace copy limits, prompt assembly,
                 the strict output schema, provenance, escalation, the analysis job, the
-                marketplace pre-fill's AI pick (@listora/analysis)
+                marketplace pre-fill's AI pick, the seller's description style
+                (@listora/analysis)
   batches/      Batch listing: batches and their items' state, the job that starts each submitted
                 item's analysis once its photos are processed (@listora/batches)
   imports/      Importing existing listings: starting an import, settling each listing it read
@@ -216,6 +217,8 @@ src/
   auth/          AuthDriver interface; the dev driver (with its /dev/auth endpoints) and the
                  Cognito driver
   profile/       The profile Settings shows (getProfile, replaceProfile)
+  description-style/  The account's description style for AI drafts (getDescriptionStyle,
+                 replaceDescriptionStyle)
   account/       Account deletion (deleteAccount); the job that finishes it is in
                  @listora/accounts
   invites/       Invites: the owner's invites and the people who joined, and the public
@@ -487,6 +490,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                       |
 | [features/invites.md](features/invites.md)                         | Invite-based sign-up: invites, redemption, revoking, separate accounts         |
 | [features/profile.md](features/profile.md)                         | Profile and settings: the avatar, names, the photo, diagnostics, the API       |
+| [features/description-style.md](features/description-style.md)     | The seller's description style: Listora's default Depop style, their own       |
 | [features/infra.md](features/infra.md)                             | Hosting and deploys                                                            |
 | [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                        |
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                   |
