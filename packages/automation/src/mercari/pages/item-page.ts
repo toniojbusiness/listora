@@ -140,6 +140,8 @@ export async function readShownItem(page: PageDriver, site: MercariSite): Promis
       priceCents: record.data.price,
       currency: 'USD',
       revision: record.data.updated * 1000,
+      // A save on the edit page moves the last change, which is how a refresh shows.
+      refreshedAt: new Date(record.data.updated * 1000).toISOString(),
     },
     sku,
     soldAt: record.data.lastSoldAt ? new Date(record.data.lastSoldAt * 1000) : null,

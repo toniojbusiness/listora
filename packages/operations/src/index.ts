@@ -63,6 +63,8 @@ export {
   DEFAULT_RETRY_POLICY,
   delayAfterAttempt,
   maxAttempts,
+  maxAttemptsFor,
+  REFRESH_MAX_ATTEMPTS,
   queuePollIntervalMs,
   RETRY_DELAYS_MS,
   scaledRetryPolicy,

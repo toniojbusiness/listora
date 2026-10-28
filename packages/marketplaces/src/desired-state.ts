@@ -4,7 +4,14 @@ import type { CurrencyCode } from '@listora/shared';
 import { REMOTE_LISTING_STATUSES, type DesiredListingState } from './adapter.ts';
 
 const CURRENCIES: readonly CurrencyCode[] = ['USD'];
-const FIELDS = ['status', 'title', 'description', 'priceCents', 'currency'] as const;
+const FIELDS = [
+  'status',
+  'title',
+  'description',
+  'priceCents',
+  'currency',
+  'refreshedAfter',
+] as const;
 
 export class InvalidDesiredStateError extends Error {
   constructor(message: string) {
@@ -26,7 +33,7 @@ export function parseDesiredListingState(value: unknown): DesiredListingState {
   if (unknown.length > 0) throw new InvalidDesiredStateError(`unknown field ${unknown.join(', ')}`);
 
   const state: DesiredListingState = {};
-  const { status, title, description, priceCents, currency } = record;
+  const { status, title, description, priceCents, currency, refreshedAfter } = record;
   if (status !== undefined) {
     const known = REMOTE_LISTING_STATUSES.find((candidate) => candidate === status);
     if (known === undefined) throw new InvalidDesiredStateError('status is not a listing status');
@@ -54,6 +61,12 @@ export function parseDesiredListingState(value: unknown): DesiredListingState {
     const known = CURRENCIES.find((candidate) => candidate === currency);
     if (known === undefined) throw new InvalidDesiredStateError('currency is not supported');
     state.currency = known;
+  }
+  if (refreshedAfter !== undefined) {
+    if (typeof refreshedAfter !== 'string' || Number.isNaN(Date.parse(refreshedAfter))) {
+      throw new InvalidDesiredStateError('refreshedAfter must be an ISO 8601 time');
+    }
+    state.refreshedAfter = refreshedAfter;
   }
   return state;
 }

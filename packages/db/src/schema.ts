@@ -81,6 +81,7 @@ import type {
   UserTaskKind,
   UserTaskStatus,
   UserTaskUrgency,
+  RefreshCadence,
 } from './values.ts';
 
 /** Written and maintained only by the database (defaults and triggers). */
@@ -229,6 +230,10 @@ export interface InventoryItemTable {
   updated_at: UpdatedAt;
   /** The status before the item was archived; set exactly when `status` is `archived`. */
   pre_archive_status: Nullable<PreArchiveItemStatus>;
+  /** The item's own refresh cadence, over the account's; null: the account's. */
+  refresh_cadence: Nullable<RefreshCadence>;
+  /** Hours between refreshes; only with `custom`. */
+  refresh_custom_hours: Nullable<number>;
 }
 
 export interface PhotoTable {
@@ -1044,6 +1049,21 @@ export interface ListingImportEntryTable {
 // Today ---------------------------------------------------------------------------------------
 
 /** The morning summary notification's setting, one per account (docs/features/today.md). */
+/** How often an account's live listings are refreshed (docs/features/listing-refresh.md). */
+export interface ListingRefreshSettingTable {
+  account_id: string;
+  cadence: Generated<RefreshCadence>;
+  /** Hours between refreshes; only with `custom`. */
+  custom_hours: Nullable<number>;
+  /** The quiet window, in minutes after midnight in `time_zone`; both or neither. */
+  quiet_start: Nullable<number>;
+  quiet_end: Nullable<number>;
+  /** An IANA time zone name, which the quiet window needs. */
+  time_zone: Nullable<string>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 export interface TodaySummarySettingTable {
   account_id: string;
   enabled: Generated<boolean>;
@@ -1211,6 +1231,7 @@ export interface Database {
   listing_import: ListingImportTable;
   listing_import_entry: ListingImportEntryTable;
   today_summary_setting: TodaySummarySettingTable;
+  listing_refresh_setting: ListingRefreshSettingTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;
   pack_check_setting: PackCheckSettingTable;

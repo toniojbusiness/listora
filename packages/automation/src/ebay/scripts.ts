@@ -297,6 +297,7 @@ export function createEbayScripts(
           priceCents: row.priceCents,
           currency: row.priceCents === null ? null : 'USD',
           revision: null,
+          refreshedAt: null,
           details: {
             photoUrls: [],
             brand: null,

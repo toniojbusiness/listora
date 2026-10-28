@@ -56,6 +56,8 @@ const foundListing = z.object({
   priceCents: z.number().int().min(0).nullable(),
   currency: z.literal('USD').nullable(),
   revision: z.number().int().min(0).nullable(),
+  // An app whose scripts predate refreshes sends none.
+  refreshedAt: z.iso.datetime({ offset: true }).nullable().default(null),
 });
 
 const listingState = z.discriminatedUnion('found', [
@@ -133,6 +135,7 @@ function valueSchema(call: ScriptCall): z.ZodType {
     case 'end':
     case 'relist':
     case 'markSold':
+    case 'refresh':
       return writeResult;
     case 'read':
       return listingState;

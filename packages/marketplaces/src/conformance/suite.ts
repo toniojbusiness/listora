@@ -5,7 +5,7 @@
  *
  * The suite branches on capability flags, like the engine: kinds whose mode is `api` or
  * `automation` (read-back kinds) are checked against the marketplace (create, price and detail
- * updates, end, relist, mark sold, read-back with freshness, not-found classification, error
+ * updates, end, relist, mark sold, a refresh in place, read-back with freshness, not-found classification, error
  * mapping, rate limiting, health), and kinds whose mode is `assisted` are checked to become user
  * tasks that never touch the marketplace and can never be confirmed by a read. An automated kind
  * whose session the marketplace rejects falls back to the same user task, never to a failure
@@ -116,7 +116,7 @@ const TASK_KINDS = {
   price: 'edit_manually',
   end: 'delist_manually',
   mark_sold: 'delist_manually',
-} as const satisfies Record<WriteOperationKind, string>;
+} as const satisfies Record<Exclude<WriteOperationKind, 'refresh'>, string>;
 
 let sequence = 0;
 /** Every id an adapter that names its listings gave out in this run, as the engine keeps them. */
@@ -281,6 +281,8 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
             throw new Error(`${kind}: ${JSON.stringify(outcome)}`);
           }
           const { task } = outcome;
+          expect(kind, 'a refresh is never a task').not.toBe('refresh');
+          if (kind === 'refresh') continue;
           expect(task.kind, kind).toBe(TASK_KINDS[kind]);
           expect(task.deepLink, kind).toMatch(/^https:\/\//);
           expect(task.payload['action'], kind).toBe(kind);
@@ -485,6 +487,29 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         });
       }
 
+      if (isApi('refresh')) {
+        it('refreshes a live listing in place: the same listing, unchanged, read as fresh', async () => {
+          const { ref, sent } = await create();
+          const before = await read(ref);
+          const refreshedAfter = new Date(Date.now() - 1000).toISOString();
+          const outcome = await adapter.execute(
+            request('refresh', ref, { desired: { refreshedAfter } }),
+            ctx(),
+          );
+          expect(outcome).toMatchObject({ type: 'confirmed' });
+          const after = await read(ref);
+          expect(after.refreshedAt).not.toBeNull();
+          expect(Date.parse(after.refreshedAt ?? '')).toBeGreaterThanOrEqual(
+            Date.parse(refreshedAfter),
+          );
+          // Never a delete and repost: the listing keeps its id and everything it shows.
+          const { refreshedAt: _after, revision: _afterRevision, ...kept } = after;
+          const { refreshedAt: _before, revision: _beforeRevision, ...was } = before;
+          expect(kept).toEqual(was);
+          expect(market().countListings(sent)).toBe(1);
+        });
+      }
+
       it('refuses changes to a listing that is not on the marketplace yet', async () => {
         for (const kind of WRITE_KINDS) {
           if (kind === 'create' || !isApi(kind)) continue;
@@ -620,6 +645,8 @@ function desiredFor(kind: Exclude<WriteOperationKind, ContentKind>): DesiredList
       return { status: 'ended' };
     case 'mark_sold':
       return { status: 'sold' };
+    case 'refresh':
+      return { refreshedAfter: new Date(Date.now() - 1000).toISOString() };
     default:
       return assertNever(kind, 'operation kind');
   }

@@ -276,6 +276,27 @@ export function createMercariScripts(
       if (shown.state.status === 'active') return { type: 'applied', externalListingId: id };
       throw changed('edit page', 'shows no listing form for a listing that has not sold');
     },
+    // A refresh saves the listing's edit page unchanged, Mercari's own way to bring a listing
+    // back to the top of search (listing-refresh.md); nothing on it changes.
+    refresh: async (op, step) => {
+      const id = op.listing.externalListingId;
+      if (id === null) return notListed();
+      const shown = await onEditor(step, id);
+      if (shown === 'active') {
+        return step('save unchanged', { mutates: true }, async (page) =>
+          submitted(await submitListing(page, 'save')),
+        );
+      }
+      if (shown !== 'inactive') {
+        if (!shown.state.found) return notListed();
+        if (shown.state.status === 'sold') return sold();
+      }
+      return {
+        type: 'rejected',
+        code: 'not_live',
+        message: 'Only a listing for sale on Mercari can be refreshed.',
+      };
+    },
     read: async (ref, step): Promise<RemoteListingState> => {
       const id = ref.externalListingId;
       if (id !== null) {

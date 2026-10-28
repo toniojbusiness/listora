@@ -104,7 +104,7 @@ import {
   removePhoneWork,
   type PhoneQueueSettings,
 } from './phone-queue.ts';
-import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
+import { delayAfterAttempt, maxAttemptsFor, type RetryPolicy } from './policy.ts';
 import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
 import { REFUSED_CONTENT_ERROR } from './status-display.ts';
@@ -610,7 +610,7 @@ async function claimStep(
       log.debug({ status: op.status }, 'automated step handed to the phone');
       return 'handed_over_to_phone';
     };
-    const max = maxAttempts(deps.policy);
+    const max = maxAttemptsFor(deps.policy, op.kind);
 
     if (op.status === 'running') {
       // The step that set `running` never recorded its result: its worker stopped mid-step.
@@ -1657,7 +1657,7 @@ async function applyResolution(
   const { ctx } = step;
   const { resolution, detail } = result;
   const attempts = step.attempt;
-  const attemptsLeft = attempts < maxAttempts(deps.policy);
+  const attemptsLeft = attempts < maxAttemptsFor(deps.policy, op.kind);
 
   switch (resolution.type) {
     case 'succeeded': {
@@ -1905,6 +1905,7 @@ const FIELD_WORDS = {
   description: 'description',
   priceCents: 'price',
   currency: 'currency',
+  refreshedAfter: 'refresh',
 } as const satisfies Record<keyof DesiredListingState, string>;
 
 function describeFields(fields: readonly (keyof DesiredListingState)[]): string {

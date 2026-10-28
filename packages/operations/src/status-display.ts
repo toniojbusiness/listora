@@ -89,6 +89,7 @@ const IN_PROGRESS = {
   relist: 'Relisting',
   mark_sold: 'Marking sold',
   verify: 'Checking',
+  refresh: 'Refreshing',
 } as const satisfies Record<OperationKind, string>;
 
 /**
@@ -136,6 +137,7 @@ const FAILED = {
   relist: 'Relist',
   mark_sold: 'Mark sold',
   verify: 'Check',
+  refresh: 'Refresh',
 } as const satisfies Record<OperationKind, string>;
 
 /** "Action needed - delist on Poshmark". */
@@ -147,6 +149,7 @@ const USER_STEP = {
   relist: 'relist',
   mark_sold: 'delist',
   verify: 'check',
+  refresh: 'refresh',
 } as const satisfies Record<OperationKind, string>;
 
 /** "You delisted it on Poshmark." */
@@ -158,6 +161,7 @@ const USER_DONE = {
   relist: 'relisted it',
   mark_sold: 'delisted it',
   verify: 'checked it',
+  refresh: 'refreshed it',
 } as const satisfies Record<OperationKind, string>;
 
 /** "Delisted (confirmed by eBay)": what a succeeded operation made true, in its history. */
@@ -169,6 +173,7 @@ const RESULT = {
   relist: 'Relisted',
   mark_sold: 'Marked sold',
   verify: 'Checked',
+  refresh: 'Refreshed',
 } as const satisfies Record<OperationKind, string>;
 
 type OperationInput = NonNullable<ListingStatusInput['operation']>;

@@ -96,6 +96,7 @@ export function createFakeSiteScripts(
       priceCents: Number.isSafeInteger(price) ? price : null,
       currency: 'USD',
       revision: Number.isSafeInteger(revision) ? revision : null,
+      refreshedAt: null,
     };
   }
 

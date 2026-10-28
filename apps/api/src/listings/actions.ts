@@ -612,4 +612,5 @@ const ACTION_PREFIX = {
   relist: 'listing.relist',
   verify: 'listing.verify',
   mark_sold: 'listing.mark_sold',
+  refresh: 'listing.refresh',
 } as const satisfies Record<OperationKind, string>;

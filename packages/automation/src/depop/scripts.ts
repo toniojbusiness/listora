@@ -244,6 +244,17 @@ export function createDepopScripts(
       if (shown.state.status === 'active') return { type: 'applied', externalListingId: slug };
       return post(op, step);
     },
+    // A refresh saves the listing's edit page unchanged, the way sellers refresh a Depop listing
+    // (it shows as recently updated); never a delete and repost, which loses its likes
+    // (listing-refresh.md).
+    refresh: async (op, step) => {
+      const opened = await editor(op, step);
+      if (!('slug' in opened)) return opened;
+      await step('check the form', { mutates: false }, (page) => expectSubmit(page, 'save'));
+      return step('save unchanged', { mutates: true, timeScale: 2 }, async (page) =>
+        submitted(await submitListing(page, 'save')),
+      );
+    },
     read: async (ref, step): Promise<RemoteListingState> => {
       const slug = ref.externalListingId;
       if (slug !== null) {

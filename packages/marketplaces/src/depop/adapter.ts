@@ -39,6 +39,7 @@ import type {
   RemoteListingState,
   ValidationIssue,
 } from '../adapter.ts';
+import { unsupportedMessage } from '../capabilities.ts';
 import type { ItemSnapshot, ListingVariant } from '../content.ts';
 import { depopErrors, retryAfterMs, type DepopApi, type DepopCallResult } from './client.ts';
 import { DepopReauthRequiredError } from './oauth.ts';
@@ -79,6 +80,8 @@ export class DepopAdapter implements MarketplaceAdapter<DepopListingPayload> {
     updateDetails: 'api',
     delist: 'api',
     relist: 'api',
+    // Depop's API refresh is not known yet; its browser automation refreshes (depop-automation.md).
+    refresh: 'none',
     // "You're expected to call this as soon as you make a sale on a different platform."
     markSold: 'api',
     verifyRead: 'api',
@@ -190,6 +193,12 @@ export class DepopAdapter implements MarketplaceAdapter<DepopListingPayload> {
           path: depopProductPath(product, 'mark-as-sold/'),
           group: 'other',
         });
+      case 'refresh':
+        return {
+          type: 'rejected',
+          code: 'not_supported',
+          message: unsupportedMessage(op.kind, 'depop'),
+        };
       default:
         return assertNever(op.kind, 'operation kind');
     }

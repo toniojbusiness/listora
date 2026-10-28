@@ -21,6 +21,7 @@ export const CAPABILITY_FOR_KIND = {
   end: 'delist',
   relist: 'relist',
   mark_sold: 'markSold',
+  refresh: 'refresh',
 } as const satisfies Record<WriteOperationKind, keyof MarketplaceCapabilities>;
 
 /**
@@ -78,6 +79,7 @@ const UNSUPPORTED_PHRASE = {
   end: 'delist',
   relist: 'relist',
   mark_sold: 'mark listings sold',
+  refresh: 'refresh listings',
 } as const satisfies Record<WriteOperationKind, string>;
 
 /** The user-readable reason an `unsupported` operation fails. */
@@ -100,6 +102,9 @@ export function checkCapabilities(capabilities: MarketplaceCapabilities): string
     if ((mode === 'api' || mode === 'automation') && verifyRead !== mode) {
       problems.push(`${flag} is ${mode}, but verifyRead is not: no read-back could confirm it`);
     }
+  }
+  if (capabilities.refresh === 'assisted' || capabilities.refresh === 'bulk_file') {
+    problems.push('refresh runs on a schedule, so only api or automation can do it');
   }
   if (verifyRead === 'user_confirm' && capabilities.readFreshness !== 'none') {
     problems.push('readFreshness needs read-backs: there are no reads to mark');

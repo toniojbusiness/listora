@@ -71,7 +71,10 @@ export function confirmByReadBack(
   freshness: Freshness,
 ): ReadBackResult {
   // An empty desired state would match any listing, so it confirms nothing.
-  if (!COMPARED_FIELDS.some((field) => desired[field] !== undefined)) {
+  if (
+    !COMPARED_FIELDS.some((field) => desired[field] !== undefined) &&
+    desired.refreshedAfter === undefined
+  ) {
     return { matches: false, reason: 'nothing_desired', fields: [] };
   }
   if (!remote.found) {
@@ -92,9 +95,12 @@ export function confirmByReadBack(
   if (freshness.kind === 'revision' && !isCurrent(remote.revision, freshness.newestSeen)) {
     return { matches: false, reason: 'stale', fields: [] };
   }
-  const fields = COMPARED_FIELDS.filter(
+  const fields: (keyof DesiredListingState)[] = COMPARED_FIELDS.filter(
     (field) => desired[field] !== undefined && desired[field] !== remote[field],
   );
+  if (desired.refreshedAfter !== undefined && !refreshedSince(remote, desired.refreshedAfter)) {
+    fields.push('refreshedAfter');
+  }
   if (fields.length > 0) return { matches: false, reason: 'mismatch', fields };
   if (freshness.kind === 'repeat' && !freshness.previousReadMatched) {
     return { matches: false, reason: 'unrepeated', fields: [] };
@@ -105,11 +111,24 @@ export function confirmByReadBack(
   };
 }
 
+/**
+ * Whether the listing reads as refreshed at or after `after`: a refresh is confirmed only by the
+ * marketplace's own time of it, never assumed from the script having run.
+ */
+function refreshedSince(
+  remote: Extract<RemoteListingState, { found: true }>,
+  after: string,
+): boolean {
+  if (remote.refreshedAt === null) return false;
+  return Date.parse(remote.refreshedAt) >= Date.parse(after);
+}
+
 /** Whether the desired state asks only that the listing be off the marketplace. */
 function onlyRemoves(desired: DesiredListingState): boolean {
   return (
     REMOVED_STATUSES.includes(desired.status) &&
-    COMPARED_FIELDS.every((field) => field === 'status' || desired[field] === undefined)
+    COMPARED_FIELDS.every((field) => field === 'status' || desired[field] === undefined) &&
+    desired.refreshedAfter === undefined
   );
 }
 
@@ -159,5 +178,6 @@ export function remoteSnapshot(remote: Extract<RemoteListingState, { found: true
     priceCents: remote.priceCents,
     currency: remote.currency,
     revision: remote.revision,
+    refreshedAt: remote.refreshedAt,
   };
 }

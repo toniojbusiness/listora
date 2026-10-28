@@ -90,5 +90,7 @@ export async function readShownItem(page: PageDriver, site: EbaySite): Promise<R
     priceCents,
     currency: 'USD',
     revision: Math.max(0, ...times),
+    // eBay has no refresh that keeps a listing's watchers, so Listora never reads one.
+    refreshedAt: null,
   };
 }
