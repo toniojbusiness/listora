@@ -5,10 +5,9 @@
     summary: Get what needs the seller today
     description: |
       The Today screen: one card per thing that needs the seller (items to ship, delists that
-      are not done, connections to reconnect, drafts to review, and old listings that could use
-      a price drop or a relist), most urgent first, and the money summary. Computed from the
-      account's own data on every request, with no AI and no marketplace call, so the app asks
-      for it each time it opens. A card is gone once its work is done.
+      are not done, connections to reconnect, and drafts to review), most urgent first, and the
+      money summary. Computed from the account's own data on every request, with no AI and no
+      marketplace call, so the app asks for it each time it opens. A card is gone once its work is done.
     responses:
       '200':
         description: The summary as of `generatedAt`.

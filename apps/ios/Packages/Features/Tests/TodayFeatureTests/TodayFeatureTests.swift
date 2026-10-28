@@ -81,7 +81,7 @@ struct TodayCardContentTests {
     }
 
     @Test
-    func `reconnect opens the marketplaces, drafts open the drafts, and a stale listing shows its age`() throws {
+    func `reconnect opens the marketplaces, and drafts open the drafts`() throws {
         let reconnect = try TodayCardContent(
             card(kind: "reconnect", action: ["label": "Reconnect", "destination": "marketplaces", "connectionId": "c"]),
             now: now,
@@ -97,15 +97,6 @@ struct TodayCardContentTests {
         )
         #expect(drafts.action?.destination == .drafts)
         #expect(drafts.facts == [.init(text: "Oldest from Oct 20", systemImage: "calendar")])
-        let stale = try TodayCardContent(
-            card(kind: "stale_listing", extra: ["staleListing": [
-                "listedAt": "2026-09-10T08:00:00Z", "daysListed": 45, "price": usd(4500), "floor": usd(3500),
-                "suggestion": "price_drop", "suggestedPrice": usd(4000), "marketplaces": ["ebay", "poshmark"],
-            ]]),
-            now: now,
-        )
-        #expect(stale.facts.map(\.text) == ["Listed 45 days", "eBay, Poshmark"])
-        #expect(stale.urgency == nil)
     }
 
     @Test

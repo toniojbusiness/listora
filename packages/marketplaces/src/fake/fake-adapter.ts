@@ -55,6 +55,7 @@ const CAPABILITIES: MarketplaceCapabilities = {
   updateDetails: 'api',
   delist: 'api',
   relist: 'api',
+  refresh: 'api',
   markSold: 'api',
   verifyRead: 'api',
   readFreshness: 'revision',
@@ -90,6 +91,7 @@ interface FakeListingBody {
   priceCents: number;
   currency: CurrencyCode;
   revision: number;
+  refreshedAt: string;
 }
 
 export class FakeMarketplaceAdapter implements MarketplaceAdapter<FakeListingPayload> {
@@ -191,6 +193,8 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter<FakeListingPay
         return this.#write(ctx, { method: 'POST', path: path('/relist') });
       case 'mark_sold':
         return this.#write(ctx, { method: 'POST', path: path('/mark-sold') });
+      case 'refresh':
+        return this.#write(ctx, { method: 'POST', path: path('/refresh') });
       default:
         return assertNever(op.kind, 'operation kind');
     }
@@ -225,6 +229,7 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter<FakeListingPay
       priceCents: listing.priceCents,
       currency: listing.currency,
       revision: this.#revision(listing.revision),
+      refreshedAt: listing.refreshedAt,
     };
   }
 

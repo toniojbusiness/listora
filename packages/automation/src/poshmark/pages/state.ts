@@ -131,7 +131,21 @@ export function remoteListing(
     priceCents: cents(record.price_amount.val, page),
     currency: 'USD',
     revision: revision(record, page),
+    refreshedAt: refreshedAt(record, page),
   };
+}
+
+/**
+ * When the listing last showed as fresh: its `updated_at`, which a share to followers moves, as
+ * the fake Poshmark mirrors (docs/features/listing-refresh.md has what is not yet proven on the
+ * real site). Poshmark keeps it to the second.
+ */
+export function refreshedAt(record: ListingRecord, page: string): string {
+  const time = Date.parse(record.updated_at);
+  if (!Number.isFinite(time)) {
+    throw new PageChangedError(`Poshmark's ${page} shows a change time Listora can't read`);
+  }
+  return new Date(time).toISOString();
 }
 
 /**

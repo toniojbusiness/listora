@@ -45,6 +45,7 @@ import {
   openListingPage,
   readListing,
   sellersListing,
+  shareToFollowers,
   type ListingPage,
 } from './pages/listing-page.ts';
 import { readSale, readSales, type PoshmarkSale } from './pages/sales-page.ts';
@@ -467,6 +468,25 @@ export function createPoshmarkScripts(
     },
     end: (op, step) => changeAvailability(op, step, 'not_for_sale'),
     relist: (op, step) => changeAvailability(op, step, 'for_sale'),
+    // A refresh is a share to the seller's followers, Poshmark's own way to bring a listing back
+    // to the top of their feeds; it changes nothing on the listing (listing-refresh.md).
+    refresh: async (op, step) => {
+      const id = op.listing.externalListingId;
+      if (id === null) return notListed();
+      const shown = await step('open the listing', { mutates: false }, (page) =>
+        openListingPage(page, site, id),
+      );
+      if (shown.type === 'hidden') return hiddenListing();
+      if (shown.type !== 'listing' || shown.record.inventory.status !== 'available') {
+        return {
+          type: 'rejected',
+          code: 'not_live',
+          message: 'Only a listing for sale on Poshmark can be shared.',
+        };
+      }
+      await step('share to followers', { mutates: true }, (page) => shareToFollowers(page));
+      return { type: 'applied', externalListingId: id };
+    },
     read: async (ref, step) => {
       if (ref.externalListingId !== null) {
         const id = ref.externalListingId;

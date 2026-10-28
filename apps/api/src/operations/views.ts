@@ -10,7 +10,7 @@ import {
   DEFAULT_RETRY_POLICY,
   describeOperation,
   isRetryableFailure,
-  maxAttempts,
+  maxAttemptsFor,
   SETTLED_STATUSES,
   type PhoneWait,
 } from '@listora/operations';
@@ -18,7 +18,6 @@ import {
 import type { OperationRow } from '../listings/repository.ts';
 
 /** Attempts the worker gives an operation (its policy keeps the count whatever its delays). */
-const MAX_ATTEMPTS = maxAttempts(DEFAULT_RETRY_POLICY);
 
 /** The listing columns an operation's view needs. */
 export interface OperationListing {
@@ -84,7 +83,7 @@ export function operationView(
       },
     }),
     attempt: op.attempts,
-    maxAttempts: MAX_ATTEMPTS,
+    maxAttempts: maxAttemptsFor(DEFAULT_RETRY_POLICY, op.kind),
     ...(op.next_attempt_at === null ? {} : { nextAttemptAt: op.next_attempt_at.toISOString() }),
     origin: { type: op.origin },
     ...(error === undefined ? {} : { error }),

@@ -61,6 +61,29 @@ export type ListingPage =
   /** No listing, and no word of what became of it. */
   | { type: 'none' };
 
+/**
+ * The listing page's Share, and its sheet's To My Followers: Poshmark's own way to bring a
+ * listing back to the top of the seller's followers' feeds, without changing it.
+ */
+export const SHARE = {
+  button: '[data-et-name="share"]',
+  toFollowers: '[data-et-name="share_poshmark"]',
+} as const;
+
+/**
+ * Shares the open listing page's listing to the seller's followers: Share, then To My Followers,
+ * and the sheet closes. A page without Share is one Listora no longer understands.
+ */
+export async function shareToFollowers(page: PageDriver): Promise<void> {
+  if (!(await page.exists(SHARE.button))) {
+    throw new PageChangedError(`Poshmark's ${PAGE} has no Share for this listing`);
+  }
+  await page.click(SHARE.button);
+  await page.waitFor(SHARE.toFollowers, 'visible');
+  await page.click(SHARE.toFollowers);
+  await page.waitFor(SHARE.toFollowers, 'hidden');
+}
+
 /** Opens the listing's page and reads what it shows of the listing. */
 export async function openListingPage(
   page: PageDriver,

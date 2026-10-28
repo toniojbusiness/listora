@@ -38,6 +38,7 @@ describe('API feature discovery', () => {
       'imports',
       'invites',
       'items',
+      'listing-refresh',
       'listings',
       'marketplace-sessions',
       'offers',

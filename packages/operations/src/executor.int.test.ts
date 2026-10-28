@@ -31,6 +31,7 @@ const CAPABILITIES: MarketplaceCapabilities = {
   updateDetails: 'api',
   delist: 'api',
   relist: 'api',
+  refresh: 'api',
   markSold: 'api',
   verifyRead: 'api',
   readFreshness: 'revision',
@@ -55,6 +56,7 @@ const ACTIVE: RemoteListingState = {
   priceCents: 4500,
   currency: 'USD',
   revision: 1,
+  refreshedAt: null,
 };
 
 function stubAdapter(behavior: {

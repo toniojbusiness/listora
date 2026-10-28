@@ -21,6 +21,8 @@ const listedListingSchema = z.object({
   priceCents: z.number().int().min(0).nullable(),
   currency: z.literal('USD').nullable(),
   revision: z.number().int().min(0).nullable(),
+  // Entries stored before refreshes were read have none.
+  refreshedAt: z.string().nullable().default(null),
   details: z.object({
     photoUrls: z.array(z.string()),
     brand: z.string().nullable(),

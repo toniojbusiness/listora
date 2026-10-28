@@ -65,6 +65,8 @@ tags:
     description: How much of the plan's quotas the account has used this period.
   - name: today
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
+  - name: listing-refresh
+    description: Listing refresh, which keeps live listings that have not sold fresh on each marketplace (docs/features/listing-refresh.md).
   - name: pack-check
     description: Pack check, an optional mode that checks each package's label before it ships.
   - name: voice
@@ -239,6 +241,10 @@ paths:
     $ref: './paths/today.yaml#/~1v1~1today'
   /v1/today/settings:
     $ref: './paths/today.yaml#/~1v1~1today~1settings'
+  /v1/listing-refresh/settings:
+    $ref: './paths/listing-refresh.yaml#/~1v1~1listing-refresh~1settings'
+  /v1/items/{itemId}/refresh:
+    $ref: './paths/listing-refresh.yaml#/~1v1~1items~1{itemId}~1refresh'
   /v1/pack-check/settings:
     $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1settings'
   /v1/pack-check/orders:
@@ -984,12 +990,6 @@ components:
       $ref: './components/schemas/today.yaml#/TodayDelist'
     TodayConnection:
       $ref: './components/schemas/today.yaml#/TodayConnection'
-    TodayStaleSuggestion:
-      $ref: './components/schemas/today.yaml#/TodayStaleSuggestion'
-    KnownTodayStaleSuggestion:
-      $ref: './components/schemas/today.yaml#/KnownTodayStaleSuggestion'
-    TodayStaleListing:
-      $ref: './components/schemas/today.yaml#/TodayStaleListing'
     TodayDrafts:
       $ref: './components/schemas/today.yaml#/TodayDrafts'
     TodayCard:
@@ -1004,6 +1004,27 @@ components:
       $ref: './components/schemas/today.yaml#/TodaySummarySettings'
     TodaySummarySettingsReplace:
       $ref: './components/schemas/today.yaml#/TodaySummarySettingsReplace'
+    # ---------------------------------------------------------------- listing refresh
+    RefreshCadence:
+      $ref: './components/schemas/listing-refresh.yaml#/RefreshCadence'
+    KnownRefreshCadence:
+      $ref: './components/schemas/listing-refresh.yaml#/KnownRefreshCadence'
+    QuietWindow:
+      $ref: './components/schemas/listing-refresh.yaml#/QuietWindow'
+    ListingRefreshSettings:
+      $ref: './components/schemas/listing-refresh.yaml#/ListingRefreshSettings'
+    ListingRefreshSettingsReplace:
+      $ref: './components/schemas/listing-refresh.yaml#/ListingRefreshSettingsReplace'
+    ItemRefresh:
+      $ref: './components/schemas/listing-refresh.yaml#/ItemRefresh'
+    ItemRefreshReplace:
+      $ref: './components/schemas/listing-refresh.yaml#/ItemRefreshReplace'
+    ListingRefreshState:
+      $ref: './components/schemas/listing-refresh.yaml#/ListingRefreshState'
+    KnownListingRefreshState:
+      $ref: './components/schemas/listing-refresh.yaml#/KnownListingRefreshState'
+    ListingRefresh:
+      $ref: './components/schemas/listing-refresh.yaml#/ListingRefresh'
     # ---------------------------------------------------------------- pack-check
     PackCheckSettings:
       $ref: './components/schemas/pack-check.yaml#/PackCheckSettings'

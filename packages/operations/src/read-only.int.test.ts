@@ -23,6 +23,7 @@ const DESIRED = {
   relist: { status: 'active', title: 'Linen shirt', priceCents: 2500, currency: 'USD' },
   mark_sold: { status: 'sold' },
   verify: { status: 'active' },
+  refresh: { refreshedAfter: '2026-10-28T00:00:00.000Z' },
 } as const satisfies Record<OperationKind, object>;
 
 describe('read-only connections in the operation engine (real Postgres, fake marketplace)', () => {

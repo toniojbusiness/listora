@@ -4615,6 +4615,10 @@ extension Components {
             public var endedAt: Components.Schemas.Timestamp?
             /// - Remark: Generated from `#/components/schemas/Listing/lastVerifiedAt`.
             public var lastVerifiedAt: Components.Schemas.Timestamp?
+            /// For a live listing, its next and last refresh (listing refresh).
+            ///
+            /// - Remark: Generated from `#/components/schemas/Listing/refresh`.
+            public var refresh: Components.Schemas.ListingRefresh?
             /// - Remark: Generated from `#/components/schemas/Listing/createdAt`.
             public var createdAt: Components.Schemas.Timestamp
             /// - Remark: Generated from `#/components/schemas/Listing/updatedAt`.
@@ -4638,6 +4642,7 @@ extension Components {
             ///   - listedAt:
             ///   - endedAt:
             ///   - lastVerifiedAt:
+            ///   - refresh: For a live listing, its next and last refresh (listing refresh).
             ///   - createdAt:
             ///   - updatedAt:
             public init(
@@ -4657,6 +4662,7 @@ extension Components {
                 listedAt: Components.Schemas.Timestamp? = nil,
                 endedAt: Components.Schemas.Timestamp? = nil,
                 lastVerifiedAt: Components.Schemas.Timestamp? = nil,
+                refresh: Components.Schemas.ListingRefresh? = nil,
                 createdAt: Components.Schemas.Timestamp,
                 updatedAt: Components.Schemas.Timestamp
             ) {
@@ -4676,6 +4682,7 @@ extension Components {
                 self.listedAt = listedAt
                 self.endedAt = endedAt
                 self.lastVerifiedAt = lastVerifiedAt
+                self.refresh = refresh
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
             }
@@ -4696,6 +4703,7 @@ extension Components {
                 case listedAt
                 case endedAt
                 case lastVerifiedAt
+                case refresh
                 case createdAt
                 case updatedAt
             }
@@ -4911,6 +4919,10 @@ extension Components {
                 ])
             }
         }
+        /// `refresh`: Listora refreshed a live listing on its schedule (listing refresh), through the
+        /// marketplace's own mechanism; never a delete and repost.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownOperationKind`.
         @frozen public enum KnownOperationKind: String, Codable, Hashable, Sendable, CaseIterable {
             case create = "create"
@@ -4920,6 +4932,7 @@ extension Components {
             case relist = "relist"
             case markSold = "mark_sold"
             case verify = "verify"
+            case refresh = "refresh"
         }
         /// A `KnownOperationStatus`, or a status added after this client was built. Clients show
         /// the operation's `statusDisplay` for an unknown status and never treat it as success.
@@ -5040,11 +5053,15 @@ extension Components {
                 ])
             }
         }
+        /// `auto_refresh`: queued by the listing refresh schedule, never by a tap.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownOperationOriginType`.
         @frozen public enum KnownOperationOriginType: String, Codable, Hashable, Sendable, CaseIterable {
             case user = "user"
             case autoDelist = "auto_delist"
             case repriceRule = "reprice_rule"
+            case autoRefresh = "auto_refresh"
         }
         /// - Remark: Generated from `#/components/schemas/OperationOrigin`.
         public struct OperationOrigin: Codable, Hashable, Sendable {
@@ -10853,8 +10870,7 @@ extension Components {
         /// `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
         /// `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
         /// seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
-        /// `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-        /// the item's floor) or a relist suggested. Every card is something the seller can do: Listora's
+        /// Every card is something the seller can do: Listora's
         /// own background problems (sale checks that fail or stall) are for the owner's alerts and the
         /// support views, never a card.
         ///
@@ -10865,7 +10881,6 @@ extension Components {
             case ship = "ship"
             case reconnect = "reconnect"
             case reviewDrafts = "review_drafts"
-            case staleListing = "stale_listing"
         }
         /// A `KnownTodayUrgency`, or a level added after this client was built, which clients show
         /// like `normal`.
@@ -10995,7 +11010,7 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/TodayAction`.
         public struct TodayAction: Codable, Hashable, Sendable {
-            /// The button's title, for example `Open sale` or `Lower to $40`.
+            /// The button's title, for example `Open sale` or `Reconnect`.
             ///
             /// - Remark: Generated from `#/components/schemas/TodayAction/label`.
             public var label: Swift.String
@@ -11010,7 +11025,7 @@ extension Components {
             /// Creates a new `TodayAction`.
             ///
             /// - Parameters:
-            ///   - label: The button's title, for example `Open sale` or `Lower to $40`.
+            ///   - label: The button's title, for example `Open sale` or `Reconnect`.
             ///   - destination:
             ///   - itemId:
             ///   - saleId:
@@ -11227,127 +11242,6 @@ extension Components {
                 case status
             }
         }
-        /// A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
-        /// clients show through the card's `detail` and action.
-        ///
-        ///
-        /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion`.
-        public struct TodayStaleSuggestion: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion/value1`.
-            public var value1: Components.Schemas.KnownTodayStaleSuggestion?
-            /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion/value2`.
-            public var value2: Swift.String?
-            /// Creates a new `TodayStaleSuggestion`.
-            ///
-            /// - Parameters:
-            ///   - value1:
-            ///   - value2:
-            public init(
-                value1: Components.Schemas.KnownTodayStaleSuggestion? = nil,
-                value2: Swift.String? = nil
-            ) {
-                self.value1 = value1
-                self.value2 = value2
-            }
-            public init(from decoder: any Swift.Decoder) throws {
-                var errors: [any Swift.Error] = []
-                do {
-                    self.value1 = try decoder.decodeFromSingleValueContainer()
-                } catch {
-                    errors.append(error)
-                }
-                do {
-                    self.value2 = try decoder.decodeFromSingleValueContainer()
-                } catch {
-                    errors.append(error)
-                }
-                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                    [
-                        self.value1,
-                        self.value2
-                    ],
-                    type: Self.self,
-                    codingPath: decoder.codingPath,
-                    errors: errors
-                )
-            }
-            public func encode(to encoder: any Swift.Encoder) throws {
-                try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                    self.value1,
-                    self.value2
-                ])
-            }
-        }
-        /// `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
-        /// `relist`: no price drop is possible (the price is at its floor, or no floor is known).
-        ///
-        ///
-        /// - Remark: Generated from `#/components/schemas/KnownTodayStaleSuggestion`.
-        @frozen public enum KnownTodayStaleSuggestion: String, Codable, Hashable, Sendable, CaseIterable {
-            case priceDrop = "price_drop"
-            case relist = "relist"
-        }
-        /// A `stale_listing` card's listing facts and suggestion.
-        ///
-        /// - Remark: Generated from `#/components/schemas/TodayStaleListing`.
-        public struct TodayStaleListing: Codable, Hashable, Sendable {
-            /// When its oldest live listing went live.
-            ///
-            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/listedAt`.
-            public var listedAt: Components.Schemas.Timestamp
-            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/daysListed`.
-            public var daysListed: Swift.Int32
-            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/price`.
-            public var price: Components.Schemas.Money
-            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/floor`.
-            public var floor: Components.Schemas.Money?
-            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/suggestion`.
-            public var suggestion: Components.Schemas.TodayStaleSuggestion
-            /// Present with `price_drop`.
-            ///
-            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/suggestedPrice`.
-            public var suggestedPrice: Components.Schemas.Money?
-            /// Where it is live.
-            ///
-            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/marketplaces`.
-            public var marketplaces: [Components.Schemas.Marketplace]
-            /// Creates a new `TodayStaleListing`.
-            ///
-            /// - Parameters:
-            ///   - listedAt: When its oldest live listing went live.
-            ///   - daysListed:
-            ///   - price:
-            ///   - floor:
-            ///   - suggestion:
-            ///   - suggestedPrice: Present with `price_drop`.
-            ///   - marketplaces: Where it is live.
-            public init(
-                listedAt: Components.Schemas.Timestamp,
-                daysListed: Swift.Int32,
-                price: Components.Schemas.Money,
-                floor: Components.Schemas.Money? = nil,
-                suggestion: Components.Schemas.TodayStaleSuggestion,
-                suggestedPrice: Components.Schemas.Money? = nil,
-                marketplaces: [Components.Schemas.Marketplace]
-            ) {
-                self.listedAt = listedAt
-                self.daysListed = daysListed
-                self.price = price
-                self.floor = floor
-                self.suggestion = suggestion
-                self.suggestedPrice = suggestedPrice
-                self.marketplaces = marketplaces
-            }
-            public enum CodingKeys: String, CodingKey {
-                case listedAt
-                case daysListed
-                case price
-                case floor
-                case suggestion
-                case suggestedPrice
-                case marketplaces
-            }
-        }
         /// A `review_drafts` card's drafts.
         ///
         /// - Remark: Generated from `#/components/schemas/TodayDrafts`.
@@ -11375,7 +11269,7 @@ extension Components {
         }
         /// One thing that needs the seller. A card exists only while its work is not done, so it is
         /// gone from the next summary once the work is finished. The kind's own property (`shipment`,
-        /// `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+        /// `delist`, `connection`, or `drafts`) carries its facts.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/TodayCard`.
@@ -11402,8 +11296,6 @@ extension Components {
             public var delist: Components.Schemas.TodayDelist?
             /// - Remark: Generated from `#/components/schemas/TodayCard/connection`.
             public var connection: Components.Schemas.TodayConnection?
-            /// - Remark: Generated from `#/components/schemas/TodayCard/staleListing`.
-            public var staleListing: Components.Schemas.TodayStaleListing?
             /// - Remark: Generated from `#/components/schemas/TodayCard/drafts`.
             public var drafts: Components.Schemas.TodayDrafts?
             /// Creates a new `TodayCard`.
@@ -11419,7 +11311,6 @@ extension Components {
             ///   - shipment:
             ///   - delist:
             ///   - connection:
-            ///   - staleListing:
             ///   - drafts:
             public init(
                 id: Swift.String,
@@ -11432,7 +11323,6 @@ extension Components {
                 shipment: Components.Schemas.TodayShipment? = nil,
                 delist: Components.Schemas.TodayDelist? = nil,
                 connection: Components.Schemas.TodayConnection? = nil,
-                staleListing: Components.Schemas.TodayStaleListing? = nil,
                 drafts: Components.Schemas.TodayDrafts? = nil
             ) {
                 self.id = id
@@ -11445,7 +11335,6 @@ extension Components {
                 self.shipment = shipment
                 self.delist = delist
                 self.connection = connection
-                self.staleListing = staleListing
                 self.drafts = drafts
             }
             public enum CodingKeys: String, CodingKey {
@@ -11459,7 +11348,6 @@ extension Components {
                 case shipment
                 case delist
                 case connection
-                case staleListing
                 case drafts
             }
         }
@@ -11651,6 +11539,346 @@ extension Components {
                 case enabled
                 case time
                 case timeZone
+            }
+        }
+        /// A `KnownRefreshCadence`, or a cadence added after this client was built, which clients show
+        /// by name.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/RefreshCadence`.
+        public struct RefreshCadence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/RefreshCadence/value1`.
+            public var value1: Components.Schemas.KnownRefreshCadence?
+            /// - Remark: Generated from `#/components/schemas/RefreshCadence/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `RefreshCadence`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownRefreshCadence? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// How often Listora refreshes a live listing that has not sold: `off`, `every_72_hours` (the
+        /// default), `daily`, `every_few_days` (every 5 days), `weekly`, or `custom` (every
+        /// `customHours`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownRefreshCadence`.
+        @frozen public enum KnownRefreshCadence: String, Codable, Hashable, Sendable, CaseIterable {
+            case off = "off"
+            case every72Hours = "every_72_hours"
+            case daily = "daily"
+            case everyFewDays = "every_few_days"
+            case weekly = "weekly"
+            case custom = "custom"
+        }
+        /// No refresh starts from `start` up to `end`, wall-clock in the setting's time zone. It runs
+        /// past midnight when `end` comes before `start` (`22:00` to `07:00`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/QuietWindow`.
+        public struct QuietWindow: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/QuietWindow/start`.
+            public var start: Swift.String
+            /// - Remark: Generated from `#/components/schemas/QuietWindow/end`.
+            public var end: Swift.String
+            /// Creates a new `QuietWindow`.
+            ///
+            /// - Parameters:
+            ///   - start:
+            ///   - end:
+            public init(
+                start: Swift.String,
+                end: Swift.String
+            ) {
+                self.start = start
+                self.end = end
+            }
+            public enum CodingKeys: String, CodingKey {
+                case start
+                case end
+            }
+        }
+        /// How Listora refreshes the account's live listings that have not sold: through each
+        /// marketplace's own way (Poshmark's share to followers, saving the listing unchanged on Mercari
+        /// and Depop), never a delete and repost, within the marketplace's pace. eBay listings are not
+        /// refreshed (eBay has no refresh that keeps watchers). Defaults (`every_72_hours`, no quiet
+        /// window) until saved.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings`.
+        public struct ListingRefreshSettings: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings/cadence`.
+            public var cadence: Components.Schemas.RefreshCadence
+            /// Present with `custom`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings/customHours`.
+            public var customHours: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings/quietWindow`.
+            public var quietWindow: Components.Schemas.QuietWindow?
+            /// An IANA time zone name, for example `America/New_York`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings/timeZone`.
+            public var timeZone: Swift.String?
+            /// Creates a new `ListingRefreshSettings`.
+            ///
+            /// - Parameters:
+            ///   - cadence:
+            ///   - customHours: Present with `custom`.
+            ///   - quietWindow:
+            ///   - timeZone: An IANA time zone name, for example `America/New_York`.
+            public init(
+                cadence: Components.Schemas.RefreshCadence,
+                customHours: Swift.Int32? = nil,
+                quietWindow: Components.Schemas.QuietWindow? = nil,
+                timeZone: Swift.String? = nil
+            ) {
+                self.cadence = cadence
+                self.customHours = customHours
+                self.quietWindow = quietWindow
+                self.timeZone = timeZone
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cadence
+                case customHours
+                case quietWindow
+                case timeZone
+            }
+        }
+        /// The setting, with the device's time zone. `customHours` is required with `custom`, and only
+        /// allowed with it. A time zone the server does not know is `422 validation_failed`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace`.
+        public struct ListingRefreshSettingsReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace/cadence`.
+            public var cadence: Components.Schemas.KnownRefreshCadence
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace/customHours`.
+            public var customHours: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace/quietWindow`.
+            public var quietWindow: Components.Schemas.QuietWindow?
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace/timeZone`.
+            public var timeZone: Swift.String
+            /// Creates a new `ListingRefreshSettingsReplace`.
+            ///
+            /// - Parameters:
+            ///   - cadence:
+            ///   - customHours:
+            ///   - quietWindow:
+            ///   - timeZone:
+            public init(
+                cadence: Components.Schemas.KnownRefreshCadence,
+                customHours: Swift.Int32? = nil,
+                quietWindow: Components.Schemas.QuietWindow? = nil,
+                timeZone: Swift.String
+            ) {
+                self.cadence = cadence
+                self.customHours = customHours
+                self.quietWindow = quietWindow
+                self.timeZone = timeZone
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cadence
+                case customHours
+                case quietWindow
+                case timeZone
+            }
+        }
+        /// An item's refresh: its own cadence when it has one (`cadence` absent: the account's), and the
+        /// account's.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemRefresh`.
+        public struct ItemRefresh: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemRefresh/cadence`.
+            public var cadence: Components.Schemas.RefreshCadence?
+            /// Present with the item's own `custom` cadence.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemRefresh/customHours`.
+            public var customHours: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/ItemRefresh/accountCadence`.
+            public var accountCadence: Components.Schemas.RefreshCadence
+            /// - Remark: Generated from `#/components/schemas/ItemRefresh/accountCustomHours`.
+            public var accountCustomHours: Swift.Int32?
+            /// Creates a new `ItemRefresh`.
+            ///
+            /// - Parameters:
+            ///   - cadence:
+            ///   - customHours: Present with the item's own `custom` cadence.
+            ///   - accountCadence:
+            ///   - accountCustomHours:
+            public init(
+                cadence: Components.Schemas.RefreshCadence? = nil,
+                customHours: Swift.Int32? = nil,
+                accountCadence: Components.Schemas.RefreshCadence,
+                accountCustomHours: Swift.Int32? = nil
+            ) {
+                self.cadence = cadence
+                self.customHours = customHours
+                self.accountCadence = accountCadence
+                self.accountCustomHours = accountCustomHours
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cadence
+                case customHours
+                case accountCadence
+                case accountCustomHours
+            }
+        }
+        /// The item's own cadence; without `cadence` the item follows the account's again.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemRefreshReplace`.
+        public struct ItemRefreshReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemRefreshReplace/cadence`.
+            public var cadence: Components.Schemas.KnownRefreshCadence?
+            /// - Remark: Generated from `#/components/schemas/ItemRefreshReplace/customHours`.
+            public var customHours: Swift.Int32?
+            /// Creates a new `ItemRefreshReplace`.
+            ///
+            /// - Parameters:
+            ///   - cadence:
+            ///   - customHours:
+            public init(
+                cadence: Components.Schemas.KnownRefreshCadence? = nil,
+                customHours: Swift.Int32? = nil
+            ) {
+                self.cadence = cadence
+                self.customHours = customHours
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cadence
+                case customHours
+            }
+        }
+        /// A `KnownListingRefreshState`, or a state added after this client was built, which clients
+        /// show without a time.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ListingRefreshState`.
+        public struct ListingRefreshState: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshState/value1`.
+            public var value1: Components.Schemas.KnownListingRefreshState?
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshState/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ListingRefreshState`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownListingRefreshState? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `scheduled`: Listora refreshes it at `nextAt`. `off`: refreshing is off for it (its item's
+        /// cadence or the account's). `unavailable`: Listora can't refresh it there (eBay, or no linked
+        /// marketplace session that works).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownListingRefreshState`.
+        @frozen public enum KnownListingRefreshState: String, Codable, Hashable, Sendable, CaseIterable {
+            case scheduled = "scheduled"
+            case off = "off"
+            case unavailable = "unavailable"
+        }
+        /// A live listing's refresh, its next and its last.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ListingRefresh`.
+        public struct ListingRefresh: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingRefresh/state`.
+            public var state: Components.Schemas.ListingRefreshState
+            /// With `scheduled`; now or soon for a listing already due.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingRefresh/nextAt`.
+            public var nextAt: Components.Schemas.Timestamp?
+            /// When its last refresh was confirmed by the marketplace.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingRefresh/lastAt`.
+            public var lastAt: Components.Schemas.Timestamp?
+            /// Creates a new `ListingRefresh`.
+            ///
+            /// - Parameters:
+            ///   - state:
+            ///   - nextAt: With `scheduled`; now or soon for a listing already due.
+            ///   - lastAt: When its last refresh was confirmed by the marketplace.
+            public init(
+                state: Components.Schemas.ListingRefreshState,
+                nextAt: Components.Schemas.Timestamp? = nil,
+                lastAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.state = state
+                self.nextAt = nextAt
+                self.lastAt = lastAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case state
+                case nextAt
+                case lastAt
             }
         }
         /// Whether Pack check is on. It is off until the seller turns it on in Settings.

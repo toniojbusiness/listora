@@ -146,6 +146,8 @@ async function readProductPage(
       priceCents,
       currency: 'USD',
       revision: null,
+      // The page's own data has no change time, so it can't show a refresh.
+      refreshedAt: null,
     },
     sku,
   };

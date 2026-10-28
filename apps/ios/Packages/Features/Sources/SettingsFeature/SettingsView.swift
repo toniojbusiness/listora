@@ -71,7 +71,7 @@ public struct SettingsView: View {
     let descriptionStyle: DescriptionStyleModel?
     let screens: SettingsScreens
     /// The marketplaces' health, on the Linked marketplaces row.
-    private let marketplacesSummary: SettingsSummary?
+    let marketplacesSummary: SettingsSummary?
     /// The sale email forwarding's status, on the Sale emails row.
     private let saleEmailsSummary: SettingsSummary?
     private let legalDocument: @MainActor (LegalDocument.Kind) -> LegalDocument?
@@ -193,52 +193,6 @@ public struct SettingsView: View {
     }
 
     @ViewBuilder
-    private var marketplacesSection: some View {
-        if screens.linkAccounts != nil || screens.marketplaces != nil || screens.imports != nil {
-            Section {
-                if screens.linkAccounts != nil {
-                    NavigationLink(value: SettingsDestination.linkAccounts) {
-                        ListRow(
-                            "Linked marketplaces",
-                            subtitle: marketplacesSummary?.text ?? "Poshmark, Mercari, Depop, and eBay",
-                            systemImage: "person.badge.key",
-                        ) {
-                            if marketplacesSummary?.needsAttention == true {
-                                StatusBadge("Needs attention", tone: .actionNeeded)
-                                    .accessibilityIdentifier("settings.marketplaces.attention")
-                            }
-                        }
-                    }
-                    .accessibilityIdentifier("settings.linkAccounts")
-                }
-                if screens.marketplaces != nil {
-                    NavigationLink(value: SettingsDestination.marketplaces) {
-                        ListRow(
-                            "How Listora connects",
-                            subtitle: "Connect eBay, and check each marketplace's connection.",
-                            systemImage: "link",
-                        )
-                    }
-                    .accessibilityIdentifier("settings.marketplaces")
-                }
-                if screens.imports != nil {
-                    NavigationLink(value: SettingsDestination.imports) {
-                        ListRow(
-                            "Import your listings",
-                            subtitle: "Bring what you already have for sale on Depop, Poshmark, and Mercari.",
-                            systemImage: "square.and.arrow.down",
-                        )
-                    }
-                    .accessibilityIdentifier("settings.imports")
-                }
-            } header: {
-                SectionHeader("Marketplaces")
-            }
-            .listRowBackground(Palette.surface.color)
-        }
-    }
-
-    @ViewBuilder
     private var sellingSection: some View {
         if showsSellingSection {
             Section {
@@ -352,7 +306,7 @@ extension SettingsView {
             if let profile {
                 EditProfileView(model: profile)
             }
-        case .linkAccounts, .marketplaces, .imports, .notifications, .saleEmails, .packCheck:
+        case .linkAccounts, .marketplaces, .imports, .listingRefresh, .notifications, .saleEmails, .packCheck:
             screens.screen(for: destination)
         case .people, .descriptionStyle:
             accountScreen(for: destination)

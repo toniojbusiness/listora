@@ -110,24 +110,6 @@ function cardView(
           status: card.status,
         },
       };
-    case 'stale_listing': {
-      const money = (amountCents: number) => ({ amountCents, currency: card.currency });
-      return {
-        ...base,
-        item: item(card.item),
-        staleListing: {
-          listedAt: card.listedAt.toISOString(),
-          daysListed: card.daysListed,
-          price: money(card.priceCents),
-          ...(card.floorCents === null ? {} : { floor: money(card.floorCents) }),
-          suggestion: card.suggestion.kind,
-          ...(card.suggestion.kind === 'price_drop'
-            ? { suggestedPrice: money(card.suggestion.priceCents) }
-            : {}),
-          marketplaces: card.marketplaces,
-        },
-      };
-    }
     case 'review_drafts':
       return {
         ...base,

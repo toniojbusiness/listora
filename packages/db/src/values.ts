@@ -110,8 +110,20 @@ export const OPERATION_KINDS = [
   'relist',
   'mark_sold',
   'verify',
+  'refresh',
 ] as const;
 export type OperationKind = (typeof OPERATION_KINDS)[number];
+
+/** `listing_refresh_setting.cadence` and `inventory_item.refresh_cadence` (listing-refresh.md). */
+export const REFRESH_CADENCES = [
+  'off',
+  'every_72_hours',
+  'daily',
+  'every_few_days',
+  'weekly',
+  'custom',
+] as const;
+export type RefreshCadence = (typeof REFRESH_CADENCES)[number];
 
 export const OPERATION_STATUSES = [
   'queued',
@@ -129,7 +141,7 @@ export type OperationStatus = (typeof OPERATION_STATUSES)[number];
 export const SUCCESS_EVIDENCE = ['read_back', 'user_confirmation'] as const;
 export type SuccessEvidence = (typeof SUCCESS_EVIDENCE)[number];
 
-export const OPERATION_ORIGINS = ['user', 'auto_delist', 'reprice_rule'] as const;
+export const OPERATION_ORIGINS = ['user', 'auto_delist', 'reprice_rule', 'auto_refresh'] as const;
 export type OperationOrigin = (typeof OPERATION_ORIGINS)[number];
 
 export const USER_TASK_KINDS = [

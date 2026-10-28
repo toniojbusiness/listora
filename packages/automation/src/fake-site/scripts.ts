@@ -96,6 +96,7 @@ export function createFakeSiteScripts(
       priceCents: Number.isSafeInteger(price) ? price : null,
       currency: 'USD',
       revision: Number.isSafeInteger(revision) ? revision : null,
+      refreshedAt: await attribute('data-refreshed-at'),
     };
   }
 
@@ -166,6 +167,25 @@ export function createFakeSiteScripts(
       if (shown.status === 'active') return { type: 'applied', externalListingId: id };
       return step('relist', { mutates: true }, async (page) => {
         await page.click('#relist');
+        return submitted(page);
+      });
+    },
+    refresh: async (op, step) => {
+      const id = op.listing.externalListingId;
+      if (id === null) return notListed();
+      const shown = await step('open the listing', { mutates: false }, (page) =>
+        readById(page, id),
+      );
+      if (!shown.found) return notListed();
+      if (shown.status !== 'active') {
+        return {
+          type: 'rejected',
+          code: 'not_live',
+          message: 'Only a live listing can be refreshed.',
+        };
+      }
+      return step('refresh', { mutates: true }, async (page) => {
+        await page.click('#refresh');
         return submitted(page);
       });
     },

@@ -178,6 +178,11 @@ from the app
   it failed), its outcome moves the connection's sale-check health, and a check that fails or
   stops running shows on Today and is announced; a read-only **history read** proves a check
   reads the seller's real sold items without acting on any ([activity.md](activity.md)).
+- **Refreshes**: Poshmark's, Mercari's, and Depop's scripts have a `refresh` (a share to
+  followers, an edit page saved unchanged) that the listing refresh schedule queues as ordinary
+  operations, within half of each session's run limits ([listing-refresh.md](listing-refresh.md)).
+  Unlike every other kind, a refresh that meets a check or a page Listora no longer understands
+  fails instead of becoming an assisted task.
 - **Imports** (`imports/`): an import of the seller's listings reads them a page per browser
   session, read-only, where the connection runs (the runner's `automation_listing_import` task,
   or `listing_import` phone work), and keeps what each page showed for `@listora/imports` to

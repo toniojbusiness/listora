@@ -8,7 +8,10 @@ OperationKind:
       maxLength: 64
 KnownOperationKind:
   type: string
-  enum: [create, revise, price, end, relist, mark_sold, verify]
+  description: |
+    `refresh`: Listora refreshed a live listing on its schedule (listing refresh), through the
+    marketplace's own mechanism; never a delete and repost.
+  enum: [create, revise, price, end, relist, mark_sold, verify, refresh]
 OperationStatus:
   description: |
     A `KnownOperationStatus`, or a status added after this client was built. Clients show
@@ -35,7 +38,9 @@ OperationOriginType:
       maxLength: 64
 KnownOperationOriginType:
   type: string
-  enum: [user, auto_delist, reprice_rule]
+  description: |
+    `auto_refresh`: queued by the listing refresh schedule, never by a tap.
+  enum: [user, auto_delist, reprice_rule, auto_refresh]
 OperationOrigin:
   type: object
   required: [type]

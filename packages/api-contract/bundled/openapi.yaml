@@ -65,6 +65,8 @@ tags:
     description: How much of the plan's quotas the account has used this period.
   - name: today
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
+  - name: listing-refresh
+    description: Listing refresh, which keeps live listings that have not sold fresh on each marketplace (docs/features/listing-refresh.md).
   - name: pack-check
     description: Pack check, an optional mode that checks each package's label before it ships.
   - name: voice
@@ -2692,10 +2694,9 @@ paths:
       summary: Get what needs the seller today
       description: |
         The Today screen: one card per thing that needs the seller (items to ship, delists that
-        are not done, connections to reconnect, drafts to review, and old listings that could use
-        a price drop or a relist), most urgent first, and the money summary. Computed from the
-        account's own data on every request, with no AI and no marketplace call, so the app asks
-        for it each time it opens. A card is gone once its work is done.
+        are not done, connections to reconnect, and drafts to review), most urgent first, and the
+        money summary. Computed from the account's own data on every request, with no AI and no
+        marketplace call, so the app asks for it each time it opens. A card is gone once its work is done.
       responses:
         '200':
           description: The summary as of `generatedAt`.
@@ -2742,6 +2743,95 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TodaySummarySettings'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/listing-refresh/settings:
+    get:
+      tags:
+        - listing-refresh
+      operationId: getListingRefreshSettings
+      summary: Get the listing refresh setting
+      description: How often the account's live listings are refreshed, and the quiet window.
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingRefreshSettings'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - listing-refresh
+      operationId: replaceListingRefreshSettings
+      summary: Replace the listing refresh setting
+      description: |
+        Sets how often Listora refreshes live listings that have not sold, and the quiet window,
+        in the device's time zone. It changes no listing by itself: the schedule refreshes each
+        listing when it is next due.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingRefreshSettingsReplace'
+      responses:
+        '200':
+          description: The saved setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingRefreshSettings'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/items/{itemId}/refresh:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    get:
+      tags:
+        - listing-refresh
+      operationId: getItemRefresh
+      summary: Get an item's refresh cadence
+      description: The item's own refresh cadence, if it has one, and the account's.
+      responses:
+        '200':
+          description: The item's refresh.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemRefresh'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - listing-refresh
+      operationId: replaceItemRefresh
+      summary: Replace an item's refresh cadence
+      description: |
+        Gives the item its own refresh cadence over the account's (for example `off` for one item),
+        or, without `cadence`, makes it follow the account's again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemRefreshReplace'
+      responses:
+        '200':
+          description: The item's refresh.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemRefresh'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         default:
@@ -6032,6 +6122,9 @@ components:
           $ref: '#/components/schemas/Timestamp'
         lastVerifiedAt:
           $ref: '#/components/schemas/Timestamp'
+        refresh:
+          $ref: '#/components/schemas/ListingRefresh'
+          description: For a live listing, its next and last refresh (listing refresh).
         createdAt:
           $ref: '#/components/schemas/Timestamp'
         updatedAt:
@@ -6129,6 +6222,9 @@ components:
           maxLength: 64
     KnownOperationKind:
       type: string
+      description: |
+        `refresh`: Listora refreshed a live listing on its schedule (listing refresh), through the
+        marketplace's own mechanism; never a delete and repost.
       enum:
         - create
         - revise
@@ -6137,6 +6233,7 @@ components:
         - relist
         - mark_sold
         - verify
+        - refresh
     OperationStatus:
       description: |
         A `KnownOperationStatus`, or a status added after this client was built. Clients show
@@ -6171,10 +6268,13 @@ components:
           maxLength: 64
     KnownOperationOriginType:
       type: string
+      description: |
+        `auto_refresh`: queued by the listing refresh schedule, never by a tap.
       enum:
         - user
         - auto_delist
         - reprice_rule
+        - auto_refresh
     OperationOrigin:
       type: object
       required:
@@ -8721,8 +8821,7 @@ components:
         `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
         `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
         seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
-        `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-        the item's floor) or a relist suggested. Every card is something the seller can do: Listora's
+        Every card is something the seller can do: Listora's
         own background problems (sale checks that fail or stall) are for the owner's alerts and the
         support views, never a card.
       enum:
@@ -8730,7 +8829,6 @@ components:
         - ship
         - reconnect
         - review_drafts
-        - stale_listing
     TodayUrgency:
       description: |
         A `KnownTodayUrgency`, or a level added after this client was built, which clients show
@@ -8777,7 +8875,7 @@ components:
         label:
           type: string
           maxLength: 60
-          description: The button's title, for example `Open sale` or `Lower to $40`.
+          description: The button's title, for example `Open sale` or `Reconnect`.
         destination:
           $ref: '#/components/schemas/TodayDestination'
         itemId:
@@ -8875,53 +8973,6 @@ components:
           maxLength: 200
         status:
           $ref: '#/components/schemas/ConnectionStatus'
-    TodayStaleSuggestion:
-      description: |
-        A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
-        clients show through the card's `detail` and action.
-      anyOf:
-        - $ref: '#/components/schemas/KnownTodayStaleSuggestion'
-        - type: string
-          maxLength: 64
-    KnownTodayStaleSuggestion:
-      type: string
-      description: |
-        `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
-        `relist`: no price drop is possible (the price is at its floor, or no floor is known).
-      enum:
-        - price_drop
-        - relist
-    TodayStaleListing:
-      type: object
-      description: A `stale_listing` card's listing facts and suggestion.
-      required:
-        - listedAt
-        - daysListed
-        - price
-        - suggestion
-        - marketplaces
-      properties:
-        listedAt:
-          $ref: '#/components/schemas/Timestamp'
-          description: When its oldest live listing went live.
-        daysListed:
-          type: integer
-          format: int32
-          minimum: 0
-        price:
-          $ref: '#/components/schemas/Money'
-        floor:
-          $ref: '#/components/schemas/Money'
-        suggestion:
-          $ref: '#/components/schemas/TodayStaleSuggestion'
-        suggestedPrice:
-          $ref: '#/components/schemas/Money'
-          description: Present with `price_drop`.
-        marketplaces:
-          type: array
-          description: Where it is live.
-          items:
-            $ref: '#/components/schemas/Marketplace'
     TodayDrafts:
       type: object
       description: A `review_drafts` card's drafts.
@@ -8940,7 +8991,7 @@ components:
       description: |
         One thing that needs the seller. A card exists only while its work is not done, so it is
         gone from the next summary once the work is finished. The kind's own property (`shipment`,
-        `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+        `delist`, `connection`, or `drafts`) carries its facts.
       required:
         - id
         - kind
@@ -8972,8 +9023,6 @@ components:
           $ref: '#/components/schemas/TodayDelist'
         connection:
           $ref: '#/components/schemas/TodayConnection'
-        staleListing:
-          $ref: '#/components/schemas/TodayStaleListing'
         drafts:
           $ref: '#/components/schemas/TodayDrafts'
     TodayMoneyPeriod:
@@ -9078,6 +9127,155 @@ components:
           minLength: 1
           maxLength: 64
           description: An IANA time zone name, for example `America/New_York` (the device's own).
+    RefreshCadence:
+      description: |
+        A `KnownRefreshCadence`, or a cadence added after this client was built, which clients show
+        by name.
+      anyOf:
+        - $ref: '#/components/schemas/KnownRefreshCadence'
+        - type: string
+          maxLength: 64
+    KnownRefreshCadence:
+      type: string
+      description: |
+        How often Listora refreshes a live listing that has not sold: `off`, `every_72_hours` (the
+        default), `daily`, `every_few_days` (every 5 days), `weekly`, or `custom` (every
+        `customHours`).
+      enum:
+        - 'off'
+        - every_72_hours
+        - daily
+        - every_few_days
+        - weekly
+        - custom
+    QuietWindow:
+      type: object
+      description: |
+        No refresh starts from `start` up to `end`, wall-clock in the setting's time zone. It runs
+        past midnight when `end` comes before `start` (`22:00` to `07:00`).
+      required:
+        - start
+        - end
+      properties:
+        start:
+          type: string
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+        end:
+          type: string
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+    ListingRefreshSettings:
+      type: object
+      description: |
+        How Listora refreshes the account's live listings that have not sold: through each
+        marketplace's own way (Poshmark's share to followers, saving the listing unchanged on Mercari
+        and Depop), never a delete and repost, within the marketplace's pace. eBay listings are not
+        refreshed (eBay has no refresh that keeps watchers). Defaults (`every_72_hours`, no quiet
+        window) until saved.
+      required:
+        - cadence
+      properties:
+        cadence:
+          $ref: '#/components/schemas/RefreshCadence'
+        customHours:
+          type: integer
+          format: int32
+          minimum: 12
+          maximum: 720
+          description: Present with `custom`.
+        quietWindow:
+          $ref: '#/components/schemas/QuietWindow'
+        timeZone:
+          type: string
+          maxLength: 64
+          description: An IANA time zone name, for example `America/New_York`.
+    ListingRefreshSettingsReplace:
+      type: object
+      description: |
+        The setting, with the device's time zone. `customHours` is required with `custom`, and only
+        allowed with it. A time zone the server does not know is `422 validation_failed`.
+      required:
+        - cadence
+        - timeZone
+      properties:
+        cadence:
+          $ref: '#/components/schemas/KnownRefreshCadence'
+        customHours:
+          type: integer
+          format: int32
+          minimum: 12
+          maximum: 720
+        quietWindow:
+          $ref: '#/components/schemas/QuietWindow'
+        timeZone:
+          type: string
+          minLength: 1
+          maxLength: 64
+    ItemRefresh:
+      type: object
+      description: |
+        An item's refresh: its own cadence when it has one (`cadence` absent: the account's), and the
+        account's.
+      required:
+        - accountCadence
+      properties:
+        cadence:
+          $ref: '#/components/schemas/RefreshCadence'
+        customHours:
+          type: integer
+          format: int32
+          minimum: 12
+          maximum: 720
+          description: Present with the item's own `custom` cadence.
+        accountCadence:
+          $ref: '#/components/schemas/RefreshCadence'
+        accountCustomHours:
+          type: integer
+          format: int32
+          minimum: 12
+          maximum: 720
+    ItemRefreshReplace:
+      type: object
+      description: The item's own cadence; without `cadence` the item follows the account's again.
+      properties:
+        cadence:
+          $ref: '#/components/schemas/KnownRefreshCadence'
+        customHours:
+          type: integer
+          format: int32
+          minimum: 12
+          maximum: 720
+    ListingRefreshState:
+      description: |
+        A `KnownListingRefreshState`, or a state added after this client was built, which clients
+        show without a time.
+      anyOf:
+        - $ref: '#/components/schemas/KnownListingRefreshState'
+        - type: string
+          maxLength: 64
+    KnownListingRefreshState:
+      type: string
+      description: |
+        `scheduled`: Listora refreshes it at `nextAt`. `off`: refreshing is off for it (its item's
+        cadence or the account's). `unavailable`: Listora can't refresh it there (eBay, or no linked
+        marketplace session that works).
+      enum:
+        - scheduled
+        - 'off'
+        - unavailable
+    ListingRefresh:
+      type: object
+      description: A live listing's refresh, its next and its last.
+      required:
+        - state
+      properties:
+        state:
+          $ref: '#/components/schemas/ListingRefreshState'
+        nextAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: With `scheduled`; now or soon for a listing already due.
+        lastAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When its last refresh was confirmed by the marketplace.
     PackCheckSettings:
       type: object
       description: Whether Pack check is on. It is off until the seller turns it on in Settings.
