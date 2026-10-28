@@ -28,6 +28,7 @@ function row(overrides: Partial<ListingRow> = {}): ListingRow {
     connection_id: null,
     connection_mode: null,
     connection_status: null,
+    read_only: false,
     item_status: 'listed',
     status: 'active',
     external_listing_id: null,
@@ -220,6 +221,21 @@ describe('listing views', () => {
     expect(view(row({ marketplace: 'mercari', status: 'ended' })).availableActions).toEqual([
       { action: 'relist', mode: 'assisted' },
     ]);
+  });
+
+  it('offers only the check on a read-only connection, never a change', () => {
+    const api = { connection_id: 'c', connection_mode: 'api' as const, read_only: true };
+    expect(view(row({ ...api, status: 'active' })).availableActions).toEqual([
+      { action: 'verify', mode: 'api' },
+    ]);
+    expect(view(row({ ...api, status: 'ended' })).availableActions).toEqual([
+      { action: 'verify', mode: 'api' },
+    ]);
+    expect(view(row({ ...api, status: 'draft' })).availableActions).toEqual([]);
+    // An assisted listing can't be checked, so it offers nothing at all.
+    expect(
+      view(row({ marketplace: 'poshmark', status: 'active', read_only: true })).availableActions,
+    ).toEqual([]);
   });
 
   it('never offers Retry for content Listora refused before sending it', () => {

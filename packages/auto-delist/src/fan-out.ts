@@ -19,7 +19,9 @@
  *    elsewhere through its API (Depop), otherwise `end`. The engine runs each in the listing's
  *    mode: API listings are ended and read back; assisted ones become an urgent user task. A
  *    listing that cannot be live (ended or sold, or a draft never sent, with nothing in flight)
- *    needs no delist.
+ *    needs no delist, and neither does one on a read-only connection
+ *    (docs/features/read-only.md): Listora never changes that account, so it gets no task either.
+ *    A sale on a read-only account delists nothing anywhere: its items are never listed elsewhere.
  * 6. **Push.** One time-sensitive notification says what Listora delists and what the seller
  *    has to. A run with nothing to delist is completed at once and the item is `sold`.
  *
@@ -37,7 +39,13 @@ import {
   type SaleDetectionSource,
 } from '@listora/db';
 import { operationMode, type AdapterLookup, type OperationMode } from '@listora/marketplaces';
-import { cancelMootOperations, enqueueOperation, UNFINISHED_STATUSES } from '@listora/operations';
+import {
+  cancelMootOperations,
+  enqueueOperation,
+  isReadOnlyMarketplace,
+  listingIsReadOnly,
+  UNFINISHED_STATUSES,
+} from '@listora/operations';
 import { enqueuePush } from '@listora/push';
 
 import { findEarlierSale, openDoubleSale } from './double-sale.ts';
@@ -149,13 +157,18 @@ async function startItem(
     .returning('id')
     .executeTakeFirstOrThrow();
 
-  const targets = await prepareTargets(trx, {
+  const prepared = await prepareTargets(trx, {
     accountId,
     itemId: item.id,
     saleId: sale.saleId,
     soldOn: sale.marketplace,
     adapters: deps.adapters,
   });
+  // A sale on a read-only account (docs/features/read-only.md) changes nothing on the account's
+  // other marketplaces either: an item from that account is never listed on them.
+  const targets = (await isReadOnlyMarketplace(trx, { accountId, marketplace: sale.marketplace }))
+    ? []
+    : prepared;
   for (const target of targets) {
     await enqueueOperation(trx, {
       accountId,
@@ -275,6 +288,7 @@ async function prepareTargets(
       'connection.mode as connection_mode',
       'connection.status as connection_status',
       'connection.runs_on as connection_runs_on',
+      listingIsReadOnly('listing').as('read_only'),
     ])
     .where('listing.account_id', '=', input.accountId)
     .where('listing.item_id', '=', input.itemId)
@@ -291,6 +305,9 @@ async function prepareTargets(
       detail: { saleId: input.saleId },
     });
     if (listing.marketplace === input.soldOn) continue;
+    // Listora never changes an account the seller made read only (docs/features/read-only.md),
+    // so it gets no delist, no task, and no word in the notification; the seller delists there.
+    if (listing.read_only) continue;
 
     const unfinished = await trx
       .selectFrom('marketplace_operation')

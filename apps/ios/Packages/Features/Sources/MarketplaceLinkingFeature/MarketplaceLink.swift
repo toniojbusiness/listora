@@ -40,6 +40,9 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
     public let displayName: String?
     /// Where its automated steps run, as the server says it (`Runs on your iPhone`).
     public let runsOn: RunsOn?
+    /// Listora only reads this account and never changes anything on it, as the server says
+    /// (docs/features/read-only.md).
+    public let readOnly: Bool
 
     public var id: String {
         marketplace
@@ -58,6 +61,11 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
         state != .notLinked
     }
 
+    /// Whether the account can be made read only, or writable again: only a linked one.
+    public var canSetReadOnly: Bool {
+        state != .notLinked
+    }
+
     /// The same marketplace once the server confirmed it is unlinked.
     func unlinked() -> MarketplaceLink {
         MarketplaceLink(
@@ -69,6 +77,24 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
             loginURL: loginURL,
             cookieDomains: cookieDomains,
             emailsSignInLinks: emailsSignInLinks,
+        )
+    }
+
+    /// The same marketplace once the server confirmed its read-only setting changed.
+    func with(readOnly: Bool) -> MarketplaceLink {
+        MarketplaceLink(
+            marketplace: marketplace,
+            name: name,
+            state: state,
+            statusLabel: statusLabel,
+            statusTone: statusTone,
+            statusDetail: statusDetail,
+            loginURL: loginURL,
+            cookieDomains: cookieDomains,
+            emailsSignInLinks: emailsSignInLinks,
+            displayName: displayName,
+            runsOn: runsOn,
+            readOnly: readOnly,
         )
     }
 
@@ -100,6 +126,7 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
             emailsSignInLinks: emailsSignInLinks,
             displayName: displayName,
             runsOn: runsOn,
+            readOnly: readOnly,
         )
     }
 
@@ -115,8 +142,10 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
         emailsSignInLinks: Bool = false,
         displayName: String? = nil,
         runsOn: RunsOn? = nil,
+        readOnly: Bool = false,
     ) {
         self.runsOn = runsOn
+        self.readOnly = readOnly
         self.marketplace = marketplace
         self.name = name
         self.state = state

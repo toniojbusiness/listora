@@ -112,6 +112,7 @@ describe('marketplace sessions (real Postgres)', () => {
       {
         marketplace: 'poshmark',
         status: 'not_linked',
+        readOnly: false,
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
         login: {
           url: 'https://poshmark.com/login',
@@ -122,6 +123,7 @@ describe('marketplace sessions (real Postgres)', () => {
       {
         marketplace: 'mercari',
         status: 'not_linked',
+        readOnly: false,
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
         login: {
           url: 'https://www.mercari.com/login/',
@@ -132,6 +134,7 @@ describe('marketplace sessions (real Postgres)', () => {
       {
         marketplace: 'depop',
         status: 'not_linked',
+        readOnly: false,
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
         login: {
           url: 'https://www.depop.com/login/',
@@ -142,6 +145,7 @@ describe('marketplace sessions (real Postgres)', () => {
       {
         marketplace: 'ebay',
         status: 'not_linked',
+        readOnly: false,
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
         login: {
           url: 'https://signin.ebay.com/signin/',

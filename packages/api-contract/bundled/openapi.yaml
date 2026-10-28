@@ -1858,6 +1858,40 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/connections/{marketplace}/read-only:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+    put:
+      tags:
+        - connections
+      operationId: setConnectionReadOnly
+      summary: Make a connection read only, or let Listora change it again
+      description: |
+        With `readOnly` true, Listora only reads the account (imports, listings, sold items,
+        sales, offers, sale checks) and never changes anything on it (docs/features/read-only.md):
+        every change to its listings is refused with `409 connection_read_only`, the changes
+        still waiting to be sent fail with that error at once, and the delists after a sale skip
+        it. `403 forbidden` for anyone but the account's owner; `404` when the marketplace has
+        no connection.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionReadOnlyChange'
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/connection-health:
     get:
       tags:
@@ -3678,7 +3712,8 @@ components:
         402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
         `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
         `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-        `marketplace_action_unavailable`, `app_update_required`, `pack_refused` 409; `payload_too_large` 413; `validation_failed`,
+        `marketplace_action_unavailable`, `app_update_required`, `pack_refused`,
+        `connection_read_only` 409; `payload_too_large` 413; `validation_failed`,
         `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
         `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
         and `marketplace_authorization_failed` appear only inside a failed
@@ -3700,6 +3735,7 @@ components:
         - marketplace_action_unavailable
         - app_update_required
         - pack_refused
+        - connection_read_only
         - payload_too_large
         - validation_failed
         - idempotency_key_reused
@@ -6270,6 +6306,22 @@ components:
           $ref: '#/components/schemas/ConnectionExecution'
         saleChecks:
           $ref: '#/components/schemas/ConnectionSaleChecks'
+        readOnly:
+          type: boolean
+          description: |
+            Listora only reads this account and never changes anything on it
+            (docs/features/read-only.md): every change to its listings is refused with
+            `409 connection_read_only`, and the delists after a sale skip it. False when the
+            marketplace has no connection; a server older than the setting leaves it out, which
+            means false.
+    ConnectionReadOnlyChange:
+      type: object
+      additionalProperties: false
+      required:
+        - readOnly
+      properties:
+        readOnly:
+          type: boolean
     ConnectionList:
       type: object
       required:
@@ -6518,6 +6570,12 @@ components:
         execution:
           $ref: '#/components/schemas/ConnectionExecution'
           description: Where its automated steps run; present once it is linked.
+        readOnly:
+          type: boolean
+          description: |
+            Listora only reads this account and never changes anything on it (the connection's
+            `readOnly`, set with `setConnectionReadOnly`). False when nothing is linked; a server
+            older than the setting leaves it out, which means false.
     MarketplaceSessionList:
       type: object
       required:

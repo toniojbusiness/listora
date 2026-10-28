@@ -138,6 +138,7 @@ export async function runActivityCommand(
           'schedule.alerted_at',
           'connection.status',
           'connection.runs_on',
+          'connection.read_only',
         ])
         .$if(command.accountId !== undefined, (q) =>
           q.where('schedule.account_id', '=', command.accountId ?? ''),
@@ -175,6 +176,7 @@ export async function runActivityCommand(
             'Marketplace',
             'Connection',
             'Runs on',
+            'Read only',
             'Health',
             'Failed in a row',
             'Last worked',
@@ -188,6 +190,7 @@ export async function runActivityCommand(
             MARKETPLACE_NAMES[row.marketplace],
             row.status,
             row.runs_on,
+            row.read_only ? 'yes' : 'no',
             row.health,
             String(row.failures_in_a_row),
             row.last_succeeded_at?.toISOString() ?? 'never',
@@ -196,7 +199,7 @@ export async function runActivityCommand(
             row.alerted_at?.toISOString() ?? '-',
             row.last_error_message ?? '-',
           ]),
-          [5],
+          [6],
         ),
       );
       if (checks.length === 0) return;

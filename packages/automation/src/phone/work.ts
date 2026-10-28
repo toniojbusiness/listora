@@ -72,6 +72,7 @@ import {
 import { createLogger, type Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
+import { isWriteCall } from '../adapter/script-call.ts';
 
 import type { AutomationSessions, SessionRequest } from '../adapter/sessions.ts';
 import { rateLimitWait, runOutcome, runSteps } from '../adapter/runner-sessions.ts';
@@ -675,6 +676,21 @@ async function advance(
       return state(work, null);
     }
     const pending = explored.pending;
+    const readOnly = await isReadOnlyConnection(trx, work);
+    if (readOnly && isWriteCall(pending.request.call)) {
+      // Answered by the server: Listora never changes a read-only account
+      // (docs/features/read-only.md), so a write script is never handed to the phone.
+      deps.logger.warn(
+        { connectionId: work.connection_id, script: pending.request.script },
+        'refused a write script on a read-only connection',
+      );
+      const refused: TranscriptEntry = {
+        key: callKey(pending.request),
+        run: { type: 'read_only' },
+      };
+      work = await saveTranscript(trx, work, [...transcript, refused]);
+      continue;
+    }
     const limited = await rateLimitWait(
       trx,
       { accountId: work.account_id, connectionId: work.connection_id },
@@ -689,7 +705,7 @@ async function advance(
       work = await saveTranscript(trx, work, [...transcript, answered]);
       continue;
     }
-    const issued = await issueCall(deps, trx, work, pending);
+    const issued = await issueCall(deps, trx, work, pending, readOnly);
     return state(work, issued);
   }
 }
@@ -928,6 +944,7 @@ async function issueCall(
   trx: DbTransaction,
   work: WorkRow,
   pending: PendingCall,
+  readOnly: boolean,
 ): Promise<PendingState> {
   const { request } = pending;
   const profile = profileFor(deps, request);
@@ -957,6 +974,7 @@ async function issueCall(
     stepTimeoutMs: deps.stepTimeoutMs,
     callTimeoutMs: deps.callTimeoutMs,
     startDelayMs,
+    ...(readOnly ? { readOnly } : {}),
   };
   const issued: PendingState = {
     index: pending.index,
@@ -1162,6 +1180,17 @@ async function connectionRef(
     .where('account_id', '=', work.account_id)
     .where('id', '=', work.connection_id)
     .executeTakeFirst();
+}
+
+/** Whether the work's connection is read only (docs/features/read-only.md). */
+async function isReadOnlyConnection(trx: DbTransaction, work: WorkRow): Promise<boolean> {
+  const connection = await trx
+    .selectFrom('marketplace_connection')
+    .select('read_only')
+    .where('account_id', '=', work.account_id)
+    .where('id', '=', work.connection_id)
+    .executeTakeFirst();
+  return connection?.read_only === true;
 }
 
 function entries(work: WorkRow): TranscriptEntry[] {

@@ -40,6 +40,7 @@ import { wasSentThroughApi } from './history.ts';
 import { syncItemListedStatus } from './item-status.ts';
 import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdAfter } from './ordering.ts';
+import { assertWritableListing } from './read-only.ts';
 import {
   attemptNow,
   eventDetail,
@@ -79,7 +80,8 @@ export interface EnqueueResult {
 /**
  * Records a new `queued` operation and enqueues its job in the same transaction. Enqueueing
  * the same idempotency key again returns the existing operation; reusing a key for a different
- * operation throws `IdempotencyConflictError`.
+ * operation throws `IdempotencyConflictError`. A change to a listing on a read-only connection
+ * throws `ReadOnlyConnectionError` and queues nothing (read-only.ts).
  */
 export async function enqueueOperation(
   executor: DbExecutor,
@@ -94,6 +96,11 @@ export async function enqueueOperation(
   }
 
   return inTransaction(executor, async (trx) => {
+    await assertWritableListing(trx, {
+      accountId: input.accountId,
+      listingId: input.listingId,
+      kind: input.kind,
+    });
     const inserted = await trx
       .insertInto('marketplace_operation')
       .values({
@@ -195,7 +202,8 @@ export interface OperationTarget {
 /**
  * The Retry action: a failed operation gets a fresh set of attempts. Its first step reads the
  * listing back before sending anything, because an earlier attempt may have been applied.
- * Refused when a newer operation exists on the listing, since retrying would undo it.
+ * Refused when a newer operation exists on the listing, since retrying would undo it, and for a
+ * change while the listing's connection is read only.
  */
 export async function retryOperation(
   executor: DbExecutor,
@@ -204,6 +212,11 @@ export async function retryOperation(
   return inTransaction(executor, async (trx) => {
     const op = await lockOperation(trx, target);
     if (op.status !== 'failed') throw new InvalidTransitionError(op.id, op.status, 'queued');
+    await assertWritableListing(trx, {
+      accountId: op.account_id,
+      listingId: op.listing_id,
+      kind: op.kind,
+    });
     const newer = await trx
       .selectFrom('marketplace_operation')
       .select('id')

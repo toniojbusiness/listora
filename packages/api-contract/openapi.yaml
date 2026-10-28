@@ -183,6 +183,8 @@ paths:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1checks'
   /v1/connections/{marketplace}/execution:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1execution'
+  /v1/connections/{marketplace}/read-only:
+    $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1read-only'
   /v1/connection-health:
     $ref: './paths/connections.yaml#/~1v1~1connection-health'
   /v1/marketplace-sessions:
@@ -708,6 +710,8 @@ components:
       $ref: './components/schemas/connections.yaml#/KnownConnectionAction'
     Connection:
       $ref: './components/schemas/connections.yaml#/Connection'
+    ConnectionReadOnlyChange:
+      $ref: './components/schemas/connections.yaml#/ConnectionReadOnlyChange'
     ConnectionList:
       $ref: './components/schemas/connections.yaml#/ConnectionList'
     ConnectionAuthorizationStatus:

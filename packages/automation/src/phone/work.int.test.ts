@@ -400,6 +400,81 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(await work()).toEqual([]);
   });
 
+  it('never hands the phone a write for a read-only shop, even mid-run, and still runs its reads', async () => {
+    await runPhone();
+    const readOnly = () =>
+      db
+        .updateTable('marketplace_connection')
+        .set({ read_only: true })
+        .where('id', '=', connectionId)
+        .execute();
+    const created = () => site.products().filter((product) => product.seller === seller);
+    const before = created().length;
+
+    // A publish queued for the phone before the shop became read only fails at its claim.
+    const queued = await enqueue(await newListing(), 'create');
+    await step(queued);
+    await readOnly();
+    expect(await runPhone()).toBe(0);
+    expect(await operation(queued.id)).toMatchObject({
+      status: 'failed',
+      error_code: 'connection_read_only',
+    });
+    expect(await work()).toEqual([]);
+    expect(created()).toHaveLength(before);
+
+    // A publish whose run starts with a read (an earlier attempt's 5xx may have posted it) and
+    // whose shop becomes read only meanwhile: the server answers the write itself.
+    await db
+      .updateTable('marketplace_connection')
+      .set({ read_only: false })
+      .where('id', '=', connectionId)
+      .execute();
+    const create = await enqueue(await newListing(), 'create');
+    site.inject({ action: 'create', fault: { type: 'server_error' } });
+    await step(create);
+    await runPhone();
+    expect(await operation(create.id)).toMatchObject({ status: 'retrying' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await step(create);
+    const device = { accountId, deviceId, runtimeVersion: PHONE_RUNTIME_VERSION };
+    const run = await claimPhoneRun(phone, db, device);
+    const call = run?.call;
+    if (run === null || call === null || call === undefined) throw new Error('no call');
+    const input = JSON.parse(JSON.stringify(call.input)) as PhoneCallInput;
+    expect(input.call.script).toBe('read');
+    await readOnly();
+    const host = new PlaywrightPhoneHost(await webData.newPage());
+    const output = await runPhoneCall(input, host, { pacing: { random: () => 0 } });
+    await host.page.close();
+    const next = await answerPhoneCall(phone, {
+      accountId,
+      deviceId,
+      runId: run.id,
+      index: call.index,
+      answer: JSON.parse(JSON.stringify(output)),
+    });
+    expect(next.call).toBeNull();
+    expect(await operation(create.id)).toMatchObject({
+      status: 'failed',
+      error_code: 'connection_read_only',
+    });
+    expect(created()).toHaveLength(before);
+    const runs = await db
+      .selectFrom('automation_run')
+      .select('script')
+      .where('operation_id', '=', create.id)
+      .orderBy('started_at')
+      .execute();
+    // The failed first send and the read; never a second send.
+    expect(runs.map((row) => row.script)).toEqual(['create', 'read listing']);
+
+    // Reads keep running, and the phone is told the shop is read only with each call.
+    await requestSaleHistoryRead(db, { accountId, marketplace: 'depop' });
+    const read = await claimPhoneRun(phone, db, device);
+    expect(read?.call?.input).toMatchObject({ readOnly: true, call: { script: 'orders' } });
+  });
+
   it('wakes the waiting app the moment the engine hands it a delist, and looks every few seconds without signals', async () => {
     await runPhone();
     const listingId = await newListing();

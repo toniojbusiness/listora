@@ -31,3 +31,25 @@ struct PhotoCarousel: View {
         }
     }
 }
+
+/// The item as a tag: its photos hang on it, its marketplaces hang on the string below, and once
+/// it sells it wears the sold stamp, pressed on when it sold while the screen was open.
+struct ItemTag: View {
+    let item: Item
+    let soldWhileOpen: Bool
+
+    var body: some View {
+        HangingTag(railOverhang: nil) {
+            PhotoCarousel(photos: item.photos)
+                .overlay {
+                    if item.isSold, let summary = item.saleSummary {
+                        SoldStamp(
+                            price: Formatting.money(summary.salePrice),
+                            marketplace: summary.soldOn.map { Formatting.marketplaceName($0.id) },
+                            lands: soldWhileOpen,
+                        )
+                    }
+                }
+        }
+    }
+}

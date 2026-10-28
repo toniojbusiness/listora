@@ -108,6 +108,67 @@ public struct StampMark: View {
     }
 }
 
+/// The sold stamp pressed onto an item's tag: "Sold" in big inked capitals in a double-ruled box,
+/// the price and the marketplace under it, crooked like a hand-pressed stamp. When `lands` (the
+/// item sold while its screen was open), it is pressed down onto the tag; with Reduce Motion it
+/// fades in. VoiceOver reads it as one line.
+public struct SoldStamp: View {
+    private let price: String
+    private let marketplace: String?
+    private let lands: Bool
+    @State private var isDown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    public init(price: String, marketplace: String?, lands: Bool) {
+        self.price = price
+        self.marketplace = marketplace
+        self.lands = lands
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            Text("Sold")
+                .font(Typography.priceLarge)
+                .textCase(.uppercase)
+                .tracking(3)
+            Text([price, marketplace].compactMap(\.self).joined(separator: " · "))
+                .font(Typography.stamp)
+                .textCase(.uppercase)
+                .tracking(1.4)
+        }
+        .foregroundStyle(Palette.brand)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xxs)
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.tight, style: .continuous)
+                .strokeBorder(Palette.brand, lineWidth: 3)
+        }
+        .padding(4)
+        .overlay {
+            RoundedRectangle(cornerRadius: Radius.tight + 2, style: .continuous)
+                .strokeBorder(Palette.brand, lineWidth: 1)
+        }
+        .background(Palette.surface.color.opacity(0.55), in: RoundedRectangle(cornerRadius: Radius.tight + 2))
+        .rotationEffect(.degrees(-12))
+        // It sits on the item's photo; VoiceOver and the Sold section carry it at larger sizes.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .scaleEffect(isDown || reduceMotion ? 1 : 1.9)
+        .opacity(isDown ? 0.92 : 0)
+        .onAppear {
+            guard lands else {
+                isDown = true
+                return
+            }
+            withAnimation(reduceMotion ? Motion.reduced : .spring(response: 0.3, dampingFraction: 0.62)) {
+                isDown = true
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(marketplace.map { "Sold for \(price) on \($0)" } ?? "Sold for \(price)")
+        .accessibilityIdentifier("item.soldStamp")
+    }
+}
+
 #Preview {
     HStack(spacing: Spacing.sm) {
         Stamp("Urgent")
@@ -115,6 +176,7 @@ public struct StampMark: View {
         Stamp("Sold", angle: .degrees(-8))
         Stamp("Failed", tone: .failed)
         StampMark(systemImage: "link", tone: .actionNeeded)
+        SoldStamp(price: "$120", marketplace: "eBay", lands: false)
     }
     .padding()
     .background(Palette.surface)
