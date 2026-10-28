@@ -111,4 +111,29 @@ describe("the server reads an app's sale-check answers, old and new", () => {
       result: { ok: true, value: [{ ...order, soldAt: new Date(order.soldAt) }] },
     });
   });
+
+  it("reads a call the app could not run as the phone's failure, a change only for a write", () => {
+    const notRun = { type: 'not_run', message: 'WebKit stopped the page' };
+    expect(readPhoneAnswer(call, notRun)).toEqual({
+      type: 'ran',
+      result: {
+        ok: false,
+        mutated: false,
+        steps: [],
+        failure: {
+          kind: 'error',
+          step: 'phone',
+          code: 'browser_unavailable',
+          message: 'the phone could not run this: WebKit stopped the page',
+          retryAfterMs: null,
+          screenshotKey: null,
+        },
+      },
+    });
+    const end = { script: 'end', externalListingId: 'shop-denim-jacket-1' } as const;
+    expect(readPhoneAnswer(end as never, notRun)).toMatchObject({
+      type: 'ran',
+      result: { ok: false, mutated: true },
+    });
+  });
 });

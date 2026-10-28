@@ -104,6 +104,12 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    lease lapse. An operation step is recovered like any interrupted step: its job finds the
    lapsed run and a read-back decides. A check waits for the phone again. A call never answered
    is finished in `automation_run` as canceled.
+   A call the app cannot run at all (its web views failed before the script answered) is
+   answered as `{"type": "not_run", "message": ...}` with the phone's reason: the call fails as
+   `browser_unavailable` (a possible change only for a write, so a read-back decides), the
+   reason goes to the server's `automation script stopped` log line, and a check is tried again
+   on its own backoff. Without that answer the next claim would cancel the run as stopped and
+   hand the same work straight back, over and over, with nothing finishing.
 6. **Waiting too long.** An operation that waits for the phone longer than 24 hours fails with
    `phone_unavailable` and a Retry. Until then its status says what the seller can do: "Delisting... open
    Listora on your iPhone", with a detail asking them to open it (how long it waited is not shown).

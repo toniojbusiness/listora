@@ -637,6 +637,39 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
+  it('finishes a sale check the phone could not run as failed, and never claims it again at once', async () => {
+    await runPhone();
+    expect(await enqueueSaleCheck(db, { accountId, connectionId, marketplace: 'depop' })).toBe(
+      true,
+    );
+    const device = { accountId, deviceId, runtimeVersion: PHONE_RUNTIME_VERSION };
+    const run = await claimPhoneRun(phone, db, device);
+    expect(run?.purpose).toBe('sale_check');
+    // The app's web views failed before the script ran: it says so instead of dropping the run.
+    const next = await answerPhoneCall(phone, {
+      accountId,
+      deviceId,
+      runId: run?.id ?? '',
+      index: run?.call?.index ?? 0,
+      answer: { type: 'not_run', message: 'WebKit stopped the page' },
+    });
+    expect(next.call).toBeNull();
+    const check = await db
+      .selectFrom('sale_check_run')
+      .select(['outcome', 'error_code', 'error_message'])
+      .where('account_id', '=', accountId)
+      .where('connection_id', '=', connectionId)
+      .orderBy('started_at', 'desc')
+      .executeTakeFirstOrThrow();
+    expect(check).toMatchObject({
+      outcome: 'failed',
+      error_code: 'browser_unavailable',
+      error_message: expect.stringContaining("Listora's browser didn't start") as unknown,
+    });
+    // Tried again later on its backoff, not handed straight back to the phone.
+    expect(await claimPhoneRun(phone, db, device)).toBeNull();
+  });
+
   it('fails work the phone has not run for a day, with a Retry', async () => {
     await runPhone();
     const create = await enqueue(await newListing(), 'create');
