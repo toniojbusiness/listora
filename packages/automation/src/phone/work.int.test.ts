@@ -59,6 +59,21 @@ import { listenForPhoneWork } from './signals.ts';
 
 const FAST_POLICY = { delaysMs: [10, 20, 30, 40, 50, 60], jitter: 0, random: () => 0.5 };
 
+/**
+ * The output as the app sends it: its web view hands back what the runtime returned as is, and
+ * a date in it (a sale's sold time) is not JSON, so the app had nothing it could send.
+ */
+function asTheAppSendsIt(output: unknown): unknown {
+  return containsDate(output) ? { type: 'not_run', message: 'invalidAnswer' } : output;
+}
+
+function containsDate(value: unknown): boolean {
+  if (value instanceof Date) return true;
+  if (Array.isArray(value)) return value.some(containsDate);
+  if (value !== null && typeof value === 'object') return Object.values(value).some(containsDate);
+  return false;
+}
+
 describe('phone runs (real Postgres, the phone runtime in headless Chromium)', () => {
   let database: MigratedDatabase;
   let db: Db;
@@ -186,7 +201,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
           deviceId,
           runId: run.id,
           index: run.call.index,
-          answer: JSON.parse(JSON.stringify(output)),
+          answer: asTheAppSendsIt(output),
         });
       }
     }
@@ -454,7 +469,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       deviceId,
       runId: run.id,
       index: call.index,
-      answer: JSON.parse(JSON.stringify(output)),
+      answer: asTheAppSendsIt(output),
     });
     expect(next.call).toBeNull();
     expect(await operation(create.id)).toMatchObject({
@@ -920,7 +935,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
         deviceId,
         runId: run.id,
         index: run.call.index,
-        answer: JSON.parse(JSON.stringify(output)),
+        answer: asTheAppSendsIt(output),
       });
       if (run.call !== null) later.push(run.call.input.startDelayMs);
     }
