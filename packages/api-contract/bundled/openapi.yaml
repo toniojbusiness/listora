@@ -65,6 +65,8 @@ tags:
     description: How much of the plan's quotas the account has used this period.
   - name: today
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
+  - name: pack-check
+    description: Pack check, an optional mode that checks each package's label before it ships.
   - name: voice
     description: Spoken corrections on the review screen that the app could not parse itself.
   - name: prefill
@@ -2634,6 +2636,243 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/settings:
+    get:
+      tags:
+        - pack-check
+      operationId: getPackCheckSettings
+      summary: Get the Pack check setting
+      description: Whether Pack check is on (off until the seller turns it on).
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackCheckSettings'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - pack-check
+      operationId: replacePackCheckSettings
+      summary: Turn Pack check on or off
+      description: |
+        Turning it on asks for a read of the labels of the orders that still need a package
+        (`refreshPackLabels`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PackCheckSettingsReplace'
+      responses:
+        '200':
+          description: The saved setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackCheckSettings'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/orders:
+    get:
+      tags:
+        - pack-check
+      operationId: listPackOrders
+      summary: List the orders to pack
+      description: |
+        The to-ship list: one order per sale that still stands and is not shipped, newest first,
+        with its items, the buyer's first name, its label, and whether it is packed (a packed order
+        stays a day). Computed from the account's own data, with no marketplace call.
+      responses:
+        '200':
+          description: The orders.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackOrderList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/refresh:
+    post:
+      tags:
+        - pack-check
+      operationId: refreshPackLabels
+      summary: Read the orders' shipping labels
+      description: |
+        Asks for a read of the shipping labels of the orders that need one, from each
+        marketplace's own order pages through the seller's session (only reads; nothing changes on
+        a marketplace). The reads run on the seller's iPhone; the app runs them and lists the
+        orders again. An order is not read again sooner than the read rules allow, however often
+        this is called.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The reads asked for.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackLabelRefresh'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/scan:
+    get:
+      tags:
+        - pack-check
+      operationId: checkPackScan
+      summary: Check a scanned label
+      description: |
+        What a scanned shipping label (and optionally the item's sticker) means for the package
+        being packed (`saleId`), or, without one, which order the label is for. Only reads:
+        `packOrder` packs. At least one of `label` and `sticker` is needed (`422` otherwise);
+        an order that isn't the account's is `404`.
+      parameters:
+        - name: label
+          in: query
+          description: What the camera read from the shipping label, or the number the seller typed.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: sticker
+          in: query
+          description: What the camera read from the item's sticker.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: saleId
+          in: query
+          description: The order being packed.
+          schema:
+            $ref: '#/components/schemas/Id'
+      responses:
+        '200':
+          description: What the scan means.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackScan'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/orders/{saleId}/pack:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - pack-check
+      operationId: packOrder
+      summary: Pack an order
+      description: |
+        Records that the scanned label went on this order's package. The scan is checked again:
+        a label that is another order's, already on a package, or with another item's sticker is
+        `409 pack_refused` (its `message` says why), and so is a label Listora doesn't know
+        unless `photoCheck` says the seller checked it against the item's photo. An order that is
+        packed already, shipped, canceled, or returned is `409 invalid_state_transition`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PackOrderPack'
+      responses:
+        '200':
+          description: The order, packed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+        - pack-check
+      operationId: unpackOrder
+      summary: Unpack an order
+      description: |
+        Takes the order off its package, to pack it again; its package photo goes too. An order
+        that isn't packed is `404`.
+      responses:
+        '200':
+          description: The order, not packed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/orders/{saleId}/photo:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - pack-check
+      operationId: addPackPhoto
+      summary: Add the package photo
+      description: |
+        Keeps one photo of the open package with its label, for a claim. It is stored without its
+        metadata (no location). The order must be packed and have no photo yet
+        (`409 invalid_state_transition` otherwise: remove the photo first to take another); a file
+        that isn't a readable JPEG is `422`. The upload follows the upload session rules
+        (`409 upload_incomplete`, `upload_expired`, `already_exists` for a file already used).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PackPhotoAdd'
+      responses:
+        '200':
+          description: The order, with its photo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+        - pack-check
+      operationId: removePackPhoto
+      summary: Remove the package photo
+      description: Deletes the package photo, to take another. An order without one is `404`.
+      responses:
+        '200':
+          description: The order, without a photo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/devices/{installationId}:
     parameters:
       - $ref: '#/components/parameters/InstallationId'
@@ -3439,7 +3678,7 @@ components:
         402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
         `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
         `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-        `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
+        `marketplace_action_unavailable`, `app_update_required`, `pack_refused` 409; `payload_too_large` 413; `validation_failed`,
         `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
         `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
         and `marketplace_authorization_failed` appear only inside a failed
@@ -3460,6 +3699,7 @@ components:
         - marketplace_reauth_required
         - marketplace_action_unavailable
         - app_update_required
+        - pack_refused
         - payload_too_large
         - validation_failed
         - idempotency_key_reused
@@ -6501,13 +6741,15 @@ components:
         or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
         a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
         history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
-        listings for sale, for an import.
+        listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
+        orders that still need a package, for Pack check.
       enum:
         - operation
         - session_check
         - sale_check
         - sale_history
         - listing_import
+        - label_read
     PhoneRunClaim:
       type: object
       additionalProperties: false
@@ -8443,6 +8685,329 @@ components:
           minLength: 1
           maxLength: 64
           description: An IANA time zone name, for example `America/New_York` (the device's own).
+    PackCheckSettings:
+      type: object
+      description: Whether Pack check is on. It is off until the seller turns it on in Settings.
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+    PackCheckSettingsReplace:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+    LabelCarrier:
+      description: A `KnownLabelCarrier`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownLabelCarrier'
+        - type: string
+          maxLength: 64
+    KnownLabelCarrier:
+      type: string
+      description: The carrier a tracking number's shape names; `other` when it can't tell.
+      enum:
+        - usps
+        - ups
+        - fedex
+        - dhl
+        - other
+    LabelSource:
+      description: A `KnownLabelSource`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownLabelSource'
+        - type: string
+          maxLength: 64
+    KnownLabelSource:
+      type: string
+      description: |
+        `marketplace`: read from the marketplace's own order page. `scan`: the seller scanned it
+        onto the order after the photo check, because Listora had no label for it.
+      enum:
+        - marketplace
+        - scan
+    PackMatch:
+      description: A `KnownPackMatch`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownPackMatch'
+        - type: string
+          maxLength: 64
+    KnownPackMatch:
+      type: string
+      description: |
+        How Listora knew the label was this order's: `sticker` (the label and the item's sticker
+        both match), `label` (the label's tracking number matches), or `photo` (a label Listora
+        didn't know, which the seller checked against the item's photo).
+      enum:
+        - sticker
+        - label
+        - photo
+    PackLocation:
+      type: object
+      description: Where the item is kept, for example shelf `B-12`.
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          maxLength: 32
+        label:
+          type: string
+          maxLength: 100
+    PackItem:
+      type: object
+      description: One item of the order.
+      required:
+        - itemId
+        - sku
+        - description
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        sku:
+          $ref: '#/components/schemas/Sku'
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 100
+          description: How Pack check names it, `black Shaka Wear tee, 2XL`.
+        sizeLabel:
+          type: string
+          maxLength: 100
+        location:
+          $ref: '#/components/schemas/PackLocation'
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: The item's cover photo, small; absent until a photo is processed.
+        photoUrl:
+          type: string
+          format: uri
+          description: The item's cover photo, large, for the photo check.
+    PackLabel:
+      type: object
+      description: The order's shipping label.
+      required:
+        - trackingNumber
+        - carrier
+        - source
+      properties:
+        trackingNumber:
+          type: string
+          maxLength: 40
+        carrier:
+          $ref: '#/components/schemas/LabelCarrier'
+        source:
+          $ref: '#/components/schemas/LabelSource'
+    PackRecord:
+      type: object
+      description: The order's package, once packed.
+      required:
+        - packedAt
+        - trackingNumber
+        - matchedBy
+        - labelMismatch
+      properties:
+        packedAt:
+          $ref: '#/components/schemas/Timestamp'
+        trackingNumber:
+          type: string
+          maxLength: 40
+          description: The label that went on the package.
+        matchedBy:
+          $ref: '#/components/schemas/PackMatch'
+        stickerSku:
+          $ref: '#/components/schemas/Sku'
+        labelMismatch:
+          type: boolean
+          description: |
+            The marketplace now shows another label for this order than the one packed (read after
+            the seller packed it with a label Listora didn't know): check the package again.
+        photoUrl:
+          type: string
+          format: uri
+          description: The package photo, kept for a claim.
+        photoAddedAt:
+          $ref: '#/components/schemas/Timestamp'
+    PackOrder:
+      type: object
+      description: |
+        One sale that still needs a package, as the to-ship list shows it: its items, the buyer's
+        first name, its label, and whether it is packed. `labelStatus` and `packStatus` are the
+        server's words; clients show them as given.
+      required:
+        - saleId
+        - marketplace
+        - soldAt
+        - description
+        - items
+        - labelStatus
+        - packStatus
+      properties:
+        saleId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        orderNumber:
+          type: string
+          maxLength: 200
+          description: The marketplace's order number (for Mercari and Depop, the listing's id).
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        shipBy:
+          $ref: '#/components/schemas/Timestamp'
+        description:
+          type: string
+          maxLength: 300
+          description: How Pack check names the order, `the black Shaka Wear tee, 2XL`.
+        buyerFirstName:
+          type: string
+          maxLength: 40
+          description: Only the first name, from the marketplace's order page.
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PackItem'
+        label:
+          $ref: '#/components/schemas/PackLabel'
+        labelStatus:
+          $ref: '#/components/schemas/StatusDisplay'
+        pack:
+          $ref: '#/components/schemas/PackRecord'
+        packStatus:
+          $ref: '#/components/schemas/StatusDisplay'
+    PackOrderList:
+      type: object
+      required:
+        - data
+        - generatedAt
+      properties:
+        data:
+          type: array
+          maxItems: 200
+          description: Newest first; packed orders stay a day.
+          items:
+            $ref: '#/components/schemas/PackOrder'
+        generatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    PackLabelRefresh:
+      type: object
+      description: The label reads Listora asked for.
+      required:
+        - orders
+        - marketplaces
+      properties:
+        orders:
+          type: integer
+          format: int32
+          minimum: 0
+          description: How many orders' labels will be read.
+        marketplaces:
+          type: array
+          maxItems: 10
+          description: Where the reads run on this account's iPhone; the app runs them.
+          items:
+            $ref: '#/components/schemas/Marketplace'
+    PackScanVerdict:
+      description: A `KnownPackScanVerdict`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownPackScanVerdict'
+        - type: string
+          maxLength: 64
+    KnownPackScanVerdict:
+      type: string
+      description: |
+        `match`: the label is the order being packed's. `found`: with no order chosen, the label's
+        (or sticker's) order. `wrong_order`: the label is another order's. `already_packed`: the
+        label went on a package already. `sticker_mismatch`: the sticker is another item's.
+        `unknown_label`: no order has this label yet. `sticker_scanned`: a sticker where the label
+        goes. `not_a_label`: not a tracking number. A verdict this client doesn't know: show
+        `headline` and `detail`, and offer nothing.
+      enum:
+        - match
+        - found
+        - wrong_order
+        - already_packed
+        - sticker_mismatch
+        - unknown_label
+        - sticker_scanned
+        - not_a_label
+    PackScan:
+      type: object
+      description: |
+        What a scan means for the package on the table, in the server's words. Only `canPack`
+        lets the app offer Packed; only `canPhotoCheck` lets it offer the photo check of a label
+        Listora doesn't know.
+      required:
+        - verdict
+        - tone
+        - headline
+        - detail
+        - canPack
+        - canPhotoCheck
+      properties:
+        verdict:
+          $ref: '#/components/schemas/PackScanVerdict'
+        tone:
+          $ref: '#/components/schemas/StatusTone'
+        headline:
+          type: string
+          maxLength: 300
+        detail:
+          type: string
+          maxLength: 500
+        trackingNumber:
+          type: string
+          maxLength: 40
+          description: The scanned label's tracking number, when it can be one.
+        order:
+          $ref: '#/components/schemas/PackOrder'
+        expectedOrder:
+          $ref: '#/components/schemas/PackOrder'
+        packedOrder:
+          $ref: '#/components/schemas/PackOrder'
+        canPack:
+          type: boolean
+        canPhotoCheck:
+          type: boolean
+    PackOrderPack:
+      type: object
+      additionalProperties: false
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: What the camera read from the shipping label, or the number the seller typed.
+        sticker:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: What the camera read from the item's sticker.
+        photoCheck:
+          type: boolean
+          description: |
+            The seller compared the item with the order's photo and says this label, which Listora
+            doesn't know, is this order's.
+    PackPhotoAdd:
+      type: object
+      additionalProperties: false
+      required:
+        - uploadFileId
+      properties:
+        uploadFileId:
+          $ref: '#/components/schemas/Id'
+          description: A JPEG uploaded through an upload session.
     ActivitySource:
       description: A `KnownActivitySource`, or one added after this client was built.
       anyOf:
@@ -8492,7 +9057,8 @@ components:
         action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
         with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
         an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
-        delist after a sale. `task`: a task for the seller.
+        delist after a sale. `task`: a task for the seller. `package`: a package Pack check
+        packed, or its photo.
       enum:
         - item
         - operation
@@ -8502,6 +9068,7 @@ components:
         - sale
         - delist
         - task
+        - package
     ActivityStep:
       type: object
       description: One step of a browser session.
@@ -8597,6 +9164,10 @@ components:
           $ref: '#/components/schemas/ActivityError'
         reference:
           $ref: '#/components/schemas/ActivityReference'
+        photoUrl:
+          type: string
+          format: uri
+          description: A `package` entry's photo of the open package with its label, for a claim.
     ActivityPage:
       type: object
       description: Newest first.

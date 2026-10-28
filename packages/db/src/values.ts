@@ -245,7 +245,13 @@ export const DELETION_RECORD_KINDS = ['account', 'connection', 'ebay_user'] as c
 export type DeletionRecordKind = (typeof DELETION_RECORD_KINDS)[number];
 
 /** What a browser automation run was for (`automation_run.purpose`). */
-export const AUTOMATION_RUN_PURPOSES = ['operation', 'sale_check', 'health', 'import'] as const;
+export const AUTOMATION_RUN_PURPOSES = [
+  'operation',
+  'sale_check',
+  'health',
+  'import',
+  'label_read',
+] as const;
 export type AutomationRunPurpose = (typeof AUTOMATION_RUN_PURPOSES)[number];
 
 /** Where an automation connection's automated steps run (docs/features/phone-execution.md). */
@@ -262,6 +268,7 @@ export const PHONE_WORK_PURPOSES = [
   'sale_check',
   'sale_history',
   'listing_import',
+  'label_read',
 ] as const;
 export type PhoneWorkPurpose = (typeof PHONE_WORK_PURPOSES)[number];
 
@@ -335,3 +342,19 @@ export type SaleCheckHealth = (typeof SALE_CHECK_HEALTHS)[number];
 /** Whether a newly linked session works (`session_check.status`). */
 export const SESSION_CHECK_STATUSES = ['pending', 'passed', 'failed'] as const;
 export type SessionCheckStatus = (typeof SESSION_CHECK_STATUSES)[number];
+
+/** Where a sale's shipping label came from (`sale_label.source`, docs/features/pack-check.md). */
+export const SALE_LABEL_SOURCES = ['marketplace', 'scan'] as const;
+export type SaleLabelSource = (typeof SALE_LABEL_SOURCES)[number];
+
+/** The carrier a label's tracking number names (`sale_label.carrier`). */
+export const LABEL_CARRIERS = ['usps', 'ups', 'fedex', 'dhl', 'other'] as const;
+export type LabelCarrier = (typeof LABEL_CARRIERS)[number];
+
+/** The last read of a sale's order page for its label (`sale_label.read_status`). */
+export const LABEL_READ_STATUSES = ['read', 'no_label', 'not_found', 'failed'] as const;
+export type LabelReadStatus = (typeof LABEL_READ_STATUSES)[number];
+
+/** How a packed order's label was known to be its own (`sale_pack.matched_by`). */
+export const PACK_MATCHES = ['sticker', 'label', 'photo'] as const;
+export type PackMatch = (typeof PACK_MATCHES)[number];

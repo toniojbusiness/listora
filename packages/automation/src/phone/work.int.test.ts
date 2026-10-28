@@ -36,6 +36,7 @@ import { setExecutionLocation } from '../execution.ts';
 import { linkAutomationSession } from '../link.ts';
 import { loadChromium } from '../runner/playwright.ts';
 import { LISTING_IMPORT_APPLY_TASK, queueImportPage } from '../imports/schedule.ts';
+import { queueLabelReads } from '../label-reads/queue.ts';
 import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
 import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -986,5 +987,77 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       .where('id', '=', connectionId)
       .executeTakeFirstOrThrow();
     expect(connection.status).toBe('reauth_required');
+  });
+
+  it("reads a sale's shipping label on the phone for Pack check, read-only, and records it", async () => {
+    await runPhone();
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    await runPhoneAndConfirm(create);
+    const listing = await db
+      .selectFrom('marketplace_listing')
+      .select(['external_listing_id', 'item_id'])
+      .where('id', '=', listingId)
+      .executeTakeFirstOrThrow();
+    const slug = listing.external_listing_id ?? '';
+    site.sell(slug, new Date(), {
+      trackingNumber: '9400 1118 9922 3197 4284 90',
+      buyerFirstName: 'Sarah M.',
+    });
+    const sale = await db
+      .insertInto('sale')
+      .values({
+        account_id: accountId,
+        marketplace: 'depop',
+        external_order_id: slug,
+        sold_at: new Date(),
+        detection_source: 'poll',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('sale_item')
+      .values({
+        account_id: accountId,
+        sale_id: sale.id,
+        marketplace: 'depop',
+        item_id: listing.item_id,
+        listing_id: listingId,
+        sale_price_cents: 1500,
+      })
+      .execute();
+
+    expect(await queueLabelReads(db, { accountId, now: new Date() })).toEqual([
+      { marketplace: 'depop', orders: 1, where: 'phone' },
+    ]);
+    expect(await work()).toEqual([
+      expect.objectContaining({ purpose: 'label_read', connection_id: connectionId }),
+    ]);
+    await runPhone();
+    const label = await db
+      .selectFrom('sale_label')
+      .select(['tracking_number', 'carrier', 'source', 'buyer_first_name', 'read_status'])
+      .where('account_id', '=', accountId)
+      .where('sale_id', '=', sale.id)
+      .executeTakeFirstOrThrow();
+    expect(label).toEqual({
+      tracking_number: '9400111899223197428490',
+      carrier: 'usps',
+      source: 'marketplace',
+      buyer_first_name: 'Sarah',
+      read_status: 'read',
+    });
+    const runs = await db
+      .selectFrom('automation_run')
+      .select(['purpose', 'host', 'outcome'])
+      .where('account_id', '=', accountId)
+      .where('purpose', '=', 'label_read')
+      .execute();
+    expect(runs).toEqual([{ purpose: 'label_read', host: 'phone', outcome: 'succeeded' }]);
+    // A label already read is not read again.
+    expect(await queueLabelReads(db, { accountId, now: new Date() })).toEqual([
+      { marketplace: 'depop', orders: 0, where: 'none' },
+    ]);
   });
 });

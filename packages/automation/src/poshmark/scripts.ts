@@ -3,7 +3,13 @@
  * describes it). They are the one definition both hosts run: the browser runner, and the
  * iPhone app for a seller whose Poshmark runs on their phone (docs/features/phone-execution.md).
  */
-import type { ListingRef, OperationRequest, RemoteOrder } from '@listora/marketplaces';
+import type {
+  LabelReadRequest,
+  ListingRef,
+  OperationRequest,
+  RemoteOrder,
+  RemoteOrderLabel,
+} from '@listora/marketplaces';
 
 import {
   mayHaveAppliedBefore,
@@ -40,6 +46,7 @@ import {
   sellersListing,
   type ListingPage,
 } from './pages/listing-page.ts';
+import { readSale, readSales, type PoshmarkSale } from './pages/sales-page.ts';
 import { listingDetails } from './pages/listing-details.ts';
 import { cents, remoteListing, revision, type ListingRecord } from './pages/state.ts';
 import { type PoshmarkListingPayload } from './payload.ts';
@@ -65,6 +72,8 @@ const NEW_WAIT_MS = 5_000;
 
 /** Sold-item pages read per sale check (48 each, the newest sales among them). */
 const SOLD_PAGES = 5;
+/** Order pages one label read opens at most, for labels the sales list does not show. */
+export const MAX_SALE_PAGES = 5;
 
 /**
  * Fills in the details of a new or changed listing, one step per part of the form (a create, a
@@ -483,6 +492,44 @@ export function createPoshmarkScripts(
           },
         ];
       });
+    },
+    labels: async (orders, step) => {
+      const sales = await step('read your sales', { mutates: false }, (page) =>
+        readSales(page, site),
+      );
+      const saleOf = (order: LabelReadRequest): PoshmarkSale | undefined =>
+        sales.find(
+          (sale) =>
+            sale.orderId === order.externalOrderId ||
+            order.externalListingIds.some((id) => sale.listingIds.includes(id)) ||
+            sale.listingIds.some((id) => order.externalOrderId === `listing:${id}`),
+        );
+      const labels: RemoteOrderLabel[] = [];
+      let opened = 0;
+      for (const order of orders) {
+        const sale = saleOf(order);
+        if (sale === undefined) {
+          labels.push({ externalOrderId: order.externalOrderId, found: false });
+          continue;
+        }
+        let { trackingNumber, buyerFirstName } = sale;
+        if (trackingNumber === null && opened < MAX_SALE_PAGES) {
+          // The list may not show the label: the order's own page does.
+          opened += 1;
+          const shown = await step('read the order', { mutates: false }, (page) =>
+            readSale(page, site, sale.orderId),
+          );
+          trackingNumber = shown.trackingNumber;
+          buyerFirstName ??= shown.buyerFirstName;
+        }
+        labels.push({
+          externalOrderId: order.externalOrderId,
+          found: true,
+          trackingNumber,
+          buyerFirstName,
+        });
+      }
+      return labels;
     },
     listings: async (cursor, step) => {
       // One closet page of the listings for sale (48), newest first: the cursor is its

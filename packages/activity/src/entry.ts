@@ -42,6 +42,8 @@ export const ACTIVITY_KINDS = [
   'delist',
   /** A task for the seller (`user_task`). */
   'task',
+  /** A package Pack check packed, and its photo (`sale_pack`). */
+  'package',
 ] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
@@ -76,4 +78,6 @@ export interface ActivityEntry {
    * (`runId`), and whether it kept a redacted screenshot; a sale check's record id.
    */
   reference: { runId: string | null; saleCheckId: string | null; screenshot: boolean } | null;
+  /** A package's photo (its storage key), kept for a claim. */
+  photoKey: string | null;
 }

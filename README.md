@@ -143,6 +143,7 @@ packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker me
 packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)
 packages/email-sales/   Email sale detection: forwarding addresses, folder and SES ingest, DKIM/SPF, parsers (@listora/email-sales)
 packages/today/         The Today screen: card rules, the summary's queries, the morning summary (@listora/today)
+packages/pack-check/    Pack check: label scans and verdicts, the to-ship list, packing, label reads' records (@listora/pack-check)
 packages/activity/      The activity timeline and the sale explanation, from the records that keep them (@listora/activity)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)

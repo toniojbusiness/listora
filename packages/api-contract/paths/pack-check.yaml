@@ -1,0 +1,228 @@
+/v1/pack-check/settings:
+  get:
+    tags: [pack-check]
+    operationId: getPackCheckSettings
+    summary: Get the Pack check setting
+    description: Whether Pack check is on (off until the seller turns it on).
+    responses:
+      '200':
+        description: The setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackCheckSettings'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [pack-check]
+    operationId: replacePackCheckSettings
+    summary: Turn Pack check on or off
+    description: |
+      Turning it on asks for a read of the labels of the orders that still need a package
+      (`refreshPackLabels`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/pack-check.yaml#/PackCheckSettingsReplace'
+    responses:
+      '200':
+        description: The saved setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackCheckSettings'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/pack-check/orders:
+  get:
+    tags: [pack-check]
+    operationId: listPackOrders
+    summary: List the orders to pack
+    description: |
+      The to-ship list: one order per sale that still stands and is not shipped, newest first,
+      with its items, the buyer's first name, its label, and whether it is packed (a packed order
+      stays a day). Computed from the account's own data, with no marketplace call.
+    responses:
+      '200':
+        description: The orders.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackOrderList'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/pack-check/refresh:
+  post:
+    tags: [pack-check]
+    operationId: refreshPackLabels
+    summary: Read the orders' shipping labels
+    description: |
+      Asks for a read of the shipping labels of the orders that need one, from each
+      marketplace's own order pages through the seller's session (only reads; nothing changes on
+      a marketplace). The reads run on the seller's iPhone; the app runs them and lists the
+      orders again. An order is not read again sooner than the read rules allow, however often
+      this is called.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The reads asked for.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackLabelRefresh'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/pack-check/scan:
+  get:
+    tags: [pack-check]
+    operationId: checkPackScan
+    summary: Check a scanned label
+    description: |
+      What a scanned shipping label (and optionally the item's sticker) means for the package
+      being packed (`saleId`), or, without one, which order the label is for. Only reads:
+      `packOrder` packs. At least one of `label` and `sticker` is needed (`422` otherwise);
+      an order that isn't the account's is `404`.
+    parameters:
+      - name: label
+        in: query
+        description: What the camera read from the shipping label, or the number the seller typed.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: sticker
+        in: query
+        description: What the camera read from the item's sticker.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: saleId
+        in: query
+        description: The order being packed.
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+    responses:
+      '200':
+        description: What the scan means.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackScan'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/pack-check/orders/{saleId}/pack:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  post:
+    tags: [pack-check]
+    operationId: packOrder
+    summary: Pack an order
+    description: |
+      Records that the scanned label went on this order's package. The scan is checked again:
+      a label that is another order's, already on a package, or with another item's sticker is
+      `409 pack_refused` (its `message` says why), and so is a label Listora doesn't know
+      unless `photoCheck` says the seller checked it against the item's photo. An order that is
+      packed already, shipped, canceled, or returned is `409 invalid_state_transition`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/pack-check.yaml#/PackOrderPack'
+    responses:
+      '200':
+        description: The order, packed.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackOrder'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [pack-check]
+    operationId: unpackOrder
+    summary: Unpack an order
+    description: |
+      Takes the order off its package, to pack it again; its package photo goes too. An order
+      that isn't packed is `404`.
+    responses:
+      '200':
+        description: The order, not packed.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackOrder'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/pack-check/orders/{saleId}/photo:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  post:
+    tags: [pack-check]
+    operationId: addPackPhoto
+    summary: Add the package photo
+    description: |
+      Keeps one photo of the open package with its label, for a claim. It is stored without its
+      metadata (no location). The order must be packed and have no photo yet
+      (`409 invalid_state_transition` otherwise: remove the photo first to take another); a file
+      that isn't a readable JPEG is `422`. The upload follows the upload session rules
+      (`409 upload_incomplete`, `upload_expired`, `already_exists` for a file already used).
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/pack-check.yaml#/PackPhotoAdd'
+    responses:
+      '200':
+        description: The order, with its photo.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackOrder'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [pack-check]
+    operationId: removePackPhoto
+    summary: Remove the package photo
+    description: Deletes the package photo, to take another. An order without one is `404`.
+    responses:
+      '200':
+        description: The order, without a photo.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pack-check.yaml#/PackOrder'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

@@ -17,6 +17,7 @@
     "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
+    "@listora/pack-check": "*",
     "@listora/shared": "*",
     "@listora/testing": "*",
     "sharp": "^0.35.5"

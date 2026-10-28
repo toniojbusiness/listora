@@ -525,7 +525,7 @@ extension Components {
         /// 402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
         /// `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
         /// `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-        /// `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
+        /// `marketplace_action_unavailable`, `app_update_required`, `pack_refused` 409; `payload_too_large` 413; `validation_failed`,
         /// `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
         /// `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
         /// and `marketplace_authorization_failed` appear only inside a failed
@@ -549,6 +549,7 @@ extension Components {
             case marketplaceReauthRequired = "marketplace_reauth_required"
             case marketplaceActionUnavailable = "marketplace_action_unavailable"
             case appUpdateRequired = "app_update_required"
+            case packRefused = "pack_refused"
             case payloadTooLarge = "payload_too_large"
             case validationFailed = "validation_failed"
             case idempotencyKeyReused = "idempotency_key_reused"
@@ -7152,7 +7153,8 @@ extension Components {
         /// or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
         /// a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
         /// history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
-        /// listings for sale, for an import.
+        /// listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
+        /// orders that still need a package, for Pack check.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownPhoneWorkPurpose`.
@@ -7162,6 +7164,7 @@ extension Components {
             case saleCheck = "sale_check"
             case saleHistory = "sale_history"
             case listingImport = "listing_import"
+            case labelRead = "label_read"
         }
         /// - Remark: Generated from `#/components/schemas/PhoneRunClaim`.
         public struct PhoneRunClaim: Codable, Hashable, Sendable {
@@ -11462,6 +11465,789 @@ extension Components {
                 case timeZone
             }
         }
+        /// Whether Pack check is on. It is off until the seller turns it on in Settings.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackCheckSettings`.
+        public struct PackCheckSettings: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackCheckSettings/enabled`.
+            public var enabled: Swift.Bool
+            /// Creates a new `PackCheckSettings`.
+            ///
+            /// - Parameters:
+            ///   - enabled:
+            public init(enabled: Swift.Bool) {
+                self.enabled = enabled
+            }
+            public enum CodingKeys: String, CodingKey {
+                case enabled
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PackCheckSettingsReplace`.
+        public struct PackCheckSettingsReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackCheckSettingsReplace/enabled`.
+            public var enabled: Swift.Bool
+            /// Creates a new `PackCheckSettingsReplace`.
+            ///
+            /// - Parameters:
+            ///   - enabled:
+            public init(enabled: Swift.Bool) {
+                self.enabled = enabled
+            }
+            public enum CodingKeys: String, CodingKey {
+                case enabled
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.enabled = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .enabled
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "enabled"
+                ])
+            }
+        }
+        /// A `KnownLabelCarrier`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/LabelCarrier`.
+        public struct LabelCarrier: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/LabelCarrier/value1`.
+            public var value1: Components.Schemas.KnownLabelCarrier?
+            /// - Remark: Generated from `#/components/schemas/LabelCarrier/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `LabelCarrier`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownLabelCarrier? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// The carrier a tracking number's shape names; `other` when it can't tell.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownLabelCarrier`.
+        @frozen public enum KnownLabelCarrier: String, Codable, Hashable, Sendable, CaseIterable {
+            case usps = "usps"
+            case ups = "ups"
+            case fedex = "fedex"
+            case dhl = "dhl"
+            case other = "other"
+        }
+        /// A `KnownLabelSource`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/LabelSource`.
+        public struct LabelSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/LabelSource/value1`.
+            public var value1: Components.Schemas.KnownLabelSource?
+            /// - Remark: Generated from `#/components/schemas/LabelSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `LabelSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownLabelSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `marketplace`: read from the marketplace's own order page. `scan`: the seller scanned it
+        /// onto the order after the photo check, because Listora had no label for it.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownLabelSource`.
+        @frozen public enum KnownLabelSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case marketplace = "marketplace"
+            case scan = "scan"
+        }
+        /// A `KnownPackMatch`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackMatch`.
+        public struct PackMatch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackMatch/value1`.
+            public var value1: Components.Schemas.KnownPackMatch?
+            /// - Remark: Generated from `#/components/schemas/PackMatch/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PackMatch`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPackMatch? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// How Listora knew the label was this order's: `sticker` (the label and the item's sticker
+        /// both match), `label` (the label's tracking number matches), or `photo` (a label Listora
+        /// didn't know, which the seller checked against the item's photo).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPackMatch`.
+        @frozen public enum KnownPackMatch: String, Codable, Hashable, Sendable, CaseIterable {
+            case sticker = "sticker"
+            case label = "label"
+            case photo = "photo"
+        }
+        /// Where the item is kept, for example shelf `B-12`.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackLocation`.
+        public struct PackLocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackLocation/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PackLocation/label`.
+            public var label: Swift.String?
+            /// Creates a new `PackLocation`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - label:
+            public init(
+                code: Swift.String,
+                label: Swift.String? = nil
+            ) {
+                self.code = code
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case label
+            }
+        }
+        /// One item of the order.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackItem`.
+        public struct PackItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackItem/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PackItem/sku`.
+            public var sku: Components.Schemas.Sku
+            /// - Remark: Generated from `#/components/schemas/PackItem/title`.
+            public var title: Swift.String?
+            /// How Pack check names it, `black Shaka Wear tee, 2XL`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackItem/description`.
+            public var description: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PackItem/sizeLabel`.
+            public var sizeLabel: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PackItem/location`.
+            public var location: Components.Schemas.PackLocation?
+            /// The item's cover photo, small; absent until a photo is processed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackItem/thumbnailUrl`.
+            public var thumbnailUrl: Swift.String?
+            /// The item's cover photo, large, for the photo check.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackItem/photoUrl`.
+            public var photoUrl: Swift.String?
+            /// Creates a new `PackItem`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - sku:
+            ///   - title:
+            ///   - description: How Pack check names it, `black Shaka Wear tee, 2XL`.
+            ///   - sizeLabel:
+            ///   - location:
+            ///   - thumbnailUrl: The item's cover photo, small; absent until a photo is processed.
+            ///   - photoUrl: The item's cover photo, large, for the photo check.
+            public init(
+                itemId: Components.Schemas.Id,
+                sku: Components.Schemas.Sku,
+                title: Swift.String? = nil,
+                description: Swift.String,
+                sizeLabel: Swift.String? = nil,
+                location: Components.Schemas.PackLocation? = nil,
+                thumbnailUrl: Swift.String? = nil,
+                photoUrl: Swift.String? = nil
+            ) {
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.description = description
+                self.sizeLabel = sizeLabel
+                self.location = location
+                self.thumbnailUrl = thumbnailUrl
+                self.photoUrl = photoUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case sku
+                case title
+                case description
+                case sizeLabel
+                case location
+                case thumbnailUrl
+                case photoUrl
+            }
+        }
+        /// The order's shipping label.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackLabel`.
+        public struct PackLabel: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackLabel/trackingNumber`.
+            public var trackingNumber: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PackLabel/carrier`.
+            public var carrier: Components.Schemas.LabelCarrier
+            /// - Remark: Generated from `#/components/schemas/PackLabel/source`.
+            public var source: Components.Schemas.LabelSource
+            /// Creates a new `PackLabel`.
+            ///
+            /// - Parameters:
+            ///   - trackingNumber:
+            ///   - carrier:
+            ///   - source:
+            public init(
+                trackingNumber: Swift.String,
+                carrier: Components.Schemas.LabelCarrier,
+                source: Components.Schemas.LabelSource
+            ) {
+                self.trackingNumber = trackingNumber
+                self.carrier = carrier
+                self.source = source
+            }
+            public enum CodingKeys: String, CodingKey {
+                case trackingNumber
+                case carrier
+                case source
+            }
+        }
+        /// The order's package, once packed.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackRecord`.
+        public struct PackRecord: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackRecord/packedAt`.
+            public var packedAt: Components.Schemas.Timestamp
+            /// The label that went on the package.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackRecord/trackingNumber`.
+            public var trackingNumber: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PackRecord/matchedBy`.
+            public var matchedBy: Components.Schemas.PackMatch
+            /// - Remark: Generated from `#/components/schemas/PackRecord/stickerSku`.
+            public var stickerSku: Components.Schemas.Sku?
+            /// The marketplace now shows another label for this order than the one packed (read after
+            /// the seller packed it with a label Listora didn't know): check the package again.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackRecord/labelMismatch`.
+            public var labelMismatch: Swift.Bool
+            /// The package photo, kept for a claim.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackRecord/photoUrl`.
+            public var photoUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PackRecord/photoAddedAt`.
+            public var photoAddedAt: Components.Schemas.Timestamp?
+            /// Creates a new `PackRecord`.
+            ///
+            /// - Parameters:
+            ///   - packedAt:
+            ///   - trackingNumber: The label that went on the package.
+            ///   - matchedBy:
+            ///   - stickerSku:
+            ///   - labelMismatch: The marketplace now shows another label for this order than the one packed (read after
+            ///   - photoUrl: The package photo, kept for a claim.
+            ///   - photoAddedAt:
+            public init(
+                packedAt: Components.Schemas.Timestamp,
+                trackingNumber: Swift.String,
+                matchedBy: Components.Schemas.PackMatch,
+                stickerSku: Components.Schemas.Sku? = nil,
+                labelMismatch: Swift.Bool,
+                photoUrl: Swift.String? = nil,
+                photoAddedAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.packedAt = packedAt
+                self.trackingNumber = trackingNumber
+                self.matchedBy = matchedBy
+                self.stickerSku = stickerSku
+                self.labelMismatch = labelMismatch
+                self.photoUrl = photoUrl
+                self.photoAddedAt = photoAddedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case packedAt
+                case trackingNumber
+                case matchedBy
+                case stickerSku
+                case labelMismatch
+                case photoUrl
+                case photoAddedAt
+            }
+        }
+        /// One sale that still needs a package, as the to-ship list shows it: its items, the buyer's
+        /// first name, its label, and whether it is packed. `labelStatus` and `packStatus` are the
+        /// server's words; clients show them as given.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackOrder`.
+        public struct PackOrder: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackOrder/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PackOrder/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// The marketplace's order number (for Mercari and Depop, the listing's id).
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrder/orderNumber`.
+            public var orderNumber: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PackOrder/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/PackOrder/shipBy`.
+            public var shipBy: Components.Schemas.Timestamp?
+            /// How Pack check names the order, `the black Shaka Wear tee, 2XL`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrder/description`.
+            public var description: Swift.String
+            /// Only the first name, from the marketplace's order page.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrder/buyerFirstName`.
+            public var buyerFirstName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PackOrder/items`.
+            public var items: [Components.Schemas.PackItem]
+            /// - Remark: Generated from `#/components/schemas/PackOrder/label`.
+            public var label: Components.Schemas.PackLabel?
+            /// - Remark: Generated from `#/components/schemas/PackOrder/labelStatus`.
+            public var labelStatus: Components.Schemas.StatusDisplay
+            /// - Remark: Generated from `#/components/schemas/PackOrder/pack`.
+            public var pack: Components.Schemas.PackRecord?
+            /// - Remark: Generated from `#/components/schemas/PackOrder/packStatus`.
+            public var packStatus: Components.Schemas.StatusDisplay
+            /// Creates a new `PackOrder`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - marketplace:
+            ///   - orderNumber: The marketplace's order number (for Mercari and Depop, the listing's id).
+            ///   - soldAt:
+            ///   - shipBy:
+            ///   - description: How Pack check names the order, `the black Shaka Wear tee, 2XL`.
+            ///   - buyerFirstName: Only the first name, from the marketplace's order page.
+            ///   - items:
+            ///   - label:
+            ///   - labelStatus:
+            ///   - pack:
+            ///   - packStatus:
+            public init(
+                saleId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                orderNumber: Swift.String? = nil,
+                soldAt: Components.Schemas.Timestamp,
+                shipBy: Components.Schemas.Timestamp? = nil,
+                description: Swift.String,
+                buyerFirstName: Swift.String? = nil,
+                items: [Components.Schemas.PackItem],
+                label: Components.Schemas.PackLabel? = nil,
+                labelStatus: Components.Schemas.StatusDisplay,
+                pack: Components.Schemas.PackRecord? = nil,
+                packStatus: Components.Schemas.StatusDisplay
+            ) {
+                self.saleId = saleId
+                self.marketplace = marketplace
+                self.orderNumber = orderNumber
+                self.soldAt = soldAt
+                self.shipBy = shipBy
+                self.description = description
+                self.buyerFirstName = buyerFirstName
+                self.items = items
+                self.label = label
+                self.labelStatus = labelStatus
+                self.pack = pack
+                self.packStatus = packStatus
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case marketplace
+                case orderNumber
+                case soldAt
+                case shipBy
+                case description
+                case buyerFirstName
+                case items
+                case label
+                case labelStatus
+                case pack
+                case packStatus
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PackOrderList`.
+        public struct PackOrderList: Codable, Hashable, Sendable {
+            /// Newest first; packed orders stay a day.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrderList/data`.
+            public var data: [Components.Schemas.PackOrder]
+            /// - Remark: Generated from `#/components/schemas/PackOrderList/generatedAt`.
+            public var generatedAt: Components.Schemas.Timestamp
+            /// Creates a new `PackOrderList`.
+            ///
+            /// - Parameters:
+            ///   - data: Newest first; packed orders stay a day.
+            ///   - generatedAt:
+            public init(
+                data: [Components.Schemas.PackOrder],
+                generatedAt: Components.Schemas.Timestamp
+            ) {
+                self.data = data
+                self.generatedAt = generatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case generatedAt
+            }
+        }
+        /// The label reads Listora asked for.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackLabelRefresh`.
+        public struct PackLabelRefresh: Codable, Hashable, Sendable {
+            /// How many orders' labels will be read.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabelRefresh/orders`.
+            public var orders: Swift.Int32
+            /// Where the reads run on this account's iPhone; the app runs them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabelRefresh/marketplaces`.
+            public var marketplaces: [Components.Schemas.Marketplace]
+            /// Creates a new `PackLabelRefresh`.
+            ///
+            /// - Parameters:
+            ///   - orders: How many orders' labels will be read.
+            ///   - marketplaces: Where the reads run on this account's iPhone; the app runs them.
+            public init(
+                orders: Swift.Int32,
+                marketplaces: [Components.Schemas.Marketplace]
+            ) {
+                self.orders = orders
+                self.marketplaces = marketplaces
+            }
+            public enum CodingKeys: String, CodingKey {
+                case orders
+                case marketplaces
+            }
+        }
+        /// A `KnownPackScanVerdict`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackScanVerdict`.
+        public struct PackScanVerdict: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackScanVerdict/value1`.
+            public var value1: Components.Schemas.KnownPackScanVerdict?
+            /// - Remark: Generated from `#/components/schemas/PackScanVerdict/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PackScanVerdict`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPackScanVerdict? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `match`: the label is the order being packed's. `found`: with no order chosen, the label's
+        /// (or sticker's) order. `wrong_order`: the label is another order's. `already_packed`: the
+        /// label went on a package already. `sticker_mismatch`: the sticker is another item's.
+        /// `unknown_label`: no order has this label yet. `sticker_scanned`: a sticker where the label
+        /// goes. `not_a_label`: not a tracking number. A verdict this client doesn't know: show
+        /// `headline` and `detail`, and offer nothing.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPackScanVerdict`.
+        @frozen public enum KnownPackScanVerdict: String, Codable, Hashable, Sendable, CaseIterable {
+            case match = "match"
+            case found = "found"
+            case wrongOrder = "wrong_order"
+            case alreadyPacked = "already_packed"
+            case stickerMismatch = "sticker_mismatch"
+            case unknownLabel = "unknown_label"
+            case stickerScanned = "sticker_scanned"
+            case notALabel = "not_a_label"
+        }
+        /// What a scan means for the package on the table, in the server's words. Only `canPack`
+        /// lets the app offer Packed; only `canPhotoCheck` lets it offer the photo check of a label
+        /// Listora doesn't know.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackScan`.
+        public struct PackScan: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PackScan/verdict`.
+            public var verdict: Components.Schemas.PackScanVerdict
+            /// - Remark: Generated from `#/components/schemas/PackScan/tone`.
+            public var tone: Components.Schemas.StatusTone
+            /// - Remark: Generated from `#/components/schemas/PackScan/headline`.
+            public var headline: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PackScan/detail`.
+            public var detail: Swift.String
+            /// The scanned label's tracking number, when it can be one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackScan/trackingNumber`.
+            public var trackingNumber: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PackScan/order`.
+            public var order: Components.Schemas.PackOrder?
+            /// - Remark: Generated from `#/components/schemas/PackScan/expectedOrder`.
+            public var expectedOrder: Components.Schemas.PackOrder?
+            /// - Remark: Generated from `#/components/schemas/PackScan/packedOrder`.
+            public var packedOrder: Components.Schemas.PackOrder?
+            /// - Remark: Generated from `#/components/schemas/PackScan/canPack`.
+            public var canPack: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/PackScan/canPhotoCheck`.
+            public var canPhotoCheck: Swift.Bool
+            /// Creates a new `PackScan`.
+            ///
+            /// - Parameters:
+            ///   - verdict:
+            ///   - tone:
+            ///   - headline:
+            ///   - detail:
+            ///   - trackingNumber: The scanned label's tracking number, when it can be one.
+            ///   - order:
+            ///   - expectedOrder:
+            ///   - packedOrder:
+            ///   - canPack:
+            ///   - canPhotoCheck:
+            public init(
+                verdict: Components.Schemas.PackScanVerdict,
+                tone: Components.Schemas.StatusTone,
+                headline: Swift.String,
+                detail: Swift.String,
+                trackingNumber: Swift.String? = nil,
+                order: Components.Schemas.PackOrder? = nil,
+                expectedOrder: Components.Schemas.PackOrder? = nil,
+                packedOrder: Components.Schemas.PackOrder? = nil,
+                canPack: Swift.Bool,
+                canPhotoCheck: Swift.Bool
+            ) {
+                self.verdict = verdict
+                self.tone = tone
+                self.headline = headline
+                self.detail = detail
+                self.trackingNumber = trackingNumber
+                self.order = order
+                self.expectedOrder = expectedOrder
+                self.packedOrder = packedOrder
+                self.canPack = canPack
+                self.canPhotoCheck = canPhotoCheck
+            }
+            public enum CodingKeys: String, CodingKey {
+                case verdict
+                case tone
+                case headline
+                case detail
+                case trackingNumber
+                case order
+                case expectedOrder
+                case packedOrder
+                case canPack
+                case canPhotoCheck
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PackOrderPack`.
+        public struct PackOrderPack: Codable, Hashable, Sendable {
+            /// What the camera read from the shipping label, or the number the seller typed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrderPack/label`.
+            public var label: Swift.String
+            /// What the camera read from the item's sticker.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrderPack/sticker`.
+            public var sticker: Swift.String?
+            /// The seller compared the item with the order's photo and says this label, which Listora
+            /// doesn't know, is this order's.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrderPack/photoCheck`.
+            public var photoCheck: Swift.Bool?
+            /// Creates a new `PackOrderPack`.
+            ///
+            /// - Parameters:
+            ///   - label: What the camera read from the shipping label, or the number the seller typed.
+            ///   - sticker: What the camera read from the item's sticker.
+            ///   - photoCheck: The seller compared the item with the order's photo and says this label, which Listora
+            public init(
+                label: Swift.String,
+                sticker: Swift.String? = nil,
+                photoCheck: Swift.Bool? = nil
+            ) {
+                self.label = label
+                self.sticker = sticker
+                self.photoCheck = photoCheck
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case sticker
+                case photoCheck
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.label = try container.decode(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                self.sticker = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .sticker
+                )
+                self.photoCheck = try container.decodeIfPresent(
+                    Swift.Bool.self,
+                    forKey: .photoCheck
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "label",
+                    "sticker",
+                    "photoCheck"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PackPhotoAdd`.
+        public struct PackPhotoAdd: Codable, Hashable, Sendable {
+            /// A JPEG uploaded through an upload session.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackPhotoAdd/uploadFileId`.
+            public var uploadFileId: Components.Schemas.Id
+            /// Creates a new `PackPhotoAdd`.
+            ///
+            /// - Parameters:
+            ///   - uploadFileId: A JPEG uploaded through an upload session.
+            public init(uploadFileId: Components.Schemas.Id) {
+                self.uploadFileId = uploadFileId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case uploadFileId
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.uploadFileId = try container.decode(
+                    Components.Schemas.Id.self,
+                    forKey: .uploadFileId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "uploadFileId"
+                ])
+            }
+        }
         /// A `KnownActivitySource`, or one added after this client was built.
         ///
         /// - Remark: Generated from `#/components/schemas/ActivitySource`.
@@ -11639,7 +12425,8 @@ extension Components {
         /// action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
         /// with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
         /// an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
-        /// delist after a sale. `task`: a task for the seller.
+        /// delist after a sale. `task`: a task for the seller. `package`: a package Pack check
+        /// packed, or its photo.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownActivityKind`.
@@ -11652,6 +12439,7 @@ extension Components {
             case sale = "sale"
             case delist = "delist"
             case task = "task"
+            case package = "package"
         }
         /// One step of a browser session.
         ///
@@ -11778,6 +12566,10 @@ extension Components {
             public var error: Components.Schemas.ActivityError?
             /// - Remark: Generated from `#/components/schemas/ActivityEntry/reference`.
             public var reference: Components.Schemas.ActivityReference?
+            /// A `package` entry's photo of the open package with its label, for a claim.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/photoUrl`.
+            public var photoUrl: Swift.String?
             /// Creates a new `ActivityEntry`.
             ///
             /// - Parameters:
@@ -11797,6 +12589,7 @@ extension Components {
             ///   - steps:
             ///   - error:
             ///   - reference:
+            ///   - photoUrl: A `package` entry's photo of the open package with its label, for a claim.
             public init(
                 id: Swift.String,
                 at: Components.Schemas.Timestamp,
@@ -11813,7 +12606,8 @@ extension Components {
                 durationMs: Swift.Int64? = nil,
                 steps: [Components.Schemas.ActivityStep]? = nil,
                 error: Components.Schemas.ActivityError? = nil,
-                reference: Components.Schemas.ActivityReference? = nil
+                reference: Components.Schemas.ActivityReference? = nil,
+                photoUrl: Swift.String? = nil
             ) {
                 self.id = id
                 self.at = at
@@ -11831,6 +12625,7 @@ extension Components {
                 self.steps = steps
                 self.error = error
                 self.reference = reference
+                self.photoUrl = photoUrl
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -11849,6 +12644,7 @@ extension Components {
                 case steps
                 case error
                 case reference
+                case photoUrl
             }
         }
         /// Newest first.

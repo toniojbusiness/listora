@@ -81,6 +81,11 @@
 				if (listings === void 0) throw new Error("these scripts list no listings");
 				return listings(call.cursor, step);
 			}
+			case "labels": {
+				const labels = scripts.labels;
+				if (labels === void 0) throw new Error("these scripts read no order labels");
+				return labels(call.orders, step);
+			}
 			default: return assertNever(call, "script call");
 		}
 	}
@@ -6447,10 +6452,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* `PageChangedError`, as a page does.
 	*/
 	/** The cookie Depop's pages send as their bearer token. */
-	const TOKEN_COOKIE = "access_token";
-	const API = "web API";
+	const TOKEN_COOKIE$1 = "access_token";
+	const API$1 = "web API";
 	/** One page of the seller's own listings. */
-	const PAGE_SIZE = 24;
+	const PAGE_SIZE$1 = 24;
 	const amount = object({ amount: string() });
 	const editListingSchema = object({
 		slug: string().regex(DEPOP_SLUG),
@@ -6488,15 +6493,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* it deleted, or another seller's).
 	*/
 	async function readOwnProduct(page, site, slug) {
-		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE });
+		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE$1 });
 		if (answer.status === 404) return null;
-		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for a product`);
-		const product = expectShape$1(editListingSchema, answer.body, API);
+		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for a product`);
+		const product = expectShape$1(editListingSchema, answer.body, API$1);
 		const status = STATUSES$2[product.status];
-		if (status === void 0) throw changed$2(API, "shows a product status Listora does not know");
-		if (product.pricing.currency_name !== "USD") throw changed$2(API, "shows a price that is not in US dollars");
+		if (status === void 0) throw changed$2(API$1, "shows a product status Listora does not know");
+		if (product.pricing.currency_name !== "USD") throw changed$2(API$1, "shows a price that is not in US dollars");
 		const key = product.pricing.final_price_key ?? "original_price";
-		const price = expectShape$1(priceSchema, product.pricing[key], API).price_breakdown.price.amount;
+		const price = expectShape$1(priceSchema, product.pricing[key], API$1).price_breakdown.price.amount;
 		const { description, sku } = listingCopy(product.description);
 		return {
 			record: answer.body,
@@ -6509,7 +6514,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: cents$1(price),
 				currency: "USD",
-				revision: revision$1(product.updated_at, API)
+				revision: revision$1(product.updated_at, API$1)
 			},
 			sku
 		};
@@ -6522,15 +6527,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const query = new URLSearchParams({
 			lang: "en",
 			cursor: cursor ?? "",
-			limit: String(PAGE_SIZE),
+			limit: String(PAGE_SIZE$1),
 			statusFilter: filter
 		});
-		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE });
-		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for the seller's listings`);
-		const feed = expectShape$1(feedSchema, answer.body, API);
+		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
+		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for the seller's listings`);
+		const feed = expectShape$1(feedSchema, answer.body, API$1);
 		return {
 			products: feed.products.map((entry) => {
-				const read = productRead(expectShape$1(productRecordSchema$1, entry, API), site, API);
+				const read = productRead(expectShape$1(productRecordSchema$1, entry, API$1), site, API$1);
 				return {
 					state: read.listing,
 					sku: read.sku,
@@ -6543,7 +6548,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** A US dollar amount (`"18.00"`) in cents. */
 	function cents$1(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-		if (match?.[1] === void 0) throw changed$2(API, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$2(API$1, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 
@@ -6742,7 +6747,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the one that offers this slug.
 	*/
 structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application/ld+json\"]" };
-	const PAGE$9 = "product page";
+	const PAGE$11 = "product page";
 	/** The product as the page's first query loaded it. */
 	const productRecordSchema = object({
 		slug: string().regex(DEPOP_SLUG),
@@ -6809,13 +6814,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let status;
 		let text;
 		if (records.length > 0) {
-			const product = expectShape$1(productRecordSchema, records[0], PAGE$9);
+			const product = expectShape$1(productRecordSchema, records[0], PAGE$11);
 			status = STATUSES$1[product.status];
-			if (status === void 0) throw changed$2(PAGE$9, "shows a product status Listora does not know");
+			if (status === void 0) throw changed$2(PAGE$11, "shows a product status Listora does not know");
 			text = product.description;
 		} else {
 			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
-			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$9, "has none of the product data Listora reads");
+			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$11, "has none of the product data Listora reads");
 			text = offer.description;
 		}
 		const priceCents = offer.priceCents;
@@ -6844,24 +6849,133 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return [];
 			}
 		});
-		if (blocks.length === 0) throw changed$2(PAGE$9, "has no product data (structured data)");
+		if (blocks.length === 0) throw changed$2(PAGE$11, "has no product data (structured data)");
 		const own = blocks.find((block) => {
 			const read = structuredDataSchema.safeParse(block);
 			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
 		});
 		if (own === void 0) {
-			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$9, "offers a different product");
-			expectShape$1(structuredDataSchema, blocks[0], PAGE$9);
-			throw changed$2(PAGE$9, "has none of the product data Listora reads");
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$11, "offers a different product");
+			expectShape$1(structuredDataSchema, blocks[0], PAGE$11);
+			throw changed$2(PAGE$11, "has none of the product data Listora reads");
 		}
-		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$9);
-		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$9, "shows a price that is not in US dollars");
+		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$11);
+		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$11, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
-		if (match?.[1] === void 0) throw changed$2(PAGE$9, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$2(PAGE$11, "shows a price Listora can't read");
 		return {
 			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
 			...offers.availability === void 0 ? {} : { availability: offers.availability },
 			...description === void 0 ? {} : { description }
+		};
+	}
+
+// src/adapter/label-fields.ts
+/**
+	* Pack check's label reads (docs/features/pack-check.md, "Reading labels") from marketplace data
+	* Listora has only seen empty: Depop's receipts and Poshmark's sales. Their records are read by
+	* field names that say what a value is (`tracking_number`, the buyer's `first_name`), at any
+	* depth, and nothing else: a value is never taken by its position or its look. A record that
+	* names no order id or listing at all is a shape Listora doesn't know, and the page module throws
+	* `PageChangedError` for it.
+	*/
+	/** Every value under a key `keys` names, at any depth (arrays included). */
+	function fieldValues(value, keys, depth = 0) {
+		if (depth > 6 || typeof value !== "object" || value === null) return [];
+		if (Array.isArray(value)) return value.flatMap((entry) => fieldValues(entry, keys, depth + 1));
+		return Object.entries(value).flatMap(([key, entry]) => [...keys.includes(key) ? [entry] : [], ...fieldValues(entry, keys, depth + 1)]);
+	}
+	/** The non-empty strings (and whole numbers, as text) among `values`, without repeats. */
+	function texts(values) {
+		const found = values.flatMap((value) => {
+			if (typeof value === "string" && value.trim() !== "") return [value.trim()];
+			if (typeof value === "number" && Number.isSafeInteger(value)) return [String(value)];
+			return [];
+		});
+		return [...new Set(found)];
+	}
+	/** The tracking number a record names, if any. */
+	function trackingField(record) {
+		return texts(fieldValues(record, ["tracking_number", "trackingNumber"]))[0] ?? null;
+	}
+	/** The buyer's first name a record names under its `buyer`, if any. */
+	function buyerFirstName(record) {
+		if (typeof record !== "object" || record === null) return null;
+		const buyer = record["buyer"];
+		return texts(fieldValues(buyer, ["first_name", "firstName"]))[0] ?? null;
+	}
+
+// src/depop/pages/receipts.ts
+/**
+	* The seller's receipts, as Depop's sold items page loads them (read on the captain's session,
+	* 2026-10-27): `GET /presentation/api/v1/receipts/?role=seller&limit=12` answers
+	* `{"objects": [...], "page_info": {"has_more": false}}`, one receipt per sale, newest first.
+	* Pack check reads each sale's shipping label and buyer's first name from them
+	* (docs/features/pack-check.md, "Reading labels").
+	*
+	* That account has no sale, so only the empty answer is known; a receipt's own fields are not.
+	* A receipt is matched to an order by its id or by a product slug it names, and only fields
+	* whose names say what they are count: `tracking_number` (or `trackingNumber`) for the label,
+	* and the buyer's `first_name`. A receipt that names neither an id nor a slug is a page Listora
+	* doesn't know (`PageChangedError`), which ends the read visibly and logs the structure, so the
+	* reader is fixed from a real receipt instead of guessing. Only reads.
+	*/
+	const TOKEN_COOKIE = "access_token";
+	const API = "receipts API";
+	const PAGE_SIZE = 24;
+	const receiptsSchema = object({
+		objects: array(record(string(), unknown())),
+		page_info: object({
+			has_more: boolean(),
+			end_cursor: string().nullish()
+		}).catchall(unknown())
+	});
+	/** One page of the seller's receipts, and the cursor of the next (`null` after the last). */
+	async function readReceipts(page, site, cursor) {
+		const query = new URLSearchParams({
+			role: "seller",
+			limit: String(PAGE_SIZE)
+		});
+		if (cursor !== null) query.set("cursor", cursor);
+		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE });
+		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for the receipts`);
+		const shown = expectShape$1(receiptsSchema, answer.body, API);
+		const receipts = shown.objects.map(receiptLabel);
+		const next = shown.page_info.has_more ? shown.page_info.end_cursor ?? null : null;
+		if (shown.page_info.has_more && next === null) throw changed$2(API, "has more receipts but no cursor");
+		return {
+			receipts,
+			next
+		};
+	}
+	/** The receipt's ids, product slugs, label, and buyer's first name, by their field names. */
+	function receiptLabel(receipt) {
+		const ids = texts([
+			receipt["id"],
+			receipt["purchase_id"],
+			receipt["purchaseId"]
+		]);
+		const slugs = texts(fieldValues(receipt, ["slug", "product_slug"]));
+		if (ids.length === 0 && slugs.length === 0) throw changed$2(API, "shows a receipt without an id or a product");
+		return {
+			ids,
+			slugs,
+			trackingNumber: trackingField(receipt),
+			buyerFirstName: buyerFirstName(receipt)
+		};
+	}
+	/** The order's label from the receipts read, or not found. */
+	function orderLabel(order, receipts) {
+		const receipt = receipts.find((shown) => shown.ids.includes(order.externalOrderId) || shown.slugs.includes(order.externalOrderId) || order.externalListingIds.some((id) => shown.slugs.includes(id)));
+		if (receipt === void 0) return {
+			externalOrderId: order.externalOrderId,
+			found: false
+		};
+		return {
+			externalOrderId: order.externalOrderId,
+			found: true,
+			trackingNumber: receipt.trackingNumber,
+			buyerFirstName: receipt.buyerFirstName
 		};
 	}
 
@@ -6872,7 +6986,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		/** A sale's row links to its receipt (not the page's own address, which a menu may link). */
 		receipt: "a[href^=\"/sellinghub/sold-items/\"]:not([href=\"/sellinghub/sold-items/\"])"
 	};
-	const PAGE$8 = "sold items page";
+	const PAGE$10 = "sold items page";
 	/** How long the list may take to draw. */
 	const DRAW_MS$1 = 1e4;
 	const LOOK_EVERY_MS$3 = 500;
@@ -6885,8 +6999,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				items: [],
 				hasMore: false
 			};
-			if (await page.exists(SOLD_ITEMS_PAGE.receipt)) throw changed$2(PAGE$8, "lists sales in a way Listora cannot read yet");
-			if (Date.now() >= end) throw changed$2(PAGE$8, "shows neither sales nor its no-sales note");
+			if (await page.exists(SOLD_ITEMS_PAGE.receipt)) throw changed$2(PAGE$10, "lists sales in a way Listora cannot read yet");
+			if (Date.now() >= end) throw changed$2(PAGE$10, "shows neither sales nor its no-sales note");
 			await lookAgain$1(page, LOOK_EVERY_MS$3);
 		}
 	}
@@ -7101,6 +7215,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				}
 				return orders;
 			},
+			labels: async (orders, step) => {
+				const receipts = [];
+				let cursor = null;
+				for (let number = 1; number <= 5; number += 1) {
+					const shown = await step("read the sold items", { mutates: false }, async (page) => {
+						await onDepop(page, site);
+						return readReceipts(page, site, cursor);
+					});
+					receipts.push(...shown.receipts);
+					const missing = orders.some((order) => !orderLabel(order, receipts).found);
+					if (shown.next === null || !missing) break;
+					cursor = shown.next;
+				}
+				return orders.map((order) => orderLabel(order, receipts));
+			},
 			listings: async (cursor, step) => {
 				const shown = await step("read your listings for sale", { mutates: false }, async (page) => {
 					await onDepop(page, site);
@@ -7277,19 +7406,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		price: "[data-testid=\"active-listings\"] [data-testid=\"listing-row\"] [data-testid=\"listing-row__price\"]",
 		next: "a[data-testid=\"pagination__next\"]"
 	};
-	const PAGE$7 = "active listings page";
+	const PAGE$9 = "active listings page";
 	/** Opens the page of active listings that starts at `offset` and reads its rows. */
 	async function readActiveListingsPage(page, site, offset) {
 		await page.goto(absolute$1(site, EBAY_PATHS.active(offset)));
-		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$1(PAGE$7, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
+		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$1(PAGE$9, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(ACTIVE_LISTINGS_PAGE.row, "data-item-id");
 		const titles = await page.texts(ACTIVE_LISTINGS_PAGE.title);
 		const labels = await page.texts(ACTIVE_LISTINGS_PAGE.customLabel);
 		const prices = await page.texts(ACTIVE_LISTINGS_PAGE.price);
-		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$1(PAGE$7, "shows rows without a title, Custom label, or price");
+		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$1(PAGE$9, "shows rows without a title, Custom label, or price");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$1(PAGE$7, "shows a row without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$1(PAGE$9, "shows a row without an item number");
 				const label = labels[index] ?? "";
 				return {
 					itemId: id,
@@ -7313,7 +7442,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		sold: "[data-testid=\"x-sold-notice\"]",
 		notFound: "[data-testid=\"x-page-missing\"]"
 	};
-	const PAGE$6 = "listing page";
+	const PAGE$8 = "listing page";
 	/** Opens the listing's page and reads it. */
 	async function readItem$1(page, site, itemId) {
 		await page.goto(itemUrl$1(site, itemId));
@@ -7326,13 +7455,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** Reads the listing page the browser shows now (after a form sent it there). */
 	async function readShownItem$1(page, site) {
 		const itemId = itemIdFromPath$1(new URL(page.url()).pathname);
-		if (itemId === null) throw changed$1(PAGE$6, "is not at a listing address");
-		await expectElement$1(page, ITEM_PAGE$1.root, PAGE$6, "listing details");
-		if (((await page.text(ITEM_PAGE$1.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$1(PAGE$6, "shows a different item number");
+		if (itemId === null) throw changed$1(PAGE$8, "is not at a listing address");
+		await expectElement$1(page, ITEM_PAGE$1.root, PAGE$8, "listing details");
+		if (((await page.text(ITEM_PAGE$1.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$1(PAGE$8, "shows a different item number");
 		const title = await page.text(ITEM_PAGE$1.title);
-		if (title === null || title === "") throw changed$1(PAGE$6, "shows no title");
+		if (title === null || title === "") throw changed$1(PAGE$8, "shows no title");
 		const priceCents = parsePrice$1(await page.text(ITEM_PAGE$1.price));
-		if (priceCents === null) throw changed$1(PAGE$6, "shows no price Listora can read");
+		if (priceCents === null) throw changed$1(PAGE$8, "shows no price Listora can read");
 		const soldNotice = await page.text(ITEM_PAGE$1.sold);
 		const endedNotice = await page.text(ITEM_PAGE$1.ended);
 		const status = soldNotice !== null ? "sold" : endedNotice !== null ? "ended" : "active";
@@ -7344,7 +7473,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		]) {
 			if (shown === null) continue;
 			const time = ebayTimeIn(shown);
-			if (time === null) throw changed$1(PAGE$6, `shows a ${what} Listora can't read`);
+			if (time === null) throw changed$1(PAGE$8, `shows a ${what} Listora can't read`);
 			times.push(time.getTime());
 		}
 		return {
@@ -7366,17 +7495,17 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		reason: "input[name=\"reason\"][value=\"NotAvailable\"]",
 		submit: "button[data-testid=\"end-listing__submit\"]"
 	};
-	const PAGE$5 = "end listing page";
+	const PAGE$7 = "end listing page";
 	/** Opens the end page of a listing on sale. */
 	async function openEndPage(page, site, itemId) {
 		await page.goto(absolute$1(site, EBAY_PATHS.end(itemId)));
-		await expectElement$1(page, END_PAGE.form, PAGE$5, "end listing form");
-		await expectElement$1(page, END_PAGE.reason, PAGE$5, "reason \"The item is no longer available\"");
+		await expectElement$1(page, END_PAGE.form, PAGE$7, "end listing form");
+		await expectElement$1(page, END_PAGE.reason, PAGE$7, "reason \"The item is no longer available\"");
 		await page.check(END_PAGE.reason, true);
 	}
 	/** Ends the listing the end page shows, and waits for its page. */
 	async function endListing(page) {
-		await expectElement$1(page, END_PAGE.submit, PAGE$5, "End listing button");
+		await expectElement$1(page, END_PAGE.submit, PAGE$7, "End listing button");
 		await page.click(END_PAGE.submit);
 		await page.waitFor(ITEM_PAGE$1.root);
 	}
@@ -7524,25 +7653,25 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		soldAt: "[data-testid=\"sold-listings\"] [data-testid=\"sold-row\"] [data-testid=\"sold-row__date\"]",
 		next: "a[data-testid=\"pagination__next\"]"
 	};
-	const PAGE$4 = "sold listings page";
+	const PAGE$6 = "sold listings page";
 	/** Opens the page of sold listings that starts at `offset` and reads its rows. */
 	async function readSoldListingsPage(page, site, offset) {
 		await page.goto(absolute$1(site, EBAY_PATHS.sold(offset)));
-		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$1(PAGE$4, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
+		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$1(PAGE$6, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(SOLD_LISTINGS_PAGE.row, "data-item-id");
 		const orders = await page.texts(SOLD_LISTINGS_PAGE.order);
 		const prices = await page.texts(SOLD_LISTINGS_PAGE.price);
 		const dates = await page.texts(SOLD_LISTINGS_PAGE.soldAt);
-		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$1(PAGE$4, "shows sales without an order number, price, or date");
+		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$1(PAGE$6, "shows sales without an order number, price, or date");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$1(PAGE$4, "shows a sale without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$1(PAGE$6, "shows a sale without an item number");
 				const orderId = /\d{2}-\d{5}-\d{5}/.exec(orders[index] ?? "")?.[0];
-				if (orderId === void 0) throw changed$1(PAGE$4, "shows an order number Listora can't read");
+				if (orderId === void 0) throw changed$1(PAGE$6, "shows an order number Listora can't read");
 				const priceCents = parsePrice$1(prices[index] ?? null);
-				if (priceCents === null) throw changed$1(PAGE$4, "shows a price Listora can't read");
+				if (priceCents === null) throw changed$1(PAGE$6, "shows a price Listora can't read");
 				const soldAt = ebayTimeIn(dates[index] ?? null);
-				if (soldAt === null) throw changed$1(PAGE$4, "shows a sale time Listora can't read");
+				if (soldAt === null) throw changed$1(PAGE$6, "shows a sale time Listora can't read");
 				return {
 					orderId,
 					itemId: id,
@@ -8456,7 +8585,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const EDIT_PAGE = { 
 	/** Deactivate on an active listing, Activate on an inactive one. */
 toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
-	const PAGE$3 = "edit page";
+	const PAGE$5 = "edit page";
 	/** How long the edit page may take to draw its form, or to answer the toggle. */
 	const DRAW_MS = 25e3;
 	const LOOK_EVERY_MS$1 = 500;
@@ -8484,7 +8613,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const shown = (await page.text(EDIT_PAGE.toggle))?.trim();
 		if (shown === "Deactivate") return "active";
 		if (shown === "Activate") return "inactive";
-		throw changed(PAGE$3, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
+		throw changed(PAGE$5, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
 	}
 	/** Deactivates the listing the editor shows, and waits for Mercari to take it. */
 	async function deactivate(page) {
@@ -8500,11 +8629,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* know: nothing is clicked.
 	*/
 	async function toggled(page, label) {
-		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed(PAGE$3, `has no ${label} button (${EDIT_PAGE.toggle})`);
+		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed(PAGE$5, `has no ${label} button (${EDIT_PAGE.toggle})`);
 		await page.click(EDIT_PAGE.toggle);
 		const end = Date.now() + DRAW_MS;
 		while (onEditPage(page)) {
-			if (Date.now() >= end) throw changed(PAGE$3, `stayed open after ${label}`);
+			if (Date.now() >= end) throw changed(PAGE$5, `stayed open after ${label}`);
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
 	}
@@ -8830,6 +8959,45 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		};
 	}
 
+// src/mercari/pages/order-page.ts
+	const ORDER_PAGE = {
+		summary: "[data-testid=\"OrderSummary\"]",
+		buyer: "[data-testid=\"UserInfoAndChat\"] [data-testid=\"UserNameLink\"]",
+		shipping: "[data-testid=\"CarrierBlock\"], [data-testid=\"ShippingCTA\"], [data-testid*=\"Tracking\"]",
+		notFound: "[data-testid=\"NotFound\"]"
+	};
+	const PAGE$4 = "order page";
+	/** "Tracking number 9400 1118 ..." or "Tracking #: 1Z...": the number after the word. */
+	const TRACKING_LINE = /tracking(?:\s*(?:number|no\.?|#))?\s*[:#]?\s*([A-Z0-9][A-Z0-9 -]{8,48}[A-Z0-9])/i;
+	function orderUrl(site, itemId) {
+		return absolute(site, `/transaction/order_status/${encodeURIComponent(itemId)}/`);
+	}
+	/** Opens the order page of the item's sale and reads its buyer and label. */
+	async function readOrder(page, site, itemId) {
+		await page.goto(orderUrl(site, itemId));
+		if (page.status() === 404 || await page.exists(ORDER_PAGE.notFound)) return {
+			found: false,
+			buyerName: null,
+			trackingNumber: null
+		};
+		await awaitElement(page, ORDER_PAGE.summary, PAGE$4, "order summary");
+		const buyer = (await page.text(ORDER_PAGE.buyer))?.trim() ?? null;
+		const shipping = await page.texts(ORDER_PAGE.shipping);
+		return {
+			found: true,
+			buyerName: buyer === "" ? null : buyer,
+			trackingNumber: trackingIn(shipping)
+		};
+	}
+	/** The tracking number a shipping block's "Tracking" line shows, if any. */
+	function trackingIn(texts) {
+		for (const text of texts) {
+			const number = TRACKING_LINE.exec(text)?.[1]?.replaceAll(/[\s-]/g, "");
+			if (number !== void 0 && /\d/.test(number) && number.length >= 10) return number;
+		}
+		return null;
+	}
+
 // src/mercari/scripts.ts
 /**
 	* How many of the newest active listings a lookup by SKU opens. A listing whose id Listora
@@ -8843,6 +9011,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* show (newest first).
 	*/
 	const MAX_SOLD_READS = 12;
+	/** Order pages one label read opens at most. */
+	const MAX_LABEL_READS = 10;
 	function createMercariScripts(options) {
 		const { site } = options;
 		const notListed = () => ({
@@ -9063,6 +9233,22 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				}
 				return orders;
 			},
+			labels: async (orders, step) => {
+				const labels = [];
+				for (const order of orders.slice(0, 10)) {
+					const read = await step("read the order", { mutates: false }, (page) => readOrder(page, site, order.externalListingIds[0] ?? order.externalOrderId));
+					labels.push(read.found ? {
+						externalOrderId: order.externalOrderId,
+						found: true,
+						trackingNumber: read.trackingNumber,
+						buyerFirstName: read.buyerName
+					} : {
+						externalOrderId: order.externalOrderId,
+						found: false
+					});
+				}
+				return labels;
+			},
 			listings: async (cursor, step) => {
 				const number = cursor === null ? 1 : Number(cursor);
 				if (!Number.isSafeInteger(number) || number < 1) throw new Error(`a Mercari listings cursor is a page number, not ${String(cursor)}`);
@@ -9216,14 +9402,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* where the runner stops for a relink), whose data says the seller is logged in
 	* (`auth.isUserLoggedIn`) and names their handle (`userCookies.userInfo`, state.ts).
 	*/
-	const PAGE$2 = "listing form";
+	const PAGE$3 = "listing form";
 	/** Opens the listing form and returns the logged-in seller's username. */
 	async function loggedInSeller(page, site) {
 		await page.goto(site.createListing());
-		const { auth, userCookies } = expectShape(authSchema, await readPageState(page, PAGE$2), PAGE$2);
+		const { auth, userCookies } = expectShape(authSchema, await readPageState(page, PAGE$3), PAGE$3);
 		const info = userCookies?.userInfo;
 		const username = info?.username !== void 0 && info.username !== "" ? info.username : info?.dh;
-		if (!auth.isUserLoggedIn || username === void 0 || username === "") throw new PageChangedError(`Poshmark's ${PAGE$2} no longer says which seller is logged in`);
+		if (!auth.isUserLoggedIn || username === void 0 || username === "") throw new PageChangedError(`Poshmark's ${PAGE$3} no longer says which seller is logged in`);
 		return username;
 	}
 
@@ -9236,7 +9422,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* (`more.next_max_id`, when `more.is_next_max_id_present`), which the next page's `max_id` takes.
 	* Scripts read one page per step, so a long closet never runs into a step's time limit.
 	*/
-	const PAGE$1 = "closet page";
+	const PAGE$2 = "closet page";
 	const closetSchema = object({ $_closet: object({ listingsPostData: object({
 		data: array(listingRecordSchema),
 		more: object({
@@ -9247,7 +9433,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** One closet page: its listings, and the cursor of the next page (`null` at the end). */
 	async function readClosetPage(page, site, username, query) {
 		await page.goto(site.closet(username, query));
-		const { data, more } = expectShape(closetSchema, await readPageState(page, PAGE$1), PAGE$1).$_closet.listingsPostData;
+		const { data, more } = expectShape(closetSchema, await readPageState(page, PAGE$2), PAGE$2).$_closet.listingsPostData;
 		const next = more?.next_max_id;
 		return {
 			listings: data,
@@ -9670,6 +9856,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		listing(id) {
 			return `${this.origin}/listing/${encodeURIComponent(id)}`;
 		}
+		/** The seller's sales (`/order/sales`, which opens the Seller Hub's sales list). */
+		sales() {
+			return `${this.origin}/order/sales`;
+		}
+		/** One sale's order page: requires its seller. */
+		sale(orderId) {
+			return `${this.origin}/order/sales/${encodeURIComponent(orderId)}`;
+		}
 		/** A seller's closet page. */
 		closet(username, query) {
 			const url = new URL(`${this.origin}/closet/${encodeURIComponent(username)}`);
@@ -9700,7 +9894,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* while it is reviewed. So a listing under review is there to change, and as a read-back it is
 	* live only once Poshmark publishes it again (an ended or sold one reads as what it is).
 	*/
-	const PAGE = "listing page";
+	const PAGE$1 = "listing page";
 	/** Poshmark's record of a listing that isn't on the site, on its 404 page. */
 	const removedSchema = object({ error: object({
 		errorType: string(),
@@ -9717,7 +9911,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const missing = page.status() === 404;
 		let details;
 		try {
-			details = expectShape(listingPageSchema, await readPageState(page, PAGE), PAGE).$_listing_details.listingDetails;
+			details = expectShape(listingPageSchema, await readPageState(page, PAGE$1), PAGE$1).$_listing_details.listingDetails;
 		} catch (error) {
 			if (missing && error instanceof PageChangedError) return { type: "none" };
 			throw error;
@@ -9757,9 +9951,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* one under review that is for sale is not live yet.
 	*/
 	function remoteState(shown, site) {
-		if (shown.type === "listing") return remoteListing(shown.record, site, PAGE);
+		if (shown.type === "listing") return remoteListing(shown.record, site, PAGE$1);
 		if (shown.type === "reviewing") {
-			const listing = remoteListing(shown.record, site, PAGE);
+			const listing = remoteListing(shown.record, site, PAGE$1);
 			return listing.status === "active" ? {
 				found: false,
 				authoritative: false
@@ -9772,7 +9966,52 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 	/** The listing as its seller has it, whether or not Poshmark is reviewing it. */
 	function sellersListing(shown, site) {
-		return shown.type === "reviewing" ? remoteListing(shown.record, site, PAGE) : remoteState(shown, site);
+		return shown.type === "reviewing" ? remoteListing(shown.record, site, PAGE$1) : remoteState(shown, site);
+	}
+
+// src/poshmark/pages/sales-page.ts
+/**
+	* The seller's sales, for Pack check's label reads (docs/features/pack-check.md, "Reading
+	* labels"). `/order/sales` opens the Seller Hub's sales list (`/seller-hub/sales`), whose
+	* embedded data holds the seller's orders in `$_order_list.userSales.data.sales_summary`, with
+	* `meta.count` (read on the captain's session 2026-10-27, which has no sale: `sales_summary`
+	* was empty and the page said "You have not sold anything yet."). One order's own page is
+	* `/order/sales/<order id>`.
+	*
+	* An order's own fields are not known yet, so they are read by name only
+	* (adapter/label-fields.ts): its `id` (or `order_id`), the listings it names (`listing_id`,
+	* `post_id`), its `tracking_number`, and its buyer's `first_name`. An order that names neither
+	* an id nor a listing is a page Listora doesn't know. Only reads.
+	*/
+	const PAGE = "sales page";
+	const salesSchema = object({ $_order_list: object({ userSales: object({
+		data: object({ sales_summary: array(record(string(), unknown())) }),
+		meta: object({ count: number().optional() }).catchall(unknown())
+	}) }) });
+	/** The seller's sales the list shows, newest first. */
+	async function readSales(page, site) {
+		await page.goto(site.sales());
+		return expectShape(salesSchema, await readPageState(page, PAGE), PAGE).$_order_list.userSales.data.sales_summary.map((order) => saleOf(order, PAGE));
+	}
+	/** One order's page: its label and buyer's first name, as the order list may not show them. */
+	async function readSale(page, site, orderId) {
+		await page.goto(site.sale(orderId));
+		const state = await readPageState(page, "order page");
+		return {
+			trackingNumber: trackingField(state),
+			buyerFirstName: buyerFirstName(state)
+		};
+	}
+	function saleOf(order, where) {
+		const [orderId] = texts([order["id"], order["order_id"]]);
+		const listingIds = texts(fieldValues(order, ["listing_id", "post_id"]));
+		if (orderId === void 0) throw new PageChangedError(`Poshmark's ${where} shows an order without an id`);
+		return {
+			orderId,
+			listingIds,
+			trackingNumber: trackingField(order),
+			buyerFirstName: buyerFirstName(order)
+		};
 	}
 
 // src/poshmark/pages/listing-details.ts
@@ -9883,6 +10122,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	const NEW_WAIT_MS = 5e3;
 	/** Sold-item pages read per sale check (48 each, the newest sales among them). */
 	const SOLD_PAGES = 5;
+	/** Order pages one label read opens at most, for labels the sales list does not show. */
+	const MAX_SALE_PAGES = 5;
 	/**
 	* Fills in the details of a new or changed listing, one step per part of the form (a create, a
 	* revise, and the recordings of the form's shapes, docs/features/recorded-pages.md).
@@ -10219,6 +10460,36 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 						}]
 					}];
 				});
+			},
+			labels: async (orders, step) => {
+				const sales = await step("read your sales", { mutates: false }, (page) => readSales(page, site));
+				const saleOf = (order) => sales.find((sale) => sale.orderId === order.externalOrderId || order.externalListingIds.some((id) => sale.listingIds.includes(id)) || sale.listingIds.some((id) => order.externalOrderId === `listing:${id}`));
+				const labels = [];
+				let opened = 0;
+				for (const order of orders) {
+					const sale = saleOf(order);
+					if (sale === void 0) {
+						labels.push({
+							externalOrderId: order.externalOrderId,
+							found: false
+						});
+						continue;
+					}
+					let { trackingNumber, buyerFirstName } = sale;
+					if (trackingNumber === null && opened < 5) {
+						opened += 1;
+						const shown = await step("read the order", { mutates: false }, (page) => readSale(page, site, sale.orderId));
+						trackingNumber = shown.trackingNumber;
+						buyerFirstName ??= shown.buyerFirstName;
+					}
+					labels.push({
+						externalOrderId: order.externalOrderId,
+						found: true,
+						trackingNumber,
+						buyerFirstName
+					});
+				}
+				return labels;
 			},
 			listings: async (cursor, step) => {
 				const username = await seller(step);

@@ -109,6 +109,21 @@ const orders = z
   )
   .max(1_000);
 
+/** An order's label as the phone read it: only its tracking number and the buyer's first name. */
+const labels = z
+  .array(
+    z.discriminatedUnion('found', [
+      z.object({
+        externalOrderId: z.string().min(1).max(200),
+        found: z.literal(true),
+        trackingNumber: z.string().min(1).max(100).nullable(),
+        buyerFirstName: z.string().min(1).max(100).nullable(),
+      }),
+      z.object({ externalOrderId: z.string().min(1).max(200), found: z.literal(false) }),
+    ]),
+  )
+  .max(100);
+
 /** What each script's value is. */
 function valueSchema(call: ScriptCall): z.ZodType {
   switch (call.script) {
@@ -134,6 +149,8 @@ function valueSchema(call: ScriptCall): z.ZodType {
         listings: z.array(listedListing).max(200),
         next: z.string().min(1).max(500).nullable(),
       });
+    case 'labels':
+      return labels;
   }
 }
 

@@ -21,6 +21,9 @@
  *   `wait: false` and waits on the app's screens.
  * - `POST /today/sold-item`: a ready item (as above) kept in bin `B-12` that sold on eBay an hour
  *   ago and ships by tomorrow, answering `{ id, sku, saleId, saleItemId }`: a Today "ship" card.
+ * - `POST /pack/orders`: Pack check turned on, and two sold items to pack whose labels Listora
+ *   read (order A's `9400111899223197428490` and order B's `9400111899223197420001`, the
+ *   double-print fixtures), answering `[{ id, sku, saleId, trackingNumber }]`.
  * - `POST /items/depop`: a ready item (as above) whose Depop listing is being published, answering
  *   `{ id, sku, listingId }`. Depop runs on the phone, so the publish waits for the app to run it.
  * - `POST /depop/faults` `{ action, fault, times? }`: the fake Depop site (which the phone
@@ -55,6 +58,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 
 import type { FakeDepopSite, FakeDepopSiteAction } from '@listora/automation';
 import type { Db, Marketplace } from '@listora/db';
+import { DOUBLE_PRINT } from '@listora/pack-check/testing';
 import type {
   FakeDepopAction,
   FakeDepopFault,
@@ -72,6 +76,7 @@ import {
   createReadyItem,
   recordSoldItem,
   type StackApi,
+  seedPackOrders,
 } from './seed.ts';
 
 const ACTIONS: readonly FakeEbayAction[] = ['add', 'revise', 'end', 'relist', 'get_item', 'media'];
@@ -243,6 +248,31 @@ async function handle(request: IncomingMessage, deps: ControlDependencies): Prom
       return {
         status: 201,
         body: { name: cookie.name, value: cookie.value, domain: cookie.domain, path: cookie.path },
+      };
+    }
+    case 'POST /pack/orders': {
+      const tee = await createReadyItem(deps.api, {
+        title: 'Shaka Wear Heavyweight Tee',
+        brand: 'Shaka Wear',
+        category: 'clothing/tops/t_shirts',
+        sizeLabel: '2XL',
+        colors: ['black'],
+      });
+      const dress = await createReadyItem(deps.api, {
+        title: 'Free People Midi Dress',
+        brand: 'Free People',
+        department: 'women',
+        category: 'clothing/dresses/dresses',
+        sizeLabel: 'S',
+        colors: ['green'],
+      });
+      return {
+        status: 201,
+        body: await seedPackOrders(
+          deps.db,
+          [tee, dress],
+          [DOUBLE_PRINT.trackingA, DOUBLE_PRINT.trackingB],
+        ),
       };
     }
     case 'POST /today/sold-item': {

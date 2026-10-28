@@ -65,6 +65,8 @@ tags:
     description: How much of the plan's quotas the account has used this period.
   - name: today
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
+  - name: pack-check
+    description: Pack check, an optional mode that checks each package's label before it ships.
   - name: voice
     description: Spoken corrections on the review screen that the app could not parse itself.
   - name: prefill
@@ -227,6 +229,18 @@ paths:
     $ref: './paths/today.yaml#/~1v1~1today'
   /v1/today/settings:
     $ref: './paths/today.yaml#/~1v1~1today~1settings'
+  /v1/pack-check/settings:
+    $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1settings'
+  /v1/pack-check/orders:
+    $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1orders'
+  /v1/pack-check/refresh:
+    $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1refresh'
+  /v1/pack-check/scan:
+    $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1scan'
+  /v1/pack-check/orders/{saleId}/pack:
+    $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1orders~1{saleId}~1pack'
+  /v1/pack-check/orders/{saleId}/photo:
+    $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1orders~1{saleId}~1photo'
   /v1/devices/{installationId}:
     $ref: './paths/phone.yaml#/~1v1~1devices~1{installationId}'
   /v1/phone-runs:
@@ -958,6 +972,47 @@ components:
       $ref: './components/schemas/today.yaml#/TodaySummarySettings'
     TodaySummarySettingsReplace:
       $ref: './components/schemas/today.yaml#/TodaySummarySettingsReplace'
+    # ---------------------------------------------------------------- pack-check
+    PackCheckSettings:
+      $ref: './components/schemas/pack-check.yaml#/PackCheckSettings'
+    PackCheckSettingsReplace:
+      $ref: './components/schemas/pack-check.yaml#/PackCheckSettingsReplace'
+    LabelCarrier:
+      $ref: './components/schemas/pack-check.yaml#/LabelCarrier'
+    KnownLabelCarrier:
+      $ref: './components/schemas/pack-check.yaml#/KnownLabelCarrier'
+    LabelSource:
+      $ref: './components/schemas/pack-check.yaml#/LabelSource'
+    KnownLabelSource:
+      $ref: './components/schemas/pack-check.yaml#/KnownLabelSource'
+    PackMatch:
+      $ref: './components/schemas/pack-check.yaml#/PackMatch'
+    KnownPackMatch:
+      $ref: './components/schemas/pack-check.yaml#/KnownPackMatch'
+    PackLocation:
+      $ref: './components/schemas/pack-check.yaml#/PackLocation'
+    PackItem:
+      $ref: './components/schemas/pack-check.yaml#/PackItem'
+    PackLabel:
+      $ref: './components/schemas/pack-check.yaml#/PackLabel'
+    PackRecord:
+      $ref: './components/schemas/pack-check.yaml#/PackRecord'
+    PackOrder:
+      $ref: './components/schemas/pack-check.yaml#/PackOrder'
+    PackOrderList:
+      $ref: './components/schemas/pack-check.yaml#/PackOrderList'
+    PackLabelRefresh:
+      $ref: './components/schemas/pack-check.yaml#/PackLabelRefresh'
+    PackScanVerdict:
+      $ref: './components/schemas/pack-check.yaml#/PackScanVerdict'
+    KnownPackScanVerdict:
+      $ref: './components/schemas/pack-check.yaml#/KnownPackScanVerdict'
+    PackScan:
+      $ref: './components/schemas/pack-check.yaml#/PackScan'
+    PackOrderPack:
+      $ref: './components/schemas/pack-check.yaml#/PackOrderPack'
+    PackPhotoAdd:
+      $ref: './components/schemas/pack-check.yaml#/PackPhotoAdd'
     # ---------------------------------------------------------------- activity
     ActivitySource:
       $ref: './components/schemas/activity.yaml#/ActivitySource'

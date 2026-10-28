@@ -48,6 +48,7 @@ import {
   type ListingsPage,
   type MarketplaceAdapter,
   type RemoteOrder,
+  type RemoteOrderLabel,
 } from '@listora/marketplaces';
 import {
   callOperationStep,
@@ -62,7 +63,15 @@ import {
   type RetryPolicy,
   type StepDependencies,
 } from '@listora/operations';
+import {
+  ordersToRead,
+  recordLabelReads,
+  type LabelReadResult,
+  type LabelReadTarget,
+} from '@listora/pack-check';
 import { createLogger, type Logger } from '@listora/shared';
+
+import { AutomationReadError } from '../adapter/automation-adapter.ts';
 
 import type { AutomationSessions, SessionRequest } from '../adapter/sessions.ts';
 import { rateLimitWait, runOutcome, runSteps } from '../adapter/runner-sessions.ts';
@@ -195,7 +204,8 @@ type StepState =
       reason?: SaleCheckReason;
       since: string | null;
       checkedThrough: string | null;
-    };
+    }
+  | { kind: 'label_read'; orders: LabelReadTarget[] };
 
 /** The call the phone runs now. */
 interface PendingState {
@@ -623,6 +633,12 @@ async function claimStepState(
         checkedThrough: started.checkedThrough?.toISOString() ?? null,
       };
     }
+    case 'label_read': {
+      const adapter = deps.adapters(new TranscriptSessions([])).lookup(work.marketplace);
+      if (adapter?.readOrderLabels === undefined) return null;
+      const orders = await ordersToRead(trx, work.account_id, work.marketplace, new Date());
+      return orders.length === 0 ? null : { kind: 'label_read', orders };
+    }
     default:
       return null;
   }
@@ -813,7 +829,69 @@ async function replay(
         },
       };
     }
+    case 'label_read': {
+      const connection = await connectionRef(trx, work);
+      const adapter = lookup(work.marketplace);
+      if (connection === undefined || adapter?.readOrderLabels === undefined)
+        return { type: 'gone' };
+      let read: { labels: RemoteOrderLabel[] } | { error: unknown };
+      try {
+        read = {
+          labels: await adapter.readOrderLabels(
+            step.orders.map((order) => ({
+              externalOrderId: order.externalOrderId,
+              externalListingIds: order.externalListingIds,
+            })),
+            { connection, signal },
+          ),
+        };
+      } catch (error) {
+        read = { error };
+      }
+      return {
+        type: 'ran',
+        pending: sessions.pending,
+        diverged: sessions.diverged,
+        record: async () => {
+          await deleteWork(trx, work);
+          await recordLabelReads(trx, work.account_id, labelResults(step.orders, read), new Date());
+          if ('error' in read) {
+            logger.warn(
+              { marketplace: work.marketplace, code: readErrorCode(read.error) },
+              'a label read failed',
+            );
+          }
+        },
+      };
+    }
   }
+}
+
+/** What a label read found for each order it covered. */
+function labelResults(
+  orders: readonly LabelReadTarget[],
+  read: { labels: RemoteOrderLabel[] } | { error: unknown },
+): LabelReadResult[] {
+  if ('error' in read) {
+    const error = `${readErrorCode(read.error)}: ${read.error instanceof Error ? read.error.message : 'the read failed'}`;
+    return orders.map((order) => ({ saleId: order.saleId, status: 'failed', error }));
+  }
+  return orders.map((order): LabelReadResult => {
+    const label = read.labels.find((found) => found.externalOrderId === order.externalOrderId);
+    if (!label?.found) return { saleId: order.saleId, status: 'not_found' };
+    return label.trackingNumber === null
+      ? { saleId: order.saleId, status: 'no_label', buyerFirstName: label.buyerFirstName }
+      : {
+          saleId: order.saleId,
+          status: 'read',
+          trackingNumber: label.trackingNumber,
+          buyerFirstName: label.buyerFirstName,
+        };
+  });
+}
+
+function readErrorCode(error: unknown): string {
+  return error instanceof AutomationReadError ? error.code : 'read_failed';
 }
 
 /** A session check whose marketplace could not be read waits for the phone again, later. */

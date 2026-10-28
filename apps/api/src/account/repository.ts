@@ -110,6 +110,16 @@ export async function deleteUserData(
     screenshotKeys = screenshots.flatMap((run) =>
       run.screenshot_key === null ? [] : [run.screenshot_key],
     );
+    // Pack check's package photos (public under unguessable names, so outside every prefix).
+    const packages = await trx
+      .selectFrom('sale_pack')
+      .select('photo_key')
+      .where('account_id', '=', tenant.accountId)
+      .where('photo_key', 'is not', null)
+      .execute();
+    screenshotKeys.push(
+      ...packages.flatMap((pack) => (pack.photo_key === null ? [] : [pack.photo_key])),
+    );
   }
 
   // The job deletes every stored object again and checks it is gone, in case the API's own

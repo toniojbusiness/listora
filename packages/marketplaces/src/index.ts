@@ -23,6 +23,8 @@ export type {
   RemoteListing,
   RemoteOrder,
   RemoteOrderItem,
+  RemoteOrderLabel,
+  LabelReadRequest,
   UserTaskSpec,
   ValidationIssue,
   WriteOperationKind,
