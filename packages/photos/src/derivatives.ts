@@ -8,13 +8,14 @@ import type { JsonObject } from '@listora/db';
  *
  * - `original`: full size; the private source for later reprocessing.
  * - `ai`: 1024 px long edge; what the AI call sees (private).
- * - `thumbnail`: 400 px; the app's lists and grids (public).
- * - `listing`: 1600 px; what marketplaces fetch (public).
+ * - `thumbnail`: 640 px; the app's lists and grids, sharp in the widest grid cell (about 196
+ *   points at 3x) and about a quarter of the listing image's bytes (public).
+ * - `listing`: 1600 px; what marketplaces fetch, and the app's item screen (public).
  */
 export const DERIVATIVES = {
   original: { maxEdge: undefined, quality: 92, public: false },
   ai: { maxEdge: 1024, quality: 85, public: false },
-  thumbnail: { maxEdge: 400, quality: 80, public: true },
+  thumbnail: { maxEdge: 640, quality: 80, public: true },
   listing: { maxEdge: 1600, quality: 88, public: true },
 } as const satisfies Record<
   string,
