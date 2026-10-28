@@ -10,7 +10,11 @@ import XCTest
 final class AssistedTasksUITests: XCTestCase {
     private let app = XCUIApplication()
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    private let listingURL = "https://poshmark.com/listing/Levis-Trucker-Jacket-64f1a2b3c4d5e6f7a8b9c0d1"
+    /// A new listing id for every try: a link stays linked to the item it finished, so a re-run
+    /// pasting the same link was refused (409, already linked) and could never pass.
+    private let listingURL = "https://poshmark.com/listing/Levis-Trucker-Jacket-" + String(
+        UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(24),
+    )
 
     override func setUp() async throws {
         continueAfterFailure = false
