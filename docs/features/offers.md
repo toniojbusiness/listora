@@ -29,9 +29,10 @@ session no page of the offers buyers make (below).
   `offer_check`, one per connection, behind routine changes and sale checks) and runs at the
   phone's pace, within the per-seller rate limits, like every run. A connection whose steps run
   in the cloud is not read.
-- **When.** Every hour while the phone runs (the dispatcher asks for each read that is due,
-  `queueDueOfferChecks`), and when the seller opens Tasks or pulls to refresh
-  (`requestOfferChecks`), at most once every 10 minutes per marketplace. Live reads on the Mac
+- **When.** Only when the seller asks, never on a timer: when they open Tasks or pull to refresh
+  (`requestOfferChecks`, at most once every 10 minutes per marketplace), and when they sync
+  (opening the app, Sync now, a pull to refresh on Today or Sales, at most once every 2 minutes,
+  [sync.md](sync.md)). Live reads on the Mac
   (recordings, below) go through the machine-wide pace (`market-pace.sh`).
 - **What each marketplace's pages show** (read on the captain's sessions, 2026-10-27, which had
   no offer, so an offer's own record is read by field names that say what each value is, and a

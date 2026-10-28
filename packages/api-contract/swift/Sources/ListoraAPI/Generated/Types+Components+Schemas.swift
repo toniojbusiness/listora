@@ -14431,5 +14431,137 @@ extension Components {
                 case data
             }
         }
+        /// A `KnownSyncState`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SyncState`.
+        public struct SyncState: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SyncState/value1`.
+            public var value1: Components.Schemas.KnownSyncState?
+            /// - Remark: Generated from `#/components/schemas/SyncState/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SyncState`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSyncState? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `syncing`: a read of the marketplace waits or runs (on the seller's iPhone, or in the cloud).
+        /// `synced`: the last reads got through. `failed`: the last read didn't; syncing again tries
+        /// again. `not_synced`: nothing was read yet.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSyncState`.
+        @frozen public enum KnownSyncState: String, Codable, Hashable, Sendable, CaseIterable {
+            case syncing = "syncing"
+            case synced = "synced"
+            case failed = "failed"
+            case notSynced = "not_synced"
+        }
+        /// One linked marketplace's sync: Listora's reads of its sales, the buyers' offers, and (once
+        /// the seller imported them) its listings. A sync only reads; nothing changes on a marketplace.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SyncMarketplace`.
+        public struct SyncMarketplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SyncMarketplace/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/SyncMarketplace/state`.
+            public var state: Components.Schemas.SyncState
+            /// In the seller's words, without the marketplace's name: what it is doing while `syncing`
+            /// ("Checking sales..."), what the last sync found ("52 sales found", "No new sales, 1 offer
+            /// waiting"), or why it didn't get through ("Couldn't check sales. Sync again to try again.").
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SyncMarketplace/statusText`.
+            public var statusText: Swift.String
+            /// When a read of the marketplace last got through.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SyncMarketplace/lastSyncedAt`.
+            public var lastSyncedAt: Components.Schemas.Timestamp?
+            /// Listora only reads this account (read-only connection); a sync reads it like any other.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SyncMarketplace/readOnly`.
+            public var readOnly: Swift.Bool
+            /// Creates a new `SyncMarketplace`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - state:
+            ///   - statusText: In the seller's words, without the marketplace's name: what it is doing while `syncing`
+            ///   - lastSyncedAt: When a read of the marketplace last got through.
+            ///   - readOnly: Listora only reads this account (read-only connection); a sync reads it like any other.
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                state: Components.Schemas.SyncState,
+                statusText: Swift.String,
+                lastSyncedAt: Components.Schemas.Timestamp? = nil,
+                readOnly: Swift.Bool
+            ) {
+                self.marketplace = marketplace
+                self.state = state
+                self.statusText = statusText
+                self.lastSyncedAt = lastSyncedAt
+                self.readOnly = readOnly
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case state
+                case statusText
+                case lastSyncedAt
+                case readOnly
+            }
+        }
+        /// Each linked marketplace Listora reads by signing in, in marketplace order.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SyncStatus`.
+        public struct SyncStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SyncStatus/data`.
+            public var data: [Components.Schemas.SyncMarketplace]
+            /// Creates a new `SyncStatus`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            public init(data: [Components.Schemas.SyncMarketplace]) {
+                self.data = data
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+            }
+        }
     }
 }

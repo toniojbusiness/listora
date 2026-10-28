@@ -47,7 +47,7 @@ final class StepTimings {
     }
 
     /// The call started its `step.index`th step; returns the run's progress with it.
-    func started(_ step: PhoneStep, operationID: String?) -> PhoneWorkProgress {
+    func started(_ step: PhoneStep, operationID: String?, purpose: String? = nil) -> PhoneWorkProgress {
         let now = clock()
         let marketplace = step.marketplace
         let key = Self.key(marketplace, step.call)
@@ -66,6 +66,7 @@ final class StepTimings {
         return PhoneWorkProgress(
             marketplace: marketplace,
             operationID: operationID,
+            purpose: purpose,
             step: step.label,
             stepNumber: step.index,
             stepCount: known ? earlier.count : nil,

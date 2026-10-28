@@ -331,7 +331,14 @@ export const CHALLENGE_KINDS = [
 export type ChallengeKind = (typeof CHALLENGE_KINDS)[number];
 
 /** Why a connection's next sale check is due when it is (`sale_check_schedule.next_reason`). */
-export const SALE_CHECK_REASONS = ['scheduled', 'email', 'retry', 'linked', 'offer'] as const;
+export const SALE_CHECK_REASONS = [
+  'scheduled',
+  'email',
+  'retry',
+  'linked',
+  'offer',
+  'sync',
+] as const;
 export type SaleCheckReason = (typeof SALE_CHECK_REASONS)[number];
 
 export const SALE_CHECK_OUTCOMES = ['succeeded', 'failed', 'challenge'] as const;

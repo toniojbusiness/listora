@@ -25,6 +25,7 @@ let package = Package(
         .library(name: "PhoneExecutionFeature", targets: ["PhoneExecutionFeature"]),
         .library(name: "ImportFeature", targets: ["ImportFeature"]),
         .library(name: "PackCheckFeature", targets: ["PackCheckFeature"]),
+        .library(name: "SyncFeature", targets: ["SyncFeature"]),
     ],
     dependencies: [
         .package(path: "../Core"),
@@ -58,6 +59,7 @@ let package = Package(
                 "PhotoSignalsFeature",
                 "ImportFeature",
                 "PackCheckFeature",
+                "SyncFeature",
             ],
         ),
         .target(
@@ -151,6 +153,11 @@ let package = Package(
         // Pack check: the to-ship list, label and sticker scans, packing, stickers, and slips.
         .target(
             name: "PackCheckFeature",
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
+        // Sync now: read-only checks of every linked marketplace, and the indicator that follows them.
+        .target(
+            name: "SyncFeature",
             dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient", "SignInFeature"]),
@@ -249,6 +256,10 @@ let package = Package(
                 "APIClient",
                 .product(name: "ListoraAPI", package: "swift"),
             ],
+        ),
+        .testTarget(
+            name: "SyncFeatureTests",
+            dependencies: ["SyncFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .testTarget(
             name: "PackCheckFeatureTests",

@@ -260,6 +260,8 @@ src/
                  (docs/features/imports.md)
   offers/        Buyers' offers: their reads, an offer and its quote, the seller's answer
                  (docs/features/offers.md)
+  sync/          Sync now: read-only checks of every linked marketplace, and what each found
+                 (docs/features/sync.md)
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
   perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
@@ -518,6 +520,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI              |
 | [features/recorded-pages.md](features/recorded-pages.md)           | Scripts tested on recorded real pages: the recorder, redaction, the replay     |
 | [features/offers.md](features/offers.md)                           | Buyers' offers in Tasks, and accepting, declining, or countering them          |
+| [features/sync.md](features/sync.md)                               | Sync now, the sync on opening the app, its indicator, and "Last synced"        |
 
 ### Former section numbers
 

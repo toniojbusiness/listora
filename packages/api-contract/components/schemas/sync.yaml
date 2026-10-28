@@ -1,0 +1,46 @@
+SyncState:
+  description: A `KnownSyncState`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownSyncState'
+    - type: string
+      maxLength: 64
+KnownSyncState:
+  type: string
+  description: |
+    `syncing`: a read of the marketplace waits or runs (on the seller's iPhone, or in the cloud).
+    `synced`: the last reads got through. `failed`: the last read didn't; syncing again tries
+    again. `not_synced`: nothing was read yet.
+  enum: [syncing, synced, failed, not_synced]
+SyncMarketplace:
+  type: object
+  description: |
+    One linked marketplace's sync: Listora's reads of its sales, the buyers' offers, and (once
+    the seller imported them) its listings. A sync only reads; nothing changes on a marketplace.
+  required: [marketplace, state, statusText, readOnly]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    state:
+      $ref: '#/SyncState'
+    statusText:
+      type: string
+      maxLength: 300
+      description: |
+        In the seller's words, without the marketplace's name: what it is doing while `syncing`
+        ("Checking sales..."), what the last sync found ("52 sales found", "No new sales, 1 offer
+        waiting"), or why it didn't get through ("Couldn't check sales. Sync again to try again.").
+    lastSyncedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When a read of the marketplace last got through.
+    readOnly:
+      type: boolean
+      description: Listora only reads this account (read-only connection); a sync reads it like any other.
+SyncStatus:
+  type: object
+  description: Each linked marketplace Listora reads by signing in, in marketplace order.
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/SyncMarketplace'

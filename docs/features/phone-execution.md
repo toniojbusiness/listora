@@ -143,7 +143,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   processed ([photos.md](photos.md)); the app downloads each one once and hands it to every
   marketplace that posts it.
 - **Progress.** Each step the runtime starts goes to the app (`progress`, never waited for): the
-  step in plain words ("Adding the photos", from the script's step name) and its number. The item
+  step in plain words ("Adding the photos", from the script's step name) and its number, with the
+  run's purpose, from which the sync indicator names what the phone is doing ("Checking Depop
+  sales...", [sync.md](sync.md)). The item
   screen's card for that listing shows it while the phone works on its change, each
   marketplace's on its own card: the step, "Step 4 of 9", and "Working on your iPhone, about 40
   seconds left", estimated from the same call's step times the last time it ran to the end on
@@ -188,6 +190,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   leaves nothing behind.
 - **After a change in the app**: linking a marketplace, Check again, publishing, changing a
   price, ending, relisting, retrying, recording a sale, and choosing what to relist.
+- **A sync** ([sync.md](sync.md)): opening the app, Sync now, and a pull to refresh on Today or
+  Sales hand the marketplaces' read-only checks (sales, offers, listings) to the phone, which
+  claims them at once. Nothing reads a marketplace that runs here on a timer.
 - **A push.** A sale whose delists run on the phone sends a visible, time-sensitive notification
   that says what sold and "Tap to delist it on Depop from your iPhone."; tapping it opens the app,
   which runs the delists. The same notification also asks iOS to wake the app

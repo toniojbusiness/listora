@@ -79,6 +79,8 @@ tags:
     description: Importing the seller's existing listings from a linked marketplace, and the questions it asks (docs/features/imports.md).
   - name: offers
     description: Buyers' offers on the seller's listings, read from the marketplaces, and the seller's answers to them (docs/features/offers.md).
+  - name: sync
+    description: Syncing the linked marketplaces now, read-only, and what each sync found (docs/features/sync.md).
 paths:
   /health/live:
     get:
@@ -3483,6 +3485,46 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sync:
+    get:
+      tags:
+        - sync
+      operationId: getSyncStatus
+      summary: Each linked marketplace's sync
+      description: |
+        What each marketplace linked by signing in is reading now, what its last sync found, and
+        when a read last got through (docs/features/sync.md).
+      responses:
+        '200':
+          description: The marketplaces' syncs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatus'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - sync
+      operationId: requestSync
+      summary: Sync every linked marketplace now
+      description: |
+        Asks for read-only checks of every marketplace linked by signing in: its sales, the
+        buyers' offers, and its listings once the seller imported them. Only reads; nothing changes
+        on a marketplace, and a read-only connection is read like any other. A marketplace synced
+        in the last 2 minutes (6 hours for listings) is not read again. The reads of marketplaces
+        that run on the seller's iPhone wait for it to claim them.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The marketplaces' syncs, with the reads now asked for.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatus'
         default:
           $ref: '#/components/responses/DefaultError'
 components:
@@ -10188,3 +10230,58 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OfferCheck'
+    SyncState:
+      description: A `KnownSyncState`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSyncState'
+        - type: string
+          maxLength: 64
+    KnownSyncState:
+      type: string
+      description: |
+        `syncing`: a read of the marketplace waits or runs (on the seller's iPhone, or in the cloud).
+        `synced`: the last reads got through. `failed`: the last read didn't; syncing again tries
+        again. `not_synced`: nothing was read yet.
+      enum:
+        - syncing
+        - synced
+        - failed
+        - not_synced
+    SyncMarketplace:
+      type: object
+      description: |
+        One linked marketplace's sync: Listora's reads of its sales, the buyers' offers, and (once
+        the seller imported them) its listings. A sync only reads; nothing changes on a marketplace.
+      required:
+        - marketplace
+        - state
+        - statusText
+        - readOnly
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        state:
+          $ref: '#/components/schemas/SyncState'
+        statusText:
+          type: string
+          maxLength: 300
+          description: |
+            In the seller's words, without the marketplace's name: what it is doing while `syncing`
+            ("Checking sales..."), what the last sync found ("52 sales found", "No new sales, 1 offer
+            waiting"), or why it didn't get through ("Couldn't check sales. Sync again to try again.").
+        lastSyncedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When a read of the marketplace last got through.
+        readOnly:
+          type: boolean
+          description: Listora only reads this account (read-only connection); a sync reads it like any other.
+    SyncStatus:
+      type: object
+      description: Each linked marketplace Listora reads by signing in, in marketplace order.
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncMarketplace'

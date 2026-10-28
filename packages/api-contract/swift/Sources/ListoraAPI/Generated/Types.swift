@@ -1235,6 +1235,27 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/offers/{offerId}/responses`.
     /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)`.
     func answerOffer(_ input: Operations.AnswerOffer.Input) async throws -> Operations.AnswerOffer.Output
+    /// Each linked marketplace's sync
+    ///
+    /// What each marketplace linked by signing in is reading now, what its last sync found, and
+    /// when a read last got through (docs/features/sync.md).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sync`.
+    /// - Remark: Generated from `#/paths//v1/sync/get(getSyncStatus)`.
+    func getSyncStatus(_ input: Operations.GetSyncStatus.Input) async throws -> Operations.GetSyncStatus.Output
+    /// Sync every linked marketplace now
+    ///
+    /// Asks for read-only checks of every marketplace linked by signing in: its sales, the
+    /// buyers' offers, and its listings once the seller imported them. Only reads; nothing changes
+    /// on a marketplace, and a read-only connection is read like any other. A marketplace synced
+    /// in the last 2 minutes (6 hours for listings) is not read again. The reads of marketplaces
+    /// that run on the seller's iPhone wait for it to claim them.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sync`.
+    /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)`.
+    func requestSync(_ input: Operations.RequestSync.Input) async throws -> Operations.RequestSync.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -3346,6 +3367,31 @@ extension APIProtocol {
             headers: headers,
             body: body
         ))
+    }
+    /// Each linked marketplace's sync
+    ///
+    /// What each marketplace linked by signing in is reading now, what its last sync found, and
+    /// when a read last got through (docs/features/sync.md).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sync`.
+    /// - Remark: Generated from `#/paths//v1/sync/get(getSyncStatus)`.
+    public func getSyncStatus(headers: Operations.GetSyncStatus.Input.Headers = .init()) async throws -> Operations.GetSyncStatus.Output {
+        try await getSyncStatus(Operations.GetSyncStatus.Input(headers: headers))
+    }
+    /// Sync every linked marketplace now
+    ///
+    /// Asks for read-only checks of every marketplace linked by signing in: its sales, the
+    /// buyers' offers, and its listings once the seller imported them. Only reads; nothing changes
+    /// on a marketplace, and a read-only connection is read like any other. A marketplace synced
+    /// in the last 2 minutes (6 hours for listings) is not read again. The reads of marketplaces
+    /// that run on the seller's iPhone wait for it to claim them.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sync`.
+    /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)`.
+    public func requestSync(headers: Operations.RequestSync.Input.Headers) async throws -> Operations.RequestSync.Output {
+        try await requestSync(Operations.RequestSync.Input(headers: headers))
     }
 }
 

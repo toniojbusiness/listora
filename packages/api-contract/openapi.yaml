@@ -79,6 +79,8 @@ tags:
     description: Importing the seller's existing listings from a linked marketplace, and the questions it asks (docs/features/imports.md).
   - name: offers
     description: Buyers' offers on the seller's listings, read from the marketplaces, and the seller's answers to them (docs/features/offers.md).
+  - name: sync
+    description: Syncing the linked marketplaces now, read-only, and what each sync found (docs/features/sync.md).
 
 paths:
   /health/live:
@@ -281,6 +283,8 @@ paths:
     $ref: './paths/offers.yaml#/~1v1~1offers~1{offerId}~1quote'
   /v1/offers/{offerId}/responses:
     $ref: './paths/offers.yaml#/~1v1~1offers~1{offerId}~1responses'
+  /v1/sync:
+    $ref: './paths/sync.yaml#/~1v1~1sync'
 
 components:
   securitySchemes:
@@ -1142,3 +1146,12 @@ components:
       $ref: './components/schemas/offers.yaml#/OfferCheck'
     OfferCheckList:
       $ref: './components/schemas/offers.yaml#/OfferCheckList'
+    # ---------------------------------------------------------------- sync
+    SyncState:
+      $ref: './components/schemas/sync.yaml#/SyncState'
+    KnownSyncState:
+      $ref: './components/schemas/sync.yaml#/KnownSyncState'
+    SyncMarketplace:
+      $ref: './components/schemas/sync.yaml#/SyncMarketplace'
+    SyncStatus:
+      $ref: './components/schemas/sync.yaml#/SyncStatus'
