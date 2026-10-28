@@ -23,14 +23,12 @@ import { itemCadence } from './settings.ts';
 
 /**
  * The marketplaces whose listings Listora refreshes, each under a browser session it can use:
- * Poshmark shares to followers, Mercari saves the edit page unchanged. Never Depop: a linked
- * Depop shop is a real seller's and stays read-only until a server-enforced read-only guard
- * exists. eBay has no refresh that keeps a listing's watchers (its relist is a new listing), and
- * an assisted marketplace would make the seller do it (docs/features/listing-refresh.md). The
- * adapters' own `refresh` capability agrees (the worker's test checks it), and the schedule asks
- * it too.
+ * Poshmark shares to followers, Mercari and Depop save the edit page unchanged. eBay has no
+ * refresh that keeps a listing's watchers (its relist is a new listing), and an assisted
+ * marketplace would make the seller do it (docs/features/listing-refresh.md). The adapters'
+ * own `refresh` capability agrees (the worker's test checks it), and the schedule asks it too.
  */
-export const REFRESH_MARKETPLACES: readonly Marketplace[] = ['poshmark', 'mercari'];
+export const REFRESH_MARKETPLACES: readonly Marketplace[] = ['poshmark', 'mercari', 'depop'];
 
 /** The operation kinds whose confirmed change leaves a listing fresh. */
 const CHANGE_KINDS = sql`('create', 'revise', 'price', 'relist')`;

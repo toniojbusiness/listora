@@ -30,20 +30,13 @@ marketplace that won't show it is not asked again and again within hours. Refres
 refresh never moves the alarms that watch the seller's own changes; a refresh metric of its own
 is a follow-up.
 
-| Marketplace                                         | Refresh                                                            | Read as fresh by                                  |
-| --------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------- |
-| Poshmark                                            | Share to followers: the listing page's Share, then To My Followers | The listing record's `updated_at` (to the second) |
-| Mercari                                             | The listing's edit page saved unchanged                            | The item's last change (`updated`, in seconds)    |
-| Depop                                               | None: a linked Depop shop is read-only (below)                     | -                                                 |
-| eBay                                                | None: eBay's relist is a new listing that drops the watchers       | -                                                 |
-| Any, without a working browser session, or assisted | None: Listora would have to ask the seller to do it every few days | -                                                 |
-
-**Never Depop (2026-10-28).** The Depop shop linked to Listora is a real seller's live shop, and
-every Depop session is treated as hers: read-only, with no write of any kind from the server, the
-phone, or a test. So Depop has no refresh script, `REFRESH_MARKETPLACES` leaves it out, and the
-schedule never queues a Depop refresh even for an adapter that claims one (a test pins it). A
-Depop refresh comes back only with a server-enforced read-only guard and the product owner's
-explicit go-ahead; until then the fake Depop site's Save is unused by refreshes.
+| Marketplace                                         | Refresh                                                            | Read as fresh by                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| Poshmark                                            | Share to followers: the listing page's Share, then To My Followers | The listing record's `updated_at` (to the second)     |
+| Mercari                                             | The listing's edit page saved unchanged                            | The item's last change (`updated`, in seconds)        |
+| Depop                                               | The listing's edit page saved unchanged                            | The product's `updated_at` (its API) or `dateUpdated` |
+| eBay                                                | None: eBay's relist is a new listing that drops the watchers       | -                                                     |
+| Any, without a working browser session, or assisted | None: Listora would have to ask the seller to do it every few days | -                                                     |
 
 The capability is the adapters' own `refresh` flag (`MarketplaceCapabilities.refresh`): an
 automation adapter has it when its scripts have a `refresh` script, never in assisted mode
@@ -84,8 +77,8 @@ checks always have room and an account is never pushed toward the marketplace's 
   share or save, and its read-back): with the default 30 runs an hour and 200 a day, up to 7
   refreshes an hour and 50 a day per marketplace. A seller with more due listings gets the ones
   waiting longest first; the rest wait their turn.
-- At most 2 refreshes wait unfinished on one connection, so a phone that is away (Poshmark and
-  Mercari run on the seller's iPhone, [phone-execution.md](phone-execution.md)) does
+- At most 2 refreshes wait unfinished on one connection, so a phone that is away (Poshmark,
+  Mercari, and Depop run on the seller's iPhone, [phone-execution.md](phone-execution.md)) does
   not collect a pile, and at most 2 are queued per connection per run.
 - Each refresh still goes through the runner's or the phone's own pacing and per-seller limits.
 - One refresh per listing per fresh period: its idempotency key names the listing and the time
@@ -96,14 +89,15 @@ checks always have room and an account is never pushed toward the marketplace's 
 The fake sites mirror each refresh, but no recording of a real share or unchanged save exists
 yet ([recorded-pages.md](recorded-pages.md)): the share controls' selectors
 (`[data-et-name="share"]`, `[data-et-name="share_poshmark"]`), that a Poshmark share moves the
-listing's `updated_at`, and that Mercari moves its change time on a save without changes. If a marketplace does not, its refreshes fail visibly and are retried only at the next
+listing's `updated_at`, and that Mercari and Depop move their change time on a save without
+changes. If a marketplace does not, its refreshes fail visibly and are retried only at the next
 interval; recording a share and a save in the seller's own session is the follow-up that settles
 it.
 
 ## Local development
 
-Nothing to configure. The fake Poshmark (`POST /share-listing/<id>`), the fake Mercari site (its
-edit page's Save), and the generic fake site (`POST /listings/:id/refresh`) each
+Nothing to configure. The fake Poshmark (`POST /share-listing/<id>`), the fake Mercari and Depop
+sites (their edit pages' Save), and the generic fake site (`POST /listings/:id/refresh`) each
 refresh a listing in place and move its time, and the fake API marketplace has
 `POST /listings/:id/refresh`. The schedule runs in the worker like every other job.
 
