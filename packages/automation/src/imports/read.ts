@@ -15,6 +15,7 @@ import { sql } from 'kysely';
 import {
   inTransaction,
   jsonb,
+  lockConnections,
   type DbExecutor,
   type JsonObject,
   type Marketplace,
@@ -150,6 +151,8 @@ export async function recordImportPage(
   page: ListingsPage,
 ): Promise<void> {
   await inTransaction(deps.db, async (trx) => {
+    // The connection before its import's rows (`lockConnections`).
+    await lockConnections(trx, prepared.key.accountId, [prepared.connection.id]);
     const current = await trx
       .selectFrom('listing_import')
       .select(['status', 'cursor', 'pages_read'])

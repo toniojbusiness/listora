@@ -3,6 +3,7 @@ export const PG_ERROR = {
   foreignKeyViolation: '23503',
   uniqueViolation: '23505',
   checkViolation: '23514',
+  deadlockDetected: '40P01',
 } as const;
 
 /** Whether `error` is a Postgres error with this SQLSTATE and, when given, constraint. */

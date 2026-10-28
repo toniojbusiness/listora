@@ -9,7 +9,7 @@ import { queueImportApply } from '@listora/automation';
 import { inTransaction, jsonb, type DbExecutor } from '@listora/db';
 import { syncItemListedStatus } from '@listora/operations';
 
-import { insertListing, recount, settle } from './apply.ts';
+import { insertListing, lockImportConnection, recount, settle } from './apply.ts';
 import { listedListing } from './read-entry.ts';
 
 export type ImportAnswer =
@@ -37,6 +37,7 @@ export async function answerImportQuestion(
     await sql`select pg_advisory_xact_lock(hashtextextended(${`listing_import:${question.accountId}`}, 0))`.execute(
       trx,
     );
+    await lockImportConnection(trx, question.accountId, question.importId);
     const entry = await trx
       .selectFrom('listing_import_entry')
       .selectAll()

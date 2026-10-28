@@ -53,6 +53,7 @@ import { sql } from 'kysely';
 import {
   inTransaction,
   jsonb,
+  lockConnections,
   type DbExecutor,
   type DbTransaction,
   type ExecutionLocation,
@@ -487,6 +488,15 @@ async function claimStep(
       log.warn('operation job has no operation; skipping');
       return null;
     }
+    // The listing's connection before the step's phone work, which the claim may replace.
+    const linked = await trx
+      .selectFrom('marketplace_listing')
+      .select('connection_id')
+      .where('account_id', '=', op.account_id)
+      .where('id', '=', op.listing_id)
+      .where('connection_id', 'is not', null)
+      .executeTakeFirst();
+    if (linked?.connection_id) await lockConnections(trx, op.account_id, [linked.connection_id]);
     switch (op.status) {
       case 'succeeded':
       case 'failed':

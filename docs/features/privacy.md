@@ -60,6 +60,22 @@ The sign-in the phone keeps in its Keychain is removed by the app when the selle
 marketplace or deletes the account there, and when another Listora account signs in on the
 phone.
 
+### Unlinking while work runs
+
+An unlink can come while work on the connection is in flight: the phone answering a sale check,
+an import page, a session check. The unlink locks the connection's row and then deletes the rows
+of its work, so work that holds one of those rows must never then wait for the connection (every
+insert that references the connection does): the two would deadlock, and Postgres would fail one
+of them. So a transaction that writes a connection's rows locks the connection first
+(`lockConnections` in `@listora/db`, `for key share`, which blocks only deleting the
+connection) before any of them: the phone's claim (the connections its device runs) and its
+answer (the run's connection), the engine's claim of a step, a sale check asked for by an email
+or a sync, an offer check or answer, an import's pages, entries, and answers, and the sale an
+order check hands over. The unlink then waits for the work to commit, or the work for the
+unlink, after which it finds the connection gone and stops. Should work that breaks the order
+still meet an unlink, Postgres rolls one of them back; when that is the unlink, it runs again
+(up to three times, each logged as a warning naming the deadlock), so an unlink always completes.
+
 An operator runs the last one with
 `npm run admin -- marketplace-purge depop --mode api --actor <name> --reason <text>`, which only
 counts the connections until it is run again with `--confirm`; the log line names the actor and
