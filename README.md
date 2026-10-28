@@ -172,8 +172,10 @@ do not run CI, so one commit never runs twice. It has four jobs:
 | `Application image build and smoke test (Linux)` | Linux                    | Only when an image input changed; otherwise a passing no-op |
 | `iOS lint, build and test (macOS)`               | macOS, or Linux as no-op | Only when an iOS input changed                              |
 
-The backend job installs PostgreSQL 18 from the PGDG apt repository (Swift comes with the
-runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
+The backend job first checks the migration order (`scripts/check-migration-order.sh`: every
+migration a pull request adds sorts after the newest on its base branch, and on `main` after the
+newest before the push; [architecture.md](docs/architecture.md#6-data-model)). It installs
+PostgreSQL 18 from the PGDG apt repository (Swift comes with the runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
 `PG_BIN_DIR=/usr/lib/postgresql/18/bin`), `scripts/dev-browser.sh --with-deps` (headless
 Chromium and its system libraries), and `npm run check`. It caches npm downloads, the browser,
 and the API contract's SwiftPM builds.
