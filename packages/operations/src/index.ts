@@ -68,6 +68,16 @@ export {
   scaledRetryPolicy,
 } from './policy.ts';
 export type { RetryPolicy } from './policy.ts';
+export {
+  assertWritableListing,
+  isWriteKind,
+  listingIsReadOnly,
+  READ_ONLY_ERROR,
+  readOnlyListing,
+  readOnlyMessage,
+  ReadOnlyConnectionError,
+  setConnectionReadOnly,
+} from './read-only.ts';
 export { LIVENESS_APPLICATION_PREFIX, reapStoppedWorkers } from './recovery.ts';
 export {
   enqueueListingResync,

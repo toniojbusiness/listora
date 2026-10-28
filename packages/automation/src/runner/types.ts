@@ -157,7 +157,12 @@ export type ScriptErrorCode =
    * runs again once they have, or the read-back decides when the run had already changed
    * something.
    */
-  | 'stopped_for_check';
+  | 'stopped_for_check'
+  /**
+   * The phone runtime refused a write script because the connection is read only
+   * (docs/features/read-only.md): nothing ran.
+   */
+  | 'read_only';
 
 /**
  * How a script went: its value or why it stopped, whether a step that changes the listing ran,

@@ -221,6 +221,7 @@ const COLUMNS = {
     'check_requested_at',
     'runs_on',
     'phone_device_id',
+    'read_only',
   ],
   connection_authorization: [
     'id',

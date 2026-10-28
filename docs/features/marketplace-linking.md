@@ -20,7 +20,10 @@ flow end to end.
    once, and its row says "Runs on this iPhone". If the check fails, or has not finished within 15
    minutes, the row says `Not confirmed` and why, and offers **Check again** (the same session,
    no sign-in) next to Relink. A session the marketplace rejected says `Sign in again`.
-4. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, then
+4. **Read only** (a switch on every linked row: "Listora will never change anything on this
+   account") makes the account read only at once; turning it off asks to confirm first. The
+   switch shows the server's setting ([read-only.md](read-only.md)).
+5. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, then
    deletes what Listora holds for that marketplace (`disconnectConnection`,
    [privacy.md](privacy.md)): the row shows `Not linked` once the server answered. Items,
    listings, and sales stay, and listings stay on the marketplace.

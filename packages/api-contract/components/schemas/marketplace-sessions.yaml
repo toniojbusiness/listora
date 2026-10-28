@@ -80,6 +80,12 @@ MarketplaceSession:
     execution:
       $ref: './phone.yaml#/ConnectionExecution'
       description: Where its automated steps run; present once it is linked.
+    readOnly:
+      type: boolean
+      description: |
+        Listora only reads this account and never changes anything on it (the connection's
+        `readOnly`, set with `setConnectionReadOnly`). False when nothing is linked; a server
+        older than the setting leaves it out, which means false.
 MarketplaceSessionList:
   type: object
   required: [data]

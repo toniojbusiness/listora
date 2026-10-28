@@ -32,6 +32,10 @@ public final class LinkAccountsModel {
         case unlinking
         /// The unlink did not go through; the marketplace is still linked. Retry asks again.
         case unlinkFailed(APIFailure)
+        /// Asking Listora to make the account read only, or writable again.
+        case changingReadOnly
+        /// The read-only change did not go through; the row shows the server's setting.
+        case readOnlyFailed(APIFailure)
     }
 
     public private(set) var links: [MarketplaceLink] = []
@@ -41,6 +45,9 @@ public final class LinkAccountsModel {
     public var signingIn: MarketplaceLink?
     /// The marketplace the user asked to unlink, waiting for them to confirm.
     public var confirmingUnlink: MarketplaceLink?
+    /// The read-only marketplace the user asked Listora to change again, waiting for them to
+    /// confirm.
+    public var confirmingWritable: MarketplaceLink?
 
     /// This app installation, which the server knows the phone that links a marketplace by.
     public let installationID: String
@@ -172,8 +179,8 @@ public final class LinkAccountsModel {
 
     private func isBusy(_ marketplace: String) -> Bool {
         switch progress[marketplace] {
-        case .sending, .requestingCheck, .unlinking: true
-        case .failed, .checkFailed, .unlinkFailed, nil: false
+        case .sending, .requestingCheck, .unlinking, .changingReadOnly: true
+        case .failed, .checkFailed, .unlinkFailed, .readOnlyFailed, nil: false
         }
     }
 
@@ -293,6 +300,53 @@ public final class LinkAccountsModel {
             links[index] = link
         } else {
             links.append(link)
+        }
+    }
+}
+
+/// The Read only switch (docs/features/read-only.md).
+extension LinkAccountsModel {
+    /// The Read only switch: making the account read only takes effect at once; letting Listora
+    /// change it again asks the user to confirm first (`confirmWritable`).
+    public func requestReadOnly(_ link: MarketplaceLink, _ readOnly: Bool) async {
+        guard link.canSetReadOnly, link.readOnly != readOnly, !isBusy(link.marketplace) else { return }
+        if readOnly {
+            await setReadOnly(link.marketplace, true)
+        } else {
+            confirmingWritable = link
+        }
+    }
+
+    public func cancelWritable() {
+        confirmingWritable = nil
+    }
+
+    /// The user confirmed that Listora may change `link`'s account again.
+    public func confirmWritable(_ link: MarketplaceLink) async {
+        confirmingWritable = nil
+        guard link.canSetReadOnly, link.readOnly, !isBusy(link.marketplace) else { return }
+        await setReadOnly(link.marketplace, false)
+    }
+
+    /// Changes the setting, then shows the server's state of the marketplace: the switch moves
+    /// only once the server has the change.
+    private func setReadOnly(_ marketplace: String, _ readOnly: Bool) async {
+        progress[marketplace] = .changingReadOnly
+        do {
+            try await service.setReadOnly(marketplace, readOnly)
+        } catch {
+            progress[marketplace] = .readOnlyFailed(error)
+            return
+        }
+        progress[marketplace] = nil
+        do {
+            try await replace(service.get(marketplace))
+        } catch {
+            // The server confirmed the change but its fresh state could not be read: show what
+            // it confirmed.
+            if let link = links.first(where: { $0.marketplace == marketplace }) {
+                replace(link.with(readOnly: readOnly))
+            }
         }
     }
 }

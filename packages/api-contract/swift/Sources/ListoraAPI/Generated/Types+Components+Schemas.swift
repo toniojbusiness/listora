@@ -525,7 +525,8 @@ extension Components {
         /// 402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
         /// `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
         /// `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-        /// `marketplace_action_unavailable`, `app_update_required`, `pack_refused` 409; `payload_too_large` 413; `validation_failed`,
+        /// `marketplace_action_unavailable`, `app_update_required`, `pack_refused`,
+        /// `connection_read_only` 409; `payload_too_large` 413; `validation_failed`,
         /// `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
         /// `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
         /// and `marketplace_authorization_failed` appear only inside a failed
@@ -550,6 +551,7 @@ extension Components {
             case marketplaceActionUnavailable = "marketplace_action_unavailable"
             case appUpdateRequired = "app_update_required"
             case packRefused = "pack_refused"
+            case connectionReadOnly = "connection_read_only"
             case payloadTooLarge = "payload_too_large"
             case validationFailed = "validation_failed"
             case idempotencyKeyReused = "idempotency_key_reused"
@@ -5988,6 +5990,15 @@ extension Components {
             public var execution: Components.Schemas.ConnectionExecution?
             /// - Remark: Generated from `#/components/schemas/Connection/saleChecks`.
             public var saleChecks: Components.Schemas.ConnectionSaleChecks?
+            /// Listora only reads this account and never changes anything on it
+            /// (docs/features/read-only.md): every change to its listings is refused with
+            /// `409 connection_read_only`, and the delists after a sale skip it. False when the
+            /// marketplace has no connection; a server older than the setting leaves it out, which
+            /// means false.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Connection/readOnly`.
+            public var readOnly: Swift.Bool?
             /// Creates a new `Connection`.
             ///
             /// - Parameters:
@@ -6005,6 +6016,7 @@ extension Components {
             ///   - lastIssue:
             ///   - execution:
             ///   - saleChecks:
+            ///   - readOnly: Listora only reads this account and never changes anything on it
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 mode: Components.Schemas.IntegrationMode,
@@ -6019,7 +6031,8 @@ extension Components {
                 lastCheckedAt: Components.Schemas.Timestamp? = nil,
                 lastIssue: Components.Schemas.ConnectionIssue? = nil,
                 execution: Components.Schemas.ConnectionExecution? = nil,
-                saleChecks: Components.Schemas.ConnectionSaleChecks? = nil
+                saleChecks: Components.Schemas.ConnectionSaleChecks? = nil,
+                readOnly: Swift.Bool? = nil
             ) {
                 self.marketplace = marketplace
                 self.mode = mode
@@ -6035,6 +6048,7 @@ extension Components {
                 self.lastIssue = lastIssue
                 self.execution = execution
                 self.saleChecks = saleChecks
+                self.readOnly = readOnly
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
@@ -6051,6 +6065,32 @@ extension Components {
                 case lastIssue
                 case execution
                 case saleChecks
+                case readOnly
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConnectionReadOnlyChange`.
+        public struct ConnectionReadOnlyChange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionReadOnlyChange/readOnly`.
+            public var readOnly: Swift.Bool
+            /// Creates a new `ConnectionReadOnlyChange`.
+            ///
+            /// - Parameters:
+            ///   - readOnly:
+            public init(readOnly: Swift.Bool) {
+                self.readOnly = readOnly
+            }
+            public enum CodingKeys: String, CodingKey {
+                case readOnly
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.readOnly = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .readOnly
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "readOnly"
+                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectionList`.
@@ -6554,6 +6594,13 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceSession/execution`.
             public var execution: Components.Schemas.ConnectionExecution?
+            /// Listora only reads this account and never changes anything on it (the connection's
+            /// `readOnly`, set with `setConnectionReadOnly`). False when nothing is linked; a server
+            /// older than the setting leaves it out, which means false.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/readOnly`.
+            public var readOnly: Swift.Bool?
             /// Creates a new `MarketplaceSession`.
             ///
             /// - Parameters:
@@ -6566,6 +6613,7 @@ extension Components {
             ///   - checkedAt: When the current session's check finished.
             ///   - issue: Why the session needs relinking, or why its check failed.
             ///   - execution: Where its automated steps run; present once it is linked.
+            ///   - readOnly: Listora only reads this account and never changes anything on it (the connection's
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 status: Components.Schemas.MarketplaceSessionStatus,
@@ -6575,7 +6623,8 @@ extension Components {
                 linkedAt: Components.Schemas.Timestamp? = nil,
                 checkedAt: Components.Schemas.Timestamp? = nil,
                 issue: Components.Schemas.ConnectionIssue? = nil,
-                execution: Components.Schemas.ConnectionExecution? = nil
+                execution: Components.Schemas.ConnectionExecution? = nil,
+                readOnly: Swift.Bool? = nil
             ) {
                 self.marketplace = marketplace
                 self.status = status
@@ -6586,6 +6635,7 @@ extension Components {
                 self.checkedAt = checkedAt
                 self.issue = issue
                 self.execution = execution
+                self.readOnly = readOnly
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
@@ -6597,6 +6647,7 @@ extension Components {
                 case checkedAt
                 case issue
                 case execution
+                case readOnly
             }
         }
         /// - Remark: Generated from `#/components/schemas/MarketplaceSessionList`.

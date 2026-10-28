@@ -120,6 +120,38 @@ struct APIMarketplaceSessionServiceTests {
     }
 
     @Test
+    func `makes an account read only with the setting alone, and reads it back`() async throws {
+        let server = CannedServer(status: 200, body: """
+        {"marketplace":"depop","mode":"automation","status":"connected","readOnly":true,
+         "statusDisplay":{"tone":"success","label":"Linked"},
+         "capabilities":{"connect":"none","create":"automation","updatePrice":"automation",
+           "updateDetails":"automation","delist":"automation","relist":"automation",
+           "markSold":"automation","verifyRead":"automation","importListings":"none",
+           "saleDetection":[],"imageTransport":"upload"},
+         "availableActions":[]}
+        """)
+        try await service(server).setReadOnly("depop", true)
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "PUT")
+        #expect(request.path == "/v1/connections/depop/read-only")
+        let body = try #require(JSONSerialization.jsonObject(with: request.body) as? [String: Any])
+        #expect(Set(body.keys) == ["readOnly"])
+        #expect(body["readOnly"] as? Bool == true)
+
+        let listed = CannedServer(status: 200, body: """
+        {"data":[
+          {"marketplace":"depop","status":"linked","statusDisplay":{"tone":"success","label":"Linked"},
+           "login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]},"readOnly":true},
+          {"marketplace":"poshmark","status":"linked","statusDisplay":{"tone":"success","label":"Linked"},
+           "login":{"url":"https://poshmark.com/login","cookieDomains":["poshmark.com"]}}
+        ]}
+        """)
+        let links = try await service(listed).list()
+        #expect(links.map(\.readOnly) == [true, false])
+    }
+
+    @Test
     func `asks for a check of the session Listora holds as the connection's Retry check`() async throws {
         let server = CannedServer(status: 202, body: """
         {"marketplace":"depop","mode":"automation","status":"connected",

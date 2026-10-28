@@ -52,7 +52,9 @@ each sold item:
    with a link to the listing; an automation listing is delisted by the runner, or by the
    seller's iPhone when its marketplace runs there ([phone-execution.md](phone-execution.md)). A listing that cannot be live needs no delist: one that is ended or sold (without a
    pending listing id a relist may have left), or a draft that was never sent anywhere, in
-   both cases with nothing in flight. The listing that sold is never touched.
+   both cases with nothing in flight. The listing that sold is never touched, and neither is one
+   on a read-only connection: it gets no delist, no task, and no word in the push
+   ([read-only.md](read-only.md)).
 6. **Push.** One time-sensitive notification: "Levi's trucker jacket sold on eBay. Listora is
    delisting it on Depop. Delist it on Mercari and Poshmark now." Delists that run on the phone
    add "Tap to delist it on Depop from your iPhone.": tapping opens the app, which runs them, and

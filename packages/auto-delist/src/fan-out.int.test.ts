@@ -136,6 +136,52 @@ describe('the delist fan-out', () => {
     expect(await operations(runId)).toHaveLength(3);
   });
 
+  it('skips a read-only connection silently: no delist, no task, no word in the push', async () => {
+    const { item, ebay, depop, poshmark, mercari } = await listedEverywhere();
+    await harness.db
+      .updateTable('marketplace_connection')
+      .set({ read_only: true })
+      .where('id', '=', depopConnection)
+      .execute();
+    try {
+      const saleId = await harness.sale('ebay', [{ itemId: item.id, listingId: ebay }]);
+      const [start] = await fanOut(saleId, 'ebay', [{ itemId: item.id, listingId: ebay }]);
+      expect(start).toMatchObject({ type: 'delist_started', itemId: item.id, delists: 2 });
+      if (start?.type !== 'delist_started') throw new Error('no run');
+      const ops = await operations(start.delistRunId);
+      expect(ops.map((op) => op.listing_id).sort()).toEqual([poshmark, mercari].sort());
+      // Nothing at all is queued on the read-only listing, and no task asks the seller.
+      const onDepop = await harness.db
+        .selectFrom('marketplace_operation')
+        .select('id')
+        .where('listing_id', '=', depop)
+        .execute();
+      expect(onDepop).toEqual([]);
+      const pushes = (await harness.jobs(PUSH_TASK)).filter(
+        (job) => job.key === `push:item_sold:${start.delistRunId}`,
+      );
+      expect(pushes).toHaveLength(1);
+      expect(JSON.stringify(pushes[0]?.payload)).not.toContain('Depop');
+
+      // An item listed only on the sale's marketplace and a read-only one is simply sold.
+      const other = await harness.item();
+      const otherEbay = await harness.listing(other.id, 'ebay', { connectionId: ebayConnection });
+      await harness.listing(other.id, 'depop', { connectionId: depopConnection });
+      const otherSale = await harness.sale('ebay', [{ itemId: other.id, listingId: otherEbay }]);
+      const [otherStart] = await fanOut(otherSale, 'ebay', [
+        { itemId: other.id, listingId: otherEbay },
+      ]);
+      expect(otherStart).toMatchObject({ type: 'delist_started', delists: 0 });
+      expect(await itemStatus(other.id)).toBe('sold');
+    } finally {
+      await harness.db
+        .updateTable('marketplace_connection')
+        .set({ read_only: false })
+        .where('id', '=', depopConnection)
+        .execute();
+    }
+  });
+
   it('cancels the work the sale made moot and never publishes the sold item', async () => {
     const item = await harness.item();
     const ebay = await harness.listing(item.id, 'ebay', { connectionId: ebayConnection });

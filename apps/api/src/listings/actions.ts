@@ -23,7 +23,12 @@ import {
   type OperationKind,
 } from '@listora/db';
 import type { ConnectionRef, DesiredListingState, ListingContent } from '@listora/marketplaces';
-import { enqueueOperation, type NewOperation } from '@listora/operations';
+import {
+  enqueueOperation,
+  isWriteKind,
+  readOnlyMessage,
+  type NewOperation,
+} from '@listora/operations';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { writeAudit } from '../audit.ts';
@@ -52,6 +57,7 @@ import {
   type ListingRow,
 } from './repository.ts';
 import {
+  ACTION_KIND,
   actionsForState,
   LISTABLE_ITEM_STATUSES,
   listingStates,
@@ -356,6 +362,11 @@ async function prepareAction(
   const trx = db as DbTransaction;
   const row = await lockListing(trx, tenant, listingId);
   if (!row) throw notFound('Listing');
+  // Listora never changes a read-only account (docs/features/read-only.md); say so, not that
+  // the action is unavailable.
+  if (row.read_only && isWriteKind(ACTION_KIND[action])) {
+    throw new ApiError('connection_read_only', readOnlyMessage(row.marketplace));
+  }
   const [state] = await listingStates(trx, tenant, [row]);
   if (state === undefined) throw notFound('Listing');
   const view = listingView(state, views);

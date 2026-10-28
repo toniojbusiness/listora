@@ -29,6 +29,7 @@ import {
   type Marketplace,
 } from '@listora/db';
 import { findSaleEmailInbox, inboundDomainOf } from '@listora/email-sales';
+import { setConnectionReadOnly } from '@listora/operations';
 import {
   isMarketplace,
   MARKETPLACE_NAMES,
@@ -38,6 +39,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 
 import { operationSpec } from '../contract/contract.ts';
+import { writeAudit } from '../audit.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError } from '../errors.ts';
 import type { SaleEmailsDependencies } from '../sale-emails/routes.ts';
@@ -276,6 +278,63 @@ export function registerConnectionRoutes(
       ),
     };
   });
+
+  contractRoute(
+    app,
+    deps,
+    'setConnectionReadOnly',
+    async ({ tenant, db, params, body, request }) => {
+      const name = MARKETPLACE_NAMES[params.marketplace];
+      if (tenant.role !== 'owner') {
+        throw new ApiError(
+          'forbidden',
+          `Only the account's owner can change whether Listora may change your ${name} account.`,
+        );
+      }
+      const linked = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+      const changed =
+        linked === undefined
+          ? undefined
+          : await inTransaction(db, async (trx) => {
+              const result = await setConnectionReadOnly(
+                trx,
+                { accountId: tenant.accountId, connectionId: linked.id },
+                body.readOnly,
+              );
+              if (result !== undefined) {
+                await writeAudit(trx, tenant, {
+                  action: 'connection.read_only_changed',
+                  changes: {
+                    marketplace: params.marketplace,
+                    readOnly: { from: linked.read_only, to: body.readOnly },
+                    refusedOperations: result.refused.length,
+                  },
+                });
+              }
+              return result;
+            });
+      if (changed === undefined) {
+        throw new ApiError('not_found', `No ${name} account is linked to Listora.`);
+      }
+      request.log.info(
+        {
+          marketplace: params.marketplace,
+          readOnly: body.readOnly,
+          refusedOperations: changed.refused.length,
+        },
+        'marketplace connection read-only setting changed',
+      );
+      const state = await accountState(db, tenant.accountId);
+      return {
+        status: 200,
+        body: connectionView(
+          params.marketplace,
+          state.connections.get(params.marketplace),
+          context(state),
+        ),
+      };
+    },
+  );
 
   contractRoute(
     app,

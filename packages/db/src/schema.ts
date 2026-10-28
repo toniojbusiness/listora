@@ -439,6 +439,8 @@ export interface MarketplaceConnectionTable {
   runs_on: Generated<ExecutionLocation>;
   /** The device that runs them on the phone: the one that linked the session. */
   phone_device_id: Nullable<string>;
+  /** Listora only reads the account: every write refuses (docs/features/read-only.md). */
+  read_only: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
