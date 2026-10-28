@@ -200,6 +200,10 @@ are in [design/hangtag-screens/](design/hangtag-screens/).
     taut with a bead where it stops.
   - Pack check's to-ship list is ruled, with SKUs in SF Mono; the import questions print their
     price in Fraunces.
+  - **Sales**: all the seller's sales on a price tag lying on its side, the total in Fraunces,
+    and each marketplace on the tag's string, a bead each with its own sales (filled where it
+    sold, a dashed bead on a loose string where it hasn't yet), never ranked
+    ([sales.md](sales.md#in-total-and-per-marketplace)).
 - **The moments** (step 3), driven by the listings' confirmed states only, so nothing looks done
   before a marketplace confirms it:
   - **Sold**: once the item sells, a "Sold" stamp with the price and the marketplace is pressed

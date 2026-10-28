@@ -1,6 +1,6 @@
-import type { RelistOption, SaleCreate } from '@listora/api-contract';
+import type { MarketplaceSales, RelistOption, SaleCreate } from '@listora/api-contract';
 import { loadDelistRuns } from '@listora/auto-delist';
-import { inTransaction, type DbExecutor, type DbTransaction } from '@listora/db';
+import { inTransaction, MARKETPLACES, type DbExecutor, type DbTransaction } from '@listora/db';
 import {
   changeSale,
   finishInboundEvent,
@@ -19,13 +19,15 @@ import type { ApiRouteContext } from '../features.ts';
 import { relistListing } from '../listings/actions.ts';
 import { itemListingRows } from '../listings/repository.ts';
 import { listingStates, listingView, type ListingViewContext } from '../listings/views.ts';
-import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor } from '../pagination.ts';
+import { decodeTimeCursor, DEFAULT_PAGE_SIZE, encodeTimeCursor } from '../pagination.ts';
 import type { Tenant } from '../tenancy.ts';
 import {
+  connectedMarketplaces,
   doubleSaleRows,
   feeLineRows,
   findSale,
   listSaleRows,
+  marketplaceSalesRows,
   saleItemRows,
   type SaleItemDetailRow,
   type SaleRow,
@@ -36,7 +38,8 @@ import { saleView, type RelistOptions } from './views.ts';
 const SOLD_AT_FUTURE_TOLERANCE_MS = 5 * 60_000;
 
 /**
- * The sales feed (`listSales`, `getSale`), recording a sale by hand (`createSale`, "Mark sold"),
+ * The sales feed (`listSales`, `getSale`), the seller's sales in total and per marketplace
+ * (`getSalesSummary`), recording a sale by hand (`createSale`, "Mark sold"),
  * the sale lifecycle (`confirmSale`, `markSaleShipped`, `cancelSale`, `recordSaleReturn`), and
  * the answer to "Relist it?" after a cancel or return (`decideSaleRelist`); see
  * docs/features/sales.md.
@@ -50,7 +53,7 @@ export function registerSaleRoutes(app: FastifyInstance, deps: ApiRouteContext):
       itemId: query.itemId,
       statuses: query.status,
       delistStatuses: query.delistStatus,
-      beforeId: query.cursor === undefined ? undefined : decodeCursor(query.cursor),
+      after: query.cursor === undefined ? undefined : decodeTimeCursor(query.cursor),
       limit,
     });
     const page = rows.slice(0, limit);
@@ -59,7 +62,49 @@ export function registerSaleRoutes(app: FastifyInstance, deps: ApiRouteContext):
       status: 200,
       body: {
         data: await saleViews(db, tenant, page, views),
-        ...(rows.length > limit && last ? { nextCursor: encodeCursor(last.id) } : {}),
+        ...(rows.length > limit && last
+          ? { nextCursor: encodeTimeCursor({ at: last.sold_at, id: last.id }) }
+          : {}),
+      },
+    };
+  });
+
+  contractRoute(app, deps, 'getSalesSummary', async ({ tenant, db }) => {
+    const [rows, connected] = await Promise.all([
+      marketplaceSalesRows(db, tenant),
+      connectedMarketplaces(db, tenant),
+    ]);
+    const byMarketplace = new Map(rows.map((row) => [row.marketplace, row]));
+    // The fixed order, never ranked (docs/features/profit.md): eBay's licence forbids comparing.
+    const marketplaces = MARKETPLACES.flatMap((marketplace): MarketplaceSales[] => {
+      const row = byMarketplace.get(marketplace);
+      if (row === undefined && !connected.includes(marketplace)) return [];
+      return [
+        {
+          marketplace,
+          salesCount: row?.salesCount ?? 0,
+          itemsSold: row?.itemsSold ?? 0,
+          revenue: { amountCents: row?.revenueCents ?? 0, currency: 'USD' },
+        },
+      ];
+    });
+    const first = rows.reduce<Date | null>(
+      (earliest, row) =>
+        earliest === null || row.firstSoldAt < earliest ? row.firstSoldAt : earliest,
+      null,
+    );
+    const sum = (pick: (row: MarketplaceSales) => number) =>
+      marketplaces.reduce((total, row) => total + pick(row), 0);
+    return {
+      status: 200,
+      body: {
+        total: {
+          salesCount: sum((row) => row.salesCount),
+          itemsSold: sum((row) => row.itemsSold),
+          revenue: { amountCents: sum((row) => row.revenue.amountCents), currency: 'USD' as const },
+        },
+        marketplaces,
+        ...(first === null ? {} : { firstSoldAt: first.toISOString() }),
       },
     };
   });

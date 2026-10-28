@@ -10,7 +10,8 @@
  *   answers 410 for).
  * - `GET /api/v1/shop/products/?statusFilter=selling` (and `sold`): the seller's own listings,
  *   newest first, as the selling hub loads them, 24 at a time with a cursor; each with its
- *   `status`, `description`, `price`, and `dateUpdated`.
+ *   `id`, `status`, `description`, `price` (the listing's: a buyer may have paid less, which
+ *   the receipt shows), `sizes`, `pictures`, and `dateUpdated`.
  *
  * Only reads: every change goes through Depop's own pages. A shape Listora doesn't know throws
  * `PageChangedError`, as a page does.
@@ -64,6 +65,8 @@ const feedSchema = z.object({
 const STATUSES: Readonly<Record<string, 'active' | 'sold' | 'ended'>> = {
   STATUS_ONSALE: 'active',
   STATUS_SOLD: 'sold',
+  // A buyer bought it (the edit data of a sold listing, read 2026-10-28).
+  STATUS_PURCHASED: 'sold',
   STATUS_MARKED_AS_SOLD: 'sold',
   STATUS_DELETED: 'ended',
   STATUS_BANNED: 'ended',

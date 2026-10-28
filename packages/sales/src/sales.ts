@@ -10,8 +10,10 @@
  *   by the marketplace's order number, which the automated sale check (reading the listing) may
  *   not show, so the two cannot meet on the order id. A listing sells once, so when an item
  *   already has a standing sale on the same marketplace and either sale came from an email, the
- *   later report is the same order: a duplicate, not a double sale. The items are locked first,
- *   so an email and a check reporting the sale at once record it once.
+ *   later report is the same order: a duplicate, not a double sale. So is the marketplace's
+ *   report (a check, a webhook, the sales history) of a sale the seller marked sold there by
+ *   hand. The items are locked first, so an email and a check reporting the sale at once record
+ *   it once.
  * - **Only Listora's items.** Each order line is matched to the account's listing on that
  *   marketplace by the listing id (the verified or the pending one) or, failing that, the
  *   seller SKU; a line a person or a parser tied to an item names it directly. An order with no
@@ -19,6 +21,8 @@
  *   item sold twice in one order adds up on its one sale item.
  * - **Fees.** The sale gets its estimated fee lines at once, and a check for the actual fees
  *   when the marketplace reports them (fees.ts).
+ * - **The sales history is recorded only.** A sale from before Listora watched the marketplace
+ *   (detection source `history`) marks its items sold and starts no delist, run, or notification.
  * - **Auto-delist in the same transaction.** Recording the sale starts its delist fan-out
  *   (`startAutoDelist` in `@listora/auto-delist`): each sold item is marked
  *   `sold_pending_delist` and every other listing gets its delist, or the item gets a
@@ -32,6 +36,7 @@ import {
 } from '@listora/auto-delist';
 import {
   inTransaction,
+  jsonb,
   type DbExecutor,
   type DbTransaction,
   type Marketplace,
@@ -170,19 +175,71 @@ export async function recordSale(
       },
       deps.adapters,
     );
-    const delists = await startAutoDelist(
-      trx,
-      {
-        accountId: sale.accountId,
-        saleId: inserted.id,
-        marketplace: sale.marketplace,
-        detectionSource: sale.detectionSource,
-        items: [...items].map(([itemId, item]) => ({ itemId, listingId: item.listingId })),
-      },
-      deps,
-    );
+    // A sale from the seller's sales history is recorded only: its items are sold, and nothing
+    // is delisted or announced.
+    const delists =
+      sale.detectionSource === 'history'
+        ? await markSoldFromHistory(trx, sale, inserted.id, [...items.keys()])
+        : await startAutoDelist(
+            trx,
+            {
+              accountId: sale.accountId,
+              saleId: inserted.id,
+              marketplace: sale.marketplace,
+              detectionSource: sale.detectionSource,
+              items: [...items].map(([itemId, item]) => ({ itemId, listingId: item.listingId })),
+            },
+            deps,
+          );
     return { type: 'recorded', saleId: inserted.id, itemIds: [...items.keys()], delists };
   });
+}
+
+/**
+ * The items of a sale from the seller's sales history (it sold before Listora watched the
+ * marketplace): sold, with no delist run, no delist, and no notification. Their other listings
+ * are left as they are.
+ */
+async function markSoldFromHistory(
+  trx: DbTransaction,
+  sale: NewSale,
+  saleId: string,
+  itemIds: readonly string[],
+): Promise<ItemDelistStart[]> {
+  const items = await trx
+    .selectFrom('inventory_item')
+    .select(['id', 'status'])
+    .where('account_id', '=', sale.accountId)
+    .where('id', 'in', itemIds)
+    .orderBy('id')
+    .forNoKeyUpdate()
+    .execute();
+  for (const item of items) {
+    // A shipped or archived item stays so.
+    if (item.status === 'shipped' || item.status === 'archived') continue;
+    await trx
+      .updateTable('inventory_item')
+      .set({ status: 'sold', pre_archive_status: null })
+      .where('account_id', '=', sale.accountId)
+      .where('id', '=', item.id)
+      .execute();
+    await trx
+      .insertInto('audit_log')
+      .values({
+        account_id: sale.accountId,
+        item_id: item.id,
+        actor_kind: 'marketplace',
+        action: 'item.sold',
+        changes: jsonb({
+          saleId,
+          marketplace: sale.marketplace,
+          history: true,
+          status: { from: item.status, to: 'sold' },
+        }),
+      })
+      .execute();
+  }
+  return [];
 }
 
 async function findSale(trx: DbTransaction, sale: NewSale): Promise<string | undefined> {
@@ -199,8 +256,9 @@ async function findSale(trx: DbTransaction, sale: NewSale): Promise<string | und
 
 /**
  * A standing sale of one of the items on the sale's marketplace that is this same order seen
- * from another source: the new or the earlier report came from a sale email. Locks the items
- * in id order (as the delist fan-out does) before it reads.
+ * from another source: the new or the earlier report came from a sale email, or the marketplace
+ * reports a sale the seller entered by hand. Locks the items in id order (as the delist fan-out
+ * does) before it reads.
  */
 async function findSaleOfSameListing(
   trx: DbTransaction,
@@ -227,7 +285,13 @@ async function findSaleOfSameListing(
     .where('sale_item.marketplace', '=', sale.marketplace)
     .where('sale_item.item_id', 'in', itemIds)
     .where('sale.status', 'in', STANDING_SALE_STATUSES);
-  if (sale.detectionSource !== 'email') query = query.where('sale.detection_source', '=', 'email');
+  // An email meets any report; a hand-entered sale meets an email; the marketplace's own report
+  // meets an email or a hand-entered sale.
+  if (sale.detectionSource === 'manual') {
+    query = query.where('sale.detection_source', '=', 'email');
+  } else if (sale.detectionSource !== 'email') {
+    query = query.where('sale.detection_source', 'in', ['email', 'manual']);
+  }
   const row = await query.orderBy('sale.sold_at').limit(1).executeTakeFirst();
   return row?.id;
 }

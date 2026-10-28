@@ -88,7 +88,10 @@ SaleDetectionSource:
       maxLength: 64
 KnownSaleDetectionSource:
   type: string
-  enum: [webhook, poll, email, manual]
+  description: |
+    `history`: found in the seller's sales history when the marketplace was connected; it sold
+    before then, so Listora never asks to ship it.
+  enum: [webhook, poll, email, manual, history]
 DelistRunStatus:
   type: string
   description: |
@@ -511,3 +514,59 @@ SalePage:
     nextCursor:
       type: string
       description: Present when there are more results.
+SalesSummary:
+  type: object
+  description: |
+    The seller's sales that stand, all time: in total, and the seller's own totals on each
+    marketplace in the fixed `KnownMarketplace` order. Only totals: no ranking or share, so no
+    marketplace's performance is presented relative to another's (eBay's API License Agreement
+    restricts that without eBay's consent).
+  required: [total, marketplaces]
+  properties:
+    total:
+      $ref: '#/SalesTotals'
+    marketplaces:
+      type: array
+      description: |
+        Each marketplace with a sale or a connected account, in the fixed `KnownMarketplace`
+        order (never ranked); a connected one without a sale has zeros.
+      maxItems: 64
+      items:
+        $ref: '#/MarketplaceSales'
+    firstSoldAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the earliest of the sales sold. Absent without a sale.
+SalesTotals:
+  type: object
+  description: A number of sales and what they brought in.
+  required: [salesCount, itemsSold, revenue]
+  properties:
+    salesCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Orders (a bundle is one).
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 0
+    revenue:
+      $ref: './common.yaml#/Money'
+      description: The sale prices plus the shipping buyers paid, as the profit dashboard counts it.
+MarketplaceSales:
+  type: object
+  description: The seller's own totals on one marketplace.
+  required: [marketplace, salesCount, itemsSold, revenue]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    salesCount:
+      type: integer
+      format: int32
+      minimum: 0
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 0
+    revenue:
+      $ref: './common.yaml#/Money'

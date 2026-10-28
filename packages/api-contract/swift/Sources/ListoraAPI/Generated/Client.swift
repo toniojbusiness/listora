@@ -8362,7 +8362,7 @@ public struct Client: APIProtocol {
     }
     /// List sales
     ///
-    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+    /// The sales feed, newest sold first, each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -8633,6 +8633,88 @@ public struct Client: APIProtocol {
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
                     return .unprocessableContent(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Get the seller's sales, in total and per marketplace
+    ///
+    /// Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+    /// marketplace: the sales the seller's connected marketplaces showed (their sales history
+    /// included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sales/summary`.
+    /// - Remark: Generated from `#/paths//v1/sales/summary/get(getSalesSummary)`.
+    public func getSalesSummary(_ input: Operations.GetSalesSummary.Input) async throws -> Operations.GetSalesSummary.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetSalesSummary.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/sales/summary",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetSalesSummary.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.SalesSummary.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
                 default:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Components.Responses.DefaultError.Body

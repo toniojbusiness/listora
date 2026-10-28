@@ -20,7 +20,11 @@ import type {
 import { describeOrder, type DescribedItem } from './describe.ts';
 import type { VerdictOrder } from './verdict.ts';
 
-/** Sale statuses that still need a package. */
+/**
+ * Sale statuses that still need a package. A sale from the seller's sales history (detection
+ * source `history`: it sold before the connection's history ends) never does: it is recorded
+ * only.
+ */
 export const OPEN_SALE_STATUSES = [
   'detected',
   'confirmed',
@@ -83,6 +87,7 @@ export async function loadPackOrders(
     .select('sale.id')
     .where('sale.account_id', '=', accountId)
     .where('sale.status', 'in', OPEN_SALE_STATUSES)
+    .where('sale.detection_source', '<>', 'history')
     .where('sale.sold_at', '>', new Date(now.getTime() - OPEN_ORDER_DAYS * 86_400_000))
     .where((eb) =>
       eb.or([
@@ -258,6 +263,7 @@ export async function openSalesWithLabel(
     .where('label.tracking_number', 'is not', null)
     .where(matchesScan('label.tracking_number', scanned))
     .where('sale.status', 'in', OPEN_SALE_STATUSES)
+    .where('sale.detection_source', '<>', 'history')
     .orderBy('sale.sold_at', 'desc')
     .execute();
   return rows.map((row) => row.id);
@@ -301,6 +307,7 @@ export async function openSaleWithSku(
     .where('sale_item.account_id', '=', accountId)
     .where('item.sku', '=', sku)
     .where('sale.status', 'in', OPEN_SALE_STATUSES)
+    .where('sale.detection_source', '<>', 'history')
     .orderBy('sale.sold_at', 'desc')
     .executeTakeFirst();
   return row?.id;

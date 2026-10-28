@@ -195,6 +195,8 @@ paths:
     $ref: './paths/connections.yaml#/~1v1~1marketplace-sessions~1{marketplace}'
   /v1/sales:
     $ref: './paths/sales.yaml#/~1v1~1sales'
+  /v1/sales/summary:
+    $ref: './paths/sales.yaml#/~1v1~1sales~1summary'
   /v1/sales/{saleId}:
     $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}'
   /v1/sales/{saleId}/confirm:
@@ -803,6 +805,12 @@ components:
       $ref: './components/schemas/sales.yaml#/SaleDetectionSource'
     KnownSaleDetectionSource:
       $ref: './components/schemas/sales.yaml#/KnownSaleDetectionSource'
+    SalesSummary:
+      $ref: './components/schemas/sales.yaml#/SalesSummary'
+    SalesTotals:
+      $ref: './components/schemas/sales.yaml#/SalesTotals'
+    MarketplaceSales:
+      $ref: './components/schemas/sales.yaml#/MarketplaceSales'
     DelistRunStatus:
       $ref: './components/schemas/sales.yaml#/DelistRunStatus'
     DelistResultState:

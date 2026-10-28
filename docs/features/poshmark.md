@@ -76,7 +76,10 @@ title (a read), the candidates are the listings created in the last 72 hours.
 
 **Sale checks.** Poshmark's sold items show no order number, and each listing sells once, so a
 sold listing is one order: `externalOrderId` is `listing:<id>`, and its sale time is the
-listing's `inventory.status_changed_at`. Buyers' names and addresses are never read.
+listing's `inventory.status_changed_at`. Buyers' names and addresses are never read. Each sale
+carries the listing's closet record (photos and details), for the sold item Listora makes of a
+sale it had no listing for ([sales.md](sales.md#sales-history)); the first check, the sales
+history, reads up to 25 closet pages. The closet doesn't say whether a sale shipped.
 
 ## Mapping tables
 

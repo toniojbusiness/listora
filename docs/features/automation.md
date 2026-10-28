@@ -156,8 +156,12 @@ from the app
   sale intake: in one transaction, an `inbound_event` (source `poll`, one per order) and the
   worker's `automation_sale_order` job (`sale-checks/orders.ts`). The worker records the sale
   there (`recordSale`, [ebay-notifications.md](ebay-notifications.md)) when a line is a Listora
-  listing, which starts its auto-delist ([auto-delist.md](auto-delist.md)), and finishes the
-  event `processed` or `ignored`. The worker records it, not the runner, because the auto-delist
+  listing, which starts its auto-delist ([auto-delist.md](auto-delist.md)); a sale of a listing
+  Listora doesn't have becomes a sold item of its own (the seller's sales history,
+  [sales.md](sales.md#sales-history)); and it finishes the event `processed` or `ignored`. A
+  connection's first check reads every sold order the pages show (the sales history), later
+  ones the orders since the last; a sale from before the connection's history ends is recorded
+  only, with no auto-delist or notification. The worker records it, not the runner, because the auto-delist
   fan-out decides from each listing's capabilities whether it is marked sold or ended, and only
   the worker's adapters include the API adapters. The next check is due when the expected sales since now reach what an average
   default interval holds (`interval.ts`): every 12 hours by default, sooner over the hours and

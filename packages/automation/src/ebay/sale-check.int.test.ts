@@ -113,6 +113,12 @@ describe('eBay sale checks (real Postgres, headless Chromium)', () => {
 
   it("records a sale from eBay's Sold page once, by its order number, and starts the auto-delist", async () => {
     const { connectionId } = await link();
+    // Linked a day ago: the sale came after its sales history ends, so Listora acts on it.
+    await database.db
+      .updateTable('sale_check_schedule')
+      .set({ history_until: new Date(Date.now() - 24 * HOUR) })
+      .where('connection_id', '=', connectionId)
+      .execute();
     const itemId = site.seed({ seller: accountId, title: 'Sold jacket', priceCents: 3000 });
     const orderId = site.sell(itemId, new Date(Date.now() - HOUR));
     const item = await createInventoryItem(database.db, accountId, { title: 'Sold jacket' });

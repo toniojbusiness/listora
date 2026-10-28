@@ -39,7 +39,8 @@ func sendOnce<Value: Sendable>(
     }
 }
 
-/// The Sales tab: recent sales, newest first, each with its profit.
+/// The Sales tab: the seller's sales in total and per marketplace, then recent sales, newest
+/// sold first, each with its profit.
 @MainActor
 @Observable
 final class SalesListModel {
@@ -51,6 +52,8 @@ final class SalesListModel {
     }
 
     private(set) var sales: [Sale] = []
+    /// All the seller's sales, in total and per marketplace; the last one read when a read fails.
+    private(set) var summary: SalesSummary?
     private(set) var phase: Phase = .loading
     private(set) var hasMore = false
     /// The newest sale, when it arrived since the list last loaded while the app was open: the
@@ -74,8 +77,13 @@ final class SalesListModel {
         if sales.isEmpty {
             phase = .loading
         }
+        // Read at once with the list; a summary that can't be read keeps the last one.
+        async let summary = try? service.summary()
         do {
             let page = try await service.sales(cursor: nil)
+            if let summary = await summary {
+                self.summary = summary
+            }
             if phase == .loaded, let newest = page.sales.first, !sales.contains(where: { $0.id == newest.id }) {
                 newSaleID = newest.id
             }

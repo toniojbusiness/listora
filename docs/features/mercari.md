@@ -14,18 +14,18 @@ the cloud browser runner ([automation.md](automation.md)). The code is in
 
 ## What it does
 
-| Operation  | How                                                                                                           | Confirmed by                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Create     | Fills the sell form (`/sell/`), then clicks List. Only that click can change anything.                        | The listing page: status, title, text, price     |
-| Revise     | Fills the edit form (`/sell/edit/<id>/`) with every detail except photos, then clicks Update                  | The same                                         |
-| Price      | Fills only the price on the edit form, then clicks Update                                                     | The same                                         |
-| End        | **Deactivate** on the edit page (it acts at once, with no confirmation). The listing is kept, never deleted.  | The page shows the listing as inactive (`ended`) |
-| Relist     | **Activate** on the edit page of an inactive listing (same id); a listing Mercari removed is posted anew.     | The page shows the listing for sale (`active`)   |
-| Mark sold  | Not needed: Mercari marks its own sales sold                                                                  |                                                  |
-| Read       | The listing's page (`/us/item/<id>/`)                                                                         |                                                  |
-| Sale check | The seller's "in progress" (sold, waiting to ship) and "sold" tabs, newest first                              |                                                  |
-| Listings   | The seller's "active" and "inactive" tabs, up to 25 pages each (`listListings`, for imports and drift checks) |                                                  |
-| Health     | The account page (`/mypage/`)                                                                                 |                                                  |
+| Operation  | How                                                                                                                  | Confirmed by                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Create     | Fills the sell form (`/sell/`), then clicks List. Only that click can change anything.                               | The listing page: status, title, text, price     |
+| Revise     | Fills the edit form (`/sell/edit/<id>/`) with every detail except photos, then clicks Update                         | The same                                         |
+| Price      | Fills only the price on the edit form, then clicks Update                                                            | The same                                         |
+| End        | **Deactivate** on the edit page (it acts at once, with no confirmation). The listing is kept, never deleted.         | The page shows the listing as inactive (`ended`) |
+| Relist     | **Activate** on the edit page of an inactive listing (same id); a listing Mercari removed is posted anew.            | The page shows the listing for sale (`active`)   |
+| Mark sold  | Not needed: Mercari marks its own sales sold                                                                         |                                                  |
+| Read       | The listing's page (`/us/item/<id>/`)                                                                                |                                                  |
+| Sale check | The seller's "in progress" (sold, waiting to ship) and "sold" (shipped) tabs, newest first, each sale's listing page |                                                  |
+| Listings   | The seller's "active" and "inactive" tabs, up to 25 pages each (`listListings`, for imports and drift checks)        |                                                  |
+| Health     | The account page (`/mypage/`)                                                                                        |                                                  |
 
 End and relist read whether the listing is active from the edit page they act on (its toggle says
 Deactivate or Activate), so they load one page before they act. Only when Mercari shows no editor
@@ -38,7 +38,10 @@ read to say what became of it.
   description or last-updated time, so those are `null`, and a listing found this way never
   confirms an operation. It reports `complete: false` when a tab has more than 25 pages.
 - A sale check reports each sold item as one order. Its id is the item id, because a Mercari
-  listing sells only once.
+  listing sells only once. A sale in the sold tab is done (`shipped`); one in progress may still
+  wait to ship. Each sale carries the listing its page shows (photos and details), for the sold
+  item Listora makes of a sale it had no listing for ([sales.md](sales.md#sales-history)). The
+  first check, the sales history, reads up to 25 pages of each tab and 60 listing pages.
 
 **Freshness.** The listing page's last-updated time (`updated`, in seconds, in the page's
 `__NEXT_DATA__` record `ItemDetail:<id>`) is the listing's revision, in milliseconds. Mercari changes it with every edit. Automated changes are always seconds apart

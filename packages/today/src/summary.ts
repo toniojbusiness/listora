@@ -97,6 +97,8 @@ async function shipFacts(executor: DbExecutor, accountId: string): Promise<ShipF
     ])
     .where('sale_item.account_id', '=', accountId)
     .where('sale.status', 'in', ['detected', 'confirmed'])
+    // A sale from the seller's sales history is recorded only: never one to ship.
+    .where('sale.detection_source', '<>', 'history')
     .where('item.status', 'in', ['sold_pending_delist', 'sold'])
     .orderBy(sql`sale.ship_by asc nulls last`)
     .orderBy('sale.sold_at')
