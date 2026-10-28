@@ -136,7 +136,6 @@ private func sale(
     actions: [Schemas.KnownSaleAction] = [.confirm, .markShipped, .cancel],
     relist: Schemas.SaleRelist? = nil,
     runStatus: Schemas.DelistRunStatus? = nil,
-    thumbnailUrl: String? = nil,
 ) -> Schemas.Sale {
     .init(
         id: "sale-1",
@@ -145,7 +144,6 @@ private func sale(
             itemId: "item-1",
             sku: "AJ-000001",
             title: "Levi's Trucker Denim Jacket",
-            thumbnailUrl: thumbnailUrl,
             salePrice: usd(4000),
             profit: usd(2000),
             relist: relist,
@@ -205,13 +203,6 @@ private let fast = SalesTiming(poll: .milliseconds(5), sendAttempts: 3, sendRetr
 @MainActor
 @Suite("Sales models")
 struct SalesModelsTests {
-    @Test
-    func `a sale row shows its sold item's thumbnail once it has one`() {
-        let url = "https://photos.example.com/public/photos/item-1/thumbnail.jpg"
-        #expect(SaleThumbnail.url(of: sale(thumbnailUrl: url)) == URL(string: url))
-        #expect(SaleThumbnail.url(of: sale()) == nil)
-    }
-
     @Test
     func `a sale says how Listora found it, and works without it`() async {
         let service = FakeSalesService(sale: sale())
