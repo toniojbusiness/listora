@@ -420,8 +420,8 @@ db:migrate`; in AWS, the deploy runs them before new code starts, see
   when a migration it adds does not sort after the newest one on its base branch, and a push to
   `main` fails when one it adds does not sort after the newest one before the push (two pull
   requests that each passed but merged in the wrong order), so the automatic deploy, which runs
-  only after `main`'s CI passed, never reaches the live migration step with one. Rename it then, before it
-  ships.
+  only after `main`'s CI passed, never reaches the live migration step with one. Rename it then,
+  before it ships.
 - **Checks.** `migrations.test.ts` checks that every migration has both files, that prefixes are
   unique, that timestamps are real UTC times, and that no numbered migration follows
   `0014_marketplace_connect`. The migration integration tests read the list from the directory, so a
