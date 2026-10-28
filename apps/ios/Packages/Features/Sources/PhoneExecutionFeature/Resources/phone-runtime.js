@@ -13168,6 +13168,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** How long one listing photo may take to download. */
 	const PHOTO_TIMEOUT_MS = 3e4;
 	async function runPhoneCall(input, host, options = {}) {
+		return plainJson(await runWithHandOffs(input, host, options));
+	}
+	/**
+	* The output as the JSON the server reads: a script's value may hold dates (a sale's sold time),
+	* which the app's web view hands back as values its answer can't carry, so the phone would
+	* answer nothing. As JSON they are the ISO strings the server's answer schemas read.
+	*/
+	function plainJson(output) {
+		return JSON.parse(JSON.stringify(output));
+	}
+	async function runWithHandOffs(input, host, options) {
 		if (input.readOnly === true && isWriteCall(input.call)) return readOnlyRefusal();
 		const profile = phoneProfile(input);
 		const pacing = new Pacing(profile.pacing, options.pacing);
