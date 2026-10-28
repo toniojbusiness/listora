@@ -1293,8 +1293,14 @@ public struct Client: APIProtocol {
     }
     /// Delete an item
     ///
-    /// Allowed only while no listing is live on a marketplace (every listing is `draft` or
-    /// `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+    /// Deletes the item from Listora with its listings; nothing changes on a marketplace. The
+    /// history of what was done on the marketplaces is kept for the owner, and no seller view
+    /// serves it. A listing that is not live (`draft`, `ended`, or `sold`) never stops it. One
+    /// that may be live (any other status) does, with `409 invalid_state_transition` naming the
+    /// marketplaces, unless `leaveListings` is `true`: the seller either ends those listings first
+    /// or removes the item from Listora only. Also `409` while a change to one of its listings is
+    /// still in flight (queued, running, retrying, or verifying), and for an item that was sold,
+    /// whose sale records are kept (archive it instead). The SKU is never reused.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/items/{itemId}`.
@@ -1315,6 +1321,13 @@ public struct Client: APIProtocol {
                     method: .delete
                 )
                 suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "leaveListings",
+                    value: input.query.leaveListings
+                )
                 converter.setAcceptHeader(
                     in: &request.headerFields,
                     contentTypes: input.headers.accept
@@ -3719,6 +3732,723 @@ public struct Client: APIProtocol {
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
                     return .unprocessableContent(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// List hauls
+    ///
+    /// Newest first, so the cost screen offers the haul of the trip the seller is on.
+    ///
+    /// - Remark: HTTP `GET /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/get(listHauls)`.
+    public func listHauls(_ input: Operations.ListHauls.Input) async throws -> Operations.ListHauls.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.ListHauls.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/hauls",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "cursor",
+                    value: input.query.cursor
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "limit",
+                    value: input.query.limit
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.ListHauls.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.HaulPage.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 400:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.BadRequest.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .badRequest(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Create a haul
+    ///
+    /// Records a haul's total and how many items it had, with `itemIds` joining it at once
+    /// (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+    /// it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/post(createHaul)`.
+    public func createHaul(_ input: Operations.CreateHaul.Input) async throws -> Operations.CreateHaul.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.CreateHaul.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/hauls",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .post
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Idempotency-Key",
+                    value: input.headers.idempotencyKey
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 201:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.CreateHaul.Output.Created.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.Haul.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .created(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.ValidationFailed.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Get a haul
+    ///
+    /// - Remark: HTTP `GET /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/get(getHaul)`.
+    public func getHaul(_ input: Operations.GetHaul.Input) async throws -> Operations.GetHaul.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetHaul.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/hauls/{}",
+                    parameters: [
+                        input.path.haulId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetHaul.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.Haul.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 404:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.NotFound.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .notFound(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Change a haul's total or count
+    ///
+    /// Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+    /// a new `version`). An `itemCount` below `itemsAdded` is `422`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/put(replaceHaul)`.
+    public func replaceHaul(_ input: Operations.ReplaceHaul.Input) async throws -> Operations.ReplaceHaul.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.ReplaceHaul.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/hauls/{}",
+                    parameters: [
+                        input.path.haulId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .put
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.ReplaceHaul.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.Haul.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 404:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.NotFound.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .notFound(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.ValidationFailed.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Add items to a haul
+    ///
+    /// The items join the haul after the ones already in it, and every item in it gets its new
+    /// share. When the haul's count is reached, each new item adds one to it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls/{haulId}/items`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/post(addHaulItems)`.
+    public func addHaulItems(_ input: Operations.AddHaulItems.Input) async throws -> Operations.AddHaulItems.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.AddHaulItems.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/hauls/{}/items",
+                    parameters: [
+                        input.path.haulId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .post
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setHeaderFieldAsURI(
+                    in: &request.headerFields,
+                    name: "Idempotency-Key",
+                    value: input.headers.idempotencyKey
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.AddHaulItems.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.Haul.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 404:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.NotFound.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .notFound(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.ValidationFailed.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Take an item out of a haul
+    ///
+    /// The item keeps its last share as its cost, which the seller can then change; the items
+    /// still in the haul get their new shares. The haul's count stays as it is.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/hauls/{haulId}/items/{itemId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/{itemId}/delete(removeHaulItem)`.
+    public func removeHaulItem(_ input: Operations.RemoveHaulItem.Input) async throws -> Operations.RemoveHaulItem.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.RemoveHaulItem.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/hauls/{}/items/{}",
+                    parameters: [
+                        input.path.haulId,
+                        input.path.itemId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .delete
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.RemoveHaulItem.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.Haul.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 404:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.NotFound.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .notFound(.init(body: body))
                 default:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Components.Responses.DefaultError.Body
@@ -14233,9 +14963,9 @@ public struct Client: APIProtocol {
     }
     /// List the marketplaces Listora imports listings from, each with its latest import
     ///
-    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-    /// import can start now (the marketplace is linked, none is under way) or why not, and its
-    /// newest import with its progress and summary.
+    /// One entry per marketplace Listora imports from (those whose imports passed live,
+    /// docs/features/verified-features.md): whether an import can start now (the marketplace is
+    /// linked, none is under way) or why not, and its newest import with its progress and summary.
     ///
     ///
     /// - Remark: HTTP `GET /v1/imports`.
@@ -14832,7 +15562,7 @@ public struct Client: APIProtocol {
     }
     /// When each marketplace's offers were last read
     ///
-    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    /// One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     ///
     /// - Remark: HTTP `GET /v1/offer-checks`.
     /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
@@ -15529,6 +16259,90 @@ public struct Client: APIProtocol {
                     case "application/json":
                         body = try await converter.getResponseBodyAsJSON(
                             Components.Schemas.SyncStatus.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// What Listora shows the seller of each marketplace
+    ///
+    /// Each marketplace's features that passed a live end-to-end test on a real account
+    /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+    /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+    /// `features`; anything else is hidden, and the server never queues its checks either. The
+    /// same for every account.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-features`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
+    public func listMarketplaceFeatures(_ input: Operations.ListMarketplaceFeatures.Input) async throws -> Operations.ListMarketplaceFeatures.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.ListMarketplaceFeatures.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/marketplace-features",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.ListMarketplaceFeatures.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.MarketplaceFeatureList.self,
                             from: responseBody,
                             transforming: { value in
                                 .json(value)

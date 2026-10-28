@@ -67,6 +67,9 @@ public final class InventoryEnvironment {
     /// Listing refresh's setting and each item's own cadence; without it, the item screen offers
     /// no "Refresh this item".
     var refreshService: (any ListingRefreshService)?
+    /// What shows of each marketplace (docs/features/verified-features.md): refresh only where
+    /// it passed live; without it, nothing of refresh shows.
+    public var features: MarketplaceFeatures?
     /// A filter for the list to apply when it next appears (the Today card for drafts).
     private var requestedFilter: InventoryFilter?
     /// An item to open, with List everywhere, when the list next appears (List it now).
@@ -116,9 +119,13 @@ public final class InventoryEnvironment {
         attention = InventoryAttention(service: service, isSignedIn: isSignedIn)
     }
 
-    /// Settings > Listing refresh, for Settings' navigation stack; nil without a refresh service.
+    /// Settings > Listing refresh, for Settings' navigation stack; nil without a refresh service,
+    /// or while refresh passed live on no marketplace.
     public func refreshSettingsScreen() -> AnyView? {
-        refreshService.map { AnyView(ListingRefreshSettingsView(model: ListingRefreshSettingsModel(service: $0))) }
+        guard features?.showsAnywhere(.listingRefresh) == true else { return nil }
+        return refreshService.map {
+            AnyView(ListingRefreshSettingsView(model: ListingRefreshSettingsModel(service: $0)))
+        }
     }
 
     /// The item screen, for another tab's navigation stack (a Today card opens it).

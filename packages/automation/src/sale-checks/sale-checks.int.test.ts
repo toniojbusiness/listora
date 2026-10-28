@@ -11,7 +11,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createInventoryItem } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
-import { ConnectionAwareAdapter, type AdapterLookup } from '@listora/marketplaces';
+import {
+  ConnectionAwareAdapter,
+  useMarketplaceFeatures,
+  type AdapterLookup,
+} from '@listora/marketplaces';
 import { LocalTokenVault, SessionVault } from '@listora/connections';
 
 import { RunnerSessions } from '../adapter/runner-sessions.ts';
@@ -652,6 +656,53 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     );
     expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 0 });
     await clearJobs();
+  });
+
+  it('never checks, calls overdue, or pushes about sales on a marketplace whose checks never passed live', async () => {
+    const { id: connectionId } = await database.db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: accountId,
+        marketplace: 'poshmark',
+        mode: 'automation',
+        status: 'connected',
+        token_ciphertext: Buffer.from('sealed'),
+        runs_on: 'phone',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    // Scheduled before Poshmark's checks were hidden, and long past due.
+    await database.db
+      .insertInto('sale_check_schedule')
+      .values({
+        account_id: accountId,
+        connection_id: connectionId,
+        marketplace: 'poshmark',
+        next_check_at: new Date(Date.now() - 7 * HOUR),
+        next_reason: 'linked',
+      })
+      .execute();
+    useMarketplaceFeatures('verified');
+    try {
+      expect(await requestSaleCheck(database.db, { accountId, marketplace: 'poshmark' })).toBe(
+        false,
+      );
+      expect((await dueSaleChecks(database.db)).map((due) => due.connectionId)).not.toContain(
+        connectionId,
+      );
+      const health = { db: database.db, settings: SETTINGS, logger: silentLogger };
+      expect(await runSaleCheckHealth(health)).toMatchObject({ alerted: 0 });
+    } finally {
+      useMarketplaceFeatures('all');
+    }
+    expect((await schedule(connectionId)).health).toBe('healthy');
+    expect(await pushes()).toEqual([]);
+    const work = await database.db
+      .selectFrom('phone_work')
+      .select('purpose')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(work).toEqual([]);
   });
 
   it('reads the sold history read-only: records every sold order and hands none over', async () => {

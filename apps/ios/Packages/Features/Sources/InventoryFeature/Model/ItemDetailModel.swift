@@ -298,11 +298,15 @@ struct DetailTiming: Sendable {
     /// The longest one wait for a change holds (the server answers within 20 seconds).
     var changeWait: Duration = .seconds(20)
 
+    /// How long a delete waits for the marketplaces to confirm the listings it ended first.
+    var endWait: Duration
+
     static let standard = DetailTiming(
         poll: .seconds(1),
         longestPoll: .seconds(15),
         sendAttempts: 3,
         sendRetryDelay: .seconds(1),
+        endWait: .seconds(120),
     )
 }
 

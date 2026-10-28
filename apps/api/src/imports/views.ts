@@ -11,7 +11,7 @@ import type {
 } from '@listora/api-contract';
 import type { DbExecutor, ListingImportEntryTable } from '@listora/db';
 import {
-  IMPORT_MARKETPLACES,
+  importableMarketplaces,
   importWords,
   titleFrom,
   type ListingImportRow,
@@ -67,11 +67,14 @@ export async function importMarketplaces(
   db: DbExecutor,
   tenant: Tenant,
 ): Promise<ListingImportMarketplace[]> {
+  // Only marketplaces whose imports passed live (verified-features.md).
+  const marketplaces = importableMarketplaces();
+  if (marketplaces.length === 0) return [];
   const connections = await db
     .selectFrom('marketplace_connection')
     .select(['marketplace', 'mode', 'status'])
     .where('account_id', '=', tenant.accountId)
-    .where('marketplace', 'in', [...IMPORT_MARKETPLACES])
+    .where('marketplace', 'in', marketplaces)
     .execute();
   const latest = await db
     .selectFrom('listing_import')
@@ -82,7 +85,7 @@ export async function importMarketplaces(
     .orderBy('created_at', 'desc')
     .orderBy('id', 'desc')
     .execute();
-  return IMPORT_MARKETPLACES.map((marketplace) => {
+  return marketplaces.map((marketplace) => {
     const name = MARKETPLACE_NAMES[marketplace];
     const connection = connections.find((found) => found.marketplace === marketplace);
     const newest = latest.find((found) => found.marketplace === marketplace);

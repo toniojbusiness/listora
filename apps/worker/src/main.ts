@@ -18,7 +18,7 @@ import {
 } from '@listora/automation';
 import { createOAuthClients, createTokenVault } from '@listora/connections';
 import { createDatabase } from '@listora/db';
-import { createMarketplaceAdapters } from '@listora/marketplaces';
+import { createMarketplaceAdapters, useMarketplaceFeatures } from '@listora/marketplaces';
 import { scaledRetryPolicy, startOperationWorker } from '@listora/operations';
 import { limitImageThreads } from '@listora/photos';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
@@ -31,6 +31,9 @@ import { collectWorkerJobs, WORKER_FEATURES } from './features.ts';
 const config = loadWorkerConfig();
 // Photo processing keeps to one libvips thread, so a burst of photos leaves CPU for the API.
 limitImageThreads();
+
+// Only the features that passed live, unless the stack runs on the fakes (MARKETPLACE_FEATURES).
+useMarketplaceFeatures(config.marketplaces.features);
 const logger = createLogger({ service: 'worker', level: config.logLevel });
 const db = createDatabase({
   connectionString: config.databaseUrl,

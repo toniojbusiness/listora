@@ -1,0 +1,20 @@
+/v1/marketplace-features:
+  get:
+    tags: [marketplace-features]
+    operationId: listMarketplaceFeatures
+    summary: What Listora shows the seller of each marketplace
+    description: |
+      Each marketplace's features that passed a live end-to-end test on a real account
+      (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+      screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+      `features`; anything else is hidden, and the server never queues its checks either. The
+      same for every account.
+    responses:
+      '200':
+        description: Every marketplace, each with its verified features.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/marketplace-features.yaml#/MarketplaceFeatureList'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

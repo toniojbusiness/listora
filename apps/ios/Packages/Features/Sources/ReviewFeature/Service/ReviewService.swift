@@ -7,6 +7,9 @@ typealias Usage = Components.Schemas.Usage
 typealias MarketplacePrefill = Components.Schemas.ItemMarketplacePrefill
 typealias PrefillDetails = Components.Schemas.PrefillDetails
 typealias PrefillAnswer = Components.Schemas.PrefillAnswer
+typealias Haul = Components.Schemas.Haul
+typealias HaulCreate = Components.Schemas.HaulCreate
+typealias HaulReplace = Components.Schemas.HaulReplace
 
 /// The API calls of review and pricing, returning the contract's types and throwing
 /// ``APIFailure`` for every other answer. A protocol so the view model's tests run against a fake.
@@ -20,6 +23,16 @@ protocol ReviewService: Sendable {
     func apply(analysisID: String, expectedVersion: Int64, idempotencyKey: String) async throws(APIFailure) -> Item
     func replace(itemID: String, with replace: ItemReplace) async throws(APIFailure) -> Item
     func pricing(itemID: String) async throws(APIFailure) -> PricingSuggestion
+    /// The seller's latest hauls, newest first, to pick the one of the trip they are on.
+    func hauls() async throws(APIFailure) -> [Haul]
+    /// Records a haul, with the items that join it at once (each then costs its share).
+    func createHaul(_ haul: HaulCreate, idempotencyKey: String) async throws(APIFailure) -> Haul
+    /// The items join the haul after the ones already in it; every item in it gets its new share.
+    func addHaulItems(haulID: String, itemIDs: [String], idempotencyKey: String) async throws(APIFailure) -> Haul
+    /// Takes the item out of the haul; it keeps its last share until the seller changes it.
+    func removeHaulItem(haulID: String, itemID: String) async throws(APIFailure) -> Haul
+    /// Fixes the haul's total or count; every item in it gets its new share.
+    func replaceHaul(haulID: String, with haul: HaulReplace) async throws(APIFailure) -> Haul
     func usage() async throws(APIFailure) -> Usage
     /// The server's text model's reading of the phrases of a spoken correction this app could
     /// not parse. A proposal only: it changes nothing on the item.
@@ -125,6 +138,58 @@ struct APIReviewService: ReviewService {
         switch try await call({ try await client.getItemPricing(path: .init(itemId: itemID)) }) {
         case let .ok(response): try body { try response.body.json }
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func hauls() async throws(APIFailure) -> [Haul] {
+        switch try await call({ try await client.listHauls(query: .init(limit: 10)) }) {
+        case let .ok(response): try body { try response.body.json.data }
+        case let .badRequest(response): throw APIFailure(statusCode: 400, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func createHaul(_ haul: HaulCreate, idempotencyKey: String) async throws(APIFailure) -> Haul {
+        let output = try await call {
+            try await client.createHaul(headers: .init(idempotencyKey: idempotencyKey), body: .json(haul))
+        }
+        switch output {
+        case let .created(response): return try body { try response.body.json }
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func addHaulItems(haulID: String, itemIDs: [String], idempotencyKey: String) async throws(APIFailure) -> Haul {
+        let output = try await call {
+            try await client.addHaulItems(
+                path: .init(haulId: haulID),
+                headers: .init(idempotencyKey: idempotencyKey),
+                body: .json(.init(itemIds: itemIDs)),
+            )
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func removeHaulItem(haulID: String, itemID: String) async throws(APIFailure) -> Haul {
+        switch try await call({ try await client.removeHaulItem(path: .init(haulId: haulID, itemId: itemID)) }) {
+        case let .ok(response): try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func replaceHaul(haulID: String, with haul: HaulReplace) async throws(APIFailure) -> Haul {
+        switch try await call({ try await client.replaceHaul(path: .init(haulId: haulID), body: .json(haul)) }) {
+        case let .ok(response): try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

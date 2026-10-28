@@ -9,7 +9,10 @@ after fees, never on its own, and it is shown as done only once a read of the of
 marketplace shows it.
 
 Poshmark and Depop are read and answered. Mercari is not yet: its website showed the captain's
-session no page of the offers buyers make (below).
+session no page of the offers buyers make (below). Sellers see only what passed live
+([verified-features.md](verified-features.md)). Today that is Depop's offer reads. Poshmark's
+offers and every answer from Listora are hidden: nothing reads them, an offer shows no Accept,
+Decline, or Counter ("Answer this offer in Depop."), and asking for an answer is refused.
 
 | Where                                                    | What                                                                      |
 | -------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -66,7 +69,8 @@ session no page of the offers buyers make (below).
   decides its own offer instead. An accepted or declined offer is final; a countered one waits
   on the buyer, and comes back as pending when the buyer counters with another price. A read that
   failed changes no offer, and the connection's `offer_check` says when the offers were last read
-  and why the newest read failed (Tasks shows it).
+  and why the newest read failed. That reason goes to the owner ([read-health.md](read-health.md))
+  and never to the seller: the offer checks the app reads carry no error.
 
 ## Answering one
 
@@ -109,8 +113,8 @@ between runs ([phone-execution.md](phone-execution.md)).
 ## In the app
 
 - **Tasks** asks for a read of the offers when it opens and on pull to refresh, runs the
-  phone's work at once, and shows a banner for a marketplace whose offers could not be read. An
-  offer's task reads "$30.00 offer on Depop".
+  phone's work at once. A read that failed shows the seller nothing. An offer's task reads
+  "$30.00 offer on Depop".
 - **The offer's screen** (`OfferTaskView`): the offer on a price tag (the amount, the listing's
   price, the listing, the buyer, a bundle's size, shipping, and when it expires), what accepting
   gives after fees and what accepting does there, Open in Depop, and Accept, Counter (the price,

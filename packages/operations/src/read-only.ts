@@ -17,7 +17,7 @@ import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 
 import { removeOperationJob } from './jobs.ts';
 import { removePhoneWork } from './phone-queue.ts';
-import { transitionOperation } from './transitions.ts';
+import { transitionOperation, type Tracked } from './transitions.ts';
 
 /**
  * The operation kinds that only read the marketplace. Every other kind, including any kind added
@@ -177,6 +177,7 @@ export async function setConnectionReadOnly(
           .onRef('listing.id', '=', 'op.listing_id'),
       )
       .selectAll('op')
+      .$narrowType<Tracked>()
       .where('op.account_id', '=', target.accountId)
       .where('op.status', 'in', ['queued', 'retrying'])
       .where('op.kind', 'not in', READ_KINDS)

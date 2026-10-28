@@ -196,8 +196,14 @@ export interface paths {
         post?: never;
         /**
          * Delete an item
-         * @description Allowed only while no listing is live on a marketplace (every listing is `draft` or
-         *     `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+         * @description Deletes the item from Listora with its listings; nothing changes on a marketplace. The
+         *     history of what was done on the marketplaces is kept for the owner, and no seller view
+         *     serves it. A listing that is not live (`draft`, `ended`, or `sold`) never stops it. One
+         *     that may be live (any other status) does, with `409 invalid_state_transition` naming the
+         *     marketplaces, unless `leaveListings` is `true`: the seller either ends those listings first
+         *     or removes the item from Listora only. Also `409` while a change to one of its listings is
+         *     still in flight (queued, running, retrying, or verifying), and for an item that was sold,
+         *     whose sale records are kept (archive it instead). The SKU is never reused.
          */
         delete: operations["deleteItem"];
         options?: never;
@@ -593,6 +599,103 @@ export interface paths {
         put: operations["replaceItemBatchInteraction"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hauls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List hauls
+         * @description Newest first, so the cost screen offers the haul of the trip the seller is on.
+         */
+        get: operations["listHauls"];
+        put?: never;
+        /**
+         * Create a haul
+         * @description Records a haul's total and how many items it had, with `itemIds` joining it at once
+         *     (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+         *     it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+         */
+        post: operations["createHaul"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hauls/{haulId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        /** Get a haul */
+        get: operations["getHaul"];
+        /**
+         * Change a haul's total or count
+         * @description Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+         *     a new `version`). An `itemCount` below `itemsAdded` is `422`.
+         */
+        put: operations["replaceHaul"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hauls/{haulId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add items to a haul
+         * @description The items join the haul after the ones already in it, and every item in it gets its new
+         *     share. When the haul's count is reached, each new item adds one to it.
+         */
+        post: operations["addHaulItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/hauls/{haulId}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take an item out of a haul
+         * @description The item keeps its last share as its cost, which the seller can then change; the items
+         *     still in the haul get their new shares. The haul's count stays as it is.
+         */
+        delete: operations["removeHaulItem"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2418,9 +2521,9 @@ export interface paths {
         };
         /**
          * List the marketplaces Listora imports listings from, each with its latest import
-         * @description One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-         *     import can start now (the marketplace is linked, none is under way) or why not, and its
-         *     newest import with its progress and summary.
+         * @description One entry per marketplace Listora imports from (those whose imports passed live,
+         *     docs/features/verified-features.md): whether an import can start now (the marketplace is
+         *     linked, none is under way) or why not, and its newest import with its progress and summary.
          */
         get: operations["listListingImports"];
         put?: never;
@@ -2519,7 +2622,7 @@ export interface paths {
         };
         /**
          * When each marketplace's offers were last read
-         * @description One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+         * @description One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
          */
         get: operations["listOfferChecks"];
         put?: never;
@@ -2628,6 +2731,30 @@ export interface paths {
          *     that run on the seller's iPhone wait for it to claim them.
          */
         post: operations["requestSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace-features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What Listora shows the seller of each marketplace
+         * @description Each marketplace's features that passed a live end-to-end test on a real account
+         *     (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+         *     screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+         *     `features`; anything else is hidden, and the server never queues its checks either. The
+         *     same for every account.
+         */
+        get: operations["listMarketplaceFeatures"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2949,6 +3076,11 @@ export interface components {
             };
             /** @description Read-only; the location `details.storageLocationId` refers to. */
             storageLocation?: components["schemas"]["StorageLocationSummary"];
+            /**
+             * @description Read-only; the haul the item is part of. Its `details.cost` is then its share of the
+             *     haul, which only the haul changes (`replaceHaul`, `addHaulItems`, `removeHaulItem`).
+             */
+            haul?: components["schemas"]["Haul"];
             /** @description In display order; the first is the cover. */
             photos: components["schemas"]["Photo"][];
             listings: components["schemas"]["Listing"][];
@@ -3388,6 +3520,81 @@ export interface components {
         ItemBatchInteractionReplace: {
             batch: components["schemas"]["InteractionTotals"];
             items: components["schemas"]["ItemBatchItemInteraction"][];
+        };
+        /**
+         * @description Items bought together for one price, such as 30 items from the bins for $50
+         *     (docs/features/hauls.md). Each item in the haul costs its share of `total`: the total
+         *     split over `itemCount`, with the leftover cents on the items that joined first, so a full
+         *     haul's items add back up to the total. The server keeps each item's `details.cost` equal to
+         *     its share, and a `replaceItem` that changes it is refused while the item is in a haul.
+         */
+        Haul: {
+            id: components["schemas"]["Id"];
+            /** @description What the whole haul cost. */
+            total: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description How many items the haul had. Never fewer than `itemsAdded`: an item joining a haul
+             *     whose count is reached adds one to it.
+             */
+            itemCount: number;
+            /**
+             * Format: int32
+             * @description The items in Listora that are part of the haul.
+             */
+            itemsAdded: number;
+            /**
+             * @description `total` over `itemCount`, to the nearest cent, to show ("$1.67 each"). Each item's own
+             *     cost is its share, which is this or within a cent of it.
+             */
+            eachCost: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description When it was bought; every item in the haul takes it.
+             */
+            purchaseDate?: string;
+            /** @description Where it was bought; every item in the haul takes it. */
+            purchaseSource?: string;
+            createdAt: components["schemas"]["Timestamp"];
+            updatedAt: components["schemas"]["Timestamp"];
+        };
+        HaulPage: {
+            /** @description Newest first. */
+            data: components["schemas"]["Haul"][];
+            /** @description Present when there are more results. */
+            nextCursor?: string;
+        };
+        HaulCreate: {
+            total: components["schemas"]["Money"];
+            /** Format: int32 */
+            itemCount: number;
+            /** Format: date */
+            purchaseDate?: string;
+            purchaseSource?: string;
+            /**
+             * @description Items that join the haul at once, in this order (a batch's items, in haul order). An
+             *     item in another haul moves to this one.
+             */
+            itemIds?: components["schemas"]["Id"][];
+        };
+        /**
+         * @description Full replacement of the haul's total, count, date, and place: a property left out is
+         *     cleared. Every item in the haul gets its new share.
+         */
+        HaulReplace: {
+            total: components["schemas"]["Money"];
+            /** Format: int32 */
+            itemCount: number;
+            /** Format: date */
+            purchaseDate?: string;
+            purchaseSource?: string;
+        };
+        HaulItemsAdd: {
+            /**
+             * @description Items that join the haul, in this order, after the items already in it. An item in
+             *     another haul moves to this one; an item already in this one stays where it is.
+             */
+            itemIds: components["schemas"]["Id"][];
         };
         /**
          * @description A model's guess, not market data. `label` is always
@@ -6036,14 +6243,18 @@ export interface components {
             offerAmount: components["schemas"]["Money"];
             counter?: components["schemas"]["Money"];
         };
-        /** @description When Listora last read the seller's offers on one marketplace, and how that went. */
+        /**
+         * @description When Listora last read the seller's offers on one marketplace, and how that went. Only
+         *     marketplaces whose offer reads passed live are listed (docs/features/verified-features.md).
+         *     A read that failed carries no error for the seller: it goes to the owner's alerts
+         *     (docs/features/read-health.md).
+         */
         OfferCheck: {
             marketplace: components["schemas"]["Marketplace"];
-            /** @description `waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`). */
+            /** @description `waiting` (a read waits for the iPhone), `ok`, or `failed` (the last read did not get through). */
             status: string;
             /** @description When a read last succeeded. */
             checkedAt?: components["schemas"]["Timestamp"];
-            message?: string;
         };
         OfferCheckList: {
             data: components["schemas"]["OfferCheck"][];
@@ -6078,6 +6289,29 @@ export interface components {
         /** @description Each linked marketplace Listora reads by signing in, in marketplace order. */
         SyncStatus: {
             data: components["schemas"]["SyncMarketplace"][];
+        };
+        /**
+         * @description A `KnownMarketplaceFeature`, or one added after this client was built. Clients ignore a
+         *     feature they do not know (they show nothing for it).
+         */
+        MarketplaceFeature: components["schemas"]["KnownMarketplaceFeature"];
+        /**
+         * @description `sales_history`: the seller's past sales read from the marketplace. `sale_checks`: new
+         *     sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
+         *     buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
+         *     offer from Listora. `listing_import`: importing the seller's existing listings.
+         *     `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
+         *     listing's details from Listora (`reviseListing`).
+         * @enum {string}
+         */
+        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise";
+        MarketplaceFeatures: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description The features of this marketplace that passed a live end-to-end test. */
+            features: components["schemas"]["MarketplaceFeature"][];
+        };
+        MarketplaceFeatureList: {
+            data: components["schemas"]["MarketplaceFeatures"][];
         };
     };
     responses: {
@@ -6194,6 +6428,7 @@ export interface components {
         PhotoId: components["schemas"]["Id"];
         SessionId: components["schemas"]["Id"];
         BatchId: components["schemas"]["Id"];
+        HaulId: components["schemas"]["Id"];
         AnalysisId: components["schemas"]["Id"];
         ListingId: components["schemas"]["Id"];
         OperationId: components["schemas"]["Id"];
@@ -6306,6 +6541,11 @@ export type ItemBatchItemCreate = components['schemas']['ItemBatchItemCreate'];
 export type ItemBatchItemSubmit = components['schemas']['ItemBatchItemSubmit'];
 export type ItemBatchItemInteraction = components['schemas']['ItemBatchItemInteraction'];
 export type ItemBatchInteractionReplace = components['schemas']['ItemBatchInteractionReplace'];
+export type Haul = components['schemas']['Haul'];
+export type HaulPage = components['schemas']['HaulPage'];
+export type HaulCreate = components['schemas']['HaulCreate'];
+export type HaulReplace = components['schemas']['HaulReplace'];
+export type HaulItemsAdd = components['schemas']['HaulItemsAdd'];
 export type AiPriceEstimate = components['schemas']['AiPriceEstimate'];
 export type SoldDataSource = components['schemas']['SoldDataSource'];
 export type KnownSoldDataSource = components['schemas']['KnownSoldDataSource'];
@@ -6605,6 +6845,10 @@ export type SyncState = components['schemas']['SyncState'];
 export type KnownSyncState = components['schemas']['KnownSyncState'];
 export type SyncMarketplace = components['schemas']['SyncMarketplace'];
 export type SyncStatus = components['schemas']['SyncStatus'];
+export type MarketplaceFeature = components['schemas']['MarketplaceFeature'];
+export type KnownMarketplaceFeature = components['schemas']['KnownMarketplaceFeature'];
+export type MarketplaceFeatures = components['schemas']['MarketplaceFeatures'];
+export type MarketplaceFeatureList = components['schemas']['MarketplaceFeatureList'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -6622,6 +6866,7 @@ export type ParameterItemId = components['parameters']['ItemId'];
 export type ParameterPhotoId = components['parameters']['PhotoId'];
 export type ParameterSessionId = components['parameters']['SessionId'];
 export type ParameterBatchId = components['parameters']['BatchId'];
+export type ParameterHaulId = components['parameters']['HaulId'];
 export type ParameterAnalysisId = components['parameters']['AnalysisId'];
 export type ParameterListingId = components['parameters']['ListingId'];
 export type ParameterOperationId = components['parameters']['OperationId'];
@@ -6968,7 +7213,13 @@ export interface operations {
     };
     deleteItem: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description `true`: remove the item from Listora only. Its live listings stay up on their
+                 *     marketplaces, and Listora stops tracking them.
+                 */
+                leaveListings?: boolean;
+            };
             header?: never;
             path: {
                 itemId: components["parameters"]["ItemId"];
@@ -7545,6 +7796,188 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listHauls: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Page size. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of hauls. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HaulPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createHaul: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaulCreate"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getHaul: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The haul. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceHaul: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaulReplace"];
+            };
+        };
+        responses: {
+            /** @description The updated haul. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    addHaulItems: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                haulId: components["parameters"]["HaulId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HaulItemsAdd"];
+            };
+        };
+        responses: {
+            /** @description The haul with the items in it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    removeHaulItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                haulId: components["parameters"]["HaulId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The haul without the item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Haul"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -10395,6 +10828,27 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listMarketplaceFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every marketplace, each with its verified features. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceFeatureList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -10496,3 +10950,4 @@ export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
 export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];
+export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise"];

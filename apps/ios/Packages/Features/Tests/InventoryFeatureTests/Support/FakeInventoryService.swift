@@ -26,6 +26,8 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     private var _categories: Schemas.MarketplaceCategories?
     private var _changes: [Schemas.ItemChangeWaitResult] = []
 
+    private var _onPerform: (@Sendable (ListingRequest) -> Void)?
+
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
         defer { lock.unlock() }
@@ -127,8 +129,8 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
         return locked { _itemsByID[id] ?? _item }
     }
 
-    func deleteItem(id: String) async throws(APIFailure) {
-        try record("delete:\(id)")
+    func deleteItem(id: String, leavingListings: Bool) async throws(APIFailure) {
+        try record("delete:\(id)\(leavingListings ? ":leavingListings" : "")")
         locked { _deleted.append(id) }
     }
 
@@ -240,9 +242,16 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
         return Fixtures.listing(status: .draft, label: "Draft", tone: .neutral, actions: [.publish], variant: variant)
     }
 
+    /// Runs after each change the server took, as the marketplace would answer it.
+    var onPerform: (@Sendable (ListingRequest) -> Void)? {
+        get { locked { _onPerform } }
+        set { locked { _onPerform = newValue } }
+    }
+
     func perform(_ request: ListingRequest, idempotencyKey: String) async throws(APIFailure) -> Schemas.Listing {
         locked { _requests.append((request, idempotencyKey)) }
         try record("perform")
+        onPerform?(request)
         return Fixtures.listing()
     }
 

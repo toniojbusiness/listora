@@ -2,7 +2,7 @@
  * The item screen's wait for a change (`waitForItemChange`, docs/features/operations.md,
  * "Following a change"): while a change to the item's listings runs or waits, the app waits
  * here instead of reading the item every second. Every new or updated operation notifies
- * `item_change` with its item's id (migration `20261028181642_item_change_notify`), and the
+ * `item_change` with its item's id (migration `20261028224729_item_change_notify`), and the
  * wait answers the moment that transaction commits.
  */
 import { KeyedSignals, listenForSignals, type DbExecutor } from '@listora/db';

@@ -204,7 +204,10 @@ real marketplace page has been measured.
   decodes off the main actor at the smallest size that fills the frame (288 x 216 for a 72-point
   row at 3x: 249 KB), and keeps up to 48 MB of decoded images in memory, so a row that comes
   back shows its photo in its first frame with no download and no decode. The inventory, Today,
-  tasks, task detail, review, and batch screens use it.
+  tasks, task detail, review, and batch screens use it. Only photos the server served are kept:
+  an error (a thumbnail asked for just after its upload, before the worker made it, answers 404)
+  is never cached, and one an older build cached is dropped, so the photo loads the next time
+  it is shown instead of staying blank until the cache evicts it.
 - **Listing photos load like thumbnails (2026-10-28).** After importing 118 real Depop listings
   (526 photos), the captain found the photos slow. Measured on those photos through the real
   photo CDN, in the simulator on the Mac's Wi-Fi with an empty cache: the Inventory grid, the
@@ -240,6 +243,23 @@ real marketplace page has been measured.
   retries, so uploads continue when the app is suspended.
 - **Networking is on demand.** The app reads a screen's data when it appears and on pull to
   refresh; it does not poll in the background.
+- **A quiet launch and idle app (2026-10-28).** Measured through a logging proxy in front of the
+  local stack (`npm run e2e:stack`, 26 listed items, a Dev build on the simulator), from launch
+  through 150 s on Today:
+
+  | Window                    | Before                   | After                                   |
+  | ------------------------- | ------------------------ | --------------------------------------- |
+  | First 10 s (the launch)   | 16 requests, 580,127 B   | 13 requests, 5,747 B                    |
+  | `GET /v1/phone-runtime`   | 573,353 B (whole bundle) | 96 B (digest only)                      |
+  | `GET /v1/today` at launch | 3                        | 2 (the second follows the opening sync) |
+  | Next 140 s, idle          | 25 requests, 1,003 B     | 11 requests, 149 B                      |
+
+  The launch no longer downloads the runtime the app ships (`RuntimeScripts`,
+  [phone-execution.md](phone-execution.md)); the idle app no longer claims and checks the
+  runtime after every 20-second wait that found nothing (7 of each in 140 s before, none after;
+  a safety claim every 5 minutes); and Today loads once as it first appears, reloading only
+  when the app comes back from the background. What is left while idle is the wait itself and
+  the Tasks badge's 30-second poll.
 
 ## Server efficiency pass of 2026-10-28
 

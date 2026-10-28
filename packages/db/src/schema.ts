@@ -240,6 +240,10 @@ export interface InventoryItemTable {
   refresh_cadence: Nullable<RefreshCadence>;
   /** Hours between refreshes; only with `custom`. */
   refresh_custom_hours: Nullable<number>;
+  /** The haul the item is part of (docs/features/hauls.md); its cost is then its share. */
+  haul_id: Nullable<string>;
+  /** When it joined the haul, with `haul_id`: its place for the haul's leftover cents. */
+  haul_joined_at: NullableTimestamp;
 }
 
 export interface PhotoTable {
@@ -533,7 +537,10 @@ export interface MarketplaceListingTable {
 export interface MarketplaceOperationTable {
   id: Id;
   account_id: string;
-  listing_id: string;
+  /** Null once the listing's item was deleted; the operation is then kept by `deleted_listing_id`. */
+  listing_id: ColumnType<string | null, string, string | null>;
+  /** The listing as it was when its item was deleted (`deleted_listing`); null until then. */
+  deleted_listing_id: ColumnType<string | null, never, string>;
   kind: OperationKind;
   idempotency_key: string;
   desired: Jsonb<JsonObject>;
@@ -549,6 +556,30 @@ export interface MarketplaceOperationTable {
   updated_at: UpdatedAt;
   /** The listing content a create, revise, or relist publishes; null for every other kind. */
   content: NullableJsonb<JsonObject>;
+}
+
+/**
+ * What a deleted item was (docs/features/items.md, Deleting an item): its id is the item's. Kept
+ * with its listings' operations for the owner's and operators' history; no seller view reads it.
+ */
+export interface DeletedItemTable {
+  id: string;
+  account_id: string;
+  sku: string;
+  title: Nullable<string>;
+  deleted_at: CreatedAt;
+}
+
+/** What a listing of a deleted item was; its id is the listing's. */
+export interface DeletedListingTable {
+  id: string;
+  account_id: string;
+  item_id: string;
+  marketplace: Marketplace;
+  /** Its status when the item was deleted (a live listing stays up on its marketplace). */
+  status: ListingStatus;
+  external_listing_id: Nullable<string>;
+  deleted_at: CreatedAt;
 }
 
 /** Append-only: the database rejects updates and deletes. */
@@ -1145,6 +1176,22 @@ export interface SaleEmailInboxTable {
   updated_at: UpdatedAt;
 }
 
+// Hauls ---------------------------------------------------------------------------------------
+
+/** Items bought together for one price (docs/features/hauls.md). */
+export interface HaulTable {
+  id: Id;
+  account_id: string;
+  total_cents: number;
+  currency: Generated<CurrencyCode>;
+  /** How many items the haul had; never fewer than the items in it. */
+  item_count: number;
+  purchase_date: Nullable<DateString>;
+  purchase_source: Nullable<string>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Batch listing -------------------------------------------------------------------------------
 
 /** A haul photographed in one session (docs/features/batch.md). */
@@ -1345,6 +1392,8 @@ export interface Database {
   connection_authorization: ConnectionAuthorizationTable;
   marketplace_listing: MarketplaceListingTable;
   marketplace_operation: MarketplaceOperationTable;
+  deleted_item: DeletedItemTable;
+  deleted_listing: DeletedListingTable;
   operation_event: OperationEventTable;
   inbound_event: InboundEventTable;
   sale: SaleTable;
@@ -1388,4 +1437,5 @@ export interface Database {
   offer_response: OfferResponseTable;
   offer_check: OfferCheckTable;
   background_read_health: BackgroundReadHealthTable;
+  haul: HaulTable;
 }

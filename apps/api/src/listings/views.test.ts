@@ -296,6 +296,7 @@ function operation(overrides: Partial<OperationRow> = {}): OperationRow {
     error_message: null,
     origin: 'user',
     delist_run_id: null,
+    deleted_listing_id: null,
     created_at: AT,
     updated_at: AT,
     content: null,

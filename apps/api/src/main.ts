@@ -13,6 +13,7 @@ import {
   createMarketplaceAdapters,
   EbayNotificationVerifier,
   EbayOAuthClient,
+  useMarketplaceFeatures,
 } from '@listora/marketplaces';
 import { scaledRetryPolicy } from '@listora/operations';
 import { graphilePhotoJobs, limitImageThreads } from '@listora/photos';
@@ -33,6 +34,9 @@ const SHUTDOWN_DRAIN_MS = 10_000;
 const config = loadApiConfig();
 // The pack check's photo goes through libvips here too; one thread, as in the worker.
 limitImageThreads();
+
+// Only the features that passed live, unless the stack runs on the fakes (MARKETPLACE_FEATURES).
+useMarketplaceFeatures(config.marketplaces.features);
 const logger = createLogger({ service: 'api', level: config.logLevel });
 const pool = createPool({ connectionString: config.databaseUrl });
 const db = createDatabase(pool);

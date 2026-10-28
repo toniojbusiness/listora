@@ -10,6 +10,7 @@ import type {
   Marketplace,
   RefreshCadence,
 } from '@listora/db';
+import { marketplacesWith } from '@listora/marketplaces';
 import { sql } from 'kysely';
 
 import {
@@ -29,6 +30,15 @@ import { itemCadence } from './settings.ts';
  * own `refresh` capability agrees (the worker's test checks it), and the schedule asks it too.
  */
 export const REFRESH_MARKETPLACES: readonly Marketplace[] = ['poshmark', 'mercari', 'depop'];
+
+/**
+ * The marketplaces whose listings Listora refreshes for sellers: those of `REFRESH_MARKETPLACES`
+ * whose refresh passed live (docs/features/verified-features.md). The others show no refresh
+ * and get none queued.
+ */
+export function refreshMarketplaces(): Marketplace[] {
+  return marketplacesWith('listing_refresh', REFRESH_MARKETPLACES);
+}
 
 /** The operation kinds whose confirmed change leaves a listing fresh. */
 const CHANGE_KINDS = sql`('create', 'revise', 'price', 'relist')`;
@@ -68,7 +78,7 @@ export type ListingRefresh =
 export function canRefresh(fact: Pick<RefreshFact, 'marketplace' | 'connection'>): boolean {
   const { connection } = fact;
   return (
-    REFRESH_MARKETPLACES.includes(fact.marketplace) &&
+    refreshMarketplaces().includes(fact.marketplace) &&
     connection !== null &&
     // A read-only connection (a real shop that must not change, read-only.md) gets no refresh.
     !connection.readOnly &&

@@ -23,6 +23,10 @@ These two rules from the product owner override every other design choice.
    confirms the desired state, or the user explicitly confirms an assisted task. Every failure
    is visible and can be retried. See [operations.md](features/operations.md).
 
+Sellers see only what passed a live end-to-end test on a real account: every customer feature
+of a marketplace (offers, sales, imports, refresh) is hidden, and its checks never run, until
+[verified-features.md](features/verified-features.md) lists it as verified.
+
 A seller can also make a linked account read only: then nothing may change it, and every new
 write path (a new operation kind, script, or automatic feature) must refuse or skip it as
 [read-only.md](features/read-only.md) describes.
@@ -234,6 +238,8 @@ src/
   analyses/      Start, get, escalate, and apply analyses; the guard pre-check
   batches/       Batches of items photographed in one session: items by position, submits, the
                  measured interaction
+  hauls/         Hauls: items bought together for one price, each costing its share
+                 (docs/features/hauls.md)
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
@@ -269,6 +275,8 @@ src/
                  (docs/features/offers.md)
   sync/          Sync now: read-only checks of every linked marketplace, and what each found
                  (docs/features/sync.md)
+  marketplace-features/  Each marketplace's features that passed live, the only ones the app
+                 shows (docs/features/verified-features.md)
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
   perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
@@ -322,6 +330,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                              | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`           |
 | Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                                         | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                        |
 | Assisted         | Poshmark, Mercari, Depop, and eBay (without its API keys) run as assisted adapters until a seller links a session (D1) or connects the API                              | The same                   | none                                          |
+| Features         | Every built marketplace feature, verified live or not (`all`; the e2e stack and every Vitest file)                                                                      | Only verified ones         | `MARKETPLACE_FEATURES=verified\|all`          |
 | Automation       | Fake marketplace site (`npm run dev:fake-site`) and each marketplace's fake site in local headless Chromium                                                             | Per-marketplace adapters   | `FAKE_AUTOMATION_SITE_URL`, `FAKE_*_SITE_URL` |
 | Browser runner   | A child process of the worker (`npm run dev:runner` by hand)                                                                                                            | ECS service, 0 to 1 tasks  | `BROWSER_RUNNER_LAUNCH`                       |
 | Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                                        | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`                    |
@@ -368,7 +377,9 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   or other triggers, and the retention job's deletes of expired rows, which name the one table
   they delete from in the transaction setting `listora.retention_delete`
   ([privacy.md](features/privacy.md#retention)). So an operation goes away only with the
-  account, and its `operation_event` history with the account or 180 days after it settled.
+  account, and its `operation_event` history with the account or 180 days after it settled:
+  deleting an item moves its listings' operations onto `deleted_listing`
+  ([items.md](features/items.md#deleting-an-item)).
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
   (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. A create,
   revise, or relist has listing `content`, and no other kind does. Assisted connections can
@@ -392,7 +403,7 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   sale-check records and health in [activity.md](features/activity.md#data), and background read
   health in [read-health.md](features/read-health.md#data);
   inventory, photos, and history in [items.md](features/items.md); batches in
-  [batch.md](features/batch.md#data); uploads in
+  [batch.md](features/batch.md#data); hauls in [hauls.md](features/hauls.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data) (double-sale incidents in
@@ -522,6 +533,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/ios.md](features/ios.md)                                 | iOS app conventions                                                            |
 | [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric     |
 | [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review      |
+| [features/hauls.md](features/hauls.md)                             | Hauls: one price for many items, each item's share, the leftover cents         |
 | [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                      |
 | [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API               |
 | [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI    |
@@ -543,6 +555,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/recorded-pages.md](features/recorded-pages.md)           | Scripts tested on recorded real pages: the recorder, redaction, the replay     |
 | [features/offers.md](features/offers.md)                           | Buyers' offers in Tasks, and accepting, declining, or countering them          |
 | [features/sync.md](features/sync.md)                               | Sync now, the sync on opening the app, its indicator, and "Last synced"        |
+| [features/verified-features.md](features/verified-features.md)     | Sellers see only features that passed live: the list, its evidence, the gate   |
 
 ### Former section numbers
 

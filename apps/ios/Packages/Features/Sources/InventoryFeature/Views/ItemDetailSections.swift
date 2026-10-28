@@ -73,8 +73,12 @@ struct MoneySection: View {
     var body: some View {
         DetailSection(title: "Cost and profit") {
             LabeledRow("List price", value: item.details.listPrice.map(Formatting.money) ?? "Not set")
-            LabeledRow("Cost", value: item.details.cost.map(Formatting.money) ?? "Not set")
-                .accessibilityIdentifier("item.cost")
+            LabeledRow(
+                "Cost",
+                value: item.details.cost.map(Formatting.money) ?? "Not set",
+                note: item.haul.map { "Its share of a \(Formatting.money($0.total)) haul of \($0.itemCount)" },
+            )
+            .accessibilityIdentifier("item.cost")
             if let profit = item.saleSummary?.profit {
                 LabeledRow(
                     "Profit",

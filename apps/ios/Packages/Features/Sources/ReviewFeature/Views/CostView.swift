@@ -2,7 +2,8 @@ import Core
 import DesignSystem
 import SwiftUI
 
-/// What the seller paid, when, and where: the basis of every "Don't sell below" price.
+/// What the seller paid, when, and where: the basis of every "Don't sell below" price. The item's
+/// own price, or its share of a haul (docs/features/hauls.md).
 struct CostView: View {
     @Bindable var model: ReviewFlowModel
     let onFinished: @MainActor (ItemReviewOutcome) -> Void
@@ -20,9 +21,24 @@ struct CostView: View {
                         .font(Typography.callout)
                         .foregroundStyle(Palette.textSecondary)
                 }
-                AmountDisplay(entry: model.cost.amount, label: "Cost", identifier: "cost.amount")
-                KeypadView { model.cost.amount.press($0) }
-                details
+                Picker("What you paid for", selection: $model.cost.mode) {
+                    Text("This item").tag(CostDraft.Mode.item)
+                    Text("Part of a haul").tag(CostDraft.Mode.haul)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("cost.mode")
+                switch model.cost.mode {
+                case .item:
+                    AmountDisplay(entry: model.cost.amount, label: "Cost", identifier: "cost.amount")
+                    KeypadView { model.cost.amount.press($0) }
+                    details
+                case .haul:
+                    HaulCostSection(model: model)
+                    // A saved haul has its own date and place; a new one takes these.
+                    if model.cost.haul == nil {
+                        details
+                    }
+                }
             }
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth)
@@ -40,7 +56,7 @@ struct CostView: View {
             }
             .buttonStyle(.listoraPrimary)
             .loading(model.isWorking)
-            .disabled(model.cost.amount.cents == nil)
+            .disabled(!model.cost.isComplete)
             .accessibilityIdentifier("cost.continue")
         }
         .toolbar {
@@ -56,6 +72,7 @@ struct CostView: View {
             }
         }
         .measuresInteraction(model)
+        .task { await model.loadHauls() }
         .actionErrorAlert(model)
         .navigationDestination(isPresented: $model.showsPrice) {
             PriceView(model: model, onFinished: onFinished)

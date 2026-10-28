@@ -10,8 +10,11 @@ import {
   EbayConnectClient,
   loadDepopConfig,
   loadEbayConfig,
+  loadMarketplaceFeatures,
+  MarketplaceFeaturesConfigError,
   type DepopConfig,
   type EbayConfig,
+  type MarketplaceFeatureSet,
   type OAuthClients,
 } from '@listora/marketplaces';
 
@@ -98,6 +101,11 @@ export interface MarketplaceConfig {
   depop: DepopConfig | undefined;
   /** `TOKEN_*`; without it no marketplace account can be connected (and the app says so). */
   tokenVault: TokenVaultConfig | undefined;
+  /**
+   * `MARKETPLACE_FEATURES`: only the features that passed live (`verified`, every deployment),
+   * or every one built (`all`, the fakes) (docs/features/verified-features.md).
+   */
+  features: MarketplaceFeatureSet;
 }
 
 export class MarketplaceConfigError extends Error {
@@ -137,8 +145,15 @@ export function loadMarketplaceConfig(env: NodeJS.ProcessEnv = process.env): Mar
     if (!(error instanceof TokenVaultConfigError)) throw error;
     issues.push(...error.issues);
   }
+  let features: MarketplaceFeatureSet = 'verified';
+  try {
+    features = loadMarketplaceFeatures(env);
+  } catch (error) {
+    if (!(error instanceof MarketplaceFeaturesConfigError)) throw error;
+    issues.push(...error.issues);
+  }
   if (issues.length > 0) throw new MarketplaceConfigError(issues);
-  return { fakeMarketplaceUrl, ebay, depop, tokenVault };
+  return { fakeMarketplaceUrl, ebay, depop, tokenVault, features };
 }
 
 /** The OAuth clients of the marketplaces this configuration can connect. */

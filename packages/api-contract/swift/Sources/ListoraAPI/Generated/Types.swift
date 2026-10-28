@@ -131,8 +131,14 @@ public protocol APIProtocol: Sendable {
     func replaceItem(_ input: Operations.ReplaceItem.Input) async throws -> Operations.ReplaceItem.Output
     /// Delete an item
     ///
-    /// Allowed only while no listing is live on a marketplace (every listing is `draft` or
-    /// `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+    /// Deletes the item from Listora with its listings; nothing changes on a marketplace. The
+    /// history of what was done on the marketplaces is kept for the owner, and no seller view
+    /// serves it. A listing that is not live (`draft`, `ended`, or `sold`) never stops it. One
+    /// that may be live (any other status) does, with `409 invalid_state_transition` naming the
+    /// marketplaces, unless `leaveListings` is `true`: the seller either ends those listings first
+    /// or removes the item from Listora only. Also `409` while a change to one of its listings is
+    /// still in flight (queued, running, retrying, or verifying), and for an item that was sold,
+    /// whose sale records are kept (archive it instead). The SKU is never reused.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/items/{itemId}`.
@@ -311,6 +317,55 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/item-batches/{batchId}/interaction`.
     /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/interaction/put(replaceItemBatchInteraction)`.
     func replaceItemBatchInteraction(_ input: Operations.ReplaceItemBatchInteraction.Input) async throws -> Operations.ReplaceItemBatchInteraction.Output
+    /// List hauls
+    ///
+    /// Newest first, so the cost screen offers the haul of the trip the seller is on.
+    ///
+    /// - Remark: HTTP `GET /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/get(listHauls)`.
+    func listHauls(_ input: Operations.ListHauls.Input) async throws -> Operations.ListHauls.Output
+    /// Create a haul
+    ///
+    /// Records a haul's total and how many items it had, with `itemIds` joining it at once
+    /// (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+    /// it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/post(createHaul)`.
+    func createHaul(_ input: Operations.CreateHaul.Input) async throws -> Operations.CreateHaul.Output
+    /// Get a haul
+    ///
+    /// - Remark: HTTP `GET /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/get(getHaul)`.
+    func getHaul(_ input: Operations.GetHaul.Input) async throws -> Operations.GetHaul.Output
+    /// Change a haul's total or count
+    ///
+    /// Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+    /// a new `version`). An `itemCount` below `itemsAdded` is `422`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/put(replaceHaul)`.
+    func replaceHaul(_ input: Operations.ReplaceHaul.Input) async throws -> Operations.ReplaceHaul.Output
+    /// Add items to a haul
+    ///
+    /// The items join the haul after the ones already in it, and every item in it gets its new
+    /// share. When the haul's count is reached, each new item adds one to it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls/{haulId}/items`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/post(addHaulItems)`.
+    func addHaulItems(_ input: Operations.AddHaulItems.Input) async throws -> Operations.AddHaulItems.Output
+    /// Take an item out of a haul
+    ///
+    /// The item keeps its last share as its cost, which the seller can then change; the items
+    /// still in the haul get their new shares. The haul's count stays as it is.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/hauls/{haulId}/items/{itemId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/{itemId}/delete(removeHaulItem)`.
+    func removeHaulItem(_ input: Operations.RemoveHaulItem.Input) async throws -> Operations.RemoveHaulItem.Output
     /// Get the plan's quota use
     ///
     /// The account's use of each plan quota in the current period (the UTC calendar month
@@ -1191,9 +1246,9 @@ public protocol APIProtocol: Sendable {
     func getSaleExplanation(_ input: Operations.GetSaleExplanation.Input) async throws -> Operations.GetSaleExplanation.Output
     /// List the marketplaces Listora imports listings from, each with its latest import
     ///
-    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-    /// import can start now (the marketplace is linked, none is under way) or why not, and its
-    /// newest import with its progress and summary.
+    /// One entry per marketplace Listora imports from (those whose imports passed live,
+    /// docs/features/verified-features.md): whether an import can start now (the marketplace is
+    /// linked, none is under way) or why not, and its newest import with its progress and summary.
     ///
     ///
     /// - Remark: HTTP `GET /v1/imports`.
@@ -1241,7 +1296,7 @@ public protocol APIProtocol: Sendable {
     func answerListingImportQuestion(_ input: Operations.AnswerListingImportQuestion.Input) async throws -> Operations.AnswerListingImportQuestion.Output
     /// When each marketplace's offers were last read
     ///
-    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    /// One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     ///
     /// - Remark: HTTP `GET /v1/offer-checks`.
     /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
@@ -1303,6 +1358,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/sync`.
     /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)`.
     func requestSync(_ input: Operations.RequestSync.Input) async throws -> Operations.RequestSync.Output
+    /// What Listora shows the seller of each marketplace
+    ///
+    /// Each marketplace's features that passed a live end-to-end test on a real account
+    /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+    /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+    /// `features`; anything else is hidden, and the server never queues its checks either. The
+    /// same for every account.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-features`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
+    func listMarketplaceFeatures(_ input: Operations.ListMarketplaceFeatures.Input) async throws -> Operations.ListMarketplaceFeatures.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -1491,18 +1558,26 @@ extension APIProtocol {
     }
     /// Delete an item
     ///
-    /// Allowed only while no listing is live on a marketplace (every listing is `draft` or
-    /// `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+    /// Deletes the item from Listora with its listings; nothing changes on a marketplace. The
+    /// history of what was done on the marketplaces is kept for the owner, and no seller view
+    /// serves it. A listing that is not live (`draft`, `ended`, or `sold`) never stops it. One
+    /// that may be live (any other status) does, with `409 invalid_state_transition` naming the
+    /// marketplaces, unless `leaveListings` is `true`: the seller either ends those listings first
+    /// or removes the item from Listora only. Also `409` while a change to one of its listings is
+    /// still in flight (queued, running, retrying, or verifying), and for an item that was sold,
+    /// whose sale records are kept (archive it instead). The SKU is never reused.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/items/{itemId}`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/delete(deleteItem)`.
     public func deleteItem(
         path: Operations.DeleteItem.Input.Path,
+        query: Operations.DeleteItem.Input.Query = .init(),
         headers: Operations.DeleteItem.Input.Headers = .init()
     ) async throws -> Operations.DeleteItem.Output {
         try await deleteItem(Operations.DeleteItem.Input(
             path: path,
+            query: query,
             headers: headers
         ))
     }
@@ -1823,6 +1898,107 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// List hauls
+    ///
+    /// Newest first, so the cost screen offers the haul of the trip the seller is on.
+    ///
+    /// - Remark: HTTP `GET /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/get(listHauls)`.
+    public func listHauls(
+        query: Operations.ListHauls.Input.Query = .init(),
+        headers: Operations.ListHauls.Input.Headers = .init()
+    ) async throws -> Operations.ListHauls.Output {
+        try await listHauls(Operations.ListHauls.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Create a haul
+    ///
+    /// Records a haul's total and how many items it had, with `itemIds` joining it at once
+    /// (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+    /// it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls`.
+    /// - Remark: Generated from `#/paths//v1/hauls/post(createHaul)`.
+    public func createHaul(
+        headers: Operations.CreateHaul.Input.Headers,
+        body: Operations.CreateHaul.Input.Body
+    ) async throws -> Operations.CreateHaul.Output {
+        try await createHaul(Operations.CreateHaul.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get a haul
+    ///
+    /// - Remark: HTTP `GET /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/get(getHaul)`.
+    public func getHaul(
+        path: Operations.GetHaul.Input.Path,
+        headers: Operations.GetHaul.Input.Headers = .init()
+    ) async throws -> Operations.GetHaul.Output {
+        try await getHaul(Operations.GetHaul.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Change a haul's total or count
+    ///
+    /// Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+    /// a new `version`). An `itemCount` below `itemsAdded` is `422`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/hauls/{haulId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/put(replaceHaul)`.
+    public func replaceHaul(
+        path: Operations.ReplaceHaul.Input.Path,
+        headers: Operations.ReplaceHaul.Input.Headers = .init(),
+        body: Operations.ReplaceHaul.Input.Body
+    ) async throws -> Operations.ReplaceHaul.Output {
+        try await replaceHaul(Operations.ReplaceHaul.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Add items to a haul
+    ///
+    /// The items join the haul after the ones already in it, and every item in it gets its new
+    /// share. When the haul's count is reached, each new item adds one to it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/hauls/{haulId}/items`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/post(addHaulItems)`.
+    public func addHaulItems(
+        path: Operations.AddHaulItems.Input.Path,
+        headers: Operations.AddHaulItems.Input.Headers,
+        body: Operations.AddHaulItems.Input.Body
+    ) async throws -> Operations.AddHaulItems.Output {
+        try await addHaulItems(Operations.AddHaulItems.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Take an item out of a haul
+    ///
+    /// The item keeps its last share as its cost, which the seller can then change; the items
+    /// still in the haul get their new shares. The haul's count stays as it is.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/hauls/{haulId}/items/{itemId}`.
+    /// - Remark: Generated from `#/paths//v1/hauls/{haulId}/items/{itemId}/delete(removeHaulItem)`.
+    public func removeHaulItem(
+        path: Operations.RemoveHaulItem.Input.Path,
+        headers: Operations.RemoveHaulItem.Input.Headers = .init()
+    ) async throws -> Operations.RemoveHaulItem.Output {
+        try await removeHaulItem(Operations.RemoveHaulItem.Input(
+            path: path,
+            headers: headers
         ))
     }
     /// Get the plan's quota use
@@ -3341,9 +3517,9 @@ extension APIProtocol {
     }
     /// List the marketplaces Listora imports listings from, each with its latest import
     ///
-    /// One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-    /// import can start now (the marketplace is linked, none is under way) or why not, and its
-    /// newest import with its progress and summary.
+    /// One entry per marketplace Listora imports from (those whose imports passed live,
+    /// docs/features/verified-features.md): whether an import can start now (the marketplace is
+    /// linked, none is under way) or why not, and its newest import with its progress and summary.
     ///
     ///
     /// - Remark: HTTP `GET /v1/imports`.
@@ -3427,7 +3603,7 @@ extension APIProtocol {
     }
     /// When each marketplace's offers were last read
     ///
-    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    /// One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
     ///
     /// - Remark: HTTP `GET /v1/offer-checks`.
     /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
@@ -3524,6 +3700,20 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/sync/post(requestSync)`.
     public func requestSync(headers: Operations.RequestSync.Input.Headers) async throws -> Operations.RequestSync.Output {
         try await requestSync(Operations.RequestSync.Input(headers: headers))
+    }
+    /// What Listora shows the seller of each marketplace
+    ///
+    /// Each marketplace's features that passed a live end-to-end test on a real account
+    /// (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+    /// screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+    /// `features`; anything else is hidden, and the server never queues its checks either. The
+    /// same for every account.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-features`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-features/get(listMarketplaceFeatures)`.
+    public func listMarketplaceFeatures(headers: Operations.ListMarketplaceFeatures.Input.Headers = .init()) async throws -> Operations.ListMarketplaceFeatures.Output {
+        try await listMarketplaceFeatures(Operations.ListMarketplaceFeatures.Input(headers: headers))
     }
 }
 

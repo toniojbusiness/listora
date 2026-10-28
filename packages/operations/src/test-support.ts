@@ -31,7 +31,7 @@ import { createLogger, type Logger } from '@listora/shared';
 
 import { enqueueOperation } from './commands.ts';
 import type { RetryPolicy } from './policy.ts';
-import type { OperationRow } from './transitions.ts';
+import type { OperationRow, Tracked } from './transitions.ts';
 import {
   startOperationWorker,
   type OperationWorker,
@@ -139,6 +139,8 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
     db
       .selectFrom('marketplace_operation')
       .selectAll()
+      .where('listing_id', 'is not', null)
+      .$narrowType<Tracked>()
       .where('account_id', '=', accountId)
       .where('id', '=', operationId)
       .executeTakeFirstOrThrow();

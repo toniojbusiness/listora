@@ -42,7 +42,10 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
   says so and is unavailable. It saves the seller's edits first, so the premium details never
   replace them (`applyAnalysis` keeps `user` details).
 - **Cost** on an in-app number pad (whole dollars or cents; no keyboard to open or dismiss), the
-  purchase date, and where it was bought, with recent places as one-tap choices.
+  purchase date, and where it was bought, with recent places as one-tap choices. "This item" is
+  its own price; "Part of a haul" is its share of a haul (a bins run: $50 for 30 items is "$1.67
+  each, from a $50 haul of 30"), a saved haul picked again or a new one's total and count on the
+  same keypad ([hauls.md](hauls.md)).
 - **Price.** The quick sale, recommended, and higher profit tiers, each marked when it is below
   a marketplace's floor; "Don't sell below" per marketplace, marked when the chosen price is
   under it (tap for the breakdown); the seller's own price on the keypad, with the highest floor

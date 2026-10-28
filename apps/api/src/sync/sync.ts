@@ -4,13 +4,17 @@
  * in: its sales (a sale check), the buyers' offers, and its listings once the seller imported
  * them (another import, which brings in what was listed there since). Every one only reads, so a
  * read-only connection is synced like any other; the reads of a marketplace that runs on the
- * seller's iPhone wait there for the app to claim them.
+ * seller's iPhone wait there for the app to claim them. Only the reads that passed live on the
+ * marketplace are asked for and shown (docs/features/verified-features.md); a marketplace with
+ * none is not part of a sync.
  */
 import { sql } from 'kysely';
 
 import type { SyncMarketplace } from '@listora/api-contract';
 import {
+  checksSales,
   enqueueSaleCheck,
+  readsOffers,
   requestOfferChecks,
   saleCheckJobKey,
   scheduleSaleCheck,
@@ -29,7 +33,16 @@ interface SyncConnection {
   readOnly: boolean;
 }
 
-/** The connections a sync reads: linked by signing in, and working. */
+/** What a sync reads of a marketplace: only the reads shown there (verified-features.md). */
+function syncReads(marketplace: Marketplace) {
+  return {
+    sales: checksSales(marketplace),
+    offers: readsOffers(marketplace),
+    listings: importsFrom(marketplace),
+  };
+}
+
+/** The connections a sync reads: linked by signing in, working, and with a read shown. */
 async function syncConnections(db: DbExecutor, accountId: string): Promise<SyncConnection[]> {
   const rows = await db
     .selectFrom('marketplace_connection')
@@ -39,7 +52,9 @@ async function syncConnections(db: DbExecutor, accountId: string): Promise<SyncC
     .where('status', 'in', ['connected', 'degraded'])
     .orderBy('marketplace')
     .execute();
-  return rows.map((row) => ({ id: row.id, marketplace: row.marketplace, readOnly: row.read_only }));
+  return rows
+    .filter((row) => Object.values(syncReads(row.marketplace)).some(Boolean))
+    .map((row) => ({ id: row.id, marketplace: row.marketplace, readOnly: row.read_only }));
 }
 
 /** Asks for the read-only checks of every linked marketplace not synced in the last minutes. */
@@ -55,21 +70,30 @@ export async function requestSync(
       connectionId: connection.id,
       marketplace: connection.marketplace,
     };
-    await inTransaction(db, async (trx) => {
-      const recent = await trx
-        .selectFrom('sale_check_schedule')
-        .select('connection_id')
-        .where('account_id', '=', request.accountId)
-        .where('connection_id', '=', connection.id)
-        .where('last_started_at', '>', sql<Date>`now() - make_interval(secs => ${gapMs / 1000})`)
-        .executeTakeFirst();
-      if (recent !== undefined) return;
-      await scheduleSaleCheck(trx, { ...check, at: 'now', reason: 'sync' });
-      await enqueueSaleCheck(trx, check);
-    });
+    if (checksSales(connection.marketplace)) await syncSales(db, check, gapMs);
     if (importsFrom(connection.marketplace)) await syncListings(db, check, listingGapMs);
   }
   await requestOfferChecks(db, { accountId: request.accountId, minGapMs: gapMs });
+}
+
+/** A sale check now, unless one started in the last `gapMs`. */
+async function syncSales(
+  db: DbExecutor,
+  check: { accountId: string; connectionId: string; marketplace: Marketplace },
+  gapMs: number,
+): Promise<void> {
+  await inTransaction(db, async (trx) => {
+    const recent = await trx
+      .selectFrom('sale_check_schedule')
+      .select('connection_id')
+      .where('account_id', '=', check.accountId)
+      .where('connection_id', '=', check.connectionId)
+      .where('last_started_at', '>', sql<Date>`now() - make_interval(secs => ${gapMs / 1000})`)
+      .executeTakeFirst();
+    if (recent !== undefined) return;
+    await scheduleSaleCheck(trx, { ...check, at: 'now', reason: 'sync' });
+    await enqueueSaleCheck(trx, check);
+  });
 }
 
 /**
@@ -153,19 +177,23 @@ export async function syncStatus(db: DbExecutor, accountId: string): Promise<Syn
   const queuedJobs = new Set(jobs.rows.map((row) => row.key));
   return connections.map((connection) => {
     const id = connection.id;
-    const run = lastRuns.find((row) => row.connection_id === id);
-    const offer = offers.find((row) => row.connection_id === id);
-    const listings = imports.find((row) => row.connection_id === id);
+    // Only the reads shown on this marketplace: a hidden one's records say nothing here.
+    const shown = syncReads(connection.marketplace);
+    const run = shown.sales ? lastRuns.find((row) => row.connection_id === id) : undefined;
+    const offer = shown.offers ? offers.find((row) => row.connection_id === id) : undefined;
+    const listings = shown.listings ? imports.find((row) => row.connection_id === id) : undefined;
     const work = new Set(
       waiting.filter((row) => row.connection_id === id).map((row) => row.purpose),
     );
     const reading = {
-      sales: work.has('sale_check') || queuedJobs.has(saleCheckJobKey(id)),
-      offers: work.has('offer_check'),
+      sales: shown.sales && (work.has('sale_check') || queuedJobs.has(saleCheckJobKey(id))),
+      offers: shown.offers && work.has('offer_check'),
       listings: listings !== undefined && listings.status !== 'finished',
     };
     const lastSyncedAt = latest(
-      schedules.find((row) => row.connection_id === id)?.last_succeeded_at ?? null,
+      shown.sales
+        ? (schedules.find((row) => row.connection_id === id)?.last_succeeded_at ?? null)
+        : null,
       offer?.last_succeeded_at ?? null,
     );
     const base = {

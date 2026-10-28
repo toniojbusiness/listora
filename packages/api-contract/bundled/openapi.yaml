@@ -43,6 +43,8 @@ tags:
     description: AI analysis of an item's photos (run once per photo set).
   - name: batches
     description: Batches of items photographed in one session, and where each item is.
+  - name: hauls
+    description: Items bought together for one price, and each one's share of it.
   - name: pricing
     description: Price suggestions with honest source labels.
   - name: listings
@@ -83,6 +85,8 @@ tags:
     description: Buyers' offers on the seller's listings, read from the marketplaces, and the seller's answers to them (docs/features/offers.md).
   - name: sync
     description: Syncing the linked marketplaces now, read-only, and what each sync found (docs/features/sync.md).
+  - name: marketplace-features
+    description: Each marketplace's features that passed a live end-to-end test, the only ones the app shows (docs/features/verified-features.md).
 paths:
   /health/live:
     get:
@@ -414,8 +418,22 @@ paths:
       operationId: deleteItem
       summary: Delete an item
       description: |
-        Allowed only while no listing is live on a marketplace (every listing is `draft` or
-        `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+        Deletes the item from Listora with its listings; nothing changes on a marketplace. The
+        history of what was done on the marketplaces is kept for the owner, and no seller view
+        serves it. A listing that is not live (`draft`, `ended`, or `sold`) never stops it. One
+        that may be live (any other status) does, with `409 invalid_state_transition` naming the
+        marketplaces, unless `leaveListings` is `true`: the seller either ends those listings first
+        or removes the item from Listora only. Also `409` while a change to one of its listings is
+        still in flight (queued, running, retrying, or verifying), and for an item that was sold,
+        whose sale records are kept (archive it instead). The SKU is never reused.
+      parameters:
+        - name: leaveListings
+          in: query
+          description: |
+            `true`: remove the item from Listora only. Its live listings stay up on their
+            marketplaces, and Listora stops tracking them.
+          schema:
+            type: boolean
       responses:
         '204':
           description: Deleted.
@@ -942,6 +960,156 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls:
+    get:
+      tags:
+        - hauls
+      operationId: listHauls
+      summary: List hauls
+      description: Newest first, so the cost screen offers the haul of the trip the seller is on.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of hauls.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HaulPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - hauls
+      operationId: createHaul
+      summary: Create a haul
+      description: |
+        Records a haul's total and how many items it had, with `itemIds` joining it at once
+        (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+        it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HaulCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls/{haulId}:
+    parameters:
+      - $ref: '#/components/parameters/HaulId'
+    get:
+      tags:
+        - hauls
+      operationId: getHaul
+      summary: Get a haul
+      responses:
+        '200':
+          description: The haul.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - hauls
+      operationId: replaceHaul
+      summary: Change a haul's total or count
+      description: |
+        Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+        a new `version`). An `itemCount` below `itemsAdded` is `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HaulReplace'
+      responses:
+        '200':
+          description: The updated haul.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls/{haulId}/items:
+    parameters:
+      - $ref: '#/components/parameters/HaulId'
+    post:
+      tags:
+        - hauls
+      operationId: addHaulItems
+      summary: Add items to a haul
+      description: |
+        The items join the haul after the ones already in it, and every item in it gets its new
+        share. When the haul's count is reached, each new item adds one to it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HaulItemsAdd'
+      responses:
+        '200':
+          description: The haul with the items in it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/hauls/{haulId}/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/HaulId'
+      - $ref: '#/components/parameters/ItemId'
+    delete:
+      tags:
+        - hauls
+      operationId: removeHaulItem
+      summary: Take an item out of a haul
+      description: |
+        The item keeps its last share as its cost, which the seller can then change; the items
+        still in the haul get their new shares. The haul's count stays as it is.
+      responses:
+        '200':
+          description: The haul without the item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Haul'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/usage:
@@ -3374,9 +3542,9 @@ paths:
       operationId: listListingImports
       summary: List the marketplaces Listora imports listings from, each with its latest import
       description: |
-        One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
-        import can start now (the marketplace is linked, none is under way) or why not, and its
-        newest import with its progress and summary.
+        One entry per marketplace Listora imports from (those whose imports passed live,
+        docs/features/verified-features.md): whether an import can start now (the marketplace is
+        linked, none is under way) or why not, and its newest import with its progress and summary.
       responses:
         '200':
           description: The marketplaces and their newest imports.
@@ -3505,7 +3673,7 @@ paths:
         - offers
       operationId: listOfferChecks
       summary: When each marketplace's offers were last read
-      description: One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+      description: One entry per linked marketplace whose offers Listora reads, on the seller's iPhone (those whose offer reads passed live, docs/features/verified-features.md).
       responses:
         '200':
           description: The reads.
@@ -3664,6 +3832,27 @@ paths:
                 $ref: '#/components/schemas/SyncStatus'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/marketplace-features:
+    get:
+      tags:
+        - marketplace-features
+      operationId: listMarketplaceFeatures
+      summary: What Listora shows the seller of each marketplace
+      description: |
+        Each marketplace's features that passed a live end-to-end test on a real account
+        (docs/features/verified-features.md). The app shows a feature of a marketplace (its
+        screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
+        `features`; anything else is hidden, and the server never queues its checks either. The
+        same for every account.
+      responses:
+        '200':
+          description: Every marketplace, each with its verified features.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketplaceFeatureList'
+        default:
+          $ref: '#/components/responses/DefaultError'
 components:
   securitySchemes:
     bearerAuth:
@@ -3728,6 +3917,12 @@ components:
         $ref: '#/components/schemas/Id'
     BatchId:
       name: batchId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    HaulId:
+      name: haulId
       in: path
       required: true
       schema:
@@ -4478,6 +4673,11 @@ components:
         storageLocation:
           $ref: '#/components/schemas/StorageLocationSummary'
           description: Read-only; the location `details.storageLocationId` refers to.
+        haul:
+          $ref: '#/components/schemas/Haul'
+          description: |
+            Read-only; the haul the item is part of. Its `details.cost` is then its share of the
+            haul, which only the haul changes (`replaceHaul`, `addHaulItems`, `removeHaulItem`).
         photos:
           type: array
           description: In display order; the first is the cover.
@@ -5392,6 +5592,139 @@ components:
           maxItems: 1000
           items:
             $ref: '#/components/schemas/ItemBatchItemInteraction'
+    Haul:
+      type: object
+      description: |
+        Items bought together for one price, such as 30 items from the bins for $50
+        (docs/features/hauls.md). Each item in the haul costs its share of `total`: the total
+        split over `itemCount`, with the leftover cents on the items that joined first, so a full
+        haul's items add back up to the total. The server keeps each item's `details.cost` equal to
+        its share, and a `replaceItem` that changes it is refused while the item is in a haul.
+      required:
+        - id
+        - total
+        - itemCount
+        - itemsAdded
+        - eachCost
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        total:
+          $ref: '#/components/schemas/Money'
+          description: What the whole haul cost.
+        itemCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          description: |
+            How many items the haul had. Never fewer than `itemsAdded`: an item joining a haul
+            whose count is reached adds one to it.
+        itemsAdded:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The items in Listora that are part of the haul.
+        eachCost:
+          $ref: '#/components/schemas/Money'
+          description: |
+            `total` over `itemCount`, to the nearest cent, to show ("$1.67 each"). Each item's own
+            cost is its share, which is this or within a cent of it.
+        purchaseDate:
+          type: string
+          format: date
+          description: When it was bought; every item in the haul takes it.
+        purchaseSource:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Where it was bought; every item in the haul takes it.
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    HaulPage:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          description: Newest first.
+          items:
+            $ref: '#/components/schemas/Haul'
+        nextCursor:
+          type: string
+          description: Present when there are more results.
+    HaulCreate:
+      type: object
+      required:
+        - total
+        - itemCount
+      properties:
+        total:
+          $ref: '#/components/schemas/Money'
+        itemCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+        purchaseDate:
+          type: string
+          format: date
+        purchaseSource:
+          type: string
+          minLength: 1
+          maxLength: 200
+        itemIds:
+          type: array
+          description: |
+            Items that join the haul at once, in this order (a batch's items, in haul order). An
+            item in another haul moves to this one.
+          maxItems: 1000
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
+    HaulReplace:
+      type: object
+      description: |
+        Full replacement of the haul's total, count, date, and place: a property left out is
+        cleared. Every item in the haul gets its new share.
+      required:
+        - total
+        - itemCount
+      properties:
+        total:
+          $ref: '#/components/schemas/Money'
+        itemCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+        purchaseDate:
+          type: string
+          format: date
+        purchaseSource:
+          type: string
+          minLength: 1
+          maxLength: 200
+    HaulItemsAdd:
+      type: object
+      required:
+        - itemIds
+      properties:
+        itemIds:
+          type: array
+          description: |
+            Items that join the haul, in this order, after the items already in it. An item in
+            another haul moves to this one; an item already in this one stays where it is.
+          minItems: 1
+          maxItems: 1000
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
     AiPriceEstimate:
       type: object
       description: |
@@ -10468,7 +10801,11 @@ components:
           $ref: '#/components/schemas/Money'
     OfferCheck:
       type: object
-      description: When Listora last read the seller's offers on one marketplace, and how that went.
+      description: |
+        When Listora last read the seller's offers on one marketplace, and how that went. Only
+        marketplaces whose offer reads passed live are listed (docs/features/verified-features.md).
+        A read that failed carries no error for the seller: it goes to the owner's alerts
+        (docs/features/read-health.md).
       required:
         - marketplace
         - status
@@ -10478,13 +10815,10 @@ components:
         status:
           type: string
           maxLength: 64
-          description: '`waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`).'
+          description: '`waiting` (a read waits for the iPhone), `ok`, or `failed` (the last read did not get through).'
         checkedAt:
           $ref: '#/components/schemas/Timestamp'
           description: When a read last succeeded.
-        message:
-          type: string
-          maxLength: 500
     OfferCheckList:
       type: object
       required:
@@ -10549,3 +10883,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SyncMarketplace'
+    MarketplaceFeature:
+      description: |
+        A `KnownMarketplaceFeature`, or one added after this client was built. Clients ignore a
+        feature they do not know (they show nothing for it).
+      anyOf:
+        - $ref: '#/components/schemas/KnownMarketplaceFeature'
+        - type: string
+          maxLength: 64
+    KnownMarketplaceFeature:
+      type: string
+      description: |
+        `sales_history`: the seller's past sales read from the marketplace. `sale_checks`: new
+        sales found by reading the marketplace (which start the delists elsewhere). `offers`: the
+        buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
+        offer from Listora. `listing_import`: importing the seller's existing listings.
+        `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
+        listing's details from Listora (`reviseListing`).
+      enum:
+        - sales_history
+        - sale_checks
+        - offers
+        - offer_answers
+        - listing_import
+        - listing_refresh
+        - revise
+    MarketplaceFeatures:
+      type: object
+      required:
+        - marketplace
+        - features
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        features:
+          type: array
+          maxItems: 20
+          description: The features of this marketplace that passed a live end-to-end test.
+          items:
+            $ref: '#/components/schemas/MarketplaceFeature'
+    MarketplaceFeatureList:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/MarketplaceFeatures'

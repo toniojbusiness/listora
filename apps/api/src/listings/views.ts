@@ -11,7 +11,7 @@ import type {
 } from '@listora/api-contract';
 import type { DbExecutor, Marketplace, OperationKind } from '@listora/db';
 import type { ListingRefresh } from '@listora/listing-refresh';
-import { operationMode, type AdapterRegistry } from '@listora/marketplaces';
+import { isFeatureVerified, operationMode, type AdapterRegistry } from '@listora/marketplaces';
 import {
   describeListingStatus,
   isWriteKind,
@@ -242,7 +242,8 @@ function listingActions(state: ListingState): KnownListingAction[] {
  * action creates a task in the user's task inbox, and only their confirmation finishes it).
  * An action the marketplace cannot do in either mode, such as checking an assisted listing, is
  * not offered, and neither is a change to a listing on a read-only connection
- * (docs/features/read-only.md): only its check.
+ * (docs/features/read-only.md): only its check. Revise is offered only where it passed live
+ * (docs/features/verified-features.md), so a hidden revise is refused before it is queued.
  */
 export function availableActions(
   state: ListingState,
@@ -257,6 +258,7 @@ export function availableActions(
   if (capabilities === undefined) return [];
   return actionsForState(state).flatMap((action) => {
     if (row.read_only && isWriteKind(ACTION_KIND[action])) return [];
+    if (action === 'revise' && !isFeatureVerified(row.marketplace, 'revise')) return [];
     const mode = operationMode(capabilities, ACTION_KIND[action]);
     return mode === 'unsupported' ? [] : [{ action, mode }];
   });
