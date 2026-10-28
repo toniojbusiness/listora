@@ -364,6 +364,13 @@ export type LabelCarrier = (typeof LABEL_CARRIERS)[number];
 export const LABEL_READ_STATUSES = ['read', 'no_label', 'not_found', 'failed'] as const;
 export type LabelReadStatus = (typeof LABEL_READ_STATUSES)[number];
 
+/**
+ * What a marketplace's order page last said of the order (`sale_label.order_state`): waiting to
+ * ship, or shipped or canceled there (delivered and refunded included).
+ */
+export const LABEL_ORDER_STATES = ['to_ship', 'shipped', 'canceled'] as const;
+export type LabelOrderState = (typeof LABEL_ORDER_STATES)[number];
+
 /** How a packed order's label was known to be its own (`sale_pack.matched_by`). */
 export const PACK_MATCHES = ['sticker', 'label', 'photo'] as const;
 export type PackMatch = (typeof PACK_MATCHES)[number];

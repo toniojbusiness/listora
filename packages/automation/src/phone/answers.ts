@@ -126,7 +126,16 @@ const orders = z
   )
   .max(1_000);
 
-/** An order's label as the phone read it: only its tracking number and the buyer's first name. */
+const labelTime = z.iso
+  .datetime({ offset: true })
+  .transform((time) => new Date(time))
+  .nullable()
+  .optional();
+
+/**
+ * An order's label as the phone read it: its tracking number, carrier, and expiry, the buyer's
+ * first name only, and how the order stands and must ship by.
+ */
 const labels = z
   .array(
     z.discriminatedUnion('found', [
@@ -135,6 +144,10 @@ const labels = z
         found: z.literal(true),
         trackingNumber: z.string().min(1).max(100).nullable(),
         buyerFirstName: z.string().min(1).max(100).nullable(),
+        orderState: z.enum(['to_ship', 'shipped', 'canceled']).optional(),
+        carrierName: z.string().min(1).max(100).nullable().optional(),
+        shipBy: labelTime,
+        labelExpiresAt: labelTime,
       }),
       z.object({ externalOrderId: z.string().min(1).max(200), found: z.literal(false) }),
     ]),

@@ -709,6 +709,8 @@ const COLUMNS = {
     'read_at',
     'created_at',
     'updated_at',
+    'order_state',
+    'label_expires_at',
   ],
   sale_pack: [
     'account_id',
@@ -870,6 +872,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['sale_label', 'source', values.SALE_LABEL_SOURCES],
   ['sale_label', 'carrier', values.LABEL_CARRIERS],
   ['sale_label', 'read_status', values.LABEL_READ_STATUSES],
+  ['sale_label', 'order_state', values.LABEL_ORDER_STATES],
   ['sale_pack', 'matched_by', values.PACK_MATCHES],
   ['marketplace_offer', 'status', values.OFFER_STATUSES],
   ['offer_response', 'action', values.OFFER_ACTIONS],

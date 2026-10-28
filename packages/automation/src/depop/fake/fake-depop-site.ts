@@ -226,7 +226,8 @@ export interface FakeDepopShipping {
 }
 
 /** A receipt's status, as Depop's receipts name them. */
-export type FakeDepopPurchaseStatus = 'shipping_pending' | 'shipped' | 'cancelled';
+export type FakeDepopPurchaseStatus =
+  'shipping_pending' | 'shipped' | 'delivered' | 'refunded' | 'cancelled';
 
 /** How a fake purchase went: what the buyer paid and whether it shipped. */
 export interface FakeDepopPurchase {
@@ -418,11 +419,18 @@ export class FakeDepopSite {
     this.#purchase([slug], soldAt, this.#newPurchaseId(), shipping, purchase);
   }
 
-  /** A buyer buys several products in one purchase (a bundle), each for what it says. */
-  sellBundle(lines: readonly { slug: string; paidCents: number }[], soldAt = new Date()): number {
+  /**
+   * A buyer buys several products in one purchase (a bundle), each for what it says, shipped in
+   * one parcel with one label.
+   */
+  sellBundle(
+    lines: readonly { slug: string; paidCents: number }[],
+    soldAt = new Date(),
+    shipping?: FakeDepopShipping,
+  ): number {
     const purchaseId = this.#newPurchaseId();
     for (const line of lines) {
-      this.#purchase([line.slug], soldAt, purchaseId, undefined, { paidCents: line.paidCents });
+      this.#purchase([line.slug], soldAt, purchaseId, shipping, { paidCents: line.paidCents });
     }
     return purchaseId;
   }
@@ -1396,10 +1404,11 @@ function receiptData(
   const first = lines[0];
   if (first === undefined) throw new Error('a purchase has a product');
   const paid = lines.reduce((total, line) => total + (line.paidCents ?? 0), 0);
+  const soldAt = first.current.soldAt ?? first.current.updatedAt;
   return {
     purchase_id: first.purchaseId,
     status: first.purchaseStatus ?? 'shipping_pending',
-    sold_timestamp: (first.current.soldAt ?? first.current.updatedAt).toISOString(),
+    sold_timestamp: soldAt.toISOString(),
     is_bundle: lines.length > 1,
     currency: 'USD',
     items_amount: priceAmount(paid),
@@ -1412,17 +1421,39 @@ function receiptData(
       description: line.current.description,
       picture_url: 'https://media-photos.depop.com/fake/P0.jpg',
     })),
+    // One parcel for all of a purchase's items. Its status is the label's: a refunded
+    // purchase's parcel still waits to ship, as Depop shows it.
     parcels: [
       {
-        parcel_status: first.purchaseStatus === 'shipped' ? 'IN_TRANSIT' : 'AWAITING_SHIPPING',
+        parcel_id: `parcel-${String(first.purchaseId)}`,
+        shipping_provider: 'USPS',
+        parcel_status: PARCEL_STATUS[first.purchaseStatus ?? 'shipping_pending'],
+        provider_name: 'USPS',
         tracking:
           first.shipping?.trackingNumber === undefined || first.shipping.trackingNumber === null
             ? null
-            : { reference: first.shipping.trackingNumber },
+            : {
+                reference: first.shipping.trackingNumber,
+                url: 'https://tools.usps.com/go/TrackConfirmAction',
+              },
+        shipping_deadline: new Date(soldAt.getTime() + 10 * DAY_MS).toISOString(),
+        label_expires_at: new Date(soldAt.getTime() + 27 * DAY_MS).toISOString(),
+        purchase_line_items: lines.map((_line, index) => 100 + index),
       },
     ],
   };
 }
+
+const DAY_MS = 86_400_000;
+
+/** A receipt's parcel status for each purchase status, as Depop's receipts show them. */
+const PARCEL_STATUS: Readonly<Record<FakeDepopPurchaseStatus, string>> = {
+  shipping_pending: 'AWAITING_SHIPPING',
+  shipped: 'IN_TRANSIT',
+  delivered: 'DELIVERED',
+  refunded: 'AWAITING_SHIPPING',
+  cancelled: 'AWAITING_SHIPPING',
+};
 
 /** One purchase as its own receipt shows it: each line's product, slug, and what it sold for. */
 function receiptDetailData(

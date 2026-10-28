@@ -1136,6 +1136,59 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     ]);
   });
 
+  it('marks a sale shipped when its Depop receipt says it shipped, read on the phone', async () => {
+    await runPhone();
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    await runPhoneAndConfirm(create);
+    const listing = await db
+      .selectFrom('marketplace_listing')
+      .select(['external_listing_id', 'item_id'])
+      .where('id', '=', listingId)
+      .executeTakeFirstOrThrow();
+    const slug = listing.external_listing_id ?? '';
+    site.sell(
+      slug,
+      new Date(),
+      { trackingNumber: '9400100000000000000021', buyerFirstName: 'Robin' },
+      { status: 'delivered' },
+    );
+    const sale = await db
+      .insertInto('sale')
+      .values({
+        account_id: accountId,
+        marketplace: 'depop',
+        external_order_id: String(site.purchaseIdOf(slug)),
+        sold_at: new Date(),
+        detection_source: 'poll',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('sale_item')
+      .values({
+        account_id: accountId,
+        sale_id: sale.id,
+        marketplace: 'depop',
+        item_id: listing.item_id,
+        listing_id: listingId,
+        sale_price_cents: 1500,
+      })
+      .execute();
+
+    await queueLabelReads(db, { accountId, now: new Date() });
+    await runPhone();
+    const shown = await db
+      .selectFrom('sale')
+      .innerJoin('sale_label as label', 'label.sale_id', 'sale.id')
+      .select(['sale.status', 'sale.ship_by', 'label.order_state', 'label.read_status'])
+      .where('sale.id', '=', sale.id)
+      .executeTakeFirstOrThrow();
+    expect(shown).toMatchObject({ status: 'shipped', order_state: 'shipped', read_status: 'read' });
+    expect(shown.ship_by).toBeInstanceOf(Date);
+  });
+
   // Offers (docs/features/offers.md) -------------------------------------------------------------
 
   /** A Depop listing of an item, posted and confirmed on the phone, with a buyer's offer on it. */

@@ -10,15 +10,15 @@
  * (`seller_amount`), and its `line_items`, each naming its product by `product_id` with the
  * product's text and photo. A listing the seller marked as sold has no receipt.
  *
- * Sale checks read every receipt (sold-items.ts), and Pack check each one's shipping label and
- * the buyer's first name (docs/features/pack-check.md, "Reading labels"). Nothing else of the
- * buyer is read: no name, address, or message is kept. Only reads.
+ * Sale checks read every receipt (sales.ts), and Pack check each one's parcel (its label,
+ * carrier, deadline, and label expiry), how the purchase stands, and the buyer's first name
+ * (docs/features/pack-check.md, "Depop's receipts"). Nothing else of the buyer is read: no name,
+ * address, or message is kept. Only reads.
  */
 import { z } from 'zod';
 
 import type { LabelReadRequest, RemoteOrderLabel } from '@listora/marketplaces';
 
-import { buyerFirstName, fieldValues, texts, trackingField } from '../../adapter/label-fields.ts';
 import type { PageDriver } from '../../runner/types.ts';
 import { changed, type DepopSite } from './common.ts';
 import { expectShape } from './page-data.ts';
@@ -31,12 +31,28 @@ export const MAX_RECEIPT_PAGES = 5;
 
 /** A dollar amount as the receipts show it (`"18.00"`). */
 const amount = z.string().regex(/^\d+(\.\d{1,2})?$/);
+const time = z.iso.datetime({ offset: true });
+
+/**
+ * One package of a purchase: Depop's label for it (`tracking.reference`, by `shipping_provider`),
+ * when it must ship by, and when the label expires. A bundle's items share one parcel. Its
+ * `parcel_status` is the label's, not the order's: a refunded order's parcel can still say
+ * `AWAITING_SHIPPING`, so it is never read.
+ */
+const parcelSchema = z
+  .object({
+    shipping_provider: z.string().nullish(),
+    tracking: z.object({ reference: z.string().nullish() }).catchall(z.unknown()).nullish(),
+    shipping_deadline: time.nullish(),
+    label_expires_at: time.nullish(),
+  })
+  .catchall(z.unknown());
 
 const receiptSchema = z
   .object({
     purchase_id: z.number().int().positive(),
     status: z.string(),
-    sold_timestamp: z.iso.datetime({ offset: true }),
+    sold_timestamp: time,
     currency: z.string(),
     items_amount: amount,
     seller_amount: amount.nullish(),
@@ -52,8 +68,11 @@ const receiptSchema = z
           .catchall(z.unknown()),
       )
       .min(1),
+    buyer: z.object({ first_name: z.string().nullish() }).catchall(z.unknown()).nullish(),
+    parcels: z.array(parcelSchema),
   })
   .catchall(z.unknown());
+type ShownReceipt = z.infer<typeof receiptSchema>;
 
 const receiptsSchema = z.object({
   objects: z.array(z.unknown()),
@@ -95,11 +114,20 @@ export interface Receipt {
   label: ReceiptLabel;
 }
 
-/** What Pack check takes from one receipt. */
+/**
+ * What Pack check takes from one receipt (docs/features/pack-check.md, "Reading labels"): the
+ * purchase, its products, how it stands, its label, and the buyer's first name only.
+ */
 export interface ReceiptLabel {
-  ids: string[];
-  slugs: string[];
+  purchaseId: string;
+  productIds: number[];
+  state: ReceiptState;
+  /** The parcel's tracking number; `null` before Depop has a label, or when it shows several. */
   trackingNumber: string | null;
+  carrierName: string | null;
+  /** The earliest of its parcels' shipping deadlines. */
+  shipBy: Date | null;
+  labelExpiresAt: Date | null;
   buyerFirstName: string | null;
 }
 
@@ -182,41 +210,67 @@ export function receiptState(status: string): ReceiptState {
   return 'unknown';
 }
 
-/** The receipt's ids, product slugs, label, and buyer's first name, by their field names. */
-export function receiptLabel(receipt: Readonly<Record<string, unknown>>): ReceiptLabel {
-  const ids = texts([receipt['id'], receipt['purchase_id'], receipt['purchaseId']]);
-  const slugs = texts(fieldValues(receipt, ['slug', 'product_slug']));
-  if (ids.length === 0 && slugs.length === 0) {
-    throw changed(API, 'shows a receipt without an id or a product');
-  }
+/**
+ * Pack check's part of a receipt. A bundle is one purchase with one parcel for all its items: one
+ * package, one label. A purchase whose parcels show several tracking numbers is not one package,
+ * so it reads as having no label (the seller scans the one on the package).
+ */
+function receiptLabel(receipt: ShownReceipt): ReceiptLabel {
+  const tracked = receipt.parcels.filter((parcel) => present(parcel.tracking?.reference));
+  const references = new Set(tracked.map((parcel) => parcel.tracking?.reference?.trim()));
+  const parcel = references.size === 1 ? tracked[0] : undefined;
+  const deadlines = receipt.parcels.flatMap((shown) =>
+    present(shown.shipping_deadline) ? [new Date(shown.shipping_deadline)] : [],
+  );
   return {
-    ids,
-    slugs,
-    // A parcel's tracking `reference`, as the receipts show it, else a field named so.
-    trackingNumber:
-      texts(fieldValues(receipt['parcels'], ['reference']))[0] ?? trackingField(receipt),
-    buyerFirstName: buyerFirstName(receipt),
+    purchaseId: String(receipt.purchase_id),
+    productIds: receipt.line_items.map((line) => line.product_id),
+    state: receiptState(receipt.status),
+    trackingNumber: parcel?.tracking?.reference?.trim() ?? null,
+    carrierName: present(parcel?.shipping_provider) ? parcel.shipping_provider.trim() : null,
+    shipBy: deadlines.length === 0 ? null : new Date(Math.min(...deadlines.map(Number))),
+    labelExpiresAt: present(parcel?.label_expires_at) ? new Date(parcel.label_expires_at) : null,
+    buyerFirstName: present(receipt.buyer?.first_name) ? receipt.buyer.first_name.trim() : null,
   };
 }
 
-/** The order's label from the receipts read, or not found. */
+/**
+ * The order's label from the receipts read, or not found. An order is its purchase (Listora names
+ * a Depop sale by its purchase id); one named otherwise is found by the products that sold in it,
+ * whose slugs (Listora's listing ids) `slugOf` gives by product id.
+ */
 export function orderLabel(
   order: LabelReadRequest,
   receipts: readonly ReceiptLabel[],
+  slugOf: ReadonlyMap<number, string> = new Map(),
 ): RemoteOrderLabel {
-  const receipt = receipts.find(
-    (shown) =>
-      shown.ids.includes(order.externalOrderId) ||
-      shown.slugs.includes(order.externalOrderId) ||
-      order.externalListingIds.some((id) => shown.slugs.includes(id)),
-  );
+  const sold = (receipt: ReceiptLabel) =>
+    receipt.productIds.flatMap((id) => {
+      const slug = slugOf.get(id);
+      return slug === undefined ? [] : [slug];
+    });
+  const receipt =
+    receipts.find((shown) => shown.purchaseId === order.externalOrderId) ??
+    receipts.find((shown) =>
+      sold(shown).some(
+        (slug) => slug === order.externalOrderId || order.externalListingIds.includes(slug),
+      ),
+    );
   if (receipt === undefined) return { externalOrderId: order.externalOrderId, found: false };
   return {
     externalOrderId: order.externalOrderId,
     found: true,
     trackingNumber: receipt.trackingNumber,
     buyerFirstName: receipt.buyerFirstName,
+    ...(receipt.state === 'unknown' ? {} : { orderState: receipt.state }),
+    carrierName: receipt.carrierName,
+    shipBy: receipt.shipBy,
+    labelExpiresAt: receipt.labelExpiresAt,
   };
+}
+
+function present(value: string | null | undefined): value is string {
+  return value !== undefined && value !== null && value.trim() !== '';
 }
 
 /** A dollar amount (`"18.00"`) in cents. */

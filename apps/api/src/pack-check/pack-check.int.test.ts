@@ -1,4 +1,5 @@
 import { createInventoryItem, jsonb, type Marketplace } from '@listora/db';
+import { ordersToRead, recordLabelReads } from '@listora/pack-check';
 import { DOUBLE_PRINT } from '@listora/pack-check/testing';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -167,16 +168,129 @@ describe('pack check (real Postgres)', () => {
     });
   });
 
-  it('leaves out an order from the sales history: it is recorded only', async () => {
+  it('leaves out an order from the sales history, unless the marketplace says it waits to ship', async () => {
     const old = await order({ title: 'History tee', tracking: '9400111899223197423333' });
+    const waiting = await order({ title: 'History skirt' });
     await api.db
       .updateTable('sale')
       .set({ detection_source: 'history' })
-      .where('id', '=', old.saleId)
+      .where('id', 'in', [old.saleId, waiting.saleId])
       .execute();
-    const listed = await api.call('listPackOrders', { token });
-    expect(listed.body.data.map((entry) => entry.saleId)).not.toContain(old.saleId);
+    const listedIds = async () =>
+      (await api.call('listPackOrders', { token })).body.data.map((entry) => entry.saleId);
+    expect(await listedIds()).not.toContain(old.saleId);
     expect((await scan({ label: '9400111899223197423333' })).body.order).toBeUndefined();
+
+    // An unread history order is read once, for how it stands on the marketplace.
+    const now = new Date(api.clock.now);
+    const reads = (await ordersToRead(api.db, tenant.accountId, 'depop', now)).map(
+      (target) => target.saleId,
+    );
+    expect(reads).toEqual(expect.arrayContaining([waiting.saleId]));
+    expect(reads).not.toContain(old.saleId);
+    await recordLabelReads(
+      api.db,
+      tenant.accountId,
+      [
+        {
+          saleId: waiting.saleId,
+          status: 'read',
+          trackingNumber: '9400111899223197424444',
+          buyerFirstName: 'Robin',
+          orderState: 'to_ship',
+          carrierName: 'USPS',
+          shipBy: new Date('2026-11-07T21:52:10.127Z'),
+          labelExpiresAt: new Date('2026-11-24T21:52:17.000Z'),
+        },
+      ],
+      now,
+    );
+    // Sold before Listora watched Depop, not shipped yet: a package all the same.
+    const listed = await api.call('listPackOrders', { token });
+    expect(listed.body.data.find((entry) => entry.saleId === waiting.saleId)).toMatchObject({
+      shipBy: '2026-11-07T21:52:10.127Z',
+      buyerFirstName: 'Robin',
+      label: { trackingNumber: '9400111899223197424444', carrier: 'usps', source: 'marketplace' },
+    });
+    expect((await scan({ label: '9400111899223197424444' })).body.order).toMatchObject({
+      saleId: waiting.saleId,
+    });
+    const stored = await api.db
+      .selectFrom('sale_label')
+      .select(['order_state', 'label_expires_at'])
+      .where('sale_id', '=', waiting.saleId)
+      .executeTakeFirstOrThrow();
+    expect(stored).toEqual({
+      order_state: 'to_ship',
+      label_expires_at: new Date('2026-11-24T21:52:17.000Z'),
+    });
+  });
+
+  it('never lists an order the marketplace says was refunded or shipped, whatever its label says', async () => {
+    const refunded = await order({ title: 'Refunded top', tracking: '9400111899223197425555' });
+    const shipped = await order({ title: 'Shipped cap', tracking: '9400111899223197426666' });
+    const now = new Date(api.clock.now);
+    await recordLabelReads(
+      api.db,
+      tenant.accountId,
+      [
+        {
+          saleId: refunded.saleId,
+          status: 'read',
+          trackingNumber: '9400111899223197425555',
+          buyerFirstName: null,
+          orderState: 'canceled',
+        },
+        {
+          saleId: shipped.saleId,
+          status: 'read',
+          trackingNumber: '9400111899223197426666',
+          buyerFirstName: null,
+          orderState: 'shipped',
+        },
+      ],
+      now,
+    );
+    const listed = (await api.call('listPackOrders', { token })).body.data.map(
+      (entry) => entry.saleId,
+    );
+    expect(listed).not.toContain(refunded.saleId);
+    expect(listed).not.toContain(shipped.saleId);
+    expect((await scan({ label: '9400111899223197425555' })).body.order).toBeUndefined();
+    const reads = await ordersToRead(api.db, tenant.accountId, 'depop', now);
+    expect(reads.map((target) => target.saleId)).not.toContain(refunded.saleId);
+  });
+
+  it('packs a bundle as one package: its one label goes on once, for all its items', async () => {
+    const bundle = await order({ title: 'Bundle tee', tracking: '9400111899223197428888' });
+    const skirt = await createInventoryItem(api.db, tenant.accountId, {
+      title: 'Bundle skirt',
+      status: 'sold',
+    });
+    await api.db
+      .insertInto('sale_item')
+      .values({
+        account_id: tenant.accountId,
+        sale_id: bundle.saleId,
+        marketplace: 'depop',
+        item_id: skirt.id,
+        sale_price_cents: 2000,
+      })
+      .execute();
+    const shown = (await api.call('listPackOrders', { token })).body.data.find(
+      (entry) => entry.saleId === bundle.saleId,
+    );
+    expect(shown?.items.map((item) => item.sku)).toEqual([bundle.sku, skirt.sku]);
+    expect((await scan({ label: '9400111899223197428888' })).body).toMatchObject({
+      verdict: 'found',
+      order: { saleId: bundle.saleId },
+    });
+    expect((await pack(bundle.saleId, { label: '9400111899223197428888' })).status).toBe(200);
+    // A second print of it is the one package's label, already used.
+    expect((await scan({ label: '9400111899223197428888' })).body).toMatchObject({
+      verdict: 'already_packed',
+      packedOrder: { saleId: bundle.saleId },
+    });
   });
 
   it("is green for the right label and a red stop for the other order's label", async () => {

@@ -1125,7 +1125,7 @@
 		const hhmm = `(?:[01]\\d|2[0-3]):[0-5]\\d`;
 		return typeof args.precision === "number" ? args.precision === -1 ? `${hhmm}` : args.precision === 0 ? `${hhmm}:[0-5]\\d` : `${hhmm}:[0-5]\\d\\.\\d{${args.precision}}` : args.seconds ? `${hhmm}:[0-5]\\d(?:\\.\\d+)?` : `${hhmm}(?::[0-5]\\d(?:\\.\\d+)?)?`;
 	}
-	function time$1(args) {
+	function time$2(args) {
 		return new RegExp(`^${timeSource(args)}$`);
 	}
 	function datetime$1(args) {
@@ -1790,7 +1790,7 @@
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISOTime = /*@__PURE__*/ $constructor("$ZodISOTime", (inst, def) => {
-		def.pattern ?? (def.pattern = time$1(def));
+		def.pattern ?? (def.pattern = time$2(def));
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISODuration = /*@__PURE__*/ $constructor("$ZodISODuration", (inst, def) => {
@@ -6999,41 +6999,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		};
 	}
 
-// src/adapter/label-fields.ts
-/**
-	* Pack check's label reads (docs/features/pack-check.md, "Reading labels") from marketplace data
-	* Listora has only seen empty: Depop's receipts and Poshmark's sales. Their records are read by
-	* field names that say what a value is (`tracking_number`, the buyer's `first_name`), at any
-	* depth, and nothing else: a value is never taken by its position or its look. A record that
-	* names no order id or listing at all is a shape Listora doesn't know, and the page module throws
-	* `PageChangedError` for it.
-	*/
-	/** Every value under a key `keys` names, at any depth (arrays included). */
-	function fieldValues(value, keys, depth = 0) {
-		if (depth > 6 || typeof value !== "object" || value === null) return [];
-		if (Array.isArray(value)) return value.flatMap((entry) => fieldValues(entry, keys, depth + 1));
-		return Object.entries(value).flatMap(([key, entry]) => [...keys.includes(key) ? [entry] : [], ...fieldValues(entry, keys, depth + 1)]);
-	}
-	/** The non-empty strings (and whole numbers, as text) among `values`, without repeats. */
-	function texts(values) {
-		const found = values.flatMap((value) => {
-			if (typeof value === "string" && value.trim() !== "") return [value.trim()];
-			if (typeof value === "number" && Number.isSafeInteger(value)) return [String(value)];
-			return [];
-		});
-		return [...new Set(found)];
-	}
-	/** The tracking number a record names, if any. */
-	function trackingField(record) {
-		return texts(fieldValues(record, ["tracking_number", "trackingNumber"]))[0] ?? null;
-	}
-	/** The buyer's first name a record names under its `buyer`, if any. */
-	function buyerFirstName(record) {
-		if (typeof record !== "object" || record === null) return null;
-		const buyer = record["buyer"];
-		return texts(fieldValues(buyer, ["first_name", "firstName"]))[0] ?? null;
-	}
-
 // src/depop/pages/receipts.ts
 /**
 	* The seller's receipts, as Depop's sold items page loads them: one per purchase, newest first,
@@ -7047,19 +7012,33 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* (`seller_amount`), and its `line_items`, each naming its product by `product_id` with the
 	* product's text and photo. A listing the seller marked as sold has no receipt.
 	*
-	* Sale checks read every receipt (sold-items.ts), and Pack check each one's shipping label and
-	* the buyer's first name (docs/features/pack-check.md, "Reading labels"). Nothing else of the
-	* buyer is read: no name, address, or message is kept. Only reads.
+	* Sale checks read every receipt (sales.ts), and Pack check each one's parcel (its label,
+	* carrier, deadline, and label expiry), how the purchase stands, and the buyer's first name
+	* (docs/features/pack-check.md, "Depop's receipts"). Nothing else of the buyer is read: no name,
+	* address, or message is kept. Only reads.
 	*/
 	const TOKEN_COOKIE$1 = "access_token";
 	const API$1 = "receipts API";
 	const PAGE_SIZE = 24;
 	/** A dollar amount as the receipts show it (`"18.00"`). */
 	const amount = string().regex(/^\d+(\.\d{1,2})?$/);
+	const time$1 = datetime({ offset: true });
+	/**
+	* One package of a purchase: Depop's label for it (`tracking.reference`, by `shipping_provider`),
+	* when it must ship by, and when the label expires. A bundle's items share one parcel. Its
+	* `parcel_status` is the label's, not the order's: a refunded order's parcel can still say
+	* `AWAITING_SHIPPING`, so it is never read.
+	*/
+	const parcelSchema = object({
+		shipping_provider: string().nullish(),
+		tracking: object({ reference: string().nullish() }).catchall(unknown()).nullish(),
+		shipping_deadline: time$1.nullish(),
+		label_expires_at: time$1.nullish()
+	}).catchall(unknown());
 	const receiptSchema = object({
 		purchase_id: number().int().positive(),
 		status: string(),
-		sold_timestamp: datetime({ offset: true }),
+		sold_timestamp: time$1,
 		currency: string(),
 		items_amount: amount,
 		seller_amount: amount.nullish(),
@@ -7068,7 +7047,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			product_id: number().int().positive(),
 			description: string(),
 			picture_url: string().nullish()
-		}).catchall(unknown())).min(1)
+		}).catchall(unknown())).min(1),
+		buyer: object({ first_name: string().nullish() }).catchall(unknown()).nullish(),
+		parcels: array(parcelSchema)
 	}).catchall(unknown());
 	const receiptsSchema = object({
 		objects: array(unknown()),
@@ -7143,25 +7124,37 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (/shipped|transit|deliver|complete/.test(shown)) return "shipped";
 		return "unknown";
 	}
-	/** The receipt's ids, product slugs, label, and buyer's first name, by their field names. */
+	/**
+	* Pack check's part of a receipt. A bundle is one purchase with one parcel for all its items: one
+	* package, one label. A purchase whose parcels show several tracking numbers is not one package,
+	* so it reads as having no label (the seller scans the one on the package).
+	*/
 	function receiptLabel(receipt) {
-		const ids = texts([
-			receipt["id"],
-			receipt["purchase_id"],
-			receipt["purchaseId"]
-		]);
-		const slugs = texts(fieldValues(receipt, ["slug", "product_slug"]));
-		if (ids.length === 0 && slugs.length === 0) throw changed$2(API$1, "shows a receipt without an id or a product");
+		const tracked = receipt.parcels.filter((parcel) => present(parcel.tracking?.reference));
+		const parcel = new Set(tracked.map((parcel) => parcel.tracking?.reference?.trim())).size === 1 ? tracked[0] : void 0;
+		const deadlines = receipt.parcels.flatMap((shown) => present(shown.shipping_deadline) ? [new Date(shown.shipping_deadline)] : []);
 		return {
-			ids,
-			slugs,
-			trackingNumber: texts(fieldValues(receipt["parcels"], ["reference"]))[0] ?? trackingField(receipt),
-			buyerFirstName: buyerFirstName(receipt)
+			purchaseId: String(receipt.purchase_id),
+			productIds: receipt.line_items.map((line) => line.product_id),
+			state: receiptState(receipt.status),
+			trackingNumber: parcel?.tracking?.reference?.trim() ?? null,
+			carrierName: present(parcel?.shipping_provider) ? parcel.shipping_provider.trim() : null,
+			shipBy: deadlines.length === 0 ? null : new Date(Math.min(...deadlines.map(Number))),
+			labelExpiresAt: present(parcel?.label_expires_at) ? new Date(parcel.label_expires_at) : null,
+			buyerFirstName: present(receipt.buyer?.first_name) ? receipt.buyer.first_name.trim() : null
 		};
 	}
-	/** The order's label from the receipts read, or not found. */
-	function orderLabel(order, receipts) {
-		const receipt = receipts.find((shown) => shown.ids.includes(order.externalOrderId) || shown.slugs.includes(order.externalOrderId) || order.externalListingIds.some((id) => shown.slugs.includes(id)));
+	/**
+	* The order's label from the receipts read, or not found. An order is its purchase (Listora names
+	* a Depop sale by its purchase id); one named otherwise is found by the products that sold in it,
+	* whose slugs (Listora's listing ids) `slugOf` gives by product id.
+	*/
+	function orderLabel(order, receipts, slugOf = /* @__PURE__ */ new Map()) {
+		const sold = (receipt) => receipt.productIds.flatMap((id) => {
+			const slug = slugOf.get(id);
+			return slug === void 0 ? [] : [slug];
+		});
+		const receipt = receipts.find((shown) => shown.purchaseId === order.externalOrderId) ?? receipts.find((shown) => sold(shown).some((slug) => slug === order.externalOrderId || order.externalListingIds.includes(slug)));
 		if (receipt === void 0) return {
 			externalOrderId: order.externalOrderId,
 			found: false
@@ -7170,13 +7163,56 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			externalOrderId: order.externalOrderId,
 			found: true,
 			trackingNumber: receipt.trackingNumber,
-			buyerFirstName: receipt.buyerFirstName
+			buyerFirstName: receipt.buyerFirstName,
+			...receipt.state === "unknown" ? {} : { orderState: receipt.state },
+			carrierName: receipt.carrierName,
+			shipBy: receipt.shipBy,
+			labelExpiresAt: receipt.labelExpiresAt
 		};
+	}
+	function present(value) {
+		return value !== void 0 && value !== null && value.trim() !== "";
 	}
 	/** A dollar amount (`"18.00"`) in cents. */
 	function cents$1(value) {
 		const [dollars = "0", fraction = ""] = value.split(".");
 		return Number(dollars) * 100 + Number(fraction.padEnd(2, "0"));
+	}
+
+// src/adapter/label-fields.ts
+/**
+	* Pack check's label reads (docs/features/pack-check.md, "Reading labels") from marketplace data
+	* Listora has only seen empty: Poshmark's sales. Their records are read by field names that say
+	* what a value is (`tracking_number`, the buyer's `first_name`), at any depth, and nothing else:
+	* a value is never taken by its position or its look. A record that names no order id or listing
+	* at all is a shape Listora doesn't know, and the page module throws `PageChangedError` for it.
+	* Depop's receipts, read on a real shop with sales, are read by their own shape instead
+	* (depop/pages/receipts.ts).
+	*/
+	/** Every value under a key `keys` names, at any depth (arrays included). */
+	function fieldValues(value, keys, depth = 0) {
+		if (depth > 6 || typeof value !== "object" || value === null) return [];
+		if (Array.isArray(value)) return value.flatMap((entry) => fieldValues(entry, keys, depth + 1));
+		return Object.entries(value).flatMap(([key, entry]) => [...keys.includes(key) ? [entry] : [], ...fieldValues(entry, keys, depth + 1)]);
+	}
+	/** The non-empty strings (and whole numbers, as text) among `values`, without repeats. */
+	function texts(values) {
+		const found = values.flatMap((value) => {
+			if (typeof value === "string" && value.trim() !== "") return [value.trim()];
+			if (typeof value === "number" && Number.isSafeInteger(value)) return [String(value)];
+			return [];
+		});
+		return [...new Set(found)];
+	}
+	/** The tracking number a record names, if any. */
+	function trackingField(record) {
+		return texts(fieldValues(record, ["tracking_number", "trackingNumber"]))[0] ?? null;
+	}
+	/** The buyer's first name a record names under its `buyer`, if any. */
+	function buyerFirstName(record) {
+		if (typeof record !== "object" || record === null) return null;
+		const buyer = record["buyer"];
+		return texts(fieldValues(buyer, ["first_name", "firstName"]))[0] ?? null;
 	}
 
 // src/adapter/offer-fields.ts
@@ -7929,6 +7965,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			}),
 			labels: async (orders, step) => {
 				const receipts = [];
+				const read = (order) => receipts.some((receipt) => receipt.purchaseId === order.externalOrderId);
 				let cursor = null;
 				for (let number = 1; number <= 5; number += 1) {
 					const shown = await step("read the sold items", { mutates: false }, async (page) => {
@@ -7936,11 +7973,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 						return readReceipts(page, site, cursor);
 					});
 					receipts.push(...shown.receipts.map((receipt) => receipt.label));
-					const missing = orders.some((order) => !orderLabel(order, receipts).found);
-					if (shown.next === null || !missing) break;
+					if (shown.next === null || orders.every(read)) break;
 					cursor = shown.next;
 				}
-				return orders.map((order) => orderLabel(order, receipts));
+				const others = receipts.filter((receipt) => !orders.some((order) => order.externalOrderId === receipt.purchaseId));
+				const slugOf = /* @__PURE__ */ new Map();
+				if (others.length > 0 && orders.some((order) => !read(order))) {
+					const sold = await soldListings({
+						site,
+						step
+					}, new Set(others.flatMap((receipt) => receipt.productIds)));
+					for (const [id, product] of sold) slugOf.set(id, product.state.externalListingId);
+				}
+				return orders.map((order) => orderLabel(order, receipts, slugOf));
 			},
 			listings: async (cursor, step) => {
 				const shown = await step("read your listings for sale", { mutates: false }, async (page) => {

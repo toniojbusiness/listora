@@ -413,6 +413,18 @@ export type RemoteOrderLabel =
       /** As the page shows it; `null` while the order has no label yet. */
       trackingNumber: string | null;
       buyerFirstName: string | null;
+      /**
+       * How the order stands there, when the page says: waiting for the seller to ship it, or
+       * shipped or canceled (delivered and refunded included). Only this says whether the order
+       * is a package to pack, never the label's or parcel's own status.
+       */
+      orderState?: 'to_ship' | 'shipped' | 'canceled';
+      /** The label's carrier as the page names it (`USPS`), when it does. */
+      carrierName?: string | null;
+      /** When the order must ship by, when the page says. */
+      shipBy?: Date | null;
+      /** When the label stops being usable, when the page says. */
+      labelExpiresAt?: Date | null;
     }
   | { externalOrderId: string; found: false };
 

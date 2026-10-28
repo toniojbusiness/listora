@@ -10,7 +10,14 @@
  */
 import { sql } from 'kysely';
 
-import type { DbExecutor, LabelReadStatus, Marketplace } from '@listora/db';
+import {
+  LABEL_CARRIERS,
+  type DbExecutor,
+  type LabelCarrier,
+  type LabelOrderState,
+  type LabelReadStatus,
+  type Marketplace,
+} from '@listora/db';
 
 import { OPEN_SALE_STATUSES } from './orders.ts';
 import { canonicalTracking, carrierOf } from './tracking.ts';
@@ -72,7 +79,18 @@ export async function ordersToRead(
     .where('sale.account_id', '=', accountId)
     .where('sale.marketplace', '=', marketplace)
     .where('sale.status', 'in', OPEN_SALE_STATUSES)
-    .where('sale.detection_source', '<>', 'history')
+    // Shipped or canceled on the marketplace: no package to pack.
+    .where((eb) =>
+      eb.or([eb('label.order_state', 'is', null), eb('label.order_state', '=', 'to_ship')]),
+    )
+    // A sale from the sales history is read once, for whether it still waits to ship there.
+    .where((eb) =>
+      eb.or([
+        eb('sale.detection_source', '<>', 'history'),
+        eb('label.read_at', 'is', null),
+        eb('label.order_state', '=', 'to_ship'),
+      ]),
+    )
     .where('sale.external_order_id', 'is not', null)
     .where('sale.sold_at', '>', new Date(now.getTime() - LABEL_READ_DAYS * 86_400_000))
     .where('pack.sale_id', 'is', null)
@@ -112,15 +130,28 @@ export async function ordersToRead(
 
 /** What a read found for one order. */
 export type LabelReadResult =
-  | { saleId: string; status: 'read'; trackingNumber: string; buyerFirstName: string | null }
-  | { saleId: string; status: 'no_label'; buyerFirstName: string | null }
+  | ({ saleId: string; status: 'read'; trackingNumber: string } & FoundOrder)
+  | ({ saleId: string; status: 'no_label' } & FoundOrder)
   | { saleId: string; status: 'not_found' }
   | { saleId: string; status: 'failed'; error: string };
+
+/** What the page of an order it found says, besides its label's tracking number. */
+export interface FoundOrder {
+  buyerFirstName: string | null;
+  /** How the order stands on the marketplace, when the page says. */
+  orderState?: LabelOrderState;
+  /** The label's carrier in the page's words (`USPS`). */
+  carrierName?: string | null;
+  shipBy?: Date | null;
+  labelExpiresAt?: Date | null;
+}
 
 /**
  * Records what a read found. A label the marketplace shows replaces one the seller scanned (the
  * marketplace's own page is the truth; a packed order whose package has another label then shows
  * it, `labelMismatch` in the views). A read that found no label keeps a label already known.
+ * How the order stands there decides whether it is a package to pack (`isPackOrder`), and the
+ * date it must ship by becomes the sale's.
  */
 export async function recordLabelReads(
   executor: DbExecutor,
@@ -129,7 +160,8 @@ export async function recordLabelReads(
   now: Date,
 ): Promise<void> {
   for (const result of results) {
-    const firstName = 'buyerFirstName' in result ? cleanFirstName(result.buyerFirstName) : null;
+    const found = result.status === 'read' || result.status === 'no_label' ? result : null;
+    const firstName = found === null ? null : cleanFirstName(found.buyerFirstName);
     const tracking = result.status === 'read' ? canonicalTracking(result.trackingNumber) : null;
     // A page whose label isn't a tracking number Listora can use counts as no label yet.
     const status: LabelReadStatus =
@@ -140,10 +172,12 @@ export async function recordLabelReads(
         ? {}
         : {
             tracking_number: tracking,
-            carrier: carrierOf(tracking),
+            carrier: namedCarrier(found?.carrierName) ?? carrierOf(tracking),
             source: 'marketplace' as const,
+            label_expires_at: found?.labelExpiresAt ?? null,
           };
     const name = firstName === null ? {} : { buyer_first_name: firstName };
+    const state = found?.orderState === undefined ? {} : { order_state: found.orderState };
     await executor
       .insertInto('sale_label')
       .values({
@@ -154,14 +188,36 @@ export async function recordLabelReads(
         read_at: now,
         ...label,
         ...name,
+        ...state,
       })
       .onConflict((conflict) =>
-        conflict
-          .columns(['account_id', 'sale_id'])
-          .doUpdateSet({ read_status: status, read_error: error, read_at: now, ...label, ...name }),
+        conflict.columns(['account_id', 'sale_id']).doUpdateSet({
+          read_status: status,
+          read_error: error,
+          read_at: now,
+          ...label,
+          ...name,
+          ...state,
+        }),
       )
       .execute();
+    if (found?.shipBy !== undefined && found.shipBy !== null) {
+      await executor
+        .updateTable('sale')
+        .set({ ship_by: found.shipBy })
+        .where('account_id', '=', accountId)
+        .where('id', '=', result.saleId)
+        .execute();
+    }
   }
+}
+
+/** A carrier Listora knows by the name a page gives it (`USPS`). */
+function namedCarrier(name: string | null | undefined): LabelCarrier | null {
+  const shown = name?.trim().toLowerCase() ?? '';
+  return (LABEL_CARRIERS as readonly string[]).includes(shown) && shown !== 'other'
+    ? (shown as LabelCarrier)
+    : null;
 }
 
 /** The buyer's first name only, as a page shows it ("Sarah M." is "Sarah"). */

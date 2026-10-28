@@ -8,7 +8,7 @@ export {
   recordLabelReads,
   RETRY_MS,
 } from './labels.ts';
-export type { LabelReadResult, LabelReadTarget } from './labels.ts';
+export type { FoundOrder, LabelReadResult, LabelReadTarget } from './labels.ts';
 export {
   loadPackOrders,
   loadPackOrdersById,
