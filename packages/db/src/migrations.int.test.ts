@@ -144,7 +144,7 @@ describe('schema migrations (real Postgres)', () => {
     });
   });
 
-  it('refuses to apply a migration that sorts before an applied one', async () => {
+  it('applies a pending migration that sorts before an applied one', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'listora-migrations-'));
     try {
       await writeFile(join(directory, '0002_later.up.sql'), 'create table later (id int);');
@@ -153,10 +153,12 @@ describe('schema migrations (real Postgres)', () => {
 
       await writeFile(join(directory, '0001_earlier.up.sql'), 'create table earlier (id int);');
       await writeFile(join(directory, '0001_earlier.down.sql'), 'drop table earlier;');
-      await expect(
-        new SchemaMigrator(db, new SqlFileMigrationProvider(directory)).migrateToLatest(),
-      ).rejects.toThrow(MigrationError);
-      expect(await tablesAndViews(db)).toEqual(['later']);
+      const migrator = new SchemaMigrator(db, new SqlFileMigrationProvider(directory));
+      expect(await migrator.migrateToLatest()).toEqual(['0001_earlier']);
+      expect(await tablesAndViews(db)).toEqual(['earlier', 'later']);
+      expect((await migrator.status()).every((migration) => migration.executedAt !== null)).toBe(
+        true,
+      );
     } finally {
       await rm(directory, { recursive: true });
     }
