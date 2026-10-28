@@ -158,6 +158,9 @@ function hostError(thrown: unknown): Error {
   if (name === 'TimeoutError' || message === 'timeout') return new Error('timeout');
   if (/net::ERR_|ECONNREFUSED/.test(message)) return new Error('unreachable');
   if (/closed/i.test(message)) return new Error('closed');
+  // A page function the page's own navigation cut short (read on a live Poshmark Update,
+  // 2026-10-27: Playwright's "Execution context was destroyed").
+  if (message.includes('Execution context was destroyed')) return new Error('navigated');
   // A page function's own failure (`element_timeout: ...`) passes through as it is.
   return new Error(message.replace(/^page\.evaluate: (Error: )?/, '').split('\n')[0]);
 }

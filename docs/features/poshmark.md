@@ -228,10 +228,17 @@ Listora's own test listings:
   `Women > Dresses > Maxi` in 88 seconds and confirmed in 5; Change price 31 + 5, End 36 + 5,
   Relist 32 + 4 (the same listing, back For Sale), and End again 29 + 5. Its page showed the
   category, size, condition, colors, and brand Listora sent. Deleted after (the edit page's Delete
-  Listing, then Yes): the page answers 404 and the read reads it as gone for good. The women's
-  jeans, shorts, and skirt forms were checked against the catalog's size sets only (sizes
-  `23` to `34` and `00` to `12` for jeans, Plus `14W` to `32W`, Petite `23P` and `0P`, letters for
-  pants, shorts, and skirts).
+  Listing, then Yes): the page answers 404 and the read reads it as gone for good.
+- **Women's jeans, shorts, and a skirt, the whole cycle** (Mac, the captain's session in a
+  background tab, 2026-10-27, one session at a time, paced machine-wide): Abercrombie straight
+  jeans (`27/4S`, filed as `Women > Jeans > Straight Leg`, size `27`), Abercrombie shorts (`0`,
+  `Women > Shorts`, size `0`), and a Wrangler denim maxi skirt (`S`, `Women > Skirts > Maxi`,
+  size `S`), each listed in 28 to 31 s and confirmed in 1 to 2 s, then Change price, End, Relist,
+  and End again in 8 to 10 s each (each confirmed in 1 to 2 s), and deleted (the read says gone
+  for good). Two gaps showed first and are fixed: an edit page draws its price section a moment
+  after its title field (the price step now waits up to 15 s for it, as the fake's edit page
+  does), and Update's own page load cut short the read that followed it (the phone runtime
+  now reads again on the new page; [phone-execution.md](phone-execution.md)).
 - **End, relist, and price from the edit form alone** (Mac, the captain's session, 2026-10-27,
   the same listing, main's scripts and then these, one after the other; the Mac was under heavy
   load from other work, so the steps they share varied by up to twice their time): Change price

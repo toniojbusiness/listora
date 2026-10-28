@@ -371,9 +371,28 @@ Makeup brand new).
 every picker and its values (sizes `00` to `36` for dresses; numbers, waists `21"` to `68"`, and
 letters for bottoms; Length on dresses and skirts; Type on dresses and jeans, and Fit on jeans;
 Body fit on every one but the specific dress types; Style on every product type). The Length,
-Type, Body fit, and Style pickers each took a pick and showed it with its Remove button. The live
-cycle on real women's items (a dress, jeans, shorts, and a skirt) waits: Depop answered the sell
-page with a Cloudflare check that day, and Listora stops at a check rather than pass it.
+Type, Body fit, and Style pickers each took a pick and showed it with its Remove button.
+
+**Women's dresses, jeans, shorts, and skirts, the whole cycle** (2026-10-27, after the captain
+cleared Depop's check; one Depop session at a time machine-wide, at least 10 minutes apart, each
+in a background tab of its own): one real item of each, listed, confirmed, repriced, ended,
+relisted, and ended again, and every listing deleted after (each read back as gone for good).
+Depop's End deletes the listing (410), so a relist posts a new one; both were deleted.
+
+| Item                                 | Filed as (Depop's own data)                       | List (send + confirm) | Price     | End       | Relist     | End again |
+| ------------------------------------ | ------------------------------------------------- | --------------------- | --------- | --------- | ---------- | --------- |
+| Free People maxi dress (`M`)         | Dresses, Length Maxi, Orange and Cream, Excellent | 27.9 s + 2.3 s        | 4.0 + 2.4 | 5.5 + 0.8 | 25.9 + 2.3 | 5.6 + 1.2 |
+| Abercrombie straight jeans (`27/4S`) | Jeans `27"`, High waisted and Straight leg, Denim | 31.1 s + 2.6 s        | 3.8 + 2.2 | 6.3 + 1.0 | 28.8 + 2.3 | 6.1 + 0.9 |
+| Abercrombie shorts (`0`)             | Shorts `0`, Cotton, Navy, Good                    | 28.7 s + 2.3 s        | 3.9 + 2.4 | 5.8 + 1.0 | 28.6 + 2.4 | 5.8 + 1.1 |
+| Wrangler denim maxi skirt (`S`)      | Skirts `S`, Length Maxi, Denim, Blue, Good        | 29.3 s + 2.4 s        | 4.1 + 2.1 | 5.5 + 0.9 | 30.9 + 2.5 | 5.9 + 0.8 |
+
+On the way, two of the dress's earlier tries stopped and said so: once Depop refused the Post with
+"Please insert at least one image" although the form showed both photos, and once the form never
+showed the photos as added within 30 seconds (Listora stopped before Post). Neither repeated in
+the next five posts; both are reported as failures with Depop's words or the step, never as a
+listing. Once, the read right after a Post failed in the page ("Failed to fetch") while the page
+was still on its way to the next one, so the run didn't know the listing it had made; a read of
+Depop's API the page couldn't make is now made once more ([automation.md](automation.md)).
 
 Still to verify: a sale check with a sale (the account has none), and a run on the iPhone itself
 (the web API's reads from the app's web view).

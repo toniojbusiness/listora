@@ -436,6 +436,20 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
   });
 
+  it("tries a create again later when Mercari's form says it could not list the item", async () => {
+    const ref = newRef();
+    inject('create', { type: 'listing_error' });
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'transient',
+      code: 'server_error',
+    });
+    expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+    // The next attempt lists it.
+    const listed = await adapter.execute({ ...request('create', ref), attempt: 2 }, ctx());
+    expect(listed).toMatchObject({ type: 'confirmed' });
+    expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(1);
+  });
+
   it("finds a new listing by its SKU when Mercari's page after List does not link to it", async () => {
     const shop = await FakeMercariSite.start(0, { listedPageLinksItem: false });
     try {

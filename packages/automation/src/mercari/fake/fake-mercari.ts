@@ -98,6 +98,11 @@ export type FakeMercariFault =
    * debit card on file; nothing is listed.
    */
   | { type: 'card_required' }
+  /**
+   * On List or Update: Mercari's own failure under the List button ("Your item could not be
+   * listed due to an error"); nothing is changed.
+   */
+  | { type: 'listing_error' }
   /** The answer comes after `delayMs`; with `afterApply`, the change is made at once. */
   | { type: 'slow'; delayMs: number; afterApply: boolean }
   /** A read serves the listing as it was before its latest change. */
@@ -482,6 +487,7 @@ export class FakeMercariSite {
       case 'item_warning':
       case 'verification_required':
       case 'card_required':
+      case 'listing_error':
       case 'slow':
       case 'stale_read':
       case undefined:
@@ -508,6 +514,20 @@ export class FakeMercariSite {
             itemWarning: fault.message,
             ...this.#formOptions,
           }),
+        ),
+      };
+    }
+    if (
+      fault?.type === 'listing_error' &&
+      (route.action === 'create' || route.action === 'update')
+    ) {
+      // The form again, with Mercari's error under its List button.
+      const stored = route.id === null ? null : this.#items.get(route.id);
+      return {
+        status: 200,
+        body: page(
+          'Sell | Mercari',
+          listingForm(stored?.current ?? null, { listingError: true, ...this.#formOptions }),
         ),
       };
     }
@@ -1159,6 +1179,8 @@ interface SellFormOptions {
   templatesTip?: boolean;
   /** Mercari's add-a-card warning over the form, its answer to List without a card on file. */
   paymentWarning?: boolean;
+  /** Mercari's own failure under the List button ("Your item could not be listed ..."). */
+  listingError?: boolean;
   /** Mercari's warning that the listing may break its rules, with this reason, over the form. */
   itemWarning?: string;
   /** Categories whose form asks for a phone's IMEI. */
@@ -1240,6 +1262,7 @@ function listingForm(item: FakeMercariItem | null, options: SellFormOptions = {}
 <p>Smart Pricing <button type="button" data-testid="SmartPricingButton">${smartPricing ? 'ON' : 'OFF'}</button></p>
 <div id="smart-pricing"></div>
 <button type="button" data-testid="ListButton">${item === null ? 'List' : 'Update'}</button>
+${options.listingError === true ? '<p data-testid="ListingError">Your item could not be listed due to an error.<br>Please return to the Home screen and try listing the item again.</p>' : ''}
 ${toggle}`;
   const config = {
     html,

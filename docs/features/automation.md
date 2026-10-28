@@ -55,8 +55,14 @@ from the app
   own scripts send as their bearer token; the value never leaves the page). It is paced like an
   action, allowed in reads, and only ever a GET: every change still goes through the site's own
   pages. A 429 or 5xx stops the run as a rate limit or a marketplace error, a 403 that is not
-  JSON as a bot check; any other status is the script's to read. Both hosts run it the same
-  way (the phone's runtime receives the API origins with each call).
+  JSON as a bot check; any other status is the script's to read. A request the page couldn't
+  make at all (`fetch` rejected: the network, or the page on its way to the next one, seen right
+  after a Depop Post) is made once more, and a second failure ends the step. Both hosts run it
+  the same way (the phone's runtime receives the API origins with each call).
+- **A marketplace's own error** (`MarketplaceError`, `runner/errors.ts`). A page that says the
+  marketplace itself failed and to try again (Mercari's "Your item could not be listed due to an
+  error") ends the step as `server_error`, as a 5xx does: the change is read back, then tried
+  again. It is not a refusal of the listing, and not a page Listora no longer understands.
 - **Network rules** (`safety/network.ts`). The runner checks every request and WebSocket before
   Chromium sends it. The main frame may only load the profile's own origins; its API origins
   take every request but a main-frame navigation. No request may go

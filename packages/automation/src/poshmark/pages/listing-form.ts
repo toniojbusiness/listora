@@ -330,6 +330,8 @@ async function pick(
 
 /** How long a choice that may not be there at all is waited for. */
 const SHORT_LOOK_MS = 1_500;
+/** How long an edit page's price section gets to be drawn after its title field. */
+const PRICE_DRAWS_MS = 15_000;
 
 /** Whether `selector` is on the page within a moment (a picker's menu draws itself). */
 async function appears(
@@ -364,7 +366,12 @@ export async function setPrice(
   priceCents: number,
   originalCents: number | null = null,
 ): Promise<void> {
-  await expectField(page, FORM_SELECTORS.listingPrice, 'listing price field');
+  // On an edit page the price section is drawn a moment after the title field the form is
+  // opened by (seen on the captain's session, 2026-10-27: none yet 6 s after the edit page
+  // opened, there a moment later), so it gets a moment to come.
+  if (!(await appears(page, FORM_SELECTORS.listingPrice, PRICE_DRAWS_MS))) {
+    await expectField(page, FORM_SELECTORS.listingPrice, 'listing price field');
+  }
   await page.fill(FORM_SELECTORS.listingPrice, wholeDollars(priceCents));
   if (!(await appears(page, FORM_SELECTORS.priceDialog))) {
     // A form without the dialog takes both prices in its own fields.

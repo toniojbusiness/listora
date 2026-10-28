@@ -307,6 +307,18 @@ showed the category, size, brand, and condition Listora sent. Each test listing 
 | Long skirt          | Women > Skirts, picked whole          | `S (4-6)`  | 35.9s | 7.3s  | 7.7s | 8.1s   | 7.5s  | 9.3s   |
 | Denim shorts        | Women > Shorts                        | `XS (0-2)` | 38.7s | 7.8s  | 7.0s | 7.0s   | 8.7s  | 9.2s   |
 
+**Women's categories again, with today's scripts** (2026-10-27, evening, one Mercari session at
+a time machine-wide, at least 10 minutes apart): a Ronni Nicole dress (`6`, filed as
+`Women > Dresses > Knee-length`, `S (4-6)`, Like new), Abercrombie straight jeans (`27/4S`,
+`Women > Jeans > Straight leg`, `27 in.`), Abercrombie shorts (`0`, `Women > Shorts > Short
+shorts`, `XS (0-2)`), and a Wrangler denim maxi skirt (`S`, `Women > Skirts > Maxi`, `S (4-6)`),
+each listed in 21 to 27 s and confirmed in 2 to 3 s, Change price 5 to 7 s, End, Relist, and End
+again 3 to 4 s each, and deleted (gone for good). Twice that day List failed with Mercari's own
+error under the List button (`ListingError`: "Your item could not be listed due to an error.
+Please return to the Home screen and try listing the item again."), nothing listed. Listora read
+it as a page it no longer understood after 45 seconds; it now ends the step as Mercari's error
+(`server_error`), which is tried again once the listing is read back, and the next try listed it.
+
 **Every form shape and department, filled but not listed** (2026-10-27): the seller's items are
 all women's clothing, so the other shapes were checked by filling Listora's payload into the
 live sell form and reading what the form showed, then closing it without listing: men's clothing
