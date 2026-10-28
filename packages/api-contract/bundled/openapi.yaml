@@ -283,7 +283,10 @@ paths:
         - items
       operationId: listItems
       summary: List items
-      description: Newest first. Filters combine with AND.
+      description: |
+        Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+        to the items they leave. A cursor continues only the sort it was issued for; with another
+        `sort` it is `400`.
       parameters:
         - name: status
           in: query
@@ -321,6 +324,11 @@ paths:
             (not counting canceled ones) failed or waits for the seller to finish a step.
           schema:
             type: boolean
+        - name: sort
+          in: query
+          description: The order; `added_newest` when omitted.
+          schema:
+            $ref: '#/components/schemas/ItemSort'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -2219,7 +2227,10 @@ paths:
         - sales
       operationId: listSales
       summary: List sales
-      description: The sales feed, newest sold first, each with its delist runs.
+      description: |
+        The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+        sort applies to the sales the filters leave. A cursor continues only the sort it was
+        issued for; with another `sort` it is `400`.
       parameters:
         - name: itemId
           in: query
@@ -2245,6 +2256,11 @@ paths:
               $ref: '#/components/schemas/DelistRunStatus'
           style: form
           explode: true
+        - name: sort
+          in: query
+          description: The order; `sold_newest` when omitted.
+          schema:
+            $ref: '#/components/schemas/SaleSort'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -4414,6 +4430,28 @@ components:
         - draft
         - ready
         - archived
+    ItemSort:
+      type: string
+      description: |
+        The order of `listItems`. Every order ends with the newest added first, so items that tie
+        keep one order from page to page.
+        `added_newest`: newest added first (the default). `listed_newest` and `listed_oldest`: by
+        when the item was first listed on any marketplace (`listed_oldest` is the longest listed
+        first); items never listed come last. `price_high` and `price_low`: by list price; items
+        without one come last. `stale_first`: items still for sale (draft, ready, listed) that have
+        waited longest first, aged from the purchase date or, without one, from when the item was
+        added; sold and archived items come after them. `profit_high`: by profit at list price (list
+        price minus cost, a haul's share included), before fees and shipping; items without a price
+        or cost come last. `name_az`: by title, A to Z, ignoring case; untitled items come last.
+      enum:
+        - added_newest
+        - listed_newest
+        - listed_oldest
+        - price_high
+        - price_low
+        - stale_first
+        - profit_high
+        - name_az
     ItemCondition:
       type: string
       description: Canonical condition; each marketplace adapter maps it to that marketplace's values.
@@ -7650,6 +7688,21 @@ components:
         - shipped
         - canceled
         - returned
+    SaleSort:
+      type: string
+      description: |
+        The order of `listSales`. Every order ends with the newest sold first, then the newest
+        recorded, so sales that tie keep one order from page to page.
+        `sold_newest`: newest sold first (the default). `sold_oldest`: oldest sold first.
+        `price_high` and `price_low`: by the order's sale price (`Sale.salePrice`). `profit_high`: by
+        the order's profit (`Sale.profit`); sales without one (fees or a cost not known yet, or the
+        sale canceled or returned) come last.
+      enum:
+        - sold_newest
+        - sold_oldest
+        - price_high
+        - price_low
+        - profit_high
     SaleDetectionSource:
       description: |
         A `KnownSaleDetectionSource`, or a source added after this client was built. Clients

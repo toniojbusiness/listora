@@ -8,7 +8,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
 
 ## The screens
 
-- **Inventory** lists the account's items, newest first (`listItems`): cover photo, title, SKU,
+- **Inventory** lists the account's items, newest first or in the order the Sort pill at the
+  start of the quick filters picks, sorted by the server and remembered ([sorting.md](sorting.md))
+  (`listItems`): cover photo, title, SKU,
   price, item status, and each listing's status on its marketplace, exactly as the server words
   it. It opens as a grid of large photos; the toolbar button switches to a list of rows and back,
   and the choice is kept on the iPhone (`InventoryLayout`). Search goes over SKU, title, brand,

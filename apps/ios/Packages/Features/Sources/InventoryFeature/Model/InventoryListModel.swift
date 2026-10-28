@@ -3,8 +3,9 @@ import Foundation
 import ListoraAPI
 import Observation
 
-/// The Inventory tab: the seller's items, newest first, with search and filters. Every load reads
-/// the server, so an item saved a moment ago is in the list the next time it appears.
+/// The Inventory tab: the seller's items, newest first or in the seller's chosen order, with search
+/// and filters. Every load reads the server, so an item saved a moment ago is in the list the next
+/// time it appears. The order is remembered (``ItemSort/storageKey``) for the next launch.
 @MainActor
 @Observable
 final class InventoryListModel {
@@ -17,8 +18,15 @@ final class InventoryListModel {
         case failed(message: String)
     }
 
-    /// Changing it reloads the list (the view's `task(id:)`).
-    var query = InventoryQuery()
+    /// Changing it reloads the list (the view's `task(id:)`); a new order is remembered.
+    var query = InventoryQuery() {
+        didSet {
+            if query.sort != oldValue.sort {
+                defaults.set(query.sort.rawValue, forKey: ItemSort.storageKey)
+            }
+        }
+    }
+
     private(set) var items: [ItemSummary] = []
     private(set) var phase: Phase = .loading
     private(set) var isLoadingMore = false
@@ -31,14 +39,22 @@ final class InventoryListModel {
     private var nextCursor: String?
     private let service: any InventoryService
     private let isSignedIn: @MainActor () -> Bool
+    private let defaults: UserDefaults
 
-    init(service: any InventoryService, isSignedIn: @escaping @MainActor () -> Bool = { true }) {
+    init(
+        service: any InventoryService,
+        isSignedIn: @escaping @MainActor () -> Bool = { true },
+        defaults: UserDefaults = .standard,
+    ) {
         self.service = service
         self.isSignedIn = isSignedIn
+        self.defaults = defaults
+        query.sort = defaults.string(forKey: ItemSort.storageKey).flatMap(ItemSort.init(rawValue:)) ?? .standard
     }
 
+    /// A filter or search narrows the list (the order is not a filter).
     var isFiltered: Bool {
-        query != InventoryQuery()
+        query != query.unfiltered
     }
 
     /// A search, marketplace, or brand narrows the list (shown as chips with Clear).
@@ -95,8 +111,9 @@ final class InventoryListModel {
         }
     }
 
+    /// Every filter and the search, keeping the order.
     func clearFilters() {
-        query = InventoryQuery()
+        query = query.unfiltered
     }
 
     /// The chosen items, in the list's order.

@@ -65,6 +65,21 @@ export const SCENARIOS: readonly Scenario[] = [
     options: () => ({ query: { marketplace: 'ebay', status: ['listed'] } }),
   },
   {
+    name: 'Inventory, by date listed',
+    operationId: 'listItems',
+    options: () => ({ query: { sort: 'listed_oldest' } }),
+  },
+  {
+    name: 'Inventory, by price',
+    operationId: 'listItems',
+    options: () => ({ query: { sort: 'price_high' } }),
+  },
+  {
+    name: 'Inventory, by profit',
+    operationId: 'listItems',
+    options: () => ({ query: { sort: 'profit_high' } }),
+  },
+  {
     name: 'Item detail, listed',
     operationId: 'getItem',
     options: (f) => ({ params: { itemId: f.listedItemId } }),
@@ -76,6 +91,11 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   { name: 'Today', operationId: 'getToday', options: () => ({}) },
   { name: 'Sales feed', operationId: 'listSales', options: () => ({}) },
+  {
+    name: 'Sales feed, by profit',
+    operationId: 'listSales',
+    options: () => ({ query: { sort: 'profit_high' } }),
+  },
   {
     name: 'Sale detail',
     operationId: 'getSale',

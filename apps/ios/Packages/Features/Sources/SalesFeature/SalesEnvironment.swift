@@ -91,6 +91,11 @@ public final class SalesEnvironment {
         SaleDetailView(environment: self, saleID: saleID)
     }
 
+    /// Forgets the sales list's order, back to newest sold first (`LISTORA_RESET_LOCAL_DATA`).
+    public static func resetLocalData(defaults: UserDefaults) {
+        defaults.removeObject(forKey: SaleSort.storageKey)
+    }
+
     func makeListModel() -> SalesListModel {
         SalesListModel(service: service, isSignedIn: isSignedIn)
     }

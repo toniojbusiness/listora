@@ -36,7 +36,9 @@ describe('performance benchmark (synthetic seller)', () => {
   it.each([
     ['listItems', {}],
     ['listItems', { status: ['listed'], marketplace: 'ebay' }],
+    ['listItems', { sort: 'listed_newest' }],
     ['listSales', {}],
+    ['listSales', { sort: 'profit_high' }],
     ['listTasks', {}],
     ['listOperations', {}],
     ['listListings', {}],

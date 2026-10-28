@@ -88,20 +88,27 @@ public struct ChoiceChip: View {
                 }
                 Text(title).lineLimit(1)
             }
-            .font(Typography.emphasis)
-            .foregroundStyle(isSelected ? Palette.onBrand : Palette.textPrimary)
-            .padding(.horizontal, Spacing.sm)
-            .frame(minHeight: 36)
-            .background(isSelected ? Palette.brand : Palette.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Palette.separator.color, lineWidth: 1))
-            // The visible pill is 36 points; the tap area reaches the minimum target.
-            .frame(minHeight: Layout.minimumTapTarget)
-            .contentShape(Rectangle())
+            .choicePill(isSelected: isSelected)
             .opacity(isEnabled ? 1 : 0.45)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: isSelected) { _, selected in selected }
+    }
+}
+
+extension View {
+    /// A choice's pill: brand filled when selected, otherwise outlined on the surface; 36 points
+    /// tall, with a tap area of the minimum target.
+    func choicePill(isSelected: Bool) -> some View {
+        font(Typography.emphasis)
+            .foregroundStyle(isSelected ? Palette.onBrand : Palette.textPrimary)
+            .padding(.horizontal, Spacing.sm)
+            .frame(minHeight: 36)
+            .background(isSelected ? Palette.brand : Palette.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Palette.separator.color, lineWidth: 1))
+            .frame(minHeight: Layout.minimumTapTarget)
+            .contentShape(Rectangle())
     }
 }
 

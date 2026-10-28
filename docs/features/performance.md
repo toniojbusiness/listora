@@ -87,6 +87,11 @@ Checked and left as they are:
   marketplace, an item's photos and listings are bounded by the item, Today reads at most 50
   cards of a kind, and the profit dashboard aggregates in SQL and lists only the 5 oldest dead
   items.
+- **Sorted lists** (2026-10-28, [sorting.md](sorting.md)). Sorting Inventory by date listed,
+  price, or profit, and Sales by profit, reads the account's rows by the same account indexes
+  and sorts them in memory: on the same machine the first page answered in 8 to 16 ms at the
+  median and 10 to 30 ms at p95 (the unsorted pages 5 to 8 ms and 7 to 14 ms in that run), so no
+  index was added for them.
 - **Indexes.** Every hot statement uses an index that leads with `account_id`. The rest of the
   top statements by time are under 1 ms each at 2,000 items. The task inbox's statement spends
   more time planning (six joins) than running.

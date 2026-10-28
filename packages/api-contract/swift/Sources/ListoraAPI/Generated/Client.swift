@@ -763,7 +763,10 @@ public struct Client: APIProtocol {
     }
     /// List items
     ///
-    /// Newest first. Filters combine with AND.
+    /// Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+    /// to the items they leave. A cursor continues only the sort it was issued for; with another
+    /// `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/items`.
     /// - Remark: Generated from `#/paths//v1/items/get(listItems)`.
@@ -815,6 +818,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "attention",
                     value: input.query.attention
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "sort",
+                    value: input.query.sort
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -9300,7 +9310,10 @@ public struct Client: APIProtocol {
     }
     /// List sales
     ///
-    /// The sales feed, newest sold first, each with its delist runs.
+    /// The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+    /// sort applies to the sales the filters leave. A cursor continues only the sort it was
+    /// issued for; with another `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -9338,6 +9351,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "delistStatus",
                     value: input.query.delistStatus
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "sort",
+                    value: input.query.sort
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
