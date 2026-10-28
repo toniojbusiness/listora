@@ -190,7 +190,7 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
             return answer
         }
         try? await Task.sleep(for: .milliseconds(20))
-        return .init(changed: false, token: after ?? "t0")
+        return .init(changed: after == nil, token: after ?? "t0")
     }
 
     /// The item's activity, one page per call, in order.
