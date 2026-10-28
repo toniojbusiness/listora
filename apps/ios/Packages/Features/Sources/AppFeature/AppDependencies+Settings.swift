@@ -20,6 +20,8 @@ public struct SettingsModels {
     public let imports: ImportsModel
     /// Settings > People: the owner's invites.
     public let invites: InvitesModel
+    /// Settings > Description style: how Listora's AI writes the seller's Depop drafts.
+    public let descriptionStyle: DescriptionStyleModel
 
     /// `profileDirectory` keeps the profile photo; `LISTORA_RESET_LOCAL_DATA` empties it first.
     init(
@@ -41,6 +43,7 @@ public struct SettingsModels {
         self.profile = profile
         saleEmails = SaleEmailsModel(service: APISaleEmailsService(api: apiClient))
         invites = InvitesModel(service: APIInvitesService(client: apiClient.client))
+        descriptionStyle = DescriptionStyleModel(service: APIDescriptionStyleService(client: apiClient.client))
         accountDeletion = Self.accountDeletion(apiClient, accessTokens, signIn, phone.sessions, profile)
         imports = AppDependencies.makeImports(apiClient, phone)
     }

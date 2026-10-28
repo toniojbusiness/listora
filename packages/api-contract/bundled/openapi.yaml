@@ -216,6 +216,59 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/account/description-style:
+    get:
+      tags:
+        - account
+      operationId: getDescriptionStyle
+      summary: Get my description style
+      description: |
+        How the item analysis writes the account's listing copy. An account that never saved its
+        own style gets Listora's default, with `depopIsDefault` true, so Settings can show it as the
+        starting point.
+      responses:
+        '200':
+          description: The description style.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DescriptionStyle'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - account
+      operationId: replaceDescriptionStyle
+      summary: Replace my description style
+      description: |
+        Saves the seller's own style, which the item analyses requested from then on follow
+        (analyses already made keep their copy). A style left out goes back to Listora's default.
+        The server trims the text; one that is blank after trimming is `422 validation_failed`.
+        The style belongs to the account, so a member who is not its owner or an admin gets
+        `403 forbidden`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DescriptionStyleReplace'
+      responses:
+        '200':
+          description: The saved description style.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DescriptionStyle'
+        '403':
+          description: The person may not change the account's description style (`forbidden`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/items:
     get:
       tags:
@@ -3960,6 +4013,33 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+    DescriptionStyle:
+      type: object
+      description: |
+        How the item analysis writes the account's listing copy: instructions for the model, in the
+        seller's words. Listora's default is the structure that works on Depop (a title line with the
+        size and a color emoji, an enthusiastic paragraph, a bulleted spec list, a hedged condition
+        sentence, and 4-5 hashtags with the brand first).
+      required:
+        - depop
+        - depopIsDefault
+      properties:
+        depop:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: The style the Depop draft is written in, the seller's own or Listora's default.
+        depopIsDefault:
+          type: boolean
+          description: True when `depop` is Listora's default, because the seller never saved their own.
+    DescriptionStyleReplace:
+      type: object
+      description: The seller's own style; one left out goes back to Listora's default.
+      properties:
+        depop:
+          type: string
+          minLength: 1
+          maxLength: 4000
     HealthCheckStatus:
       type: string
       enum:

@@ -6,6 +6,7 @@ import { photoSetHash } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
 
 import { AnalysisFailedError } from './analyze.ts';
+import { loadDescriptionStyle } from './description-style.ts';
 import {
   MAX_TAG_CROPS,
   selectAnalysisPhotos,
@@ -16,9 +17,10 @@ import type { AnalysisRow } from './repository.ts';
 
 /**
  * Loads what an analysis sends from the database and storage: the selected photos' `ai`
- * derivatives, a crop of the first `MAX_TAG_CROPS` tag photos from their `original`, and the
- * reads the phone uploaded with each photo. The item's photos must still be the analyzed photo set; anything
- * else fails the analysis with a reason the user can act on.
+ * derivatives, a crop of the first `MAX_TAG_CROPS` tag photos from their `original`, the reads
+ * the phone uploaded with each photo, and the seller's own description style. The item's photos
+ * must still be the analyzed photo set; anything else fails the analysis with a reason the user
+ * can act on.
  */
 export async function loadAnalysisInput(
   db: DbExecutor,
@@ -84,12 +86,14 @@ export async function loadAnalysisInput(
       };
     }),
   );
+  const style = await loadDescriptionStyle(db, analysis.account_id);
   return {
     accountId: analysis.account_id,
     userId: analysis.requested_by_user_id,
     itemId: analysis.item_id,
     photoSetHash: analysis.photo_set_hash,
     photos,
+    ...(style.depop === null ? {} : { depopStyle: style.depop }),
   };
 }
 

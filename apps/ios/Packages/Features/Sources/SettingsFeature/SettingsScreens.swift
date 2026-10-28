@@ -21,7 +21,7 @@ public struct SettingsScreens {
         case .notifications: notifications?()
         case .saleEmails: saleEmails?()
         case .packCheck: packCheck?()
-        case .profile, .people, .help, .legal, .diagnostics, .deleteAccount: nil
+        case .profile, .descriptionStyle, .people, .help, .legal, .diagnostics, .deleteAccount: nil
         }
     }
 
@@ -52,6 +52,7 @@ public enum SettingsDestination: Hashable, Sendable {
     case notifications
     case saleEmails
     case packCheck
+    case descriptionStyle
     case people
     case help
     case legal(LegalDocument.Kind)

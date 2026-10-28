@@ -23,7 +23,9 @@ import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 import sharp from 'sharp';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { loadDescriptionStyle, saveDescriptionStyle } from './description-style.ts';
 import { runItemAnalysis, type AnalysisJobDependencies } from './job.ts';
+import { ITEM_ANALYSIS_SYSTEM } from './prompt.ts';
 import type { AnalysisJobPayload } from './queue.ts';
 import { requestAnalysis } from './repository.ts';
 import { analysisFixture, answer } from './test-support.ts';
@@ -189,6 +191,28 @@ describe('runItemAnalysis (real Postgres and local storage)', () => {
     // Running the job again (a duplicate delivery) does nothing and pays nothing.
     expect(await runItemAnalysis(deps(), { accountId, analysisId })).toBe('skipped');
     expect(provider.requests).toHaveLength(1);
+  });
+
+  it("sends the seller's own Depop style with the item, and none once they go back to the default", async () => {
+    const depop = 'Short and plain: one sentence, the size, then the flaws.';
+    expect(await saveDescriptionStyle(db, accountId, { depop })).toEqual({ depop });
+    expect(await loadDescriptionStyle(db, accountId)).toEqual({ depop });
+    const styled = await queuedAnalysis(['front']);
+    expect(await runItemAnalysis(deps(), { accountId, analysisId: styled.analysisId })).toBe(
+      'succeeded',
+    );
+    const sent = JSON.parse(provider.requests[0]?.prompt ?? '{}') as Record<string, unknown>;
+    expect(sent['depopStyle']).toBe(depop);
+    expect(provider.requests[0]?.system).toBe(ITEM_ANALYSIS_SYSTEM);
+
+    expect(await saveDescriptionStyle(db, accountId, { depop: null })).toEqual({ depop: null });
+    expect(await loadDescriptionStyle(db, accountId)).toEqual({ depop: null });
+    const plain = await queuedAnalysis(['tag']);
+    expect(await runItemAnalysis(deps(), { accountId, analysisId: plain.analysisId })).toBe(
+      'succeeded',
+    );
+    const unstyled = JSON.parse(provider.requests[1]?.prompt ?? '{}') as Record<string, unknown>;
+    expect(unstyled).not.toHaveProperty('depopStyle');
   });
 
   it('takes over an analysis left running by a crashed run', async () => {

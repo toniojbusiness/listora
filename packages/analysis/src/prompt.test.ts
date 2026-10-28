@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_DEPOP_DESCRIPTION_STYLE } from './description-style.ts';
 import { MAX_ANALYSIS_PHOTOS, selectAnalysisPhotos } from './input.ts';
 import { buildAnalysisRequest, ITEM_ANALYSIS_SYSTEM } from './prompt.ts';
 import { image, photo, tagInput } from './test-support.ts';
@@ -46,6 +47,20 @@ describe('buildAnalysisRequest', () => {
     // The vocabulary is spelled out for the model.
     expect(ITEM_ANALYSIS_SYSTEM).toContain('clothing/tops: t_shirts');
     expect(ITEM_ANALYSIS_SYSTEM).toContain('at most 80 characters');
+  });
+
+  it("holds Listora's default Depop style, and sends a seller's own style with the item", () => {
+    expect(ITEM_ANALYSIS_SYSTEM).toContain(DEFAULT_DEPOP_DESCRIPTION_STYLE);
+    expect(ITEM_ANALYSIS_SYSTEM).toContain('fits in\n    929 characters');
+    const plain = JSON.parse(buildAnalysisRequest(tagInput()).prompt) as Record<string, unknown>;
+    expect(plain).not.toHaveProperty('depopStyle');
+
+    const depopStyle = 'One plain sentence, then the measurements. No emoji.';
+    const request = buildAnalysisRequest(tagInput({ depopStyle }));
+    // The seller's style travels in the request, so the cached system prompt stays the same.
+    expect(request.system).toBe(ITEM_ANALYSIS_SYSTEM);
+    const prompt = JSON.parse(request.prompt) as Record<string, unknown>;
+    expect(prompt['depopStyle']).toBe(depopStyle);
   });
 
   it('includes the first analysis when escalating', () => {
