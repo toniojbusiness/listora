@@ -199,9 +199,9 @@ struct PhoneRunnerTests {
     }
 
     @Test
-    func `a call the runtime could not run is never answered`() async {
+    func `a call the runtime could not run is answered as not run, with why`() async throws {
         let service = FakeWorkService(claims: [
-            .run(PhoneRun(id: "run-1", purpose: "listing", marketplace: "depop", call: .call(0))),
+            .run(PhoneRun(id: "run-1", purpose: "sale_check", marketplace: "depop", call: .call(0))),
             .none,
         ])
         let runtime = FakeRuntime()
@@ -210,8 +210,12 @@ struct PhoneRunnerTests {
 
         await runner.runUntilDone(.opened)
 
-        // Its claim lapses on the server, which recovers the work.
-        #expect(await service.answered.isEmpty)
+        // The server fails the work visibly and tries it again later, instead of handing it back.
+        #expect(await service.answered == ["run-1:0"])
+        let answer = try #require(await service.answers.first)
+        let object = try #require(try JSONSerialization.jsonObject(with: answer) as? [String: String])
+        #expect(object["type"] == "not_run")
+        #expect(object["message"]?.contains("invalidAnswer") == true)
         #expect(runner.problem == "Listora couldn't run this on your iPhone.")
     }
 
