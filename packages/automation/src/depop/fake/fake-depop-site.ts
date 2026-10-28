@@ -60,6 +60,7 @@ import {
   type SubmittedForm,
 } from '../../fake-site/http.ts';
 import { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from '../../fake-photos/fake-photos.ts';
+import { allDepopCategories } from '../categories.ts';
 import { DEPOP_CONDITION_LABELS } from '../conditions.ts';
 import { DEPOP_SLUG } from '../site.ts';
 import {
@@ -144,7 +145,10 @@ export interface FakeDepopProduct {
   status: FakeDepopStatus;
   /** The whole listing text, as the form's description field got it. */
   description: string;
+  /** The price a buyer pays now (the reduced one, when the seller marked it down). */
   priceCents: number;
+  /** The price before a markdown; `null` when it has none. Only seeded. */
+  originalPriceCents: number | null;
   /** Department, category, product type. */
   category: string[];
   size: string | null;
@@ -343,6 +347,7 @@ export class FakeDepopSite {
       id: this.#sequence,
       current: {
         status: 'ONSALE',
+        originalPriceCents: null,
         category: ['Women', 'Tops', 'T-shirts'],
         size: 'M',
         brand: null,
@@ -652,6 +657,7 @@ export class FakeDepopSite {
             slug,
             seller: session.seller,
             status: 'ONSALE',
+            originalPriceCents: null,
             ...fields,
             listedAt: now,
             updatedAt: seconds(now),
@@ -1027,37 +1033,73 @@ function shopProductData(product: FakeDepopProduct, id: number): Record<string, 
   };
 }
 
+/** Depop's department names as the edit data's `categories` still name them. */
+const FORMER_DEPARTMENTS: Readonly<Record<string, string>> = {
+  menswear: 'Menswear',
+  womenswear: 'Womenswear',
+  kidswear: 'Kidswear',
+  'everything-else': 'Everything else',
+};
+
+/** The edit data's `gender` by Depop's department. */
+const GENDERS: Readonly<Record<string, string>> = { menswear: 'male', womenswear: 'female' };
+
 /**
  * The seller's own product as the edit page loads it from the API (pages/api.ts), with its
  * photos as Listora's import reads them (pages/listing-details.ts): each picture's sizes, the
- * images served from the fake's own image CDN (`/media/`, fake-photos.ts).
+ * images served from the fake's own image CDN (`/media/`, fake-photos.ts). As on Depop, its
+ * category is Depop's ids (`gender`, `group`, `product_type`) beside the names `categories`
+ * shows, which stop at the department and category; its brand is Depop's slug beside the
+ * brand's name ("Other" for none); a marked-down product's pricing has both prices.
  */
 function editListingData(
   product: FakeDepopProduct,
   id: number,
   origin: string,
 ): Record<string, unknown> {
-  const amount = priceAmount(product.priceCents);
+  const original = product.originalPriceCents;
+  const reduced = original !== null && original > product.priceCents;
+  const [department, group, productType] = allDepopCategories().find(
+    (entry) => entry.path.join('>') === product.category.join('>'),
+  )?.ids ?? [null, null, null];
   return {
     id,
     status: `STATUS_${product.status}`,
-    categories: product.category,
+    categories:
+      department === null
+        ? product.category
+        : [FORMER_DEPARTMENTS[department] ?? department, product.category[1]],
+    ...(department === null
+      ? {}
+      : {
+          ...(GENDERS[department] === undefined ? {} : { gender: GENDERS[department] }),
+          is_kids: department === 'kidswear',
+          group,
+          product_type: productType,
+        }),
     description: product.description,
     // Depop's own, to the microsecond.
     updated_at: product.updatedAt.toISOString().replace('Z', '123Z'),
     created_at: product.listedAt.toISOString(),
     pricing: {
-      final_price_key: 'original_price',
+      final_price_key: reduced ? 'discounted_price' : 'original_price',
       currency: 'USD',
       currency_name: 'USD',
-      is_reduced: false,
-      original_price: { total_price: amount, price_breakdown: { price: { amount } } },
+      is_reduced: reduced,
+      original_price: price(reduced ? original : product.priceCents),
+      ...(reduced
+        ? {
+            discount_percentage: Math.round(100 - (product.priceCents / original) * 100),
+            discounted_price: price(product.priceCents),
+          }
+        : {}),
     },
     slug: product.slug,
     is_boosted: product.boosted,
     condition: product.condition,
     colour: product.colours.map((colour) => colour.toLowerCase()),
-    brand: product.brand,
+    brand: product.brand === null ? 'unbranded' : brandSlug(product.brand),
+    brand_name: product.brand ?? 'Other',
     pictures: product.photos.map((name, index) => [
       {
         id: index * 2,
@@ -1073,6 +1115,20 @@ function editListingData(
       },
     ]),
   };
+}
+
+/** A price as Depop's pricing gives one. */
+function price(cents: number): Record<string, unknown> {
+  const amount = priceAmount(cents);
+  return { total_price: amount, price_breakdown: { price: { amount } } };
+}
+
+/** Depop's slug of a brand's name (`Hollister Co.` is `hollister-co`). */
+function brandSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 function json(status: number, body: unknown): Reply {

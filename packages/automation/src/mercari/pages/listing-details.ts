@@ -41,6 +41,8 @@ export function listingDetails(
     condition: condition === null ? null : (CONDITIONS[condition] ?? null),
     categoryRef: categoryPath.length >= 2 ? categoryPath.join(' > ') : null,
     categoryPath,
+    colors: [],
+    originalPriceCents: null,
     sku,
   };
 }
