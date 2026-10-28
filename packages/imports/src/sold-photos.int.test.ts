@@ -164,6 +164,7 @@ describe('sold item photos from a later sales history read (real Postgres, a loc
       priceCents: 1800,
       currency: 'USD',
       revision: 1_761_000_000_000,
+      refreshedAt: null,
       details: {
         photoUrls: photos.map((name) => `${cdn}/media/${name}.jpg`),
         brand: null,

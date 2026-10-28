@@ -1,10 +1,10 @@
--- Sold items' photos (docs/features/sales.md, "Sales history"): a Mercari or Poshmark sale
+-- Sold items' photos (docs/features/sales.md, "Sales history"): a Mercari sale
 -- recorded from a check that sent no sold listing (an app built before sold items) has a sold
 -- item with no photos. Each such connection's next check reads its whole sales history once
 -- more, and every recorded sale whose sold item still has no photos gets its sold listing's.
 update sale_check_schedule schedule
 set checked_through = null
-where schedule.marketplace in ('mercari', 'poshmark')
+where schedule.marketplace = 'mercari'
   and exists (
     select 1
     from sale

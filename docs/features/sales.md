@@ -45,8 +45,9 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
   size, [photos.md](photos.md)); the event ends `processed`, or `ignored` when none could be
   fetched or the item has photos by then, and the next check that reads the order tries again.
   It reads no extra page: the photos are the ones the check's own read showed. Migration
-  `20261028133630_sold_item_photos` makes the next check of each Mercari and Poshmark connection
-  with such a sold item a full read once more, so the sales an older app recorded get theirs.
+  `20261028152207_sold_item_photos` makes the next check of each Mercari connection with such a
+  sold item a full read once more, so the sales an older app recorded get theirs (Poshmark's
+  sales work is paused; its sold items get photos the same way at its next full read).
 - **A sale of a listing Listora doesn't have** (sold before Listora was connected, or listed on
   the marketplace itself) becomes a **sold item**: the worker's `automation_sale_order` job makes
   the item from the sold listing as the sold pages showed it (`soldItemMaker` in
@@ -216,8 +217,8 @@ creation at linking, and the deploy for every existing connection); and every
 `sale_check_schedule.checked_through` is reset so each connection's next check reads its whole
 sales history. Down drops the column and turns `history` sales back into `poll` ones.
 
-Migration `20261028133630_sold_item_photos`: resets `sale_check_schedule.checked_through` of each
-Mercari and Poshmark connection whose account has a sale there of an item without photos, so its
+Migration `20261028152207_sold_item_photos`: resets `sale_check_schedule.checked_through` of each
+Mercari connection whose account has a sale there of an item without photos, so its
 next check is a full read that brings their photos. Down does nothing.
 
 ## Open items
