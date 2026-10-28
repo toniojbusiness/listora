@@ -213,7 +213,12 @@ final class LinkAccountsUITests: XCTestCase {
 
         let copyCode = app.buttons["saleEmails.copy.code"]
         copyCode.tap()
-        XCTAssertEqual(copyCode.label, "Confirmation code copied")
+        // The label changes once the copy has gone through, a moment after the tap on CI.
+        let copied = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "Confirmation code copied"),
+            object: copyCode,
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [copied], timeout: 5), .completed, copyCode.label)
     }
 
     /// Settings > Notifications: "Ask before delisting", saved on the server.
