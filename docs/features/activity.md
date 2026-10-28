@@ -68,15 +68,18 @@ Each automation connection's schedule keeps whether its sale checks work (`healt
   runner has not run it. The worker's `sale_check_health` task (every 5 minutes) marks it.
 
 A connection only the seller can fix (`reauth_required`, `revoked`) has its own reconnect card
-and notification instead. For a working connection with a problem:
+and notification instead. A problem with a working connection is Listora's to fix, so it is
+the owner's, not the seller's:
 
-- **Today** shows a `sale_checks` card (`high`, after reconnect cards) naming the marketplace and
-  the reason, and that until a check works a sale there is not delisted elsewhere
-  automatically. It opens the marketplaces screen, where the connection's `saleChecks` says when
-  sales were last checked and last worked, when the next check is due, and the last error.
-- **A notification** (`sale_checks_need_attention`) says the same, once per problem: the
-  schedule's `alerted_at` is set in the transaction that queues it, and a check that works ends
-  the problem. The morning summary mentions it too.
+- **The seller** sees nothing on Today, in the morning summary, or on any screen. The one case
+  they can fix is checks that run on their iPhone and are overdue because Listora has not been
+  opened there: a notification (`sale_checks_need_attention`, "Open Listora to keep Depop in
+  sync") asks them to open it, once per problem. The schedule's `alerted_at` settles every
+  problem once (set in the transaction that queues the notification, when there is one), and a
+  check that works ends the problem.
+- **Support** reads the connection's `saleChecks` (when sales were last checked and last worked,
+  the next check, the last error) from `listConnections` and `admin sale-checks`; the app does
+  not show it.
 - **The operator** sees `UnhealthySaleChecks` per marketplace in the trust metrics, and the
   `sale-checks-unhealthy` alarm ([observability.md](observability.md)); the task logs
   `event: "sale_check_overdue"` and `event: "sale_check_alert"`, and each check
@@ -111,11 +114,14 @@ it".
 - `listItemActivity` (`GET /v1/items/{itemId}/activity`) and `listOperationActivity`
   (`GET /v1/operations/{operationId}/activity`): a page of entries, newest first, with a cursor to
   older ones. Another account's item or operation is `404`.
-- `getSaleExplanation`, above; the Today card; and `Connection.saleChecks` on every automation
-  connection.
+- `getSaleExplanation`, above, and `Connection.saleChecks` on every automation connection.
+- These endpoints are the seller's (`forSeller` in `loadActivity`): only what the seller did or
+  can act on (item changes, marketplace actions, sales, delists, tasks). Browser sessions, sale
+  checks, orders, step timings, error codes, run references, the check that saw a sale, and a
+  delist's attempts are Listora's diagnostics, which only the operator's timeline below shows.
 - The item screen's **Activity** row opens the item's timeline: each line in the server's words,
-  who did it ("On your iPhone", "Listora's cloud browser", "You"), when, and how long it took, and
-  a browser session's steps. The sale screen has **How Listora found it**.
+  who did it ("Listora", "You", the marketplace), and when. The sale screen has **How Listora
+  found it**: when it sold and each delist's result.
 
 ## Searching as an operator
 

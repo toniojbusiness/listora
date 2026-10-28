@@ -138,15 +138,12 @@ public struct RunsOn: Equatable, Sendable {
     public let phone: Bool
     public let installationID: String?
     public let deviceName: String?
-    /// Changes and checks waiting for that phone.
-    public let waiting: Int
 
-    public init(label: String, phone: Bool, installationID: String?, deviceName: String?, waiting: Int) {
+    public init(label: String, phone: Bool, installationID: String?, deviceName: String?) {
         self.label = label
         self.phone = phone
         self.installationID = installationID
         self.deviceName = deviceName
-        self.waiting = waiting
     }
 
     /// What the row shows, for this installation: "Runs on this iPhone", or the other phone's name.

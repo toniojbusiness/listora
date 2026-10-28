@@ -53,7 +53,6 @@ final class ConnectionHealthUITests: XCTestCase {
         keepScreenshot("Marketplaces, eBay connection problem")
         check.tap()
         XCTAssertTrue(waitForLabel(of: ebay, "Connected", timeout: 30), ebay.label)
-        XCTAssertTrue(app.descendants(matching: .any)["marketplaces.ebay.lastOk"].exists)
         XCTAssertFalse(check.exists)
         keepScreenshot("Marketplaces, eBay connected")
 

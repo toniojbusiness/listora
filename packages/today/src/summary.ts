@@ -4,7 +4,6 @@
  * call, so the app can ask for it every time it opens.
  */
 import { loadDelistRuns } from '@listora/auto-delist';
-import { loadSaleCheckProblems } from '@listora/automation';
 import { saleMoney } from '@listora/sales';
 import type { DbExecutor, Marketplace } from '@listora/db';
 import type { CurrencyCode } from '@listora/shared';
@@ -15,7 +14,6 @@ import {
   orderCards,
   reconnectCard,
   reviewDraftsCard,
-  saleChecksCard,
   shipCard,
   staleListingCard,
   TODAY_RULES,
@@ -45,11 +43,10 @@ export async function loadToday(
   accountId: string,
   now: Date,
 ): Promise<TodaySummary> {
-  const [ship, delist, connections, saleChecks, listed, drafts, sales] = await Promise.all([
+  const [ship, delist, connections, listed, drafts, sales] = await Promise.all([
     shipFacts(executor, accountId),
     delistCards(executor, accountId),
     connectionFacts(executor, accountId),
-    loadSaleCheckProblems(executor, accountId),
     staleCandidates(executor, accountId, now),
     draftsFact(executor, accountId),
     saleMoneyFacts(executor, accountId, now),
@@ -58,7 +55,6 @@ export async function loadToday(
     ...delist,
     ...ship.map((fact) => shipCard(fact, now)),
     ...connections.map(reconnectCard),
-    ...saleChecks.map((problem) => saleChecksCard(problem, now)),
     ...[reviewDraftsCard(drafts)].filter((card) => card !== null),
     ...listed
       .map((fact) => staleListingCard(fact, now))

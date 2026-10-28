@@ -151,7 +151,7 @@ final class PhoneExecutionUITests: XCTestCase {
         let seeded = try await stack.seedQueuedDepopListing()
         let before = try await stack.depopProducts().count
         try await waitFor("the publish to wait on the phone") {
-            try await stack.listing(id: seeded.listingId).statusDisplay.label.contains("waiting on your iPhone")
+            try await stack.listing(id: seeded.listingId).statusDisplay.label.contains("open Listora on your iPhone")
         }
 
         // Opening the app runs it: the listing goes live on Depop, in the seller's session here.
