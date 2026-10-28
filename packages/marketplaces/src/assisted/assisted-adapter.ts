@@ -69,6 +69,8 @@ const ASSISTED_CAPABILITIES: MarketplaceCapabilities = {
   updateDetails: 'assisted',
   delist: 'assisted',
   relist: 'assisted',
+  // A scheduled refresh the seller had to do every few days would be a chore, not a help.
+  refresh: 'none',
   markSold: 'not_needed',
   verifyRead: 'user_confirm',
   readFreshness: 'none',
@@ -89,7 +91,7 @@ const TASK_KIND = {
   price: 'edit_manually',
   end: 'delist_manually',
   mark_sold: 'delist_manually',
-} as const satisfies Record<WriteOperationKind, UserTaskKind>;
+} as const satisfies Record<Exclude<WriteOperationKind, 'refresh'>, UserTaskKind>;
 
 export class AssistedAdapter implements MarketplaceAdapter<AssistedListingPayload> {
   readonly id: Marketplace;
@@ -188,7 +190,7 @@ export class AssistedAdapter implements MarketplaceAdapter<AssistedListingPayloa
   }
 
   #taskFor(op: OperationRequest<AssistedListingPayload>): Outcome {
-    if (operationMode(this.#capabilities, op.kind) !== 'assisted') {
+    if (op.kind === 'refresh' || operationMode(this.#capabilities, op.kind) !== 'assisted') {
       return {
         type: 'rejected',
         code: 'not_supported',
@@ -218,13 +220,13 @@ export class AssistedAdapter implements MarketplaceAdapter<AssistedListingPayloa
     }
     return {
       type: 'pendingUser',
-      task: { kind: TASK_KIND[op.kind], deepLink: this.#deepLink(op), payload },
+      task: { kind: TASK_KIND[op.kind], deepLink: this.#deepLink(op.kind, op), payload },
     };
   }
 
   /** New listings start on the marketplace's site; changes open the listing's own page. */
-  #deepLink(op: OperationRequest): string {
-    switch (op.kind) {
+  #deepLink(kind: keyof typeof TASK_KIND, op: OperationRequest): string {
+    switch (kind) {
       case 'create':
       case 'relist':
         return this.#siteUrl;
@@ -234,7 +236,7 @@ export class AssistedAdapter implements MarketplaceAdapter<AssistedListingPayloa
       case 'mark_sold':
         return this.#listingUrl(op.listing.externalUrl) ?? this.#siteUrl;
       default:
-        return assertNever(op.kind, 'operation kind');
+        return assertNever(kind, 'operation kind');
     }
   }
 

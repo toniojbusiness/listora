@@ -5,8 +5,6 @@ extension StubAPIServer {
     static let shipCardID = "ship:7d3c2b1a-0f9e-4d8c-8b7a-6f5e4d3c2b1a"
     static let reconnectCardID = "reconnect:6c5b4a39-2817-4f6e-9d5c-4b3a29180716"
     static let draftsCardID = "review_drafts"
-    static let staleItemId = "5b4a3928-1706-4e5d-8c4b-3a2918070605"
-    static let staleCardID = "stale:\(staleItemId)"
 
     /// A card of every kind and this week's sales, dated around now, in the server's words
     /// (`packages/today/src/cards.ts`).
@@ -32,18 +30,11 @@ extension StubAPIServer {
             + #""detail":"Check their details and prices, and they're ready to list everywhere.","#
             + #""action":{"label":"Review drafts","destination":"drafts"},"#
             + #""drafts":{"count":2,"oldestCreatedAt":"\#(at(-50))"}}"#
-        let stale = #"{"id":"\#(staleCardID)","kind":"stale_listing","urgency":"normal","title":"Patagonia Better "#
-            + #"Sweater fleece","detail":"Listed 45 days with no changes. Try $40, still above your $35 floor.","#
-            + #""action":{"label":"Lower to $40","destination":"item","itemId":"\#(staleItemId)"},"#
-            + #""item":{"id":"\#(staleItemId)","sku":"AJ-000185","title":"Patagonia Better Sweater fleece"},"#
-            + #""staleListing":{"listedAt":"\#(at(-45 * 24))","daysListed":45,"price":\#(usd(4500)),"#
-            + #""floor":\#(usd(3500)),"suggestion":"price_drop","suggestedPrice":\#(usd(4000)),"#
-            + #""marketplaces":["ebay","poshmark"]}}"#
         let money = #"{"thisWeek":{"start":"\#(at(-168))","end":"\#(at(0))","sales":3,"itemsSold":3,"#
             + #""salesTotal":\#(usd(14200)),"profit":\#(usd(6150)),"profitPendingSales":1},"#
             + #""lastWeek":{"start":"\#(at(-336))","end":"\#(at(-168))","sales":2,"itemsSold":2,"#
             + #""salesTotal":\#(usd(9800)),"profit":\#(usd(4100)),"profitPendingSales":0}}"#
-        return #"{"generatedAt":"\#(at(0))","cards":[\#([ship, reconnect, drafts, stale].joined(separator: ","))],"#
+        return #"{"generatedAt":"\#(at(0))","cards":[\#([ship, reconnect, drafts].joined(separator: ","))],"#
             + #""money":\#(money)}"#
     }
 

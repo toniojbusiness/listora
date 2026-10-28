@@ -20,6 +20,7 @@ import {
   saleItemRows,
 } from '../sales/repository.ts';
 import { delistRunView, doubleSaleView, moneyOfSale } from '../sales/views.ts';
+import { listingRefreshes } from '../listing-refresh/views.ts';
 import type { Tenant } from '../tenancy.ts';
 import { detailsFromRow, provenanceFromRow } from './details.ts';
 import { storageLocationSummary } from './repository.ts';
@@ -44,9 +45,16 @@ export async function itemView(
 ): Promise<Item> {
   const [photos, listings, location, runs, doubleSales, relistSale] = await Promise.all([
     listPhotoRows(db, tenant, row.id),
-    itemListingRows(db, tenant, [row.id]).then((rows) =>
-      listingStates(db, tenant, rows.get(row.id) ?? []),
-    ),
+    itemListingRows(db, tenant, [row.id]).then(async (rows) => {
+      const states = await listingStates(db, tenant, rows.get(row.id) ?? []);
+      const refreshes = await listingRefreshes(
+        db,
+        tenant,
+        states.map((state) => state.row.id),
+        new Date(),
+      );
+      return states.map((state) => ({ ...state, refresh: refreshes.get(state.row.id) }));
+    }),
     row.storage_location_id === null
       ? undefined
       : storageLocationSummary(db, tenant, row.storage_location_id),

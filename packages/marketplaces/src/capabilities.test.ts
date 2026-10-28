@@ -12,6 +12,7 @@ const API: MarketplaceCapabilities = {
   updateDetails: 'api',
   delist: 'api',
   relist: 'api',
+  refresh: 'api',
   markSold: 'api',
   verifyRead: 'api',
   readFreshness: 'revision',
@@ -33,6 +34,7 @@ const ASSISTED: MarketplaceCapabilities = {
   updateDetails: 'assisted',
   delist: 'assisted',
   relist: 'assisted',
+  refresh: 'none',
   markSold: 'not_needed',
   verifyRead: 'user_confirm',
   readFreshness: 'none',
@@ -47,6 +49,7 @@ const AUTOMATION: MarketplaceCapabilities = {
   updateDetails: 'automation',
   delist: 'automation',
   relist: 'automation',
+  refresh: 'automation',
   markSold: 'not_needed',
   verifyRead: 'automation',
   readFreshness: 'none',
@@ -74,6 +77,7 @@ describe('operationMode', () => {
       relist: 'assisted',
       mark_sold: 'unsupported',
       verify: 'unsupported',
+      refresh: 'unsupported',
     });
   });
 
@@ -102,6 +106,7 @@ describe('operationMode', () => {
       relist: 'automation',
       mark_sold: 'unsupported',
       verify: 'automation',
+      refresh: 'automation',
     });
     // Each kind switches on its own: an automated delist next to an assisted create.
     expect(operationMode({ ...AUTOMATION, create: 'assisted' }, 'create')).toBe('assisted');
@@ -132,6 +137,15 @@ describe('checkCapabilities', () => {
     ]);
     expect(checkCapabilities({ ...API, relist: 'automation' })).toEqual([
       'relist is automation, but verifyRead is not: no read-back could confirm it',
+    ]);
+  });
+
+  it('refuses a refresh the seller would have to do: it runs on a schedule', () => {
+    expect(checkCapabilities({ ...ASSISTED, refresh: 'assisted' })).toEqual([
+      'refresh runs on a schedule, so only api or automation can do it',
+    ]);
+    expect(checkCapabilities({ ...API, refresh: 'automation' })).toEqual([
+      'refresh is automation, but verifyRead is not: no read-back could confirm it',
     ]);
   });
 

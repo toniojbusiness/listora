@@ -55,6 +55,8 @@ public final class LinkAccountsModel {
     private let sessions: (any MarketplaceSessionStore)?
     private let signInLinks: (any SignInLinkHandoff)?
     private weak var phoneWork: (any PhoneWorkTrigger)?
+    /// Each marketplace's last sync, for its "Last synced" (docs/features/sync.md).
+    public weak var sync: (any MarketplaceSync)?
     private let makeIdempotencyKey: @Sendable () -> String
     private let sleep: @Sendable (Duration) async throws -> Void
     private let pollInterval: Duration
@@ -97,6 +99,7 @@ public final class LinkAccountsModel {
 
     /// Reads every marketplace's status, then keeps checking the ones still being checked.
     public func load() async {
+        Task { await sync?.refreshStatus() }
         if links.isEmpty {
             loadState = .loading
         }
@@ -114,9 +117,21 @@ public final class LinkAccountsModel {
         }
     }
 
+    /// "Last synced 5 minutes ago": when a read of the marketplace last got through; `nil` before
+    /// the first, or while nothing is linked there.
+    public func lastSynced(_ link: MarketplaceLink) -> String? {
+        guard let date = sync?.lastSyncedAt(link.marketplace) else { return nil }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        let now = now()
+        let ago = now.timeIntervalSince(date) < 60 ? "just now" : formatter.localizedString(for: date, relativeTo: now)
+        return "Last synced \(ago)"
+    }
+
     /// Reads every marketplace's status again (the phone just ran work for one), leaving alone
     /// the rows that are being linked, checked, or unlinked.
     public func refresh() async {
+        Task { await sync?.refreshStatus() }
         guard loadState == .loaded, let fresh = try? await service.list() else { return }
         for link in fresh where progress[link.marketplace] == nil {
             replace(link)

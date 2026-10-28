@@ -42,6 +42,8 @@ struct PhoneRunnerProgressTests {
         #expect(seen.prefix(3).allSatisfy { $0?.stepCount == nil && $0?.expectedEnd == nil })
         #expect(seen[1]?.step == "Adding the photos")
         #expect(seen[1]?.operationID == "op-1")
+        // What the work is, for the sync indicator's words.
+        #expect(seen[1]?.purpose == "listing")
         // The second knows the steps and their times from the first.
         let second = try #require(seen[4])
         #expect(second.operationID == "op-2")

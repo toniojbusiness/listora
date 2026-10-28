@@ -144,6 +144,7 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
       priceCents: 3400,
       currency: 'USD',
       revision: 1_761_000_000_000,
+      refreshedAt: null,
       ...overrides,
       details: {
         photoUrls: [`${cdn}/media/${id}-front.jpg`, `${cdn}/media/${id}-back.jpg`],

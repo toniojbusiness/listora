@@ -195,6 +195,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
       priceCents: 4500,
       currency: 'USD',
       revision: listed?.updatedAt.getTime(),
+      refreshedAt: listed?.updatedAt.toISOString(),
     });
     // Mercari's page after List is not the listing's, so the read-back gives the revision.
     expect(outcome).not.toHaveProperty('revision');
@@ -521,6 +522,7 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
         priceCents: 3400,
         currency: 'USD',
         revision: expect.any(Number) as number,
+        refreshedAt: expect.any(String) as string,
         details: {
           photoUrls: [
             `${seller.url}/media/${dress}-0-front.jpg`,

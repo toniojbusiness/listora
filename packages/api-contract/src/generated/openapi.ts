@@ -1934,10 +1934,9 @@ export interface paths {
         /**
          * Get what needs the seller today
          * @description The Today screen: one card per thing that needs the seller (items to ship, delists that
-         *     are not done, connections to reconnect, drafts to review, and old listings that could use
-         *     a price drop or a relist), most urgent first, and the money summary. Computed from the
-         *     account's own data on every request, with no AI and no marketplace call, so the app asks
-         *     for it each time it opens. A card is gone once its work is done.
+         *     are not done, connections to reconnect, and drafts to review), most urgent first, and the
+         *     money summary. Computed from the account's own data on every request, with no AI and no
+         *     marketplace call, so the app asks for it each time it opens. A card is gone once its work is done.
          */
         get: operations["getToday"];
         put?: never;
@@ -1966,6 +1965,59 @@ export interface paths {
          *     zone the server does not know is `422 validation_failed`.
          */
         put: operations["replaceTodaySettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/listing-refresh/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the listing refresh setting
+         * @description How often the account's live listings are refreshed, and the quiet window.
+         */
+        get: operations["getListingRefreshSettings"];
+        /**
+         * Replace the listing refresh setting
+         * @description Sets how often Listora refreshes live listings that have not sold, and the quiet window,
+         *     in the device's time zone. It changes no listing by itself: the schedule refreshes each
+         *     listing when it is next due.
+         */
+        put: operations["replaceListingRefreshSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/items/{itemId}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get an item's refresh cadence
+         * @description The item's own refresh cadence, if it has one, and the account's.
+         */
+        get: operations["getItemRefresh"];
+        /**
+         * Replace an item's refresh cadence
+         * @description Gives the item its own refresh cadence over the account's (for example `off` for one item),
+         *     or, without `cadence`, makes it follow the account's again.
+         */
+        put: operations["replaceItemRefresh"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2518,6 +2570,35 @@ export interface paths {
          *     range.
          */
         post: operations["answerOffer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Each linked marketplace's sync
+         * @description What each marketplace linked by signing in is reading now, what its last sync found, and
+         *     when a read last got through (docs/features/sync.md).
+         */
+        get: operations["getSyncStatus"];
+        put?: never;
+        /**
+         * Sync every linked marketplace now
+         * @description Asks for read-only checks of every marketplace linked by signing in: its sales, the
+         *     buyers' offers, and its listings once the seller imported them. Only reads; nothing changes
+         *     on a marketplace, and a read-only connection is read like any other. A marketplace synced
+         *     in the last 2 minutes (6 hours for listings) is not read again. The reads of marketplaces
+         *     that run on the seller's iPhone wait for it to claim them.
+         */
+        post: operations["requestSync"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3652,6 +3733,8 @@ export interface components {
             listedAt?: components["schemas"]["Timestamp"];
             endedAt?: components["schemas"]["Timestamp"];
             lastVerifiedAt?: components["schemas"]["Timestamp"];
+            /** @description For a live listing, its next and last refresh (listing refresh). */
+            refresh?: components["schemas"]["ListingRefresh"];
             createdAt: components["schemas"]["Timestamp"];
             updatedAt: components["schemas"]["Timestamp"];
         };
@@ -3690,8 +3773,12 @@ export interface components {
          *     an unknown kind generically using the operation's `statusDisplay`.
          */
         OperationKind: components["schemas"]["KnownOperationKind"];
-        /** @enum {string} */
-        KnownOperationKind: "create" | "revise" | "price" | "end" | "relist" | "mark_sold" | "verify";
+        /**
+         * @description `refresh`: Listora refreshed a live listing on its schedule (listing refresh), through the
+         *     marketplace's own mechanism; never a delete and repost.
+         * @enum {string}
+         */
+        KnownOperationKind: "create" | "revise" | "price" | "end" | "relist" | "mark_sold" | "verify" | "refresh";
         /**
          * @description A `KnownOperationStatus`, or a status added after this client was built. Clients show
          *     the operation's `statusDisplay` for an unknown status and never treat it as success.
@@ -3710,8 +3797,11 @@ export interface components {
          *     show an unknown origin generically.
          */
         OperationOriginType: components["schemas"]["KnownOperationOriginType"];
-        /** @enum {string} */
-        KnownOperationOriginType: "user" | "auto_delist" | "reprice_rule";
+        /**
+         * @description `auto_refresh`: queued by the listing refresh schedule, never by a tap.
+         * @enum {string}
+         */
+        KnownOperationOriginType: "user" | "auto_delist" | "reprice_rule" | "auto_refresh";
         OperationOrigin: {
             type: components["schemas"]["OperationOriginType"];
             /** @description Set for `auto_delist`. */
@@ -5102,13 +5192,12 @@ export interface components {
          * @description `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
          *     `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
          *     seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
-         *     `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-         *     the item's floor) or a relist suggested. Every card is something the seller can do: Listora's
+         *     Every card is something the seller can do: Listora's
          *     own background problems (sale checks that fail or stall) are for the owner's alerts and the
          *     support views, never a card.
          * @enum {string}
          */
-        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "review_drafts" | "stale_listing";
+        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "review_drafts";
         /**
          * @description A `KnownTodayUrgency`, or a level added after this client was built, which clients show
          *     like `normal`.
@@ -5134,7 +5223,7 @@ export interface components {
         KnownTodayDestination: "item" | "sale" | "marketplaces" | "drafts";
         /** @description The card's one primary action and the screen it opens. */
         TodayAction: {
-            /** @description The button's title, for example `Open sale` or `Lower to $40`. */
+            /** @description The button's title, for example `Open sale` or `Reconnect`. */
             label: string;
             destination: components["schemas"]["TodayDestination"];
             itemId?: components["schemas"]["Id"];
@@ -5182,31 +5271,6 @@ export interface components {
             displayName?: string;
             status: components["schemas"]["ConnectionStatus"];
         };
-        /**
-         * @description A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
-         *     clients show through the card's `detail` and action.
-         */
-        TodayStaleSuggestion: components["schemas"]["KnownTodayStaleSuggestion"];
-        /**
-         * @description `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
-         *     `relist`: no price drop is possible (the price is at its floor, or no floor is known).
-         * @enum {string}
-         */
-        KnownTodayStaleSuggestion: "price_drop" | "relist";
-        /** @description A `stale_listing` card's listing facts and suggestion. */
-        TodayStaleListing: {
-            /** @description When its oldest live listing went live. */
-            listedAt: components["schemas"]["Timestamp"];
-            /** Format: int32 */
-            daysListed: number;
-            price: components["schemas"]["Money"];
-            floor?: components["schemas"]["Money"];
-            suggestion: components["schemas"]["TodayStaleSuggestion"];
-            /** @description Present with `price_drop`. */
-            suggestedPrice?: components["schemas"]["Money"];
-            /** @description Where it is live. */
-            marketplaces: components["schemas"]["Marketplace"][];
-        };
         /** @description A `review_drafts` card's drafts. */
         TodayDrafts: {
             /** Format: int32 */
@@ -5216,7 +5280,7 @@ export interface components {
         /**
          * @description One thing that needs the seller. A card exists only while its work is not done, so it is
          *     gone from the next summary once the work is finished. The kind's own property (`shipment`,
-         *     `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+         *     `delist`, `connection`, or `drafts`) carries its facts.
          */
         TodayCard: {
             /** @description Stable while the card's work is the same, for example `ship:<saleItemId>`. */
@@ -5230,7 +5294,6 @@ export interface components {
             shipment?: components["schemas"]["TodayShipment"];
             delist?: components["schemas"]["TodayDelist"];
             connection?: components["schemas"]["TodayConnection"];
-            staleListing?: components["schemas"]["TodayStaleListing"];
             drafts?: components["schemas"]["TodayDrafts"];
         };
         /**
@@ -5284,6 +5347,96 @@ export interface components {
             time: string;
             /** @description An IANA time zone name, for example `America/New_York` (the device's own). */
             timeZone: string;
+        };
+        /**
+         * @description A `KnownRefreshCadence`, or a cadence added after this client was built, which clients show
+         *     by name.
+         */
+        RefreshCadence: components["schemas"]["KnownRefreshCadence"];
+        /**
+         * @description How often Listora refreshes a live listing that has not sold: `off`, `every_72_hours` (the
+         *     default), `daily`, `every_few_days` (every 5 days), `weekly`, or `custom` (every
+         *     `customHours`).
+         * @enum {string}
+         */
+        KnownRefreshCadence: "off" | "every_72_hours" | "daily" | "every_few_days" | "weekly" | "custom";
+        /**
+         * @description No refresh starts from `start` up to `end`, wall-clock in the setting's time zone. It runs
+         *     past midnight when `end` comes before `start` (`22:00` to `07:00`).
+         */
+        QuietWindow: {
+            start: string;
+            end: string;
+        };
+        /**
+         * @description How Listora refreshes the account's live listings that have not sold: through each
+         *     marketplace's own way (Poshmark's share to followers, saving the listing unchanged on Mercari
+         *     and Depop), never a delete and repost, within the marketplace's pace. eBay listings are not
+         *     refreshed (eBay has no refresh that keeps watchers). Defaults (`every_72_hours`, no quiet
+         *     window) until saved.
+         */
+        ListingRefreshSettings: {
+            cadence: components["schemas"]["RefreshCadence"];
+            /**
+             * Format: int32
+             * @description Present with `custom`.
+             */
+            customHours?: number;
+            quietWindow?: components["schemas"]["QuietWindow"];
+            /** @description An IANA time zone name, for example `America/New_York`. */
+            timeZone?: string;
+        };
+        /**
+         * @description The setting, with the device's time zone. `customHours` is required with `custom`, and only
+         *     allowed with it. A time zone the server does not know is `422 validation_failed`.
+         */
+        ListingRefreshSettingsReplace: {
+            cadence: components["schemas"]["KnownRefreshCadence"];
+            /** Format: int32 */
+            customHours?: number;
+            quietWindow?: components["schemas"]["QuietWindow"];
+            timeZone: string;
+        };
+        /**
+         * @description An item's refresh: its own cadence when it has one (`cadence` absent: the account's), and the
+         *     account's.
+         */
+        ItemRefresh: {
+            cadence?: components["schemas"]["RefreshCadence"];
+            /**
+             * Format: int32
+             * @description Present with the item's own `custom` cadence.
+             */
+            customHours?: number;
+            accountCadence: components["schemas"]["RefreshCadence"];
+            /** Format: int32 */
+            accountCustomHours?: number;
+        };
+        /** @description The item's own cadence; without `cadence` the item follows the account's again. */
+        ItemRefreshReplace: {
+            cadence?: components["schemas"]["KnownRefreshCadence"];
+            /** Format: int32 */
+            customHours?: number;
+        };
+        /**
+         * @description A `KnownListingRefreshState`, or a state added after this client was built, which clients
+         *     show without a time.
+         */
+        ListingRefreshState: components["schemas"]["KnownListingRefreshState"];
+        /**
+         * @description `scheduled`: Listora refreshes it at `nextAt`. `off`: refreshing is off for it (its item's
+         *     cadence or the account's). `unavailable`: Listora can't refresh it there (eBay, or no linked
+         *     marketplace session that works).
+         * @enum {string}
+         */
+        KnownListingRefreshState: "scheduled" | "off" | "unavailable";
+        /** @description A live listing's refresh, its next and its last. */
+        ListingRefresh: {
+            state: components["schemas"]["ListingRefreshState"];
+            /** @description With `scheduled`; now or soon for a listing already due. */
+            nextAt?: components["schemas"]["Timestamp"];
+            /** @description When its last refresh was confirmed by the marketplace. */
+            lastAt?: components["schemas"]["Timestamp"];
         };
         /** @description Whether Pack check is on. It is off until the seller turns it on in Settings. */
         PackCheckSettings: {
@@ -5852,6 +6005,37 @@ export interface components {
         OfferCheckList: {
             data: components["schemas"]["OfferCheck"][];
         };
+        /** @description A `KnownSyncState`, or one added after this client was built. */
+        SyncState: components["schemas"]["KnownSyncState"];
+        /**
+         * @description `syncing`: a read of the marketplace waits or runs (on the seller's iPhone, or in the cloud).
+         *     `synced`: the last reads got through. `failed`: the last read didn't; syncing again tries
+         *     again. `not_synced`: nothing was read yet.
+         * @enum {string}
+         */
+        KnownSyncState: "syncing" | "synced" | "failed" | "not_synced";
+        /**
+         * @description One linked marketplace's sync: Listora's reads of its sales, the buyers' offers, and (once
+         *     the seller imported them) its listings. A sync only reads; nothing changes on a marketplace.
+         */
+        SyncMarketplace: {
+            marketplace: components["schemas"]["Marketplace"];
+            state: components["schemas"]["SyncState"];
+            /**
+             * @description In the seller's words, without the marketplace's name: what it is doing while `syncing`
+             *     ("Checking sales..."), what the last sync found ("52 sales found", "No new sales, 1 offer
+             *     waiting"), or why it didn't get through ("Couldn't check sales. Sync again to try again.").
+             */
+            statusText: string;
+            /** @description When a read of the marketplace last got through. */
+            lastSyncedAt?: components["schemas"]["Timestamp"];
+            /** @description Listora only reads this account (read-only connection); a sync reads it like any other. */
+            readOnly: boolean;
+        };
+        /** @description Each linked marketplace Listora reads by signing in, in marketplace order. */
+        SyncStatus: {
+            data: components["schemas"]["SyncMarketplace"][];
+        };
     };
     responses: {
         /** @description Any error. See `KnownErrorCode` for the codes and their HTTP statuses. */
@@ -6287,9 +6471,6 @@ export type TodayShipment = components['schemas']['TodayShipment'];
 export type TodayLocation = components['schemas']['TodayLocation'];
 export type TodayDelist = components['schemas']['TodayDelist'];
 export type TodayConnection = components['schemas']['TodayConnection'];
-export type TodayStaleSuggestion = components['schemas']['TodayStaleSuggestion'];
-export type KnownTodayStaleSuggestion = components['schemas']['KnownTodayStaleSuggestion'];
-export type TodayStaleListing = components['schemas']['TodayStaleListing'];
 export type TodayDrafts = components['schemas']['TodayDrafts'];
 export type TodayCard = components['schemas']['TodayCard'];
 export type TodayMoneyPeriod = components['schemas']['TodayMoneyPeriod'];
@@ -6297,6 +6478,16 @@ export type TodayMoney = components['schemas']['TodayMoney'];
 export type Today = components['schemas']['Today'];
 export type TodaySummarySettings = components['schemas']['TodaySummarySettings'];
 export type TodaySummarySettingsReplace = components['schemas']['TodaySummarySettingsReplace'];
+export type RefreshCadence = components['schemas']['RefreshCadence'];
+export type KnownRefreshCadence = components['schemas']['KnownRefreshCadence'];
+export type QuietWindow = components['schemas']['QuietWindow'];
+export type ListingRefreshSettings = components['schemas']['ListingRefreshSettings'];
+export type ListingRefreshSettingsReplace = components['schemas']['ListingRefreshSettingsReplace'];
+export type ItemRefresh = components['schemas']['ItemRefresh'];
+export type ItemRefreshReplace = components['schemas']['ItemRefreshReplace'];
+export type ListingRefreshState = components['schemas']['ListingRefreshState'];
+export type KnownListingRefreshState = components['schemas']['KnownListingRefreshState'];
+export type ListingRefresh = components['schemas']['ListingRefresh'];
 export type PackCheckSettings = components['schemas']['PackCheckSettings'];
 export type PackCheckSettingsReplace = components['schemas']['PackCheckSettingsReplace'];
 export type LabelCarrier = components['schemas']['LabelCarrier'];
@@ -6366,6 +6557,10 @@ export type OfferCounterRange = components['schemas']['OfferCounterRange'];
 export type OfferAnswer = components['schemas']['OfferAnswer'];
 export type OfferCheck = components['schemas']['OfferCheck'];
 export type OfferCheckList = components['schemas']['OfferCheckList'];
+export type SyncState = components['schemas']['SyncState'];
+export type KnownSyncState = components['schemas']['KnownSyncState'];
+export type SyncMarketplace = components['schemas']['SyncMarketplace'];
+export type SyncStatus = components['schemas']['SyncStatus'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -9185,6 +9380,106 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getListingRefreshSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingRefreshSettings"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceListingRefreshSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingRefreshSettingsReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingRefreshSettings"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getItemRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item's refresh. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemRefresh"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceItemRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemRefreshReplace"];
+            };
+        };
+        responses: {
+            /** @description The item's refresh. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemRefresh"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getPackCheckSettings: {
         parameters: {
             query?: never;
@@ -9973,6 +10268,59 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getSyncStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marketplaces' syncs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatus"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    requestSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marketplaces' syncs, with the reads now asked for. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatus"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -10015,9 +10363,9 @@ export const prefillAnswerFieldValues: ReadonlyArray<FlattenedDeepRequired<compo
 export const knownListingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
 export const knownListingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
 export const listingEndReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingEndReason"]> = ["sold_elsewhere", "not_available", "other"];
-export const knownOperationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationKind"]> = ["create", "revise", "price", "end", "relist", "mark_sold", "verify"];
+export const knownOperationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationKind"]> = ["create", "revise", "price", "end", "relist", "mark_sold", "verify", "refresh"];
 export const knownOperationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationStatus"]> = ["queued", "running", "retrying", "verifying", "succeeded", "failed", "needs_user_action", "canceled"];
-export const knownOperationOriginTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationOriginType"]> = ["user", "auto_delist", "reprice_rule"];
+export const knownOperationOriginTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationOriginType"]> = ["user", "auto_delist", "reprice_rule", "auto_refresh"];
 export const knownConnectionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionStatus"]> = ["not_connected", "connected", "degraded", "reauth_required", "revoked"];
 export const knownCapabilityModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownCapabilityMode"]> = ["api", "automation", "assisted", "bulk_file", "none"];
 export const knownMarkSoldModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarkSoldMode"]> = ["api", "automation", "assisted", "bulk_file", "none", "not_needed"];
@@ -10052,10 +10400,11 @@ export const knownInviteStatusValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const knownInviteActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownInviteAction"]> = ["revoke", "restore"];
 export const knownInviteRedemptionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownInviteRedemptionStatus"]> = ["ready", "email_verification_sent"];
 export const knownSaleEmailStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleEmailStatus"]> = ["unavailable", "not_set_up", "confirming", "working"];
-export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "review_drafts", "stale_listing"];
+export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "review_drafts"];
 export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];
 export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];
-export const knownTodayStaleSuggestionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayStaleSuggestion"]> = ["price_drop", "relist"];
+export const knownRefreshCadenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownRefreshCadence"]> = ["off", "every_72_hours", "daily", "every_few_days", "weekly", "custom"];
+export const knownListingRefreshStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingRefreshState"]> = ["scheduled", "off", "unavailable"];
 export const knownLabelCarrierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelCarrier"]> = ["usps", "ups", "fedex", "dhl", "other"];
 export const knownLabelSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelSource"]> = ["marketplace", "scan"];
 export const knownPackMatchValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPackMatch"]> = ["sticker", "label", "photo"];
@@ -10072,3 +10421,4 @@ export const knownImportMatchReasonValues: ReadonlyArray<FlattenedDeepRequired<c
 export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ImportAnswerKind"]> = ["same_item", "new_item", "skip"];
 export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
+export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];

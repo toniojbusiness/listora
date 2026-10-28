@@ -174,6 +174,8 @@ function rowStub(): Parameters<typeof detailsFromRow>[0] {
     created_at: new Date(),
     updated_at: new Date(),
     pre_archive_status: null,
+    refresh_cadence: null,
+    refresh_custom_hours: null,
     ...columnsFromDetails({}),
   };
 }

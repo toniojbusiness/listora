@@ -1,6 +1,6 @@
 /**
  * `cancelMootOperations`, which the auto-delist orchestrator runs on each listing of an item
- * that sold: edits waiting to run or retry and publishes that never reached the marketplace
+ * that sold: edits and refreshes waiting to run or retry and publishes that never reached the marketplace
  * are canceled; a publish that may have reached it, and work waiting for the user, are kept.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -41,6 +41,9 @@ describe('cancelMootOperations', () => {
     }
     const price = await harness.enqueue(listing, 'price', { priceCents: 3900 });
     const revise = await harness.enqueue(listing, 'revise', { title: 'Jacket, worn twice' });
+    const refresh = await harness.enqueue(listing, 'refresh', {
+      refreshedAfter: new Date().toISOString(),
+    });
 
     const canceled = await cancelMootOperations(harness.db, {
       accountId: harness.accountId,
@@ -48,9 +51,9 @@ describe('cancelMootOperations', () => {
       reason: 'the item sold',
       detail: { saleId: 'sale-1' },
     });
-    expect(canceled).toEqual([price.id, revise.id]);
+    expect(canceled).toEqual([price.id, revise.id, refresh.id]);
     expect((await harness.operation(create.id)).status).toBe('retrying');
-    for (const op of [price, revise]) {
+    for (const op of [price, revise, refresh]) {
       expect(await harness.operation(op.id)).toMatchObject({ status: 'canceled' });
       expect((await harness.events(op.id)).at(-1)?.detail).toMatchObject({
         action: 'supersede',

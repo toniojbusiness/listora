@@ -71,7 +71,9 @@ What was found and changed:
   larger one). They now name the account as a parameter, and Postgres hashes only this seller's
   recent changes. The statement went from 8 ms mean (up to 15 ms) to about 3 ms with 5 sellers
   in the tables and from 11-14 ms to about 5 ms with 50 (100,000 items, 340,000 operations),
-  and the Today endpoint from 15 ms to 10 ms (`staleCandidates` in `packages/today/src/summary.ts`).
+  and the Today endpoint from 15 ms to 10 ms. The card and its query were later removed: listing
+  refresh keeps old listings fresh instead ([listing-refresh.md](listing-refresh.md)), and its
+  per-listing reads bind the account the same way (`loadRefreshFacts`).
 - **Cover photos.** The inventory list and Today read each item's cover with
   `distinct on (item_id) ... order by position`, which reads and sorts every photo of every
   item on the page (6 per item, with their JSON). Photo positions are a gapless sequence from 0,

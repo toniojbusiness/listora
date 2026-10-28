@@ -40,6 +40,7 @@ import type {
   RemoteListingStatus,
   ValidationIssue,
 } from '../adapter.ts';
+import { unsupportedMessage } from '../capabilities.ts';
 import type { ItemSnapshot, ListingContent, ListingVariant } from '../content.ts';
 import type { CallPriority, TradingCallBudget } from './budget.ts';
 import { mapEbayCategory, type EbayCategory } from './categories.ts';
@@ -147,6 +148,8 @@ export class EbayAdapter implements MarketplaceAdapter<EbayListingPayload> {
       updateDetails: 'api',
       delist: 'api',
       relist: 'api',
+      // eBay has no refresh that keeps a listing's watchers: its relist is a new listing.
+      refresh: 'none',
       // eBay marks its own sales sold; a sale elsewhere ends the eBay listing instead.
       markSold: 'not_needed',
       verifyRead: 'api',
@@ -266,6 +269,12 @@ export class EbayAdapter implements MarketplaceAdapter<EbayListingPayload> {
         }
         return this.#write('RelistFixedPriceItem', [el('Item', item)], current, ctx, 'normal');
       }
+      case 'refresh':
+        return {
+          type: 'rejected',
+          code: 'not_supported',
+          message: unsupportedMessage(op.kind, 'ebay'),
+        };
       default:
         return assertNever(op.kind, 'operation kind');
     }
@@ -1088,6 +1097,7 @@ function remoteListing(item: XmlNode): Extract<RemoteListingState, { found: true
     priceCents: priceCents(text(price, '#text')),
     currency: currency === 'USD' ? (currency satisfies CurrencyCode) : null,
     revision: null,
+    refreshedAt: null,
   };
 }
 

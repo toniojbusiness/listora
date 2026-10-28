@@ -42,7 +42,8 @@
 		"price",
 		"end",
 		"relist",
-		"markSold"
+		"markSold",
+		"refresh"
 	];
 	/**
 	* Whether an earlier attempt of the operation may have posted or changed the listing, so a
@@ -64,7 +65,8 @@
 			case "price":
 			case "end":
 			case "relist":
-			case "markSold": {
+			case "markSold":
+			case "refresh": {
 				const script = scripts[call.script];
 				if (script === void 0) throw new Error(`these scripts have no ${call.script} script`);
 				return script(call.op, step);
@@ -6435,7 +6437,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: dollars$1(record.price, page),
 				currency: "USD",
-				revision: revision$1(record.dateUpdated, page)
+				revision: revision$1(record.dateUpdated, page),
+				refreshedAt: new Date(revision$1(record.dateUpdated, page)).toISOString()
 			},
 			sku
 		};
@@ -6546,7 +6549,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: cents$2(price),
 				currency: "USD",
-				revision: revision$1(product.updated_at, API$2)
+				revision: revision$1(product.updated_at, API$2),
+				refreshedAt: new Date(revision$1(product.updated_at, API$2)).toISOString()
 			},
 			sku
 		};
@@ -6964,7 +6968,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				description,
 				priceCents,
 				currency: "USD",
-				revision: null
+				revision: null,
+				refreshedAt: null
 			},
 			sku
 		};
@@ -7949,6 +7954,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				return post(op, step);
 			},
+			refresh: async (op, step) => {
+				const opened = await editor(op, step);
+				if (!("slug" in opened)) return opened;
+				await step("check the form", { mutates: false }, (page) => expectSubmit(page, "save"));
+				return step("save unchanged", {
+					mutates: true,
+					timeScale: 2
+				}, async (page) => submitted(await submitListing$2(page, "save")));
+			},
 			read: async (ref, step) => {
 				const slug = ref.externalListingId;
 				if (slug !== null) return (await step("read the listing", { mutates: false }, (page) => readProduct(page, site, slug))).state;
@@ -8245,7 +8259,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			description: null,
 			priceCents,
 			currency: "USD",
-			revision: Math.max(0, ...times)
+			revision: Math.max(0, ...times),
+			refreshedAt: null
 		};
 	}
 
@@ -8644,6 +8659,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 						priceCents: row.priceCents,
 						currency: row.priceCents === null ? null : "USD",
 						revision: null,
+						refreshedAt: null,
 						details: {
 							photoUrls: [],
 							brand: null,
@@ -8738,7 +8754,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				description: await page.text("[data-field=\"description\"]"),
 				priceCents: Number.isSafeInteger(price) ? price : null,
 				currency: "USD",
-				revision: Number.isSafeInteger(revision) ? revision : null
+				revision: Number.isSafeInteger(revision) ? revision : null,
+				refreshedAt: await attribute("data-refreshed-at")
 			};
 		}
 		return {
@@ -8805,6 +8822,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				return step("relist", { mutates: true }, async (page) => {
 					await page.click("#relist");
+					return submitted(page);
+				});
+			},
+			refresh: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await step("open the listing", { mutates: false }, (page) => readById(page, id));
+				if (!shown.found) return notListed();
+				if (shown.status !== "active") return {
+					type: "rejected",
+					code: "not_live",
+					message: "Only a live listing can be refreshed."
+				};
+				return step("refresh", { mutates: true }, async (page) => {
+					await page.click("#refresh");
 					return submitted(page);
 				});
 			},
@@ -9538,7 +9570,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				description,
 				priceCents: record$1.data.price,
 				currency: "USD",
-				revision: record$1.data.updated * 1e3
+				revision: record$1.data.updated * 1e3,
+				refreshedAt: (/* @__PURE__ */ new Date(record$1.data.updated * 1e3)).toISOString()
 			},
 			sku,
 			soldAt: record$1.data.lastSoldAt ? /* @__PURE__ */ new Date(record$1.data.lastSoldAt * 1e3) : null,
@@ -9969,6 +10002,21 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				};
 				throw changed("edit page", "shows no listing form for a listing that has not sold");
 			},
+			refresh: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await onEditor(step, id);
+				if (shown === "active") return step("save unchanged", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
+				if (shown !== "inactive") {
+					if (!shown.state.found) return notListed();
+					if (shown.state.status === "sold") return sold();
+				}
+				return {
+					type: "rejected",
+					code: "not_live",
+					message: "Only a listing for sale on Mercari can be refreshed."
+				};
+			},
 			read: async (ref, step) => {
 				const id = ref.externalListingId;
 				if (id !== null) return (await step("read the listing", { mutates: false }, (page) => readItem(page, site, id))).state;
@@ -10159,8 +10207,19 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			description: record.description,
 			priceCents: cents(record.price_amount.val, page),
 			currency: "USD",
-			revision: revision(record, page)
+			revision: revision(record, page),
+			refreshedAt: refreshedAt(record, page)
 		};
+	}
+	/**
+	* When the listing last showed as fresh: its `updated_at`, which a share to followers moves, as
+	* the fake Poshmark mirrors (docs/features/listing-refresh.md has what is not yet proven on the
+	* real site). Poshmark keeps it to the second.
+	*/
+	function refreshedAt(record, page) {
+		const time = Date.parse(record.updated_at);
+		if (!Number.isFinite(time)) throw new PageChangedError(`Poshmark's ${page} shows a change time Listora can't read`);
+		return new Date(time).toISOString();
 	}
 	/**
 	* The listing's revision: its newest change time in milliseconds. Poshmark keeps `updated_at`
@@ -10706,6 +10765,25 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}).optional() }).optional()
 	}) });
 	const listingPageSchema = object({ $_listing_details: object({ listingDetails: union([listingRecordSchema, removedSchema]).nullable().optional() }) });
+	/**
+	* The listing page's Share, and its sheet's To My Followers: Poshmark's own way to bring a
+	* listing back to the top of the seller's followers' feeds, without changing it.
+	*/
+	const SHARE = {
+		button: "[data-et-name=\"share\"]",
+		toFollowers: "[data-et-name=\"share_poshmark\"]"
+	};
+	/**
+	* Shares the open listing page's listing to the seller's followers: Share, then To My Followers,
+	* and the sheet closes. A page without Share is one Listora no longer understands.
+	*/
+	async function shareToFollowers(page) {
+		if (!await page.exists(SHARE.button)) throw new PageChangedError(`Poshmark's ${PAGE$2} has no Share for this listing`);
+		await page.click(SHARE.button);
+		await page.waitFor(SHARE.toFollowers, "visible");
+		await page.click(SHARE.toFollowers);
+		await page.waitFor(SHARE.toFollowers, "hidden");
+	}
 	/** Opens the listing's page and reads what it shows of the listing. */
 	async function openListingPage(page, site, id) {
 		if (!isListingId(id)) return { type: "none" };
@@ -11333,6 +11411,22 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			},
 			end: (op, step) => changeAvailability(op, step, "not_for_sale"),
 			relist: (op, step) => changeAvailability(op, step, "for_sale"),
+			refresh: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await step("open the listing", { mutates: false }, (page) => openListingPage(page, site, id));
+				if (shown.type === "hidden") return hiddenListing();
+				if (shown.type !== "listing" || shown.record.inventory.status !== "available") return {
+					type: "rejected",
+					code: "not_live",
+					message: "Only a listing for sale on Poshmark can be shared."
+				};
+				await step("share to followers", { mutates: true }, (page) => shareToFollowers(page));
+				return {
+					type: "applied",
+					externalListingId: id
+				};
+			},
 			read: async (ref, step) => {
 				if (ref.externalListingId !== null) {
 					const id = ref.externalListingId;

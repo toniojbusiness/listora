@@ -35,6 +35,7 @@ public struct LinkAccountsView: View {
                             link: link,
                             installationID: model.installationID,
                             progress: model.progress[link.marketplace],
+                            lastSynced: model.lastSynced(link),
                             onLink: { model.startLinking(link) },
                             onCheckAgain: { Task { await model.checkAgain(link) } },
                             onRetry: { Task { await model.retry(link.marketplace) } },
@@ -112,6 +113,8 @@ private struct LinkAccountRow: View {
     let link: MarketplaceLink
     let installationID: String
     let progress: LinkAccountsModel.LinkProgress?
+    /// "Last synced 5 minutes ago".
+    let lastSynced: String?
     let onLink: () -> Void
     let onCheckAgain: () -> Void
     let onRetry: () -> Void
@@ -171,6 +174,12 @@ private struct LinkAccountRow: View {
             if let runsOn = link.runsOn {
                 RunsOnLabel(runsOn: runsOn, installationID: installationID)
                     .accessibilityIdentifier("linkAccounts.runsOn.\(link.marketplace)")
+            }
+            if let lastSynced {
+                Label(lastSynced, systemImage: "arrow.triangle.2.circlepath")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("linkAccounts.lastSynced.\(link.marketplace)")
             }
             if link.canSetReadOnly {
                 readOnlySwitch

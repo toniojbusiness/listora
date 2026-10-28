@@ -198,19 +198,7 @@ struct ItemDetailView: View {
                         identifier: "item.draft",
                     )
                 }
-                MarketplacesSection(
-                    rows: model.rows,
-                    histories: model.histories,
-                    events: model.events,
-                    busyMarketplace: model.busyMarketplace,
-                    phoneProgress: environment.phoneProgress?.progress ?? [],
-                    perform: perform,
-                    end: { reason, row in end(row, reason: reason) },
-                    relistAll: { rows in performAll(rows) { .relist(listingID: $0) } },
-                    endAll: { reason, rows in performAll(rows) { .end(listingID: $0, reason: reason.contract) } },
-                    listEverywhere: openListEverywhere,
-                    loadEvents: { id in await model.loadEvents(operationID: id) },
-                )
+                marketplaces(of: item)
                 MoneySection(item: item)
                 itemActions(for: item)
                 DetailsSection(item: item) { editingSize = true }
@@ -327,5 +315,37 @@ extension ItemDetailView {
     private func end(_ row: MarketplaceRowState, reason: EndReason) {
         guard let listing = row.listing else { return }
         Task { await model.perform(.end(listingID: listing.id, reason: reason.contract), marketplace: row.id) }
+    }
+}
+
+/// The marketplaces part of the item screen, apart so the view's body stays short.
+extension ItemDetailView {
+    /// Its marketplaces, each with its status and actions, and the item's own refresh cadence.
+    @ViewBuilder
+    private func marketplaces(of item: Item) -> some View {
+        MarketplacesSection(
+            rows: model.rows,
+            histories: model.histories,
+            events: model.events,
+            busyMarketplace: model.busyMarketplace,
+            phoneProgress: environment.phoneProgress?.progress ?? [],
+            perform: perform,
+            end: { reason, row in end(row, reason: reason) },
+            relistAll: { rows in performAll(rows) { .relist(listingID: $0) } },
+            endAll: { reason, rows in performAll(rows) { .end(listingID: $0, reason: reason.contract) } },
+            listEverywhere: openListEverywhere,
+            loadEvents: { id in await model.loadEvents(operationID: id) },
+        )
+        refreshSection(for: item)
+    }
+
+    /// The item's own refresh cadence, once it is live somewhere (listing-refresh.md).
+    @ViewBuilder
+    private func refreshSection(for item: Item) -> some View {
+        if let service = environment.refreshService,
+           item.listings.contains(where: { $0.status.value1 == .active })
+        {
+            ItemRefreshSection(itemID: item.id, service: service)
+        }
     }
 }

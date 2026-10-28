@@ -76,6 +76,8 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
     let lastChange: String?
     /// The listing's own price ("$39.00"), which can differ from the item's list price.
     let priceLabel: String?
+    /// "Next refresh Thu, 9:00 AM · Last refreshed Oct 27" for a live listing Listora refreshes.
+    let refreshLine: String?
     let actions: [Action]
 
     init(marketplace: KnownMarketplace, listing: Listing?, connection: Connection?, now: Date = Date()) {
@@ -102,6 +104,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             }
         }
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
+        refreshLine = RefreshWords.line(listing?.refresh, now: now)
         let waiting = Self.waitingAttempt(of: listing, now: now)
         if let listing {
             statusLabel = listing.statusDisplay.label

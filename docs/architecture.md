@@ -87,7 +87,7 @@ apps/
                 check, item analysis, batch items' analysis start, photo processing, trust
                 metrics, the daily connection health check, the delist SLA, push delivery, sale
                 fees, the morning summary, sale email ingest, sale-check health, background read
-                alerts, listing imports); and the
+                alerts, listing imports, the listing refresh schedule); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
@@ -148,6 +148,8 @@ packages/
                 fake, the outbox job (@listora/push)
   today/        The Today screen: card rules, the summary's plain queries, the money summary, the
                 morning summary job and its setting (@listora/today)
+  listing-refresh/ Listing refresh: the cadence and quiet-window rules, the settings, each live
+                listing's next and last refresh, the paced schedule (@listora/listing-refresh)
   pack-check/   Pack check: label scans and their verdicts, the to-ship list, packing (one label
                 per package), label reads' records, the setting (@listora/pack-check)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
@@ -251,6 +253,8 @@ src/
                  sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
   today/         The Today summary (getToday) and the morning summary setting
+  listing-refresh/ The listing refresh setting and an item's own cadence
+                 (docs/features/listing-refresh.md)
   pack-check/    Pack check: the to-ship list, label reads, scans, packing, the package photo
                  (docs/features/pack-check.md)
   activity/      An item's and an operation's activity, and a sale's explanation
@@ -261,6 +265,8 @@ src/
                  (docs/features/imports.md)
   offers/        Buyers' offers: their reads, an offer and its quote, the seller's answer
                  (docs/features/offers.md)
+  sync/          Sync now: read-only checks of every linked marketplace, and what each found
+                 (docs/features/sync.md)
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
   perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
@@ -389,7 +395,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [profit.md](features/profit.md#data)); pricing in [pricing.md](features/pricing.md#data);
   deleted identities and account deletion in [auth.md](features/auth.md#data); invites in
   [invites.md](features/invites.md#data); the morning
-  summary setting in [today.md](features/today.md#data); sale email inboxes in
+  summary setting in [today.md](features/today.md#data); the listing refresh setting in
+  [listing-refresh.md](features/listing-refresh.md#data); sale email inboxes in
   [email-sales.md](features/email-sales.md#data); the marketplace pre-fill's answers and AI picks in
   [marketplace-prefill.md](features/marketplace-prefill.md#data); listing imports in
   [imports.md](features/imports.md#data); Pack check's setting, labels, and packages in
@@ -509,6 +516,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders           |
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule   |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push   |
+| [features/listing-refresh.md](features/listing-refresh.md)         | Refreshing live listings that haven't sold, its schedule, pace, and settings   |
 | [features/pack-check.md](features/pack-check.md)                   | Pack check: the to-ship list, label scans, the duplicate-print guard, stickers |
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"           |
 | [features/marketplace-prefill.md](features/marketplace-prefill.md) | Each marketplace's form pre-filled on the review, and its one-tap questions    |
@@ -521,6 +529,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI              |
 | [features/recorded-pages.md](features/recorded-pages.md)           | Scripts tested on recorded real pages: the recorder, redaction, the replay     |
 | [features/offers.md](features/offers.md)                           | Buyers' offers in Tasks, and accepting, declining, or countering them          |
+| [features/sync.md](features/sync.md)                               | Sync now, the sync on opening the app, its indicator, and "Last synced"        |
 
 ### Former section numbers
 
