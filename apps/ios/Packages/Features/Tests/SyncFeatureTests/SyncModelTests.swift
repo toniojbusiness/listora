@@ -102,6 +102,19 @@ struct SyncModelTests {
     }
 
     @Test
+    func `a server from before Sync says so, without Try again`() async {
+        await service.failRequests(statusCode: 404)
+        let model = model()
+        await model.syncNow()
+        #expect(model.lines == [line(
+            "listora", "Sync now isn't on Listora's server yet. Your sales are still checked as before.", .found,
+        )])
+        #expect(trigger.reasons.isEmpty)
+        await sleeps.pass(.seconds(6))
+        #expect(model.lines.isEmpty)
+    }
+
+    @Test
     func `a marketplace synced moments ago shows what that sync found`() async {
         await service.answerRequest([
             .depop(.synced, "No new sales"),
@@ -234,6 +247,7 @@ actor FakeSyncService: SyncService {
     private var requestReply: [MarketplaceSyncStatus] = []
     private var statusReply: [MarketplaceSyncStatus] = []
     private var unreachable = false
+    private var failureStatus: Int?
 
     func answerRequest(_ reply: [MarketplaceSyncStatus]) {
         requestReply = reply
@@ -243,8 +257,9 @@ actor FakeSyncService: SyncService {
         statusReply = reply
     }
 
-    func failRequests() {
+    func failRequests(statusCode: Int? = nil) {
         unreachable = true
+        failureStatus = statusCode
     }
 
     func status() async throws(APIFailure) -> [MarketplaceSyncStatus] {
@@ -254,7 +269,7 @@ actor FakeSyncService: SyncService {
     func requestSync(idempotencyKey _: String) async throws(APIFailure) -> [MarketplaceSyncStatus] {
         requests += 1
         if unreachable {
-            throw APIFailure(statusCode: nil, code: "network", message: "Offline.", retryable: true)
+            throw APIFailure(statusCode: failureStatus, code: "network", message: "Offline.", retryable: true)
         }
         return requestReply
     }

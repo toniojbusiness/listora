@@ -127,6 +127,14 @@ public final class SyncModel: MarketplaceSync {
         let answered: [MarketplaceSyncStatus]
         do {
             answered = try await service.requestSync(idempotencyKey: UUID().uuidString)
+        } catch where error.statusCode == 404 || error.statusCode == 405 {
+            // A server from before Sync: say so, without a Try again that can't help.
+            show(Line(
+                id: Self.listora,
+                text: "Sync now isn't on Listora's server yet. Your sales are still checked as before.",
+                kind: .found,
+            ))
+            return
         } catch {
             results[Self.listora] = Line(
                 id: Self.listora,
