@@ -12,7 +12,7 @@ import { CHALLENGE_KINDS, FEE_KINDS } from '@listora/db';
 import { ITEM_CONDITIONS, REMOTE_LISTING_STATUSES } from '@listora/marketplaces';
 
 import type { ScriptCall } from '../adapter/script-call.ts';
-import { isWriteCall } from '../adapter/script-call.ts';
+import { isWriteCall, sellerIdentity } from '../adapter/script-call.ts';
 import type { SessionRun } from '../adapter/sessions.ts';
 import type { ScriptErrorCode, ScriptResult } from '../runner/types.ts';
 import { pageEvidenceSchema, type PageEvidence } from '../safety/evidence.ts';
@@ -205,11 +205,19 @@ function valueSchema(call: ScriptCall): z.ZodType {
     case 'read':
       return listingState;
     case 'health':
-      // A health script returns nothing, which JSON leaves out.
+      // The signed-in seller, or `null` when the page didn't show one; a runtime older than the
+      // seller's read returns nothing, which JSON leaves out (unknown, as `null`).
       return z
-        .undefined()
-        .or(z.null())
-        .transform(() => undefined);
+        .string()
+        .min(1)
+        .max(255)
+        .transform((handle) => sellerIdentity(handle))
+        .or(
+          z
+            .undefined()
+            .or(z.null())
+            .transform(() => null),
+        );
     case 'orders':
       return orders;
     case 'listings':

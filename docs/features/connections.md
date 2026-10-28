@@ -140,7 +140,9 @@ thing.
 
 ## Data
 
-- `marketplace_connection` (mode, the seller's immutable id, the encrypted credential (OAuth
+- `marketplace_connection` (mode, the seller's id (an API connection's immutable id from the
+  marketplace, an automation connection's handle as its session check read it,
+  [marketplace-linking.md](marketplace-linking.md#the-shop-a-connection-holds)), the encrypted credential (OAuth
   tokens, or the browser session of an `automation` connection, with its `credential_version`;
   [automation.md](automation.md#data)), expiries, scopes, status, when the grant was issued
   (or the session linked), `last_ok_at`, `last_checked_at`, `check_requested_at` (a pending

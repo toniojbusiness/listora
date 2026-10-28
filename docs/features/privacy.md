@@ -51,6 +51,13 @@ after their retention period (7 days for personal, 30 for production).
 | eBay Marketplace Account Deletion                | Every connection to that eBay user in every account (as an unlink), and every eBay event about them, in one transaction that checks and records ([ebay-notifications.md](ebay-notifications.md))                                   | None needed: eBay deleted the user                                                                                | The Listora account's own records                                                                                                                                                                       |
 | The marketplace ends Listora's access (Depop)    | Every connection to the marketplace in one mode, in every account, as an unlink (reason `marketplace_terminated`)                                                                                                                  | As an unlink                                                                                                      | The same as an unlink                                                                                                                                                                                   |
 
+Two records of a marketplace seller's handle outlive a connection on purpose
+([read-only.md](read-only.md#the-shop-not-the-row)). The sellers an account kept read only
+(`read_only_seller`) stay through an unlink, as the Read only setting does, and go with the
+account. A protected shop (`protected_seller`) belongs to no account: its seller id stays when an
+account that linked it is deleted, because keeping that shop safe is its only use, and only a
+migration removes it.
+
 In the app, a person deletes their account in Settings > Delete account ([auth.md](auth.md#account-deletion)) and unlinks a marketplace with Unlink in Settings > Link accounts ([marketplace-linking.md](marketplace-linking.md)).
 
 The marketplaces that run on the seller's iPhone ([phone-execution.md](phone-execution.md)) add

@@ -99,9 +99,39 @@ An unlink and a relink are never a way around the setting:
   only (`marketplace_connection_inherit_read_only`, before insert), whichever path creates it:
   linking a session, OAuth, or any other.
 
-The protection is still per account and marketplace, not per shop: a later link of another shop
-on the same marketplace starts read only too, until the owner turns it off. Binding the setting to
-the marketplace's seller identity is a follow-up ([security.md](security.md)).
+A later link of another shop on the same marketplace starts read only too, until the owner turns
+it off.
+
+## The shop, not the row
+
+A connection knows the seller its session is signed in as
+([marketplace-linking.md](marketplace-linking.md#the-shop-a-connection-holds)), and read only
+follows that seller as well as the row (migration `20261029042234_shop_seller`):
+
+- **The account keeps each read-only seller** (`read_only_seller`): a connection that is read
+  only while it holds a known seller remembers that seller for the account and marketplace. A
+  connection of the account that later comes to hold one of them (a relink on the same row, a new
+  link after another shop was linked and made writable) becomes read only again when its check
+  records the seller, and its waiting changes fail with `connection_read_only`. Turning Read only
+  off with a seller linked forgets that seller only; the others stay.
+- **Writes check the shop on the page** before their first step, whatever the setting
+  (`expectedSeller`), so a session for another shop changes nothing even before its check runs.
+
+## Protected shops
+
+A protected shop (`protected_seller`) is one Listora only ever reads, whoever links it:
+
+- Every connection that holds it is read only, by a database trigger that sets `read_only`
+  whatever writes the row (a link, the Read only switch, a direct database change), on any account.
+- The owner can't turn Read only off: `setConnectionReadOnly` refuses with `ProtectedShopError`,
+  and the API answers `409 connection_read_only` ("This Depop shop is protected, so Listora will
+  only ever read it and Read only stays on."). The app shows that message on the switch.
+- Only a migration adds or removes one (no API or app path writes the table), so lifting it is a
+  code change the repository's owner merges.
+- A shop is named by its seller id, or by the connection that holds it until that connection's
+  first recorded seller fills the id in; from then on the seller protects it on any connection.
+  The live Depop shop below is protected this way: by its connection until its next session check
+  records its seller, so its handle is never in the repository.
 
 Reads keep working on a read-only connection: imports, the listings and sold pages, sales
 history, sale checks and sale detection, session checks, label reads, offer reads, and `verify`.
@@ -118,6 +148,9 @@ The same migration detaches one stray listing record from that connection: a lis
 from the owner's own test shop, which relinking the account's Depop left under the live shop's
 connection. Without a connection no session, not even a read, ever runs for it there, and it
 stays read only through the account's Depop connection. Only Listora's record changes.
+
+Migration `20261029042234_shop_seller` makes it a [protected shop](#protected-shops), named by
+that connection until its next session check records the shop's seller.
 
 Migration `20261028133845_depop_shop_stray_listings` detaches the other three (ended, with no
 Depop listing id), so the live shop's connection holds only its own 118 listings, and marks all
@@ -141,7 +174,11 @@ nothing.
   crossing to another marketplace, the unlink refused while read only, and a relink after the
   connection was deleted another way starting read only.
 - `db/src/constraints.int.test.ts`: every new connection of a read-only marketplace starts read
-  only, for that account and marketplace only, until the setting is turned off.
+  only, for that account and marketplace only, until the setting is turned off; a seller kept read
+  only makes a connection read only again; a protected shop stays read only whatever sets it,
+  learns its seller from its connection, and is protected on any account.
+- `operations/src/shop-identity.int.test.ts` and `apps/api/src/connections/read-only.int.test.ts`:
+  a seller kept read only, and the owner refused Read only off on a protected shop (`409`).
 - The app: `ReadOnlyLinkTests` and `APIMarketplaceSessionServiceTests`.
 
 ## Data
@@ -153,3 +190,8 @@ nothing.
   and start a new connection read only, migration `20261028172246_marketplace_read_only`. It is
   the seller's setting, not marketplace data, so it stays through an unlink and goes with the
   account.
+- `read_only_seller` (account, marketplace, seller id: the sellers the account's read-only
+  connections held, kept by triggers, gone with the account) and `protected_seller` (marketplace,
+  seller id or the connection that holds it, and why; not an account's, so it stays when an
+  account goes), with the triggers that keep read only by seller, migration
+  `20261029042234_shop_seller`.

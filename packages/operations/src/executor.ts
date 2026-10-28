@@ -787,13 +787,18 @@ async function loadConnection(
   if (listing.connection_id === null) return null;
   const connection = await trx
     .selectFrom('marketplace_connection')
-    .select(['id', 'mode', 'status', 'runs_on'])
+    .select(['id', 'mode', 'status', 'runs_on', 'external_user_id'])
     .where('account_id', '=', listing.account_id)
     .where('id', '=', listing.connection_id)
     .executeTakeFirst();
   if (connection === undefined) return null;
   return {
-    ref: { id: connection.id, mode: connection.mode, status: connection.status },
+    ref: {
+      id: connection.id,
+      mode: connection.mode,
+      status: connection.status,
+      sellerId: connection.external_user_id,
+    },
     runsOn: connection.runs_on,
   };
 }

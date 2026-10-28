@@ -66,8 +66,12 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
    * the marketplace's own "removed" answer for that id. Only reads: no step may mutate.
    */
   read: (ref: ListingRef, step: StepRunner) => Promise<RemoteListingState>;
-  /** Opens a page only a logged-in seller sees, to show the session works. Only reads. */
-  health: (step: StepRunner) => Promise<void>;
+  /**
+   * Opens a page only a logged-in seller sees, to show the session works, and returns the
+   * seller it is signed in as (`sellerIdentity` of the page's handle), or `null` when the page
+   * doesn't show one Listora can read. Only reads.
+   */
+  health: (step: StepRunner) => Promise<string | null>;
   /** The seller's orders sold at or after `since`, for sale checks. Only reads. */
   orders?: (since: Date | null, step: StepRunner) => Promise<RemoteOrder[]>;
   /**
@@ -111,9 +115,19 @@ export const WRITE_SCRIPTS = [
 ] as const;
 export type WriteScriptName = (typeof WRITE_SCRIPTS)[number];
 
+/**
+ * The seller a write must find signed in (the connection's recorded shop): before its first
+ * step, the call reads the signed-in seller with the health script and changes nothing when it
+ * is another one (docs/features/marketplace-linking.md#the-shop-a-connection-holds). Absent while
+ * Listora doesn't know the connection's seller; a runtime older than it ignores it.
+ */
+interface ExpectedSeller {
+  expectedSeller?: string;
+}
+
 /** Which script runs, with its input. */
 export type ScriptCall<P extends AssistedListingPayload = AssistedListingPayload> =
-  | { script: WriteScriptName; op: OperationRequest<P> }
+  | ({ script: WriteScriptName; op: OperationRequest<P> } & ExpectedSeller)
   | { script: 'read'; ref: ListingRef }
   | { script: 'health' }
   /** `since` is an ISO time, or `null` for every order the pages show. */
@@ -123,7 +137,26 @@ export type ScriptCall<P extends AssistedListingPayload = AssistedListingPayload
   | { script: 'labels'; orders: LabelReadRequest[] }
   | { script: 'offers' }
   | { script: 'offer'; ref: OfferRef }
-  | { script: 'answerOffer'; request: OfferAnswerRequest };
+  | ({ script: 'answerOffer'; request: OfferAnswerRequest } & ExpectedSeller);
+
+/** The longest seller id Listora keeps (`marketplace_connection.external_user_id`). */
+const MAX_SELLER_ID = 255;
+
+/**
+ * A seller's handle as a page shows it, as the id Listora compares and records: trimmed and
+ * lower-cased (marketplaces treat handles without case), or `null` when there is none to use.
+ */
+export function sellerIdentity(handle: string | null | undefined): string | null {
+  const id = handle?.trim().toLowerCase() ?? '';
+  return id.length === 0 || id.length > MAX_SELLER_ID ? null : id;
+}
+
+/** The code of a change refused because another seller is signed in than the connection's. */
+export const SELLER_MISMATCH = 'seller_mismatch';
+
+/** What the seller reads when a change was refused because another shop is signed in. */
+export const SELLER_MISMATCH_MESSAGE =
+  'Listora is signed in to another shop than the one linked, so it changed nothing. Link the shop again in Link accounts, then try again.';
 
 /**
  * Whether an earlier attempt of the operation may have posted or changed the listing, so a
@@ -159,6 +192,9 @@ export async function runScriptCall<P extends AssistedListingPayload>(
     case 'refresh': {
       const script = scripts[call.script];
       if (script === undefined) throw new Error(`these scripts have no ${call.script} script`);
+      if (await signedInAsAnother(scripts, call, step)) {
+        return { type: 'rejected', code: SELLER_MISMATCH, message: SELLER_MISMATCH_MESSAGE };
+      }
       return script(call.op, step);
     }
     case 'read':
@@ -193,9 +229,27 @@ export async function runScriptCall<P extends AssistedListingPayload>(
     case 'answerOffer': {
       const answer = scripts.answerOffer;
       if (answer === undefined) throw new Error('these scripts answer no offers');
+      if (await signedInAsAnother(scripts, call, step)) {
+        return { type: 'refused', code: SELLER_MISMATCH, message: SELLER_MISMATCH_MESSAGE };
+      }
       return answer(call.request, step);
     }
     default:
       return assertNever(call, 'script call');
   }
+}
+
+/**
+ * Whether the session is signed in as another seller than the call expects, read by the health
+ * script before anything changes. A page that doesn't show the seller is not proof of another
+ * one: the call goes ahead, as it did before Listora knew sellers.
+ */
+async function signedInAsAnother<P extends AssistedListingPayload>(
+  scripts: AutomationScripts<P>,
+  call: ExpectedSeller,
+  step: StepRunner,
+): Promise<boolean> {
+  if (call.expectedSeller === undefined) return false;
+  const seen = await scripts.health(step);
+  return seen !== null && seen !== call.expectedSeller;
 }

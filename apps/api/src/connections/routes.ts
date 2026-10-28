@@ -30,7 +30,11 @@ import {
   type Marketplace,
 } from '@listora/db';
 import { findSaleEmailInbox, inboundDomainOf } from '@listora/email-sales';
-import { readOnlyUnlinkMessage, setConnectionReadOnly } from '@listora/operations';
+import {
+  ProtectedShopError,
+  readOnlyUnlinkMessage,
+  setConnectionReadOnly,
+} from '@listora/operations';
 import {
   isMarketplace,
   MARKETPLACE_NAMES,
@@ -315,7 +319,13 @@ export function registerConnectionRoutes(
                 trx,
                 { accountId: tenant.accountId, connectionId: linked.id },
                 body.readOnly,
-              );
+              ).catch((error: unknown) => {
+                // A protected shop stays read only (docs/features/read-only.md#protected-shops).
+                if (error instanceof ProtectedShopError) {
+                  throw new ApiError('connection_read_only', error.message);
+                }
+                throw error;
+              });
               if (result !== undefined) {
                 await writeAudit(trx, tenant, {
                   action: 'connection.read_only_changed',

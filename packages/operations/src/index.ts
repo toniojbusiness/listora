@@ -72,6 +72,8 @@ export {
 export type { RetryPolicy } from './policy.ts';
 export {
   assertWritableListing,
+  failWaitingWrites,
+  holdsProtectedShop,
   isReadOnlyMarketplace,
   isWriteKind,
   listingIsReadOnly,
@@ -81,9 +83,13 @@ export {
   readOnlyMessage,
   readOnlyUnlinkMessage,
   readOnlySource,
+  ProtectedShopError,
+  protectedShopMessage,
   ReadOnlyConnectionError,
   setConnectionReadOnly,
 } from './read-only.ts';
+export { recordConnectionSeller, SHOP_CHANGED_ERROR, shopChangedMessage } from './shop-identity.ts';
+export type { RecordedSeller } from './shop-identity.ts';
 export { LIVENESS_APPLICATION_PREFIX, reapStoppedWorkers } from './recovery.ts';
 export {
   enqueueListingResync,

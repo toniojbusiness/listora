@@ -137,3 +137,34 @@ describe("the server reads an app's sale-check answers, old and new", () => {
     });
   });
 });
+
+describe("the server reads an app's session-check answers, old and new", () => {
+  const health = { script: 'health' } as const;
+  const checked = (value?: unknown) => ({
+    type: 'ran',
+    result: {
+      ok: true,
+      ...(value === undefined ? {} : { value }),
+      mutated: false,
+      steps: ['open the selling hub'],
+    },
+  });
+  const valueOf = (answer: unknown) => {
+    const run = readPhoneAnswer(health, answer);
+    return run.type === 'ran' && run.result.ok ? run.result.value : 'unreadable';
+  };
+
+  it('reads the seller a newer runtime read, as the id Listora compares', () => {
+    expect(valueOf(checked('Live.Shop'))).toBe('live.shop');
+  });
+
+  it("reads an older runtime's answer, which names no seller, as an unknown seller", () => {
+    expect(valueOf(checked())).toBeNull();
+    expect(valueOf(checked(null))).toBeNull();
+  });
+
+  it('refuses a seller it could never store', () => {
+    expect(valueOf(checked('x'.repeat(256)))).toBe('unreadable');
+    expect(valueOf(checked(42))).toBe('unreadable');
+  });
+});

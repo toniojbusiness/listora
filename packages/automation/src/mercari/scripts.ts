@@ -312,8 +312,12 @@ export function createMercariScripts(
       const found = await findBySku(step, listingSku(ref));
       return found?.state ?? { found: false, authoritative: false };
     },
-    health: (step) =>
-      step('open your account', { mutates: false }, (page) => openAccount(page, site)),
+    health: async (step) => {
+      await step('open your account', { mutates: false }, (page) => openAccount(page, site));
+      // The account page shows the seller's display name, which is neither unique nor fixed,
+      // and no id: the seller stays unknown, never a guess.
+      return null;
+    },
     orders: async (since, step) => {
       const orders: RemoteOrder[] = [];
       // The done sales' tab is wherever the account page's Sales link goes (not `/sold/`).

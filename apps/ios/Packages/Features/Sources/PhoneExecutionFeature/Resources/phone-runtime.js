@@ -45,6 +45,20 @@
 		"markSold",
 		"refresh"
 	];
+	/** The longest seller id Listora keeps (`marketplace_connection.external_user_id`). */
+	const MAX_SELLER_ID = 255;
+	/**
+	* A seller's handle as a page shows it, as the id Listora compares and records: trimmed and
+	* lower-cased (marketplaces treat handles without case), or `null` when there is none to use.
+	*/
+	function sellerIdentity(handle) {
+		const id = handle?.trim().toLowerCase() ?? "";
+		return id.length === 0 || id.length > MAX_SELLER_ID ? null : id;
+	}
+	/** The code of a change refused because another seller is signed in than the connection's. */
+	const SELLER_MISMATCH = "seller_mismatch";
+	/** What the seller reads when a change was refused because another shop is signed in. */
+	const SELLER_MISMATCH_MESSAGE = "Listora is signed in to another shop than the one linked, so it changed nothing. Link the shop again in Link accounts, then try again.";
 	/**
 	* Whether an earlier attempt of the operation may have posted or changed the listing, so a
 	* create or relist looks for that listing before it posts (`OperationRequest.mayHaveApplied`;
@@ -69,6 +83,11 @@
 			case "refresh": {
 				const script = scripts[call.script];
 				if (script === void 0) throw new Error(`these scripts have no ${call.script} script`);
+				if (await signedInAsAnother(scripts, call, step)) return {
+					type: "rejected",
+					code: SELLER_MISMATCH,
+					message: SELLER_MISMATCH_MESSAGE
+				};
 				return script(call.op, step);
 			}
 			case "read": return scripts.read(call.ref, step);
@@ -101,10 +120,25 @@
 			case "answerOffer": {
 				const answer = scripts.answerOffer;
 				if (answer === void 0) throw new Error("these scripts answer no offers");
+				if (await signedInAsAnother(scripts, call, step)) return {
+					type: "refused",
+					code: SELLER_MISMATCH,
+					message: SELLER_MISMATCH_MESSAGE
+				};
 				return answer(call.request, step);
 			}
 			default: return assertNever(call, "script call");
 		}
+	}
+	/**
+	* Whether the session is signed in as another seller than the call expects, read by the health
+	* script before anything changes. A page that doesn't show the seller is not proof of another
+	* one: the call goes ahead, as it did before Listora knew sellers.
+	*/
+	async function signedInAsAnother(scripts, call, step) {
+		if (call.expectedSeller === void 0) return false;
+		const seen = await scripts.health(step);
+		return seen !== null && seen !== call.expectedSeller;
 	}
 
 // ../marketplaces/src/adapter.ts
@@ -6375,10 +6409,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/depop/pages/hub-page.ts
-	const HUB_PAGE = { signedInUser: "[data-testid=\"avatar\"]" };
+	const HUB_PAGE = {
+		signedInUser: "[data-testid=\"avatar\"]",
+		likes: "a[aria-label=\"Likes\"]"
+	};
+	/** A username as Depop's paths carry it. */
+	const USERNAME_PATH = /^\/([A-Za-z0-9._-]+)\/likes\/?$/;
 	async function openHub(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
 		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
+	}
+	/**
+	* The username of the seller signed in on the open hub, or `null` when its header doesn't show
+	* it as Listora knows (docs/features/marketplace-linking.md#the-shop-a-connection-holds).
+	*/
+	async function hubSeller(page, site) {
+		const href = await page.attribute(HUB_PAGE.likes, "href");
+		if (href === null) return null;
+		let url;
+		try {
+			url = new URL(href, absolute$2(site, DEPOP_PATHS.hub));
+		} catch {
+			return null;
+		}
+		return USERNAME_PATH.exec(url.pathname)?.[1] ?? null;
 	}
 
 // src/depop/pages/page-data.ts
@@ -8027,7 +8081,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					authoritative: false
 				};
 			},
-			health: (step) => step("open the selling hub", { mutates: false }, (page) => openHub(page, site)),
+			health: (step) => step("open the selling hub", { mutates: false }, async (page) => {
+				await openHub(page, site);
+				return sellerIdentity(await hubSeller(page, site));
+			}),
 			orders: (since, step) => readSales$1({
 				site,
 				step,
@@ -8673,7 +8730,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					authoritative: false
 				};
 			},
-			health: (step) => step("open Seller Hub", { mutates: false }, (page) => openOverview(page, site)),
+			health: async (step) => {
+				await step("open Seller Hub", { mutates: false }, (page) => openOverview(page, site));
+				return null;
+			},
 			orders: async (since, step) => {
 				const orders = /* @__PURE__ */ new Map();
 				let offset = 0;
@@ -8913,6 +8973,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			health: (step) => step("open the account", { mutates: false }, async (page) => {
 				await page.goto(`${site}/`);
 				if (!await page.exists("[data-account]")) throw new Error("not the account page");
+				return sellerIdentity(await page.attribute("[data-account]", "data-account"));
 			}),
 			orders: (since, step) => step("open the sold orders", { mutates: false }, async (page) => {
 				await page.goto(`${site}/sold`);
@@ -10081,7 +10142,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					authoritative: false
 				};
 			},
-			health: (step) => step("open your account", { mutates: false }, (page) => openAccount(page, site)),
+			health: async (step) => {
+				await step("open your account", { mutates: false }, (page) => openAccount(page, site));
+				return null;
+			},
 			orders: async (since, step) => {
 				const orders = [];
 				const soldPath = await step("find the sales tab", { mutates: false }, (page) => salesTabPath(page, site));
@@ -11499,9 +11563,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					authoritative: false
 				};
 			},
-			health: async (step) => {
-				await seller(step);
-			},
+			health: async (step) => sellerIdentity(await seller(step)),
 			orders: async (since, step) => {
 				const username = await seller(step);
 				const soldAt = (listing) => new Date(listing.inventory.status_changed_at ?? listing.updated_at);

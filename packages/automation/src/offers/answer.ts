@@ -318,6 +318,7 @@ export async function prepareOfferAnswer(
       'connection.id as connectionId',
       'connection.mode',
       'connection.status as connectionStatus',
+      'connection.external_user_id as sellerId',
     ])
     .where('response.account_id', '=', key.accountId)
     .where('response.id', '=', key.responseId)
@@ -328,7 +329,12 @@ export async function prepareOfferAnswer(
     responseId: found.id,
     connectionId: found.connectionId,
     marketplace: found.marketplace,
-    connection: { id: found.connectionId, mode: found.mode, status: found.connectionStatus },
+    connection: {
+      id: found.connectionId,
+      mode: found.mode,
+      status: found.connectionStatus,
+      sellerId: found.sellerId,
+    },
     offerId: found.offerId,
     sent: found.sent,
     attempts: found.attempts,
