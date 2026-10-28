@@ -9603,11 +9603,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* table (`[data-testid="Listings"]`) of `tr[data-testid="ListingRow"]` rows, each with its
 	* listing's link (`a[data-testid="ItemLink"]`, the title as its text) and price (`ItemPrice`).
 	* A sold row shows no sold time, only the day it last changed, in its "Updated" column
-	* (`11/16/24`): the sale's time is on the listing's page (item-page.ts). An empty tab keeps
-	* Listora's earlier model. On the phone, Mercari draws the same tabs in its mobile layout (seen
-	* in the phone's evidence, 2026-10-27): rows without the table, which link to their listing
-	* only through its photo (`ProductThumbWrapper`) and show no `ItemLink` or `ItemPrice`; their
-	* title and price are on the listing's page.
+	* (`11/16/24`): the sale's time is on the listing's page (item-page.ts). An empty tab shows
+	* `ZeroListings`. On the phone, Mercari draws the same tabs in its mobile layout, which it picks
+	* for a touch screen whatever the page's width (read on the seller's session, 2026-10-28): a list of `li[data-testid="ListItem"]` rows
+	* without the table, which link to their listing through its photo (`ProductThumbWrapper`) and
+	* its title (`RowItemWithMeta`) and show no `ItemLink` or `ItemPrice`; their title and price are
+	* on the listing's page. While Mercari's own query for the rows runs (about a second on the
+	* phone), that layout shows three placeholder `ListingRow`s that link to nothing, and an empty
+	* tab then shows `ZeroListings` in their place.
 	*/
 	const LISTINGS_PAGE = {
 		/** What an empty tab shows instead of its rows. */
@@ -9624,7 +9627,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		headings: "[data-testid=\"Listings\"] th",
 		next: "a[data-testid=\"NextPage\"]"
 	};
-	/** How long a tab's rows get to draw; a tab without any by then reads as empty. */
+	/** How long a tab's rows (or its `ZeroListings`) get to draw after its list or placeholders. */
 	const ROWS_MS = 8e3;
 	/**
 	* The latest moment a day shown as `11/16/24` (Mercari's US dates) ends in any time zone: noon
@@ -9643,14 +9646,20 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		await page.goto(url);
 		const name = `${tab.replace("_", " ")} listings page`;
 		await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, "listing list");
-		if (await page.exists(LISTINGS_PAGE.empty)) return {
-			rows: [],
-			hasNext: false
-		};
 		const end = Date.now() + ROWS_MS;
-		while (!await page.exists(LISTINGS_PAGE.row) && Date.now() < end) {
-			await new Promise((resolve) => setTimeout(resolve, 500));
-			await page.waitFor("body", "attached");
+		for (;;) {
+			if (await page.exists(LISTINGS_PAGE.empty)) return {
+				rows: [],
+				hasNext: false
+			};
+			const [shown, named, photos] = await Promise.all([
+				page.count(LISTINGS_PAGE.row),
+				page.count(LISTINGS_PAGE.link),
+				page.count(LISTINGS_PAGE.photoLink)
+			]);
+			if (shown > 0 && Math.max(named, photos) === shown) break;
+			if (Date.now() >= end) throw changed(name, shown === 0 ? "shows no rows" : "has rows that link to no listing");
+			await lookAgain(page, 500);
 		}
 		const sold = tab === "in_progress" || tab === "sold";
 		const [shownRows, named, titles, prices, soldAts, headings] = await Promise.all([
