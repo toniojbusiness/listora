@@ -69,7 +69,7 @@ batch as one haul on the local stack and checks every item's share on the server
 
 ## Data
 
-Migration `20261028173151_hauls` adds `haul` (the total in cents, its currency, the count, and the
+Migration `20261028185247_hauls` adds `haul` (the total in cents, its currency, the count, and the
 date and place) and, on `inventory_item`, `haul_id` and `haul_joined_at` (both or neither), with a
 composite foreign key to the account's haul. Deleting the account deletes its hauls.
 
