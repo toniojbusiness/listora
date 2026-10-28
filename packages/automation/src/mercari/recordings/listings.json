@@ -20,6 +20,7 @@
           "priceCents": 1800,
           "currency": "USD",
           "revision": 1791741914000,
+          "refreshedAt": "2026-10-11T18:05:14.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/1.jpg",
@@ -46,6 +47,7 @@
           "priceCents": 2500,
           "currency": "USD",
           "revision": 1791741383000,
+          "refreshedAt": "2026-10-11T17:56:23.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/6.jpg",
@@ -71,6 +73,7 @@
           "priceCents": 2000,
           "currency": "USD",
           "revision": 1792000809000,
+          "refreshedAt": "2026-10-14T18:00:09.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/10.jpg",
@@ -96,6 +99,7 @@
           "priceCents": 2500,
           "currency": "USD",
           "revision": 1792000809000,
+          "refreshedAt": "2026-10-14T18:00:09.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/14.jpg",
@@ -121,6 +125,7 @@
           "priceCents": 3500,
           "currency": "USD",
           "revision": 1792000809000,
+          "refreshedAt": "2026-10-14T18:00:09.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/18.jpg",
@@ -145,6 +150,7 @@
           "priceCents": 1900,
           "currency": "USD",
           "revision": 1792000809000,
+          "refreshedAt": "2026-10-14T18:00:09.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/21.jpg",
@@ -172,6 +178,7 @@
           "priceCents": 1300,
           "currency": "USD",
           "revision": 1792000745000,
+          "refreshedAt": "2026-10-14T17:59:05.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/27.jpg",
@@ -196,6 +203,7 @@
           "priceCents": 4000,
           "currency": "USD",
           "revision": 1792000745000,
+          "refreshedAt": "2026-10-14T17:59:05.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/30.jpg",
@@ -219,6 +227,7 @@
           "priceCents": 2500,
           "currency": "USD",
           "revision": 1792000809000,
+          "refreshedAt": "2026-10-14T18:00:09.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/32.jpg",
@@ -242,6 +251,7 @@
           "priceCents": 2800,
           "currency": "USD",
           "revision": 1792000809000,
+          "refreshedAt": "2026-10-14T18:00:09.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/34.jpg",
@@ -265,6 +275,7 @@
           "priceCents": 2500,
           "currency": "USD",
           "revision": 1792000809000,
+          "refreshedAt": "2026-10-14T18:00:09.000Z",
           "details": {
             "photoUrls": [
               "https://images.recorded.invalid/36.jpg",

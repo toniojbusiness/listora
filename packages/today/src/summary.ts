@@ -5,8 +5,7 @@
  */
 import { loadDelistRuns } from '@listora/auto-delist';
 import { saleMoney } from '@listora/sales';
-import type { DbExecutor, Marketplace } from '@listora/db';
-import type { CurrencyCode } from '@listora/shared';
+import type { DbExecutor } from '@listora/db';
 import { sql } from 'kysely';
 
 import {
@@ -15,11 +14,8 @@ import {
   reconnectCard,
   reviewDraftsCard,
   shipCard,
-  staleListingCard,
-  TODAY_RULES,
   type ConnectionFact,
   type DraftsFact,
-  type ListedFact,
   type ShipFact,
   type TodayCard,
   type TodayItemRef,
@@ -43,11 +39,10 @@ export async function loadToday(
   accountId: string,
   now: Date,
 ): Promise<TodaySummary> {
-  const [ship, delist, connections, listed, drafts, sales] = await Promise.all([
+  const [ship, delist, connections, drafts, sales] = await Promise.all([
     shipFacts(executor, accountId),
     delistCards(executor, accountId),
     connectionFacts(executor, accountId),
-    staleCandidates(executor, accountId, now),
     draftsFact(executor, accountId),
     saleMoneyFacts(executor, accountId, now),
   ]);
@@ -56,10 +51,6 @@ export async function loadToday(
     ...ship.map((fact) => shipCard(fact, now)),
     ...connections.map(reconnectCard),
     ...[reviewDraftsCard(drafts)].filter((card) => card !== null),
-    ...listed
-      .map((fact) => staleListingCard(fact, now))
-      .filter((card) => card !== null)
-      .slice(0, TODAY_RULES.maxStaleCards),
   ];
   return { generatedAt: now, cards: orderCards(cards), money: moneySummary(sales, now) };
 }
@@ -165,80 +156,6 @@ async function connectionFacts(executor: DbExecutor, accountId: string): Promise
         ]
       : [],
   );
-}
-
-/**
- * Listed items whose oldest live listing went live at least `staleListedDays` ago and that had
- * no listing change for `staleQuietDays`, longest listed first. The rules in cards.ts decide
- * again from the same facts, so these thresholds only keep the read small.
- *
- * The subqueries name the account as a parameter, not as `item.account_id`. Correlated through
- * the outer row, Postgres either hashed the `not exists` over every account's recent operations
- * and listings (sequential scans of both tables) or ran it once per listed item; with the
- * account bound it hashes only this seller's recent changes, two to three times faster
- * (docs/features/performance.md).
- */
-async function staleCandidates(
-  executor: DbExecutor,
-  accountId: string,
-  now: Date,
-): Promise<ListedFact[]> {
-  const listedBefore = new Date(now.getTime() - TODAY_RULES.staleListedDays * DAY_MS);
-  const quietSince = new Date(now.getTime() - TODAY_RULES.staleQuietDays * DAY_MS);
-  const { rows } = await sql<{
-    id: string;
-    sku: string;
-    title: string | null;
-    currency: CurrencyCode;
-    list_price_cents: number | null;
-    floor_price_cents: number | null;
-    min_listing_price_cents: number | null;
-    listed_at: Date;
-    last_change_at: Date | null;
-    marketplaces: Marketplace[];
-  }>`
-    select item.id, item.sku, item.title, item.currency, item.list_price_cents,
-      item.floor_price_cents, min(listing.price_cents) as min_listing_price_cents,
-      min(listing.listed_at) as listed_at,
-      array_agg(distinct listing.marketplace::text order by listing.marketplace::text) as marketplaces,
-      (
-        select max(op.created_at)
-        from marketplace_operation op
-        join marketplace_listing changed
-          on changed.account_id = op.account_id and changed.id = op.listing_id
-        where op.account_id = ${accountId} and changed.account_id = ${accountId}
-          and changed.item_id = item.id and op.kind in ('create', 'revise', 'price', 'relist')
-      ) as last_change_at
-    from inventory_item item
-    join marketplace_listing listing
-      on listing.account_id = item.account_id and listing.item_id = item.id
-    where item.account_id = ${accountId}
-      and item.status = 'listed'
-      and listing.status = 'active'
-      and listing.listed_at is not null
-    group by item.id
-    having min(listing.listed_at) <= ${listedBefore}
-      and not exists (
-        select 1
-        from marketplace_operation op
-        join marketplace_listing changed
-          on changed.account_id = op.account_id and changed.id = op.listing_id
-        where op.account_id = ${accountId} and changed.account_id = ${accountId}
-          and changed.item_id = item.id and op.kind in ('create', 'revise', 'price', 'relist')
-          and op.created_at > ${quietSince}
-      )
-    order by min(listing.listed_at), item.id
-    limit ${MAX_CARDS_PER_KIND}
-  `.execute(executor);
-  return rows.map((row) => ({
-    item: { id: row.id, sku: row.sku, title: row.title },
-    currency: row.currency,
-    priceCents: row.list_price_cents ?? row.min_listing_price_cents,
-    floorCents: row.floor_price_cents,
-    listedAt: row.listed_at,
-    lastChangeAt: row.last_change_at,
-    marketplaces: row.marketplaces,
-  }));
 }
 
 async function draftsFact(executor: DbExecutor, accountId: string): Promise<DraftsFact> {

@@ -63,7 +63,6 @@ struct TodayCardContent: Equatable, Identifiable {
         case .delist: Self.delist(card)
         case .reconnect: Self.reconnect(card)
         case .reviewDrafts: Self.drafts(card, calendar: calendar)
-        case .staleListing: Self.stale(card)
         case nil: KindContent(systemImage: "sparkles")
         }
         systemImage = kind.systemImage
@@ -114,22 +113,6 @@ struct TodayCardContent: Equatable, Identifiable {
                 text: "Oldest from \(day(drafts.oldestCreatedAt, calendar: calendar))",
                 systemImage: "calendar",
             ))
-        }
-        return content
-    }
-
-    private static func stale(_ card: TodayCard) -> KindContent {
-        var content = KindContent(systemImage: "clock.arrow.circlepath", iconTone: .neutral)
-        if let stale = card.staleListing {
-            content.facts.append(Fact(
-                text: stale.daysListed == 1 ? "Listed 1 day" : "Listed \(stale.daysListed) days",
-                systemImage: "clock",
-            ))
-            let names = stale.marketplaces
-                .map { TodayFormatting.marketplaceName($0.value1?.rawValue ?? $0.value2 ?? "") }
-            if !names.isEmpty {
-                content.facts.append(Fact(text: names.joined(separator: ", "), systemImage: "tag"))
-            }
         }
         return content
     }

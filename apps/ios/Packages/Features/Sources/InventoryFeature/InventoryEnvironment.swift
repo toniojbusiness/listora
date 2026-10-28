@@ -64,6 +64,9 @@ public final class InventoryEnvironment {
     /// The marketplace work this iPhone runs now, for the item screen's progress; without it,
     /// the screen shows only the server's status.
     public weak var phoneProgress: (any PhoneWorkProgressSource)?
+    /// Listing refresh's setting and each item's own cadence; without it, the item screen offers
+    /// no "Refresh this item".
+    var refreshService: (any ListingRefreshService)?
     /// A filter for the list to apply when it next appears (the Today card for drafts).
     private var requestedFilter: InventoryFilter?
     /// An item to open, with List everywhere, when the list next appears (List it now).
@@ -91,6 +94,7 @@ public final class InventoryEnvironment {
             saleScreens: saleScreens,
             taskDestination: taskDestination,
         )
+        refreshService = APIListingRefreshService(client: apiClient.client)
     }
 
     init(
@@ -110,6 +114,11 @@ public final class InventoryEnvironment {
         self.saleScreens = saleScreens
         self.taskDestination = taskDestination
         attention = InventoryAttention(service: service, isSignedIn: isSignedIn)
+    }
+
+    /// Settings > Listing refresh, for Settings' navigation stack; nil without a refresh service.
+    public func refreshSettingsScreen() -> AnyView? {
+        refreshService.map { AnyView(ListingRefreshSettingsView(model: ListingRefreshSettingsModel(service: $0))) }
     }
 
     /// The item screen, for another tab's navigation stack (a Today card opens it).

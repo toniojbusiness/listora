@@ -226,6 +226,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
       currency: 'USD',
       // Depop's own last change time, from the read its edit page makes.
       revision: listed?.updatedAt.getTime(),
+      refreshedAt: listed?.updatedAt.toISOString(),
     });
     expect(remote).toMatchObject(
       readBackState(desiredStateForContent('create', content), adapter.capabilities()),
@@ -606,6 +607,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
         priceCents: 1250,
         currency: 'USD',
         revision: expect.any(Number) as number,
+        refreshedAt: expect.any(String) as string,
         details: {
           photoUrls: [`${fake.url}/media/front.jpg`, `${fake.url}/media/back.jpg`],
           brand: 'Zara',

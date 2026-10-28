@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { DelistCard, ShipCard, StaleListingCard } from './cards.ts';
+import type { DelistCard, ShipCard } from './cards.ts';
 import { loadToday } from './summary.ts';
 import { createTodayHarness, type TodayHarness } from './test-support.ts';
 
@@ -232,75 +232,6 @@ describe('the Today summary (real Postgres)', () => {
     await harness.item(accountId, { status: 'ready' });
     const { cards } = await loadToday(harness.db, accountId, now());
     expect(cards).toMatchObject([{ kind: 'review_drafts', count: 2, title: '2 drafts to review' }]);
-  });
-
-  describe('stale listings', () => {
-    it('suggests a price drop above the floor for an old listing with no recent change', async () => {
-      const accountId = await harness.account();
-      const stale = await harness.item(accountId, {
-        status: 'listed',
-        title: 'Old sweater',
-        list_price_cents: 4500,
-        floor_price_cents: 3500,
-      });
-      const ebayListing = await harness.listing(accountId, stale.id, 'ebay', {
-        listedAt: ago(40 * DAY),
-      });
-      await harness.listing(accountId, stale.id, 'depop', { listedAt: ago(35 * DAY) });
-      await harness.operation(accountId, ebayListing, 'price', ago(20 * DAY));
-
-      const recentlyChanged = await harness.item(accountId, {
-        status: 'listed',
-        list_price_cents: 3000,
-      });
-      const changed = await harness.listing(accountId, recentlyChanged.id, 'ebay', {
-        listedAt: ago(60 * DAY),
-      });
-      await harness.operation(accountId, changed, 'price', ago(3 * DAY));
-
-      const young = await harness.item(accountId, { status: 'listed', list_price_cents: 3000 });
-      await harness.listing(accountId, young.id, 'ebay', { listedAt: ago(10 * DAY) });
-
-      const ended = await harness.item(accountId, { status: 'listed', list_price_cents: 3000 });
-      await harness.listing(accountId, ended.id, 'ebay', {
-        status: 'ended',
-        listedAt: ago(60 * DAY),
-      });
-
-      const { cards } = await loadToday(harness.db, accountId, now());
-      const staleCards = cards.filter(
-        (card): card is StaleListingCard => card.kind === 'stale_listing',
-      );
-      expect(staleCards).toHaveLength(1);
-      expect(staleCards[0]).toMatchObject({
-        title: 'Old sweater',
-        daysListed: 40,
-        priceCents: 4500,
-        floorCents: 3500,
-        suggestion: { kind: 'price_drop', priceCents: 4000 },
-        marketplaces: ['depop', 'ebay'],
-        action: { label: 'Lower to $40', destination: 'item', itemId: stale.id },
-      });
-    });
-
-    it('uses the lowest listing price when the item has none, and shows at most five', async () => {
-      const accountId = await harness.account();
-      for (let index = 0; index < 7; index += 1) {
-        const item = await harness.item(accountId, { status: 'listed', floor_price_cents: 1000 });
-        await harness.listing(accountId, item.id, 'ebay', {
-          listedAt: ago((40 + index) * DAY),
-          priceCents: 2000 + index,
-        });
-      }
-      const { cards } = await loadToday(harness.db, accountId, now());
-      const staleCards = cards.filter(
-        (card): card is StaleListingCard => card.kind === 'stale_listing',
-      );
-      expect(staleCards).toHaveLength(5);
-      // Longest listed first.
-      expect(staleCards.map((card) => card.daysListed)).toEqual([46, 45, 44, 43, 42]);
-      expect(staleCards[0]?.priceCents).toBe(2006);
-    });
   });
 
   it('sums this week and last week, profit only where fees and costs are known', async () => {

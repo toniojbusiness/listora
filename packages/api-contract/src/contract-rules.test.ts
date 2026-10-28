@@ -445,7 +445,10 @@ describe('vocabulary', () => {
         'needs_user_action',
       ],
     ],
-    ['KnownOperationKind', ['create', 'revise', 'price', 'end', 'relist', 'mark_sold', 'verify']],
+    [
+      'KnownOperationKind',
+      ['create', 'revise', 'price', 'end', 'relist', 'mark_sold', 'verify', 'refresh'],
+    ],
     [
       'KnownOperationStatus',
       [

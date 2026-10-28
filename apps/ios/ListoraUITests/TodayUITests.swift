@@ -49,12 +49,6 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Marketplaces"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        // The stale listing offers the price drop and opens the item.
-        let lower = action(StubAPIServer.staleCardID)
-        scroll(to: lower)
-        XCTAssertEqual(lower.label, "Lower to $40")
-        XCTAssertTrue(card(StubAPIServer.staleCardID).staticTexts["Listed 45 days"].exists)
-
         // The drafts card opens the drafts: this iPhone has none, so the server's, in Inventory.
         let drafts = action(StubAPIServer.draftsCardID)
         scroll(to: drafts)

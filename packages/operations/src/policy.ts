@@ -10,7 +10,6 @@
  */
 import type { OperationKind } from '@listora/db';
 
-
 /** 30 s, 2 m, 10 m, 30 m, 2 h, 6 h: seven attempts over about nine hours. */
 export const RETRY_DELAYS_MS: readonly number[] = [
   30_000, 120_000, 600_000, 1_800_000, 7_200_000, 21_600_000,

@@ -7,6 +7,8 @@ public struct SettingsScreens {
     public var marketplaces: (@MainActor () -> AnyView)?
     /// Import listings: bring the listings a seller already has into Listora.
     public var imports: (@MainActor () -> AnyView)?
+    /// Listing refresh: how often live listings that haven't sold are refreshed.
+    public var listingRefresh: (@MainActor () -> AnyView)?
     public var notifications: (@MainActor () -> AnyView)?
     public var saleEmails: (@MainActor () -> AnyView)?
     public var packCheck: (@MainActor () -> AnyView)?
@@ -18,6 +20,7 @@ public struct SettingsScreens {
         case .linkAccounts: linkAccounts?()
         case .marketplaces: marketplaces?()
         case .imports: imports?()
+        case .listingRefresh: listingRefresh?()
         case .notifications: notifications?()
         case .saleEmails: saleEmails?()
         case .packCheck: packCheck?()
@@ -29,6 +32,7 @@ public struct SettingsScreens {
         linkAccounts: (@MainActor () -> AnyView)? = nil,
         marketplaces: (@MainActor () -> AnyView)? = nil,
         imports: (@MainActor () -> AnyView)? = nil,
+        listingRefresh: (@MainActor () -> AnyView)? = nil,
         notifications: (@MainActor () -> AnyView)? = nil,
         saleEmails: (@MainActor () -> AnyView)? = nil,
         packCheck: (@MainActor () -> AnyView)? = nil,
@@ -36,6 +40,7 @@ public struct SettingsScreens {
         self.linkAccounts = linkAccounts
         self.marketplaces = marketplaces
         self.imports = imports
+        self.listingRefresh = listingRefresh
         self.notifications = notifications
         self.saleEmails = saleEmails
         self.packCheck = packCheck
@@ -49,6 +54,7 @@ public enum SettingsDestination: Hashable, Sendable {
     case linkAccounts
     case marketplaces
     case imports
+    case listingRefresh
     case notifications
     case saleEmails
     case packCheck

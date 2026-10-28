@@ -10,6 +10,7 @@ import type {
   Verification,
 } from '@listora/api-contract';
 import type { DbExecutor, Marketplace, OperationKind } from '@listora/db';
+import type { ListingRefresh } from '@listora/listing-refresh';
 import { operationMode, type AdapterRegistry } from '@listora/marketplaces';
 import {
   describeListingStatus,
@@ -21,6 +22,7 @@ import {
 } from '@listora/operations';
 import { assertNever } from '@listora/shared';
 
+import { listingRefreshView } from '../listing-refresh/views.ts';
 import { operationView } from '../operations/views.ts';
 import type { Tenant } from '../tenancy.ts';
 import {
@@ -52,6 +54,8 @@ export interface ListingState {
   operation: OperationRow | undefined;
   /** The operation's step waits for the seller's iPhone, or the phone runs it now. */
   phoneWait?: PhoneWait | undefined;
+  /** A live listing's next and last refresh, where the view shows it (the item screen). */
+  refresh?: ListingRefresh | undefined;
 }
 
 /**
@@ -301,6 +305,7 @@ export function listingView(state: ListingState, context: ListingViewContext): L
     ...(row.last_verified_at === null
       ? {}
       : { lastVerifiedAt: row.last_verified_at.toISOString() }),
+    ...(state.refresh === undefined ? {} : { refresh: listingRefreshView(state.refresh) }),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };

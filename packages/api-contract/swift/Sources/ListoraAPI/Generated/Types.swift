@@ -892,10 +892,9 @@ public protocol APIProtocol: Sendable {
     /// Get what needs the seller today
     ///
     /// The Today screen: one card per thing that needs the seller (items to ship, delists that
-    /// are not done, connections to reconnect, drafts to review, and old listings that could use
-    /// a price drop or a relist), most urgent first, and the money summary. Computed from the
-    /// account's own data on every request, with no AI and no marketplace call, so the app asks
-    /// for it each time it opens. A card is gone once its work is done.
+    /// are not done, connections to reconnect, and drafts to review), most urgent first, and the
+    /// money summary. Computed from the account's own data on every request, with no AI and no
+    /// marketplace call, so the app asks for it each time it opens. A card is gone once its work is done.
     ///
     ///
     /// - Remark: HTTP `GET /v1/today`.
@@ -917,6 +916,39 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/today/settings`.
     /// - Remark: Generated from `#/paths//v1/today/settings/put(replaceTodaySettings)`.
     func replaceTodaySettings(_ input: Operations.ReplaceTodaySettings.Input) async throws -> Operations.ReplaceTodaySettings.Output
+    /// Get the listing refresh setting
+    ///
+    /// How often the account's live listings are refreshed, and the quiet window.
+    ///
+    /// - Remark: HTTP `GET /v1/listing-refresh/settings`.
+    /// - Remark: Generated from `#/paths//v1/listing-refresh/settings/get(getListingRefreshSettings)`.
+    func getListingRefreshSettings(_ input: Operations.GetListingRefreshSettings.Input) async throws -> Operations.GetListingRefreshSettings.Output
+    /// Replace the listing refresh setting
+    ///
+    /// Sets how often Listora refreshes live listings that have not sold, and the quiet window,
+    /// in the device's time zone. It changes no listing by itself: the schedule refreshes each
+    /// listing when it is next due.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/listing-refresh/settings`.
+    /// - Remark: Generated from `#/paths//v1/listing-refresh/settings/put(replaceListingRefreshSettings)`.
+    func replaceListingRefreshSettings(_ input: Operations.ReplaceListingRefreshSettings.Input) async throws -> Operations.ReplaceListingRefreshSettings.Output
+    /// Get an item's refresh cadence
+    ///
+    /// The item's own refresh cadence, if it has one, and the account's.
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/refresh`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/refresh/get(getItemRefresh)`.
+    func getItemRefresh(_ input: Operations.GetItemRefresh.Input) async throws -> Operations.GetItemRefresh.Output
+    /// Replace an item's refresh cadence
+    ///
+    /// Gives the item its own refresh cadence over the account's (for example `off` for one item),
+    /// or, without `cadence`, makes it follow the account's again.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/items/{itemId}/refresh`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/refresh/put(replaceItemRefresh)`.
+    func replaceItemRefresh(_ input: Operations.ReplaceItemRefresh.Input) async throws -> Operations.ReplaceItemRefresh.Output
     /// Get the Pack check setting
     ///
     /// Whether Pack check is on (off until the seller turns it on).
@@ -2684,10 +2716,9 @@ extension APIProtocol {
     /// Get what needs the seller today
     ///
     /// The Today screen: one card per thing that needs the seller (items to ship, delists that
-    /// are not done, connections to reconnect, drafts to review, and old listings that could use
-    /// a price drop or a relist), most urgent first, and the money summary. Computed from the
-    /// account's own data on every request, with no AI and no marketplace call, so the app asks
-    /// for it each time it opens. A card is gone once its work is done.
+    /// are not done, connections to reconnect, and drafts to review), most urgent first, and the
+    /// money summary. Computed from the account's own data on every request, with no AI and no
+    /// marketplace call, so the app asks for it each time it opens. A card is gone once its work is done.
     ///
     ///
     /// - Remark: HTTP `GET /v1/today`.
@@ -2717,6 +2748,67 @@ extension APIProtocol {
         body: Operations.ReplaceTodaySettings.Input.Body
     ) async throws -> Operations.ReplaceTodaySettings.Output {
         try await replaceTodaySettings(Operations.ReplaceTodaySettings.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get the listing refresh setting
+    ///
+    /// How often the account's live listings are refreshed, and the quiet window.
+    ///
+    /// - Remark: HTTP `GET /v1/listing-refresh/settings`.
+    /// - Remark: Generated from `#/paths//v1/listing-refresh/settings/get(getListingRefreshSettings)`.
+    public func getListingRefreshSettings(headers: Operations.GetListingRefreshSettings.Input.Headers = .init()) async throws -> Operations.GetListingRefreshSettings.Output {
+        try await getListingRefreshSettings(Operations.GetListingRefreshSettings.Input(headers: headers))
+    }
+    /// Replace the listing refresh setting
+    ///
+    /// Sets how often Listora refreshes live listings that have not sold, and the quiet window,
+    /// in the device's time zone. It changes no listing by itself: the schedule refreshes each
+    /// listing when it is next due.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/listing-refresh/settings`.
+    /// - Remark: Generated from `#/paths//v1/listing-refresh/settings/put(replaceListingRefreshSettings)`.
+    public func replaceListingRefreshSettings(
+        headers: Operations.ReplaceListingRefreshSettings.Input.Headers = .init(),
+        body: Operations.ReplaceListingRefreshSettings.Input.Body
+    ) async throws -> Operations.ReplaceListingRefreshSettings.Output {
+        try await replaceListingRefreshSettings(Operations.ReplaceListingRefreshSettings.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get an item's refresh cadence
+    ///
+    /// The item's own refresh cadence, if it has one, and the account's.
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/refresh`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/refresh/get(getItemRefresh)`.
+    public func getItemRefresh(
+        path: Operations.GetItemRefresh.Input.Path,
+        headers: Operations.GetItemRefresh.Input.Headers = .init()
+    ) async throws -> Operations.GetItemRefresh.Output {
+        try await getItemRefresh(Operations.GetItemRefresh.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Replace an item's refresh cadence
+    ///
+    /// Gives the item its own refresh cadence over the account's (for example `off` for one item),
+    /// or, without `cadence`, makes it follow the account's again.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/items/{itemId}/refresh`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/refresh/put(replaceItemRefresh)`.
+    public func replaceItemRefresh(
+        path: Operations.ReplaceItemRefresh.Input.Path,
+        headers: Operations.ReplaceItemRefresh.Input.Headers = .init(),
+        body: Operations.ReplaceItemRefresh.Input.Body
+    ) async throws -> Operations.ReplaceItemRefresh.Output {
+        try await replaceItemRefresh(Operations.ReplaceItemRefresh.Input(
+            path: path,
             headers: headers,
             body: body
         ))

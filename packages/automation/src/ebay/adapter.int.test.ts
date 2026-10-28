@@ -218,6 +218,7 @@ describe('eBay automation adapter on the fake eBay site', () => {
       currency: 'USD',
       // Never changed since it was listed.
       revision: 0,
+      refreshedAt: null,
     });
     expect(remote).toMatchObject(
       readBackState(desiredStateForContent('create', content), adapter.capabilities()),
@@ -539,6 +540,7 @@ describe('eBay automation adapter on the fake eBay site', () => {
         priceCents: 104_550,
         currency: 'USD',
         revision: null,
+        refreshedAt: null,
         details: {
           photoUrls: [],
           brand: null,

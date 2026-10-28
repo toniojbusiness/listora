@@ -253,6 +253,7 @@ extension RootView {
                 linkAccounts: { AnyView(LinkAccountsView(model: dependencies.linkAccounts)) },
                 marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },
                 imports: { dependencies.importsScreen() },
+                listingRefresh: { dependencies.inventory.refreshSettingsScreen() ?? AnyView(EmptyView()) },
                 notifications: {
                     AnyView(NotificationSettingsView(
                         today: dependencies.today,
