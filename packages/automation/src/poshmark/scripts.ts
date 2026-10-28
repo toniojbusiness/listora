@@ -5,6 +5,7 @@
  */
 import type {
   LabelReadRequest,
+  ListedListing,
   ListingRef,
   OperationRequest,
   RemoteOrder,
@@ -72,6 +73,8 @@ const NEW_WAIT_MS = 5_000;
 
 /** Sold-item pages read per sale check (48 each, the newest sales among them). */
 const SOLD_PAGES = 5;
+/** Sold-item pages the sales history (a check with no `since`) reads at most: 1,200 sales. */
+const HISTORY_SOLD_PAGES = 25;
 /** Order pages one label read opens at most, for labels the sales list does not show. */
 export const MAX_SALE_PAGES = 5;
 
@@ -417,6 +420,22 @@ export function createPoshmarkScripts(
     return result;
   }
 
+  /**
+   * A sold listing as its closet record shows it, with its photos and details, for a sale of a
+   * listing Listora doesn't have; none when the record doesn't read as one (the sale itself still
+   * does).
+   */
+  function soldListing(record: ListingRecord): { listing?: ListedListing } {
+    try {
+      return {
+        listing: { ...remoteListing(record, site, 'closet page'), details: listingDetails(record) },
+      };
+    } catch (error) {
+      if (error instanceof PageChangedError) return {};
+      throw error;
+    }
+  }
+
   return {
     create: (op, step) => createListing(op, step),
     revise: async (op, step) => {
@@ -471,7 +490,7 @@ export function createPoshmarkScripts(
         username,
         { availability: 'sold_out' },
         // Listora has not seen the order of sold items, so every page up to the cap is read.
-        { maxPages: SOLD_PAGES },
+        { maxPages: since === null ? HISTORY_SOLD_PAGES : SOLD_PAGES },
       );
       return listings.flatMap((listing): RemoteOrder[] => {
         const at = soldAt(listing);
@@ -487,6 +506,7 @@ export function createPoshmarkScripts(
                 title: listing.title,
                 priceCents: cents(listing.price_amount.val, 'closet page'),
                 currency: 'USD',
+                ...soldListing(listing),
               },
             ],
           },

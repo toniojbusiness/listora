@@ -167,6 +167,18 @@ describe('pack check (real Postgres)', () => {
     });
   });
 
+  it('leaves out an order from the sales history: it sold before the marketplace was connected', async () => {
+    const old = await order({ title: 'History tee', tracking: '9400111899223197423333' });
+    await api.db
+      .updateTable('sale')
+      .set({ detection_source: 'history' })
+      .where('id', '=', old.saleId)
+      .execute();
+    const listed = await api.call('listPackOrders', { token });
+    expect(listed.body.data.map((entry) => entry.saleId)).not.toContain(old.saleId);
+    expect((await scan({ label: '9400111899223197423333' })).body.order).toBeUndefined();
+  });
+
   it("is green for the right label and a red stop for the other order's label", async () => {
     const tee = await order({
       title: 'Tee',

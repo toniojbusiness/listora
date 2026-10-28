@@ -13,6 +13,10 @@
  * it until then, and the relink checks at once); one that failed otherwise tries again after
  * the minimum interval. Only a database failure throws, and the job queue then runs it again.
  *
+ * A connection's first check (no `checked_through` yet) reads the seller's sales history: every
+ * sold order the pages show, up to the adapter's history limit, each handed over like a new one
+ * (docs/features/sales.md, "Sales history").
+ *
  * A `history` read is the same read with nothing handed over: it reads every sold order the
  * pages show and records what it saw, to prove a marketplace's sale check reads the seller's
  * real sold items, without acting on any of them and without touching the schedule.
@@ -372,23 +376,42 @@ async function recordOrders(
   const added: RemoteOrder[] = [];
   for (const order of orders) {
     await inTransaction(db, async (trx) => {
-      const event = await recordInboundEvent(trx, {
-        accountId: key.accountId,
-        source: 'poll',
-        marketplace,
-        providerEventId: `order:${order.externalOrderId}`.slice(0, 255),
-        signatureOk: null,
-        payload: orderEventPayload(key.connectionId, order, prepared.runId),
-        // An automation connection knows its seller by the session only, not by a user id.
-        externalUserId: null,
-      });
-      // A check handed this order over before.
-      if (event.duplicate) return;
+      const handOver = (providerEventId: string) =>
+        recordInboundEvent(trx, {
+          accountId: key.accountId,
+          source: 'poll',
+          marketplace,
+          providerEventId: providerEventId.slice(0, 255),
+          signatureOk: null,
+          payload: orderEventPayload(key.connectionId, order, prepared.runId),
+          // An automation connection knows its seller by the session only, not by a user id.
+          externalUserId: null,
+        });
+      let event = await handOver(`order:${order.externalOrderId}`);
+      // A check handed this order over before. A sales history read hands it over once more
+      // when it was dropped then (`ignored`: before Listora recorded the sales of listings it
+      // doesn't have); recording it again is a no-op for a sale already recorded.
+      if (event.duplicate) {
+        if (prepared.since !== null || !(await wasIgnored(trx, key.accountId, event.id))) return;
+        event = await handOver(`history:order:${order.externalOrderId}`);
+        if (event.duplicate) return;
+      }
       await queueSaleOrder(trx, { accountId: key.accountId, inboundEventId: event.id });
       added.push(order);
     });
   }
   return added;
+}
+
+/** Whether an order's earlier event recorded no sale: nothing of it was a Listora listing then. */
+async function wasIgnored(db: DbExecutor, accountId: string, eventId: string): Promise<boolean> {
+  const event = await db
+    .selectFrom('inbound_event')
+    .select('result')
+    .where('account_id', '=', accountId)
+    .where('id', '=', eventId)
+    .executeTakeFirst();
+  return event?.result === 'ignored';
 }
 
 /** Finishes the check's record with what it read, or why it failed. */

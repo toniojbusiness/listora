@@ -187,8 +187,18 @@ export {
 export type { SaleCheckHealthDependencies, SaleCheckProblem } from './sale-checks/health.ts';
 export { runSaleCheck } from './sale-checks/job.ts';
 export type { SaleCheckOrderRecord } from './sale-checks/job.ts';
-export { isSaleOrderJobPayload, recordSaleOrder, SALE_ORDER_TASK } from './sale-checks/orders.ts';
-export type { SaleOrderDependencies, SaleOrderJobPayload } from './sale-checks/orders.ts';
+export {
+  isSaleOrderJobPayload,
+  orderEventPayload,
+  recordSaleOrder,
+  SALE_ORDER_TASK,
+} from './sale-checks/orders.ts';
+export type {
+  SaleOrderDependencies,
+  SaleOrderJobPayload,
+  SoldItemMaker,
+  SoldItemSource,
+} from './sale-checks/orders.ts';
 export type { SaleCheckDependencies } from './sale-checks/job.ts';
 export {
   dueSaleChecks,

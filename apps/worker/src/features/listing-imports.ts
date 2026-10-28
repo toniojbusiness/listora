@@ -1,7 +1,8 @@
 import { isListingImportJobPayload, LISTING_IMPORT_APPLY_TASK } from '@listora/automation';
-import { applyListingImport, HttpImportPhotoFetcher } from '@listora/imports';
+import { applyListingImport } from '@listora/imports';
 
 import type { WorkerFeature } from '../features.ts';
+import { importPhotoFetcher } from '../import-photos.ts';
 
 /**
  * Listing imports (`listing_import_apply`, docs/features/imports.md): after every page an
@@ -21,11 +22,10 @@ export const feature: WorkerFeature = {
           );
           return;
         }
-        const local = Object.values(config.automation.profiles).some((profile) =>
-          profile.origins.some((origin) => /^http:\/\/(127\.0\.0\.1|localhost)(:|$)/.test(origin)),
+        await applyListingImport(
+          { db, storage, photos: importPhotoFetcher(config), logger },
+          payload,
         );
-        const photos = new HttpImportPhotoFetcher({ allowLocalHttp: local });
-        await applyListingImport({ db, storage, photos, logger }, payload);
       },
     },
   }),

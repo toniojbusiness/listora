@@ -327,7 +327,7 @@ export function orderDetail(result: InboundEventResult | null, error: string | n
     case 'processed':
       return 'Recorded as a sale.';
     case 'ignored':
-      return 'Nothing to do: none of it is a Listora listing, or the sale was recorded already.';
+      return 'Nothing to do: the sale was recorded already, or the order showed nothing to record.';
     case 'failed':
       return error ?? "Listora couldn't read it.";
     default:
@@ -347,6 +347,8 @@ export function saleDetectionWords(source: SaleDetectionSource, marketplace: Mar
       return 'Found in a forwarded sale email.';
     case 'manual':
       return 'You marked it sold.';
+    case 'history':
+      return `Found in your ${name} sales history, from before you connected ${name}.`;
     default:
       return assertNever(source, 'sale detection source');
   }

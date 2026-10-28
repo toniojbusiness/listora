@@ -698,7 +698,7 @@ public protocol APIProtocol: Sendable {
     func linkMarketplaceSession(_ input: Operations.LinkMarketplaceSession.Input) async throws -> Operations.LinkMarketplaceSession.Output
     /// List sales
     ///
-    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+    /// The sales feed, newest sold first, each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -717,6 +717,16 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/post(createSale)`.
     func createSale(_ input: Operations.CreateSale.Input) async throws -> Operations.CreateSale.Output
+    /// Get the seller's sales, in total and per marketplace
+    ///
+    /// Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+    /// marketplace: the sales the seller's connected marketplaces showed (their sales history
+    /// included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sales/summary`.
+    /// - Remark: Generated from `#/paths//v1/sales/summary/get(getSalesSummary)`.
+    func getSalesSummary(_ input: Operations.GetSalesSummary.Input) async throws -> Operations.GetSalesSummary.Output
     /// Get a sale and its delist run
     ///
     /// - Remark: HTTP `GET /v1/sales/{saleId}`.
@@ -2359,7 +2369,7 @@ extension APIProtocol {
     }
     /// List sales
     ///
-    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
+    /// The sales feed, newest sold first, each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -2393,6 +2403,18 @@ extension APIProtocol {
             headers: headers,
             body: body
         ))
+    }
+    /// Get the seller's sales, in total and per marketplace
+    ///
+    /// Every sale that stands (detected, confirmed, or shipped), all time, in total and on each
+    /// marketplace: the sales the seller's connected marketplaces showed (their sales history
+    /// included) and the ones entered by hand. A canceled or returned sale counts nowhere.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sales/summary`.
+    /// - Remark: Generated from `#/paths//v1/sales/summary/get(getSalesSummary)`.
+    public func getSalesSummary(headers: Operations.GetSalesSummary.Input.Headers = .init()) async throws -> Operations.GetSalesSummary.Output {
+        try await getSalesSummary(Operations.GetSalesSummary.Input(headers: headers))
     }
     /// Get a sale and its delist run
     ///

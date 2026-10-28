@@ -26,7 +26,13 @@ import { PUSH_TASK } from '@listora/push';
 
 import { runSaleCheckHealth } from './health.ts';
 import { runSaleCheck } from './job.ts';
-import { recordSaleOrder, SALE_ORDER_TASK, type SaleOrderJobPayload } from './orders.ts';
+import {
+  recordSaleOrder,
+  SALE_ORDER_TASK,
+  type SaleOrderJobPayload,
+  type SoldItemMaker,
+  type SoldItemSource,
+} from './orders.ts';
 import {
   dueSaleChecks,
   requestSaleCheck,
@@ -202,6 +208,11 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     await clearJobs();
   });
 
+  /** Makes the connection a day old, so the sales the site shows came after it. */
+  const connectedSinceYesterday = (connectionId: string) =>
+    sql`update marketplace_connection set created_at = now() - interval '1 day'
+      where id = ${connectionId}`.execute(database.db);
+
   it('records each new order once for the sale intake and schedules the next check', async () => {
     const { connectionId } = await link();
     // The first order sold a listing Listora made; the second one Listora knows nothing of.
@@ -340,6 +351,96 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     expect(Math.abs(delay - 12 * HOUR)).toBeLessThan(60_000);
     expect(row.checked_through).toBeInstanceOf(Date);
     await clearJobs();
+  });
+
+  it('records the sales history: every sale shown, a sold item each, once; a dropped order again', async () => {
+    const { connectionId } = await link();
+    await connectedSinceYesterday(connectionId);
+    // A sale from before Listora was connected, and one since, of listings Listora doesn't have.
+    const before = site.sell(
+      site.seed({
+        seller: accountId,
+        sku: `SKU-${accountId}-old`,
+        title: 'Old jacket',
+        description: 'Red.',
+        priceCents: 2000,
+      }),
+      new Date(Date.now() - 3 * 24 * HOUR),
+    ).id;
+    const since = soldOnSite(1)[0] ?? '';
+    const runAll = async (maker?: SoldItemMaker<SoldItemSource>) => {
+      const { rows } = await sql<{ payload: SaleOrderJobPayload }>`
+        select payload from graphile_worker._private_jobs where task_id =
+          (select id from graphile_worker._private_tasks where identifier = ${SALE_ORDER_TASK})
+      `.execute(database.db);
+      for (const { payload } of rows) {
+        await recordSaleOrder(
+          {
+            db: database.db,
+            adapters,
+            logger: silentLogger,
+            ...(maker ? { soldItems: maker } : {}),
+          },
+          payload,
+        );
+      }
+      await clearJobs();
+    };
+    // Before sold items: the first check dropped both orders.
+    await check(connectionId);
+    await runAll();
+    expect((await events()).map((event) => [event.provider_event_id, event.result])).toEqual(
+      [before, since].sort().map((id) => [`order:${id}`, 'ignored']),
+    );
+
+    // The next check reads the whole history again (the migration's reset) and hands each
+    // dropped order over once more; a later full read hands nothing over twice.
+    const made: SoldItemSource[] = [];
+    const maker: SoldItemMaker<SoldItemSource> = {
+      prepare: (source) => Promise.resolve(source),
+      create: async (trx, source) => {
+        made.push(source);
+        const item = await createInventoryItem(trx, source.accountId, { title: 'Sold jacket' });
+        return { itemId: item.id, listingId: null };
+      },
+    };
+    for (let read = 0; read < 2; read += 1) {
+      await database.db
+        .updateTable('sale_check_schedule')
+        .set({ checked_through: null })
+        .where('connection_id', '=', connectionId)
+        .execute();
+      await check(connectionId);
+      await runAll(maker);
+    }
+    expect((await events()).map((event) => [event.provider_event_id, event.result])).toEqual(
+      [
+        ...[before, since].map((id) => [`history:order:${id}`, 'processed']),
+        ...[before, since].map((id) => [`order:${id}`, 'ignored']),
+      ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    );
+    expect(made).toHaveLength(2);
+    expect(made[0]).toMatchObject({ accountId, connectionId, marketplace: 'mercari' });
+    // Each a sale of its own sold item: the one from before Listora was connected found in the
+    // sales history, never one to ship; nothing else to delist.
+    const sales = await database.db
+      .selectFrom('sale')
+      .innerJoin('sale_item', 'sale_item.sale_id', 'sale.id')
+      .innerJoin('inventory_item as item', 'item.id', 'sale_item.item_id')
+      .select([
+        'sale.external_order_id',
+        'sale.detection_source',
+        'sale.status',
+        'item.status as item',
+      ])
+      .where('sale.account_id', '=', accountId)
+      .orderBy('sale.sold_at')
+      .execute();
+    expect(sales).toEqual([
+      { external_order_id: before, detection_source: 'history', status: 'detected', item: 'sold' },
+      { external_order_id: since, detection_source: 'poll', status: 'detected', item: 'sold' },
+    ]);
+    expect(await pushes()).toEqual([]);
   });
 
   it("records why a check failed; checks failing in a row are the owner's, never the seller's", async () => {

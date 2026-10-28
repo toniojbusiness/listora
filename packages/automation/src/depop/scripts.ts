@@ -7,7 +7,6 @@ import {
   type ListedListing,
   type OperationRequest,
   type RemoteListingState,
-  type RemoteOrder,
 } from '@listora/marketplaces';
 
 import {
@@ -38,17 +37,14 @@ import {
   readReceipts,
   type ReceiptLabel,
 } from './pages/receipts.ts';
-import { readSoldItemsPage } from './pages/sold-items-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
+import { readSales } from './sales.ts';
 
 /**
  * Pages of the seller's newest listings for sale (24 each) a lookup by SKU looks through. A
  * listing whose slug Listora never learned is one it just posted, so it is among the newest.
  */
 export const SKU_LOOKUP_PAGES = 1;
-/** Pages of sold items one sale check goes through at most (newest first). */
-export const MAX_SOLD_PAGES = 5;
-
 export interface DepopScriptOptions {
   /** The site the scripts drive: Depop, or its stand-in in development and tests. */
   site: DepopSite;
@@ -258,35 +254,7 @@ export function createDepopScripts(
     },
     health: (step) =>
       step('open the selling hub', { mutates: false }, (page) => openHub(page, site)),
-    orders: async (since, step) => {
-      const orders: RemoteOrder[] = [];
-      for (let number = 1; number <= MAX_SOLD_PAGES; number += 1) {
-        const shown = await step('read the sold items', { mutates: false }, (page) =>
-          readSoldItemsPage(page, site, number),
-        );
-        for (const item of shown.items) {
-          if (since !== null && item.soldAt < since) continue;
-          // Listora lists one of each item, so a Depop listing sells once: its slug names the
-          // order.
-          orders.push({
-            externalOrderId: item.slug,
-            soldAt: item.soldAt,
-            items: [
-              {
-                externalListingId: item.slug,
-                title: null,
-                priceCents: item.priceCents,
-                currency: 'USD',
-              },
-            ],
-          });
-        }
-        // Newest first: a page that reaches past `since` is the last one needed.
-        const oldest = shown.items.at(-1)?.soldAt ?? null;
-        if (!shown.hasMore || (since !== null && oldest !== null && oldest < since)) break;
-      }
-      return orders;
-    },
+    orders: (since, step) => readSales({ site, step, since }),
     labels: async (orders, step) => {
       const receipts: ReceiptLabel[] = [];
       let cursor: string | null = null;
@@ -295,7 +263,7 @@ export function createDepopScripts(
           await onDepop(page, site);
           return readReceipts(page, site, cursor);
         });
-        receipts.push(...shown.receipts);
+        receipts.push(...shown.receipts.map((receipt) => receipt.label));
         const missing = orders.some((order) => !orderLabel(order, receipts).found);
         if (shown.next === null || !missing) break;
         cursor = shown.next;

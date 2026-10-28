@@ -122,9 +122,15 @@ details a revise removes, which a recording of an unsent form cannot).
 
 ## Open items
 
-- Recordings cover what the seller's own account shows. A seller with no sales yet records an
-  empty sold-items page, and a page only another account state shows (a listing under review, a
-  sold listing's page) is still covered by the fakes alone. An entry about one of the seller's
+- Recordings cover what the seller's own account shows. A seller with no sales yet records
+  empty sold items, and a page only another account state shows (a listing under review, a
+  sold listing's page) is still covered by the fakes alone. Depop's `sold` entry (the receipts
+  read from the selling hub) is the captain's: the hub page recorded 2026-10-27 with the receipts
+  API's empty answer his session gave 2026-10-28, put together because that Chrome then held
+  another seller's shop, whose sales are never recorded (the repository is public); re-record it
+  (`--only sold`) once the captain's Depop is signed in there again. That seller's receipts were
+  read read-only instead ([depop-automation.md](depop-automation.md#live-verification)), and the
+  tests use invented receipts in their real shape. An entry about one of the seller's
   listings (`listing`, `edit`) is skipped when the seller has none for sale: the first
   recordings (2026-10-27) have Poshmark's skipped and Depop's shop empty (its `listing` and
   `edit` are from an earlier session of the same day); re-record them once the account has a

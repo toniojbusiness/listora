@@ -103,6 +103,7 @@ export type FakeDepopSiteAction =
   | 'listings'
   | 'sold'
   | 'receipts'
+  | 'receipt'
   | 'health'
   | 'form';
 
@@ -135,7 +136,8 @@ export interface FakeDepopSiteFaultRule {
 }
 
 /** Depop's product statuses, which its pages show as `STATUS_ONSALE`, ... */
-export type FakeDepopStatus = 'ONSALE' | 'SOLD' | 'DELETED';
+/** `PURCHASED`: a buyer bought it through Depop (Depop's own status since 2026-10-28's read). */
+export type FakeDepopStatus = 'ONSALE' | 'PURCHASED' | 'MARKED_AS_SOLD' | 'DELETED';
 
 export interface FakeDepopProduct {
   slug: string;
@@ -199,12 +201,25 @@ interface StoredProduct {
   purchaseId: number | null;
   /** The sale's shipping label and buyer's first name, once it sold. */
   shipping?: FakeDepopShipping;
+  /** What the buyer paid for it (an accepted offer may be less than its price), once it sold. */
+  paidCents?: number;
+  /** Whether the purchase shipped (`shipped`) or still waits to (`shipping_pending`). */
+  purchaseStatus?: FakeDepopPurchaseStatus;
 }
 
 /** A sale's label, as a receipt shows it. */
 export interface FakeDepopShipping {
   trackingNumber: string | null;
   buyerFirstName: string | null;
+}
+
+/** A receipt's status, as Depop's receipts name them. */
+export type FakeDepopPurchaseStatus = 'shipping_pending' | 'shipped' | 'cancelled';
+
+/** How a fake purchase went: what the buyer paid and whether it shipped. */
+export interface FakeDepopPurchase {
+  paidCents?: number;
+  status?: FakeDepopPurchaseStatus;
 }
 
 interface Session {
@@ -362,17 +377,61 @@ export class FakeDepopSite {
       },
       previous: null,
       gone: false,
-      purchaseId: product.status === 'SOLD' ? this.#newPurchaseId() : null,
+      purchaseId: product.status === 'PURCHASED' ? this.#newPurchaseId() : null,
     });
     return slug;
   }
 
-  /** A buyer buys the product: it is sold (a receipt on the sold items page). */
-  sell(slug: string, soldAt = new Date(), shipping?: FakeDepopShipping): void {
+  /**
+   * A buyer buys the product: it is sold (a receipt on the sold items page), and its last change
+   * time is the sale's, as a sold product can't be changed any more.
+   */
+  sell(
+    slug: string,
+    soldAt = new Date(),
+    shipping?: FakeDepopShipping,
+    purchase: FakeDepopPurchase = {},
+  ): void {
+    this.#purchase([slug], soldAt, this.#newPurchaseId(), shipping, purchase);
+  }
+
+  /** A buyer buys several products in one purchase (a bundle), each for what it says. */
+  sellBundle(lines: readonly { slug: string; paidCents: number }[], soldAt = new Date()): number {
+    const purchaseId = this.#newPurchaseId();
+    for (const line of lines) {
+      this.#purchase([line.slug], soldAt, purchaseId, undefined, { paidCents: line.paidCents });
+    }
+    return purchaseId;
+  }
+
+  /** The purchase ships (or is canceled), as its receipt then says. */
+  purchaseStatus(slug: string, status: FakeDepopPurchaseStatus): void {
+    this.#stored(slug).purchaseStatus = status;
+  }
+
+  #purchase(
+    slugs: readonly string[],
+    soldAt: Date,
+    purchaseId: number,
+    shipping: FakeDepopShipping | undefined,
+    purchase: FakeDepopPurchase,
+  ): void {
+    for (const slug of slugs) {
+      const stored = this.#stored(slug);
+      this.#change(stored, { status: 'PURCHASED', soldAt });
+      stored.current.updatedAt = seconds(soldAt);
+      stored.purchaseId = purchaseId;
+      stored.paidCents = purchase.paidCents ?? stored.current.priceCents;
+      stored.purchaseStatus = purchase.status ?? 'shipping_pending';
+      if (shipping !== undefined) stored.shipping = shipping;
+    }
+  }
+
+  /** The seller marks the product as sold (it sold somewhere else): no receipt. */
+  markAsSold(slug: string, at = new Date()): void {
     const stored = this.#stored(slug);
-    this.#change(stored, { status: 'SOLD', soldAt });
-    stored.purchaseId = this.#newPurchaseId();
-    if (shipping !== undefined) stored.shipping = shipping;
+    this.#change(stored, { status: 'MARKED_AS_SOLD' });
+    stored.current.updatedAt = seconds(at);
   }
 
   /** The sale's purchase id (its receipt's), once it sold. */
@@ -724,8 +783,13 @@ export class FakeDepopSite {
           filter === 'sold'
             ? [...this.#products.values()]
                 .filter((stored) => stored.current.seller === session.seller)
-                .filter((stored) => stored.current.status === 'SOLD')
+                .filter(
+                  (stored) =>
+                    stored.current.status === 'PURCHASED' ||
+                    stored.current.status === 'MARKED_AS_SOLD',
+                )
                 .map((stored) => copy(stored.current))
+                .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
             : this.#forSale(session.seller);
         const limit = Math.max(1, Number(url.searchParams.get('limit') ?? '24') || 24);
         const start = Math.max(0, Number(url.searchParams.get('cursor') ?? '0') || 0);
@@ -734,32 +798,41 @@ export class FakeDepopSite {
         const end = start + size >= rows.length;
         return json(200, {
           meta: { cursor: end ? null : String(start + size), end },
-          products: page.map((product) => shopProductData(product, this.#idOf(product.slug))),
+          products: page.map((product) =>
+            shopProductData(product, this.#idOf(product.slug), this.#url),
+          ),
         });
       }
       case 'receipts': {
-        const receipts = [...this.#products.values()]
-          .filter(
-            (stored) =>
-              stored.current.seller === session.seller &&
-              stored.current.status === 'SOLD' &&
-              stored.purchaseId !== null,
-          )
-          .sort((a, b) => (b.current.soldAt?.getTime() ?? 0) - (a.current.soldAt?.getTime() ?? 0))
-          .map((stored) => ({
-            id: stored.purchaseId,
-            sold_time: (stored.current.soldAt ?? stored.current.updatedAt).toISOString(),
-            buyer: { first_name: stored.shipping?.buyerFirstName ?? null },
-            products: [{ slug: stored.current.slug }],
-            shipment: { tracking_number: stored.shipping?.trackingNumber ?? null },
-          }));
-        return json(200, { objects: receipts, page_info: { has_more: false } });
+        // The seller's purchases, newest first, a page at a time, as Depop's receipts list them
+        // (the fields Listora reads, with invented values; read 2026-10-28).
+        const purchases = this.#purchasesOf(session.seller);
+        const limit = Math.max(1, Number(url.searchParams.get('limit') ?? '24') || 24);
+        const after = url.searchParams.get('after');
+        const start = after === null ? 0 : Math.max(0, Number(after.replace(/^r/, '')) || 0);
+        const page = purchases.slice(start, start + Math.min(limit, this.#pageSize));
+        const end = start + page.length;
+        return json(200, {
+          objects: page.map((lines) => receiptData(lines, this.#idOf.bind(this))),
+          page_info: {
+            has_more: end < purchases.length,
+            first: `r${String(start)}`,
+            last: `r${String(end)}`,
+          },
+        });
+      }
+      case 'receipt': {
+        const lines = this.#purchasesOf(session.seller).find(
+          (purchase) => String(purchase[0]?.purchaseId) === route.slug,
+        );
+        if (lines === undefined) return json(404, { message: 'Receipt not found' });
+        return json(200, receiptDetailData(lines, this.#idOf.bind(this)));
       }
       case 'sold': {
         const sales = [...this.#products.values()]
           .flatMap((stored) =>
             stored.current.seller === session.seller &&
-            stored.current.status === 'SOLD' &&
+            stored.current.status === 'PURCHASED' &&
             stored.purchaseId !== null
               ? [
                   {
@@ -773,6 +846,19 @@ export class FakeDepopSite {
         return { status: 200, body: soldItemsPage(session.seller, sales) };
       }
     }
+  }
+
+  /** The seller's purchases, newest first: each one's products (a bundle has several). */
+  #purchasesOf(seller: string): StoredProduct[][] {
+    const byPurchase = new Map<number, StoredProduct[]>();
+    for (const stored of this.#products.values()) {
+      if (stored.current.seller !== seller || stored.purchaseId === null) continue;
+      if (stored.current.status !== 'PURCHASED') continue;
+      byPurchase.set(stored.purchaseId, [...(byPurchase.get(stored.purchaseId) ?? []), stored]);
+    }
+    return [...byPurchase.values()].sort(
+      (a, b) => (b[0]?.current.soldAt?.getTime() ?? 0) - (a[0]?.current.soldAt?.getTime() ?? 0),
+    );
   }
 
   /** The seller's products for sale, newest first. */
@@ -866,6 +952,8 @@ function matchRoute(method: string, path: string): Route | null {
   if (get && path === '/presentation/api/v1/receipts/') {
     return { method, action: 'receipts', slug: null, api: true };
   }
+  const receipt = /^\/presentation\/api\/v1\/receipts\/(\d+)\/$/.exec(path)?.[1];
+  if (get && receipt !== undefined) return { method, action: 'receipt', slug: receipt, api: true };
   if (path === '/products/create/') {
     if (get) return { method, action: 'form', slug: null };
     if (post) return { method, action: 'create', slug: null };
@@ -1013,7 +1101,11 @@ function priceData(cents: number): { priceAmount: string; currencyName: string }
 }
 
 /** A product as the API's list of the seller's own listings has it (pages/api.ts). */
-function shopProductData(product: FakeDepopProduct, id: number): Record<string, unknown> {
+function shopProductData(
+  product: FakeDepopProduct,
+  id: number,
+  origin: string,
+): Record<string, unknown> {
   return {
     id,
     slug: product.slug,
@@ -1022,6 +1114,10 @@ function shopProductData(product: FakeDepopProduct, id: number): Record<string, 
     price: { ...priceData(product.priceCents), nationalShippingCost: '1.99' },
     sizes: product.size === null ? [] : [product.size],
     category: product.category[1],
+    // Each picture's sizes, as the list shows them (read 2026-10-28).
+    pictures: product.photos.map((name, index) => [
+      { id: index, width: 640, height: 640, url: `${origin}/media/${fakeMediaName(name)}.jpg` },
+    ]),
     dateCreated: product.listedAt.toISOString(),
     dateUpdated: product.updatedAt.toISOString(),
   };
@@ -1100,5 +1196,62 @@ function copy(product: FakeDepopProduct): FakeDepopProduct {
     listedAt: new Date(product.listedAt),
     updatedAt: new Date(product.updatedAt),
     soldAt: product.soldAt === null ? null : new Date(product.soldAt),
+  };
+}
+
+/**
+ * One purchase as Depop's receipts list shows it: the fields Listora reads (its id, status,
+ * time, what the buyer paid for the items and what the seller is paid, and each line's
+ * product), plus the buyer's first name and the parcel's tracking for Pack check. Invented
+ * values only.
+ */
+function receiptData(
+  lines: readonly StoredProduct[],
+  idOf: (slug: string) => number,
+): Record<string, unknown> {
+  const first = lines[0];
+  if (first === undefined) throw new Error('a purchase has a product');
+  const paid = lines.reduce((total, line) => total + (line.paidCents ?? 0), 0);
+  return {
+    purchase_id: first.purchaseId,
+    status: first.purchaseStatus ?? 'shipping_pending',
+    sold_timestamp: (first.current.soldAt ?? first.current.updatedAt).toISOString(),
+    is_bundle: lines.length > 1,
+    currency: 'USD',
+    items_amount: priceAmount(paid),
+    // What the seller is paid: the fake's Depop keeps 10%.
+    seller_amount: priceAmount(paid - Math.round(paid / 10)),
+    buyer: { first_name: first.shipping?.buyerFirstName ?? 'Buyer' },
+    line_items: lines.map((line, index) => ({
+      id: 100 + index,
+      product_id: idOf(line.current.slug),
+      description: line.current.description,
+      picture_url: 'https://media-photos.depop.com/fake/P0.jpg',
+    })),
+    parcels: [
+      {
+        parcel_status: first.purchaseStatus === 'shipped' ? 'IN_TRANSIT' : 'AWAITING_SHIPPING',
+        tracking:
+          first.shipping?.trackingNumber === undefined || first.shipping.trackingNumber === null
+            ? null
+            : { reference: first.shipping.trackingNumber },
+      },
+    ],
+  };
+}
+
+/** One purchase as its own receipt shows it: each line's product, slug, and what it sold for. */
+function receiptDetailData(
+  lines: readonly StoredProduct[],
+  idOf: (slug: string) => number,
+): Record<string, unknown> {
+  return {
+    purchase_id: lines[0]?.purchaseId,
+    lines: lines.map((line) => ({
+      product_id: idOf(line.current.slug),
+      slug: line.current.slug,
+      product_amount: priceAmount(line.paidCents ?? 0),
+      original_price: priceAmount(line.current.priceCents),
+    })),
   };
 }

@@ -74,6 +74,15 @@ struct E2EStack {
         return try JSONDecoder().decode(ProfitReportBody.self, from: data).summary
     }
 
+    /// The seller's sales in total and per marketplace, as the API reports them (`getSalesSummary`).
+    func salesSummary() async throws -> SalesSummaryBody {
+        var request = URLRequest(url: apiURL.appending(path: "v1/sales/summary"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200, String(bytes: data, encoding: .utf8) ?? "")
+        return try JSONDecoder().decode(SalesSummaryBody.self, from: data)
+    }
+
     /// A ready item, kept in bin B-12, that sold on eBay and ships by tomorrow
     /// (`POST /today/sold-item`): a Today ship card.
     func seedSoldItem() async throws -> SoldItem {
@@ -258,4 +267,21 @@ struct ProfitSummary: Decodable {
     let netProfit: SavedMoney
     let revenue: SavedMoney
     let salesCount: Int
+}
+
+/// The parts of the contract's `SalesSummary` the test checks.
+struct SalesSummaryBody: Decodable {
+    struct Totals: Decodable {
+        let salesCount: Int
+        let revenue: SavedMoney
+    }
+
+    struct Marketplace: Decodable {
+        let marketplace: String
+        let salesCount: Int
+        let revenue: SavedMoney
+    }
+
+    let total: Totals
+    let marketplaces: [Marketplace]
 }

@@ -5,7 +5,6 @@
  */
 import { z } from 'zod';
 
-import type { JsonObject } from '@listora/db';
 import {
   ITEM_CONDITIONS,
   REMOTE_LISTING_STATUSES,
@@ -33,7 +32,7 @@ const listedListingSchema = z.object({
   }),
 });
 
-export function listedListing(stored: JsonObject): ListedListing | null {
+export function listedListing(stored: unknown): ListedListing | null {
   const parsed = listedListingSchema.safeParse(stored);
   return parsed.success ? parsed.data : null;
 }

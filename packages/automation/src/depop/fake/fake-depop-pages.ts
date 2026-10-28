@@ -307,7 +307,7 @@ export function productPage(view: ProductPageView): string {
     `0:${JSON.stringify({ b: 'fake', c: ['', 'products', product.slug, ''], share: { slug: product.slug, url }, f: '$4' })}`,
   ];
   const badge =
-    product.status === 'SOLD'
+    product.status === 'PURCHASED' || product.status === 'MARKED_AS_SOLD'
       ? '<p data-testid="product__sold">Sold</p>'
       : product.status === 'DELETED'
         ? '<p data-testid="product__deleted">This item is no longer available.</p>'
@@ -753,8 +753,7 @@ export const FAKE_DEPOP_NO_SALES =
 
 /**
  * The seller's sold items (`/sellinghub/sold-items/`), as Depop's App Router page draws them
- * after the document (read on the seller's own session, 2026-10-27, sold-items-page.ts): one row
- * per sale, newest first, a link to its receipt (`/sellinghub/sold-items/<purchase id>/`, no
+ * after the document (read on the seller's own session, 2026-10-27): one row per sale, newest first, a link to its receipt (`/sellinghub/sold-items/<purchase id>/`, no
  * product slug) with the buyer, where it ships, and when it sold; or, for a seller without
  * sales, a note.
  */
@@ -832,7 +831,8 @@ export function captchaWidget(): string {
 /** schema.org's availability for each of Depop's product statuses. */
 const AVAILABILITY: Readonly<Record<FakeDepopProduct['status'], string>> = {
   ONSALE: 'https://schema.org/InStock',
-  SOLD: 'https://schema.org/SoldOut',
+  PURCHASED: 'https://schema.org/SoldOut',
+  MARKED_AS_SOLD: 'https://schema.org/SoldOut',
   DELETED: 'https://schema.org/Discontinued',
 };
 

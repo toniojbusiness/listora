@@ -47,6 +47,9 @@ export const MAX_SOLD_PAGES = 5;
  * show (newest first).
  */
 export const MAX_SOLD_READS = 12;
+/** The sales history's (a check with no `since`) pages and listing pages per tab at most. */
+export const HISTORY_SOLD_PAGES = 25;
+export const HISTORY_SOLD_READS = 60;
 /** Order pages one label read opens at most. */
 export const MAX_LABEL_READS = 10;
 
@@ -296,9 +299,11 @@ export function createMercariScripts(
       const soldPath = await step('find the sales tab', { mutates: false }, (page) =>
         salesTabPath(page, site),
       );
+      const maxPages = since === null ? HISTORY_SOLD_PAGES : MAX_SOLD_PAGES;
+      const maxReads = since === null ? HISTORY_SOLD_READS : MAX_SOLD_READS;
       for (const tab of ['in_progress', 'sold'] as const) {
         let reads = 0;
-        tab: for (let number = 1; number <= MAX_SOLD_PAGES; number += 1) {
+        tab: for (let number = 1; number <= maxPages; number += 1) {
           const shown = await step(
             `read the ${tab.replace('_', ' ')} sales`,
             { mutates: false },
@@ -310,9 +315,11 @@ export function createMercariScripts(
             // row last changed before `since`, it and every row after it sold before then.
             if (since !== null && row.changedBy !== null && row.changedBy < since) break tab;
             let { soldAt, priceCents, title } = row;
+            let listing: ListedListing | undefined;
             if (soldAt === null || priceCents === null) {
-              // The row doesn't show when it sold or for how much: the listing's page does.
-              if (reads === MAX_SOLD_READS) break tab;
+              // The row doesn't show when it sold or for how much: the listing's page does, with
+              // its photos and details.
+              if (reads === maxReads) break tab;
               reads += 1;
               const read = await step('read the sale', { mutates: false }, (page) =>
                 readItem(page, site, row.id),
@@ -321,20 +328,27 @@ export function createMercariScripts(
               if (read.state.found) {
                 priceCents ??= read.state.priceCents;
                 title ||= read.state.title ?? '';
+                listing = {
+                  ...read.state,
+                  details: listingDetails(read.record ?? {}, read.records ?? {}, read.sku),
+                };
               }
             }
             if (soldAt === null || priceCents === null) continue;
             if (since !== null && soldAt < since) continue;
-            // A Mercari listing sells once, so its id names the order.
+            // A Mercari listing sells once, so its id names the order. The sold tab holds the
+            // finished ones; in progress may still wait to ship or be on its way.
             orders.push({
               externalOrderId: row.id,
               soldAt,
+              ...(tab === 'sold' ? { shipped: true } : {}),
               items: [
                 {
                   externalListingId: row.id,
                   title: title === '' ? null : title,
                   priceCents,
                   currency: 'USD',
+                  ...(listing === undefined ? {} : { listing }),
                 },
               ],
             });

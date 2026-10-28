@@ -5,7 +5,9 @@ one tap: each listing for sale becomes an inventory item that is already listed 
 title, description, price, category, size, brand, condition, and the listing's id and URL), the
 same item listed on several marketplaces becomes one item with several listings, and **List on
 the others** then crosslists it to the marketplaces it is not on yet, through the normal List
-flow. Listora only reads the marketplace: an import never changes or ends a listing.
+flow. Listora only reads the marketplace: an import never changes or ends a listing. Sold
+listings come in another way: each sale the marketplace's sale checks find becomes a sale, of a
+sold item made the same way when Listora had no listing for it ([sales.md](sales.md#sales-history)).
 
 | Where                                                            | What                                                                  |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------- |
