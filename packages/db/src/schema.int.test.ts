@@ -481,6 +481,7 @@ const COLUMNS = {
     'response_body',
     'created_at',
     'expires_at',
+    'response_ciphertext',
   ],
   deleted_identity: ['auth_provider', 'auth_subject_sha256', 'deleted_at'],
   account_deletion: [

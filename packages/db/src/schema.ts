@@ -772,11 +772,15 @@ export interface AuditLogTable {
  */
 export interface IdempotencyRecordTable {
   account_id: string;
+  /** The Idempotency-Key's SHA-256 (hex); the key itself in records stored before sealing. */
   key: string;
   operation_id: string;
   request_hash: string;
   response_status: number;
+  /** Null once sealed: only records stored before `response_ciphertext` hold the response. */
   response_body: NullableJsonb<JsonValue>;
+  /** The response sealed under a key derived from the Idempotency-Key (apps/api/src/idempotency.ts). */
+  response_ciphertext: Nullable<Buffer>;
   created_at: CreatedAt;
   expires_at: Timestamp;
 }
