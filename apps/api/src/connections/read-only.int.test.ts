@@ -7,7 +7,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { PHONE_RUNTIME_VERSION } from '@listora/automation';
-import { createInventoryItem } from '@listora/db';
+import { startConnectionDeletion } from '@listora/connections';
+import { createInventoryItem, inTransaction } from '@listora/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
@@ -19,18 +20,11 @@ describe('read-only connections in the API (real Postgres)', () => {
   let token: string;
   let accountId: string;
   let listingId: string;
+  const installationId = randomUUID();
 
-  beforeAll(async () => {
-    api = await createTestApi('read_only');
-    token = await api.signIn(SELLER);
-    accountId = (await api.tenantOf(SELLER)).accountId;
-    const installationId = randomUUID();
-    await api.call('registerDevice', {
-      token,
-      params: { installationId },
-      body: { name: "Sam's iPhone", platform: 'ios', runtimeVersion: PHONE_RUNTIME_VERSION },
-    });
-    const linked = await api.call('linkMarketplaceSession', {
+  /** Links the Depop shop by signing in on the phone. */
+  const link = () =>
+    api.call('linkMarketplaceSession', {
       token,
       params: { marketplace: 'depop' },
       body: {
@@ -49,6 +43,17 @@ describe('read-only connections in the API (real Postgres)', () => {
         ],
       },
     });
+
+  beforeAll(async () => {
+    api = await createTestApi('read_only');
+    token = await api.signIn(SELLER);
+    accountId = (await api.tenantOf(SELLER)).accountId;
+    await api.call('registerDevice', {
+      token,
+      params: { installationId },
+      body: { name: "Sam's iPhone", platform: 'ios', runtimeVersion: PHONE_RUNTIME_VERSION },
+    });
+    const linked = await link();
     expect(linked.status).toBe(201);
     expect(linked.body.readOnly).toBe(false);
     // A listing live on the linked shop, as an import leaves it.
@@ -212,5 +217,69 @@ describe('read-only connections in the API (real Postgres)', () => {
         .where('account_id', '=', accountId)
         .execute();
     }
+  });
+  describe('unlinking and relinking', () => {
+    const unlink = () =>
+      api.call('disconnectConnection', { token, params: { marketplace: 'depop' } });
+    const connectionId = async () =>
+      (
+        await api.db
+          .selectFrom('marketplace_connection')
+          .select('id')
+          .where('account_id', '=', accountId)
+          .where('marketplace', '=', 'depop')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const deletions = async () =>
+      (
+        await api.db
+          .selectFrom('connection_deletion')
+          .select('id')
+          .where('marketplace', '=', 'depop')
+          .execute()
+      ).length;
+
+    it('never unlinks a read-only shop, and deletes nothing', async () => {
+      await setReadOnly(true);
+      const before = await deletions();
+      const refused = await unlink();
+      expect(refused.status).toBe(409);
+      expect(refused.error).toMatchObject({
+        code: 'connection_read_only',
+        message: expect.stringContaining(
+          'turn off Read only for Depop in Link accounts first',
+        ) as unknown,
+      });
+      expect(await deletions()).toBe(before);
+      expect(
+        (await api.call('getConnection', { token, params: { marketplace: 'depop' } })).body,
+      ).toMatchObject({ readOnly: true });
+      expect((await listing()).body).toMatchObject({ id: listingId });
+    });
+
+    it('starts a relink read only when the connection went another way (retention, a purge)', async () => {
+      await setReadOnly(true);
+      const id = await connectionId();
+      await inTransaction(api.db, (trx) =>
+        startConnectionDeletion(trx, { accountId, connectionId: id, reason: 'revoked' }),
+      );
+      const relinked = await link();
+      expect(relinked.status).toBe(201);
+      expect(relinked.body.readOnly).toBe(true);
+      expect(
+        (await api.call('getConnection', { token, params: { marketplace: 'depop' } })).body,
+      ).toMatchObject({ readOnly: true });
+      // Still never unlinked while read only.
+      expect((await unlink()).status).toBe(409);
+    });
+
+    it('unlinks once the owner turns Read only off, and the next link is writable', async () => {
+      await setReadOnly(true);
+      expect((await setReadOnly(false)).body).toMatchObject({ readOnly: false });
+      expect((await unlink()).status).toBe(200);
+      const relinked = await link();
+      expect(relinked.status).toBe(201);
+      expect(relinked.body.readOnly).toBe(false);
+    });
   });
 });

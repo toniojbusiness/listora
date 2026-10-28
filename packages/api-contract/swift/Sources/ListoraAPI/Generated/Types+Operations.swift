@@ -11145,7 +11145,9 @@ public enum Operations {
     /// marketplace events, automation runs and their screenshots), and asks the marketplace to
     /// revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
     /// marketplace but Listora can no longer change or verify them until the account is
-    /// connected again. `404` when no account of the marketplace is linked.
+    /// connected again. `404` when no account of the marketplace is linked; `409
+    /// connection_read_only` while the account is read only (the owner turns Read only off
+    /// first, so an unlink and a relink never make it writable).
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/connections/{marketplace}`.

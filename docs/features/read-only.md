@@ -10,7 +10,10 @@ Code:
 
 - `packages/operations/src/read-only.ts`: what is a write, what is read only, the refusal and its
   message, and turning the setting on and off (`setConnectionReadOnly`).
-- `apps/api/src/connections/routes.ts`: `PUT /v1/connections/{marketplace}/read-only`.
+- `apps/api/src/connections/routes.ts`: `PUT /v1/connections/{marketplace}/read-only`, and the
+  unlink's refusal while read only.
+- `packages/db/migrations/20261028143028_marketplace_read_only.up.sql`: the account's setting
+  per marketplace, which outlives the connection.
 - The app's Link accounts screen (`MarketplaceLinkingFeature`): the Read only switch.
 
 ## What is read only
@@ -75,6 +78,26 @@ task, and no word about it in a notification.
   transaction. Each must leave out read-only listings itself: select with `listingIsReadOnly` and
   skip them, as the fan-out does.
 
+## Unlinking and relinking
+
+An unlink and a relink are never a way around the setting:
+
+- **Unlinking a read-only connection is refused** (`disconnectConnection` answers
+  `409 connection_read_only`: "Your Depop account is read only, so Listora won't unlink it. To
+  unlink it, turn off Read only for Depop in Link accounts first."), checked under the
+  connection's lock, and nothing is deleted. The owner turns Read only off first.
+- **The account keeps the setting per marketplace** (`marketplace_read_only`), so a connection
+  deleted another way (the retention job after a revocation, an operator's purge, eBay's account
+  deletion) does not take it along. Database triggers keep it: a row is added when a connection
+  becomes read only (or starts so), removed only when its setting is turned off, and kept when
+  the connection is deleted. Every new connection of that marketplace on the account starts read
+  only (`marketplace_connection_inherit_read_only`, before insert), whichever path creates it:
+  linking a session, OAuth, or any other.
+
+The protection is still per account and marketplace, not per shop: a later link of another shop
+on the same marketplace starts read only too, until the owner turns it off. Binding the setting to
+the marketplace's seller identity is a follow-up ([security.md](security.md)).
+
 Reads keep working on a read-only connection: imports, the listings and sold pages, sales
 history, sale checks and sale detection, session checks, label reads, offer reads, and `verify`.
 
@@ -109,11 +132,19 @@ nothing.
   and `automation/src/phone/read-only.test.ts`: the runner, the phone's dispatch (also mid-run),
   and the phone runtime refuse write scripts and still run reads.
 - `apps/api/src/connections/read-only.int.test.ts` and `apps/api/src/listings/views.test.ts`: the
-  setting, both screens, the owner rule, the actions offered, the `409`s, and items never
-  crossing to another marketplace.
+  setting, both screens, the owner rule, the actions offered, the `409`s, items never
+  crossing to another marketplace, the unlink refused while read only, and a relink after the
+  connection was deleted another way starting read only.
+- `db/src/constraints.int.test.ts`: every new connection of a read-only marketplace starts read
+  only, for that account and marketplace only, until the setting is turned off.
 - The app: `ReadOnlyLinkTests` and `APIMarketplaceSessionServiceTests`.
 
 ## Data
 
 - `marketplace_connection.read_only` (boolean, default false), migration
   `20261028061656_connection_read_only`.
+- `marketplace_read_only` (account, marketplace; one row while the account's connection on that
+  marketplace is read only, kept after the connection is deleted), and the triggers that keep it
+  and start a new connection read only, migration `20261028143028_marketplace_read_only`. It is
+  the seller's setting, not marketplace data, so it stays through an unlink and goes with the
+  account.

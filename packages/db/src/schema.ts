@@ -455,6 +455,17 @@ export interface MarketplaceConnectionTable {
   updated_at: UpdatedAt;
 }
 
+/**
+ * A marketplace that is read only on the account: kept by triggers while its connection is read
+ * only and after the connection is deleted, so every new connection of it starts read only
+ * (docs/features/read-only.md#unlinking-and-relinking). Removed only when the setting is turned off.
+ */
+export interface MarketplaceReadOnlyTable {
+  account_id: string;
+  marketplace: Marketplace;
+  created_at: CreatedAt;
+}
+
 /** One attempt to connect a marketplace account over OAuth (the `state` is stored hashed). */
 export interface ConnectionAuthorizationTable {
   id: Id;
@@ -1302,6 +1313,7 @@ export interface Database {
   ai_account_block: AiAccountBlockTable;
   ai_control_audit: AiControlAuditTable;
   marketplace_connection: MarketplaceConnectionTable;
+  marketplace_read_only: MarketplaceReadOnlyTable;
   connection_authorization: ConnectionAuthorizationTable;
   marketplace_listing: MarketplaceListingTable;
   marketplace_operation: MarketplaceOperationTable;

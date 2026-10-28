@@ -79,6 +79,7 @@ export {
   readOnlyItemMessage,
   readOnlyListing,
   readOnlyMessage,
+  readOnlyUnlinkMessage,
   readOnlySource,
   ReadOnlyConnectionError,
   setConnectionReadOnly,

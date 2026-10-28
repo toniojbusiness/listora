@@ -225,6 +225,7 @@ const COLUMNS = {
     'phone_device_id',
     'read_only',
   ],
+  marketplace_read_only: ['account_id', 'marketplace', 'created_at'],
   connection_authorization: [
     'id',
     'account_id',

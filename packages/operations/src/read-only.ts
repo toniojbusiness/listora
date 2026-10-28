@@ -39,6 +39,15 @@ export function readOnlyMessage(marketplace: Marketplace): string {
   return `Your ${name} account is read only, so Listora won't change anything on it. To let Listora change it, turn off Read only for ${name} in Link accounts.`;
 }
 
+/**
+ * What the seller is told when unlinking a read-only connection is refused: an unlink and a
+ * relink must never be a way around the setting.
+ */
+export function readOnlyUnlinkMessage(marketplace: Marketplace): string {
+  const name = MARKETPLACE_NAMES[marketplace];
+  return `Your ${name} account is read only, so Listora won't unlink it. To unlink it, turn off Read only for ${name} in Link accounts first.`;
+}
+
 /** A change was asked for on a listing whose connection is read only; nothing was queued. */
 export class ReadOnlyConnectionError extends Error {
   readonly marketplace: Marketplace;
