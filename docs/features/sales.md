@@ -56,7 +56,9 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
   once; for a connection linked before this, the deploy that brought sales history in) has the
   detection source `history` ("Found in your Depop sales history."), of a Listora listing too. Its items are marked sold and nothing else happens: no
   auto-delist, delist run, or delist of any other listing, no notification, no Today ship card,
-  and no Pack check order. Only a sale that sold after the history ends is acted on.
+  and no Pack check order, unless the marketplace's order page says it still waits to ship
+  ([pack-check.md](pack-check.md), "The to-ship list"). Only a sale that sold after the history
+  ends is acted on.
 - **One sale, reported twice.** A sale the seller marked sold by hand on a marketplace and then
   found there by a check (or its history) is the same order, not a double sale
   (`findSaleOfSameListing`, `@listora/sales`).

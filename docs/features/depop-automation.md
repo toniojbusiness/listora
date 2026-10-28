@@ -98,8 +98,10 @@ through `PageDriver.apiGet` ([automation.md](automation.md#how-it-works)), only 
   `line_items`
   (each its `product_id`, text, and photo); one receipt
   (`/presentation/api/v1/receipts/<purchase id>/`) gives a bundle's `lines` with each one's
-  `slug` and `product_amount`. Receipts also name the buyer and where it ships; Listora reads
-  only the buyer's first name and the parcel's tracking, for Pack check.
+  `slug` and `product_amount`. Each receipt's `parcels` (one for a bundle's items too) give its
+  label: `tracking.reference`, `shipping_provider`, `shipping_deadline`, and `label_expires_at`.
+  Receipts also name the buyer and where it ships; Listora reads only the buyer's first name and
+  the parcel, for Pack check ([pack-check.md](pack-check.md), "Depop's receipts").
 
 A read opens the product's page first: a 410 Gone there is the definitive absence the end is
 confirmed by, and a 404 never counts (it could be a listing not visible yet, as Depop says of its

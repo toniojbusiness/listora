@@ -46,6 +46,7 @@ import type {
   InboundEventSource,
   ItemStatus,
   LabelCarrier,
+  LabelOrderState,
   LabelReadStatus,
   ListingImportMatch,
   ListingImportOutcome,
@@ -1230,6 +1231,10 @@ export interface SaleLabelTable {
   read_status: Nullable<LabelReadStatus>;
   read_error: Nullable<string>;
   read_at: NullableTimestamp;
+  /** What the order page last said of the order; `null` when it doesn't say. */
+  order_state: Nullable<LabelOrderState>;
+  /** When the marketplace's label expires, as its page shows it. */
+  label_expires_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

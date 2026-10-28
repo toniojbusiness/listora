@@ -1,10 +1,11 @@
 /**
  * Pack check's label reads (docs/features/pack-check.md, "Reading labels") from marketplace data
- * Listora has only seen empty: Depop's receipts and Poshmark's sales. Their records are read by
- * field names that say what a value is (`tracking_number`, the buyer's `first_name`), at any
- * depth, and nothing else: a value is never taken by its position or its look. A record that
- * names no order id or listing at all is a shape Listora doesn't know, and the page module throws
- * `PageChangedError` for it.
+ * Listora has only seen empty: Poshmark's sales. Their records are read by field names that say
+ * what a value is (`tracking_number`, the buyer's `first_name`), at any depth, and nothing else:
+ * a value is never taken by its position or its look. A record that names no order id or listing
+ * at all is a shape Listora doesn't know, and the page module throws `PageChangedError` for it.
+ * Depop's receipts, read on a real shop with sales, are read by their own shape instead
+ * (depop/pages/receipts.ts).
  */
 
 /** Every value under a key `keys` names, at any depth (arrays included). */
