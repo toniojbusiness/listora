@@ -453,6 +453,59 @@ describe('activity and sale detection (real Postgres)', () => {
     expect(timeline).toContain('Saw 1 sold order on your iPhone. Nothing was changed.');
   });
 
+  it("lists every connection's reads and when each last worked, with the last error", async () => {
+    const connectionId = await mercari();
+    await db
+      .insertInto('background_read_health')
+      .values([
+        {
+          account_id: alpha,
+          connection_id: connectionId,
+          marketplace: 'mercari',
+          read: 'sale_check',
+          last_succeeded_at: new Date('2026-10-26T06:00:00Z'),
+          last_failed_at: new Date('2026-10-27T18:00:00Z'),
+          failures_in_a_row: 7,
+          failing_since: new Date('2026-10-26T10:00:00Z'),
+          last_error_code: 'element_missing',
+          last_error_step: 'read the in progress sales',
+          last_error_detail: "Mercari's in progress tab has rows that link to no listing.",
+          owner_alerted_at: new Date('2026-10-26T20:00:00Z'),
+        },
+        {
+          account_id: alpha,
+          connection_id: connectionId,
+          marketplace: 'mercari',
+          read: 'offer_check',
+          last_succeeded_at: new Date('2026-10-27T19:00:00Z'),
+        },
+      ])
+      .onConflict((conflict) =>
+        conflict.columns(['account_id', 'connection_id', 'read']).doNothing(),
+      )
+      .execute();
+    const table = await run(['read-health', '--account', alpha]);
+    const line = (read: string) => table.split('\n').find((row) => row.includes(read)) ?? '';
+    expect(line('sale check')).toContain('2026-10-26T06:00:00.000Z');
+    expect(line('sale check')).toContain('2026-10-26T20:00:00.000Z');
+    expect(line('sale check')).toContain(
+      `element_missing at "read the in progress sales": Mercari's in progress tab has rows that link to no listing.`,
+    );
+    expect(line('offer check')).toContain('2026-10-27T19:00:00.000Z');
+    expect(line('listing import')).toContain('never ran');
+    output = '';
+    const json = JSON.parse(await run(['read-health', '--account', alpha, '--json'])) as {
+      read: string;
+      failuresInARow: number;
+      lastSucceededAt: string | null;
+    }[];
+    expect(json.map(({ read, failuresInARow }) => [read, failuresInARow])).toEqual([
+      ['sale_check', 7],
+      ['listing_import', 0],
+      ['offer_check', 0],
+    ]);
+  });
+
   it('says plainly when a sale or a connection is missing', async () => {
     await expect(run(['sale-why', MISSING_ACCOUNT])).rejects.toThrow(CommandError);
     await expect(run(['sale-history', 'read', 'depop', '--account', alpha])).rejects.toThrow(

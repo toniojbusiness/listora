@@ -168,7 +168,7 @@ async function readMaster(page: Page, headers: Record<string, string>): Promise<
     body: JSON.stringify({ operationName: 'masterQuery', variables: {}, query: MASTER_QUERY }),
   })) as { master?: MercariMasterData } | undefined;
   if (data?.master === undefined || data.master.itemCategories.length === 0) {
-    throw new Error("Mercari's master data came back empty; the page may have changed.");
+    throw new Error("Mercari's master data came back empty.");
   }
   return data.master;
 }

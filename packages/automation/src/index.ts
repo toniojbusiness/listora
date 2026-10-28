@@ -185,6 +185,30 @@ export {
   saleCheckProblemNotification,
 } from './sale-checks/health.ts';
 export type { SaleCheckHealthDependencies, SaleCheckProblem } from './sale-checks/health.ts';
+export {
+  READ_ALERTS_SCHEDULE,
+  READ_ALERTS_TASK,
+  READ_HEALTH_DOC,
+  READ_NAMES,
+  readAlertEmail,
+  readFailure,
+  readFailureReason,
+  readProblem,
+  recordReadFailed,
+  recordReadSucceeded,
+  runReadAlerts,
+} from './read-health/health.ts';
+export type {
+  OwnerEmail,
+  OwnerMailer,
+  ReadAlert,
+  ReadAlertDependencies,
+  ReadAlertSettings,
+  ReadFailure,
+  ReadProblemReason,
+  ReadState,
+  ReadTarget,
+} from './read-health/health.ts';
 export { runSaleCheck } from './sale-checks/job.ts';
 export type { SaleCheckOrderRecord } from './sale-checks/job.ts';
 export {

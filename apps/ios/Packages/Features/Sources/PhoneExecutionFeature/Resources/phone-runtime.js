@@ -5817,7 +5817,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 /**
 	* What a script throws when a page is not the way it expects: a field missing from the page's
 	* data, a status it does not know, a form without the button it submits with. The run ends as
-	* `element_missing` (the site may have changed), so a step that changed nothing goes to the
+	* `element_missing` (the page is not as the script expects), so a step that changed nothing goes to the
 	* user instead of being retried against a page that will not change back. The message is
 	* logged and stored, so it says what the script expected and never repeats page content.
 	*/
@@ -5957,7 +5957,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The failure for a Depop page that is not as the script expects. */
 	function changed$2(pageName, problem) {
-		return new PageChangedError(`Depop's ${pageName} ${problem}; the page may have changed.`);
+		return new PageChangedError(`Depop's ${pageName} ${problem}.`);
 	}
 	/**
 	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
@@ -8115,7 +8115,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	/** The failure for an eBay page that is not as the script expects. */
 	function changed$1(pageName, problem) {
-		return new PageChangedError(`eBay's ${pageName} ${problem}; the page may have changed.`);
+		return new PageChangedError(`eBay's ${pageName} ${problem}.`);
 	}
 	/** A US dollar price as eBay shows it (`US $45.00`, `$1,045.00`) in cents; `null` otherwise. */
 	function parsePrice$1(text) {
@@ -8976,7 +8976,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	/** The failure for a Mercari page that is not as the script expects. */
 	function changed(pageName, problem) {
-		return new PageChangedError(`Mercari's ${pageName} ${problem}; the page may have changed.`);
+		return new PageChangedError(`Mercari's ${pageName} ${problem}.`);
 	}
 	/** Cents from a price as Mercari shows it: `$45`, `$1,250`, or `$45.00`. `null` otherwise. */
 	function parsePrice(shown) {

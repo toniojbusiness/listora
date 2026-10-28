@@ -774,6 +774,14 @@
               {
                 "Name": "AWS_REGION",
                 "Value": "us-east-1"
+              },
+              {
+                "Name": "OWNER_ALERTS",
+                "Value": "log"
+              },
+              {
+                "Name": "OWNER_ALERT_ENV",
+                "Value": "prod"
               }
             ],
             "Essential": true,

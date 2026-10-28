@@ -140,7 +140,7 @@ export type ScriptErrorCode =
   | 'server_error'
   /** The page could not be loaded at all (network, DNS). */
   | 'unreachable'
-  /** An element the script expects is not on the page: the site may have changed. */
+  /** An element the script expects is not on the page (which alone does not prove the site changed). */
   | 'element_missing'
   /** The run was aborted (the engine's deadline, or the runner stopping). */
   | 'aborted'

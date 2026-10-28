@@ -51,7 +51,7 @@ export function saleCheckErrorMessage(code: string, marketplace: Marketplace): s
   const name = MARKETPLACE_NAMES[marketplace];
   switch (code) {
     case 'element_missing':
-      return `${name}'s sold items page has changed, so Listora couldn't read it.`;
+      return `Listora couldn't read ${name}'s sold items page.`;
     case 'step_timeout':
     case 'timeout':
       return `${name}'s pages took too long to load.`;

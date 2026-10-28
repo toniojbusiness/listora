@@ -44,7 +44,7 @@ describe('sale-check health words', () => {
       ),
     ).toEqual({
       code: 'element_missing',
-      message: "Depop's sold items page has changed, so Listora couldn't read it.",
+      message: "Listora couldn't read Depop's sold items page.",
     });
     expect(saleCheckError(new Error('socket hang up at 10.0.0.1'), 'depop')).toEqual({
       code: 'error',

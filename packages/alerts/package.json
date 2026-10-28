@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Operator email: the alert emails sent for every alarm and AWS event on the alarm topic, the weekly health summary, the mailer interface with its SES driver and recording fake, and the Lambda handlers infra deploys them as.",
+  "description": "Operator email: the alert emails sent for every alarm and AWS event on the alarm topic, the weekly health summary, the mailer interface with its SES driver and recording fake, the owner alerts' configuration the worker sends with, and the Lambda handlers infra deploys them as.",
   "exports": {
     ".": "./src/index.ts",
     "./bundle": "./src/bundle.ts"

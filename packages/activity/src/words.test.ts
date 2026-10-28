@@ -53,9 +53,7 @@ describe('activity words', () => {
         failed_step: 'read the sold items',
         error_code: 'element_missing',
       }),
-    ).toBe(
-      "Stopped at “read the sold items”: the page wasn't what Listora knows (it may have changed).",
-    );
+    ).toBe("Stopped at “read the sold items”: the page wasn't what Listora expected.");
     expect(browserSessionDetail({ ...run, outcome: null })).toBe('Running now.');
     expect(browserSessionOutcome('canceled')).toBe('info');
     expect(browserSessionOutcome('challenge')).toBe('failed');
