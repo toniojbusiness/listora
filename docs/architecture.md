@@ -443,8 +443,9 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   ([features/e2e.md](features/e2e.md)).
 - CI runs the same fresh-clone path as local development; see the CI section of the
   [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
-  (`scripts/container-smoke.sh`) when an image input changed. macOS jobs run `make ios-lint`
-  and the unit tests in one, and the UI tests in three shards side by side, but only when a file
+  (`scripts/container-smoke.sh`) when an image input changed. one macOS job runs `make ios-lint`
+  and the build, and hands the built tests to jobs that run the unit tests and three UI test
+  shards side by side, but only when a file
   the iOS build reads changed (macOS runners are the scarce ones); `iOS checks` sums them up.
   The Linux backend check runs on every non-draft pull request.
 

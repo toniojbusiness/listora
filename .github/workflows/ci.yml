@@ -175,13 +175,14 @@ jobs:
       - if: ${{ env.IMAGE_AFFECTED == 'true' }}
         run: scripts/container-smoke.sh
 
-  # The iOS checks run as jobs side by side on macOS runners: lint, the build, and the unit and
-  # package tests in one, and the UI tests split into IOS_UI_SHARDS shards by running time
-  # (scripts/ios-ui-shard.sh), each with its own local stack. Each job builds for itself, from
-  # the Xcode compilation cache `main` saves, so none waits for another. `iOS checks` below
-  # sums them up into one result for a required check.
-  ios-unit:
-    name: iOS lint, build and unit tests (macOS)
+  # The iOS checks: one macOS job lints and builds, then hands the built tests (the products and
+  # their .xctestrun) to the test jobs, which run side by side on macOS runners: the unit and
+  # package tests in one, and the UI tests in IOS_UI_SHARDS shards split by running time
+  # (scripts/ios-ui-shard.sh), each with its own local stack. One build per run keeps the macOS
+  # minutes down: an account runs only a few macOS jobs at once, shared by every open pull
+  # request. `iOS checks` below sums them up into one result for a required check.
+  ios-build:
+    name: iOS lint and build (macOS)
     needs: changes
     if: ${{ needs.changes.outputs.ios == 'true' }}
     runs-on: macos-26
@@ -195,7 +196,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install XcodeGen, SwiftLint, and SwiftFormat
-        run: brew install xcodegen swiftlint swiftformat
+        run: |
+          xcodebuild -version
+          brew install xcodegen swiftlint swiftformat
       # SwiftPM checkouts for the app's package graph, and the compilation cache (Makefile,
       # IOS_COMPILATION_CACHE): Xcode keys it on file contents, so it stays valid in a fresh
       # checkout, where DerivedData would not (Xcode keys that on timestamps). Only `main` saves
@@ -223,23 +226,69 @@ jobs:
           if (( ${size_kb:-0} > 4 * 1024 * 1024 )); then rm -rf "$IOS_COMPILATION_CACHE"; echo 'Starting it over.'; fi
       - run: make ios-lint
       - run: make ios-check-ats
+      - id: build
+        run: make ios-build-for-testing
+      # Everything the tests run from: the app, the extension, every test bundle, and the
+      # .xctestrun that lists them (about 1 GB). A tar keeps the executables' modes and the
+      # frameworks' symlinks, which an artifact alone drops. Kept a day; the test jobs read it
+      # right away.
+      - name: Pack the built tests
+        run: tar -cf .build/ios/built-tests.tar -C .build/ios/DerivedData/Build Products
+      - name: Hand the built tests to the test jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-built-tests
+          path: .build/ios/built-tests.tar
+          retention-days: 1
+          compression-level: 1
+          if-no-files-found: error
+      - name: Save SwiftPM checkouts for the iOS app
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios/SourcePackages
+            .build/ios/PackageCache
+          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
+      - name: Save the Xcode compilation cache
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/ios/CompilationCache
+          key: ios-compilation-${{ runner.os }}-xcode-26.3-${{ github.sha }}
+
+  ios-unit:
+    name: iOS unit and package tests (macOS)
+    needs: [changes, ios-build]
+    if: ${{ needs.changes.outputs.ios == 'true' }}
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # One clean boot of the test simulator: every other simulator is shut down and the test
-      # one erased first. It starts just before the build so it boots during it (about two
-      # minutes); started before the installs, it slowed Homebrew down by as much. The tests
-      # start only once it has finished booting (the wait before them).
+      # one erased first. It boots (about two minutes) while the built tests download; the
+      # tests start only once it has finished booting.
       - name: Start booting a clean iPhone 17 simulator
         run: |
-          xcodebuild -version
           xcrun simctl shutdown all
           xcrun simctl erase 'iPhone 17'
           xcrun simctl boot 'iPhone 17'
-      - id: build
-        run: make ios-build-for-testing
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ios-built-tests
+          path: .build/ios
+      - name: Unpack the built tests
+        run: |
+          mkdir -p .build/ios/DerivedData/Build
+          tar -xf .build/ios/built-tests.tar -C .build/ios/DerivedData/Build
+          rm .build/ios/built-tests.tar
       - name: Wait until the simulator has booted
         run: xcrun simctl bootstatus 'iPhone 17' -b > /dev/null
       # Retries a failing test up to twice. It ends by naming the tests that failed and the ones
       # that passed only on a retry; the same summary goes into .build/ios/test-summary.txt.
-      - run: make ios-unit-test IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
+      - run: make ios-unit-test IOS_PREBUILT=1 IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
       - name: Show the failing-test summary
         if: ${{ always() && hashFiles('.build/ios/test-summary.txt') != '' }}
         run: |
@@ -253,30 +302,14 @@ jobs:
             .build/ios/Unit.xcresult
             .build/ios/test-summary.txt
           retention-days: 7
-      # The caches every iOS job restores; saved once the build has succeeded, even when a test
-      # then failed, because the build outputs are good either way.
-      - name: Save SwiftPM checkouts for the iOS app
-        if: ${{ always() && github.event_name == 'push' && steps.build.outcome == 'success' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            .build/ios/SourcePackages
-            .build/ios/PackageCache
-          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
-      - name: Save the Xcode compilation cache
-        if: ${{ always() && github.event_name == 'push' && steps.build.outcome == 'success' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .build/ios/CompilationCache
-          key: ios-compilation-${{ runner.os }}-xcode-26.3-${{ github.sha }}
 
   ios-ui:
     name: iOS UI tests (macOS, shard ${{ matrix.shard }} of 3)
-    needs: changes
+    needs: [changes, ios-build]
     if: ${{ needs.changes.outputs.ios_ui == 'true' }}
     runs-on: macos-26
-    # A shard takes about 15 minutes of tests; the rest is room for a cold build and retries.
-    timeout-minutes: 45
+    # A shard takes about 15 minutes of tests; the rest is room for re-runs of failed tests.
+    timeout-minutes: 40
     strategy:
       # Every shard reports its own failures, not only the first one's.
       fail-fast: false
@@ -284,48 +317,42 @@ jobs:
         # 1 to IOS_UI_SHARDS.
         shard: [1, 2, 3]
     env:
-      # As in ios-unit.
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_CLEANUP: '1'
-      IOS_COMPILATION_CACHE: ${{ github.workspace }}/.build/ios/CompilationCache
       IOS_UI_SHARDS: '3'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install XcodeGen and PostgreSQL 18
-        run: brew install xcodegen postgresql@18
       # The UI tests that go through the backend run against the local stack (packages/e2e):
       # the API and worker from this checkout, on the scripts/dev-db.sh cluster.
+      - name: Install PostgreSQL 18
+        run: brew install postgresql@18
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Restore SwiftPM checkouts for the iOS app
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            .build/ios/SourcePackages
-            .build/ios/PackageCache
-          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
-      - name: Restore the Xcode compilation cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .build/ios/CompilationCache
-          key: ios-compilation-${{ runner.os }}-xcode-26.3-${{ github.sha }}
-          restore-keys: ios-compilation-${{ runner.os }}-xcode-26.3-
-      # As in ios-unit: it boots during the build.
+      # As in ios-unit: it boots while the built tests download. Started after the installs,
+      # which it slowed down by as much as it saved.
       - name: Start booting a clean iPhone 17 simulator
         run: |
-          xcodebuild -version
           xcrun simctl shutdown all
           xcrun simctl erase 'iPhone 17'
           xcrun simctl boot 'iPhone 17'
-      - run: make ios-build-for-testing
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ios-built-tests
+          path: .build/ios
+      - name: Unpack the built tests
+        run: |
+          mkdir -p .build/ios/DerivedData/Build
+          tar -xf .build/ios/built-tests.tar -C .build/ios/DerivedData/Build
+          rm .build/ios/built-tests.tar
       - name: Wait until the simulator has booted
         run: xcrun simctl bootstatus 'iPhone 17' -b > /dev/null
-      # Retries a failing test up to twice, and ends with the summary, as ios-unit-test does.
-      - run: make ios-ui-test IOS_UI_SHARD="${{ matrix.shard }}/$IOS_UI_SHARDS" IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
+      # Runs the failed tests again, up to twice, and ends with the summary
+      # (scripts/ios-test-run.sh).
+      - run: make ios-ui-test IOS_PREBUILT=1 IOS_UI_SHARD="${{ matrix.shard }}/$IOS_UI_SHARDS" IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
       - name: Show the failing-test summary
         if: ${{ always() && hashFiles('.build/ios/test-summary.txt') != '' }}
         run: |
@@ -349,7 +376,7 @@ jobs:
   # check) on a draft pull request.
   ios:
     name: iOS checks
-    needs: [changes, ios-unit, ios-ui]
+    needs: [changes, ios-build, ios-unit, ios-ui]
     if: ${{ !cancelled() && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -359,6 +386,7 @@ jobs:
           CHANGES: ${{ needs.changes.result }}
           IOS: ${{ needs.changes.outputs.ios }}
           IOS_UI: ${{ needs.changes.outputs.ios_ui }}
+          BUILD: ${{ needs.ios-build.result }}
           UNIT: ${{ needs.ios-unit.result }}
           UI: ${{ needs.ios-ui.result }}
         run: |
@@ -377,6 +405,7 @@ jobs:
               status=1
             fi
           }
-          check 'iOS lint, build and unit tests' "$IOS" "$UNIT"
+          check 'iOS lint and build' "$IOS" "$BUILD"
+          check 'iOS unit and package tests' "$IOS" "$UNIT"
           check 'iOS UI tests' "$IOS_UI" "$UI"
           exit $status

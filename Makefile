@@ -95,6 +95,18 @@ IOS_TEST_SUMMARY_FILE ?=
 # One shard of the UI tests, <shard>/<count> (for example 2/3): scripts/ios-ui-shard.sh splits the
 # UI test classes by their recorded running time. Empty runs every UI test.
 IOS_UI_SHARD ?=
+# IOS_PREBUILT=1 runs ios-unit-test and ios-ui-test on the products already in DerivedData
+# without building first: CI builds once and hands them to its test jobs.
+IOS_PREBUILT ?=
+IOS_TEST_BUILD := $(if $(IOS_PREBUILT),,ios-build-for-testing)
+# The tests run from the .xctestrun file the build writes next to its products, not from the
+# project: that needs nothing but the products (with -scheme and only the products, xcodebuild
+# silently skips every package test bundle). The newest file, in case an older SDK's is left.
+XCTEST := xcodebuild test-without-building \
+	-xctestrun "$$(ls -t $(IOS_BUILD_DIR)/DerivedData/Build/Products/*-arm64.xctestrun 2>/dev/null | head -1)" \
+	-destination '$(IOS_DESTINATION)' -quiet -parallel-testing-enabled NO $(IOS_TEST_LIMITS)
+require_products = @ls $(IOS_BUILD_DIR)/DerivedData/Build/Products/*-arm64.xctestrun >/dev/null 2>&1 || { \
+	echo "error: no built tests in $(IOS_BUILD_DIR)/DerivedData. Run: make ios-build-for-testing" >&2; exit 1; }
 
 ## Run unit, package, and UI tests on the simulator: the ATS check, then ios-unit-test and
 ## ios-ui-test (both run even when the first fails). Results: .build/ios/Unit.xcresult and
@@ -112,18 +124,19 @@ ios-build-for-testing: ios-generate ios-simulator
 
 ## Unit and package tests: every test target of the scheme but the UI tests. They need no backend.
 ## Parallel testing is off here and in ios-ui-test because it would clone the simulator.
-ios-unit-test: ios-build-for-testing
+ios-unit-test: ios-simulator $(IOS_TEST_BUILD)
+	$(require_products)
 	rm -rf $(IOS_BUILD_DIR)/Unit.xcresult
 	@status=0; \
-	$(XCODEBUILD) test-without-building -skip-testing:ListoraUITests -parallel-testing-enabled NO \
-		$(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Unit.xcresult || status=$$?; \
+	$(XCTEST) -skip-testing:ListoraUITests -resultBundlePath $(IOS_BUILD_DIR)/Unit.xcresult || status=$$?; \
 	scripts/ios-test-summary.sh '$(IOS_TEST_SUMMARY_FILE)' $(IOS_BUILD_DIR)/Unit.xcresult; \
 	exit $$status
 
 ## UI tests (ListoraUITests), or the IOS_UI_SHARD shard of them. The ones that go through the
 ## backend run against the local stack (packages/e2e): the real API and worker with fakes, on a
 ## scratch database of this checkout's Postgres cluster. Its logs: .build/ios/e2e-logs.
-ios-ui-test: ios-build-for-testing ios-e2e-ready
+ios-ui-test: ios-simulator $(IOS_TEST_BUILD) ios-e2e-ready
+	$(require_products)
 	rm -rf $(IOS_BUILD_DIR)/UI*.xcresult $(IOS_BUILD_DIR)/e2e-logs
 	@if [ -n '$(IOS_UI_SHARD)' ]; then \
 		tests=$$(scripts/ios-ui-shard.sh $(subst /, ,$(IOS_UI_SHARD))) || exit 2; \
@@ -132,7 +145,7 @@ ios-ui-test: ios-build-for-testing ios-e2e-ready
 		tests=-only-testing:ListoraUITests; \
 	fi; \
 	$(E2E_STACK) -- scripts/ios-test-run.sh $(IOS_BUILD_DIR)/UI.xcresult '$(IOS_TEST_SUMMARY_FILE)' -- \
-		$(XCODEBUILD) test-without-building $$tests -parallel-testing-enabled NO $(IOS_TEST_LIMITS)
+		$(XCTEST) $$tests
 
 ## The full-stack end-to-end suite (docs/features/e2e.md): FullStackUITests on the simulator,
 ## against the full local stack (`--marketplaces all`): the API, the worker, and the browser

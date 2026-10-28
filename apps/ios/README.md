@@ -24,25 +24,26 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 
 Run these from the repository root.
 
-| Command                   | What it does                                                                           |
-| ------------------------- | -------------------------------------------------------------------------------------- |
-| `make ios-generate`       | Generate `apps/ios/Listora.xcodeproj` from `project.yml`                               |
-| `make ios-open`           | Generate the project and open it in Xcode                                              |
-| `make ios-build`          | Build the app, Share Extension, and packages for the simulator                         |
-| `make ios-test`           | Run package, unit, and UI tests on the simulator, the UI tests in the local stack      |
-| `make ios-unit-test`      | Only the package and unit tests (no backend)                                           |
-| `make ios-ui-test`        | Only the UI tests, in the local stack; `IOS_UI_SHARD=2/3` runs one CI shard            |
-| `make e2e-full`           | The full-stack suite (`FullStackUITests`; docs/features/e2e.md)                        |
-| `make ios-lint`           | SwiftLint (strict) and the SwiftFormat check                                           |
-| `make ios-format`         | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes                         |
-| `make ios-clean`          | Delete the generated project and `.build/ios`                                          |
-| `make ios-tag-fixtures`   | Re-render the tag-reading test photos (see Tag reading)                                |
-| `make ios-batch-fixtures` | Re-render the batch hauls and record their Vision signals (docs/features/batch.md)     |
-| `make ios-app-icon`       | Render the app icon from its SVG sources (see App icon)                                |
-| `make ios-screenshots`    | Screenshot every screen in four variants (see Design)                                  |
-| `make ios-archive`        | Unsigned release archive; needs no Apple account (Releases)                            |
-| `make ios-testflight`     | Signed release archive uploaded to TestFlight (Releases)                               |
-| `make ios-install-device` | Install and launch on your own iPhone with a free Apple ID (Installing on your iPhone) |
+| Command                      | What it does                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| `make ios-generate`          | Generate `apps/ios/Listora.xcodeproj` from `project.yml`                               |
+| `make ios-open`              | Generate the project and open it in Xcode                                              |
+| `make ios-build`             | Build the app, Share Extension, and packages for the simulator                         |
+| `make ios-test`              | Run package, unit, and UI tests on the simulator, the UI tests in the local stack      |
+| `make ios-unit-test`         | Only the package and unit tests (no backend)                                           |
+| `make ios-ui-test`           | Only the UI tests, in the local stack; `IOS_UI_SHARD=2/3` runs one CI shard            |
+| `make ios-build-for-testing` | Build the app and every test target; `IOS_PREBUILT=1` then skips the tests' own build  |
+| `make e2e-full`              | The full-stack suite (`FullStackUITests`; docs/features/e2e.md)                        |
+| `make ios-lint`              | SwiftLint (strict) and the SwiftFormat check                                           |
+| `make ios-format`            | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes                         |
+| `make ios-clean`             | Delete the generated project and `.build/ios`                                          |
+| `make ios-tag-fixtures`      | Re-render the tag-reading test photos (see Tag reading)                                |
+| `make ios-batch-fixtures`    | Re-render the batch hauls and record their Vision signals (docs/features/batch.md)     |
+| `make ios-app-icon`          | Render the app icon from its SVG sources (see App icon)                                |
+| `make ios-screenshots`       | Screenshot every screen in four variants (see Design)                                  |
+| `make ios-archive`           | Unsigned release archive; needs no Apple account (Releases)                            |
+| `make ios-testflight`        | Signed release archive uploaded to TestFlight (Releases)                               |
+| `make ios-install-device`    | Install and launch on your own iPhone with a free Apple ID (Installing on your iPhone) |
 
 `make ios-test` writes DerivedData, SwiftPM caches, and the result bundles
 (`.build/ios/Unit.xcresult` and `.build/ios/UI.xcresult`) to `.build/ios` in this checkout, never

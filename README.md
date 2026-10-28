@@ -169,7 +169,8 @@ do not run CI, so one commit never runs twice. Its jobs:
 | `Detect changed areas`                           | Linux                | Always; decides whether the iOS and image jobs build        |
 | `Backend check (Linux)`                          | Linux                | Always                                                      |
 | `Application image build and smoke test (Linux)` | Linux                | Only when an image input changed; otherwise a passing no-op |
-| `iOS lint, build and unit tests (macOS)`         | macOS                | Only when an iOS input changed; otherwise skipped           |
+| `iOS lint and build (macOS)`                     | macOS                | Only when an iOS input changed; otherwise skipped           |
+| `iOS unit and package tests (macOS)`             | macOS                | Only when an iOS input changed, after the build             |
 | `iOS UI tests (macOS, shard N of 3)`             | macOS, three of them | Only when a UI test input changed; otherwise skipped        |
 | `iOS checks`                                     | Linux                | Always; passes when every iOS job the change needed passed  |
 
@@ -191,26 +192,29 @@ files they read from the image at startup (the feature discovery indexes
 `packages/api-contract/bundled/**`), `infra/**`, `scripts/container-smoke.sh`, or
 `.github/workflows/ci.yml` (the `image` filter in the `changes` job).
 
-The iOS jobs run side by side on macOS runners with Xcode 26.3, so the iOS result takes about as
-long as its longest job instead of the whole suite in a row (55 to 60 minutes in one job
-before, October 2026). The unit job runs `make ios-lint`, `make ios-check-ats`, and
-`make ios-unit-test` (every test target but the UI tests; no backend). Each UI shard runs
-`make ios-ui-test IOS_UI_SHARD=<n>/3` against its own local stack (`packages/e2e`), with Node
-(`npm ci`) and PostgreSQL 18 from Homebrew; `scripts/ios-ui-shard.sh` splits the UI test classes
-into shards of about equal running time, from the times in `scripts/ios-ui-test-seconds.tsv`
-(`scripts/ios-ui-shard.sh plan 3` shows the split; refresh the times with
-`scripts/ios-ui-shard.sh seconds <UI.xcresult>` when the shards drift apart). Every job builds
-for itself (`make ios-build-for-testing`) from the Xcode compilation cache
-(`IOS_COMPILATION_CACHE` in the Makefile): unlike DerivedData, whose incremental build relies on
-file timestamps that a fresh checkout resets, it is keyed by file contents. Pushes to `main`
-save it and the app's SwiftPM checkouts; pull requests only restore them, which keeps the
-repository's cache space for the caches every run uses. The cache starts over once it passes
-4 GB. Each job starts booting the erased iPhone 17 simulator right before the build and waits until
-it has finished booting before the tests. Every run, passed or failed, uploads each job's test
-results (`Unit.xcresult`, or `UI.xcresult` with the UI tests' screenshots and the stack's API
-and worker logs) and the failing-test summary, and puts the summary in the job summary, so a
-failure names its test instead of a bare `** TEST FAILED **`. `iOS checks` is the one result to
-require before a merge.
+The iOS jobs run on macOS runners with Xcode 26.3. One build job runs `make ios-lint`,
+`make ios-check-ats`, and `make ios-build-for-testing`, then hands the built tests (the products
+and their `.xctestrun`, as a tar that keeps file modes and symlinks) to the test jobs, which run
+side by side: the unit job runs `make ios-unit-test IOS_PREBUILT=1` (every test target but the
+UI tests; no backend), and each UI shard runs `make ios-ui-test IOS_PREBUILT=1
+IOS_UI_SHARD=<n>/3` against its own local stack (`packages/e2e`), with Node (`npm ci`) and
+PostgreSQL 18 from Homebrew. The iOS result takes about the build plus the longest shard instead
+of the whole suite in a row (55 to 60 minutes in one job before, October 2026), with one build
+per run: macOS runners are shared by every open pull request, so their minutes are what make a
+run wait. `scripts/ios-ui-shard.sh` splits the UI test classes into shards of about equal running
+time, from the times in `scripts/ios-ui-test-seconds.tsv` (`scripts/ios-ui-shard.sh plan 3`
+shows the split; refresh the times with `scripts/ios-ui-shard.sh seconds <UI.xcresult>` when the
+shards drift apart). The build uses the Xcode compilation cache (`IOS_COMPILATION_CACHE` in the
+Makefile): unlike DerivedData, whose incremental build relies on file timestamps that a fresh
+checkout resets, it is keyed by file contents. Pushes to `main` save it and the app's SwiftPM
+checkouts; pull requests only restore them, which keeps the repository's cache space for the
+caches every run uses. The cache starts over once it passes 4 GB. Each test job boots the erased
+iPhone 17 simulator while the built tests download, and waits until it has finished booting
+before the tests. Every run, passed or failed, uploads each test job's results (`Unit.xcresult`,
+or `UI.xcresult` and its re-runs with the UI tests' screenshots and the stack's API and worker
+logs) and the failing-test summary, and puts the summary in the job summary, so a failure names
+its test instead of a bare `** TEST FAILED **`. `iOS checks` is the one result to require before
+a merge.
 
 **Flaky test rule.** `make ios-test` (and each of its halves) retries a failing test up to twice,
 locally and in CI. The unit and package tests use xcodebuild's own retry
@@ -222,7 +226,7 @@ fails the run. A test that passes only on a retry does not block the merge, but 
 flaky: the summary lists it under "Flaky", and it gets a follow-up fix (open a task for it in
 the pull request description) rather than being left to retry forever.
 
-The unit job runs only when the change touches a file the iOS build reads: `apps/ios/**` except
+The build and unit jobs run only when the change touches a file the iOS build reads: `apps/ios/**` except
 Markdown, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI` Swift
 package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS parser
 is tested against), `packages/e2e/**` (the local stack), `Makefile`, `scripts/ios-*`, or
@@ -233,10 +237,10 @@ are the `changes` job's. Other backend changes do not run them, though the UI te
 backend: the backend job covers them, and the contract keeps the API and the app in step.
 
 **Capacity rule.** The macOS runners are the scarce ones (an account runs only a few macOS jobs
-at once, and one iOS run takes four), so the iOS and image jobs build only when one of their
-inputs changed. `iOS checks` and the image job still report a result every time, so they can be
-required checks; they fail, rather than passing, when change detection fails. When a build
-starts reading a new file, add it to its filter.
+at once, and one iOS run uses up to four), so the iOS and image jobs build only when one of their
+inputs changed, and one build serves every iOS test job. `iOS checks` and the image job still
+report a result every time, so they can be required checks; they fail, rather than passing, when
+change detection fails. When a build starts reading a new file, add it to its filter.
 
 Which jobs do real work, by change:
 
