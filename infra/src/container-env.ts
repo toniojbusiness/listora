@@ -31,6 +31,7 @@ const SMOKE_RESOURCES: ServiceResources = {
     bucket: 'listora-smoke-photos',
     region: 'us-east-1',
     publicBaseUrl: 'https://photos.smoke.invalid',
+    cdnDistributionId: 'E2SMOKETEST0001',
   },
   signIn: signInResources(
     signIn,

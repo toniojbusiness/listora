@@ -155,6 +155,43 @@ describe('LocalDiskStorage', () => {
     expect(() => storage.publicUrl('uploads/acct/file')).toThrow('public/');
   });
 
+  it('signs reads of any key, for a while, and refuses a changed key or signature', async () => {
+    const url = new URL(
+      await storage.signedReadUrl('pack/token/package.jpg', new Date(clock.now + 3_600_000)),
+    );
+    expect(url.pathname).toBe('/storage/pack/token/package.jpg');
+    const read = (overrides: Partial<{ key: string; signature: string }> = {}) =>
+      storage.acceptsRead({
+        key: overrides.key ?? 'pack/token/package.jpg',
+        expires: url.searchParams.get('expires') ?? undefined,
+        signature: overrides.signature ?? url.searchParams.get('signature') ?? undefined,
+      });
+    expect(read()).toBe(true);
+    expect(read({ key: 'pack/other/package.jpg' })).toBe(false);
+    expect(read({ signature: 'x'.repeat(43) })).toBe(false);
+    expect(
+      storage.acceptsRead({
+        key: 'pack/token/package.jpg',
+        expires: undefined,
+        signature: undefined,
+      }),
+    ).toBe(false);
+    clock.now += 3_600_000;
+    expect(read()).toBe(false);
+    expect(() => storage.signedReadUrl('pack/token/package.jpg', new Date(clock.now))).toThrow(
+      RangeError,
+    );
+    expect(() =>
+      storage.signedReadUrl('pack/token/package.jpg', new Date(clock.now + 2 * 86_400_000)),
+    ).toThrow(RangeError);
+  });
+
+  it('has no CDN to invalidate, and still refuses a key that is not public', async () => {
+    await expect(storage.invalidatePublic(['public/token/package.jpg'])).resolves.toBeUndefined();
+    // Like its other methods, the local driver throws a bad key at once.
+    expect(() => storage.invalidatePublic(['pack/token/package.jpg'])).toThrow('public/');
+  });
+
   it('needs a signing secret of at least 32 characters', () => {
     expect(
       () => new LocalDiskStorage({ rootDir, baseUrl: 'http://x', signingSecret: 'short' }),

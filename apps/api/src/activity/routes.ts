@@ -1,4 +1,11 @@
-import { loadActivity, loadSaleExplanation, type ActivityFilter } from '@listora/activity';
+import {
+  loadActivity,
+  loadSaleExplanation,
+  type ActivityEntry,
+  type ActivityFilter,
+} from '@listora/activity';
+import { packPhotoUrls } from '@listora/pack-check';
+import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
@@ -22,8 +29,17 @@ import {
  * sessions, sale checks, step timings) are the operator's (`admin activity`).
  */
 export interface ActivityRouteDependencies extends RouteDependencies {
-  /** Package photos' URLs. */
-  storage: ActivityUrls;
+  /** Where package photos are kept: their reads are signed (`packPhotoUrls`). */
+  storage: ObjectStorage;
+}
+
+/** The signed read URLs of the entries' package photos. */
+async function activityUrls(
+  storage: ObjectStorage,
+  entries: readonly ActivityEntry[],
+): Promise<ActivityUrls> {
+  const keys = entries.flatMap((entry) => (entry.photoKey === null ? [] : [entry.photoKey]));
+  return { photoUrls: await packPhotoUrls(storage, keys, new Date()) };
 }
 
 export function registerActivityRoutes(
@@ -44,10 +60,11 @@ export function registerActivityRoutes(
     });
     const shown = entries.slice(0, limit);
     const last = shown.at(-1);
+    const urls = await activityUrls(deps.storage, shown);
     return {
       status: 200 as const,
       body: {
-        data: shown.map((entry) => activityEntryView(entry, deps.storage)),
+        data: shown.map((entry) => activityEntryView(entry, urls)),
         ...(entries.length > limit && last ? { nextCursor: encodeActivityCursor(last.at) } : {}),
       },
     };
@@ -75,6 +92,7 @@ export function registerActivityRoutes(
       { forSeller: true },
     );
     if (explanation === undefined) throw notFound('Sale');
-    return { status: 200, body: saleExplanationView(explanation, deps.storage) };
+    const urls = await activityUrls(deps.storage, explanation.entries);
+    return { status: 200, body: saleExplanationView(explanation, urls) };
   });
 }

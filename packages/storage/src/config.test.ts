@@ -46,9 +46,23 @@ describe('loadStorageConfig', () => {
       region: 'us-east-1',
       endpoint: undefined,
       publicBaseUrl: 'https://images.listora.app',
+      cdnDistributionId: undefined,
     });
     // Building the client needs no credentials; they are resolved on the first request.
     expect(createStorage(config)).toBeInstanceOf(S3Storage);
+    // The worker's: the CDN it invalidates.
+    const worker = {
+      STORAGE_DRIVER: 's3',
+      STORAGE_S3_BUCKET: 'listora-prod-photos',
+      STORAGE_S3_REGION: 'us-east-1',
+      STORAGE_PUBLIC_BASE_URL: 'https://images.listora.app',
+    };
+    expect(
+      loadStorageConfig({ ...worker, STORAGE_CDN_DISTRIBUTION_ID: 'E2EXAMPLE0001' }),
+    ).toMatchObject({ cdnDistributionId: 'E2EXAMPLE0001' });
+    expect(issuesOf({ ...worker, STORAGE_CDN_DISTRIBUTION_ID: 'not an id' })).toEqual([
+      'STORAGE_CDN_DISTRIBUTION_ID must be a CloudFront distribution id',
+    ]);
 
     expect(issuesOf({ STORAGE_DRIVER: 's3' })).toEqual([
       'STORAGE_S3_BUCKET must be an S3 bucket name',

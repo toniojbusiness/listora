@@ -432,8 +432,28 @@ describe('pack check (real Postgres)', () => {
       body: { uploadFileId: upload },
     });
     expect(added.status).toBe(200);
-    const photoUrl = added.body.pack?.photoUrl;
-    expect(photoUrl).toMatch(/package\.jpg$/);
+    // Private (it shows the buyer's label): read only through a signed URL, never cached.
+    const photoUrl = added.body.pack?.photoUrl ?? '';
+    const signed = new URL(photoUrl);
+    expect(signed.pathname).toMatch(/^\/storage\/pack\/[0-9a-f]{32}\/package\.jpg$/);
+    expect(signed.searchParams.get('signature')).toBeTruthy();
+    const read = await api.app.inject({ method: 'GET', url: `${signed.pathname}${signed.search}` });
+    expect(read.statusCode).toBe(200);
+    expect(read.headers['cache-control']).toBe('private, no-store');
+    expect(read.rawPayload.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+    expect((await api.app.inject({ method: 'GET', url: signed.pathname })).statusCode).toBe(404);
+    signed.searchParams.set('signature', 'x'.repeat(43));
+    expect(
+      (await api.app.inject({ method: 'GET', url: `${signed.pathname}${signed.search}` }))
+        .statusCode,
+    ).toBe(404);
+    const stored = await api.db
+      .selectFrom('sale_pack')
+      .select('photo_key')
+      .where('account_id', '=', tenant.accountId)
+      .where('sale_id', '=', shirt.saleId)
+      .executeTakeFirstOrThrow();
+    expect(stored.photo_key).toMatch(/^pack\//);
 
     const second = await api.uploads.add(tenant, { bytes: new Uint8Array(jpeg) });
     const refused = await api.call('addPackPhoto', {
@@ -452,7 +472,7 @@ describe('pack check (real Postgres)', () => {
       'Package photo added',
       'Packed with the label ending 6666',
     ]);
-    expect(kinds[0]?.photoUrl).toBe(photoUrl);
+    expect(new URL(kinds[0]?.photoUrl ?? '').pathname).toBe(new URL(photoUrl).pathname);
 
     expect(
       (await api.call('removePackPhoto', { token, params: { saleId: shirt.saleId } })).body.pack

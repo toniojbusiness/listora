@@ -304,9 +304,12 @@ describe('recordings', () => {
 
     it('keeps the cache consistent: the buyer reference still names the buyer entry', () => {
       const redacted = redactRecordings([global]).recordings[0] ?? global;
-      const data = redacted.states[0]?.data.__APOLLO__ as Record<string, Record<string, unknown>>;
+      const data = redacted.states[0]?.data['__APOLLO__'] as Record<
+        string,
+        Record<string, unknown>
+      >;
       const item = data['ItemDetail:m10000000001'];
-      const buyer = (item?.buyer as { __ref: string }).__ref;
+      const buyer = (item?.['buyer'] as { __ref: string }).__ref;
       expect(buyer).toMatch(/^PublicUser:9\d+$/);
       expect(data[buyer]).toMatchObject({
         __typename: 'PublicUser',

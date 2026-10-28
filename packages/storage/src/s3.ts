@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+
+import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -19,7 +22,9 @@ import {
   CHECKSUM_SHA256_HEADER,
   hexToBase64,
   listLimit,
+  PRIVATE_CACHE_CONTROL,
   PUBLIC_KEY_PREFIX,
+  signedReadSeconds,
   type ObjectStorage,
   type PutOptions,
   type StoredObjectInfo,
@@ -38,8 +43,16 @@ export interface S3StorageOptions {
    * origin path is `/public`, so a key's URL is the key without that prefix.
    */
   publicBaseUrl: string;
+  /**
+   * The CloudFront distribution at `publicBaseUrl` and a client for it, for `invalidatePublic`;
+   * absent in a process that never invalidates (the API), where it throws.
+   */
+  cdn?: { client: CloudFrontClient; distributionId: string };
   now?: () => Date;
 }
+
+/** The most paths one invalidation request names (CloudFront's limit is 3,000). */
+const MAX_INVALIDATION_PATHS = 1000;
 
 export interface S3ClientSettings {
   region: string;
@@ -80,12 +93,14 @@ export class S3Storage implements ObjectStorage {
   readonly #client: S3Client;
   readonly #bucket: string;
   readonly #publicBaseUrl: string;
+  readonly #cdn: S3StorageOptions['cdn'];
   readonly #now: () => Date;
 
   constructor(options: S3StorageOptions) {
     this.#client = options.client;
     this.#bucket = options.bucket;
     this.#publicBaseUrl = options.publicBaseUrl.replace(/\/+$/, '');
+    this.#cdn = options.cdn;
     this.#now = options.now ?? (() => new Date());
   }
 
@@ -187,4 +202,45 @@ export class S3Storage implements ObjectStorage {
     assertPublicKey(key);
     return `${this.#publicBaseUrl}/${key.slice(PUBLIC_KEY_PREFIX.length)}`;
   }
+
+  /** A presigned GET of S3 itself (never CloudFront), whose answer S3 marks `private, no-store`. */
+  async signedReadUrl(key: string, expiresAt: Date): Promise<string> {
+    assertStorageKey(key);
+    const now = this.#now();
+    return getSignedUrl(
+      this.#client,
+      new GetObjectCommand({
+        Bucket: this.#bucket,
+        Key: key,
+        ResponseCacheControl: PRIVATE_CACHE_CONTROL,
+      }),
+      { expiresIn: signedReadSeconds(expiresAt, now), signingDate: now },
+    );
+  }
+
+  async invalidatePublic(keys: readonly string[]): Promise<void> {
+    for (const key of keys) assertPublicKey(key);
+    if (keys.length === 0) return;
+    if (this.#cdn === undefined) {
+      throw new Error('no CDN distribution is configured (STORAGE_CDN_DISTRIBUTION_ID)');
+    }
+    const paths = [...new Set(keys)].map((key) => `/${key.slice(PUBLIC_KEY_PREFIX.length)}`);
+    for (let start = 0; start < paths.length; start += MAX_INVALIDATION_PATHS) {
+      const batch = paths.slice(start, start + MAX_INVALIDATION_PATHS);
+      await this.#cdn.client.send(
+        new CreateInvalidationCommand({
+          DistributionId: this.#cdn.distributionId,
+          InvalidationBatch: {
+            // The same paths are the same request, so a retry never starts a second one.
+            CallerReference: invalidationReference(batch),
+            Paths: { Quantity: batch.length, Items: batch },
+          },
+        }),
+      );
+    }
+  }
+}
+
+function invalidationReference(paths: readonly string[]): string {
+  return createHash('sha256').update(paths.join('\n')).digest('hex');
 }

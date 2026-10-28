@@ -29,6 +29,21 @@ export {
   unpackOrder,
 } from './pack.ts';
 export type { PackInput } from './pack.ts';
+export {
+  expirePackPhotos,
+  movePublicPackPhotos,
+  PACK_PHOTO_PREFIX,
+  PACK_PHOTO_RETENTION_DAYS,
+  PACK_PHOTO_URL_SECONDS,
+  PACK_PHOTOS_CRONTAB,
+  PACK_PHOTOS_TASK,
+  packPhotoKey,
+  packPhotoUrls,
+  privatePackPhotoKey,
+  queuePackPhotos,
+  runPackPhotos,
+} from './photos.ts';
+export type { PackPhotosDependencies, PackPhotosOptions } from './photos.ts';
 export { checkScan, PackOrderNotFoundError } from './scan.ts';
 export type { CheckedScan, ScanInput } from './scan.ts';
 export {

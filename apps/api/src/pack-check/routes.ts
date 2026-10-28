@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import { queueLabelReads } from '@listora/automation';
 import { inTransaction, type DbExecutor } from '@listora/db';
 import {
@@ -11,6 +9,8 @@ import {
   PackOrderClosedError,
   PackOrderNotFoundError,
   PackOrderPackedError,
+  packPhotoKey,
+  packPhotoUrls,
   PackRefusedError,
   removePackPhoto,
   savePackCheckSettings,
@@ -19,8 +19,8 @@ import {
   verdictWords,
   type PackOrderRecord,
 } from '@listora/pack-check';
-import { PUBLIC_CACHE_CONTROL, processImage, UnusableImageError } from '@listora/photos';
-import type { ObjectStorage } from '@listora/storage';
+import { processImage, UnusableImageError } from '@listora/photos';
+import { PRIVATE_CACHE_CONTROL, type ObjectStorage } from '@listora/storage';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
@@ -192,9 +192,10 @@ export function registerPackCheckRoutes(
       }
       // The listing-size image: upright, at most 1600 px, without any metadata (no location).
       const key = packPhotoKey();
+      // Private: it shows the buyer's name and address (`packPhotoUrls` signs its reads).
       await deps.storage.put(key, image.derivatives.listing.bytes, {
         contentType: 'image/jpeg',
-        cacheControl: PUBLIC_CACHE_CONTROL,
+        cacheControl: PRIVATE_CACHE_CONTROL,
       });
       const saved = await savePackPhoto(trx, tenant.accountId, params.saleId, key);
       if (saved !== 'saved') throw new Error(`the package photo was not saved: ${saved}`);
@@ -211,15 +212,6 @@ export function registerPackCheckRoutes(
     await deletePhoto(deps.storage, key, request.log);
     return { status: 200, body: await oneView(db, tenant, deps, params.saleId, deps.now()) };
   });
-}
-
-/**
- * A package photo's key: public under an unguessable name, as an item's listing photos are, so
- * the app (and a claim the seller files) can show it; deleted with the package's record or the
- * account (docs/features/pack-check.md, "Data").
- */
-function packPhotoKey(): string {
-  return `public/${randomBytes(16).toString('hex')}/package.jpg`;
 }
 
 async function deletePhoto(
@@ -242,7 +234,10 @@ async function viewContext(
   now: Date,
 ): Promise<PackViewContext> {
   const itemIds = [...new Set(orders.flatMap((order) => order.items.map((item) => item.itemId)))];
-  const [covers, reads] = await Promise.all([
+  const photoKeys = orders.flatMap((order) =>
+    order.pack?.photoKey == null ? [] : [order.pack.photoKey],
+  );
+  const [covers, reads, photoUrls] = await Promise.all([
     coverPhotoRows(db, tenant, itemIds),
     db
       .selectFrom('phone_work')
@@ -250,10 +245,12 @@ async function viewContext(
       .where('account_id', '=', tenant.accountId)
       .where('purpose', '=', 'label_read')
       .execute(),
+    packPhotoUrls(deps.storage, photoKeys, now),
   ]);
   return {
     covers,
     storage: deps.storage,
+    packPhotoUrls: photoUrls,
     reading: new Set(reads.map((read) => read.marketplace)),
     now,
   };

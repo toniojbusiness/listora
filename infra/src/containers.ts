@@ -38,6 +38,11 @@ export interface PhotoStorage {
   readonly region: string;
   /** The CloudFront URL that serves the bucket's `public/` keys. */
   readonly publicBaseUrl: string;
+  /**
+   * That distribution's id, which only the worker gets (`STORAGE_CDN_DISTRIBUTION_ID`): it asks
+   * the distribution to drop its copies of the public package photos it moves to private keys.
+   */
+  readonly cdnDistributionId: string;
 }
 
 /**
@@ -126,7 +131,8 @@ export interface ServiceResources {
  * (`kms:GenerateDataKey` only), the worker also opens OAuth tokens (`kms:Decrypt`). The worker
  * starts the browser runner's service when automated work waits; the runner opens sellers'
  * browser sessions with the same key and keeps the redacted screenshots of failed runs in the
- * photo bucket's private `automation/` prefix.
+ * photo bucket's private `automation/` prefix. Only the worker may invalidate the photo CDN
+ * (the public package photos it moves to private keys).
  */
 export function containerEnvironment(
   container: 'migrate',
@@ -194,7 +200,12 @@ export function containerEnvironment(
     // With a user pool, the worker deletes the Cognito users of deleted accounts (its task role
     // may cognito-idp:AdminGetUser and AdminDeleteUser on the pool).
     case 'worker':
-      return { ...services(), ...workerAuth(deployed().signIn), ...runnerService(deployed()) };
+      return {
+        ...services(),
+        STORAGE_CDN_DISTRIBUTION_ID: deployed().photoStorage.cdnDistributionId,
+        ...workerAuth(deployed().signIn),
+        ...runnerService(deployed()),
+      };
     case 'runner':
       return {
         ...common,
