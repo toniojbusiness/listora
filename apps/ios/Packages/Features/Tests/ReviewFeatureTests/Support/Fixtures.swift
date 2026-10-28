@@ -1,5 +1,6 @@
 import Foundation
 import ListoraAPI
+@testable import ReviewFeature
 
 typealias Schemas = Components.Schemas
 
@@ -154,6 +155,26 @@ enum Fixtures {
             fieldProvenance: .init(additionalProperties: provenance),
             photos: photos,
             listings: [],
+            createdAt: date,
+            updatedAt: date,
+        )
+    }
+
+    static func haul(
+        id: String = "haul-1",
+        totalCents: Int64 = 5000,
+        count: Int32 = 30,
+        added: Int32 = 1,
+        source: String? = "Goodwill Bins",
+    ) -> Schemas.Haul {
+        .init(
+            id: id,
+            total: usd(totalCents),
+            itemCount: count,
+            itemsAdded: added,
+            eachCost: usd(HaulPresentation.eachCents(totalCents: totalCents, count: Int(count))),
+            purchaseDate: "2026-10-26",
+            purchaseSource: source,
             createdAt: date,
             updatedAt: date,
         )

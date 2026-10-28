@@ -1,0 +1,144 @@
+/v1/hauls:
+  get:
+    tags: [hauls]
+    operationId: listHauls
+    summary: List hauls
+    description: Newest first, so the cost screen offers the haul of the trip the seller is on.
+    parameters:
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of hauls.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/hauls.yaml#/HaulPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [hauls]
+    operationId: createHaul
+    summary: Create a haul
+    description: |
+      Records a haul's total and how many items it had, with `itemIds` joining it at once
+      (each then costs its share). An `itemCount` below the number of `itemIds` is raised to
+      it. An item id that is not an item of this account is `422` with a `fieldErrors` entry.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/hauls.yaml#/HaulCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/hauls.yaml#/Haul'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/hauls/{haulId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/HaulId'
+  get:
+    tags: [hauls]
+    operationId: getHaul
+    summary: Get a haul
+    responses:
+      '200':
+        description: The haul.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/hauls.yaml#/Haul'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [hauls]
+    operationId: replaceHaul
+    summary: Change a haul's total or count
+    description: |
+      Fixes the haul's total, count, date, or place; every item in it gets its new share (and
+      a new `version`). An `itemCount` below `itemsAdded` is `422`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/hauls.yaml#/HaulReplace'
+    responses:
+      '200':
+        description: The updated haul.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/hauls.yaml#/Haul'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/hauls/{haulId}/items:
+  parameters:
+    - $ref: '../components/parameters.yaml#/HaulId'
+  post:
+    tags: [hauls]
+    operationId: addHaulItems
+    summary: Add items to a haul
+    description: |
+      The items join the haul after the ones already in it, and every item in it gets its new
+      share. When the haul's count is reached, each new item adds one to it.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/hauls.yaml#/HaulItemsAdd'
+    responses:
+      '200':
+        description: The haul with the items in it.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/hauls.yaml#/Haul'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/hauls/{haulId}/items/{itemId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/HaulId'
+    - $ref: '../components/parameters.yaml#/ItemId'
+  delete:
+    tags: [hauls]
+    operationId: removeHaulItem
+    summary: Take an item out of a haul
+    description: |
+      The item keeps its last share as its cost, which the seller can then change; the items
+      still in the haul get their new shares. The haul's count stays as it is.
+    responses:
+      '200':
+        description: The haul without the item.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/hauls.yaml#/Haul'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

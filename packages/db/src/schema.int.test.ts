@@ -83,6 +83,8 @@ const COLUMNS = {
     'pre_archive_status',
     'refresh_cadence',
     'refresh_custom_hours',
+    'haul_id',
+    'haul_joined_at',
   ],
   photo: [
     'id',
@@ -701,6 +703,17 @@ const COLUMNS = {
     'updated_at',
   ],
   description_style: ['account_id', 'depop', 'created_at', 'updated_at'],
+  haul: [
+    'id',
+    'account_id',
+    'total_cents',
+    'currency',
+    'item_count',
+    'purchase_date',
+    'purchase_source',
+    'created_at',
+    'updated_at',
+  ],
   item_batch: [
     'id',
     'account_id',

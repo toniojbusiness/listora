@@ -35,6 +35,8 @@ extension Components {
         public typealias SessionId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/BatchId`.
         public typealias BatchId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/HaulId`.
+        public typealias HaulId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/AnalysisId`.
         public typealias AnalysisId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/ListingId`.

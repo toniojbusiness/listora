@@ -1211,6 +1211,12 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Item/storageLocation`.
             public var storageLocation: Components.Schemas.StorageLocationSummary?
+            /// Read-only; the haul the item is part of. Its `details.cost` is then its share of the
+            /// haul, which only the haul changes (`replaceHaul`, `addHaulItems`, `removeHaulItem`).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/haul`.
+            public var haul: Components.Schemas.Haul?
             /// In display order; the first is the cover.
             ///
             /// - Remark: Generated from `#/components/schemas/Item/photos`.
@@ -1245,6 +1251,7 @@ extension Components {
             ///   - details:
             ///   - fieldProvenance: Read-only: where each detail came from, keyed by property name, for example
             ///   - storageLocation: Read-only; the location `details.storageLocationId` refers to.
+            ///   - haul: Read-only; the haul the item is part of. Its `details.cost` is then its share of the
             ///   - photos: In display order; the first is the cover.
             ///   - listings:
             ///   - saleSummary:
@@ -1261,6 +1268,7 @@ extension Components {
                 details: Components.Schemas.ItemDetails,
                 fieldProvenance: Components.Schemas.Item.FieldProvenancePayload? = nil,
                 storageLocation: Components.Schemas.StorageLocationSummary? = nil,
+                haul: Components.Schemas.Haul? = nil,
                 photos: [Components.Schemas.Photo],
                 listings: [Components.Schemas.Listing],
                 saleSummary: Components.Schemas.ItemSaleSummary? = nil,
@@ -1277,6 +1285,7 @@ extension Components {
                 self.details = details
                 self.fieldProvenance = fieldProvenance
                 self.storageLocation = storageLocation
+                self.haul = haul
                 self.photos = photos
                 self.listings = listings
                 self.saleSummary = saleSummary
@@ -1294,6 +1303,7 @@ extension Components {
                 case details
                 case fieldProvenance
                 case storageLocation
+                case haul
                 case photos
                 case listings
                 case saleSummary
@@ -2980,6 +2990,224 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case batch
                 case items
+            }
+        }
+        /// Items bought together for one price, such as 30 items from the bins for $50
+        /// (docs/features/hauls.md). Each item in the haul costs its share of `total`: the total
+        /// split over `itemCount`, with the leftover cents on the items that joined first, so a full
+        /// haul's items add back up to the total. The server keeps each item's `details.cost` equal to
+        /// its share, and a `replaceItem` that changes it is refused while the item is in a haul.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/Haul`.
+        public struct Haul: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Haul/id`.
+            public var id: Components.Schemas.Id
+            /// What the whole haul cost.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Haul/total`.
+            public var total: Components.Schemas.Money
+            /// How many items the haul had. Never fewer than `itemsAdded`: an item joining a haul
+            /// whose count is reached adds one to it.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Haul/itemCount`.
+            public var itemCount: Swift.Int32
+            /// The items in Listora that are part of the haul.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Haul/itemsAdded`.
+            public var itemsAdded: Swift.Int32
+            /// `total` over `itemCount`, to the nearest cent, to show ("$1.67 each"). Each item's own
+            /// cost is its share, which is this or within a cent of it.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Haul/eachCost`.
+            public var eachCost: Components.Schemas.Money
+            /// When it was bought; every item in the haul takes it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Haul/purchaseDate`.
+            public var purchaseDate: Swift.String?
+            /// Where it was bought; every item in the haul takes it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Haul/purchaseSource`.
+            public var purchaseSource: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Haul/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/Haul/updatedAt`.
+            public var updatedAt: Components.Schemas.Timestamp
+            /// Creates a new `Haul`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - total: What the whole haul cost.
+            ///   - itemCount: How many items the haul had. Never fewer than `itemsAdded`: an item joining a haul
+            ///   - itemsAdded: The items in Listora that are part of the haul.
+            ///   - eachCost: `total` over `itemCount`, to the nearest cent, to show ("$1.67 each"). Each item's own
+            ///   - purchaseDate: When it was bought; every item in the haul takes it.
+            ///   - purchaseSource: Where it was bought; every item in the haul takes it.
+            ///   - createdAt:
+            ///   - updatedAt:
+            public init(
+                id: Components.Schemas.Id,
+                total: Components.Schemas.Money,
+                itemCount: Swift.Int32,
+                itemsAdded: Swift.Int32,
+                eachCost: Components.Schemas.Money,
+                purchaseDate: Swift.String? = nil,
+                purchaseSource: Swift.String? = nil,
+                createdAt: Components.Schemas.Timestamp,
+                updatedAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.total = total
+                self.itemCount = itemCount
+                self.itemsAdded = itemsAdded
+                self.eachCost = eachCost
+                self.purchaseDate = purchaseDate
+                self.purchaseSource = purchaseSource
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case total
+                case itemCount
+                case itemsAdded
+                case eachCost
+                case purchaseDate
+                case purchaseSource
+                case createdAt
+                case updatedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/HaulPage`.
+        public struct HaulPage: Codable, Hashable, Sendable {
+            /// Newest first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/HaulPage/data`.
+            public var data: [Components.Schemas.Haul]
+            /// Present when there are more results.
+            ///
+            /// - Remark: Generated from `#/components/schemas/HaulPage/nextCursor`.
+            public var nextCursor: Swift.String?
+            /// Creates a new `HaulPage`.
+            ///
+            /// - Parameters:
+            ///   - data: Newest first.
+            ///   - nextCursor: Present when there are more results.
+            public init(
+                data: [Components.Schemas.Haul],
+                nextCursor: Swift.String? = nil
+            ) {
+                self.data = data
+                self.nextCursor = nextCursor
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case nextCursor
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/HaulCreate`.
+        public struct HaulCreate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/HaulCreate/total`.
+            public var total: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/HaulCreate/itemCount`.
+            public var itemCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/HaulCreate/purchaseDate`.
+            public var purchaseDate: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/HaulCreate/purchaseSource`.
+            public var purchaseSource: Swift.String?
+            /// Items that join the haul at once, in this order (a batch's items, in haul order). An
+            /// item in another haul moves to this one.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/HaulCreate/itemIds`.
+            public var itemIds: [Components.Schemas.Id]?
+            /// Creates a new `HaulCreate`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - itemCount:
+            ///   - purchaseDate:
+            ///   - purchaseSource:
+            ///   - itemIds: Items that join the haul at once, in this order (a batch's items, in haul order). An
+            public init(
+                total: Components.Schemas.Money,
+                itemCount: Swift.Int32,
+                purchaseDate: Swift.String? = nil,
+                purchaseSource: Swift.String? = nil,
+                itemIds: [Components.Schemas.Id]? = nil
+            ) {
+                self.total = total
+                self.itemCount = itemCount
+                self.purchaseDate = purchaseDate
+                self.purchaseSource = purchaseSource
+                self.itemIds = itemIds
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case itemCount
+                case purchaseDate
+                case purchaseSource
+                case itemIds
+            }
+        }
+        /// Full replacement of the haul's total, count, date, and place: a property left out is
+        /// cleared. Every item in the haul gets its new share.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/HaulReplace`.
+        public struct HaulReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/HaulReplace/total`.
+            public var total: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/HaulReplace/itemCount`.
+            public var itemCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/HaulReplace/purchaseDate`.
+            public var purchaseDate: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/HaulReplace/purchaseSource`.
+            public var purchaseSource: Swift.String?
+            /// Creates a new `HaulReplace`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - itemCount:
+            ///   - purchaseDate:
+            ///   - purchaseSource:
+            public init(
+                total: Components.Schemas.Money,
+                itemCount: Swift.Int32,
+                purchaseDate: Swift.String? = nil,
+                purchaseSource: Swift.String? = nil
+            ) {
+                self.total = total
+                self.itemCount = itemCount
+                self.purchaseDate = purchaseDate
+                self.purchaseSource = purchaseSource
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case itemCount
+                case purchaseDate
+                case purchaseSource
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/HaulItemsAdd`.
+        public struct HaulItemsAdd: Codable, Hashable, Sendable {
+            /// Items that join the haul, in this order, after the items already in it. An item in
+            /// another haul moves to this one; an item already in this one stays where it is.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/HaulItemsAdd/itemIds`.
+            public var itemIds: [Components.Schemas.Id]
+            /// Creates a new `HaulItemsAdd`.
+            ///
+            /// - Parameters:
+            ///   - itemIds: Items that join the haul, in this order, after the items already in it. An item in
+            public init(itemIds: [Components.Schemas.Id]) {
+                self.itemIds = itemIds
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemIds
             }
         }
         /// A model's guess, not market data. `label` is always

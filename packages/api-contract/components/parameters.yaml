@@ -55,6 +55,12 @@ BatchId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+HaulId:
+  name: haulId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
 AnalysisId:
   name: analysisId
   in: path

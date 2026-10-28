@@ -1,23 +1,17 @@
+import APIClient
 import Core
 import Foundation
+import ListoraAPI
 import Observation
 
 /// The rapid review of a batch (docs/features/batch.md): one page per item, swiped through in haul
 /// order. Each page is the single-item review's model (``ReviewFlowModel``), so an item goes
 /// through the same analysis, details, cost, and price rules, and one tap approves it and moves
 /// on. A cost and source entered once can apply to every item still to approve: the same amount
-/// each, or a haul's total split across them.
+/// each, or the items marked as one haul whose total is split across them (docs/features/hauls.md).
 @MainActor
 @Observable
 final class BatchReviewModel {
-    /// How a haul's cost applies to the items still to approve.
-    enum CostSplit: Equatable {
-        /// Every item cost this much.
-        case each(Int64)
-        /// The haul cost this much in all, split evenly.
-        case total(Int64)
-    }
-
     struct Summary: Equatable {
         let saved: [ReviewFlowModel.SavedItem]
         /// The whole batch: its capture and grouping, plus every saved item's review.
@@ -38,6 +32,7 @@ final class BatchReviewModel {
     let pages: [ReviewFlowModel]
     let meter: InteractionMeter
     let recentSources: RecentPurchaseSources
+    private let service: any ReviewService
     private let onEvent: @MainActor (BatchReviewEvent) -> Void
     /// The page showing.
     var index = 0 {
@@ -52,6 +47,14 @@ final class BatchReviewModel {
     private var started: Set<Int> = []
     /// The amount the last Apply to all gave each item, by item.
     private var appliedCents: [ObjectIdentifier: Int64] = [:]
+    /// The haul the items still to approve were marked as, in one step.
+    private(set) var markedHaul: Haul?
+    /// Marking the haul is being sent.
+    private(set) var isMarkingHaul = false
+    /// Marking the haul failed; shown on the card with the way to try again.
+    var haulError: String?
+    /// The Idempotency-Key of the haul being marked and its body, reused by a retry of it.
+    private var pendingHaul: (key: String, body: HaulCreate)?
     /// The screen is in front of the seller.
     private var isVisible = false
     /// The item session the meter is counting now: the page showing.
@@ -66,6 +69,7 @@ final class BatchReviewModel {
         self.onEvent = onEvent
         meter = environment.meter
         recentSources = environment.recentSources
+        service = environment.service
         pages = request.items.map { item in
             environment.makeModel(for: ItemReviewRequest(sessionID: item.sessionID, itemID: item.itemID, sku: item.sku))
         }
@@ -122,11 +126,11 @@ final class BatchReviewModel {
         }
     }
 
-    /// Applies the page's cost, date, and source to every other item not approved yet.
-    func applyCost(from page: ReviewFlowModel, as split: CostSplit) {
-        let targets = remaining
-        let amounts = Self.amounts(split, count: targets.count)
-        for (target, cents) in zip(targets, amounts) {
+    /// Gives every item not approved yet the page's cost, date, and source: the same amount each.
+    func applySameCost(from page: ReviewFlowModel) {
+        guard let cents = page.cost.amount.cents else { return }
+        for target in remaining {
+            target.cost.mode = .item
             target.cost.amount = AmountEntry(cents: cents)
             target.cost.purchaseDate = page.cost.purchaseDate
             target.cost.source = page.cost.source
@@ -134,23 +138,54 @@ final class BatchReviewModel {
         }
     }
 
-    /// The page shows the cost Apply to all gave it: applying again would apply that share.
-    func hasAppliedCost(_ page: ReviewFlowModel) -> Bool {
-        appliedCents[ObjectIdentifier(page)].map { $0 == page.cost.amount.cents } ?? false
+    /// Marks every item not approved yet as one haul, in one step: the page's amount is the haul's
+    /// total and the items are its count, so each costs its share, the leftover cents on the first
+    /// ones. The server records the haul with the items in it; each page then reads its share back.
+    func markHaul(from page: ReviewFlowModel) async {
+        let targets = remaining
+        guard let cents = page.cost.amount.cents, !targets.isEmpty, !isMarkingHaul else { return }
+        let source = page.cost.source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = HaulCreate(
+            total: Money(amountCents: cents, currency: .usd),
+            itemCount: Int32(targets.count),
+            purchaseDate: ReviewFlowModel.day(page.cost.purchaseDate),
+            purchaseSource: source.isEmpty ? nil : source,
+            itemIds: targets.map(\.request.itemID),
+        )
+        let key = pendingHaul.flatMap { $0.body == body ? $0.key : nil } ?? UUID().uuidString.lowercased()
+        pendingHaul = (key, body)
+        isMarkingHaul = true
+        haulError = nil
+        defer { isMarkingHaul = false }
+        let haul: Haul
+        do {
+            haul = try await service.createHaul(body, idempotencyKey: key)
+        } catch {
+            haulError = error.message
+            return
+        }
+        pendingHaul = nil
+        markedHaul = haul
+        if !source.isEmpty {
+            recentSources.remember(source)
+        }
+        for target in targets {
+            target.cost.mode = .haul
+            target.cost.haul = haul
+            target.cost.purchaseDate = page.cost.purchaseDate
+            target.cost.source = page.cost.source
+            appliedCents[ObjectIdentifier(target)] = nil
+            // Its share is its cost now; a page that can't read it yet reads it when it loads.
+            try? await target.readHaulCost()
+        }
     }
 
-    /// Each item's share: the same for all, or the total split with the leftover cents on the first
-    /// items, so the shares always add up to the total.
-    static func amounts(_ split: CostSplit, count: Int) -> [Int64] {
-        guard count > 0 else { return [] }
-        switch split {
-        case let .each(cents):
-            return Array(repeating: cents, count: count)
-        case let .total(cents):
-            let share = cents / Int64(count)
-            let leftover = Int(cents % Int64(count))
-            return (0 ..< count).map { share + ($0 < leftover ? 1 : 0) }
+    /// The page shows the cost Apply to all gave it: applying again would apply that share.
+    func hasAppliedCost(_ page: ReviewFlowModel) -> Bool {
+        if let markedHaul, page.cost.mode == .haul, page.cost.haul?.id == markedHaul.id {
+            return true
         }
+        return appliedCents[ObjectIdentifier(page)].map { $0 == page.cost.amount.cents } ?? false
     }
 
     /// The seller is done: tells Add Item, which keeps the batch's measured interaction.

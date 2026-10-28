@@ -19,6 +19,7 @@ import { writeAudit } from '../audit.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { isPgError, PG_ERROR } from '../db-errors.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
+import { lockHauls, settleHaul } from '../hauls/repository.ts';
 import { itemListingRows } from '../listings/repository.ts';
 import { listingStates, type ListingViewContext } from '../listings/views.ts';
 import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor } from '../pagination.ts';
@@ -135,6 +136,7 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
 
       const details = normalizeDetails(body.details);
       await assertValidDetails(trx, tenant, row.id, details);
+      assertHaulCostKept(row, details);
       const { status, preArchiveStatus } = await nextStatus(trx, tenant, row, body.status);
       const columns = columnsFromDetails(details);
       const before = detailsFromRow(row);
@@ -173,6 +175,9 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
 
   contractRoute(app, deps, 'deleteItem', async ({ tenant, db, params, request }) => {
     const photos = await inTransaction(db, async (trx) => {
+      // A haul's lock comes before its items' (hauls/routes.ts), so it is taken first.
+      const haulId = (await findItem(trx, tenant, params.itemId))?.haul_id ?? null;
+      if (haulId !== null) await lockHauls(trx, tenant, [haulId]);
       const row = await lockItem(trx, tenant, params.itemId);
       if (!row) throw notFound('Item');
       if (await hasLiveListing(trx, tenant, row.id)) {
@@ -200,6 +205,11 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
         action: 'item.deleted',
         changes: { itemId: row.id, sku: row.sku },
       });
+      // The items still in its haul move up a place, so their shares may change.
+      if (row.haul_id !== null) {
+        if (row.haul_id !== haulId) await lockHauls(trx, tenant, [row.haul_id]);
+        await settleHaul(trx, tenant, row.haul_id);
+      }
       return itemPhotos;
     });
     await deletePhotoObjects(deps.storage, photos, request.log);
@@ -303,6 +313,21 @@ async function nextStatus(
     'invalid_state_transition',
     `This item is ${row.status.replaceAll('_', ' ')}; its status now follows its listings and sales.`,
   );
+}
+
+/**
+ * An item in a haul costs its share of the haul (docs/features/hauls.md): only the haul changes
+ * it, so a replace must send the cost the item has.
+ */
+function assertHaulCostKept(row: InventoryItem, details: ItemDetailsInput): void {
+  if (row.haul_id === null) return;
+  if (details.cost?.amountCents === row.cost_cents) return;
+  throw validationFailed([
+    {
+      field: 'details.cost',
+      message: "is this item's share of its haul; change the haul, or take the item out of it",
+    },
+  ]);
 }
 
 export function versionConflict(): ApiError {

@@ -233,6 +233,8 @@ src/
   analyses/      Start, get, escalate, and apply analyses; the guard pre-check
   batches/       Batches of items photographed in one session: items by position, submits, the
                  measured interaction
+  hauls/         Hauls: items bought together for one price, each costing its share
+                 (docs/features/hauls.md)
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
@@ -391,7 +393,7 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   sale-check records and health in [activity.md](features/activity.md#data), and background read
   health in [read-health.md](features/read-health.md#data);
   inventory, photos, and history in [items.md](features/items.md); batches in
-  [batch.md](features/batch.md#data); uploads in
+  [batch.md](features/batch.md#data); hauls in [hauls.md](features/hauls.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data) (double-sale incidents in
@@ -521,6 +523,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/ios.md](features/ios.md)                                 | iOS app conventions                                                            |
 | [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric     |
 | [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review      |
+| [features/hauls.md](features/hauls.md)                             | Hauls: one price for many items, each item's share, the leftover cents         |
 | [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                      |
 | [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API               |
 | [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI    |
