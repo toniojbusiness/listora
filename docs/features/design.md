@@ -130,32 +130,33 @@ same on every screen. The table with each style's use is in `Typography.swift`.
 
 ### Components
 
-| Component                                  | What it is                                                                                                                                                                               |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ListoraButtonStyle`                       | `primary`, `secondary`, `destructive`, `tertiary`, `destructiveText`; large or compact; pressed scale; `.loading(_:)` spinner that keeps the size; the filled kinds have a stitched edge |
-| `Wordmark`, `BrandSpinner`                 | The Looptag wordmark and the brand loading indicator (Brand, above)                                                                                                                      |
-| `cardStyle(_:)`                            | `elevated`, `flat`, or `tinted(tone)` surface, no border in light mode; or `ruled`, no box and a hairline under it, for dense places                                                     |
-| `tagStyle()`, `TagShape`, `stitchedEdge`   | A tag on its side (the day's cards): card stock, the pointed end with its eyelet punched through, a stitched edge (Hang Tag, below)                                                      |
-| `ThreadRow`, `ThreadBead`, `ThreadSegment` | The Looptag string through a column of rows, a bead per marketplace or step (filled, ringed, or dashed, with a symbol), a piece that can be cut                                          |
-| `Stamp`                                    | A rubber-stamp word in inked capitals ("Urgent", "Soon", "Sold"), for a mark that is not a status                                                                                        |
-| `TabRail`, `tabRail(_:selection:)`         | The tab bar: a rail with the tabs under it and Add as a clay tag hanging from it; `tabRailHidden(_:)` steps it aside for a flow                                                          |
-| `ListRow`                                  | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                                                            |
-| `IconTile`                                 | An SF Symbol or monogram on a soft square (rows, cards, empty states)                                                                                                                    |
-| `Avatar`                                   | The seller's photo, or initials on brand clay, in a circle: the header button, rows, the profile ([profile.md](profile.md))                                                              |
-| `StatusTone`, `StatusBadge`, `StatusLabel` | The honest status vocabulary as a woven label (nearly square, stitched just inside) or as inline text                                                                                    |
-| `Chip`, `ChoiceChip`, `FlowLayout`         | Square-cornered labels over photos (or `muted`, on a card); single-choice chips (capsules) that wrap                                                                                     |
-| `ListoraTextField`                         | Labeled field with focus outline, hint, and error                                                                                                                                        |
-| `PriceField`, `PriceInput`                 | Price entry in minor units on the decimal keypad; input kept valid as typed                                                                                                              |
-| `SectionHeader`                            | Small-capitals heading with optional explanation and action                                                                                                                              |
-| `EmptyStateView`                           | The art hanging from a rail off to one side, then, left-aligned: title, message, optional numbered steps, one action                                                                     |
-| `SpotIllustration`                         | The empty-state art: an empty tag hanging by its string with an SF Symbol printed on it; fixed size, so the action stays on screen                                                       |
-| `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                                                         |
-| `SkeletonPhotoTile`, `SkeletonList`        | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners                                          |
-| `celebration(trigger:)`                    | The sold celebration (above)                                                                                                                                                             |
-| `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                                                                      |
-| `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                                                               |
-| `solidBarEdges()`                          | A hard edge under the navigation bar (iOS 26), so content never shows through; set once at the root                                                                                      |
-| `RemoteImage`, `RemoteImageLoader`         | A server photo filling its frame: disk and memory caches, decoded at display size ([performance.md](performance.md#ios)); never `AsyncImage`                                             |
+| Component                                   | What it is                                                                                                                                                                                |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ListoraButtonStyle`                        | `primary`, `secondary`, `destructive`, `tertiary`, `destructiveText`; large or compact; pressed scale; `.loading(_:)` spinner that keeps the size; the filled kinds have a stitched edge  |
+| `Wordmark`, `BrandSpinner`                  | The Looptag wordmark and the brand loading indicator (Brand, above)                                                                                                                       |
+| `cardStyle(_:)`                             | `elevated`, `flat`, or `tinted(tone)` surface, no border in light mode; or `ruled`, no box and a hairline under it, for dense places                                                      |
+| `tagStyle()`, `TagShape`, `stitchedEdge`    | A tag on its side (the day's cards): card stock, the pointed end with its eyelet punched through, a stitched edge (Hang Tag, below)                                                       |
+| `ThreadRow`, `ThreadBead`, `ThreadSegment`  | The Looptag string through a column of rows, a bead per marketplace or step (filled, ringed, or dashed, with a symbol), a piece that can be cut                                           |
+| `StampMark`, `HangingTag`, `ThreadProgress` | A symbol stamped in a ruled square (a card with no photo); a tag hanging from a rail by its string (Inventory's photos, the item's photos); how far work has come as a string pulled taut |
+| `Stamp`                                     | A rubber-stamp word in inked capitals ("Urgent", "Soon", "Sold"), for a mark that is not a status                                                                                         |
+| `TabRail`, `tabRail(_:selection:)`          | The tab bar: a rail with the tabs under it and Add as a clay tag hanging from it; `tabRailHidden(_:)` steps it aside for a flow                                                           |
+| `ListRow`                                   | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                                                             |
+| `IconTile`                                  | An SF Symbol or monogram: on a soft square at row size (Settings rows); stamped in ink (`StampMark`) at card and hero sizes                                                               |
+| `Avatar`                                    | The seller's photo, or initials on brand clay, in a circle: the header button, rows, the profile ([profile.md](profile.md))                                                               |
+| `StatusTone`, `StatusBadge`, `StatusLabel`  | The honest status vocabulary as a woven label (nearly square, stitched just inside) or as inline text                                                                                     |
+| `Chip`, `ChoiceChip`, `FlowLayout`          | Square-cornered labels over photos (or `muted`, on a card); single-choice chips (capsules) that wrap                                                                                      |
+| `ListoraTextField`                          | Labeled field with focus outline, hint, and error                                                                                                                                         |
+| `PriceField`, `PriceInput`                  | Price entry in minor units on the decimal keypad; input kept valid as typed                                                                                                               |
+| `SectionHeader`                             | Small-capitals heading with optional explanation and action                                                                                                                               |
+| `EmptyStateView`                            | The art hanging from a rail off to one side, then, left-aligned: title, message, optional numbered steps, one action                                                                      |
+| `SpotIllustration`                          | The empty-state art: an empty tag hanging by its string with an SF Symbol printed on it; fixed size, so the action stays on screen                                                        |
+| `SkeletonBlock`, `SkeletonRow`              | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                                                          |
+| `SkeletonPhotoTile`, `SkeletonList`         | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners                                           |
+| `celebration(trigger:)`                     | The sold celebration (above)                                                                                                                                                              |
+| `Banner`, `toast(_:)`                       | Inline status message with Retry or dismiss; a passing confirmation                                                                                                                       |
+| `BottomActionBar`, `bottomActionBar(_:)`    | The pinned bar for a screen's main actions                                                                                                                                                |
+| `solidBarEdges()`                           | A hard edge under the navigation bar (iOS 26), so content never shows through; set once at the root                                                                                       |
+| `RemoteImage`, `RemoteImageLoader`          | A server photo filling its frame: disk and memory caches, decoded at display size ([performance.md](performance.md#ios)); never `AsyncImage`                                              |
 
 The review flow enters amounts on its own keypad (`KeypadView` in `ReviewFeature`) rather than
 `PriceField`, so the system keyboard never covers the bottom bar; `PriceField` is for amount
@@ -172,7 +173,8 @@ system (this section), the screens (Today's string, the Inventory rail, the item
 List everywhere), and the moments (the sold stamp, strings cut on auto-delist, knots tied as each
 marketplace confirms). Before and after sheets of the design system step are in
 [design/hangtag/](design/hangtag/): main before it, and this step, on the iPhone 17 in light and
-dark mode and at the largest text size in dark mode.
+dark mode and at the largest text size in dark mode. The screens step's sheets, against the design system step,
+are in [design/hangtag-screens/](design/hangtag-screens/).
 
 - **Tags and strings only where they carry meaning**: the day's cards, the item and its
   marketplaces, the rail of items, an empty state, the tab bar. Everywhere else, bigger type,
@@ -183,7 +185,20 @@ dark mode and at the largest text size in dark mode.
   full, so nothing relies on decoration or color alone. The string, beads, stitching, and
   eyelets are hidden from VoiceOver.
 - **Type**: Fraunces for headings and prices, SF Pro for everything you read, SF Mono for text
-  read off a tag.
+  read off a tag and for SKUs (`Typography.sku`).
+- **The screens** (step 2):
+  - **Today**: each card is a tag lying on its side, threaded on one string down the left
+    through every eyelet, most urgent first. Urgency is a stamp ("Urgent", "Soon"), and a card
+    with no item photo has its mark stamped on the tag instead of an icon tile. This week's money
+    is ruled, not boxed.
+  - **Inventory**: in the grid, each item's photo hangs on a tag from the row's rail; the title,
+    the price in Fraunces, and the SKU in SF Mono stay on the page under it. The list is ruled.
+  - **The item**: its photos hang on a tag, and its marketplaces are beads on one string, the
+    string to a marketplace it is not on yet loose (dashed). A failed marketplace keeps its tint.
+  - **List everywhere**: the step the iPhone runs shows how far it has come as a string pulled
+    taut with a bead where it stops.
+  - Pack check's to-ship list is ruled, with SKUs in SF Mono; the import questions print their
+    price in Fraunces.
 - **The tab bar** (`TabRail`): a rail across the bottom with the five tabs under it, Inventory a
   hanger, and Add a clay tag hanging from the rail. It sits under the `TabView`, not in its safe
   area (an inset outside a tab's navigation stack does not reach the screens in it), so every

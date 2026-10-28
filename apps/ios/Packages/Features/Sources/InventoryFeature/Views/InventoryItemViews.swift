@@ -37,13 +37,13 @@ struct InventoryRow: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     meta {
                         Text("\(item.sku) · \(item.status.label)")
-                            .font(Typography.metadata)
+                            .font(Typography.sku)
                             .foregroundStyle(Palette.textSecondary)
                             .frame(maxWidth: isAccessibilitySize ? nil : .infinity, alignment: .leading)
                         if let price = item.listPrice {
                             Text(Formatting.money(price))
-                                .font(Typography.number)
-                                .foregroundStyle(Palette.textPrimary)
+                                .font(Typography.price)
+                                .foregroundStyle(Palette.brand)
                                 .fixedSize()
                         }
                     }
@@ -72,11 +72,13 @@ struct InventoryRow: View {
                 }
             }
         }
-        .cardStyle(.flat, padding: Spacing.sm)
-        .overlay {
+        // A long list is ruled, not boxed, so it stays calm at a hundred items.
+        .cardStyle(.ruled, padding: Spacing.sm)
+        .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
-                    .strokeBorder(Palette.brand.color, lineWidth: 2)
+                RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+                    .fill(Palette.brandSoft)
+                    .padding(.horizontal, -Spacing.xs)
             }
         }
         .contentShape(Rectangle())
@@ -84,9 +86,9 @@ struct InventoryRow: View {
     }
 }
 
-/// One item in the grid: its cover photo, large and square, with the item's status on it; the
-/// title, price, and SKU; and each marketplace's status as a line in the server's words, in full.
-/// No card around it: the photo carries the cell.
+/// One item in the grid: its cover photo, large and square, on a tag hanging from the row's rail,
+/// with the item's status on it; then, on the page under the tag, the title, price, and SKU, and
+/// each marketplace's status as a line in the server's words, in full.
 struct InventoryGridCell: View {
     let item: ItemSummary
     /// Select mode, and whether the item is chosen.
@@ -95,35 +97,7 @@ struct InventoryGridCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Color.clear
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    // The listing size: the thumbnail is too small to fill a cell sharply.
-                    PhotoView(
-                        url: item.coverPhoto?.urls?.listing ?? item.coverPhoto?.urls?.thumbnail,
-                        cornerRadius: Radius.large,
-                    )
-                }
-                .overlay(alignment: .topLeading) {
-                    Chip(item.status.label)
-                        .padding(Spacing.xs)
-                }
-                .overlay(alignment: .topTrailing) {
-                    if isSelecting {
-                        SelectionMark(isSelected: isSelected).padding(Spacing.xs)
-                    }
-                }
-                .overlay(alignment: .bottomLeading) {
-                    if item.needsYou, !isSelecting {
-                        NeedsYouBadge(item: item).padding(Spacing.xs)
-                    }
-                }
-                .overlay {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
-                            .strokeBorder(Palette.brand.color, lineWidth: 3)
-                    }
-                }
+            HangingTag(railOverhang: Spacing.md / 2) { photo }
                 .padding(.bottom, Spacing.xxs)
             Text(item.title ?? "Untitled item")
                 .font(Typography.headline)
@@ -134,12 +108,12 @@ struct InventoryGridCell: View {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 if let price = item.listPrice {
                     Text(Formatting.money(price))
-                        .font(Typography.number)
-                        .foregroundStyle(Palette.textPrimary)
+                        .font(Typography.price)
+                        .foregroundStyle(Palette.brand)
                         .fixedSize()
                 }
                 Text(item.sku)
-                    .font(Typography.metadata)
+                    .font(Typography.sku)
                     .foregroundStyle(Palette.textSecondary)
                     .lineLimit(1)
             }
@@ -158,6 +132,38 @@ struct InventoryGridCell: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private var photo: some View {
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                // The listing size: the thumbnail is too small to fill a cell sharply.
+                PhotoView(
+                    url: item.coverPhoto?.urls?.listing ?? item.coverPhoto?.urls?.thumbnail,
+                    cornerRadius: Radius.small,
+                )
+            }
+            .overlay(alignment: .topLeading) {
+                Chip(item.status.label)
+                    .padding(Spacing.xs)
+            }
+            .overlay(alignment: .topTrailing) {
+                if isSelecting {
+                    SelectionMark(isSelected: isSelected).padding(Spacing.xs)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if item.needsYou, !isSelecting {
+                    NeedsYouBadge(item: item).padding(Spacing.xs)
+                }
+            }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
+                        .strokeBorder(Palette.brand.color, lineWidth: 3)
+                }
+            }
     }
 }
 

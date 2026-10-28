@@ -20,7 +20,8 @@ import SwiftUI
 /// | `subheadline`| Subheadline  | SF Pro   | Regular  | Row subtitles                            |
 /// | `emphasis`   | Subheadline  | SF Pro   | Semibold | Values, inline actions, tabular digits   |
 /// | `footnote`   | Footnote     | SF Pro   | Regular  | Hints under controls                     |
-/// | `metadata`   | Footnote     | SF Pro   | Regular  | SKUs, counts, and dates, tabular digits  |
+/// | `metadata`   | Footnote     | SF Pro   | Regular  | Counts and dates, tabular digits         |
+/// | `sku`        | Footnote     | SF Mono  | Regular  | A SKU, as printed on a tag               |
 /// | `smallEmphasis` | Footnote  | SF Pro   | Semibold | Small values and links, tabular digits   |
 /// | `caption`    | Caption 1    | SF Pro   | Regular  | Metadata (counts, times)                 |
 /// | `label`      | Caption 1    | SF Pro   | Semibold | Badges and chips                         |
@@ -51,6 +52,8 @@ public enum Typography {
     public static let footnote = Font.footnote
     /// SKUs, counts, and dates in rows: digits line up.
     public static let metadata = Font.footnote.monospacedDigit()
+    /// A SKU, printed like the code on a tag.
+    public static let sku = Font.footnote.monospaced()
     /// A small value or link beside footnote text.
     public static let smallEmphasis = Font.footnote.weight(.semibold).monospacedDigit()
     public static let caption = Font.caption

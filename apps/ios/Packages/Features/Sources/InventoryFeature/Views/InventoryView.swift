@@ -202,7 +202,7 @@ public struct InventoryView<Header: View>: View {
             .accessibilityIdentifier("inventory.noMatches")
         } else {
             EmptyStateView(
-                systemImage: "shippingbox",
+                systemImage: "hanger",
                 title: "No items yet",
                 message: "Create an item once, and see where it's listed and what sold on every marketplace.",
                 steps: [
@@ -237,7 +237,7 @@ public struct InventoryView<Header: View>: View {
                         }
                     }
                 case .list:
-                    LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(model.items, id: \.id) { item in
                             link(to: item) { InventoryRow(
                                 item: item,
@@ -246,7 +246,7 @@ public struct InventoryView<Header: View>: View {
                             ) }
                         }
                         if model.isLoadingMore {
-                            SkeletonRow().cardStyle(.flat)
+                            SkeletonRow().cardStyle(.ruled, padding: Spacing.sm)
                         }
                     }
                     .frame(maxWidth: Layout.readableWidth)

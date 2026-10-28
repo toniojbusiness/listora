@@ -46,7 +46,7 @@ struct MoneySummaryView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("today.money.profit")
             }
-            .cardStyle()
+            .cardStyle(.ruled)
         }
     }
 }
