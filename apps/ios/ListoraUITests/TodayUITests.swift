@@ -29,8 +29,8 @@ final class TodayUITests: XCTestCase {
         app.launch()
 
         // Today is the first tab and opens first, most urgent card on top.
-        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
+        XCTAssertTrue(app.tabRail.buttons["Today"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.buttons["Today"].isSelected)
         let ship = card(StubAPIServer.shipCardID)
         XCTAssertTrue(ship.waitForExistence(timeout: 10), "no ship card")
         XCTAssertTrue(app.staticTexts["4 things need you"].exists)
@@ -60,10 +60,10 @@ final class TodayUITests: XCTestCase {
         scroll(to: drafts)
         drafts.tap()
         XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.tabBars.buttons["Inventory"].isSelected)
+        XCTAssertTrue(app.tabRail.buttons["Inventory"].isSelected)
 
         // The money summary: this week next to last week, and the profit the server knows.
-        app.tabBars.buttons["Today"].tap()
+        app.tabRail.buttons["Today"].tap()
         let sales = app.descendants(matching: .any)["today.money.sales"]
         scroll(to: sales)
         XCTAssertTrue(sales.label.contains("$142"), sales.label)
@@ -74,8 +74,8 @@ final class TodayUITests: XCTestCase {
 
         // Everything is done: the next look at Today is all caught up.
         server.setToday(.caughtUp)
-        app.tabBars.buttons["Inventory"].tap()
-        app.tabBars.buttons["Today"].tap()
+        app.tabRail.buttons["Inventory"].tap()
+        app.tabRail.buttons["Today"].tap()
         XCTAssertTrue(app.staticTexts["You're all caught up"].waitForExistence(timeout: 10))
         XCTAssertFalse(card(StubAPIServer.shipCardID).exists)
         keepScreenshot("All caught up")

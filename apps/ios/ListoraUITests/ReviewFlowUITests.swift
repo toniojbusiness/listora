@@ -41,7 +41,7 @@ final class ReviewFlowUITests: XCTestCase {
         XCTAssertFalse(app.buttons["draft.row"].exists)
 
         // The saved item is in the inventory right away, ready to list.
-        app.tabBars.buttons["Inventory"].tap()
+        app.tabRail.buttons["Inventory"].tap()
         let row = app.buttons["inventory.row.\(sku)"]
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the saved item is not in the inventory")
         XCTAssertFalse(app.staticTexts["No items yet"].exists)
@@ -166,7 +166,7 @@ final class ReviewFlowUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ].merging(environment) { _, new in new }
         app.launch()
-        let tab = app.tabBars.buttons["Add"]
+        let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
     }

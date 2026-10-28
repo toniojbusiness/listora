@@ -46,7 +46,7 @@ final class SignInUITests: XCTestCase {
         XCTAssertTrue(welcome.waitForExistence(timeout: 10))
         XCTAssertEqual(app.descendants(matching: .any)["signIn.wordmark"].label, "Listora")
         XCTAssertTrue(app.staticTexts["signIn.valueStatement"].exists)
-        XCTAssertFalse(app.tabBars.firstMatch.exists, "the tabs show only once signed in")
+        XCTAssertFalse(app.tabRail.exists, "the tabs show only once signed in")
         XCTAssertFalse(app.buttons["signIn.continue"].isEnabled, "Continue needs an email")
 
         requestCode(for: "seller@listora.test")
@@ -64,7 +64,7 @@ final class SignInUITests: XCTestCase {
         XCTAssertTrue(message.waitForExistence(timeout: 10))
         XCTAssertEqual(message.label, "That sign-in code is not correct.")
         XCTAssertNotEqual(code.value as? String, "000000", "the wrong code is cleared")
-        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        XCTAssertFalse(app.tabRail.exists)
 
         // The right code opens the app on Today, with the first-run guide over it the first time.
         code.typeText(StubAPIServer.devSignInCode)
@@ -73,7 +73,7 @@ final class SignInUITests: XCTestCase {
         XCTAssertTrue(skipGuide.waitForExistence(timeout: 10), "the first sign-in shows the getting-started guide")
         XCTAssertTrue(app.staticTexts["Link your marketplaces"].exists)
         skipGuide.tap()
-        let tabBar = app.tabBars.firstMatch
+        let tabBar = app.tabRail
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10), "signing in shows the tabs")
         XCTAssertTrue(tabBar.buttons["Today"].isSelected)
         XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10), "Today loads signed in")
@@ -103,7 +103,7 @@ final class SignInUITests: XCTestCase {
         UIPasteboard.general.string = "Your Listora code: \(StubAPIServer.devSignInCode)"
         app.buttons["signIn.paste"].tap()
 
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10), "the pasted code signs in")
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10), "the pasted code signs in")
     }
 
     func testDifferentEmailGoesBackToTheWelcomeScreen() {

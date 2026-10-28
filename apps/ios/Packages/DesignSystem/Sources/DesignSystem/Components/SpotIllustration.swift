@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// The friendly art of an empty screen, drawn from palette colors and an SF Symbol, so it suits
-/// both modes and every screen without image assets: two tilted cards on a soft circle, the front
-/// one carrying the symbol, with a few small shapes around them. Decorative, so VoiceOver skips
-/// it. It settles in with a short spring (a fade with Reduce Motion on).
+/// The art of an empty screen: an empty price tag hanging by its string, a little tilted, with an
+/// SF Symbol printed on it and two blank lines to write on, drawn from palette colors so it suits
+/// both modes and every screen without image assets. ``EmptyStateView`` hangs it from a rail.
+/// Decorative, so VoiceOver skips it. It swings in and settles (a fade with Reduce Motion on).
 public struct SpotIllustration: View {
     private let systemImage: String
     private let tone: StatusTone?
@@ -14,52 +14,30 @@ public struct SpotIllustration: View {
     /// action stay on screen at the largest sizes.
     public static let side: CGFloat = 168
 
-    /// `tone` colors the art; nil uses the brand.
+    /// How far the string drops from the rail to the tag's eyelet.
+    static let stringLength: CGFloat = 34
+    /// The tag's resting tilt, in degrees.
+    static let restingTilt: Double = 6
+
+    /// `tone` colors the symbol; nil uses the brand.
     public init(systemImage: String, tone: StatusTone? = nil) {
         self.systemImage = systemImage
         self.tone = tone
     }
 
-    private var strong: ColorToken {
-        tone?.color ?? Palette.brand
-    }
-
-    private var soft: ColorToken {
-        tone?.softColor ?? Palette.brandSoft
-    }
-
     public var body: some View {
         let side = Self.side
-        ZStack {
-            Circle()
-                .fill(soft)
-                .frame(width: side * 0.86, height: side * 0.86)
-            Circle()
-                .fill(Palette.surfaceSecondary)
-                .frame(width: side * 0.2, height: side * 0.2)
-                .offset(x: side * 0.36, y: -side * 0.3)
-            Circle()
-                .strokeBorder(strong.color.opacity(0.35), lineWidth: 2)
-                .frame(width: side * 0.13, height: side * 0.13)
-                .offset(x: -side * 0.4, y: side * 0.3)
-            Image(systemName: "sparkle")
-                .font(.system(size: side * 0.11, weight: .semibold))
-                .foregroundStyle(strong.color.opacity(0.7))
-                .offset(x: -side * 0.34, y: -side * 0.32)
-            card(fill: Palette.surfaceSecondary)
-                .rotationEffect(.degrees(isShown ? 9 : 0))
-                .offset(x: side * 0.07, y: -side * 0.03)
-            card(fill: Palette.surface)
-                .overlay {
-                    Image(systemName: systemImage)
-                        .font(.system(size: side * 0.22, weight: .semibold))
-                        .foregroundStyle(strong)
-                }
-                .rotationEffect(.degrees(isShown ? -5 : 0))
-                .elevation(.medium)
+        let tagSize = CGSize(width: side * 0.62, height: side * 0.8)
+        VStack(spacing: 0) {
+            ThreadSegment()
+                .stroke(Palette.thread, style: Thread.stroke(.taut))
+                .frame(width: Thread.width, height: Self.stringLength)
+            tag(size: tagSize)
+                // The string ties on through the eyelet, so the tag starts just above it.
+                .padding(.top, -(TagMetrics.eyeletInset + 2))
         }
-        .frame(width: side, height: side)
-        .scaleEffect(isShown || reduceMotion ? 1 : 0.92)
+        .rotationEffect(.degrees(isShown || reduceMotion ? Self.restingTilt : 16), anchor: .top)
+        .frame(width: side, height: side, alignment: .top)
         .opacity(isShown ? 1 : 0)
         .accessibilityHidden(true)
         .onAppear {
@@ -69,16 +47,33 @@ public struct SpotIllustration: View {
         }
     }
 
-    private func card(fill: ColorToken) -> some View {
-        RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
-            .fill(fill)
-            .frame(width: Self.side * 0.46, height: Self.side * 0.54)
+    private func tag(size: CGSize) -> some View {
+        TagShape(end: .top, chamfer: 26)
+            .fill(Palette.surface)
+            .stitchedEdge(TagShape(end: .top, chamfer: 26, punchesEyelet: false), inset: 5)
+            .overlay(alignment: .top) {
+                EyeletRing().padding(.top, TagMetrics.eyeletInset + 2 - TagMetrics.eyeletRingRadius)
+            }
+            .overlay {
+                VStack(spacing: Spacing.sm) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: size.width * 0.3, weight: .semibold))
+                        .foregroundStyle(tone?.color ?? Palette.brand)
+                    VStack(spacing: Spacing.xs) {
+                        Capsule().fill(Palette.separator).frame(width: size.width * 0.56, height: 1.5)
+                        Capsule().fill(Palette.separator).frame(width: size.width * 0.4, height: 1.5)
+                    }
+                }
+                .padding(.top, Spacing.lg)
+            }
+            .frame(width: size.width, height: size.height)
+            .elevation(.medium)
     }
 }
 
 #Preview {
     HStack(spacing: Spacing.lg) {
-        SpotIllustration(systemImage: "shippingbox")
+        SpotIllustration(systemImage: "dollarsign")
         SpotIllustration(systemImage: "checkmark", tone: .success)
     }
     .padding()

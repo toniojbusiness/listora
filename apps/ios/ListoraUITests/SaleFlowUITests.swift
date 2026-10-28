@@ -46,7 +46,7 @@ final class SaleFlowUITests: XCTestCase {
         keepScreenshot("Relisted")
 
         // The Sales tab lists the sale.
-        app.tabBars.buttons["Sales"].tap()
+        app.tabRail.buttons["Sales"].tap()
         let saleRow = app.buttons["sales.row.\(item.sku)"]
         XCTAssertTrue(saleRow.waitForExistence(timeout: 15), "the sale is not in the Sales tab")
         XCTAssertTrue(saleRow.label.contains("Canceled"), saleRow.label)
@@ -95,7 +95,7 @@ final class SaleFlowUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        let inventory = app.tabBars.buttons["Inventory"]
+        let inventory = app.tabRail.buttons["Inventory"]
         XCTAssertTrue(inventory.waitForExistence(timeout: 10))
         inventory.tap()
     }

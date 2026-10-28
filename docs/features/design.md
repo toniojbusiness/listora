@@ -1,7 +1,7 @@
 # Listora design
 
-How the iPhone app looks and behaves: the design system in the `DesignSystem` package, the rules
-every screen follows, and the UI audit behind design system v2. The code conventions are in
+How the iPhone app looks and behaves: the design system in the `DesignSystem` package (Hang Tag,
+below), the rules every screen follows, and the UI audits behind it. The code conventions are in
 [apps/ios/README.md](../../apps/ios/README.md); this file is about what the user sees.
 
 ## Principles
@@ -46,13 +46,17 @@ audience of women and men: warm and earthy rather than pastel, and no generic te
 | `warning` / `warningSoft`               | `#7F5000` / `#F6ECD5`         | `#EDC476` / `#382C12`             | Needs the user                            |
 | `danger` / `dangerSoft` / `onDanger`    | `#A8203F` / `#F9E2E7` / white | `#FF9DB0` / `#461723` / `#3A0A16` | Failed, destructive                       |
 | `mediaBackground` / `onMedia` / `scrim` | black / white / black         | same                              | Camera and crop, always dark              |
+| `thread` / `rail`                       | `#3C5446` / `#7A5C3E`         | `#8FA597` / `#A88A68`             | The string and the rail (Hang Tag)        |
+| `stitch` / `eyelet`                     | `#CDC2AE` / `#D3C29F`         | `#3D5244` / `#6E5E44`             | Stitched edges, the eyelet's ring         |
 
 The palette sheets that compared the three directions (Today, inventory, item, Add Item,
 review, price, and Settings, in light and dark mode) are in [design/palette/](design/palette/).
 
 `PaletteTests` checks every text color on every background, every strong color and
 `textPrimary` on its soft background, the labels on `brand` and `danger`, and that the brand and
-status colors differ from each other, in both modes.
+status colors differ from each other, in both modes. The string and the rail carry meaning, so
+they reach the 3:1 of meaningful graphics on every background; the stitching stays quieter than
+the string, so decoration never reads as a connection.
 
 ### Brand: Looptag
 
@@ -68,35 +72,40 @@ logo concepts; the concept renders and the generator that made them are outside 
 | `Wordmark`     | Welcome, the code screen, the first-run welcome                                                | "listora" in Fraunces (below) whose l is the mark: the string at the font's stem weight, the clay tag below the baseline like a descender. VoiceOver reads "Listora".                                                                                 |
 | `BrandSpinner` | Wherever a spinner shows: loading buttons, the analysis steps, searches, a marketplace at work | The l draws itself, the tag lands, the string lifts off, every 1.6 s. With Reduce Motion the whole mark stays still and pulses like the skeletons. Brand colors, or one color (`color:`) on a filled button or a status tone. Sized by `controlSize`. |
 
-**The wordmark's font** is Fraunces (SIL Open Font License 1.1, no reserved font name), bundled
+**The display font** is Fraunces (SIL Open Font License 1.1, no reserved font name), bundled
 in DesignSystem with its license (`Resources/Fonts/OFL.txt`) and registered for the app's
 process only on first use (`BrandFont`). It is a static instance of the variable font from
 `github.com/google/fonts` (`ofl/fraunces`), made with fontTools:
 `fonttools varLib.instancer 'Fraunces[SOFT,WONK,opsz,wght].ttf' opsz=72 wght=700 SOFT=100 WONK=0 --update-name-table`.
-Only the wordmark uses it; Apple's fonts are not licensed for a logo, and the type scale below
-stays SF Pro and New York. A wordmark is drawn from the font's glyph outlines (Core Text), so it
-matches the concept's lockup at any size.
+The wordmark uses it (Apple's fonts are not licensed for a logo), and so do the display styles of
+the type scale below, the print on a price tag. A wordmark is drawn from the font's glyph
+outlines (Core Text), so it matches the concept's lockup at any size.
 
 Loading a screen still uses skeletons, not a spinner (below); the spinner is for an action in
 progress inside a screen.
 
 ### Type (`Typography`)
 
-One scale, SF Pro on Dynamic Type text styles. Only the two display styles are New York
-(serif): `largeTitle` and `title`, for a screen's own heading, an empty state, and a welcome
-step. Everything inside cards and rows is SF Pro: `title3` (card headings), `headline`, `number`
-(amounts in rows), `body`, `callout`, `code` (text read off a tag), `subheadline`, `emphasis`
-(values and inline actions), `footnote`, `metadata` (SKUs, counts, dates), `smallEmphasis`,
-`caption`, `label` (badges and chips), `eyebrow` (section headers, in capitals), `price` and
-`priceLarge`. Views never add a weight or a digit style of their own, so the same kind of text
-looks the same on every screen. The table with each style's use is in `Typography.swift`.
+One scale on Dynamic Type text styles. The display styles are Fraunces, scaled with Dynamic Type
+through `Font.custom(_:size:relativeTo:)`: `largeTitle` and `title` (a screen's own heading, an
+empty state, a welcome step) and the prices, `price` and `priceLarge`. The navigation bar's large
+titles (Today, Inventory, Sales) are Fraunces too (`BrandAppearance`, installed by the root
+view); inline titles stay SF Pro. Everything you read inside cards and rows is SF Pro: `title3`
+(card headings), `headline`, `number` (amounts in rows), `body`, `callout`, `code` (text read off
+a tag), `subheadline`, `emphasis` (values and inline actions), `footnote`, `metadata` (SKUs,
+counts, dates), `smallEmphasis`, `caption`, `label` (badges and chips), `stamp` (a stamp's word),
+`eyebrow` (section headers, in capitals). Fraunces has no tabular figures, so an amount or a code
+being typed (`amountEntry`) and a keypad's keys (`keypad`) are SF Pro, with digits that hold
+still. Views never add a weight or a digit style of their own, so the same kind of text looks the
+same on every screen. The table with each style's use is in `Typography.swift`.
 
 ### Space, shape, depth, motion
 
 - `Spacing`: an 8-point grid (8, 16, 24, 32, 48, 64) with the 4- and 12-point half steps for
   the inside of small components. Screens use a 16-point margin.
-- `Radius`: `small` 8 (thumbnails, chips), `medium` 12 (buttons, fields, photo tiles), `large`
-  20 (cards, banners), `extraLarge` 28 (hero tiles).
+- `Radius`: `tight` 3 (woven labels, stamps, chips), `small` 8 (thumbnails), `medium` 12
+  (buttons, fields, photo tiles, tags), `large` 20 (cards, banners), `extraLarge` 28 (hero
+  tiles).
 - `Layout`: `minimumTapTarget` 44, `buttonHeight` 52, `compactButtonHeight` 44, `shutterSize`
   84, `readableWidth` 560.
 - `Elevation`: `low` for cards, `medium` for floating bars, `high` for toasts. Cards have no
@@ -121,32 +130,68 @@ looks the same on every screen. The table with each style's use is in `Typograph
 
 ### Components
 
-| Component                                  | What it is                                                                                                                                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ListoraButtonStyle`                       | `primary`, `secondary`, `destructive`, `tertiary`, `destructiveText`; large or compact; pressed scale; `.loading(_:)` spinner that keeps the size |
-| `Wordmark`, `BrandSpinner`                 | The Looptag wordmark and the brand loading indicator (Brand, above)                                                                               |
-| `cardStyle(_:)`                            | `elevated`, `flat`, or `tinted(tone)` surface; no border in light mode                                                                            |
-| `ListRow`                                  | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                     |
-| `IconTile`                                 | An SF Symbol or monogram on a soft square (rows, cards, empty states)                                                                             |
-| `Avatar`                                   | The seller's photo, or initials on brand clay, in a circle: the header button, rows, the profile ([profile.md](profile.md))                       |
-| `StatusTone`, `StatusBadge`, `StatusLabel` | The honest status vocabulary as a pill or as inline text                                                                                          |
-| `Chip`, `ChoiceChip`, `FlowLayout`         | Labels over photos (or `muted`, on a card); single-choice chips that wrap                                                                         |
-| `ListoraTextField`                         | Labeled field with focus outline, hint, and error                                                                                                 |
-| `PriceField`, `PriceInput`                 | Price entry in minor units on the decimal keypad; input kept valid as typed                                                                       |
-| `SectionHeader`                            | Small-capitals heading with optional explanation and action                                                                                       |
-| `EmptyStateView`                           | Illustration, title, message, optional numbered steps, one action                                                                                 |
-| `SpotIllustration`                         | The empty-state art: two tilted cards with an SF Symbol on a soft circle, drawn from the palette; fixed size, so the action stays on screen       |
-| `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                  |
-| `SkeletonPhotoTile`, `SkeletonList`        | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners   |
-| `celebration(trigger:)`                    | The sold celebration (above)                                                                                                                      |
-| `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                               |
-| `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                        |
-| `solidBarEdges()`                          | A hard edge under the navigation bar (iOS 26), so content never shows through; set once at the root                                               |
-| `RemoteImage`, `RemoteImageLoader`         | A server photo filling its frame: disk and memory caches, decoded at display size ([performance.md](performance.md#ios)); never `AsyncImage`      |
+| Component                                  | What it is                                                                                                                                                                               |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ListoraButtonStyle`                       | `primary`, `secondary`, `destructive`, `tertiary`, `destructiveText`; large or compact; pressed scale; `.loading(_:)` spinner that keeps the size; the filled kinds have a stitched edge |
+| `Wordmark`, `BrandSpinner`                 | The Looptag wordmark and the brand loading indicator (Brand, above)                                                                                                                      |
+| `cardStyle(_:)`                            | `elevated`, `flat`, or `tinted(tone)` surface, no border in light mode; or `ruled`, no box and a hairline under it, for dense places                                                     |
+| `tagStyle()`, `TagShape`, `stitchedEdge`   | A tag on its side (the day's cards): card stock, the pointed end with its eyelet punched through, a stitched edge (Hang Tag, below)                                                      |
+| `ThreadRow`, `ThreadBead`, `ThreadSegment` | The Looptag string through a column of rows, a bead per marketplace or step (filled, ringed, or dashed, with a symbol), a piece that can be cut                                          |
+| `Stamp`                                    | A rubber-stamp word in inked capitals ("Urgent", "Soon", "Sold"), for a mark that is not a status                                                                                        |
+| `TabRail`, `tabRail(_:selection:)`         | The tab bar: a rail with the tabs under it and Add as a clay tag hanging from it; `tabRailHidden(_:)` steps it aside for a flow                                                          |
+| `ListRow`                                  | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                                                            |
+| `IconTile`                                 | An SF Symbol or monogram on a soft square (rows, cards, empty states)                                                                                                                    |
+| `Avatar`                                   | The seller's photo, or initials on brand clay, in a circle: the header button, rows, the profile ([profile.md](profile.md))                                                              |
+| `StatusTone`, `StatusBadge`, `StatusLabel` | The honest status vocabulary as a woven label (nearly square, stitched just inside) or as inline text                                                                                    |
+| `Chip`, `ChoiceChip`, `FlowLayout`         | Square-cornered labels over photos (or `muted`, on a card); single-choice chips (capsules) that wrap                                                                                     |
+| `ListoraTextField`                         | Labeled field with focus outline, hint, and error                                                                                                                                        |
+| `PriceField`, `PriceInput`                 | Price entry in minor units on the decimal keypad; input kept valid as typed                                                                                                              |
+| `SectionHeader`                            | Small-capitals heading with optional explanation and action                                                                                                                              |
+| `EmptyStateView`                           | The art hanging from a rail off to one side, then, left-aligned: title, message, optional numbered steps, one action                                                                     |
+| `SpotIllustration`                         | The empty-state art: an empty tag hanging by its string with an SF Symbol printed on it; fixed size, so the action stays on screen                                                       |
+| `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                                                         |
+| `SkeletonPhotoTile`, `SkeletonList`        | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners                                          |
+| `celebration(trigger:)`                    | The sold celebration (above)                                                                                                                                                             |
+| `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                                                                      |
+| `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                                                               |
+| `solidBarEdges()`                          | A hard edge under the navigation bar (iOS 26), so content never shows through; set once at the root                                                                                      |
+| `RemoteImage`, `RemoteImageLoader`         | A server photo filling its frame: disk and memory caches, decoded at display size ([performance.md](performance.md#ios)); never `AsyncImage`                                             |
 
 The review flow enters amounts on its own keypad (`KeypadView` in `ReviewFeature`) rather than
 `PriceField`, so the system keyboard never covers the bottom bar; `PriceField` is for amount
 fields inside forms.
+
+## Hang Tag
+
+The visual identity, from the `lstdesign` study (three directions, Hang Tag chosen and built
+with the restraint of the second, The Edit): every item is a price tag on the Looptag string,
+and one string ties together what belongs together, so "one loop ties each item to every
+marketplace" is something you see. The study, its mockups, and the recommendation are outside
+the repository (the firstmate `lstdesign` report). It is built in three steps: the design
+system (this section), the screens (Today's string, the Inventory rail, the item's marketplaces,
+List everywhere), and the moments (the sold stamp, strings cut on auto-delist, knots tied as each
+marketplace confirms).
+
+- **Tags and strings only where they carry meaning**: the day's cards, the item and its
+  marketplaces, the rail of items, an empty state, the tab bar. Everywhere else, bigger type,
+  fewer boxes, and rules over cards (`cardStyle(.ruled)`), so an 86-item inventory stays clean;
+  no stitching on secondary surfaces (Settings, forms).
+- **The tag is only a frame.** A card keeps one title, the honest status in words, and one
+  action; a bead has its letter and a symbol as well as its color, and the status beside it in
+  full, so nothing relies on decoration or color alone. The string, beads, stitching, and
+  eyelets are hidden from VoiceOver.
+- **Type**: Fraunces for headings and prices, SF Pro for everything you read, SF Mono for text
+  read off a tag.
+- **The tab bar** (`TabRail`): a rail across the bottom with the five tabs under it, Inventory a
+  hanger, and Add a clay tag hanging from the rail. It is solid, so content never shows through
+  it. The system tab bar is hidden; `TabView` still owns the tabs and their state. Each tab is a
+  button, the current one selected, and a badge is read as the tab's value ("2 need you", "1 open
+  task"). It does not carry SwiftUI's tab bar trait, which makes UI tests see every icon and
+  title inside a tab as another button of the same name. Its labels stop growing at the largest text sizes,
+  with the large content viewer on a long press, like the system's. It steps aside for the
+  keyboard, for the review flow (`tabRailHidden()`), and for Inventory's select mode. UI tests
+  find it as `app.tabRail` (`ListoraUITests/TabRail.swift`): `app.tabBars` finds only UIKit's.
+  Tapping the current tab again does not pop to its first screen, as the system bar did.
 
 ## Screenshots
 

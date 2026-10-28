@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// A small non-interactive label on a capsule, such as a photo's role or "Cover". `prominent`
+/// A small non-interactive label, nearly square like a printed tag's sticker, such as a photo's
+/// role or "Cover". `prominent`
 /// uses the brand fill; otherwise it sits on the surface, readable over photos. `muted` sits on
 /// a card, for a fact beside the card's title such as how Listora works with a marketplace.
 public struct Chip: View {
@@ -51,7 +52,7 @@ public struct Chip: View {
         .foregroundStyle(foreground)
         .padding(.horizontal, Spacing.xs)
         .padding(.vertical, Spacing.xxs)
-        .background(fill, in: Capsule())
+        .background(fill, in: RoundedRectangle(cornerRadius: Radius.tight, style: .continuous))
     }
 }
 

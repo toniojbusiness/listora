@@ -39,7 +39,7 @@ final class PackCheckUITests: XCTestCase {
     /// Sales > Pack orders, then the tee: the dress's label is a red stop, its own label packs.
     private func packTheTeeAfterStoppingTheDressLabel(_ tee: PackOrderSeed) throws {
         // Sales shows the way in while Pack check is on.
-        let sales = app.tabBars.buttons["Sales"]
+        let sales = app.tabRail.buttons["Sales"]
         XCTAssertTrue(sales.waitForExistence(timeout: 10))
         sales.tap()
         let packOrders = app.buttons["sales.packOrders"]

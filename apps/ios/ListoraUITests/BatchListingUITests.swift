@@ -30,7 +30,7 @@ final class BatchListingUITests: XCTestCase {
         }
 
         // Every item is in the inventory, ready to list.
-        app.tabBars.buttons["Inventory"].tap()
+        app.tabRail.buttons["Inventory"].tap()
         for sku in skus {
             XCTAssertTrue(app.buttons["inventory.row.\(sku)"].waitForExistence(timeout: 10), "\(sku) is not listed")
         }
@@ -48,7 +48,7 @@ final class BatchListingUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        let tab = app.tabBars.buttons["Add"]
+        let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
     }

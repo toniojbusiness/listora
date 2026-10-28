@@ -112,7 +112,7 @@ final class BulkActionsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        let inventory = app.tabBars.buttons["Inventory"]
+        let inventory = app.tabRail.buttons["Inventory"]
         XCTAssertTrue(inventory.waitForExistence(timeout: 10))
         inventory.tap()
     }

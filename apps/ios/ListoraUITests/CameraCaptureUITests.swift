@@ -16,7 +16,7 @@ final class CameraCaptureUITests: XCTestCase {
         ]
         app.signInWithoutServer()
         app.launch()
-        let tab = app.tabBars.buttons["Add"]
+        let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
     }

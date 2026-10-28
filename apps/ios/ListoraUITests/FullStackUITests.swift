@@ -152,7 +152,7 @@ final class FullStackUITests: XCTestCase {
         )
         keepScreenshot("CAPTCHA: action needed")
 
-        app.tabBars.buttons["Tasks"].tap()
+        app.tabRail.buttons["Tasks"].tap()
         let task = app.buttons["tasks.row.list_manually.ebay.\(item.sku)"]
         XCTAssertTrue(task.waitForExistence(timeout: 15), "the list task is not in the inbox")
         XCTAssertTrue(app.buttons["tasks.row.reconnect.ebay.none"].exists, "no reconnect task")

@@ -17,6 +17,20 @@ struct AppTabTests {
         #expect(Set(icons).count == icons.count)
         #expect(!icons.contains(""))
     }
+
+    @Test
+    func `the Add tab is the tag hanging from the rail, and Inventory is a hanger`() {
+        #expect(AppTab.allCases.filter(\.isTag) == [.addItem])
+        #expect(AppTab.inventory.systemImage == "hanger")
+    }
+
+    @Test
+    func `a badge reads to VoiceOver as what waits in the tab`() {
+        #expect(AppTab.inventory.badgeDescription(2) == "2 need you")
+        #expect(AppTab.tasks.badgeDescription(1) == "1 open task")
+        #expect(AppTab.tasks.badgeDescription(3) == "3 open tasks")
+        #expect(AppTab.today.badgeDescription(0) == nil)
+    }
 }
 
 @MainActor
