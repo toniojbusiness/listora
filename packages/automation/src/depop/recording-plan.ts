@@ -107,6 +107,12 @@ export const depopRecordingPlan: RecordingPlan = {
       mode: 'read',
       script: () => (step) => present(scripts.orders)(null, step),
     },
+    {
+      name: 'offers',
+      page: 'offers',
+      mode: 'read',
+      script: () => (step) => present(scripts.offers)(step),
+    },
     shape('men-tops', 'Men > Tops > T-shirts', { department: 'men', ...sized('L') }),
     shape('men-bottoms', 'Men > Bottoms > Jeans', { department: 'men', ...sized('32', 'numeric') }),
     shape('men-outerwear', 'Men > Coats and jackets > Jackets', {

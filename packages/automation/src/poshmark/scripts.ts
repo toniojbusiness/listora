@@ -47,6 +47,8 @@ import {
   type ListingPage,
 } from './pages/listing-page.ts';
 import { readSale, readSales, type PoshmarkSale } from './pages/sales-page.ts';
+import { poshmarkOfferPages, readOffers } from './pages/offers-page.ts';
+import { answerOnOfferPage, readOfferPage } from '../adapter/offer-page.ts';
 import { listingDetails } from './pages/listing-details.ts';
 import { cents, remoteListing, revision, type ListingRecord } from './pages/state.ts';
 import { type PoshmarkListingPayload } from './payload.ts';
@@ -549,5 +551,12 @@ export function createPoshmarkScripts(
       });
       return { listings, next: shown.next };
     },
+    offers: (step) =>
+      step('read your offers', { mutates: false }, (page) => readOffers(page, site)),
+    offer: (ref, step) =>
+      step('read the offer', { mutates: false }, (page) =>
+        readOfferPage(page, poshmarkOfferPages(site), ref),
+      ),
+    answerOffer: (request, step) => answerOnOfferPage(step, poshmarkOfferPages(site), request),
   };
 }

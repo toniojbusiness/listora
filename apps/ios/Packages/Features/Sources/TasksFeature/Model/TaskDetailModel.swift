@@ -24,6 +24,8 @@ final class TaskDetailModel {
 
     private(set) var task: UserTask
     let presentation: TaskPresentation
+    /// A buyer's offer and the seller's answer to it, for an offer's task.
+    let offer: OfferModel?
     private(set) var photoState: PhotoState = .idle
     /// The new listing's link, pasted or typed, for a list task.
     var listingURL = ""
@@ -41,9 +43,19 @@ final class TaskDetailModel {
     private var completeKey = UUID().uuidString
     private var dismissKey = UUID().uuidString
 
-    init(task: UserTask, service: any TasksService, pasteboard: any Pasteboard, photoSaver: any PhotoSaving) {
+    init(
+        task: UserTask,
+        service: any TasksService,
+        pasteboard: any Pasteboard,
+        photoSaver: any PhotoSaving,
+        offers: (any OffersService)? = nil,
+        runPhoneWork: @escaping @MainActor () -> Void = {},
+    ) {
         self.task = task
         presentation = TaskPresentation(task)
+        offer = task.offer.flatMap { offer in
+            offers.map { OfferModel(offer: offer, service: $0, runPhoneWork: runPhoneWork) }
+        }
         self.service = service
         self.pasteboard = pasteboard
         self.photoSaver = photoSaver

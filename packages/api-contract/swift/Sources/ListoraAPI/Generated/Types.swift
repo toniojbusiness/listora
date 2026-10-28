@@ -1160,6 +1160,49 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/imports/{importId}/questions/{questionId}/answer`.
     /// - Remark: Generated from `#/paths//v1/imports/{importId}/questions/{questionId}/answer/post(answerListingImportQuestion)`.
     func answerListingImportQuestion(_ input: Operations.AnswerListingImportQuestion.Input) async throws -> Operations.AnswerListingImportQuestion.Output
+    /// When each marketplace's offers were last read
+    ///
+    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    ///
+    /// - Remark: HTTP `GET /v1/offer-checks`.
+    /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
+    func listOfferChecks(_ input: Operations.ListOfferChecks.Input) async throws -> Operations.ListOfferChecks.Output
+    /// Read the seller's offers now
+    ///
+    /// Asks for a read of the offers on each linked marketplace (only reads; nothing changes on a
+    /// marketplace). The reads run on the seller's iPhone, at most one per marketplace every 10
+    /// minutes however often this is called. Each pending offer becomes an `answer_offer` task.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/offer-checks`.
+    /// - Remark: Generated from `#/paths//v1/offer-checks/post(requestOfferChecks)`.
+    func requestOfferChecks(_ input: Operations.RequestOfferChecks.Input) async throws -> Operations.RequestOfferChecks.Output
+    /// Get an offer and the newest answer to it
+    ///
+    /// - Remark: HTTP `GET /v1/offers/{offerId}`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/get(getOffer)`.
+    func getOffer(_ input: Operations.GetOffer.Input) async throws -> Operations.GetOffer.Output
+    /// What a price on the offer gives the seller after fees
+    ///
+    /// For the counteroffer's confirmation; an estimate from Listora's fee tables, with no marketplace call.
+    ///
+    /// - Remark: HTTP `GET /v1/offers/{offerId}/quote`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/quote/get(getOfferQuote)`.
+    func getOfferQuote(_ input: Operations.GetOfferQuote.Input) async throws -> Operations.GetOfferQuote.Output
+    /// Accept, decline, or counter an offer
+    ///
+    /// The seller's confirmed answer, sent once from their iPhone and shown as done only once a
+    /// read of the offer on the marketplace shows it (`OfferResponse`). An accepted offer then
+    /// goes through the normal sale flow when the marketplace shows it sold. `409` when the offer
+    /// no longer waits on the seller or an answer is already under way
+    /// (`invalid_state_transition`), or Listora can't answer offers on that connection
+    /// (`marketplace_action_unavailable`); `422` when the amount moved or the counter is out of
+    /// range.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/offers/{offerId}/responses`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)`.
+    func answerOffer(_ input: Operations.AnswerOffer.Input) async throws -> Operations.AnswerOffer.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -3148,6 +3191,81 @@ extension APIProtocol {
         body: Operations.AnswerListingImportQuestion.Input.Body
     ) async throws -> Operations.AnswerListingImportQuestion.Output {
         try await answerListingImportQuestion(Operations.AnswerListingImportQuestion.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// When each marketplace's offers were last read
+    ///
+    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    ///
+    /// - Remark: HTTP `GET /v1/offer-checks`.
+    /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
+    public func listOfferChecks(headers: Operations.ListOfferChecks.Input.Headers = .init()) async throws -> Operations.ListOfferChecks.Output {
+        try await listOfferChecks(Operations.ListOfferChecks.Input(headers: headers))
+    }
+    /// Read the seller's offers now
+    ///
+    /// Asks for a read of the offers on each linked marketplace (only reads; nothing changes on a
+    /// marketplace). The reads run on the seller's iPhone, at most one per marketplace every 10
+    /// minutes however often this is called. Each pending offer becomes an `answer_offer` task.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/offer-checks`.
+    /// - Remark: Generated from `#/paths//v1/offer-checks/post(requestOfferChecks)`.
+    public func requestOfferChecks(headers: Operations.RequestOfferChecks.Input.Headers) async throws -> Operations.RequestOfferChecks.Output {
+        try await requestOfferChecks(Operations.RequestOfferChecks.Input(headers: headers))
+    }
+    /// Get an offer and the newest answer to it
+    ///
+    /// - Remark: HTTP `GET /v1/offers/{offerId}`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/get(getOffer)`.
+    public func getOffer(
+        path: Operations.GetOffer.Input.Path,
+        headers: Operations.GetOffer.Input.Headers = .init()
+    ) async throws -> Operations.GetOffer.Output {
+        try await getOffer(Operations.GetOffer.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// What a price on the offer gives the seller after fees
+    ///
+    /// For the counteroffer's confirmation; an estimate from Listora's fee tables, with no marketplace call.
+    ///
+    /// - Remark: HTTP `GET /v1/offers/{offerId}/quote`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/quote/get(getOfferQuote)`.
+    public func getOfferQuote(
+        path: Operations.GetOfferQuote.Input.Path,
+        query: Operations.GetOfferQuote.Input.Query,
+        headers: Operations.GetOfferQuote.Input.Headers = .init()
+    ) async throws -> Operations.GetOfferQuote.Output {
+        try await getOfferQuote(Operations.GetOfferQuote.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Accept, decline, or counter an offer
+    ///
+    /// The seller's confirmed answer, sent once from their iPhone and shown as done only once a
+    /// read of the offer on the marketplace shows it (`OfferResponse`). An accepted offer then
+    /// goes through the normal sale flow when the marketplace shows it sold. `409` when the offer
+    /// no longer waits on the seller or an answer is already under way
+    /// (`invalid_state_transition`), or Listora can't answer offers on that connection
+    /// (`marketplace_action_unavailable`); `422` when the amount moved or the counter is out of
+    /// range.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/offers/{offerId}/responses`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)`.
+    public func answerOffer(
+        path: Operations.AnswerOffer.Input.Path,
+        headers: Operations.AnswerOffer.Input.Headers,
+        body: Operations.AnswerOffer.Input.Body
+    ) async throws -> Operations.AnswerOffer.Output {
+        try await answerOffer(Operations.AnswerOffer.Input(
             path: path,
             headers: headers,
             body: body

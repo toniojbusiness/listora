@@ -98,7 +98,7 @@ public struct AppDependencies {
         phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
         packCheck = Self.makePackCheck(apiClient, accessTokens, phone, launchOptions, defaults)
         sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone, packCheck)
-        tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
+        tasks = Self.makeTasks(apiClient, accessTokens, showSignIn, phone)
         inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
             saleScreens: Self.saleScreens(sales),

@@ -126,8 +126,20 @@ KnownPhoneWorkPurpose:
     a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
     history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
     listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
-    orders that still need a package, for Pack check.
-  enum: [operation, session_check, sale_check, sale_history, listing_import, label_read]
+    orders that still need a package, for Pack check. `offer_check`: a read-only read of the
+    offers on the seller's listings. `offer_response`: the seller's confirmed answer to an
+    offer, and the read of the offer that confirms it.
+  enum:
+    [
+      operation,
+      session_check,
+      sale_check,
+      sale_history,
+      listing_import,
+      label_read,
+      offer_check,
+      offer_response,
+    ]
 PhoneRunClaim:
   type: object
   additionalProperties: false

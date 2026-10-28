@@ -24,6 +24,7 @@
     "@listora/marketplaces": "*",
     "@listora/operations": "*",
     "@listora/pack-check": "*",
+    "@listora/pricing": "*",
     "@listora/push": "*",
     "@listora/sales": "*",
     "@listora/shared": "*",

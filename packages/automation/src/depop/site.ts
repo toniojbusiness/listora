@@ -60,6 +60,10 @@ export const DEPOP_PATHS = {
   edit: (slug: string) => `/products/edit/${encodeURIComponent(slug)}/`,
   /** The seller's sold items, newest first. */
   sold: (page: number) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ''}`,
+  /** The selling hub's offers ("Review offers"). */
+  offers: '/sellinghub/offers/',
+  /** One offer, where the seller answers it. */
+  offer: (id: string) => `/sellinghub/offers/${encodeURIComponent(id)}/`,
 } as const;
 
 /**
