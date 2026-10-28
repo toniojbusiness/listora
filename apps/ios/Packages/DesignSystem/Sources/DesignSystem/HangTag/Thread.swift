@@ -71,7 +71,8 @@ public struct ThreadSegment: Shape {
 public enum Thread {
     public static let width: CGFloat = 2
 
-    static func stroke(_ style: ThreadStyle) -> StrokeStyle {
+    /// How a piece of string in `style` is stroked.
+    public static func stroke(_ style: ThreadStyle) -> StrokeStyle {
         switch style {
         case .taut: StrokeStyle(lineWidth: width, lineCap: .round)
         case .loose: StrokeStyle(lineWidth: width, lineCap: .round, dash: [3, 5])

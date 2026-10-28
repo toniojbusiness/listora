@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Work under way in steps: the step in plain words, its number ("Step 4 of 9"), a bar (the
-/// share done, or moving while the count isn't known), and a line under it that can change each
-/// second ("about 40 seconds left").
+/// Work under way in steps: the step in plain words, its number ("Step 4 of 9"), a string pulled
+/// taut as far as the work has come (or a moving bar while the count isn't known), and a line
+/// under it that can change each second ("about 40 seconds left").
 public struct StepProgressView: View {
     private let step: String
     private let stepText: String?
@@ -40,8 +40,7 @@ public struct StepProgressView: View {
                     }
                 }
                 if let fraction {
-                    ProgressView(value: fraction)
-                        .tint(Palette.info.color)
+                    ThreadProgress(fraction: fraction)
                 } else {
                     ProgressView()
                         .progressViewStyle(.linear)
@@ -58,5 +57,36 @@ public struct StepProgressView: View {
         .padding(Spacing.sm)
         .background(Palette.infoSoft.color, in: RoundedRectangle(cornerRadius: Radius.small))
         .accessibilityIdentifier(identifier)
+    }
+}
+
+/// How far work has come, as a string: taut and in the working color up to the share done, with a
+/// bead where it stops, and loose (dashed) the rest of the way. Read as part of its step's label,
+/// so VoiceOver skips it.
+struct ThreadProgress: View {
+    let fraction: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static let beadSide: CGFloat = 10
+
+    var body: some View {
+        let done = min(max(fraction, 0), 1)
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            ZStack(alignment: .leading) {
+                ThreadSegment(axis: .horizontal)
+                    .stroke(Palette.textSecondary.color.opacity(0.5), style: Thread.stroke(.loose))
+                ThreadSegment(axis: .horizontal, drawn: done)
+                    .stroke(Palette.info, style: Thread.stroke(.taut))
+                Circle()
+                    .fill(Palette.info)
+                    .frame(width: Self.beadSide, height: Self.beadSide)
+                    .offset(x: (width - Self.beadSide) * done)
+            }
+            .frame(height: Self.beadSide)
+        }
+        .frame(height: Self.beadSide)
+        .animation(Motion.animation(Motion.standard, reduceMotion: reduceMotion), value: done)
+        .accessibilityHidden(true)
     }
 }

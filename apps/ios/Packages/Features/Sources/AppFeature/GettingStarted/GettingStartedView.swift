@@ -33,7 +33,7 @@ struct GettingStartedView: View {
                 + "price for you to check.",
         ),
         Step(
-            systemImage: "shippingbox",
+            systemImage: "hanger",
             title: "See it listed",
             message: "Choose where to list it. Inventory shows its status on each marketplace, as that "
                 + "marketplace confirms it.",

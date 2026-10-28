@@ -265,6 +265,7 @@ schemes:
         - package: Features/MarketplaceLinkingFeatureTests
         - package: Features/PhoneExecutionFeatureTests
         - package: Features/PackCheckFeatureTests
+        - package: Features/ImportFeatureTests
     profile:
       config: Prod-Release
     analyze:

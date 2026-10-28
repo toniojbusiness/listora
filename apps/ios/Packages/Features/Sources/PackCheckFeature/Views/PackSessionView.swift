@@ -235,7 +235,7 @@ private struct OrderHeader: View {
                 .accessibilityIdentifier("pack.current")
             ForEach(order.items, id: \.itemId) { item in
                 Text([item.sku, item.location.map { "Shelf \($0.code)" }].compactMap(\.self).joined(separator: " · "))
-                    .font(Typography.metadata)
+                    .font(Typography.sku)
                     .foregroundStyle(Palette.textSecondary)
             }
             Text(order.buyerFirstName.map { "For \($0) on \(MarketplaceName.of(order.marketplace))" }
