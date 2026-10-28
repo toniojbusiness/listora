@@ -365,10 +365,10 @@ describe('ENVIRONMENT_SETTINGS', () => {
     });
     expect(personal.database.maxAllocatedStorageGiB).toBeGreaterThan(20);
     expect(personal.database.backupRetentionDays).toBeGreaterThanOrEqual(1);
-    // One always-on task of the smallest Fargate CPU runs the API and the worker together.
+    // One always-on task of 0.5 vCPU runs the API and the worker together.
     expect(personal.services).toEqual({
       layout: 'combined',
-      app: { cpu: 256, memoryMiB: 1024, minTasks: 1, maxTasks: 1 },
+      app: { cpu: 512, memoryMiB: 1024, minTasks: 1, maxTasks: 1 },
     });
     expect(personal.logRetention).toBe(RetentionDays.ONE_WEEK);
     expect(personal.containerInsights).toBe(false);

@@ -7,9 +7,10 @@ own browser session, on the seller's iPhone ([phone-execution.md](phone-executio
 refuses Listora's cloud browser runner, [automation.md](automation.md)). The code is in
 `packages/automation/src/depop/`. The runner's safety rules apply to every step:
 
-- Every action is human-paced: 0.3 to 0.8 seconds before each one on Depop (`DEPOP_PACING`,
-  agreed with the product owner 2026-10-27; the other marketplaces wait 0.8 to 2.5). Each
-  seller's account gets a limited number of runs.
+- Every action is human-paced: 0.3 seconds before each one, the floor (`DEPOP_PACING`, the
+  product owner's call 2026-10-28; 0.3 to 0.8 before), and 0.3 to 0.8 on a read-only shop
+  (`DEPOP_READ_ONLY_PACING`, [read-only.md](read-only.md)). Each seller's account gets a limited
+  number of runs.
 - The first CAPTCHA, bot check, login page, or login-code step stops the run. Listora never tries
   to get past one. The step becomes the user's assisted task, and the connection waits until the
   seller logs in again in the app.

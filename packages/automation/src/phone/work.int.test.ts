@@ -46,6 +46,9 @@ import { phoneWorkAdapters } from './adapters.ts';
 import type { HandOffAnswer } from './host.ts';
 import { PHONE_RUNTIME_VERSION, runPhoneCall, type PhoneCallInput } from './runtime.ts';
 import { PlaywrightPhoneHost } from './test-host.ts';
+
+/** A read-only shop's pace in these tests: slower than `QUICK_PACING`, still quick to run. */
+const GENTLE_PACING = { ...QUICK_PACING, actionDelayMs: [5, 8] } as const;
 import {
   answerPhoneCall,
   claimPhoneRun,
@@ -87,7 +90,10 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     const loaded = loadAutomationSettings({ FAKE_DEPOP_SITE_URL: site.url });
     settings = {
       ...loaded,
-      profiles: { ...loaded.profiles, depop: { ...loaded.profiles.depop, pacing: QUICK_PACING } },
+      profiles: {
+        ...loaded.profiles,
+        depop: { ...loaded.profiles.depop, pacing: QUICK_PACING, readOnlyPacing: GENTLE_PACING },
+      },
     };
     const marketplaces = { fakeMarketplaceUrl: undefined, ebay: undefined, depop: undefined };
     const workerAdapters: AdapterLookup = createMarketplaceAdapters({
@@ -445,6 +451,8 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     if (run === null || call === null || call === undefined) throw new Error('no call');
     const input = JSON.parse(JSON.stringify(call.input)) as PhoneCallInput;
     expect(input.call.script).toBe('read');
+    // A shop that can write is paced at its marketplace's quick pace.
+    expect(input.pacing).toEqual(QUICK_PACING);
     await readOnly();
     const host = new PlaywrightPhoneHost(await webData.newPage());
     const output = await runPhoneCall(input, host, { pacing: { random: () => 0 } });
@@ -474,7 +482,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     // Reads keep running, and the phone is told the shop is read only with each call.
     await requestSaleHistoryRead(db, { accountId, marketplace: 'depop' });
     const read = await claimPhoneRun(phone, db, device);
-    expect(read?.call?.input).toMatchObject({ readOnly: true, call: { script: 'orders' } });
+    // ...at the gentler read-only pace, not the quicker pace of a shop that can write.
+    expect(read?.call?.input).toMatchObject({
+      readOnly: true,
+      call: { script: 'orders' },
+      pacing: GENTLE_PACING,
+    });
   });
 
   it('wakes the waiting app the moment the engine hands it a delist, and looks every few seconds without signals', async () => {

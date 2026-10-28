@@ -1124,7 +1124,7 @@ async function issueCall(
     origins: [...profile.origins],
     apiOrigins: [...profile.apiOrigins],
     cookieDomains: [...profile.cookieDomains],
-    pacing: profile.pacing,
+    pacing: readOnly ? profile.readOnlyPacing : profile.pacing,
     stepTimeoutMs: deps.stepTimeoutMs,
     callTimeoutMs: deps.callTimeoutMs,
     startDelayMs,
