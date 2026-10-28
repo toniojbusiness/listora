@@ -160,7 +160,8 @@ from the app
   Listora doesn't have becomes a sold item of its own (the seller's sales history,
   [sales.md](sales.md#sales-history)); and it finishes the event `processed` or `ignored`. A
   connection's first check reads every sold order the pages show (the sales history), later
-  ones the orders since the last. The worker records it, not the runner, because the auto-delist
+  ones the orders since the last; a sale from before the connection's history ends is recorded
+  only, with no auto-delist or notification. The worker records it, not the runner, because the auto-delist
   fan-out decides from each listing's capabilities whether it is marked sold or ended, and only
   the worker's adapters include the API adapters. The next check is due when the expected sales since now reach what an average
   default interval holds (`interval.ts`): every 12 hours by default, sooner over the hours and

@@ -32,7 +32,9 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
   listing pages per tab), handed to the sale intake like any order. Later checks read the
   orders since the last. Migration `20261028063403_sales_history` made every existing
   connection's next check a full read, and a full read hands over again, once, an order an
-  earlier check dropped (`history:order:<id>`, before sold items existed).
+  earlier check dropped (`history:order:<id>`, before sold items existed). An app built before
+  this keeps working (the phone's call protocol is unchanged): its checks send no sold listing,
+  so such a sale's sold item has only the order's title and price until the app updates.
 - **A sale of a listing Listora doesn't have** (sold before Listora was connected, or listed on
   the marketplace itself) becomes a **sold item**: the worker's `automation_sale_order` job makes
   the item from the sold listing as the sold pages showed it (`soldItemMaker` in
@@ -42,18 +44,19 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
   Without the listing, the order line's title makes it; with neither, nothing is recorded (the
   event is `ignored`). A photo that can't be fetched is left out; the sale is still recorded. A
   sold listing never joins an item Listora has, even one that looks the same: a wrong match
-  would delist that item everywhere else. Nothing on the marketplace changes, and with no other
-  listing there is nothing to delist and no notification.
+  would delist that item everywhere else. Nothing on the marketplace changes.
 - **What the marketplace says of the order counts.** The sale price is what the buyer paid for
   each item (Depop's receipt: an accepted offer or a bundle discount, not the listing's price).
   An order the marketplace says shipped or was delivered (Depop's receipts, Mercari's sold tab)
   is recorded `shipped`. Fees the marketplace shows replace the estimate at once (Depop's
   receipt: what the items sold for less what the seller is paid, one actual "Depop's fees" line,
   so the payout is Depop's to the cent, the Boost fee included); elsewhere they stay estimated.
-- **From before the marketplace was connected**: such a sale's detection source is `history`
-  ("Found in your Depop sales history, from before you connected Depop."). Listora wasn't
-  watching it, so it never asks to ship it (Today's ship card, Pack check), unless the
-  marketplace says it still waits to ship. A sale of Listora's own listing is always `poll`.
+- **The sales history is recorded only.** A sale that sold before the connection's history ends
+  (`sale_check_schedule.history_until`: when the marketplace was linked, its first check due at
+  once; for a connection linked before this, the deploy that brought sales history in) has the
+  detection source `history` ("Found in your Depop sales history."), of a Listora listing too. Its items are marked sold and nothing else happens: no
+  auto-delist, delist run, or delist of any other listing, no notification, no Today ship card,
+  and no Pack check order. Only a sale that sold after the history ends is acted on.
 - **One sale, reported twice.** A sale the seller marked sold by hand on a marketplace and then
   found there by a check (or its history) is the same order, not a double sale
   (`findSaleOfSameListing`, `@listora/sales`).
@@ -189,9 +192,11 @@ Migration `20261025123116_sale_lifecycle`:
   and `relist_decided_at`.
 - `fee_line`: `description` and, for estimated lines, `fee_table_version`.
 
-Migration `20261028063403_sales_history`: `sale.detection_source` gains `history`, and every
+Migration `20261028063403_sales_history`: `sale.detection_source` gains `history`;
+`sale_check_schedule.history_until` (where the connection's sales history ends: the row's
+creation at linking, and the deploy for every existing connection); and every
 `sale_check_schedule.checked_through` is reset so each connection's next check reads its whole
-sales history. Down turns `history` sales back into `poll` ones.
+sales history. Down drops the column and turns `history` sales back into `poll` ones.
 
 ## Open items
 

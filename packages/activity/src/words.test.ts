@@ -93,9 +93,7 @@ describe('activity words', () => {
   it('says how Listora learned of a sale', () => {
     expect(saleDetectionWords('poll', 'mercari')).toBe('Listora found it on Mercari.');
     expect(saleDetectionWords('webhook', 'ebay')).toBe('eBay told Listora about it.');
-    expect(saleDetectionWords('history', 'depop')).toBe(
-      'Found in your Depop sales history, from before you connected Depop.',
-    );
+    expect(saleDetectionWords('history', 'depop')).toBe('Found in your Depop sales history.');
     expect(saleDetectionWords('manual', 'depop')).toBe('You marked it sold.');
     expect(orderDetail('ignored', null)).toContain('recorded already');
   });

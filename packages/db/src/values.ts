@@ -161,7 +161,10 @@ export type InboundEventSource = (typeof INBOUND_EVENT_SOURCES)[number];
 export const INBOUND_EVENT_RESULTS = ['processed', 'ignored', 'failed'] as const;
 export type InboundEventResult = (typeof INBOUND_EVENT_RESULTS)[number];
 
-/** `history`: found in the seller's sales history, sold before the marketplace was connected. */
+/**
+ * `history`: from the seller's sales history, sold before the connection's history ends: recorded
+ * only.
+ */
 export const SALE_DETECTION_SOURCES = ['webhook', 'poll', 'email', 'manual', 'history'] as const;
 export type SaleDetectionSource = (typeof SALE_DETECTION_SOURCES)[number];
 

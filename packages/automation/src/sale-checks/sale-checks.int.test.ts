@@ -208,13 +208,17 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     await clearJobs();
   });
 
-  /** Makes the connection a day old, so the sales the site shows came after it. */
+  /** Ends the connection's sales history a day ago: the sales the site shows came after it. */
   const connectedSinceYesterday = (connectionId: string) =>
-    sql`update marketplace_connection set created_at = now() - interval '1 day'
-      where id = ${connectionId}`.execute(database.db);
+    database.db
+      .updateTable('sale_check_schedule')
+      .set({ history_until: new Date(Date.now() - 24 * HOUR) })
+      .where('connection_id', '=', connectionId)
+      .execute();
 
   it('records each new order once for the sale intake and schedules the next check', async () => {
     const { connectionId } = await link();
+    await connectedSinceYesterday(connectionId);
     // The first order sold a listing Listora made; the second one Listora knows nothing of.
     const ours = site.seed({
       seller: accountId,
@@ -441,6 +445,73 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
       { external_order_id: since, detection_source: 'poll', status: 'detected', item: 'sold' },
     ]);
     expect(await pushes()).toEqual([]);
+  });
+
+  it("records a sale of Listora's own listing from before the history ends only: no delist, no alert", async () => {
+    const { connectionId } = await link();
+    // Listora's listing, also live on Poshmark, sold on the marketplace before it was linked.
+    const ours = site.seed({
+      seller: accountId,
+      sku: `SKU-${accountId}-history`,
+      title: 'Sold jacket',
+      description: 'Blue.',
+      priceCents: 3000,
+    });
+    const order = site.sell(ours, new Date(Date.now() - 2 * HOUR)).id;
+    const item = await createInventoryItem(database.db, accountId, {
+      title: 'Sold jacket',
+      status: 'listed',
+    });
+    for (const marketplace of ['mercari', 'poshmark'] as const) {
+      await database.db
+        .insertInto('marketplace_listing')
+        .values({
+          account_id: accountId,
+          item_id: item.id,
+          marketplace,
+          status: 'active',
+          ...(marketplace === 'mercari'
+            ? { connection_id: connectionId, external_listing_id: ours }
+            : { external_listing_id: `posh-${accountId}` }),
+        })
+        .execute();
+    }
+    await check(connectionId);
+    const { rows } = await sql<{ payload: SaleOrderJobPayload }>`
+      select payload from graphile_worker._private_jobs where task_id =
+        (select id from graphile_worker._private_tasks where identifier = ${SALE_ORDER_TASK})
+    `.execute(database.db);
+    for (const { payload } of rows) {
+      await recordSaleOrder({ db: database.db, adapters, logger: silentLogger }, payload);
+    }
+    await clearJobs();
+    // The sale, from the sales history: recorded, its item sold, and nothing else.
+    const sales = await database.db
+      .selectFrom('sale')
+      .select(['external_order_id', 'detection_source'])
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(sales).toEqual([{ external_order_id: order, detection_source: 'history' }]);
+    const sold = await database.db
+      .selectFrom('inventory_item')
+      .select('status')
+      .where('id', '=', item.id)
+      .executeTakeFirstOrThrow();
+    expect(sold.status).toBe('sold');
+    const acted = await Promise.all(
+      (['delist_run', 'marketplace_operation', 'user_task'] as const).map((table) =>
+        database.db.selectFrom(table).select('id').where('account_id', '=', accountId).execute(),
+      ),
+    );
+    expect(acted).toEqual([[], [], []]);
+    expect(await pushes()).toEqual([]);
+    // The Poshmark listing is left as it was.
+    const posh = await database.db
+      .selectFrom('marketplace_listing')
+      .select('status')
+      .where('external_listing_id', '=', `posh-${accountId}`)
+      .executeTakeFirstOrThrow();
+    expect(posh.status).toBe('active');
   });
 
   it("records why a check failed; checks failing in a row are the owner's, never the seller's", async () => {

@@ -348,7 +348,7 @@ export function saleDetectionWords(source: SaleDetectionSource, marketplace: Mar
     case 'manual':
       return 'You marked it sold.';
     case 'history':
-      return `Found in your ${name} sales history, from before you connected ${name}.`;
+      return `Found in your ${name} sales history.`;
     default:
       return assertNever(source, 'sale detection source');
   }

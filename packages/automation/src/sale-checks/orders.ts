@@ -12,10 +12,11 @@
  * on it. Its photos are fetched between two transactions, never inside one. A sold listing never
  * joins an item Listora has: a wrong match would delist that item everywhere else.
  *
- * Such an order that sold before its marketplace was connected is found in the seller's sales
- * history (detection source `history`): Listora wasn't watching then, so it never asks to ship
- * it, unless the marketplace says it still waits to ship. An order the marketplace says shipped
- * is `shipped`, and the fees it showed replace the estimate.
+ * An order that sold before the connection's sales history ends (when it was linked, or the
+ * deploy that brought sales history in) is the seller's sales history (detection source
+ * `history`), of Listora's listings too: Listora wasn't acting on it then, so the sale is
+ * recorded only, with no auto-delist, delist, notification, or request to ship it. An order the
+ * marketplace says shipped is `shipped`, and the fees it showed replace the estimate.
  *
  * The runner hands the sale over instead of recording it, because the auto-delist fan-out
  * decides from each listing's capabilities whether it is marked sold or ended, and only the
@@ -242,8 +243,7 @@ async function settleOrder(
       },
       { adapters: deps.adapters },
     );
-  // A sale of Listora's own listing: Listora was watching it, so the check found it.
-  let source: 'poll' | 'history' = 'poll';
+  const source = await detectedBy(trx, payload.accountId, order);
   let sale = await record(
     order.items.map((item) => ({
       externalListingId: item.externalListingId,
@@ -260,7 +260,6 @@ async function settleOrder(
       const item = await deps.soldItems.create(trx, line.made);
       lines.push({ ...item, quantity: 1, priceCents: line.priceCents });
     }
-    source = await detectedBy(trx, payload.accountId, order);
     if (lines.length > 0) sale = await record(lines, source);
   }
   // The fees the marketplace showed take the place of the estimate.
@@ -309,23 +308,23 @@ async function settleOrder(
 }
 
 /**
- * How the sale was found: in the seller's sales history when it sold before the connection
- * that found it was made (Listora wasn't watching then), otherwise by the sale check. A sale the
- * marketplace says still waits to ship is the seller's work now, however old: found by the check.
+ * How the sale was found: in the seller's sales history when it sold before the connection's
+ * history ends (`sale_check_schedule.history_until`: when it was linked, or the deploy that
+ * brought sales history in), otherwise by the sale check. A history sale is recorded only.
  */
 async function detectedBy(
   trx: DbTransaction,
   accountId: string,
   order: OrderEvent,
 ): Promise<'poll' | 'history'> {
-  if (order.connectionId === undefined || order.shipped === false) return 'poll';
-  const connection = await trx
-    .selectFrom('marketplace_connection')
-    .select('created_at')
+  if (order.connectionId === undefined) return 'poll';
+  const schedule = await trx
+    .selectFrom('sale_check_schedule')
+    .select('history_until')
     .where('account_id', '=', accountId)
-    .where('id', '=', order.connectionId)
+    .where('connection_id', '=', order.connectionId)
     .executeTakeFirst();
-  return connection !== undefined && new Date(order.soldAt) < connection.created_at
+  return schedule !== undefined && new Date(order.soldAt) < schedule.history_until
     ? 'history'
     : 'poll';
 }

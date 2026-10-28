@@ -98,7 +98,7 @@ describe('the Today summary (real Postgres)', () => {
         .set({ status: 'returned', returned_at: new Date() })
         .where('id', '=', sales[3]?.saleId ?? '')
         .execute();
-      // From the sales history (it sold before the marketplace was connected): never one to ship.
+      // From the sales history (it sold before the connection's history ends): never one to ship.
       await harness.db
         .updateTable('sale')
         .set({ detection_source: 'history' })

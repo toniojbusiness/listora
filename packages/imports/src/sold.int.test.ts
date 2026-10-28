@@ -266,13 +266,13 @@ describe('sold items for the sales history (real Postgres, a local image CDN)', 
       .where('id', '=', event)
       .executeTakeFirstOrThrow();
     expect(recorded.result).toBe('processed');
-    // Nothing else to delist, and the item is no ship card's: it shipped.
+    // From the sales history: recorded only, no delist run at all.
     const runs = await db
       .selectFrom('delist_run')
       .select('status')
       .where('account_id', '=', accountId)
       .execute();
-    expect(runs).toEqual([{ status: 'completed' }]);
+    expect(runs).toEqual([]);
   });
 
   it("makes it of the order line's title alone without the listing; of nothing, no sale", async () => {

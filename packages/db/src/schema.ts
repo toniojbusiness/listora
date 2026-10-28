@@ -887,6 +887,11 @@ export interface SaleCheckScheduleTable {
   unhealthy_since: NullableTimestamp;
   /** When the seller was told about the current problem. */
   alerted_at: NullableTimestamp;
+  /**
+   * Where the connection's sales history ends (docs/features/sales.md): a sale that sold before
+   * it is recorded only (detection source `history`), one after it is acted on.
+   */
+  history_until: Generated<Date>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

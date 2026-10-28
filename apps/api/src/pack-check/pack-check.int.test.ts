@@ -167,7 +167,7 @@ describe('pack check (real Postgres)', () => {
     });
   });
 
-  it('leaves out an order from the sales history: it sold before the marketplace was connected', async () => {
+  it('leaves out an order from the sales history: it is recorded only', async () => {
     const old = await order({ title: 'History tee', tracking: '9400111899223197423333' });
     await api.db
       .updateTable('sale')

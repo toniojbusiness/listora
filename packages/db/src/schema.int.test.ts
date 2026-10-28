@@ -558,6 +558,7 @@ const COLUMNS = {
     'health',
     'unhealthy_since',
     'alerted_at',
+    'history_until',
   ],
   sale_check_run: [
     'id',

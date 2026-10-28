@@ -21,6 +21,8 @@
  *   item sold twice in one order adds up on its one sale item.
  * - **Fees.** The sale gets its estimated fee lines at once, and a check for the actual fees
  *   when the marketplace reports them (fees.ts).
+ * - **The sales history is recorded only.** A sale from before Listora watched the marketplace
+ *   (detection source `history`) marks its items sold and starts no delist, run, or notification.
  * - **Auto-delist in the same transaction.** Recording the sale starts its delist fan-out
  *   (`startAutoDelist` in `@listora/auto-delist`): each sold item is marked
  *   `sold_pending_delist` and every other listing gets its delist, or the item gets a
@@ -34,6 +36,7 @@ import {
 } from '@listora/auto-delist';
 import {
   inTransaction,
+  jsonb,
   type DbExecutor,
   type DbTransaction,
   type Marketplace,
@@ -172,19 +175,71 @@ export async function recordSale(
       },
       deps.adapters,
     );
-    const delists = await startAutoDelist(
-      trx,
-      {
-        accountId: sale.accountId,
-        saleId: inserted.id,
-        marketplace: sale.marketplace,
-        detectionSource: sale.detectionSource,
-        items: [...items].map(([itemId, item]) => ({ itemId, listingId: item.listingId })),
-      },
-      deps,
-    );
+    // A sale from the seller's sales history is recorded only: its items are sold, and nothing
+    // is delisted or announced.
+    const delists =
+      sale.detectionSource === 'history'
+        ? await markSoldFromHistory(trx, sale, inserted.id, [...items.keys()])
+        : await startAutoDelist(
+            trx,
+            {
+              accountId: sale.accountId,
+              saleId: inserted.id,
+              marketplace: sale.marketplace,
+              detectionSource: sale.detectionSource,
+              items: [...items].map(([itemId, item]) => ({ itemId, listingId: item.listingId })),
+            },
+            deps,
+          );
     return { type: 'recorded', saleId: inserted.id, itemIds: [...items.keys()], delists };
   });
+}
+
+/**
+ * The items of a sale from the seller's sales history (it sold before Listora watched the
+ * marketplace): sold, with no delist run, no delist, and no notification. Their other listings
+ * are left as they are.
+ */
+async function markSoldFromHistory(
+  trx: DbTransaction,
+  sale: NewSale,
+  saleId: string,
+  itemIds: readonly string[],
+): Promise<ItemDelistStart[]> {
+  const items = await trx
+    .selectFrom('inventory_item')
+    .select(['id', 'status'])
+    .where('account_id', '=', sale.accountId)
+    .where('id', 'in', itemIds)
+    .orderBy('id')
+    .forNoKeyUpdate()
+    .execute();
+  for (const item of items) {
+    // A shipped or archived item stays so.
+    if (item.status === 'shipped' || item.status === 'archived') continue;
+    await trx
+      .updateTable('inventory_item')
+      .set({ status: 'sold', pre_archive_status: null })
+      .where('account_id', '=', sale.accountId)
+      .where('id', '=', item.id)
+      .execute();
+    await trx
+      .insertInto('audit_log')
+      .values({
+        account_id: sale.accountId,
+        item_id: item.id,
+        actor_kind: 'marketplace',
+        action: 'item.sold',
+        changes: jsonb({
+          saleId,
+          marketplace: sale.marketplace,
+          history: true,
+          status: { from: item.status, to: 'sold' },
+        }),
+      })
+      .execute();
+  }
+  return [];
 }
 
 async function findSale(trx: DbTransaction, sale: NewSale): Promise<string | undefined> {

@@ -21,9 +21,9 @@ import { describeOrder, type DescribedItem } from './describe.ts';
 import type { VerdictOrder } from './verdict.ts';
 
 /**
- * Sale statuses that still need a package. A sale found in the seller's sales history (detection
- * source `history`: it sold before the marketplace was connected) never does: Listora wasn't
- * watching it ship.
+ * Sale statuses that still need a package. A sale from the seller's sales history (detection
+ * source `history`: it sold before the connection's history ends) never does: it is recorded
+ * only.
  */
 export const OPEN_SALE_STATUSES = [
   'detected',
