@@ -33,7 +33,7 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(app.tabRail.buttons["Today"].isSelected)
         let ship = card(StubAPIServer.shipCardID)
         XCTAssertTrue(ship.waitForExistence(timeout: 10), "no ship card")
-        XCTAssertTrue(app.staticTexts["4 things need you"].exists)
+        XCTAssertTrue(app.staticTexts["3 things need you"].exists)
         XCTAssertTrue(ship.staticTexts["Ship Lululemon Align pant"].exists)
         XCTAssertTrue(ship.staticTexts["Urgent"].exists)
         XCTAssertTrue(ship.staticTexts["B-12 · Garage shelf 3"].exists)
