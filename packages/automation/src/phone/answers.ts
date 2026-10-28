@@ -73,6 +73,9 @@ const listedListing = foundListing.extend({
     condition: z.enum(ITEM_CONDITIONS).nullable(),
     categoryRef: z.string().max(500).nullable(),
     categoryPath: z.array(z.string().min(1).max(200)).max(8),
+    // A phone on an older app answers without them.
+    colors: z.array(z.string().min(1).max(50)).max(8).default([]),
+    originalPriceCents: z.number().int().min(0).nullable().default(null),
     sku: z.string().min(1).max(64).nullable(),
   }),
 });

@@ -147,6 +147,8 @@ describe('listing imports (real Postgres)', () => {
             condition: 'pre_owned_good',
             categoryRef: null,
             categoryPath: [],
+            colors: [],
+            originalPriceCents: null,
             sku: null,
           },
         }),

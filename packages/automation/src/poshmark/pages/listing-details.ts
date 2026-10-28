@@ -85,6 +85,8 @@ export function listingDetails(record: ListingRecord): ListingDetails {
     condition: typeof record.condition === 'string' ? (CONDITIONS[record.condition] ?? null) : null,
     categoryRef: categoryPath.length >= 2 ? categoryPath.join('/') : null,
     categoryPath,
+    colors: [],
+    originalPriceCents: null,
     sku: splitSkuLine(record.description).sku,
   };
 }

@@ -6576,19 +6576,116 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		used_good: "pre_owned_good",
 		used_fair: "pre_owned_fair"
 	};
+	/** Depop's colour ids (taxonomy.json `colour`) in Listora's terms; khaki has none. */
+	const COLOURS = {
+		black: "black",
+		grey: "gray",
+		white: "white",
+		brown: "brown",
+		tan: "tan",
+		cream: "cream",
+		yellow: "yellow",
+		red: "red",
+		burgundy: "red",
+		orange: "orange",
+		pink: "pink",
+		purple: "purple",
+		blue: "blue",
+		navy: "navy",
+		green: "green",
+		multi: "multicolor",
+		silver: "silver",
+		gold: "gold"
+	};
+	/** Depop's departments by the edit data's `gender`. */
+	const GENDERS = {
+		female: "womenswear",
+		male: "menswear"
+	};
+	/** Depop's departments by the first of the names in `categories`, former names included. */
+	const DEPARTMENT_NAMES = {
+		womenswear: "womenswear",
+		women: "womenswear",
+		menswear: "menswear",
+		men: "menswear",
+		kidswear: "kidswear",
+		kids: "kidswear",
+		"everything else": "everything-else"
+	};
+	/** Depop's brand slug for a listing without a brand, which it shows as "Other". */
+	const UNBRANDED = "unbranded";
 	/** The details of a listing from its edit data and its record in the list of listings. */
 	function listingDetails$2(edit, listed, sku) {
 		const categoryPath = strings(edit["categories"] ?? edit["category"]).slice(0, 3);
+		const ids = categoryIds(edit, categoryPath);
 		const condition = text$2(edit["condition"]);
 		return {
 			photoUrls: photoUrls$2(edit["pictures"] ?? edit["pictures_data"] ?? listed["pictures"] ?? listed["preview"]),
-			brand: named$1(edit["brand"]) ?? text$2(edit["brand_name"]) ?? text$2(edit["brandName"]),
+			brand: brand(edit),
 			size: strings(listed["sizes"])[0] ?? named$1(edit["size"]) ?? strings(edit["sizes"]).at(0) ?? variantSize(edit["variants"]) ?? null,
 			condition: condition === null ? null : CONDITIONS$2[condition] ?? null,
-			categoryRef: categoryPath.length > 0 ? categoryPath.join(" > ") : null,
+			categoryRef: ids ?? (categoryPath.length > 0 ? categoryPath.join(" > ") : null),
 			categoryPath,
+			colors: colours(edit["colour"] ?? edit["colours"]),
+			originalPriceCents: originalPrice(edit["pricing"]),
 			sku
 		};
+	}
+	/**
+	* The listing's product type as Depop's ids name it, `department/group/product_type`
+	* (`womenswear/bottoms/jeans`, a form `parseCategoryRef` reads): its department from
+	* `is_kids`, else `gender`, else the first name in `categories`; `null` without all three. The
+	* server checks it against Depop's taxonomy (`importedCategory`), which the phone doesn't carry.
+	*/
+	function categoryIds(edit, shown) {
+		const type = text$2(edit["product_type"]);
+		const group = text$2(edit["group"]);
+		if (type === null || group === null) return null;
+		const gender = text$2(edit["gender"])?.toLowerCase();
+		const department = edit["is_kids"] === true ? "kidswear" : (gender === void 0 ? void 0 : GENDERS[gender]) ?? DEPARTMENT_NAMES[(shown[0] ?? "").toLowerCase()];
+		return department === void 0 ? null : [
+			department,
+			group,
+			type
+		].join("/");
+	}
+	/** The brand's name as the listing shows it, before Depop's slug of it; "Other" is none. */
+	function brand(edit) {
+		if ((typeof edit["brand"] === "string" ? text$2(edit["brand"]) : null)?.toLowerCase() === UNBRANDED) return null;
+		return text$2(edit["brand_name"]) ?? text$2(edit["brandName"]) ?? named$1(edit["brand"]);
+	}
+	/** The listing's colours that Listora's vocabulary has, in Depop's order, each once. */
+	function colours(value) {
+		const known = strings(value).flatMap((colour) => {
+			const color = COLOURS[colour.toLowerCase()];
+			return color === void 0 ? [] : [color];
+		});
+		return [...new Set(known)];
+	}
+	/**
+	* The price before the listing's markdown, in cents: `pricing.original_price` when the price a
+	* buyer pays now (`final_price_key`) is another, lower one; `null` when it is not marked down.
+	*/
+	function originalPrice(pricing) {
+		if (pricing === null || typeof pricing !== "object") return null;
+		const record = pricing;
+		const key = text$2(record["final_price_key"]) ?? "original_price";
+		if (key === "original_price") return null;
+		const original = amountCents(record["original_price"]);
+		const final = amountCents(record[key]);
+		return original !== null && final !== null && original > final ? original : null;
+	}
+	/** A Depop price's amount (`{ price_breakdown: { price: { amount: "15.00" } } }`) in cents. */
+	function amountCents(price) {
+		if (price === null || typeof price !== "object") return null;
+		const breakdown = price["price_breakdown"];
+		if (breakdown === null || typeof breakdown !== "object") return null;
+		const shown = breakdown["price"];
+		if (shown === null || typeof shown !== "object") return null;
+		const amount = shown["amount"];
+		const match = typeof amount === "string" ? /^(\d+)(?:\.(\d{1,2}))?$/.exec(amount) : null;
+		if (match?.[1] === void 0) return null;
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 	/** Each picture's widest https image, in order. */
 	function photoUrls$2(pictures) {
@@ -7903,6 +8000,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 							condition: null,
 							categoryRef: null,
 							categoryPath: [],
+							colors: [],
+							originalPriceCents: null,
 							sku: null
 						}
 					})),
@@ -8820,6 +8919,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			condition: condition === null ? null : CONDITIONS$1[condition] ?? null,
 			categoryRef: categoryPath.length >= 2 ? categoryPath.join(" > ") : null,
 			categoryPath,
+			colors: [],
+			originalPriceCents: null,
 			sku
 		};
 	}
@@ -10105,6 +10206,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			condition: typeof record.condition === "string" ? CONDITIONS[record.condition] ?? null : null,
 			categoryRef: categoryPath.length >= 2 ? categoryPath.join("/") : null,
 			categoryPath,
+			colors: [],
+			originalPriceCents: null,
 			sku: splitSkuLine(record.description).sku
 		};
 	}
