@@ -154,6 +154,39 @@ struct HangTagTests {
         #expect(long.width <= 200, "a long stamp wraps instead of overflowing: \(long)")
     }
 
+    @Test(arguments: StatusTone.allCases)
+    func `a stamped mark grows a little with the text, as big as a card's photo by default`(tone: StatusTone) {
+        let regular = size(of: StampMark(systemImage: "link", tone: tone), width: 390, typeSize: .large)
+        let largest = size(of: StampMark(systemImage: "link", tone: tone), width: 390, typeSize: .accessibility5)
+        #expect(regular == CGSize(width: StampMark.side, height: StampMark.side))
+        #expect(largest.width > regular.width && largest.width <= StampMark.side * 1.4 + 0.5)
+    }
+
+    @Test
+    func `an icon tile is a soft tile in rows and a stamp on cards`() {
+        let row = size(of: IconTile(systemImage: "link"), width: 390, typeSize: .large)
+        let card = size(of: IconTile(systemImage: "link", size: .card), width: 390, typeSize: .large)
+        let hero = size(of: IconTile(systemImage: "link", size: .hero), width: 390, typeSize: .accessibility5)
+        #expect(row == CGSize(width: 36, height: 36))
+        #expect(card == CGSize(width: 48, height: 48))
+        #expect(hero == CGSize(width: 96, height: 96), "the hero mark keeps its size, so the action stays on screen")
+    }
+
+    @Test
+    func `an item's hanging tag fits its grid cell, its photo inside the card stock`() {
+        everyVariant { width, typeSize, scheme in
+            let cell = (width - 3 * Spacing.md) / 2
+            let tag = HangingTag(railOverhang: Spacing.md / 2) {
+                Color.clear.aspectRatio(1, contentMode: .fit)
+            }
+            .frame(width: cell)
+            let measured = size(of: tag, width: width, typeSize: typeSize, scheme: scheme)
+            #expect(abs(measured.width - cell) < 0.5, "\(measured) for \(cell)")
+            // The photo, the eyelet's band above it, the margins, and the string's drop.
+            #expect(measured.height > cell + HangingTag<EmptyView>.drop, "\(measured) for \(cell)")
+        }
+    }
+
     // MARK: The tab rail
 
     private func rail(selection: Int = 0) -> some View {

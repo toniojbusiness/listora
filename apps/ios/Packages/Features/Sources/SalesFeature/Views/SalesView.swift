@@ -87,7 +87,7 @@ public struct SalesView<Settings: View>: View {
                     title: "No sales yet",
                     message: "When an item sells, Listora delists it everywhere else and shows the sale and "
                         + "its profit here. Sold somewhere Listora doesn't see? Open the item and tap Mark as sold.",
-                    action: onOpenInventory.map { .init("Go to Inventory", systemImage: "shippingbox", handler: $0) },
+                    action: onOpenInventory.map { .init("Go to Inventory", systemImage: "hanger", handler: $0) },
                 )
                 .accessibilityIdentifier("sales.empty")
             } else {

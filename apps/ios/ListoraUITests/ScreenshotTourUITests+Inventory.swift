@@ -18,6 +18,11 @@ extension ScreenshotTourUITests {
         XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         tab("Inventory")
         let row = app.buttons["inventory.row.\(item.sku)"]
+        // At the largest text sizes the grid is one column of tall tags, and the item can be below
+        // the first screen, where the lazy grid has not made it yet.
+        for _ in 0 ..< 4 where !row.waitForExistence(timeout: 5) {
+            app.swipeUp()
+        }
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         try shot("27-inventory")
         // The list, then back to the photo grid (the default).

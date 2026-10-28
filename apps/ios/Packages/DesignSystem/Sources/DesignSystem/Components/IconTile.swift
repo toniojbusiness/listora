@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// An SF Symbol on a soft rounded square: the leading icon of list rows and the art of empty
-/// states. Decorative, so VoiceOver skips it.
+/// An SF Symbol or a monogram as a mark. At row size it sits on a soft rounded square, the
+/// leading icon of a list row (Settings); at card and hero sizes it is stamped in ink
+/// (``StampMark``), so cards read as tags with a mark on them rather than rows of icon tiles.
+/// Decorative, so VoiceOver skips it.
 public struct IconTile: View {
     public enum Size: Sendable {
         /// 36 points, for list rows.
@@ -53,8 +55,21 @@ public struct IconTile: View {
     }
 
     public var body: some View {
-        let side = size == .hero ? size.side : size.side * min(scale, 1.6)
-        Group {
+        if size == .row {
+            tile
+        } else {
+            switch content {
+            case let .symbol(name):
+                StampMark(.symbol(name), tone: tone, side: size.side, scales: size == .card)
+            case let .monogram(letters):
+                StampMark(.monogram(letters), tone: tone, side: size.side, scales: size == .card)
+            }
+        }
+    }
+
+    private var tile: some View {
+        let side = size.side * min(scale, 1.6)
+        return Group {
             switch content {
             case let .symbol(name):
                 Image(systemName: name)
@@ -67,7 +82,7 @@ public struct IconTile: View {
         .frame(width: side, height: side)
         .background(
             tone?.softColor ?? Palette.brandSoft,
-            in: RoundedRectangle(cornerRadius: size == .hero ? Radius.extraLarge : Radius.small, style: .continuous),
+            in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous),
         )
         .accessibilityHidden(true)
     }

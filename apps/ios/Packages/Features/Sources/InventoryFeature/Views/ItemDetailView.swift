@@ -166,7 +166,8 @@ struct ItemDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    PhotoCarousel(photos: item.photos)
+                    // The item is a tag; its marketplaces hang on the string below.
+                    HangingTag(railOverhang: nil) { PhotoCarousel(photos: item.photos) }
                     ItemHeader(item: item)
                 }
                 if let notice = model.notice {

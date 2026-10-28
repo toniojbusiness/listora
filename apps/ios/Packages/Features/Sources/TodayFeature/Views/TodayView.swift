@@ -121,7 +121,7 @@ public struct TodayView<Settings: View>: View {
                 SkeletonRow()
                 SkeletonBlock(height: Layout.buttonHeight, cornerRadius: Radius.medium)
             }
-            .cardStyle()
+            .tagStyle()
         }
     }
 
@@ -135,9 +135,11 @@ public struct TodayView<Settings: View>: View {
                         .font(Typography.subheadline)
                         .foregroundStyle(Palette.textSecondary)
                         .accessibilityIdentifier("today.count")
-                    ForEach(model.cards) { card in
-                        TodayCardView(card: card, onAction: open)
-                            .transition(.opacity.combined(with: .move(edge: .leading)))
+                    DayString {
+                        ForEach(model.cards) { card in
+                            TodayCardView(card: card, onAction: open)
+                                .transition(.opacity.combined(with: .move(edge: .leading)))
+                        }
                     }
                 }
                 if let money = model.money, money.hasSales {
@@ -161,11 +163,30 @@ public struct TodayView<Settings: View>: View {
     }
 }
 
+/// The day's cards threaded on one string, most urgent first: the string runs down through every
+/// card's eyelet, showing between the cards and through the holes, so the day reads as one loop.
+private struct DayString<Cards: View>: View {
+    @ViewBuilder let cards: Cards
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            cards
+        }
+        .background(alignment: .leading) {
+            ThreadSegment()
+                .stroke(Palette.thread, style: Thread.stroke(.taut))
+                .frame(width: Thread.width)
+                .padding(.leading, TagMetrics.eyeletInset - Thread.width / 2)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 /// Shown above the money summary when nothing needs the seller.
 private struct CaughtUpCard: View {
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            IconTile(systemImage: "checkmark.circle", tone: .success, size: .card)
+            StampMark(systemImage: "checkmark", tone: .success)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("You're all caught up")
                     .font(Typography.headline)
