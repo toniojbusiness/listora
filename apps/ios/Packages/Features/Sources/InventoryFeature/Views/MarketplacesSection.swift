@@ -74,9 +74,16 @@ struct MarketplacesSection: View {
         }
     }
 
-    /// Tied to a marketplace with a listing (in any state); loose to one it is not on yet.
-    private static func string(to row: MarketplaceRowState) -> ThreadStyle {
-        row.listing == nil ? .loose : .taut
+    /// The string to a marketplace, from the listing's confirmed state only: tied once the
+    /// marketplace confirms the listing is live (or sold there), cut once it confirms the listing
+    /// ended (a sale ends it everywhere else), and loose while the item is not on it or the work
+    /// is still running or failed. A change animates: the knot ties, or the string is cut.
+    static func string(to row: MarketplaceRowState) -> ThreadStyle {
+        switch row.listing?.status.value1 {
+        case .active, .ending, .sold: .taut
+        case .ended: .cut
+        case .draft, .queued, .publishing, .error, .unknown, .needsUserAction, nil: .loose
+        }
     }
 }
 

@@ -138,6 +138,7 @@ same on every screen. The table with each style's use is in `Typography.swift`.
 | `tagStyle()`, `TagShape`, `stitchedEdge`    | A tag on its side (the day's cards): card stock, the pointed end with its eyelet punched through, a stitched edge (Hang Tag, below)                                                       |
 | `ThreadRow`, `ThreadBead`, `ThreadSegment`  | The Looptag string through a column of rows, a bead per marketplace or step (filled, ringed, or dashed, with a symbol), a piece that can be cut                                           |
 | `StampMark`, `HangingTag`, `ThreadProgress` | A symbol stamped in a ruled square (a card with no photo); a tag hanging from a rail by its string (Inventory's photos, the item's photos); how far work has come as a string pulled taut |
+| `SoldStamp`                                 | The sold stamp on an item's tag: "Sold", the price, and the marketplace in a double-ruled box; it lands when the item sells while open                                                    |
 | `Stamp`                                     | A rubber-stamp word in inked capitals ("Urgent", "Soon", "Sold"), for a mark that is not a status                                                                                         |
 | `TabRail`, `tabRail(_:selection:)`          | The tab bar: a rail with the tabs under it and Add as a clay tag hanging from it; `tabRailHidden(_:)` steps it aside for a flow                                                           |
 | `ListRow`                                   | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                                                             |
@@ -199,6 +200,16 @@ are in [design/hangtag-screens/](design/hangtag-screens/).
     taut with a bead where it stops.
   - Pack check's to-ship list is ruled, with SKUs in SF Mono; the import questions print their
     price in Fraunces.
+- **The moments** (step 3), driven by the listings' confirmed states only, so nothing looks done
+  before a marketplace confirms it:
+  - **Sold**: once the item sells, a "Sold" stamp with the price and the marketplace is pressed
+    onto its tag (`SoldStamp`); when it sells while the item is open, the stamp lands.
+  - **Strings cut on auto-delist**: the string to a marketplace is cut, with the scissors' mark
+    in the gap, once that marketplace confirms the listing ended (`ThreadStyle.cut`).
+  - **Knots tied**: as List everywhere runs, the string to each marketplace is tied (solid, drawn
+    down over the dashed one) and its bead pulls tight once the marketplace confirms the listing
+    is live.
+  - With Reduce Motion, each of these is one cross-fade, and the bead does not move.
 - **The tab bar** (`TabRail`): a rail across the bottom with the five tabs under it, Inventory a
   hanger, and Add a clay tag hanging from the rail. It sits under the `TabView`, not in its safe
   area (an inset outside a tab's navigation stack does not reach the screens in it), so every

@@ -37,12 +37,29 @@ final class SaleFlowUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(of: delist, "Delisted (confirmed by eBay)", timeout: 60), delist.label)
         keepScreenshot("Sale")
 
+        // The item wears the sold stamp, and its string to eBay is cut (eBay confirmed the delist).
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let stamp = app.descendants(matching: .any)["item.soldStamp"]
+        XCTAssertTrue(stamp.waitForExistence(timeout: 10), "the sold item has no sold stamp")
+        XCTAssertTrue(stamp.label.hasPrefix("Sold for $") && stamp.label.hasSuffix(" on Depop"), stamp.label)
+        keepScreenshot("Sold, the string to eBay cut")
+        let sale = app.buttons["item.sale"]
+        for _ in 0 ..< 4 where !sale.isHittable {
+            app.swipeUp()
+        }
+        sale.tap()
+        XCTAssertTrue(soldOn.waitForExistence(timeout: 15))
+
         cancelAndRelistOnEbay()
 
         // The item's eBay listing is live again, as eBay confirms it.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForLabel(of: ebayStatus, "Active (confirmed by eBay)", timeout: 60), ebayStatus.label)
         XCTAssertFalse(app.descendants(matching: .any)["item.relistPrompt"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["item.soldStamp"].waitForNonExistence(timeout: 10),
+            "a canceled sale leaves no sold stamp",
+        )
         keepScreenshot("Relisted")
 
         // The Sales tab lists the sale.
