@@ -10617,8 +10617,9 @@ extension Components {
         /// `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
         /// seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
         /// `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-        /// the item's floor) or a relist suggested. `sale_checks`: a marketplace whose sale checks fail
-        /// or stopped running, so its sales are not being seen.
+        /// the item's floor) or a relist suggested. Every card is something the seller can do: Listora's
+        /// own background problems (sale checks that fail or stall) are for the owner's alerts and the
+        /// support views, never a card.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownTodayCardKind`.
@@ -10626,7 +10627,6 @@ extension Components {
             case delist = "delist"
             case ship = "ship"
             case reconnect = "reconnect"
-            case saleChecks = "sale_checks"
             case reviewDrafts = "review_drafts"
             case staleListing = "stale_listing"
         }
@@ -10990,49 +10990,6 @@ extension Components {
                 case status
             }
         }
-        /// A `sale_checks` card's connection and its problem.
-        ///
-        /// - Remark: Generated from `#/components/schemas/TodaySaleChecks`.
-        public struct TodaySaleChecks: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/connectionId`.
-            public var connectionId: Components.Schemas.Id
-            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/marketplace`.
-            public var marketplace: Components.Schemas.Marketplace
-            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/health`.
-            public var health: Components.Schemas.SaleCheckHealth
-            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/since`.
-            public var since: Components.Schemas.Timestamp
-            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/lastSucceededAt`.
-            public var lastSucceededAt: Components.Schemas.Timestamp?
-            /// Creates a new `TodaySaleChecks`.
-            ///
-            /// - Parameters:
-            ///   - connectionId:
-            ///   - marketplace:
-            ///   - health:
-            ///   - since:
-            ///   - lastSucceededAt:
-            public init(
-                connectionId: Components.Schemas.Id,
-                marketplace: Components.Schemas.Marketplace,
-                health: Components.Schemas.SaleCheckHealth,
-                since: Components.Schemas.Timestamp,
-                lastSucceededAt: Components.Schemas.Timestamp? = nil
-            ) {
-                self.connectionId = connectionId
-                self.marketplace = marketplace
-                self.health = health
-                self.since = since
-                self.lastSucceededAt = lastSucceededAt
-            }
-            public enum CodingKeys: String, CodingKey {
-                case connectionId
-                case marketplace
-                case health
-                case since
-                case lastSucceededAt
-            }
-        }
         /// A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
         /// clients show through the card's `detail` and action.
         ///
@@ -11181,7 +11138,7 @@ extension Components {
         }
         /// One thing that needs the seller. A card exists only while its work is not done, so it is
         /// gone from the next summary once the work is finished. The kind's own property (`shipment`,
-        /// `delist`, `connection`, `saleChecks`, `staleListing`, or `drafts`) carries its facts.
+        /// `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/TodayCard`.
@@ -11208,8 +11165,6 @@ extension Components {
             public var delist: Components.Schemas.TodayDelist?
             /// - Remark: Generated from `#/components/schemas/TodayCard/connection`.
             public var connection: Components.Schemas.TodayConnection?
-            /// - Remark: Generated from `#/components/schemas/TodayCard/saleChecks`.
-            public var saleChecks: Components.Schemas.TodaySaleChecks?
             /// - Remark: Generated from `#/components/schemas/TodayCard/staleListing`.
             public var staleListing: Components.Schemas.TodayStaleListing?
             /// - Remark: Generated from `#/components/schemas/TodayCard/drafts`.
@@ -11227,7 +11182,6 @@ extension Components {
             ///   - shipment:
             ///   - delist:
             ///   - connection:
-            ///   - saleChecks:
             ///   - staleListing:
             ///   - drafts:
             public init(
@@ -11241,7 +11195,6 @@ extension Components {
                 shipment: Components.Schemas.TodayShipment? = nil,
                 delist: Components.Schemas.TodayDelist? = nil,
                 connection: Components.Schemas.TodayConnection? = nil,
-                saleChecks: Components.Schemas.TodaySaleChecks? = nil,
                 staleListing: Components.Schemas.TodayStaleListing? = nil,
                 drafts: Components.Schemas.TodayDrafts? = nil
             ) {
@@ -11255,7 +11208,6 @@ extension Components {
                 self.shipment = shipment
                 self.delist = delist
                 self.connection = connection
-                self.saleChecks = saleChecks
                 self.staleListing = staleListing
                 self.drafts = drafts
             }
@@ -11270,7 +11222,6 @@ extension Components {
                 case shipment
                 case delist
                 case connection
-                case saleChecks
                 case staleListing
                 case drafts
             }

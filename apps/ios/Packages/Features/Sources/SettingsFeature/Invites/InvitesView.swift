@@ -261,7 +261,7 @@ private struct NewInviteSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: Spacing.sm) {
                 Text(created.code)
-                    .font(Typography.price.monospaced())
+                    .font(Typography.keypad.monospaced())
                     .foregroundStyle(Palette.textPrimary)
                     .textSelection(.enabled)
                     .minimumScaleFactor(0.6)

@@ -34,7 +34,7 @@ struct CodeEntryView: View {
                             text: Binding(get: { model.code }, set: { enter($0) }),
                             prompt: Text(verbatim: ""),
                         )
-                        .font(Typography.priceLarge)
+                        .font(Typography.amountEntry)
                         .textContentType(.oneTimeCode)
                         .keyboardType(.numberPad)
                         .focused($codeFocused)

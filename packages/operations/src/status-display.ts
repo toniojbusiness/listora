@@ -18,8 +18,6 @@ import type {
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { assertNever } from '@listora/shared';
 
-import { DEFAULT_RETRY_POLICY, maxAttempts } from './policy.ts';
-
 /** How to style a status (the API contract's `KnownStatusTone`). */
 export type StatusTone =
   'success' | 'in_progress' | 'checking' | 'failed' | 'action_needed' | 'neutral';
@@ -56,8 +54,6 @@ export interface ListingStatusInput {
   now?: Date;
   /** What a relist of this listing does there (`relistMode`), for its in-progress label. */
   relist?: RelistMode | undefined;
-  /** Attempts an operation gets (default: the engine's default retry policy). */
-  maxAttempts?: number;
 }
 
 /**
@@ -203,7 +199,7 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
       input.listingStatus,
     );
   }
-  return describeUnsettled(operation, name, input.maxAttempts, input.now, input.relist);
+  return describeUnsettled(operation, name, input.now, input.relist);
 }
 
 /**
@@ -214,7 +210,6 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
 export function describeOperation(input: {
   marketplace: Marketplace;
   operation: OperationInput;
-  maxAttempts?: number;
   now?: Date;
 }): StatusDisplay {
   const { operation } = input;
@@ -236,7 +231,7 @@ export function describeOperation(input: {
     case 'verifying':
     case 'needs_user_action':
     case 'failed':
-      return describeUnsettled(operation, name, input.maxAttempts, input.now);
+      return describeUnsettled(operation, name, input.now);
     default:
       return assertNever(operation.status, 'operation status');
   }
@@ -246,7 +241,6 @@ export function describeOperation(input: {
 function describeUnsettled(
   operation: OperationInput,
   name: string,
-  attemptsPerOperation: number | undefined,
   now: Date | undefined,
   relist?: RelistMode,
 ): StatusDisplay {
@@ -256,8 +250,8 @@ function describeUnsettled(
   const wait = operation.phoneWait;
   const at = (now ?? new Date()).getTime();
   const due = operation.nextAttemptAt?.getTime() ?? null;
-  // A retry before its time waits for that time, not for the phone: the app shows when it is
-  // ("Waiting to retry at 9:41 PM"), and the phone takes it once it is due.
+  // A retry before its time waits for that time, not for the phone, which takes it once it is
+  // due.
   const retryLater = operation.status !== 'queued' && due !== null && due > at;
   if (
     wait !== undefined &&
@@ -267,23 +261,21 @@ function describeUnsettled(
   ) {
     const doing = operation.status === 'verifying' ? 'Checking' : doingNow;
     if (wait.running) return { tone: 'in_progress', label: `${doing} on your iPhone...` };
-    // The wait for the phone counts from when the step was due, not from its first attempt.
-    const waited = waitedFor(at - Math.max(wait.since.getTime(), due ?? 0));
+    // What the seller can do, not how long the work has waited (that is the support views').
     return {
       tone: 'in_progress',
-      label: `${doing}... waiting on your iPhone (${waited})`,
-      detail: `Open Listora on your iPhone to finish this on ${name}. It has waited ${waited}.`,
+      label: `${doing}... open Listora on your iPhone`,
+      detail: `Open Listora on your iPhone to finish this on ${name}.`,
     };
   }
   switch (operation.status) {
     case 'queued':
     case 'running':
       return { tone: 'in_progress', label: `${doingNow}...` };
-    case 'retrying': {
-      const retries = (attemptsPerOperation ?? maxAttempts(DEFAULT_RETRY_POLICY)) - 1;
-      const label = `${doingNow}... retry ${String(operation.attempts)} of ${String(retries)}`;
-      return { tone: 'in_progress', label, ...detail };
-    }
+    case 'retrying':
+      // Listora is still on it; the attempt count and the last try's error are the support
+      // views', not the seller's.
+      return { tone: 'in_progress', label: `${doingNow}...` };
     case 'verifying':
       return { tone: 'checking', label: 'Checking...', ...detail };
     case 'needs_user_action':
@@ -302,20 +294,6 @@ function describeUnsettled(
 
 /** The statuses in which a step can wait for the phone. */
 const UNSETTLED_ON_PHONE: readonly OperationStatus[] = ['queued', 'retrying', 'verifying'];
-
-/** "less than a minute", "12 min", "3 h 5 min", "2 days". */
-export function waitedFor(ms: number): string {
-  const minutes = Math.floor(Math.max(0, ms) / 60_000);
-  if (minutes < 1) return 'less than a minute';
-  if (minutes < 60) return `${String(minutes)} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    const rest = minutes % 60;
-    return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`;
-  }
-  const days = Math.floor(hours / 24);
-  return days === 1 ? '1 day' : `${String(days)} days`;
-}
 
 /**
  * `state` is what the read-back confirmed. Without evidence (which the database refuses) the

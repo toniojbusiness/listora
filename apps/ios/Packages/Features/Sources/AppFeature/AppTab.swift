@@ -21,14 +21,29 @@ public enum AppTab: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// Add's filled camera stands out among the outlined icons.
+    /// Inventory is a hanger, where the items hang; Add's camera is printed on the clay tag that
+    /// hangs from the tab rail.
     public var systemImage: String {
         switch self {
         case .today: "sun.max"
-        case .inventory: "shippingbox"
-        case .addItem: "camera.circle.fill"
+        case .inventory: "hanger"
+        case .addItem: "camera"
         case .tasks: "checklist"
         case .sales: "dollarsign.circle"
+        }
+    }
+
+    /// Add is the tag hanging from the rail: the app's main way in.
+    public var isTag: Bool {
+        self == .addItem
+    }
+
+    /// How VoiceOver reads the tab's badge of `count`.
+    public func badgeDescription(_ count: Int) -> String? {
+        switch self {
+        case .inventory: "\(count) need you"
+        case .tasks: count == 1 ? "1 open task" : "\(count) open tasks"
+        case .today, .addItem, .sales: nil
         }
     }
 }

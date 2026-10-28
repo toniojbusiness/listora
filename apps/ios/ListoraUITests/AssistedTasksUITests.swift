@@ -26,11 +26,16 @@ final class AssistedTasksUITests: XCTestCase {
         // Waiting for the user, with the task in the badged Tasks tab.
         try require(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
         try require(app.buttons["marketplace.poshmark.action.openTask"].waitForExistence(timeout: 5))
-        // The tab's badge (1) is drawn by the system tab bar, which doesn't expose it to UI
-        // tests; the screenshot keeps it for review.
+        // The tab rail reads the badge out, as VoiceOver does.
+        let tasksTab = app.tabRail.buttons["Tasks"]
+        let badged = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "1 open task"),
+            object: tasksTab,
+        )
+        await fulfillment(of: [badged], timeout: 15)
         keepScreenshot("Action needed, Tasks badged")
 
-        app.tabBars.buttons["Tasks"].tap()
+        app.tabRail.buttons["Tasks"].tap()
         let row = app.buttons["tasks.row.list_manually.poshmark.\(item.sku)"]
         try require(row.waitForExistence(timeout: 15), "the list task is not in the inbox")
         keepScreenshot("Task inbox")
@@ -89,7 +94,7 @@ final class AssistedTasksUITests: XCTestCase {
     /// tabs while the done task's confirmation was still on screen, so the tab is tapped until it
     /// is selected, and the item opened from the list if the tab is back at its list.
     private func showItem(sku: String, status: XCUIElement) throws {
-        let inventory = app.tabBars.buttons["Inventory"]
+        let inventory = app.tabRail.buttons["Inventory"]
         for _ in 0 ..< 3 where !inventory.isSelected {
             inventory.tap()
             _ = status.waitForExistence(timeout: 2)
@@ -219,7 +224,7 @@ final class AssistedTasksUITests: XCTestCase {
         // always asks. Resetting makes every run take the asking path, the one that can break.
         app.resetAuthorizationStatus(for: .photos)
         app.launch()
-        let inventory = app.tabBars.buttons["Inventory"]
+        let inventory = app.tabRail.buttons["Inventory"]
         try require(inventory.waitForExistence(timeout: 10))
         inventory.tap()
     }

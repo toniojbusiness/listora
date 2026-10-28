@@ -15,7 +15,7 @@ extension ScreenshotTourUITests {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         tab("Inventory")
         let row = app.buttons["inventory.row.\(item.sku)"]
         XCTAssertTrue(row.waitForExistence(timeout: 15))

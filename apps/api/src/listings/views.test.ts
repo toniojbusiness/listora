@@ -158,7 +158,7 @@ describe('listing views', () => {
         row({ ...api, status: 'active' }),
         operation({ kind: 'end', status: 'retrying', attempts: 2, error_message: 'eBay is busy.' }),
       ).statusDisplay,
-    ).toEqual({ tone: 'in_progress', label: 'Delisting... retry 2 of 6', detail: 'eBay is busy.' });
+    ).toEqual({ tone: 'in_progress', label: 'Delisting...' });
     expect(
       view(
         row({ ...api, status: 'active' }),

@@ -127,4 +127,21 @@ public enum Palette {
     /// Shadows under raised elements. Shadows barely show on dark backgrounds, so dark mode relies
     /// on the surfaces' lighter tone and hairline borders instead.
     public static let shadow = ColorToken(light: 0x17281E, dark: 0x000000)
+
+    // Hang Tag: the price-tag materials. Each item is a tag on the Looptag string; the string ties
+    // together what belongs together (the day's cards, an item's marketplaces). `thread` and
+    // `rail` carry meaning, so they reach the 3:1 contrast of meaningful graphics on every
+    // background (`PaletteTests`); `stitch` and `eyelet` are decoration and stay quiet.
+
+    /// The string: through the eyelets of the day's cards, and from an item to its marketplaces.
+    public static let thread = ColorToken(light: 0x3C5446, dark: 0x8FA597)
+
+    /// The rail the tags hang from: above the tab bar and an empty state's tag.
+    public static let rail = ColorToken(light: 0x7A5C3E, dark: 0xA88A68)
+
+    /// The stitched edge just inside a tag, a label, or a filled button's border.
+    public static let stitch = ColorToken(light: 0xCDC2AE, dark: 0x3D5244)
+
+    /// The brass ring around a tag's punched eyelet.
+    public static let eyelet = ColorToken(light: 0xD3C29F, dark: 0x6E5E44)
 }

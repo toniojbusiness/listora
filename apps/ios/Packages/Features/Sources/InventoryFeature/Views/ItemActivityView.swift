@@ -2,8 +2,7 @@ import DesignSystem
 import SwiftUI
 
 /// The item's activity: everything that happened to it, newest first, each line with who did it
-/// (Listora, your iPhone, Listora's cloud browser, you, the marketplace), when, and how it went.
-/// A browser session lists its steps and how long each took.
+/// (Listora, you, the marketplace), when, and how it went.
 struct ItemActivityView: View {
     @State private var model: ItemActivityModel
 
@@ -79,10 +78,9 @@ struct ItemActivityView: View {
     }
 }
 
-/// One line: an icon in the outcome's tone, the words, then who, when, and how long.
+/// One line: an icon in the outcome's tone, the words, then who and when.
 private struct ActivityRow: View {
     let row: ActivityRowContent
-    @State private var showsSteps = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -105,35 +103,13 @@ private struct ActivityRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if !row.steps.isEmpty {
-                DisclosureGroup(isExpanded: $showsSteps) {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        ForEach(Array(row.steps.enumerated()), id: \.offset) { _, step in
-                            HStack {
-                                Text(step.name)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                if let duration = step.duration {
-                                    Text(duration).monospacedDigit()
-                                }
-                            }
-                            .font(Typography.metadata)
-                            .foregroundStyle(Palette.textSecondary)
-                        }
-                    }
-                    .padding(.top, Spacing.xxs)
-                } label: {
-                    Text(row.steps.count == 1 ? "1 step" : "\(row.steps.count) steps")
-                        .font(Typography.metadata)
-                        .foregroundStyle(Palette.textSecondary)
-                }
-            }
         }
         .accessibilityElement(children: .combine)
     }
 
-    /// "On your iPhone · Oct 26, 2:41 PM · 12.3 s".
+    /// "Listora · Oct 26, 2:41 PM".
     private var meta: String {
         let when = row.date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
-        return [row.source, when, row.duration].compactMap(\.self).joined(separator: " · ")
+        return "\(row.source) · \(when)"
     }
 }

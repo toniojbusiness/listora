@@ -12,10 +12,11 @@
  * sent: Listora doesn't have it.
  *
  * After submitting, the form either shows Mercari's validation message or its warning about a
- * prohibited item (a rejection in Mercari's own words, never passed with "Continue listing") or
- * opens the listing's page.
+ * prohibited item (a rejection in Mercari's own words, never passed with "Continue listing"), or
+ * Mercari's own error (tried again later), or opens the listing's page.
  */
 import { withSkuLine } from '../../adapter/sku-line.ts';
+import { MarketplaceError } from '../../runner/errors.ts';
 import type { PageDriver, UploadFile } from '../../runner/types.ts';
 import type { MercariListingPayload } from '../payload.ts';
 import { itemIdFromPath, MERCARI_ITEM_ID, MERCARI_PATHS } from '../site.ts';
@@ -105,6 +106,12 @@ export const LISTING_FORM = {
   /** The edit page's submit: the same button, there named Update (read 2026-10-27). */
   save: 'button[data-testid="ListButton"]',
   error: '[data-testid="FormError"]',
+  /**
+   * Mercari's own failure under the List button, there only once a List failed: "Your item could
+   * not be listed due to an error. Please return to the Home screen and try listing the item
+   * again." (read on the captain's session, 2026-10-27, twice in a day of listing).
+   */
+  listingError: '[data-testid="ListingError"]',
 } as const;
 
 const FORM = 'listing form';
@@ -446,6 +453,12 @@ export async function submitListing(page: PageDriver, button: 'list' | 'save'): 
         message:
           'Mercari asks for a credit or debit card on file before it lists. Add one in Mercari (Account settings > Payment methods), then list again.',
       };
+    }
+    if ((await page.texts(LISTING_FORM.listingError)).some((text) => text.trim() !== '')) {
+      // Mercari's own error, not a refusal: the run is retried once the listing is read back.
+      throw new MarketplaceError(
+        "Mercari's form said the item could not be listed due to an error",
+      );
     }
     const messages = (await page.texts(LISTING_FORM.error)).filter((text) => text !== '');
     if (messages.length > 0) return { type: 'refused', message: messages.join(' ') };

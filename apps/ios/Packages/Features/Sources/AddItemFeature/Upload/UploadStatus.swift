@@ -36,7 +36,7 @@ enum PhotoUploadStatus: Equatable, Sendable {
         case .readingTag: "Reading tag"
         case .uploading: "Uploading"
         case .uploaded: "Uploaded"
-        case let .retrying(attempt, maxAttempts): "Retrying (\(attempt) of \(maxAttempts))"
+        case .retrying: "Uploading"
         case .waitingForSignIn: "Sign in to upload"
         case .failed: "Upload failed"
         }

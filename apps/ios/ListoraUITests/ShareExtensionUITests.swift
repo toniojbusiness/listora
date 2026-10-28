@@ -31,7 +31,7 @@ final class ShareExtensionUITests: XCTestCase {
         app.launchEnvironment = environment
         app.launch()
         // Signed in, the app shows its tabs; signed out, the welcome screen.
-        let shown = app.tabBars.firstMatch.waitForExistence(timeout: 10)
+        let shown = app.tabRail.waitForExistence(timeout: 10)
             || app.descendants(matching: .any)["signIn.welcome"].exists
         XCTAssertTrue(shown, "the app did not finish launching")
     }

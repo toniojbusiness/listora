@@ -17,6 +17,8 @@ public enum Spacing {
 
 /// Corner radii in points. Nested shapes use a smaller radius than their container.
 public enum Radius {
+    /// Woven labels and stamps: nearly square, like cloth and ink.
+    public static let tight: CGFloat = 3
     /// Thumbnails, chips inside cards, small wells.
     public static let small: CGFloat = 8
     /// Buttons, text fields, photo tiles.
@@ -26,7 +28,7 @@ public enum Radius {
     /// Sheets and the bottom action bar's top edge.
     public static let extraLarge: CGFloat = 28
 
-    static let scale = [small, medium, large, extraLarge]
+    static let scale = [tight, small, medium, large, extraLarge]
 }
 
 /// Minimum sizes that keep controls easy to hit.

@@ -39,14 +39,14 @@ final class DesignPassUITests: XCTestCase {
         app.buttons["gettingStarted.addItem"].tap()
         XCTAssertTrue(waitForAbsence(of: guide))
         XCTAssertTrue(app.navigationBars["Add Item"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.tabBars.buttons["Add"].isSelected)
+        XCTAssertTrue(app.tabRail.buttons["Add"].isSelected)
 
         // Done is done: a relaunch, even signed in, does not show it again.
         app.terminate()
         app.launchEnvironment = [:]
         app.signInWithoutServer()
         app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         XCTAssertFalse(guide.waitForExistence(timeout: 2))
     }
 
@@ -65,7 +65,7 @@ final class DesignPassUITests: XCTestCase {
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
         guide.tap()
         XCTAssertTrue(waitForAbsence(of: guide))
-        XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
+        XCTAssertTrue(app.tabRail.buttons["Today"].isSelected)
     }
 
     // MARK: Background cleanup
@@ -77,7 +77,7 @@ final class DesignPassUITests: XCTestCase {
         ]
         app.signInWithoutServer()
         app.launch()
-        let tab = app.tabBars.buttons["Add"]
+        let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
         let cover = app.buttons["photo.tile.0"]
@@ -145,7 +145,7 @@ final class DesignPassUITests: XCTestCase {
             app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
         }
         app.launch()
-        let inventory = app.tabBars.buttons["Inventory"]
+        let inventory = app.tabRail.buttons["Inventory"]
         XCTAssertTrue(inventory.waitForExistence(timeout: 10))
         inventory.tap()
     }

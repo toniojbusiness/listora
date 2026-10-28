@@ -177,20 +177,21 @@ describe('activity (real Postgres)', () => {
     return { itemId: item.id, saleId: sale.id, operationId, checkId: check.id };
   }
 
-  it("serves an item's activity newest first, page by page, and only the owner's", async () => {
+  it("serves an item's activity newest first, page by page, only the owner's, and no diagnostics", async () => {
     const { itemId } = await soldItem();
     const first = await api.call('listItemActivity', {
       token,
       params: { itemId },
-      query: { limit: 2 },
+      query: { limit: 1 },
     });
     expect(first.status).toBe(200);
-    expect(first.body.data.map((entry) => entry.kind)).toEqual(['sale', 'sale_check']);
+    // The sale check that saw the sale and the phone's browser session are Listora's diagnostics.
+    expect(first.body.data.map((entry) => entry.kind)).toEqual(['sale']);
     expect(first.body.data[0]).toMatchObject({
       source: 'marketplace',
       outcome: 'info',
       title: 'Sold on Mercari for $45.00 (order order-' + itemId + ')',
-      detail: 'Found by a sale check of Mercari on your iPhone.',
+      detail: 'Listora found it on Mercari.',
     });
     expect(first.body.nextCursor).toEqual(expect.any(String));
     const second = await api.call('listItemActivity', {
@@ -198,17 +199,13 @@ describe('activity (real Postgres)', () => {
       params: { itemId },
       query: { limit: 25, cursor: first.body.nextCursor ?? '' },
     });
-    expect(second.body.data.map((entry) => entry.kind)).toEqual(['browser_session', 'operation']);
-    expect(second.body.data[0]).toMatchObject({
-      source: 'iphone',
-      outcome: 'succeeded',
-      title: 'Your iPhone changed the price on Mercari',
-      durationMs: 4_200,
-      steps: [
-        { name: 'open the editor', durationMs: 2_100 },
-        { name: 'save the price', durationMs: 2_100 },
-      ],
-    });
+    expect(second.body.data.map((entry) => entry.kind)).toEqual(['operation']);
+    for (const entry of [...first.body.data, ...second.body.data]) {
+      expect(entry).not.toHaveProperty('durationMs');
+      expect(entry).not.toHaveProperty('steps');
+      expect(entry).not.toHaveProperty('error');
+      expect(entry).not.toHaveProperty('reference');
+    }
     expect(second.body.nextCursor).toBeUndefined();
 
     const other = await api.call('listItemActivity', {
@@ -232,7 +229,6 @@ describe('activity (real Postgres)', () => {
     });
     expect(response.status).toBe(200);
     expect(response.body.data.map((entry) => [entry.kind, entry.title])).toEqual([
-      ['browser_session', 'Your iPhone changed the price on Mercari'],
       ['operation', 'Change the price on Mercari'],
     ]);
     const missing = await api.call('listOperationActivity', {
@@ -243,18 +239,19 @@ describe('activity (real Postgres)', () => {
   });
 
   it('explains how a sale was found', async () => {
-    const { saleId, checkId } = await soldItem();
+    const { saleId } = await soldItem();
     const response = await api.call('getSaleExplanation', { token, params: { saleId } });
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
       saleId,
       marketplace: 'mercari',
       detectionSource: 'poll',
-      detection: 'Found by a sale check of Mercari on your iPhone.',
-      check: { id: checkId, kind: 'scheduled', host: 'phone', ordersSeen: 2, newOrders: 1 },
+      detection: 'Listora found it on Mercari.',
       delists: [],
     });
-    expect(response.body.entries.map((entry) => entry.kind)).toEqual(['sale', 'sale_check']);
+    // Which check saw it, where it ran, and what it read are the operator's (`admin sale-why`).
+    expect(response.body).not.toHaveProperty('check');
+    expect(response.body.entries.map((entry) => entry.kind)).toEqual(['sale']);
     const other = await api.call('getSaleExplanation', {
       token: await api.signIn(OTHER),
       params: { saleId },
@@ -262,20 +259,10 @@ describe('activity (real Postgres)', () => {
     expect(other.status).toBe(404);
   });
 
-  it('shows a marketplace whose sale checks fail on Today and with its connection', async () => {
-    const connectionId = await mercari('failing');
+  it('keeps failing sale checks off Today, on the connection for support', async () => {
+    await mercari('failing');
     const today = await api.call('getToday', { token });
-    const card = today.body.cards.find((candidate) => candidate.kind === 'sale_checks');
-    expect(card).toMatchObject({
-      id: `sale_checks:${connectionId}`,
-      urgency: 'high',
-      title: "Listora can't check Mercari for sales",
-      detail: expect.stringContaining(
-        "Mercari's sold items page has changed, so Listora couldn't read it.",
-      ) as unknown,
-      action: { destination: 'marketplaces', connectionId },
-      saleChecks: { connectionId, marketplace: 'mercari', health: 'failing' },
-    });
+    expect(today.body.cards.map((card) => card.kind)).not.toContain('sale_checks');
     const connections = await api.call('listConnections', { token });
     expect(
       connections.body.data.find((connection) => connection.marketplace === 'mercari')?.saleChecks,
@@ -286,9 +273,5 @@ describe('activity (real Postgres)', () => {
         message: "Mercari's sold items page has changed, so Listora couldn't read it.",
       },
     });
-
-    await mercari('healthy');
-    const caughtUp = await api.call('getToday', { token });
-    expect(caughtUp.body.cards.some((candidate) => candidate.kind === 'sale_checks')).toBe(false);
   });
 });

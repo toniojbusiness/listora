@@ -47,9 +47,9 @@ struct KeypadView: View {
     private func label(for key: AmountEntry.Key) -> some View {
         switch key {
         case let .digit(digit):
-            Text("\(digit)").font(Typography.price)
+            Text("\(digit)").font(Typography.keypad)
         case .decimalPoint:
-            Text(".").font(Typography.price)
+            Text(".").font(Typography.keypad)
         case .delete:
             Image(systemName: "delete.left").font(Typography.headline)
         }
@@ -89,7 +89,7 @@ struct AmountDisplay: View {
 
     var body: some View {
         Text(entry.display)
-            .font(Typography.priceLarge)
+            .font(Typography.amountEntry)
             .foregroundStyle(entry.isEmpty ? Palette.textSecondary : Palette.textPrimary)
             .contentTransition(reduceMotion ? .identity : .numericText())
             .animation(Motion.animation(Motion.snappy, reduceMotion: reduceMotion), value: entry)

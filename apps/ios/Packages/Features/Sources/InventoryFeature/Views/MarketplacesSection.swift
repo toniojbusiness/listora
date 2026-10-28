@@ -115,12 +115,6 @@ private struct MarketplaceCard: View {
             if let progress {
                 PhoneProgressView(progress: progress, marketplace: row.id)
             }
-            if let schedule = row.scheduleLabel {
-                Label(schedule, systemImage: "clock")
-                    .font(Typography.subheadline)
-                    .foregroundStyle(Palette.textSecondary)
-                    .accessibilityIdentifier("marketplace.\(row.id).schedule")
-            }
             if let detail = row.statusDetail {
                 Text(detail)
                     .font(Typography.subheadline)

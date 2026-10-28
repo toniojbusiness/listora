@@ -148,13 +148,14 @@ an urgent task. A `delist_run` gathers the per-marketplace results. If anything 
 delisted or confirmed after 10 minutes, Listora alerts the user again, and after 30 minutes it
 escalates the alert. A second sale opens a double-sale incident.
 
-**Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
+**Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting...`,
 `Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
-`Done (you confirmed)`, and for a step the phone runs, `Delisting... waiting on your iPhone (12
-minutes)` and `Delisting on your iPhone...`. The wait on the iPhone counts from when the step was
-due: a retry before its time shows its retry label, and the app adds when it is ("Waiting to
-retry at 9:41 PM", "Checking again at 9:41 PM", from `nextAttemptAt`) with Try now, so a wait
-for a retry is never shown as a wait for the phone. A relist says what it does where Listora
+`Done (you confirmed)`, and for a step the phone runs, `Delisting... open Listora on your
+iPhone` and `Delisting on your iPhone...`. A label says what the seller can do, never Listora's
+internals: a retry shows as the work in progress (`Delisting...`, with Try now in the app),
+without its attempt count, its last error, or when it is next tried, and a wait for the phone
+without how long it has waited; those stay in the operation's record for the support views. A
+retry before its time is never shown as a wait for the phone. A relist says what it does where Listora
 knows (`relistMode`): `Reactivating...` brings back the listing Listora ended (Mercari activates
 it, Poshmark puts it back for sale), and `Relisting (new listing)...` posts a new one (Depop,
 whose End deletes, and any listing whose id a read-back cleared because the marketplace removed

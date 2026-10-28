@@ -310,7 +310,7 @@ describe('activity timeline (real Postgres)', () => {
     });
     expect(entries.find((entry) => entry.kind === 'sale')).toMatchObject({
       source: 'marketplace',
-      detail: 'Found by a sale check of Mercari on your iPhone.',
+      detail: 'Listora found it on Mercari.',
       reference: { saleCheckId: seeded.checkId },
     });
     expect(entries.find((entry) => entry.kind === 'sale_check')).toMatchObject({
@@ -400,7 +400,7 @@ describe('activity timeline (real Postgres)', () => {
       reportedAt: at(10.5),
       recordedAt: at(11),
       detectionSource: 'poll',
-      detection: 'Found by a sale check of Mercari on your iPhone.',
+      detection: 'Listora found it on Mercari.',
       check: {
         id: seeded.checkId,
         kind: 'scheduled',

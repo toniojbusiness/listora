@@ -1,11 +1,13 @@
 import CoreText
 import Foundation
+import SwiftUI
 
-/// The wordmark's typeface: Fraunces (SIL Open Font License, `Resources/Fonts/OFL.txt`), a static
-/// instance at the 72 pt optical size, weight 700, fully soft (SOFT 100) and not wonky (WONK 0),
-/// as the Looptag concept set it. It is bundled with the package and registered for this process
-/// only, the first time a wordmark asks for it. Only the wordmark uses it; the type scale stays
-/// SF Pro and New York (`Typography`).
+/// The brand's display typeface: Fraunces (SIL Open Font License, `Resources/Fonts/OFL.txt`), a
+/// static instance at the 72 pt optical size, weight 700, fully soft (SOFT 100) and not wonky
+/// (WONK 0), as the Looptag concept set it. It is bundled with the package and registered for
+/// this process only, the first time the wordmark or a display style asks for it. The wordmark
+/// draws from its outlines; `Typography` uses it for headings and prices, the print on a price
+/// tag, and SF Pro for everything else you read.
 enum BrandFont {
     /// The PostScript name the bundled file declares.
     static let postScriptName = "Fraunces-72ptSuperSoftBoldNonWonky"
@@ -33,5 +35,12 @@ enum BrandFont {
     static func font(size: CGFloat) -> CTFont {
         _ = isRegistered
         return CTFontCreateWithName(postScriptName as CFString, size, nil)
+    }
+
+    /// The font at `size` points at the default text size, scaled with Dynamic Type like
+    /// `textStyle`. The font has no tabular figures, so amounts being typed use SF Pro instead.
+    static func display(size: CGFloat, relativeTo textStyle: Font.TextStyle) -> Font {
+        _ = isRegistered
+        return Font.custom(postScriptName, size: size, relativeTo: textStyle)
     }
 }

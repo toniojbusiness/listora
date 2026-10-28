@@ -31,8 +31,9 @@ final class AccessibilityAuditUITests: XCTestCase {
             systemBanner.swipeUp()
             XCTAssertTrue(systemBanner.waitForNonExistence(timeout: 5), "a system banner covers the app")
         }
-        // System chrome (tab bar, navigation bars, and their buttons) is drawn by UIKit.
-        let chrome = (app.navigationBars.allElementsBoundByIndex + app.tabBars.allElementsBoundByIndex).map(\.frame)
+        // System chrome (navigation bars and their buttons) is drawn by UIKit. The tab rail is the
+        // app's own, so it is audited like the screen.
+        let chrome = app.navigationBars.allElementsBoundByIndex.map(\.frame)
         // Contrast and text size are left to deterministic checks: `PaletteTests` checks every token
         // pair with the WCAG formula, `ComponentLayoutTests` lays the components out at the largest
         // text size, and `make ios-screenshots` captures every screen there. The audit's versions
@@ -71,7 +72,7 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
         try audit("Getting started")
         skipGuide.tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
     }
 
     /// The tab screens and Settings.
@@ -80,17 +81,17 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))
         try audit("Today")
 
-        app.tabBars.buttons["Inventory"].tap()
+        app.tabRail.buttons["Inventory"].tap()
         try audit("Inventory")
 
-        app.tabBars.buttons["Sales"].tap()
+        app.tabRail.buttons["Sales"].tap()
         XCTAssertTrue(app.navigationBars["Sales"].waitForExistence(timeout: 5))
         try audit("Sales")
 
-        app.tabBars.buttons["Tasks"].tap()
+        app.tabRail.buttons["Tasks"].tap()
         try audit("Tasks")
 
-        app.tabBars.buttons["Today"].tap()
+        app.tabRail.buttons["Today"].tap()
         app.buttons["settings.open"].tap()
         XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
         try audit("Settings")
@@ -99,7 +100,7 @@ final class AccessibilityAuditUITests: XCTestCase {
     /// Add Item, a draft of imported photos, and one photo.
     func testAddItemScreensPassTheAudit() throws {
         try launchSignedIn()
-        app.tabBars.buttons["Add"].tap()
+        app.tabRail.buttons["Add"].tap()
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try audit("Add Item")
 
@@ -138,7 +139,7 @@ final class AccessibilityAuditUITests: XCTestCase {
         let skipGuide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
         skipGuide.tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
     }
 
     private func enterEmail(_ email: XCUIElement) -> XCUIElement {

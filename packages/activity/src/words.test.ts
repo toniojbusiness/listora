@@ -91,11 +91,9 @@ describe('activity words', () => {
   });
 
   it('says how Listora learned of a sale', () => {
-    expect(saleDetectionWords('poll', 'mercari', { host: 'phone' })).toBe(
-      'Found by a sale check of Mercari on your iPhone.',
-    );
-    expect(saleDetectionWords('webhook', 'ebay', null)).toBe('eBay told Listora about it.');
-    expect(saleDetectionWords('manual', 'depop', null)).toBe('You marked it sold.');
+    expect(saleDetectionWords('poll', 'mercari')).toBe('Listora found it on Mercari.');
+    expect(saleDetectionWords('webhook', 'ebay')).toBe('eBay told Listora about it.');
+    expect(saleDetectionWords('manual', 'depop')).toBe('You marked it sold.');
     expect(orderDetail('ignored', null)).toContain('none of it is a Listora listing');
   });
 

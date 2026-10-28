@@ -104,7 +104,6 @@ struct APIMarketplaceSessionServiceTests {
             phone: true,
             installationID: "0199a1f0-0000-7000-8000-0000000000d1",
             deviceName: "Sam's iPhone",
-            waiting: 1,
         ))
         let request = try #require(server.requests.first)
         #expect(request.method == "POST")

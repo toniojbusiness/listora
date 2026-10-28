@@ -5805,6 +5805,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			this.name = "PageChangedError";
 		}
 	};
+	/**
+	* What a script throws when the marketplace's own page says it failed and to try again (Mercari's
+	* "Your item could not be listed due to an error"): not a refusal of the listing, and not a page
+	* Listora no longer understands. The run ends as `server_error`, which is retried once the
+	* listing is read back. The message is logged and stored, so it never repeats page content.
+	*/
+	var MarketplaceError = class extends Error {
+		constructor(message) {
+			super(message);
+			this.name = "MarketplaceError";
+		}
+	};
 
 // src/depop/site.ts
 /** Depop. Products are `/products/<slug>/`; the seller's own pages are under `/sellinghub/`. */
@@ -6020,7 +6032,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
 	* in the order given; `null` leaves the listing's photos as they are (an edit).
 	*/
-	async function fillListing$2(page, payload, sku, photos) {
+	async function fillListing$3(page, payload, sku, photos) {
 		await awaitElement$1(page, LISTING_FORM$2.form, FORM$2, FORM$2);
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		let brand = await fillPicks(page, payload);
@@ -7088,7 +7100,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				timeScale: 4
 			}, async (page) => {
 				await openSellForm$1(page, site);
-				await fillListing$2(page, payload, sku, files);
+				await fillListing$3(page, payload, sku, files);
 				await expectSubmit(page, "post");
 			});
 			const result = await step("post", {
@@ -7127,7 +7139,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					mutates: false,
 					timeScale: 4
 				}, async (page) => {
-					await fillListing$2(page, payload, listingSku(op.listing), null);
+					await fillListing$3(page, payload, listingSku(op.listing), null);
 					await expectSubmit(page, "save");
 				});
 				return step("save", {
@@ -7556,7 +7568,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* uploaded in the order given; `null` leaves the listing's photos as they are (a revise or a
 	* relist).
 	*/
-	async function fillListing$1(page, payload, sku, photos) {
+	async function fillListing$2(page, payload, sku, photos) {
 		await expectElement$1(page, LISTING_FORM$1.form, FORM$1, FORM$1);
 		if (payload.categoryId === null) throw new Error("a listing without a category passed validation");
 		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$1(FORM$1, `is not in category ${payload.categoryId}`);
@@ -7776,7 +7788,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
 				await step("fill in the listing", { mutates: false }, async (page) => {
 					await openNewListingForm(page, site, categoryId);
-					await fillListing$1(page, payload, listingSku(op.listing), files);
+					await fillListing$2(page, payload, listingSku(op.listing), files);
 				});
 				return step("list it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
@@ -7785,7 +7797,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editable(op, step, payload.categoryId);
 				if (!("itemId" in opened)) return opened;
-				await step("fill in the changes", { mutates: false }, (page) => fillListing$1(page, payload, listingSku(op.listing), null));
+				await step("fill in the changes", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
 				return step("revise it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
 			price: async (op, step) => {
@@ -7831,7 +7843,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				const found = await earlier(op, step);
 				if (found !== null) return found;
 				if (await step("open the relist form", { mutates: false }, (page) => openListingForm(page, site, "RelistItem", itemId, payload.categoryId)) === "not_editable") throw changed$1("relist form", "shows no listing form for an ended listing");
-				await step("fill in the listing", { mutates: false }, (page) => fillListing$1(page, payload, listingSku(op.listing), null));
+				await step("fill in the listing", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
 				return step("list it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
 			read: async (ref, step) => {
@@ -8232,8 +8244,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* sent: Listora doesn't have it.
 	*
 	* After submitting, the form either shows Mercari's validation message or its warning about a
-	* prohibited item (a rejection in Mercari's own words, never passed with "Continue listing") or
-	* opens the listing's page.
+	* prohibited item (a rejection in Mercari's own words, never passed with "Continue listing"), or
+	* Mercari's own error (tried again later), or opens the listing's page.
 	*/
 	/**
 	* Read on the captain's verified session (2026-10-27): the sell page is drawn by Mercari's
@@ -8309,7 +8321,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		list: "button[data-testid=\"ListButton\"]",
 		/** The edit page's submit: the same button, there named Update (read 2026-10-27). */
 		save: "button[data-testid=\"ListButton\"]",
-		error: "[data-testid=\"FormError\"]"
+		error: "[data-testid=\"FormError\"]",
+		/**
+		* Mercari's own failure under the List button, there only once a List failed: "Your item could
+		* not be listed due to an error. Please return to the Home screen and try listing the item
+		* again." (read on the captain's session, 2026-10-27, twice in a day of listing).
+		*/
+		listingError: "[data-testid=\"ListingError\"]"
 	};
 	const FORM = "listing form";
 	/** How long a picked category gets to open its subcategories, or close the dialog. */
@@ -8342,7 +8360,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* `imei_required` when the category's form asks for a phone's IMEI, which Listora doesn't have:
 	* nothing is sent.
 	*/
-	async function fillListing(page, payload, sku, photos) {
+	async function fillListing$1(page, payload, sku, photos) {
 		await expectElement(page, LISTING_FORM.form, FORM, FORM);
 		if (await page.exists(LISTING_FORM.templatesTip)) await page.click(LISTING_FORM.templatesTip);
 		if (photos !== null) {
@@ -8558,6 +8576,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				type: "refused",
 				message: "Mercari asks for a credit or debit card on file before it lists. Add one in Mercari (Account settings > Payment methods), then list again."
 			};
+			if ((await page.texts(LISTING_FORM.listingError)).some((text) => text.trim() !== "")) throw new MarketplaceError("Mercari's form said the item could not be listed due to an error");
 			const messages = (await page.texts(LISTING_FORM.error)).filter((text) => text !== "");
 			if (messages.length > 0) return {
 				type: "refused",
@@ -9105,7 +9124,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (await step("fill in the listing", {
 				mutates: false,
 				timeScale: 3
-			}, (page) => fillListing(page, payload, sku, files)) === "imei_required") return imeiRequired();
+			}, (page) => fillListing$1(page, payload, sku, files)) === "imei_required") return imeiRequired();
 			const result = await step("list", {
 				mutates: true,
 				timeScale: 3
@@ -9130,7 +9149,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (await step("fill in the changes", {
 					mutates: false,
 					timeScale: 3
-				}, (page) => fillListing(page, payload, listingSku(op.listing), null)) === "imei_required") return imeiRequired();
+				}, (page) => fillListing$1(page, payload, listingSku(op.listing), null)) === "imei_required") return imeiRequired();
 				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			price: async (op, step) => {
@@ -9702,6 +9721,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 	/** How long a choice that may not be there at all is waited for. */
 	const SHORT_LOOK_MS = 1500;
+	/** How long an edit page's price section gets to be drawn after its title field. */
+	const PRICE_DRAWS_MS = 15e3;
 	/** Whether `selector` is on the page within a moment (a picker's menu draws itself). */
 	async function appears(page, selector, withinMs = EDITOR_OPENS_MS) {
 		const end = Date.now() + withinMs;
@@ -9722,7 +9743,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* Listing Price dialog it opens: the price, Automate Offers off, the original price, Done.
 	*/
 	async function setPrice(page, priceCents, originalCents = null) {
-		await expectField(page, FORM_SELECTORS.listingPrice, "listing price field");
+		if (!await appears(page, FORM_SELECTORS.listingPrice, PRICE_DRAWS_MS)) await expectField(page, FORM_SELECTORS.listingPrice, "listing price field");
 		await page.fill(FORM_SELECTORS.listingPrice, wholeDollars(priceCents));
 		if (!await appears(page, FORM_SELECTORS.priceDialog)) {
 			if (originalCents !== null) {
@@ -10124,6 +10145,38 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	const SOLD_PAGES = 5;
 	/** Order pages one label read opens at most, for labels the sales list does not show. */
 	const MAX_SALE_PAGES = 5;
+	/**
+	* Fills in the details of a new or changed listing, one step per part of the form (a create, a
+	* revise, and the recordings of the form's shapes, docs/features/recorded-pages.md).
+	*/
+	async function fillListing(step, payload) {
+		const { catalog, size, condition } = payload;
+		if (catalog === null || size === null || condition === null) throw new Error("the listing has no Poshmark catalog, size, or condition");
+		await step("fill in the title and description", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => fillText(page, payload));
+		await step("fill in the prices", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => fillPrices(page, payload));
+		await step("fill in the brand", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => fillBrand(page, payload.brand));
+		await step("choose the category", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => chooseCatalog(page, catalog));
+		await step("choose the size and condition", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => chooseSizeAndCondition(page, size, condition));
+		await step("choose the colors", {
+			mutates: false,
+			timeScale: 2
+		}, (page) => chooseColors(page, payload.colors));
+	}
 	function createPoshmarkScripts(options) {
 		const { site } = options;
 		const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
@@ -10210,35 +10263,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					revision: revision(record, "listing page")
 				};
 			});
-		}
-		/** Fills in the details of a new or changed listing, one step per part of the form. */
-		async function fillListing(step, payload) {
-			const { catalog, size, condition } = payload;
-			if (catalog === null || size === null || condition === null) throw new Error("the listing has no Poshmark catalog, size, or condition");
-			await step("fill in the title and description", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => fillText(page, payload));
-			await step("fill in the prices", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => fillPrices(page, payload));
-			await step("fill in the brand", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => fillBrand(page, payload.brand));
-			await step("choose the category", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => chooseCatalog(page, catalog));
-			await step("choose the size and condition", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => chooseSizeAndCondition(page, size, condition));
-			await step("choose the colors", {
-				mutates: false,
-				timeScale: 2
-			}, (page) => chooseColors(page, payload.colors));
 		}
 		/**
 		* Saves the open form; Poshmark's validation messages are a rejection in its own words. An
@@ -11257,6 +11281,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				};
 			}
 			if (signal.aborted) return error(step, "aborted", "the run was stopped");
+			if (thrown instanceof MarketplaceError) return {
+				...error(step, "server_error", sanitizeMessage(thrown.message, this.#typed)),
+				screenshotKey: await this.#screenshot()
+			};
 			if (thrown instanceof PageChangedError) return {
 				...error(step, "element_missing", sanitizeMessage(thrown.message, this.#typed)),
 				screenshotKey: await this.#screenshot(),
@@ -11374,10 +11402,21 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
       const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(name + '='));
       if (pair !== undefined) headers.authorization = 'Bearer ' + decodeURIComponent(pair.slice(name.length + 1));
     }
-    const response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+    let response;
+    try {
+      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+    } catch (error) {
+      return { status: null, failed: String(error) };
+    }
     const text = await response.text();
     return { status: response.status, retryAfter: response.headers.get('retry-after'), text: text.length > ${String(API_BODY_LIMIT)} ? null : text };
   })()`;
+	}
+	/** How many times a read of a marketplace's API is tried when the page couldn't make it. */
+	const API_ATTEMPTS = 2;
+	/** Whether the page's request never got an answer (`fetch` rejected: the network, or a page load). */
+	function fetchFailed(answer) {
+		return answer !== null && typeof answer === "object" && "failed" in answer;
 	}
 	function apiAnswer(answer) {
 		const read = answer;
@@ -11530,9 +11569,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const target = URL.canParse(url) ? new URL(url) : null;
 			if (target === null || !this.#session.profile.apiOrigins.includes(target.origin)) throw new StepError("script_error", "the script asked for an API outside the marketplace's");
 			this.#active();
-			await this.#session.pacing.wait("action", this.#signal);
-			const answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
-			this.#active();
+			let answer;
+			for (let attempt = 1;; attempt += 1) {
+				await this.#session.pacing.wait("action", this.#signal);
+				answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
+				this.#active();
+				if (!fetchFailed(answer)) break;
+				if (attempt === API_ATTEMPTS) throw new StepError("script_error", `the page couldn't reach the marketplace's API`);
+			}
 			const { status, text, retryAfterSeconds } = apiAnswer(answer);
 			const body = jsonOrNull(text);
 			if (status === 429) this.#session.stopFor({
@@ -11838,12 +11882,16 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 `);
 
 // src/phone/host.ts
-/** Why a host call failed, as the app reports it. */
+/**
+	* Why a host call failed, as the app reports it. `navigated`: the page loaded another document
+	* while a page function ran, so the function's answer was lost with the old one.
+	*/
 	const HOST_FAILURES = [
 		"timeout",
 		"unreachable",
 		"blocked",
-		"closed"
+		"closed",
+		"navigated"
 	];
 
 // src/phone/backend.ts
@@ -11869,7 +11917,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			this.#state = await this.#call("navigation", () => this.#host.navigate(href, this.#waitMs));
 		}
 		async click(selector) {
-			await this.#page(CLICK, { selector });
+			try {
+				await this.#page(CLICK, { selector });
+			} catch (thrown) {
+				if (!navigated(thrown)) throw thrown;
+			}
 			this.#state = await this.#call("navigation", () => this.#host.settle(this.#waitMs));
 		}
 		async fill(selector, text) {
@@ -11910,7 +11962,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			this.#host.acceptNextDialog().catch(() => void 0);
 		}
 		async waitFor(selector, state) {
-			await this.#page(WAIT_FOR, {
+			await this.#look(WAIT_FOR, {
 				selector,
 				state
 			});
@@ -11946,42 +11998,42 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			return await this.count(selector) > 0;
 		}
 		async count(selector) {
-			return expectNumber(await this.#page(QUERY, {
+			return expectNumber(await this.#look(QUERY, {
 				selector,
 				what: "count",
 				name: null
 			}));
 		}
 		async text(selector) {
-			return expectText(await this.#page(QUERY, {
+			return expectText(await this.#look(QUERY, {
 				selector,
 				what: "text",
 				name: null
 			}));
 		}
 		async texts(selector) {
-			return expectTexts(await this.#page(QUERY, {
+			return expectTexts(await this.#look(QUERY, {
 				selector,
 				what: "texts",
 				name: null
 			}));
 		}
 		async attribute(selector, name) {
-			return expectText(await this.#page(QUERY, {
+			return expectText(await this.#look(QUERY, {
 				selector,
 				what: "attribute",
 				name
 			}));
 		}
 		async value(selector) {
-			return expectText(await this.#page(QUERY, {
+			return expectText(await this.#look(QUERY, {
 				selector,
 				what: "value",
 				name: null
 			}));
 		}
 		async attributes(selector, name) {
-			const values = await this.#page(QUERY, {
+			const values = await this.#look(QUERY, {
 				selector,
 				what: "attributes",
 				name
@@ -11994,13 +12046,30 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}
 		async inspect(script) {
 			this.#state = await this.#call("navigation", () => this.#host.state());
-			return await this.#call("element", () => this.#host.evaluate(`return ${script};`, {}, this.#waitMs + HOST_MARGIN_MS));
+			return await this.#look(`return ${script};`, {}, false);
 		}
 		read(script) {
-			return this.#call("element", () => this.#host.evaluate(`return ${script};`, {}, this.#waitMs + HOST_MARGIN_MS));
+			return this.#look(`return ${script};`, {}, false);
 		}
 		screenshot() {
 			return Promise.resolve(null);
+		}
+		/**
+		* Evaluates one of dom.ts's functions that only reads the page. One a navigation cut short
+		* (the page a click or the site itself was loading took over) is run again on the new page
+		* once it has loaded, within the step's wait: reading changes nothing. `waits`: the function
+		* is given the step's wait (dom.ts's functions take it; a script's own read does not).
+		*/
+		async #look(body, args, waits = true) {
+			const end = Date.now() + this.#waitMs;
+			for (;;) {
+				try {
+					return await (waits ? this.#page(body, args) : this.#call("element", () => this.#host.evaluate(body, args, this.#waitMs + HOST_MARGIN_MS)));
+				} catch (thrown) {
+					if (!navigated(thrown) || Date.now() >= end) throw thrown;
+				}
+				this.#state = await this.#call("navigation", () => this.#host.settle(Math.max(0, end - Date.now())));
+			}
 		}
 		/** Evaluates one of dom.ts's functions with the step's wait. */
 		#page(body, args) {
@@ -12018,11 +12087,15 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			}
 		}
 	};
+	/** Whether a page function failed because the page loaded another document while it ran. */
+	function navigated(thrown) {
+		return thrown instanceof PageBackendError && thrown.message === "navigated";
+	}
 	function backendError(thrown, kind) {
 		const message = thrown instanceof Error ? thrown.message : String(thrown);
 		if (message.startsWith("element_timeout")) return new PageBackendError("element_timeout", message);
 		const failure = HOST_FAILURES.find((candidate) => candidate === message);
-		return new PageBackendError(failure === void 0 ? "other" : failure === "timeout" ? kind === "navigation" ? "navigation_timeout" : "element_timeout" : failure === "closed" ? "closed" : "unreachable", message);
+		return new PageBackendError(failure === void 0 ? "other" : failure === "timeout" ? kind === "navigation" ? "navigation_timeout" : "element_timeout" : failure === "closed" ? "closed" : failure === "navigated" ? "other" : "unreachable", message);
 	}
 	function expectNumber(value) {
 		if (typeof value !== "number") throw new PageBackendError("other", "the page sent no number");

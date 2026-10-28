@@ -54,14 +54,13 @@ final class ConnectionHealthUITests: XCTestCase {
         keepScreenshot("Marketplaces, eBay connection problem")
         check.tap()
         XCTAssertTrue(waitForLabel(of: ebay, "Connected", timeout: 30), ebay.label)
-        XCTAssertTrue(app.descendants(matching: .any)["marketplaces.ebay.lastOk"].exists)
         XCTAssertFalse(check.exists)
         keepScreenshot("Marketplaces, eBay connected")
 
         // Back on Inventory the banner is gone.
         app.navigationBars["Marketplaces"].buttons.element(boundBy: 0).tap()
         app.buttons["settings.done"].tap()
-        XCTAssertTrue(app.tabBars.buttons["Inventory"].isSelected)
+        XCTAssertTrue(app.tabRail.buttons["Inventory"].isSelected)
         XCTAssertTrue(waitForAbsence(of: banner), "the banner stayed after eBay was fixed")
     }
 
@@ -73,7 +72,7 @@ final class ConnectionHealthUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        let inventory = app.tabBars.buttons["Inventory"]
+        let inventory = app.tabRail.buttons["Inventory"]
         XCTAssertTrue(inventory.waitForExistence(timeout: 10))
         inventory.tap()
     }

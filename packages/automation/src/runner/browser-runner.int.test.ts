@@ -452,6 +452,8 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       status: 200,
       body: '{"products":[{"slug":"ana-denim-jacket"}]}',
     };
+    // Requests the API drops without an answer, as a page load under way cuts one short.
+    let drops = 0;
     const api = createServer((request, response) => {
       const cors = {
         'access-control-allow-origin': site.url,
@@ -460,6 +462,11 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       };
       if (request.method === 'OPTIONS') {
         response.writeHead(204, cors).end();
+        return;
+      }
+      if (drops > 0) {
+        drops -= 1;
+        request.socket.destroy();
         return;
       }
       seen.push(request.headers);
@@ -514,6 +521,21 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
         ok: false,
         failure: { kind: 'error', code: 'server_error' },
       });
+      // A request the page couldn't make is made once more; one that fails again ends the step.
+      // (Chromium itself sends a request again once when its connection drops, so each failed
+      // fetch here is two dropped connections.)
+      answer = { status: 200, body: '{"products":[]}' };
+      drops = 2;
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: true,
+        value: { status: 200, body: { products: [] } },
+      });
+      drops = 4;
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: false,
+        failure: { kind: 'error', code: 'script_error' },
+      });
+      drops = 0;
       // Anywhere but the profile's API origins ends the run.
       expect(await get('https://example.com/api/')).toMatchObject({
         ok: false,
