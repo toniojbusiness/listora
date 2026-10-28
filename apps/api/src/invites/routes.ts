@@ -15,7 +15,7 @@ import {
   newInviteCode,
   normalizeInviteCode,
 } from './codes.ts';
-import { RedemptionLimiter } from './limiter.ts';
+import { RedemptionLimiter, sourceAddress } from './limiter.ts';
 import {
   canInvite,
   countOpenInvites,
@@ -180,7 +180,7 @@ function registerRedemption(app: FastifyInstance, deps: InviteRouteDependencies)
     method: spec.method,
     url: spec.url,
     handler: async (request, reply) => {
-      limiter.check();
+      const source = sourceAddress(request);
       const validated = spec.validateBody?.(request.body);
       if (validated === undefined || request.body === undefined) {
         throw new ApiError('invalid_request', 'This request needs a JSON body.');
@@ -189,7 +189,7 @@ function registerRedemption(app: FastifyInstance, deps: InviteRouteDependencies)
       const body = validated.value as InviteRedeem;
       const code = normalizeInviteCode(body.code);
       if (code === undefined) {
-        limiter.failed();
+        limiter.failed(source);
         throw validationFailed(
           [{ field: 'code', message: 'is not an invite code' }],
           "That isn't an invite code. It has 16 letters and digits, like K7QD-3M9P-XW2T-H8RA.",
@@ -197,8 +197,9 @@ function registerRedemption(app: FastifyInstance, deps: InviteRouteDependencies)
       }
       const email = body.email.trim().toLowerCase();
       const bound = await bindInvite(deps.db, code, email, ownerEmail, deps.now());
+      // Looked up first: a right code is never refused, whatever others tried.
       if (bound.kind === 'unknown') {
-        limiter.failed();
+        limiter.failed(source);
         throw new ApiError('not_found', "That invite code isn't right. Check it and try again.");
       }
       const redemption = await admitInvitee(deps.invites.directory, bound, request.log);

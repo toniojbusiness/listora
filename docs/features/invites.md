@@ -70,8 +70,11 @@ sandbox their SES identity; the worker's deletion job deletes the user too,
 [auth.md](auth.md#account-deletion)). The owner deleting their account deletes their invites;
 the people they invited keep their own accounts.
 
-**Guessing.** A code has 80 random bits, and `redeemInvite` refuses every redemption with `429`
-once 30 wrong codes arrived within 15 minutes (per API process, in memory).
+**Guessing.** A code has 80 random bits. `redeemInvite` looks the code up first and counts only
+wrong ones, per source address (the one the load balancer or API Gateway in front of the API
+added to `X-Forwarded-For` or `Forwarded`, per API process, in memory): past 30 within 15
+minutes, that source's wrong codes are answered `429`. A right code is never refused, so nobody
+can lock others out of signing up by sending wrong codes.
 
 ### Reaching invitees in the SES sandbox
 
