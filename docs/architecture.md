@@ -419,16 +419,17 @@ db:migrate`; in AWS, the deploy runs them before new code starts, see
   (`date -u +%Y%m%d%H%M%S`), so branches written in parallel never pick the same name. The
   first migrations keep their four-digit numbers (`0001` to `0014`), which sort before every
   timestamp; no new numbered migration is added.
-- **Order.** Migrations apply in name order, and the migrator refuses to apply a migration that
-  sorts before one already applied (Kysely's default; it is never turned off). So at your final
-  rebase before merge, if `origin/main` has a migration with a later timestamp than yours,
-  rename yours (both files) to the current UTC time. Never rename a migration an environment
-  has applied. CI enforces the order (`scripts/check-migration-order.sh`): a pull request fails
-  when a migration it adds does not sort after the newest one on its base branch, and a push to
-  `main` fails when one it adds does not sort after the newest one before the push (two pull
-  requests that each passed but merged in the wrong order), so the automatic deploy, which runs
-  only after `main`'s CI passed, never reaches the live migration step with one. Rename it then,
-  before it ships.
+- **Order.** Migrations apply in name order. Keep each new migration after the newest one on
+  `main`: at your final rebase before merge, if `origin/main` has a migration with a later
+  timestamp than yours, rename yours (both files) to the current UTC time. Never rename a
+  migration an environment has applied. CI checks this (`scripts/check-migration-order.sh`): a
+  pull request fails when a migration it adds does not sort after the newest one on its base
+  branch, and a push to `main` fails when one it adds does not sort after the newest one before
+  the push. Two pull requests can each pass and still merge in the other order, so the migrator
+  also runs with Kysely's `allowUnorderedMigrations`: a pending migration that sorts before one
+  an environment already applied is applied after it, instead of stopping the deploy. Every
+  migration must therefore work when applied after any migration merged beside it, which the
+  expand-then-contract rule ([infra.md](features/infra.md)) already requires.
 - **Checks.** `migrations.test.ts` checks that every migration has both files, that prefixes are
   unique, that timestamps are real UTC times, and that no numbered migration follows
   `0014_marketplace_connect`. The migration integration tests read the list from the directory, so a

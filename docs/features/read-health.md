@@ -80,7 +80,7 @@ in `.env.example`. `read-health/health.test.ts` covers the thresholds and the em
 
 ## Data
 
-Migration `20261028141639_background_read_health`: `background_read_health`, one row per
+Migration `20261028175148_background_read_health`: `background_read_health`, one row per
 connection and read (`sale_check`, `listing_import`, `offer_check`): `last_succeeded_at`,
 `last_failed_at`, `failures_in_a_row`, `failing_since` (the run's first failure, null while the
 read works), `last_error_code`, `last_error_step`, `last_error_detail`, and `owner_alerted_at`.

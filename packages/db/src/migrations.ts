@@ -132,14 +132,15 @@ export interface MigrationStatus {
 /**
  * Runs the schema migrations. Migrations apply in name order inside one transaction per run
  * (Postgres has transactional DDL), so a failing migration leaves the schema unchanged. A
- * database lock stops two processes from migrating at once, and applying migrations out of
- * order is refused.
+ * database lock stops two processes from migrating at once. A pending migration that sorts
+ * before one already applied (two pull requests merged in the other order) is still applied,
+ * after the applied ones (docs/architecture.md, migrations).
  */
 export class SchemaMigrator {
   readonly #migrator: Migrator;
 
   constructor(db: Db, provider: MigrationProvider = new SqlFileMigrationProvider()) {
-    this.#migrator = new Migrator({ db, provider });
+    this.#migrator = new Migrator({ db, provider, allowUnorderedMigrations: true });
   }
 
   /** Applies every pending migration; returns the names applied. */
