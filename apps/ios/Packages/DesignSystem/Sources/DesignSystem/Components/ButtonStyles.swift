@@ -5,9 +5,11 @@ import SwiftUI
 /// dims when disabled, and shows a spinner in place of its label while ``SwiftUI/View/loading(_:)``
 /// is true.
 ///
-/// - `primary`: the one main action of a screen, brand filled.
+/// - `primary`: the one main action of a screen, brand filled, with a stitched edge like a
+///   leather patch.
 /// - `secondary`: the alternative, brand text on a brand-tinted fill.
-/// - `destructive`: deletes or removes something, danger filled. Confirm before acting.
+/// - `destructive`: deletes or removes something, danger filled and stitched. Confirm before
+///   acting.
 /// - `tertiary`: low-emphasis actions (Dismiss, Use a different email), brand text only.
 /// - `destructiveText`: a low-emphasis destructive action (Sign out), danger text only.
 public struct ListoraButtonStyle: ButtonStyle {
@@ -70,6 +72,13 @@ private struct ListoraButtonBody: View {
                 minHeight: size == .large ? Layout.buttonHeight : Layout.compactButtonHeight,
             )
             .background(background, in: shape)
+            .overlay {
+                if let stitch {
+                    shape.inset(by: 4)
+                        .stroke(stitch, style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [4, 3]))
+                        .accessibilityHidden(true)
+                }
+            }
             .contentShape(shape)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
             .opacity(isEnabled || isLoading ? (configuration.isPressed ? 0.85 : 1) : 0.45)
@@ -84,6 +93,15 @@ private struct ListoraButtonBody: View {
         case .secondary, .tertiary: Palette.brand
         case .destructive: Palette.onDanger
         case .destructiveText: Palette.danger
+        }
+    }
+
+    /// The stitched line inside a filled button, in its label's color, faint.
+    private var stitch: Color? {
+        switch kind {
+        case .primary: Palette.onBrand.color.opacity(0.45)
+        case .destructive: Palette.onDanger.color.opacity(0.45)
+        case .secondary, .tertiary, .destructiveText: nil
         }
     }
 

@@ -57,7 +57,7 @@ final class ScreenshotTourUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         tab("Add")
         app.buttons["addItem.importPhotos"].tap()
         let tagPhoto = app.buttons["photo.tile.2"]
@@ -117,6 +117,8 @@ final class ScreenshotTourUITests: XCTestCase {
     private func costTour() throws {
         XCTAssertTrue(app.staticTexts["cost.amount"].waitForExistence(timeout: 10))
         try shot("19-cost-empty", settle: 1)
+        // At the largest text sizes the keypad's first row starts under the bottom bar.
+        app.buttons["keypad.1"].scrollClear(of: app.buttons["cost.continue"], in: app)
         app.buttons["keypad.1"].tap()
         app.buttons["keypad.2"].tap()
         try shot("20-cost")
@@ -161,7 +163,7 @@ final class ScreenshotTourUITests: XCTestCase {
         ]
         app.signInWithoutServer()
         app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         try shot("00-today-offline")
 
         tab("Inventory")
@@ -201,7 +203,7 @@ final class ScreenshotTourUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
         app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         // The count heads the loaded list; at the largest text sizes the money summary is several
         // screens down.
         XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))
@@ -286,7 +288,7 @@ final class ScreenshotTourUITests: XCTestCase {
     }
 
     func tab(_ title: String) {
-        app.tabBars.buttons[title].tap()
+        app.tabRail.buttons[title].tap()
     }
 
     /// Waits for animations and images to settle, then saves the screen.

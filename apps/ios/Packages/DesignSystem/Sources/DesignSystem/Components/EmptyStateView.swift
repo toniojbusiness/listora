@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// A screen with nothing to show yet: a friendly illustration, a title, a short message, optional
-/// numbered steps that explain what happens next, and one clear action, so a screen is never a
-/// dead end.
+/// A screen with nothing to show yet: an empty tag hanging from a rail, off to one side, then,
+/// left-aligned under it like a printed card, a title, a short message, optional numbered steps
+/// that explain what happens next, and one clear action, so a screen is never a dead end.
 public struct EmptyStateView: View {
     public struct Action {
         let title: String
@@ -52,19 +52,20 @@ public struct EmptyStateView: View {
     }
 
     private var content: some View {
-        VStack(spacing: Spacing.lg) {
-            SpotIllustration(systemImage: systemImage, tone: tone)
-            VStack(spacing: Spacing.xs) {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            art
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(title)
                     .font(Typography.title)
                     .foregroundStyle(Palette.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 Text(message)
                     .font(Typography.body)
                     .foregroundStyle(Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .multilineTextAlignment(.center)
+            .multilineTextAlignment(.leading)
             if !steps.isEmpty {
                 stepList
             }
@@ -74,9 +75,24 @@ public struct EmptyStateView: View {
                     .padding(.top, Spacing.xs)
             }
         }
-        .padding(.horizontal, Spacing.xl)
-        .padding(.vertical, Spacing.xxl)
-        .frame(maxWidth: 440)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.xl)
+        .frame(maxWidth: 440, alignment: .leading)
+    }
+
+    /// The rail runs in from the screen's leading edge, and the tag hangs from it off center, so
+    /// the art and the text do not stack on one centered axis.
+    private var art: some View {
+        SpotIllustration(systemImage: systemImage, tone: tone)
+            .padding(.trailing, Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .background(alignment: .top) {
+                Capsule()
+                    .fill(Palette.rail)
+                    .frame(height: 3)
+                    .padding(.leading, -Spacing.lg)
+                    .accessibilityHidden(true)
+            }
     }
 
     private var stepList: some View {
@@ -87,7 +103,10 @@ public struct EmptyStateView: View {
                         .font(Typography.label)
                         .foregroundStyle(Palette.brand)
                         .frame(minWidth: 28, minHeight: 28)
-                        .background(Palette.brandSoft, in: Circle())
+                        .background(
+                            Palette.brandSoft,
+                            in: RoundedRectangle(cornerRadius: Radius.tight, style: .continuous),
+                        )
                         .accessibilityHidden(true)
                     Text(step)
                         .font(Typography.callout)
@@ -99,7 +118,6 @@ public struct EmptyStateView: View {
                 .accessibilityLabel("Step \(index + 1): \(step)")
             }
         }
-        .padding(.horizontal, Spacing.xs)
     }
 
     private func button(_ action: Action) -> some View {
@@ -115,7 +133,7 @@ public struct EmptyStateView: View {
 
 #Preview("Light") {
     EmptyStateView(
-        systemImage: "shippingbox",
+        systemImage: "hanger",
         title: "No items yet",
         message: "Create an item once, and Listora keeps it in sync everywhere you sell.",
         steps: ["Take photos of the item", "Check the details Listora fills in", "List it on your marketplaces"],
