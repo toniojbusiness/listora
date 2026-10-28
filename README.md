@@ -258,8 +258,9 @@ The full-stack end-to-end suite is separate: `.github/workflows/e2e-full.yml` ru
 
 Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for `staging`
 or `prod`, and `.github/workflows/deploy-personal.yml` deploys `personal` (one reseller's own
-low-cost setup, priced in [docs/features/costs.md](docs/features/costs.md)) after every CI run that
-passes on `main`, and by hand. Each runs inside the protected GitHub environment of that name and
+low-cost setup, priced in [docs/features/costs.md](docs/features/costs.md)) after every push to
+`main` whose server checks pass (the backend check and the image build, not the iPhone checks),
+and by hand. Each runs inside the protected GitHub environment of that name and
 reaches AWS through OIDC with no stored keys. Setup and the first deploy are described in
 [infra/README.md](infra/README.md).
 

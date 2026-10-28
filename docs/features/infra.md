@@ -40,7 +40,8 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   bootstrap uses the restricted execution policy in `infra/src/deploy/execution-policy.ts`,
   never `AdministratorAccess`.
 - **Personal deploys** run from GitHub: the Deploy personal workflow runs
-  `scripts/deploy-personal.sh --ci` after every CI run that passes on `main` (and by hand), with
+  `scripts/deploy-personal.sh --ci` after every push to `main` whose server checks pass (not the
+  iPhone checks; and by hand), with
   a deploy role that trusts only this repository's `main` branch in the protected `personal`
   GitHub environment and can touch only Listora's own stacks, bootstrap roles, images, and
   services (infra/README.md, Deploying from GitHub). The same script is one command from a Mac,

@@ -211,7 +211,7 @@ and fails fast, naming the missing or invalid key without printing its value.
 
 The personal environment deploys with one script, `scripts/deploy-personal.sh`, which deploys
 only to the captain's account `976033325938` (pinned in the script; any other account is
-refused). GitHub runs it after every CI run that passes on `main`
+refused). GitHub runs it after every push to `main` whose server checks pass
 ([Deploying from GitHub](#deploying-from-github)); from a Mac it is the first deploy, the
 fallback, and the way to change what only an administrator may (the bootstrap, the Anthropic
 key). Both run the same steps in the same order as the Deploy workflow.
@@ -387,9 +387,12 @@ from GitHub runs the same script, so it does that too.
 ### Deploying from GitHub
 
 The **Deploy personal** workflow (`.github/workflows/deploy-personal.yml`) deploys personal from
-GitHub, so no deploy depends on a Mac's AWS sign-in or Docker. It runs after every CI run that
-passes for a push to `main` (and by hand from the Actions tab, on `main`), deploys the commit CI
-tested unless `main` has moved past it (the newer commit's run deploys that), and runs one
+GitHub, so no deploy depends on a Mac's AWS sign-in or Docker. It runs for every push to `main`
+(and by hand from the Actions tab, on `main`): it waits until CI's server checks have passed for
+that commit (`Detect changed areas`, `Backend check (Linux)`, and
+`Application image build and smoke test (Linux)`; the iPhone checks test nothing that ships with
+the server, so they never hold a deploy back), fails without deploying when one of them fails,
+deploys the commit unless `main` has moved past it (the newer commit's run deploys that), and runs one
 deploy at a time without ever cancelling one that started. Its one deploy step is
 `scripts/deploy-personal.sh --ci`: the full deploy, with the same checks, health check, smoke
 test, and rollback, using the AWS credentials of the role the job assumes through OIDC (no AWS

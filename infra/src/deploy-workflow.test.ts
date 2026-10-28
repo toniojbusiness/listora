@@ -14,6 +14,7 @@ interface Step {
   uses?: string;
   run?: string;
   with?: Record<string, unknown>;
+  env?: Record<string, string>;
 }
 interface Job {
   if?: string;
@@ -148,16 +149,14 @@ const personalSource = readFileSync(
   'utf8',
 );
 const personal = parse(personalSource) as {
-  on: Record<string, { workflows?: string[]; types?: string[]; branches?: string[] } | null>;
+  on: Record<string, { branches?: string[] } | null>;
   permissions: Record<string, string>;
   concurrency: { group: string; 'cancel-in-progress': boolean };
   jobs: Record<string, Job>;
 };
-const ciName = (
-  parse(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')) as {
-    name: string;
-  }
-).name;
+const ci = parse(
+  readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'),
+) as { jobs: Record<string, { name: string }> };
 
 describe('deploy personal workflow', () => {
   const pick = personal.jobs['commit'];
@@ -166,31 +165,35 @@ describe('deploy personal workflow', () => {
     throw new Error('deploy-personal.yml needs its commit and deploy jobs');
   }
 
-  it('runs after CI on main and by hand, never on pull requests', () => {
-    expect(Object.keys(personal.on).sort()).toEqual(['workflow_dispatch', 'workflow_run']);
-    expect(personal.on['workflow_run']).toEqual({
-      workflows: [ciName],
-      types: ['completed'],
-      branches: ['main'],
-    });
+  it('runs for pushes to main and by hand, never on pull requests', () => {
+    expect(personal.on).toEqual({ push: { branches: ['main'] }, workflow_dispatch: null });
+    expect(pick.if).toBe(`github.ref == '${DEPLOY_BRANCH_REF}'`);
   });
 
-  it('deploys only a commit CI passed for a push to main of this repository', () => {
-    const condition = (pick.if ?? '').replace(/\s+/g, ' ');
-    expect(condition).toContain(`github.ref == '${DEPLOY_BRANCH_REF}'`);
-    for (const check of [
-      "github.event.workflow_run.conclusion == 'success'",
-      "github.event.workflow_run.event == 'push'",
-      'github.event.workflow_run.head_repository.full_name == github.repository',
-    ]) {
-      expect(condition).toContain(check);
-    }
+  it("waits for CI's server checks, and never for the iPhone checks", () => {
+    const step = pick.steps[0];
+    const waited = (step?.env?.['SERVER_CHECKS'] ?? '').split('\n').filter((name) => name !== '');
+    const server = ['changes', 'backend', 'image'].map((job) => ci.jobs[job]?.name);
+    expect(waited).toEqual(server);
+    const ios = Object.entries(ci.jobs)
+      .filter(([job]) => job.startsWith('ios'))
+      .map(([, job]) => job.name);
+    expect(ios.length).toBeGreaterThan(0);
+    for (const name of ios) expect(waited).not.toContain(name);
+    const run = step?.run ?? '';
+    expect(run).toContain('-f check_name="$check" -f filter=latest');
+    expect(run).toContain("'completed success') ;;");
+    // A failed server check fails the job, so nothing deploys.
+    expect(run).toMatch(/completed\*\)\n.*\n\s*exit 1 ;;/);
+  });
+
+  it("deploys only the pushed commit, and only while it is still main's head", () => {
     expect(deploy.needs).toBe('commit');
     expect(deploy.if).toBe("needs.commit.outputs.sha != ''");
-    // The commit CI tested, and only while it is still main's head.
     const run = pick.steps[0]?.run ?? '';
+    expect(pick.steps[0]?.env?.['SHA']).toBe('${{ github.sha }}');
     expect(run).toContain('gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha');
-    expect(run).toMatch(/if \[ "\$head" = "\$TESTED" \]; then\n\s*echo "sha=\$TESTED"/);
+    expect(run).toMatch(/if \[ "\$head" = "\$SHA" \]; then\n\s*echo "sha=\$SHA"/);
     const checkout = deploy.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
     expect(checkout?.with?.['ref']).toBe('${{ needs.commit.outputs.sha }}');
   });
@@ -202,7 +205,7 @@ describe('deploy personal workflow', () => {
   it('assumes the personal deploy role through OIDC in the personal environment, with no AWS keys', () => {
     expect(deploy.environment).toBe('personal');
     expect(personal.permissions).toEqual({ contents: 'read' });
-    expect(pick.permissions).toEqual({ contents: 'read' });
+    expect(pick.permissions).toEqual({ contents: 'read', checks: 'read' });
     expect(deploy.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
     expect(personalSource).not.toMatch(/aws-access-key-id|aws-secret-access-key/);
     // The one secret is the owner's address, a secret only so the public log masks it.
