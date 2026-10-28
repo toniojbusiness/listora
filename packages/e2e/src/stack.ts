@@ -42,7 +42,10 @@ export interface LocalStackOptions {
   readonly fakeAiFixturesDir: string;
   /** Where `stop()` writes the API's and the worker's logs, for a failing run; none when unset. */
   readonly logDir?: string;
-  /** How long each process may take to start, in milliseconds. */
+  /**
+   * How long each process may take to start, in milliseconds (default 120 s). A first start right
+   * after `npm ci` on a busy CI runner took the worker over 50 seconds before its first log line.
+   */
   readonly startTimeoutMs?: number;
   /** Default `ebay`. */
   readonly marketplaces?: StackMarketplaces;
@@ -86,7 +89,7 @@ export interface LocalStack {
  * confirmed in seconds.
  */
 export async function startLocalStack(options: LocalStackOptions): Promise<LocalStack> {
-  const startTimeoutMs = options.startTimeoutMs ?? 30_000;
+  const startTimeoutMs = options.startTimeoutMs ?? 120_000;
   const marketplaces = options.marketplaces ?? 'ebay';
   const database = await createMigratedDatabase('e2e', { jobQueue: true });
   const storageDir = await mkdtemp(join(tmpdir(), 'listora-e2e-storage-'));
