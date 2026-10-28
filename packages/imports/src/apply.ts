@@ -232,6 +232,7 @@ export async function createItem(
     size_label: details.sizeLabel,
     size_system: details.sizeSystem,
     condition: details.condition,
+    colors: details.colors,
     list_price_cents: details.listPriceCents,
     status: 'ready',
     field_provenance: jsonb(

@@ -26,6 +26,8 @@ function listed(
       condition: 'pre_owned_excellent',
       categoryRef: null,
       categoryPath: [],
+      colors: [],
+      originalPriceCents: null,
       sku: null,
       ...details,
     },
@@ -53,6 +55,7 @@ describe('importedItem', () => {
       sizeLabel: 'S',
       sizeSystem: 'letter',
       condition: 'pre_owned_excellent',
+      colors: [],
       listPriceCents: 3400,
       fromListing: [
         'title',
@@ -103,6 +106,28 @@ describe('importedItem', () => {
     ['mercari', 'Women > Dresses > Above knee, mini', 'clothing/dresses/dresses', 'women'],
     ['depop', 'Men > Bottoms > Jeans', 'clothing/bottoms/jeans', 'men'],
     ['depop', 'Women > Footwear > Boots', 'shoes/boots', 'women'],
+    // Depop's ids, as its listings' edit data names their category (shapes from a real shop,
+    // whose names stop at two levels or name categories the sell form no longer has).
+    ['depop', 'womenswear/bottoms/jeans', 'clothing/bottoms/jeans', 'women'],
+    ['depop', 'womenswear/bottoms/trousers', 'clothing/bottoms/pants', 'women'],
+    ['depop', 'womenswear/dresses/dresses', 'clothing/dresses/dresses', 'women'],
+    ['depop', 'womenswear/coats-jackets/jackets', 'clothing/outerwear/jackets', 'women'],
+    ['depop', 'menswear/coats-jackets/coats', 'clothing/outerwear/coats', 'men'],
+    ['depop', 'womenswear/tops/jumpers', 'clothing/tops/sweaters', 'women'],
+    ['depop', 'womenswear/tops/vests-tanks-camis', 'clothing/tops/tank_tops', 'women'],
+    ['depop', 'womenswear/nightwear/pajamas', 'clothing/sleep_lounge/pajamas', 'women'],
+    [
+      'depop',
+      'womenswear/jumpsuit-and-playsuit/jumpsuit',
+      'clothing/dresses/jumpsuits_rompers',
+      'women',
+    ],
+    [
+      'depop',
+      'womenswear/jumpsuit-and-playsuit/dungarees-overalls',
+      'clothing/dresses/jumpsuits_rompers',
+      'women',
+    ],
     ['poshmark', 'Women/Dresses/Long Sleeve', 'clothing/dresses/dresses', 'women'],
     ['poshmark', 'Men/Shirts/Tees - Short Sleeve', 'clothing/tops/t_shirts', 'men'],
     ['poshmark', 'Women/Shoes/Ankle Boots & Booties', 'shoes/boots', 'women'],
@@ -143,7 +168,46 @@ describe('importedItem', () => {
   });
 });
 
+describe('a Depop listing', () => {
+  it("keeps its category as Depop's sell form names it", () => {
+    const columns = importedListingColumns(
+      'depop',
+      listed({}, { categoryRef: 'womenswear/tops/jumpers', categoryPath: ['Womenswear', 'Tops'] }),
+    );
+    expect(columns.categoryRef).toBe('Women > Tops > Sweaters');
+  });
+
+  it('lists the item at the price before a markdown, and the listing at the price shown now', () => {
+    const marked = listed({ priceCents: 1500 }, { originalPriceCents: 2500 });
+    expect(importedItem('depop', marked).listPriceCents).toBe(2500);
+    expect(importedListingColumns('depop', marked).priceCents).toBe(1500);
+    expect(importedItem('depop', listed({ priceCents: 1500 })).listPriceCents).toBe(1500);
+  });
+
+  it('takes its colours, and leaves them out of the details it set when it has none', () => {
+    const item = importedItem('depop', listed({}, { colors: ['white', 'cream'] }));
+    expect(item.colors).toEqual(['white', 'cream']);
+    expect(item.fromListing).toContain('colors');
+    expect(importedItem('depop', listed()).fromListing).not.toContain('colors');
+  });
+
+  it('takes its title from its first line without the hashtags on it, and keeps them in its text', () => {
+    const item = importedItem(
+      'depop',
+      listed({ description: 'Cartoon graphic tee #cartoon #retro\nSoft and boxy.' }),
+    );
+    expect(item.title).toBe('Cartoon graphic tee');
+    expect(item.description).toBe('Cartoon graphic tee #cartoon #retro\nSoft and boxy.');
+  });
+});
+
 describe('titles and sizes', () => {
+  it('leaves hashtags out of a title, and a line of only hashtags for the next one', () => {
+    expect(titleFrom('#y2k Baby tee #pink')).toBe('Baby tee');
+    expect(titleFrom('#vintage #denim\nHigh rise jeans')).toBe('High rise jeans');
+    expect(titleFrom('Size #1 fan jersey')).toBe('Size #1 fan jersey');
+  });
+
   it('cuts a long first line at a word, within 80 characters', () => {
     const title = titleFrom(`${'Vintage oversized wool blend cardigan '.repeat(4)}\nmore`);
     expect(title?.length).toBeLessThanOrEqual(80);

@@ -76,6 +76,7 @@ export async function createSoldItem(
     size_label: details.sizeLabel,
     size_system: details.sizeSystem,
     condition: details.condition,
+    colors: details.colors,
     list_price_cents: details.listPriceCents,
     status: 'ready',
     field_provenance: jsonb(
@@ -148,6 +149,7 @@ function titledItem(source: SoldItemSource): ImportedItem {
     sizeLabel: null,
     sizeSystem: null,
     condition: null,
+    colors: [],
     listPriceCents: source.priceCents,
     fromListing: title === '' ? ['listPriceCents'] : ['title', 'listPriceCents'],
   };

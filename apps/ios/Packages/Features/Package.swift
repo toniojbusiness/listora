@@ -94,7 +94,7 @@ let package = Package(
         ),
         .target(
             name: "TasksFeature",
-            dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .target(
             name: "SettingsFeature",

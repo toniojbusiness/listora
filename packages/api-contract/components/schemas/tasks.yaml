@@ -12,6 +12,11 @@ KnownUserTaskKind:
   description: |
     `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
     task's sale is the later one) and completes the task.
+
+    `answer_offer`: a buyer's offer waits on the seller (`offer`); the seller answers it with
+    `answerOffer` (or in the marketplace's app, `deepLink`). The task closes by itself once the
+    answer is read back or the marketplace no longer shows the offer waiting; `completeTask`
+    refuses it, and `dismissTask` only hides it (the offer stays open on the marketplace).
   enum:
     [
       list_manually,
@@ -21,6 +26,7 @@ KnownUserTaskKind:
       reconnect,
       review_match,
       resolve_double_sale,
+      answer_offer,
     ]
 UserTaskStatus:
   type: string
@@ -90,6 +96,9 @@ UserTask:
         for `resolve_double_sale`, the later sale.
     saleEmail:
       $ref: '#/UserTaskSaleEmail'
+    offer:
+      $ref: './offers.yaml#/Offer'
+      description: For an `answer_offer` task, the offer and the newest answer to it.
     deepLink:
       type: string
       format: uri

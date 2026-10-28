@@ -31,8 +31,14 @@ sold item made the same way when Listora had no listing for it ([sales.md](sales
    runner's `automation_listing_import` task. Each page is the marketplace's own list of the
    seller's listings for sale, read the way its pages read it:
    - **Depop**: the selling hub's list from Depop's web API (24 a page), then each listing's own
-     edit data (`edit-listing`) for its photos, brand, condition, and categories. Its listings
-     have no title, so the item's title is the first line of its text.
+     edit data (`edit-listing`) for its photos, brand, condition, category, colours, and pricing.
+     The category is Depop's ids (`gender` or `is_kids`, `group`, `product_type`, as
+     `womenswear/bottoms/jeans`), which the server reads against Depop's taxonomy: the names in
+     `categories` often stop at two levels (Womenswear > Bottoms) or use names the sell form no
+     longer offers (Lingerie, Vests), so they name it only without the ids. The brand is `brand_name` ("Hollister Co."), not Depop's slug of it,
+     and Depop's "Other" is no brand. A marked-down listing keeps its `original_price` beside
+     the price a buyer pays now. Its listings have no title, so the item's title is the first
+     line of its text.
    - **Poshmark**: the seller's closet (48 a page, `availability=available`), whose records carry
      the cover photo and the others, brand, size, condition code, and department, category, and
      subcategory.
@@ -78,11 +84,14 @@ sold item made the same way when Listora had no listing for it ([sales.md](sales
    listing; a PNG or WebP becomes a JPEG. Each is stored as an upload and processed by the photo
    pipeline like any other (derivatives, metadata stripped, the upload deleted); its perceptual
    hash is computed first for the match.
-7. **The item's details** (`details.ts`): the title (Depop: the first line, within 80
-   characters), the description without Listora's SKU line (and Depop's hashtags), the brand, the
-   size and its system, the condition in Listora's terms, never claiming more than the listing
-   (Poshmark's "Like New" and Mercari's "Like new" are pre-owned excellent, Depop's "Brand new" is
-   new without tags), the price, and Listora's canonical category and department from the
+7. **The item's details** (`details.ts`): the title (Depop: the first line without the hashtags
+   on it, within 80 characters), the description without Listora's SKU line (and Depop's
+   hashtags), the brand, the size and its system, the colours (Depop's, in Listora's terms), the
+   condition in Listora's terms, never claiming more than the listing (Poshmark's "Like New" and
+   Mercari's "Like new" are pre-owned excellent, Depop's "Brand new" is new without tags), the
+   price (the item's list price is the price before a markdown, so it never lists elsewhere at
+   a sale price; the listing keeps the price it shows now), and Listora's canonical category
+   and department from the
    marketplace's category (`importedCategory`: the canonical category whose mapping onto that
    marketplace lands closest to it, so List on the others places it through the same maps and
    pre-fill as any item). Each detail it set has the provenance `marketplace`.
@@ -136,9 +145,10 @@ Read-only, in the captain's signed-in Chrome sessions on the Mac, background tab
   listings for sale; the record shape (photos, brand, size, condition, catalog) was read on a
   public category page.
 - **Depop**: both sessions met a human check on the selling hub (Cloudflare "Just a moment..."
-  and a bot check), and stopped there as they must, so Depop's `edit-listing` keys for photos,
-  brand, condition, and categories follow the fake Depop's model and are read leniently until a
-  session gets through.
+  and a bot check), and stopped there as they must. A later read-only scout of a real shop
+  (2026-10-28, 118 listings) gave the `edit-listing` keys the import now reads (category ids,
+  `brand_name`, `colour`, and `pricing` with a markdown); the fake Depop models them, and every
+  one is still read leniently.
 
 ## Data
 

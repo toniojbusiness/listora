@@ -36,9 +36,10 @@ describe('recording plans', () => {
       const plan = recordingPlan(marketplace);
       const names = plan.entries.map((entry) => entry.name);
       expect(new Set(names).size).toBe(names.length);
-      expect(new Set(plan.entries.map((entry) => entry.page))).toEqual(
-        new Set(['hub', 'shop', 'listing', 'edit', 'sell-form', 'sold']),
-      );
+      // Offers are recorded where a session has read them (docs/features/offers.md).
+      const pages = new Set(plan.entries.map((entry) => entry.page));
+      pages.delete('offers');
+      expect(pages).toEqual(new Set(['hub', 'shop', 'listing', 'edit', 'sell-form', 'sold']));
     },
   );
 });

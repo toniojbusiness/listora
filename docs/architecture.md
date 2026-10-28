@@ -129,7 +129,8 @@ packages/
                 launcher, the
                 fake marketplace site, and the Poshmark, Mercari, Depop, and eBay adapters with
                 their fake sites (poshmark/, mercari/, depop/, ebay/); the marketplace pre-fill
-                over their category trees and forms (prefill/) (@listora/automation)
+                over their category trees and forms (prefill/); reading buyers' offers and
+                answering them (offers/) (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
@@ -254,6 +255,8 @@ src/
                  (docs/features/marketplace-prefill.md)
   imports/       Importing the seller's existing listings, and the import's questions
                  (docs/features/imports.md)
+  offers/        Buyers' offers: their reads, an offer and its quote, the seller's answer
+                 (docs/features/offers.md)
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
   perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
@@ -385,7 +388,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [email-sales.md](features/email-sales.md#data); the marketplace pre-fill's answers and AI picks in
   [marketplace-prefill.md](features/marketplace-prefill.md#data); listing imports in
   [imports.md](features/imports.md#data); Pack check's setting, labels, and packages in
-  [pack-check.md](features/pack-check.md#data). Billing
+  [pack-check.md](features/pack-check.md#data); offers, their answers, and their reads in
+  [offers.md](features/offers.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -509,6 +513,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups  |
 | [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI              |
 | [features/recorded-pages.md](features/recorded-pages.md)           | Scripts tested on recorded real pages: the recorder, redaction, the replay     |
+| [features/offers.md](features/offers.md)                           | Buyers' offers in Tasks, and accepting, declining, or countering them          |
 
 ### Former section numbers
 

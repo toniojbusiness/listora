@@ -7205,7 +7205,9 @@ extension Components {
         /// a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
         /// history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
         /// listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
-        /// orders that still need a package, for Pack check.
+        /// orders that still need a package, for Pack check. `offer_check`: a read-only read of the
+        /// offers on the seller's listings. `offer_response`: the seller's confirmed answer to an
+        /// offer, and the read of the offer that confirms it.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownPhoneWorkPurpose`.
@@ -7216,6 +7218,8 @@ extension Components {
             case saleHistory = "sale_history"
             case listingImport = "listing_import"
             case labelRead = "label_read"
+            case offerCheck = "offer_check"
+            case offerResponse = "offer_response"
         }
         /// - Remark: Generated from `#/components/schemas/PhoneRunClaim`.
         public struct PhoneRunClaim: Codable, Hashable, Sendable {
@@ -9565,6 +9569,11 @@ extension Components {
         /// `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
         /// task's sale is the later one) and completes the task.
         ///
+        /// `answer_offer`: a buyer's offer waits on the seller (`offer`); the seller answers it with
+        /// `answerOffer` (or in the marketplace's app, `deepLink`). The task closes by itself once the
+        /// answer is read back or the marketplace no longer shows the offer waiting; `completeTask`
+        /// refuses it, and `dismissTask` only hides it (the offer stays open on the marketplace).
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownUserTaskKind`.
         @frozen public enum KnownUserTaskKind: String, Codable, Hashable, Sendable, CaseIterable {
@@ -9575,6 +9584,7 @@ extension Components {
             case reconnect = "reconnect"
             case reviewMatch = "review_match"
             case resolveDoubleSale = "resolve_double_sale"
+            case answerOffer = "answer_offer"
         }
         /// - Remark: Generated from `#/components/schemas/UserTaskStatus`.
         @frozen public enum UserTaskStatus: String, Codable, Hashable, Sendable, CaseIterable {
@@ -9675,6 +9685,10 @@ extension Components {
             public var saleId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/UserTask/saleEmail`.
             public var saleEmail: Components.Schemas.UserTaskSaleEmail?
+            /// For an `answer_offer` task, the offer and the newest answer to it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/UserTask/offer`.
+            public var offer: Components.Schemas.Offer?
             /// Opens the right screen in the marketplace app or site.
             ///
             /// - Remark: Generated from `#/components/schemas/UserTask/deepLink`.
@@ -9703,6 +9717,7 @@ extension Components {
             ///   - operationId:
             ///   - saleId: For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
             ///   - saleEmail:
+            ///   - offer: For an `answer_offer` task, the offer and the newest answer to it.
             ///   - deepLink: Opens the right screen in the marketplace app or site.
             ///   - copyAssist:
             ///   - dueAt:
@@ -9722,6 +9737,7 @@ extension Components {
                 operationId: Components.Schemas.Id? = nil,
                 saleId: Components.Schemas.Id? = nil,
                 saleEmail: Components.Schemas.UserTaskSaleEmail? = nil,
+                offer: Components.Schemas.Offer? = nil,
                 deepLink: Swift.String? = nil,
                 copyAssist: Components.Schemas.CopyAssist? = nil,
                 dueAt: Components.Schemas.Timestamp? = nil,
@@ -9741,6 +9757,7 @@ extension Components {
                 self.operationId = operationId
                 self.saleId = saleId
                 self.saleEmail = saleEmail
+                self.offer = offer
                 self.deepLink = deepLink
                 self.copyAssist = copyAssist
                 self.dueAt = dueAt
@@ -9761,6 +9778,7 @@ extension Components {
                 case operationId
                 case saleId
                 case saleEmail
+                case offer
                 case deepLink
                 case copyAssist
                 case dueAt
@@ -13814,6 +13832,553 @@ extension Components {
                     "answer",
                     "itemId"
                 ])
+            }
+        }
+        /// An `KnownOfferAction`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfferAction`.
+        public struct OfferAction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferAction/value1`.
+            public var value1: Components.Schemas.KnownOfferAction?
+            /// - Remark: Generated from `#/components/schemas/OfferAction/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `OfferAction`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownOfferAction? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// The seller's answer to an offer. `accept`: on Poshmark it sells the listing at once (the
+        /// buyer paid when they offered); on Depop the buyer then buys at that price.
+        /// `decline`: the offer ends. `counter`: the seller asks for another price (more than the
+        /// offer, less than the listing's price), and the offer waits on the buyer.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownOfferAction`.
+        @frozen public enum KnownOfferAction: String, Codable, Hashable, Sendable, CaseIterable {
+            case accept = "accept"
+            case decline = "decline"
+            case counter = "counter"
+        }
+        /// What the seller gets for a price on the offer's marketplace, after its fees (an estimate from Listora's fee tables).
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfferQuote`.
+        public struct OfferQuote: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferQuote/price`.
+            public var price: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/OfferQuote/fees`.
+            public var fees: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/OfferQuote/net`.
+            public var net: Components.Schemas.Money
+            /// Creates a new `OfferQuote`.
+            ///
+            /// - Parameters:
+            ///   - price:
+            ///   - fees:
+            ///   - net:
+            public init(
+                price: Components.Schemas.Money,
+                fees: Components.Schemas.Money,
+                net: Components.Schemas.Money
+            ) {
+                self.price = price
+                self.fees = fees
+                self.net = net
+            }
+            public enum CodingKeys: String, CodingKey {
+                case price
+                case fees
+                case net
+            }
+        }
+        /// A `KnownOfferResponseStatus`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfferResponseStatus`.
+        public struct OfferResponseStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferResponseStatus/value1`.
+            public var value1: Components.Schemas.KnownOfferResponseStatus?
+            /// - Remark: Generated from `#/components/schemas/OfferResponseStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `OfferResponseStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownOfferResponseStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `queued`: waiting for the seller's iPhone. `running`: the iPhone is answering it.
+        /// `verifying`: it may have reached the marketplace, and Listora reads the offer to confirm.
+        /// `succeeded`: a read of the offer shows the answer. `failed`: see `error`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownOfferResponseStatus`.
+        @frozen public enum KnownOfferResponseStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case queued = "queued"
+            case running = "running"
+            case verifying = "verifying"
+            case succeeded = "succeeded"
+            case failed = "failed"
+        }
+        /// The seller's answer to an offer. It is sent once, from the seller's iPhone, and is
+        /// `succeeded` only when a read of the offer on the marketplace shows it; it is never sent
+        /// again once it may have reached the marketplace.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfferResponse`.
+        public struct OfferResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/action`.
+            public var action: Components.Schemas.OfferAction
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/status`.
+            public var status: Components.Schemas.OfferResponseStatus
+            /// For example "Accepting on your iPhone..." or "Accepted (confirmed by Poshmark)".
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/statusText`.
+            public var statusText: Swift.String
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/offerAmount`.
+            public var offerAmount: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/counter`.
+            public var counter: Components.Schemas.Money?
+            /// What the confirmation showed the seller would get after fees (zero for a decline).
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/net`.
+            public var net: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/error`.
+            public var error: Components.Schemas.OfferResponseError?
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/OfferResponse/finishedAt`.
+            public var finishedAt: Components.Schemas.Timestamp?
+            /// Creates a new `OfferResponse`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - action:
+            ///   - status:
+            ///   - statusText: For example "Accepting on your iPhone..." or "Accepted (confirmed by Poshmark)".
+            ///   - offerAmount:
+            ///   - counter:
+            ///   - net: What the confirmation showed the seller would get after fees (zero for a decline).
+            ///   - error:
+            ///   - createdAt:
+            ///   - finishedAt:
+            public init(
+                id: Components.Schemas.Id,
+                action: Components.Schemas.OfferAction,
+                status: Components.Schemas.OfferResponseStatus,
+                statusText: Swift.String,
+                offerAmount: Components.Schemas.Money,
+                counter: Components.Schemas.Money? = nil,
+                net: Components.Schemas.Money,
+                error: Components.Schemas.OfferResponseError? = nil,
+                createdAt: Components.Schemas.Timestamp,
+                finishedAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.id = id
+                self.action = action
+                self.status = status
+                self.statusText = statusText
+                self.offerAmount = offerAmount
+                self.counter = counter
+                self.net = net
+                self.error = error
+                self.createdAt = createdAt
+                self.finishedAt = finishedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case action
+                case status
+                case statusText
+                case offerAmount
+                case counter
+                case net
+                case error
+                case createdAt
+                case finishedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/OfferResponseError`.
+        public struct OfferResponseError: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferResponseError/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/OfferResponseError/message`.
+            public var message: Swift.String
+            /// Whether answering again from Listora can help (it never can once the answer may have reached the marketplace).
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfferResponseError/retryable`.
+            public var retryable: Swift.Bool
+            /// Creates a new `OfferResponseError`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - message:
+            ///   - retryable: Whether answering again from Listora can help (it never can once the answer may have reached the marketplace).
+            public init(
+                code: Swift.String,
+                message: Swift.String,
+                retryable: Swift.Bool
+            ) {
+                self.code = code
+                self.message = message
+                self.retryable = retryable
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case message
+                case retryable
+            }
+        }
+        /// An offer a buyer made on one of the seller's listings, as the seller's own session last read it.
+        ///
+        /// - Remark: Generated from `#/components/schemas/Offer`.
+        public struct Offer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Offer/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/Offer/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// `pending` (waits on the seller), `accepted`, `declined`, `countered`, or `closed` (no longer shown waiting on the seller).
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/status`.
+            public var status: Swift.String
+            /// The buyer's offer (after a confirmed counter, the seller's price).
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/amount`.
+            public var amount: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/Offer/listPrice`.
+            public var listPrice: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/Offer/listingTitle`.
+            public var listingTitle: Swift.String?
+            /// The buyer's public username on the marketplace, as the offer shows it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/buyerName`.
+            public var buyerName: Swift.String?
+            /// How many listings the offer covers (a bundle), when more than one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/listingCount`.
+            public var listingCount: Swift.Int?
+            /// What the buyer pays for shipping under the offer, when it says.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/shipping`.
+            public var shipping: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/Offer/madeAt`.
+            public var madeAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Offer/expiresAt`.
+            public var expiresAt: Components.Schemas.Timestamp?
+            /// The offer's page on the marketplace (Open in Poshmark).
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/url`.
+            public var url: Swift.String?
+            /// The answers Listora can send now; empty while one is under way or once the offer no longer waits on the seller.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/actions`.
+            public var actions: [Components.Schemas.OfferAction]
+            /// What accepting does on this marketplace, in the seller's words.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/acceptNote`.
+            public var acceptNote: Swift.String
+            /// What accepting gives the seller after fees.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/accept`.
+            public var accept: Components.Schemas.OfferQuote
+            /// - Remark: Generated from `#/components/schemas/Offer/counterRange`.
+            public var counterRange: Components.Schemas.OfferCounterRange?
+            /// The newest answer from Listora, if any.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Offer/response`.
+            public var response: Components.Schemas.OfferResponse?
+            /// - Remark: Generated from `#/components/schemas/Offer/firstSeenAt`.
+            public var firstSeenAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/Offer/lastSeenAt`.
+            public var lastSeenAt: Components.Schemas.Timestamp
+            /// Creates a new `Offer`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - marketplace:
+            ///   - status: `pending` (waits on the seller), `accepted`, `declined`, `countered`, or `closed` (no longer shown waiting on the seller).
+            ///   - amount: The buyer's offer (after a confirmed counter, the seller's price).
+            ///   - listPrice:
+            ///   - listingTitle:
+            ///   - buyerName: The buyer's public username on the marketplace, as the offer shows it.
+            ///   - listingCount: How many listings the offer covers (a bundle), when more than one.
+            ///   - shipping: What the buyer pays for shipping under the offer, when it says.
+            ///   - madeAt:
+            ///   - expiresAt:
+            ///   - url: The offer's page on the marketplace (Open in Poshmark).
+            ///   - actions: The answers Listora can send now; empty while one is under way or once the offer no longer waits on the seller.
+            ///   - acceptNote: What accepting does on this marketplace, in the seller's words.
+            ///   - accept: What accepting gives the seller after fees.
+            ///   - counterRange:
+            ///   - response: The newest answer from Listora, if any.
+            ///   - firstSeenAt:
+            ///   - lastSeenAt:
+            public init(
+                id: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                status: Swift.String,
+                amount: Components.Schemas.Money,
+                listPrice: Components.Schemas.Money? = nil,
+                listingTitle: Swift.String? = nil,
+                buyerName: Swift.String? = nil,
+                listingCount: Swift.Int? = nil,
+                shipping: Components.Schemas.Money? = nil,
+                madeAt: Components.Schemas.Timestamp? = nil,
+                expiresAt: Components.Schemas.Timestamp? = nil,
+                url: Swift.String? = nil,
+                actions: [Components.Schemas.OfferAction],
+                acceptNote: Swift.String,
+                accept: Components.Schemas.OfferQuote,
+                counterRange: Components.Schemas.OfferCounterRange? = nil,
+                response: Components.Schemas.OfferResponse? = nil,
+                firstSeenAt: Components.Schemas.Timestamp,
+                lastSeenAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.marketplace = marketplace
+                self.status = status
+                self.amount = amount
+                self.listPrice = listPrice
+                self.listingTitle = listingTitle
+                self.buyerName = buyerName
+                self.listingCount = listingCount
+                self.shipping = shipping
+                self.madeAt = madeAt
+                self.expiresAt = expiresAt
+                self.url = url
+                self.actions = actions
+                self.acceptNote = acceptNote
+                self.accept = accept
+                self.counterRange = counterRange
+                self.response = response
+                self.firstSeenAt = firstSeenAt
+                self.lastSeenAt = lastSeenAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case marketplace
+                case status
+                case amount
+                case listPrice
+                case listingTitle
+                case buyerName
+                case listingCount
+                case shipping
+                case madeAt
+                case expiresAt
+                case url
+                case actions
+                case acceptNote
+                case accept
+                case counterRange
+                case response
+                case firstSeenAt
+                case lastSeenAt
+            }
+        }
+        /// A counteroffer is more than `above` and, when `below` is present, less than it.
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfferCounterRange`.
+        public struct OfferCounterRange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferCounterRange/above`.
+            public var above: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/OfferCounterRange/below`.
+            public var below: Components.Schemas.Money?
+            /// Creates a new `OfferCounterRange`.
+            ///
+            /// - Parameters:
+            ///   - above:
+            ///   - below:
+            public init(
+                above: Components.Schemas.Money,
+                below: Components.Schemas.Money? = nil
+            ) {
+                self.above = above
+                self.below = below
+            }
+            public enum CodingKeys: String, CodingKey {
+                case above
+                case below
+            }
+        }
+        /// The seller's confirmed answer. `offerAmount` is the offer's amount the confirmation showed:
+        /// an offer the buyer changed since is `422 validation_failed`. `counter` is required for a
+        /// counter and refused otherwise.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfferAnswer`.
+        public struct OfferAnswer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferAnswer/action`.
+            public var action: Components.Schemas.KnownOfferAction
+            /// - Remark: Generated from `#/components/schemas/OfferAnswer/offerAmount`.
+            public var offerAmount: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/OfferAnswer/counter`.
+            public var counter: Components.Schemas.Money?
+            /// Creates a new `OfferAnswer`.
+            ///
+            /// - Parameters:
+            ///   - action:
+            ///   - offerAmount:
+            ///   - counter:
+            public init(
+                action: Components.Schemas.KnownOfferAction,
+                offerAmount: Components.Schemas.Money,
+                counter: Components.Schemas.Money? = nil
+            ) {
+                self.action = action
+                self.offerAmount = offerAmount
+                self.counter = counter
+            }
+            public enum CodingKeys: String, CodingKey {
+                case action
+                case offerAmount
+                case counter
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.action = try container.decode(
+                    Components.Schemas.KnownOfferAction.self,
+                    forKey: .action
+                )
+                self.offerAmount = try container.decode(
+                    Components.Schemas.Money.self,
+                    forKey: .offerAmount
+                )
+                self.counter = try container.decodeIfPresent(
+                    Components.Schemas.Money.self,
+                    forKey: .counter
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "action",
+                    "offerAmount",
+                    "counter"
+                ])
+            }
+        }
+        /// When Listora last read the seller's offers on one marketplace, and how that went.
+        ///
+        /// - Remark: Generated from `#/components/schemas/OfferCheck`.
+        public struct OfferCheck: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferCheck/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// `waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfferCheck/status`.
+            public var status: Swift.String
+            /// When a read last succeeded.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OfferCheck/checkedAt`.
+            public var checkedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/OfferCheck/message`.
+            public var message: Swift.String?
+            /// Creates a new `OfferCheck`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - status: `waiting` (a read waits for the iPhone), `ok`, or `failed` (see `message`).
+            ///   - checkedAt: When a read last succeeded.
+            ///   - message:
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                status: Swift.String,
+                checkedAt: Components.Schemas.Timestamp? = nil,
+                message: Swift.String? = nil
+            ) {
+                self.marketplace = marketplace
+                self.status = status
+                self.checkedAt = checkedAt
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case status
+                case checkedAt
+                case message
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/OfferCheckList`.
+        public struct OfferCheckList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OfferCheckList/data`.
+            public var data: [Components.Schemas.OfferCheck]
+            /// Creates a new `OfferCheckList`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            public init(data: [Components.Schemas.OfferCheck]) {
+                self.data = data
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
             }
         }
     }

@@ -37,6 +37,8 @@ import { linkAutomationSession } from '../link.ts';
 import { loadChromium } from '../runner/playwright.ts';
 import { LISTING_IMPORT_APPLY_TASK, queueImportPage } from '../imports/schedule.ts';
 import { queueLabelReads } from '../label-reads/queue.ts';
+import { requestOfferAnswer } from '../offers/answer.ts';
+import { queueDueOfferChecks, queueOfferCheck } from '../offers/schedule.ts';
 import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
 import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -1132,5 +1134,291 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(await queueLabelReads(db, { accountId, now: new Date() })).toEqual([
       { marketplace: 'depop', orders: 0, where: 'none' },
     ]);
+  });
+
+  // Offers (docs/features/offers.md) -------------------------------------------------------------
+
+  /** A Depop listing of an item, posted and confirmed on the phone, with a buyer's offer on it. */
+  async function listingWithOffer(amountCents = 2000) {
+    site.offers.clear();
+    await runPhone();
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    await runPhoneAndConfirm(create);
+    const listing = await db
+      .selectFrom('marketplace_listing')
+      .select(['external_listing_id', 'item_id', 'price_cents'])
+      .where('id', '=', listingId)
+      .executeTakeFirstOrThrow();
+    const offer = site.offers.add({
+      listingId: listing.external_listing_id ?? '',
+      listingTitle: 'Trucker jacket',
+      amountCents,
+      listPriceCents: 3000,
+      buyer: 'jacketfan',
+    });
+    return { listingId, itemId: listing.item_id, priceCents: listing.price_cents, offer };
+  }
+
+  const readOffers = async () => {
+    expect(await queueOfferCheck(db, { accountId, connectionId, marketplace: 'depop' })).toBe(true);
+    await runPhone();
+  };
+  /** Listora's id of a fake Depop offer: its product and the offer's own id. */
+  const externalOfferIds = new Map<string, string>();
+  const offerRow = (fakeOfferId: string) => {
+    const offer = site.offers.get(fakeOfferId);
+    if (offer !== undefined) {
+      externalOfferIds.set(
+        fakeOfferId,
+        `${String(site.productId(offer.listingId))}//${fakeOfferId}`,
+      );
+    }
+    return db
+      .selectFrom('marketplace_offer')
+      .selectAll()
+      .where('account_id', '=', accountId)
+      .where('external_offer_id', '=', externalOfferIds.get(fakeOfferId) ?? fakeOfferId)
+      .executeTakeFirstOrThrow();
+  };
+  const offerTasks = () =>
+    db
+      .selectFrom('user_task')
+      .select(['kind', 'status', 'offer_id', 'item_id', 'listing_id', 'deep_link'])
+      .where('account_id', '=', accountId)
+      .where('kind', '=', 'answer_offer')
+      .execute();
+  const responseRow = (id: string) =>
+    db
+      .selectFrom('offer_response')
+      .selectAll()
+      .where('account_id', '=', accountId)
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+  const answerNow = (
+    offer: { id: string; amount_cents: number },
+    action: 'accept' | 'decline' | 'counter',
+    counterCents: number | null = null,
+  ) =>
+    requestOfferAnswer(db, {
+      accountId,
+      offerId: offer.id,
+      action,
+      counterCents,
+      offerAmountCents: offer.amount_cents,
+      idempotencyKey: crypto.randomUUID(),
+      now: new Date(),
+    });
+  /** Work put off (a read again after a send) is due now. */
+  const dueNow = () =>
+    db
+      .updateTable('phone_work')
+      .set({ due_at: sql<Date>`now()` })
+      .where('account_id', '=', accountId)
+      .execute();
+
+  it("reads the seller's offers on the phone read-only: each pending one is a task, and one that goes away closes it", async () => {
+    const { listingId, itemId, priceCents, offer } = await listingWithOffer();
+    await readOffers();
+    const row = await offerRow(offer.id);
+    expect(row).toMatchObject({
+      status: 'pending',
+      amount_cents: 2000,
+      // Depop's offers name no price: the listing's own.
+      list_price_cents: priceCents,
+      buyer_name: 'jacketfan',
+      listing_id: listingId,
+      item_id: itemId,
+      offer_url: `${site.url}/sellinghub/offers/`,
+    });
+    expect(await offerTasks()).toEqual([
+      {
+        kind: 'answer_offer',
+        status: 'open',
+        offer_id: row.id,
+        item_id: itemId,
+        listing_id: listingId,
+        deep_link: row.offer_url,
+      },
+    ]);
+    const check = await db
+      .selectFrom('offer_check')
+      .select(['last_outcome', 'offers_seen'])
+      .where('account_id', '=', accountId)
+      .executeTakeFirstOrThrow();
+    expect(check).toEqual({ last_outcome: 'succeeded', offers_seen: 1 });
+    const runs = await db
+      .selectFrom('automation_run')
+      .select(['purpose', 'host', 'outcome'])
+      .where('account_id', '=', accountId)
+      .where('purpose', '=', 'offer_check')
+      .execute();
+    expect(runs).toEqual([{ purpose: 'offer_check', host: 'phone', outcome: 'succeeded' }]);
+    // Reading again keeps one task; nothing was ever answered.
+    await readOffers();
+    expect(await offerTasks()).toHaveLength(1);
+    expect(site.offers.answers).toEqual([]);
+
+    // The dispatcher asks again only once the hour since the last read is up.
+    const offerReadsWaiting = async () =>
+      (await work()).filter((row) => row.purpose === 'offer_check').length;
+    await queueDueOfferChecks(db);
+    expect(await offerReadsWaiting()).toBe(0);
+    await queueDueOfferChecks(db, 0);
+    expect(await offerReadsWaiting()).toBe(1);
+    await runPhone();
+
+    site.offers.remove(offer.id);
+    await readOffers();
+    expect(await offerRow(offer.id)).toMatchObject({ status: 'closed' });
+    expect(await offerTasks()).toEqual([expect.objectContaining({ status: 'done' })]);
+  });
+
+  it('accepts an offer from the phone only when asked, done only once a read-back shows it, then checks for the sale', async () => {
+    const { offer } = await listingWithOffer();
+    await readOffers();
+    const row = await offerRow(offer.id);
+    const { responseId } = await answerNow(row, 'accept');
+    await runPhone();
+    expect(site.offers.answers).toMatchObject([{ offerId: offer.id, action: 'accept' }]);
+    expect(await responseRow(responseId)).toMatchObject({
+      status: 'succeeded',
+      success_evidence: 'read_back',
+      sent: true,
+      net_cents: expect.any(Number) as number,
+    });
+    expect(await offerRow(offer.id)).toMatchObject({ status: 'accepted' });
+    expect(await offerTasks()).toEqual([expect.objectContaining({ status: 'done' })]);
+    // The normal sale flow takes it from here: a sale check of Depop, asked for by the offer.
+    const checks = await db
+      .selectFrom('sale_check_run')
+      .select(['reason', 'host'])
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(checks).toContainEqual({ reason: 'offer', host: 'phone' });
+    const runs = await db
+      .selectFrom('automation_run')
+      .select(['script'])
+      .where('account_id', '=', accountId)
+      .where('purpose', '=', 'offer_response')
+      .orderBy('started_at')
+      .execute();
+    expect(runs.map((run) => run.script)).toEqual(['answer offer', 'read offer']);
+  });
+
+  it('never sends an answer twice: one whose page failed after it was taken is only read back', async () => {
+    const { offer } = await listingWithOffer();
+    await readOffers();
+    const row = await offerRow(offer.id);
+    site.offers.injectFault({ type: 'lost_answer' });
+    const { responseId } = await answerNow(row, 'counter', 2600);
+    await runPhone();
+    await dueNow();
+    await runPhone();
+    expect(site.offers.answers).toHaveLength(1);
+    expect(await responseRow(responseId)).toMatchObject({ status: 'succeeded', sent: true });
+    expect(await offerRow(offer.id)).toMatchObject({ status: 'countered', amount_cents: 2600 });
+  });
+
+  it('treats an answer the phone stopped in the middle of as maybe sent: it is read back, never sent again', async () => {
+    const { offer } = await listingWithOffer();
+    await readOffers();
+    const row = await offerRow(offer.id);
+    const { responseId } = await answerNow(row, 'decline');
+    // The phone claims the answer and is handed its send, then stops before answering.
+    const run = await claimPhoneRun(phone, db, {
+      accountId,
+      deviceId,
+      runtimeVersion: PHONE_RUNTIME_VERSION,
+    });
+    expect(run?.purpose).toBe('offer_response');
+    await db
+      .updateTable('phone_work')
+      .set({ lease_expires_at: sql<Date>`now()` })
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(await responseRow(responseId)).toMatchObject({ sent: true });
+    await runPhone();
+    // The read shows the offer still waiting: not confirmed, and not sent again.
+    expect(site.offers.answers).toEqual([]);
+    expect(await responseRow(responseId)).toMatchObject({ status: 'verifying', sent: true });
+  });
+
+  it('fails an answer the marketplace refuses with its reason, and refuses one for an offer that moved', async () => {
+    const { offer } = await listingWithOffer();
+    await readOffers();
+    const row = await offerRow(offer.id);
+    site.offers.injectFault({ type: 'refuse', message: 'This offer has expired.' });
+    const { responseId } = await answerNow(row, 'accept');
+    await runPhone();
+    expect(await responseRow(responseId)).toMatchObject({
+      status: 'failed',
+      error_message: 'Depop: This offer has expired.',
+      retryable: false,
+    });
+    expect(await offerTasks()).toEqual([expect.objectContaining({ status: 'open' })]);
+    await expect(answerNow({ ...row, amount_cents: 1900 }, 'accept')).rejects.toMatchObject({
+      code: 'invalid',
+    });
+    await expect(answerNow(row, 'counter', row.list_price_cents ?? 0)).rejects.toMatchObject({
+      code: 'invalid',
+    });
+    expect(site.offers.answers).toEqual([]);
+  });
+
+  it('reads a read-only account’s offers, but never answers one there, even one asked for before', async () => {
+    const { offer } = await listingWithOffer();
+    const readOnly = (on: boolean) =>
+      db
+        .updateTable('marketplace_connection')
+        .set({ read_only: on })
+        .where('account_id', '=', accountId)
+        .where('id', '=', connectionId)
+        .execute();
+    await readOnly(true);
+    // Reading stays allowed: the offer is a task.
+    await readOffers();
+    const row = await offerRow(offer.id);
+    expect(await offerTasks()).toEqual([expect.objectContaining({ status: 'open' })]);
+    await expect(answerNow(row, 'accept')).rejects.toMatchObject({ code: 'unavailable' });
+
+    // An answer asked for while the account was writable, then the account made read only:
+    // the claim refuses it before anything is sent.
+    await readOnly(false);
+    const { responseId } = await answerNow(row, 'accept');
+    await readOnly(true);
+    await runPhone();
+    expect(await responseRow(responseId)).toMatchObject({
+      status: 'failed',
+      error_code: 'read_only',
+      sent: false,
+    });
+    expect(site.offers.answers).toEqual([]);
+    await readOnly(false);
+  });
+
+  it('hands an app on runtime 2 every call but the offers, which wait for its update', async () => {
+    await runPhone();
+    await db
+      .updateTable('app_device')
+      .set({ runtime_version: 2 })
+      .where('account_id', '=', accountId)
+      .where('id', '=', deviceId)
+      .execute();
+    const olderApp = { accountId, deviceId, runtimeVersion: 2 };
+    expect(await queueOfferCheck(db, { accountId, connectionId, marketplace: 'depop' })).toBe(true);
+    expect(await claimPhoneRun(phone, db, olderApp)).toBeNull();
+    expect((await work()).map((row) => row.purpose)).toEqual(['offer_check']);
+
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    const run = await claimPhoneRun(phone, db, olderApp);
+    expect(run?.purpose).toBe('operation');
+    expect((run?.call?.input as unknown as { runtimeVersion: number }).runtimeVersion).toBe(2);
+    await expect(claimPhoneRun(phone, db, { ...olderApp, runtimeVersion: 1 })).rejects.toThrow(
+      /needs an update/,
+    );
   });
 });

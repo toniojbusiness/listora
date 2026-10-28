@@ -31,6 +31,10 @@
  *   pages (`FakeDepopSite.inject`): a CAPTCHA, a bot check, a login code, or a signed-out page.
  * - `DELETE /depop/faults`: removes every fault.
  * - `GET /depop/products`: the fake Depop's products, `[{ slug, status, priceCents, description }]`.
+ * - `POST /depop/offers` `{ slug, amountCents }`: a buyer makes an offer on that product on the
+ *   fake Depop (docs/features/offers.md), answering `{ id }`.
+ * - `GET /depop/offer-answers`: every answer the fake Depop took, `[{ offerId, action,
+ *   counterCents }]`, so a test sees what was sent, and how often.
  * - `POST /depop/sessions` `{ seller? }`: a signed-in session cookie on the fake Depop, as signing
  *   in there would set, answering `{ name, value, domain, path }`.
  * - `GET /depop/sign-in-link`: the newest sign-in link the fake Depop "emailed" (its Email me a
@@ -232,6 +236,32 @@ async function handle(request: IncomingMessage, deps: ControlDependencies): Prom
           status: product.status,
           priceCents: product.priceCents,
           description: product.description,
+        })),
+      };
+    case 'POST /depop/offers': {
+      const body = await readJson(request);
+      const slug = field(body, 'slug');
+      const amountCents = field(body, 'amountCents');
+      if (typeof slug !== 'string' || typeof amountCents !== 'number') {
+        return refused('an offer needs a slug and an amountCents');
+      }
+      const product = deps.fakeDepop.products().find((each) => each.slug === slug);
+      const offer = deps.fakeDepop.offers.add({
+        listingId: slug,
+        listingTitle: product?.description.split('\n')[0] ?? 'A listing',
+        amountCents,
+        listPriceCents: product?.priceCents ?? amountCents + 1000,
+        buyer: 'e2e-buyer',
+      });
+      return { status: 201, body: { id: offer.id } };
+    }
+    case 'GET /depop/offer-answers':
+      return {
+        status: 200,
+        body: deps.fakeDepop.offers.answers.map((answer) => ({
+          offerId: answer.offerId,
+          action: answer.action,
+          counterCents: answer.counterCents,
         })),
       };
     case 'GET /depop/sign-in-link': {

@@ -142,6 +142,8 @@ describe('sold items for the sales history (real Postgres, a local image CDN)', 
         categoryRef: null,
         categoryPath: [],
         sku: null,
+        colors: ['blue'],
+        originalPriceCents: null,
       },
     };
   }

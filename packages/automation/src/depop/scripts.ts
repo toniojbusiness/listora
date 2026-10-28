@@ -37,6 +37,8 @@ import {
   readReceipts,
   type ReceiptLabel,
 } from './pages/receipts.ts';
+import { depopOfferPages, readOffer, readOffers } from './pages/offers.ts';
+import { answerOnOfferPage } from '../adapter/offer-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
 import { readSales } from './sales.ts';
 
@@ -293,6 +295,11 @@ export function createDepopScripts(
       }
       return { listings, next: shown.next };
     },
+    offers: (step) =>
+      step('read your offers', { mutates: false }, (page) => readOffers(page, site)),
+    offer: (ref, step) =>
+      step('read the offer', { mutates: false }, (page) => readOffer(page, site, ref)),
+    answerOffer: (request, step) => answerOnOfferPage(step, depopOfferPages(site), request),
   };
 }
 

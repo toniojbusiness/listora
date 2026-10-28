@@ -33,6 +33,13 @@ import type {
   ValidationIssue,
 } from './adapter.ts';
 import type { ItemSnapshot, ListingVariant } from './content.ts';
+import type {
+  OfferAnswerOutcome,
+  OfferAnswerRequest,
+  OfferRef,
+  RemoteOffer,
+  RemoteOfferState,
+} from './offers.ts';
 
 export interface ConnectionAwareAdapterOptions {
   /**
@@ -174,6 +181,41 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
       );
     }
     return adapter.readOrderLabels(orders, ctx);
+  }
+
+  /** The serving adapter's open offers; throws when it can't read them (an assisted one never can). */
+  listOffers(ctx: AdapterContext): Promise<RemoteOffer[]> {
+    const adapter = this.adapterFor(ctx.connection);
+    if (adapter.listOffers === undefined) {
+      return Promise.reject(
+        new Error(`the ${adapter.id} adapter for this connection reads no offers`),
+      );
+    }
+    return adapter.listOffers(ctx);
+  }
+
+  /** The serving adapter's read of one offer; throws when it can't read offers. */
+  readOffer(ref: OfferRef, ctx: AdapterContext): Promise<RemoteOfferState> {
+    const adapter = this.adapterFor(ctx.connection);
+    if (adapter.readOffer === undefined) {
+      return Promise.reject(
+        new Error(`the ${adapter.id} adapter for this connection reads no offers`),
+      );
+    }
+    return adapter.readOffer(ref, ctx);
+  }
+
+  /** The serving adapter's answer; the seller answers where it can't (an assisted one never can). */
+  async answerOffer(request: OfferAnswerRequest, ctx: AdapterContext): Promise<OfferAnswerOutcome> {
+    const adapter = this.adapterFor(ctx.connection);
+    if (adapter.answerOffer === undefined) {
+      return {
+        type: 'needs_seller',
+        code: 'no_session',
+        message: 'Listora can answer this offer once the marketplace is linked again.',
+      };
+    }
+    return adapter.answerOffer(request, ctx);
   }
 
   /** The serving adapter's order fees; `unavailable` when it reports none (assisted). */

@@ -31,6 +31,10 @@
  *   GET  /presentation/api/v1/receipts/ the seller's receipts (web API), as the sold items page loads
  *                                      them; a receipt's own fields are Listora's assumption until a
  *                                      real sale shows them (depop/pages/receipts.ts)
+ *   GET  /presentation/api/v1/offers/me/products/ buyers' offers on the seller's products (web API),
+ *                                      as the Offers page loads them (fields: Listora's assumption,
+ *                                      depop/pages/offers.ts)
+ *   GET  /sellinghub/offers/<id>/      an offer's page (fake-offers/); POST .../answer answers it
  *   GET  /photos/<name>.jpg            a photo, standing in for Listora's image CDN (no session)
  *   GET  /media/<name>.jpg             a listing's photo on Depop's own image CDN (no session)
  *
@@ -59,7 +63,9 @@ import {
   type Reply,
   type SubmittedForm,
 } from '../../fake-site/http.ts';
+import { FakeOfferDesk, fakeOfferPageBody, type FakeOffer } from '../../fake-offers/fake-offers.ts';
 import { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from '../../fake-photos/fake-photos.ts';
+import { allDepopCategories } from '../categories.ts';
 import { DEPOP_CONDITION_LABELS } from '../conditions.ts';
 import { DEPOP_SLUG } from '../site.ts';
 import {
@@ -105,7 +111,10 @@ export type FakeDepopSiteAction =
   | 'receipts'
   | 'receipt'
   | 'health'
-  | 'form';
+  | 'form'
+  | 'offers'
+  | 'offer'
+  | 'answer_offer';
 
 export type FakeDepopSiteFault =
   /** A bot-check page ("Please verify you are a human") instead of the page, status 403. */
@@ -146,7 +155,10 @@ export interface FakeDepopProduct {
   status: FakeDepopStatus;
   /** The whole listing text, as the form's description field got it. */
   description: string;
+  /** The price a buyer pays now (the reduced one, when the seller marked it down). */
   priceCents: number;
+  /** The price before a markdown; `null` when it has none. Only seeded. */
+  originalPriceCents: number | null;
   /** Department, category, product type. */
   category: string[];
   size: string | null;
@@ -259,6 +271,16 @@ export class FakeDepopSite {
   readonly #faults: (FakeDepopSiteFaultRule & { remaining: number })[] = [];
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly requests: FakeDepopSiteRequest[] = [];
+  /** An `offer_display_status` every offer shows instead of its own (an unknown status). */
+  offerStatusOverride: string | null = null;
+
+  /** The id of the product with this slug, as Depop's web API names it. */
+  productId(slug: string): number | undefined {
+    return this.#products.get(slug)?.id;
+  }
+
+  /** Buyers' offers on the seller's products, and the answers the fake took. */
+  readonly offers = new FakeOfferDesk();
   #sequence = 0;
   #purchases = 0;
   #url = '';
@@ -358,6 +380,7 @@ export class FakeDepopSite {
       id: this.#sequence,
       current: {
         status: 'ONSALE',
+        originalPriceCents: null,
         category: ['Women', 'Tops', 'T-shirts'],
         size: 'M',
         brand: null,
@@ -711,6 +734,7 @@ export class FakeDepopSite {
             slug,
             seller: session.seller,
             status: 'ONSALE',
+            originalPriceCents: null,
             ...fields,
             listedAt: now,
             updatedAt: seconds(now),
@@ -803,6 +827,42 @@ export class FakeDepopSite {
           ),
         });
       }
+      case 'offers':
+        return route.slug === null
+          ? this.#offerProducts(url)
+          : this.#productOffers(Number(route.slug), url);
+      case 'offer': {
+        const id = route.slug ?? '';
+        const offer = this.offers.get(id);
+        return {
+          status: offer === undefined ? 404 : 200,
+          body: plainPage(
+            'Offer | Depop',
+            fakeOfferPageBody(offer, `/sellinghub/offers/${id}`, url.searchParams.get('confirm')),
+          ),
+        };
+      }
+      case 'answer_offer': {
+        const id = route.slug ?? '';
+        const answered = this.offers.answer(
+          id,
+          form?.text('action') ?? '',
+          form?.text('counter') ?? null,
+        );
+        if (answered.status === 303) return redirect(`/sellinghub/offers/${id}/`);
+        return {
+          status: answered.status,
+          body: plainPage(
+            'Offer | Depop',
+            fakeOfferPageBody(
+              this.offers.get(id),
+              `/sellinghub/offers/${id}`,
+              null,
+              answered.message,
+            ),
+          ),
+        };
+      }
       case 'receipts': {
         // The seller's purchases, newest first, a page at a time, as Depop's receipts list them
         // (the fields Listora reads, with invented values; read 2026-10-28).
@@ -867,6 +927,50 @@ export class FakeDepopSite {
       .filter((stored) => stored.current.seller === seller && onSale(stored))
       .sort((a, b) => b.current.listedAt.getTime() - a.current.listedAt.getTime() || b.id - a.id)
       .map((stored) => copy(stored.current));
+  }
+
+  /**
+   * The products with offers (`offers/me/products/`), 10 a page with `after=` as Depop's are
+   * (docs/features/offers.md): the seller's own offers to likers count too.
+   */
+  #offerProducts(url: URL): Reply {
+    const slugs = [...new Set(this.offers.all().map((offer) => offer.listingId))];
+    const start = Number(url.searchParams.get('after') ?? '0');
+    const page = slugs.slice(start, start + OFFER_PAGE);
+    const end = start + OFFER_PAGE >= slugs.length;
+    return json(200, {
+      objects: page.map((slug) => {
+        const stored = this.#products.get(slug);
+        return {
+          id: this.#idOf(slug),
+          slug,
+          ...(stored === undefined ? {} : { description: stored.current.description }),
+        };
+      }),
+      page_info: { has_more: !end, last: end ? null : String(start + OFFER_PAGE) },
+    });
+  }
+
+  /** One product's offers (`products/<id>/offers/?active=`), as Depop's records name them. */
+  #productOffers(id: number, url: URL): Reply {
+    const active = url.searchParams.get('active') !== 'false';
+    const slug = [...this.#products.entries()].find(([, stored]) => stored.id === id)?.[0];
+    const offers = this.offers
+      .all()
+      .filter((offer) => offer.listingId === slug)
+      .filter((offer) => (offer.status === 'pending' || offer.status === 'countered') === active);
+    return json(200, {
+      objects: offers.map((offer) => ({
+        offer_id: offer.id,
+        offer_value: { amount: (offer.amountCents / 100).toFixed(2), currency: 'USD' },
+        offer_display_status: this.offerStatusOverride ?? depopStatus(offer),
+        expires_at: offer.expiresAt,
+        created_at: offer.createdAt,
+        can_make_counter_offer: offer.status === 'pending',
+        offerer: { username: offer.buyer },
+      })),
+      page_info: { has_more: false, last: null },
+    });
   }
 
   #idOf(slug: string): number {
@@ -949,6 +1053,18 @@ function matchRoute(method: string, path: string): Route | null {
   )?.[1];
   if (get && own !== undefined) return { method, action: 'read', slug: decoded(own), api: true };
   if (get && path === '/sellinghub/sold-items/') return { method, action: 'sold', slug: null };
+  if (get && path === '/presentation/api/v1/offers/me/products/') {
+    return { method, action: 'offers', slug: null, api: true };
+  }
+  const productOffers = /^\/presentation\/api\/v1\/products\/(\d+)\/offers\/$/.exec(path)?.[1];
+  if (get && productOffers !== undefined) {
+    return { method, action: 'offers', slug: productOffers, api: true };
+  }
+  const offer = /^\/sellinghub\/offers\/([\w-]+)\/?(answer)?$/.exec(path);
+  if (offer?.[1] !== undefined) {
+    if (get && offer[2] === undefined) return { method, action: 'offer', slug: offer[1] };
+    if (post && offer[2] !== undefined) return { method, action: 'answer_offer', slug: offer[1] };
+  }
   if (get && path === '/presentation/api/v1/receipts/') {
     return { method, action: 'receipts', slug: null, api: true };
   }
@@ -970,6 +1086,24 @@ function matchRoute(method: string, path: string): Route | null {
   const product = /^\/products\/([^/]+)\/$/.exec(path)?.[1];
   if (get && product !== undefined) return { method, action: 'read', slug: decoded(product) };
   return null;
+}
+
+/** One page of products with offers. */
+const OFFER_PAGE = 10;
+
+/** An offer's `offer_display_status`, as Depop names them (docs/features/offers.md). */
+function depopStatus(offer: FakeOffer): string {
+  if (offer.sentBySeller === true) return 'SENT_PRIVATE_OFFER';
+  switch (offer.status) {
+    case 'pending':
+      return 'RECEIVED';
+    case 'accepted':
+      return 'ACCEPTED';
+    case 'declined':
+      return 'DECLINED';
+    case 'countered':
+      return 'COUNTER_OFFER_SENT';
+  }
 }
 
 function decoded(segment: string): string {
@@ -1123,37 +1257,73 @@ function shopProductData(
   };
 }
 
+/** Depop's department names as the edit data's `categories` still name them. */
+const FORMER_DEPARTMENTS: Readonly<Record<string, string>> = {
+  menswear: 'Menswear',
+  womenswear: 'Womenswear',
+  kidswear: 'Kidswear',
+  'everything-else': 'Everything else',
+};
+
+/** The edit data's `gender` by Depop's department. */
+const GENDERS: Readonly<Record<string, string>> = { menswear: 'male', womenswear: 'female' };
+
 /**
  * The seller's own product as the edit page loads it from the API (pages/api.ts), with its
  * photos as Listora's import reads them (pages/listing-details.ts): each picture's sizes, the
- * images served from the fake's own image CDN (`/media/`, fake-photos.ts).
+ * images served from the fake's own image CDN (`/media/`, fake-photos.ts). As on Depop, its
+ * category is Depop's ids (`gender`, `group`, `product_type`) beside the names `categories`
+ * shows, which stop at the department and category; its brand is Depop's slug beside the
+ * brand's name ("Other" for none); a marked-down product's pricing has both prices.
  */
 function editListingData(
   product: FakeDepopProduct,
   id: number,
   origin: string,
 ): Record<string, unknown> {
-  const amount = priceAmount(product.priceCents);
+  const original = product.originalPriceCents;
+  const reduced = original !== null && original > product.priceCents;
+  const [department, group, productType] = allDepopCategories().find(
+    (entry) => entry.path.join('>') === product.category.join('>'),
+  )?.ids ?? [null, null, null];
   return {
     id,
     status: `STATUS_${product.status}`,
-    categories: product.category,
+    categories:
+      department === null
+        ? product.category
+        : [FORMER_DEPARTMENTS[department] ?? department, product.category[1]],
+    ...(department === null
+      ? {}
+      : {
+          ...(GENDERS[department] === undefined ? {} : { gender: GENDERS[department] }),
+          is_kids: department === 'kidswear',
+          group,
+          product_type: productType,
+        }),
     description: product.description,
     // Depop's own, to the microsecond.
     updated_at: product.updatedAt.toISOString().replace('Z', '123Z'),
     created_at: product.listedAt.toISOString(),
     pricing: {
-      final_price_key: 'original_price',
+      final_price_key: reduced ? 'discounted_price' : 'original_price',
       currency: 'USD',
       currency_name: 'USD',
-      is_reduced: false,
-      original_price: { total_price: amount, price_breakdown: { price: { amount } } },
+      is_reduced: reduced,
+      original_price: price(reduced ? original : product.priceCents),
+      ...(reduced
+        ? {
+            discount_percentage: Math.round(100 - (product.priceCents / original) * 100),
+            discounted_price: price(product.priceCents),
+          }
+        : {}),
     },
     slug: product.slug,
     is_boosted: product.boosted,
     condition: product.condition,
     colour: product.colours.map((colour) => colour.toLowerCase()),
-    brand: product.brand,
+    brand: product.brand === null ? 'unbranded' : brandSlug(product.brand),
+    brand_name: product.brand ?? 'Other',
     pictures: product.photos.map((name, index) => [
       {
         id: index * 2,
@@ -1169,6 +1339,20 @@ function editListingData(
       },
     ]),
   };
+}
+
+/** A price as Depop's pricing gives one. */
+function price(cents: number): Record<string, unknown> {
+  const amount = priceAmount(cents);
+  return { total_price: amount, price_breakdown: { price: { amount } } };
+}
+
+/** Depop's slug of a brand's name (`Hollister Co.` is `hollister-co`). */
+function brandSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 function json(status: number, body: unknown): Reply {

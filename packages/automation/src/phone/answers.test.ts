@@ -1,13 +1,13 @@
 /**
  * The server reads an app's answers whatever its runtime: an app built before sales history (its
  * sale checks send orders without the sold listing, the shipped state, or fees) is read as it was,
- * and a newer app's orders with them are read whole. The call protocol (PHONE_RUNTIME_VERSION)
- * didn't change, so an older app keeps taking every call.
+ * and a newer app's orders with them are read whole. The server still hands an app on runtime
+ * version 2 (the app the captain runs, built before sales history) every marketplace step.
  */
 import { describe, expect, it } from 'vitest';
 
 import { readPhoneAnswer } from './answers.ts';
-import { PHONE_RUNTIME_VERSION } from './runtime.ts';
+import { SUPPORTED_PHONE_RUNTIME_VERSIONS } from './work.ts';
 
 const call = { script: 'orders', since: null } as const;
 
@@ -17,8 +17,8 @@ const ran = (value: unknown) => ({
 });
 
 describe("the server reads an app's sale-check answers, old and new", () => {
-  it('speaks the runtime version apps built before sales history speak', () => {
-    expect(PHONE_RUNTIME_VERSION).toBe(2);
+  it('still serves the runtime version apps built before sales history speak', () => {
+    expect(SUPPORTED_PHONE_RUNTIME_VERSIONS).toContain(2);
   });
 
   it("reads an older app's orders as they were: no listing, shipped state, or fees", () => {

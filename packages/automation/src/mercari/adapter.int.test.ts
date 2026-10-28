@@ -531,6 +531,8 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
           condition: 'pre_owned_excellent',
           categoryRef: 'Women > Dresses > Maxi',
           categoryPath: ['Women', 'Dresses', 'Maxi'],
+          colors: [],
+          originalPriceCents: null,
           sku: 'AJ-000007',
         },
       });

@@ -254,3 +254,35 @@ export {
 export { AI_PICK_CONFIDENCE } from './prefill/choose.ts';
 export { LABEL_READ_MARKETPLACES, queueLabelReads } from './label-reads/queue.ts';
 export type { QueuedLabelRead } from './label-reads/queue.ts';
+export {
+  MAX_ATTEMPTS as MAX_OFFER_ANSWER_ATTEMPTS,
+  OfferAnswerRefusedError,
+  offerActions,
+  offerQuote,
+  prepareOfferAnswer,
+  recordOfferAnswer,
+  requestOfferAnswer,
+  runOfferAnswer,
+} from './offers/answer.ts';
+export type {
+  OfferAnswerInput,
+  OfferAnswerStep,
+  OfferQuote,
+  PreparedOfferAnswer,
+} from './offers/answer.ts';
+export {
+  offerReadErrorMessage,
+  recordOfferCheckFailure,
+  recordOffers,
+  startOfferCheck,
+} from './offers/record.ts';
+export {
+  OFFER_CHECK_INTERVAL_MS,
+  OFFER_CHECK_MIN_GAP_MS,
+  OFFER_MARKETPLACES,
+  queueDueOfferChecks,
+  queueOfferCheck,
+  queueOfferResponse,
+  requestOfferChecks,
+} from './offers/schedule.ts';
+export type { OfferCheckTarget } from './offers/schedule.ts';

@@ -38,6 +38,11 @@ assisted adapters' `pendingUser` outcome ([marketplaces.md](marketplaces.md#adap
 4. Every completion and dismissal is in the item's history (`task.completed`, `task.dismissed`,
    with the linked URL and the user's note).
 
+Answer-offer tasks are buyers' offers read from the marketplaces ([offers.md](offers.md)): the
+seller answers one with Accept, Decline, or Counter, and its task closes once the answer is read
+back from the marketplace, or once the marketplace no longer shows the offer waiting; `completeTask`
+refuses it, and dismissing only hides it until the offer changes.
+
 Confirm-sale and match-review tasks come from forwarded sale emails
 ([email-sales.md](email-sales.md#the-tasks)): the app shows what the email said, and confirming
 or picking the item records the sale. Such tasks of any other origin (imports) have no producer

@@ -24,6 +24,9 @@ struct TaskDetailView: View {
                 if let problem = model.problem {
                     Banner(problem, tone: .failed, identifier: "task.problem")
                 }
+                if let offer = model.offer {
+                    OfferTaskView(model: offer, open: open)
+                }
                 steps
             }
             .padding(Spacing.md)
@@ -107,6 +110,13 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private var actions: some View {
+        if let offer = model.offer {
+            OfferTaskView(model: offer, open: open).actions
+            HStack(spacing: Spacing.sm) {
+                OfferTaskView(model: offer, open: open).declineAction
+                dismissButton
+            }
+        }
         if let doneTitle = model.presentation.doneTitle {
             Button(doneTitle, systemImage: "checkmark") {
                 Task { await model.complete() }
@@ -124,7 +134,13 @@ struct TaskDetailView: View {
             .loading(model.isSubmitting)
             .accessibilityIdentifier("task.rejectMatch")
         }
-        Button("Dismiss task") { confirmsDismiss = true }
+        if model.offer == nil {
+            dismissButton
+        }
+    }
+
+    private var dismissButton: some View {
+        Button(model.offer == nil ? "Dismiss task" : "Hide this offer") { confirmsDismiss = true }
             .buttonStyle(.listora(.destructiveText, size: .large))
             .disabled(model.isSubmitting)
             .accessibilityIdentifier("task.dismiss")

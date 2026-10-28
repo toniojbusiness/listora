@@ -173,6 +173,10 @@ export function browserSessionTitle(run: {
       return `${where} read your ${name} listings for an import`;
     case 'label_read':
       return `${where} read your ${name} shipping labels`;
+    case 'offer_check':
+      return `${where} read your ${name} offers`;
+    case 'offer_response':
+      return `${where} answered an offer on ${name}`;
     default:
       return assertNever(run.purpose, 'automation run purpose');
   }
@@ -372,6 +376,8 @@ export function taskTitle(kind: UserTaskKind, marketplace: Marketplace | null): 
       return 'Waiting for you: check which item sold';
     case 'resolve_double_sale':
       return 'Waiting for you: it sold twice';
+    case 'answer_offer':
+      return `Waiting for you: answer an offer${on}`;
     default:
       return assertNever(kind, 'user task kind');
   }

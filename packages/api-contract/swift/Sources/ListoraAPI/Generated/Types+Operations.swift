@@ -21799,4 +21799,918 @@ public enum Operations {
             }
         }
     }
+    /// When each marketplace's offers were last read
+    ///
+    /// One entry per linked marketplace whose offers Listora reads (Poshmark and Depop, on the seller's iPhone; not Mercari yet).
+    ///
+    /// - Remark: HTTP `GET /v1/offer-checks`.
+    /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)`.
+    public enum ListOfferChecks {
+        public static let id: Swift.String = "listOfferChecks"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/offer-checks/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListOfferChecks.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListOfferChecks.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListOfferChecks.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.ListOfferChecks.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offer-checks/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/offer-checks/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.OfferCheckList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.OfferCheckList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListOfferChecks.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListOfferChecks.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The reads.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListOfferChecks.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListOfferChecks.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offer-checks/get(listOfferChecks)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Read the seller's offers now
+    ///
+    /// Asks for a read of the offers on each linked marketplace (only reads; nothing changes on a
+    /// marketplace). The reads run on the seller's iPhone, at most one per marketplace every 10
+    /// minutes however often this is called. Each pending offer becomes an `answer_offer` task.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/offer-checks`.
+    /// - Remark: Generated from `#/paths//v1/offer-checks/post(requestOfferChecks)`.
+    public enum RequestOfferChecks {
+        public static let id: Swift.String = "requestOfferChecks"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/offer-checks/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/offer-checks/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RequestOfferChecks.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RequestOfferChecks.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.RequestOfferChecks.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.RequestOfferChecks.Input.Headers) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offer-checks/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/offer-checks/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.OfferCheckList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.OfferCheckList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.RequestOfferChecks.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.RequestOfferChecks.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The reads, with the ones now waiting for the iPhone.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offer-checks/post(requestOfferChecks)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.RequestOfferChecks.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.RequestOfferChecks.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offer-checks/post(requestOfferChecks)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Get an offer and the newest answer to it
+    ///
+    /// - Remark: HTTP `GET /v1/offers/{offerId}`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/get(getOffer)`.
+    public enum GetOffer {
+        public static let id: Swift.String = "getOffer"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/GET/path/offerId`.
+                public var offerId: Components.Parameters.OfferId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - offerId:
+                public init(offerId: Components.Parameters.OfferId) {
+                    self.offerId = offerId
+                }
+            }
+            public var path: Operations.GetOffer.Input.Path
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetOffer.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetOffer.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetOffer.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetOffer.Input.Path,
+                headers: Operations.GetOffer.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/offers/{offerId}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Offer)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Offer {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetOffer.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetOffer.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The offer.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/get(getOffer)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetOffer.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetOffer.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/get(getOffer)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/get(getOffer)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// What a price on the offer gives the seller after fees
+    ///
+    /// For the counteroffer's confirmation; an estimate from Listora's fee tables, with no marketplace call.
+    ///
+    /// - Remark: HTTP `GET /v1/offers/{offerId}/quote`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/quote/get(getOfferQuote)`.
+    public enum GetOfferQuote {
+        public static let id: Swift.String = "getOfferQuote"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/quote/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/quote/GET/path/offerId`.
+                public var offerId: Components.Parameters.OfferId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - offerId:
+                public init(offerId: Components.Parameters.OfferId) {
+                    self.offerId = offerId
+                }
+            }
+            public var path: Operations.GetOfferQuote.Input.Path
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/quote/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/quote/GET/query/priceCents`.
+                public var priceCents: Swift.Int64
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - priceCents:
+                public init(priceCents: Swift.Int64) {
+                    self.priceCents = priceCents
+                }
+            }
+            public var query: Operations.GetOfferQuote.Input.Query
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/quote/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetOfferQuote.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetOfferQuote.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetOfferQuote.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - query:
+            ///   - headers:
+            public init(
+                path: Operations.GetOfferQuote.Input.Path,
+                query: Operations.GetOfferQuote.Input.Query,
+                headers: Operations.GetOfferQuote.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/quote/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/offers/{offerId}/quote/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.OfferQuote)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.OfferQuote {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetOfferQuote.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetOfferQuote.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The estimate.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/quote/get(getOfferQuote)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetOfferQuote.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetOfferQuote.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/quote/get(getOfferQuote)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/quote/get(getOfferQuote)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/quote/get(getOfferQuote)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Accept, decline, or counter an offer
+    ///
+    /// The seller's confirmed answer, sent once from their iPhone and shown as done only once a
+    /// read of the offer on the marketplace shows it (`OfferResponse`). An accepted offer then
+    /// goes through the normal sale flow when the marketplace shows it sold. `409` when the offer
+    /// no longer waits on the seller or an answer is already under way
+    /// (`invalid_state_transition`), or Listora can't answer offers on that connection
+    /// (`marketplace_action_unavailable`); `422` when the amount moved or the counter is out of
+    /// range.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/offers/{offerId}/responses`.
+    /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)`.
+    public enum AnswerOffer {
+        public static let id: Swift.String = "answerOffer"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/path/offerId`.
+                public var offerId: Components.Parameters.OfferId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - offerId:
+                public init(offerId: Components.Parameters.OfferId) {
+                    self.offerId = offerId
+                }
+            }
+            public var path: Operations.AnswerOffer.Input.Path
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnswerOffer.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.AnswerOffer.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.AnswerOffer.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.OfferAnswer)
+            }
+            public var body: Operations.AnswerOffer.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.AnswerOffer.Input.Path,
+                headers: Operations.AnswerOffer.Input.Headers,
+                body: Operations.AnswerOffer.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Accepted: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/responses/202/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/offers/{offerId}/responses/POST/responses/202/content/application\/json`.
+                    case json(Components.Schemas.OfferResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.OfferResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.AnswerOffer.Output.Accepted.Body
+                /// Creates a new `Accepted`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.AnswerOffer.Output.Accepted.Body) {
+                    self.body = body
+                }
+            }
+            /// The answer, waiting for the iPhone.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)/responses/202`.
+            ///
+            /// HTTP response code: `202 accepted`.
+            case accepted(Operations.AnswerOffer.Output.Accepted)
+            /// The associated value of the enum case if `self` is `.accepted`.
+            ///
+            /// - Throws: An error if `self` is not `.accepted`.
+            /// - SeeAlso: `.accepted`.
+            public var accepted: Operations.AnswerOffer.Output.Accepted {
+                get throws {
+                    switch self {
+                    case let .accepted(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "accepted",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/offers/{offerId}/responses/post(answerOffer)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
 }

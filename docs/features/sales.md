@@ -30,7 +30,7 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
 - **The first check reads the whole history**: every sold order the marketplace's pages show,
   up to each adapter's history limit (Depop 600 sales, Poshmark 1,200, Mercari 25 pages and 60
   listing pages per tab), handed to the sale intake like any order. Later checks read the
-  orders since the last. Migration `20261028063403_sales_history` made every existing
+  orders since the last. Migration `20261028095905_sales_history` made every existing
   connection's next check a full read, and a full read hands over again, once, an order an
   earlier check dropped (`history:order:<id>`, before sold items existed). An app built before
   this keeps working (the phone's call protocol is unchanged): its checks send no sold listing,
@@ -192,7 +192,7 @@ Migration `20261025123116_sale_lifecycle`:
   and `relist_decided_at`.
 - `fee_line`: `description` and, for estimated lines, `fee_table_version`.
 
-Migration `20261028063403_sales_history`: `sale.detection_source` gains `history`;
+Migration `20261028095905_sales_history`: `sale.detection_source` gains `history`;
 `sale_check_schedule.history_until` (where the connection's sales history ends: the row's
 creation at linking, and the deploy for every existing connection); and every
 `sale_check_schedule.checked_through` is reset so each connection's next check reads its whole

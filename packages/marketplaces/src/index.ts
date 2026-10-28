@@ -29,6 +29,18 @@ export type {
   ValidationIssue,
   WriteOperationKind,
 } from './adapter.ts';
+export { answerShown, isOfferMarketplace, OFFER_RULES } from './offers.ts';
+export type {
+  OfferAnswer,
+  OfferAnswerOutcome,
+  OfferAnswerRequest,
+  OfferMarketplace,
+  OfferRef,
+  OfferRules,
+  OfferTurn,
+  RemoteOffer,
+  RemoteOfferState,
+} from './offers.ts';
 export { AssistedAdapter } from './assisted/assisted-adapter.ts';
 export type {
   AssistedAdapterOptions,

@@ -57,6 +57,10 @@ import type {
   OperationOrigin,
   OperationStatus,
   ImageContentType,
+  OfferAction,
+  OfferCheckOutcome,
+  OfferResponseStatus,
+  OfferStatus,
   PackMatch,
   PhoneWorkPurpose,
   PhotoRole,
@@ -639,6 +643,8 @@ export interface UserTaskTable {
   updated_at: UpdatedAt;
   /** The sale the task is about (the later sale of a double sale). */
   sale_id: Nullable<string>;
+  /** The offer an `answer_offer` task is about (docs/features/offers.md). */
+  offer_id: Nullable<string>;
 }
 
 export interface FeeLineTable {
@@ -995,6 +1001,8 @@ export interface PhoneWorkTable {
   updated_at: UpdatedAt;
   /** The import a `listing_import` reads the next page of. */
   import_id: Nullable<string>;
+  /** The seller's answer to an offer that an `offer_response` sends. */
+  offer_response_id: Nullable<string>;
 }
 
 // Imports -------------------------------------------------------------------------------------
@@ -1119,6 +1127,75 @@ export interface ItemBatchItemTable {
   updated_at: UpdatedAt;
 }
 
+// Offers --------------------------------------------------------------------------------------
+
+/** An offer a buyer made on one of the seller's listings (docs/features/offers.md). */
+export interface MarketplaceOfferTable {
+  id: Id;
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  external_offer_id: string;
+  external_listing_id: Nullable<string>;
+  listing_id: Nullable<string>;
+  item_id: Nullable<string>;
+  listing_title: Nullable<string>;
+  status: Generated<OfferStatus>;
+  currency: Generated<CurrencyCode>;
+  amount_cents: number;
+  list_price_cents: Nullable<number>;
+  buyer_name: Nullable<string>;
+  details: DefaultedJsonb<JsonObject>;
+  offer_url: Nullable<string>;
+  made_at: NullableTimestamp;
+  expires_at: NullableTimestamp;
+  first_seen_at: Generated<Date>;
+  last_seen_at: ColumnType<Date, Date | string | undefined, Date | string>;
+  closed_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** The seller's answer to an offer: sent once, succeeded only with a read-back. */
+export interface OfferResponseTable {
+  id: Id;
+  account_id: string;
+  offer_id: string;
+  action: OfferAction;
+  currency: Generated<CurrencyCode>;
+  offer_amount_cents: number;
+  counter_cents: Nullable<number>;
+  net_cents: number;
+  idempotency_key: string;
+  status: Generated<OfferResponseStatus>;
+  attempts: Generated<number>;
+  sent: Generated<boolean>;
+  success_evidence: Nullable<'read_back'>;
+  error_code: Nullable<string>;
+  error_message: Nullable<string>;
+  retryable: Generated<boolean>;
+  finished_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** When a connection's offers were last asked for and read. */
+export interface OfferCheckTable {
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  requested_at: NullableTimestamp;
+  last_started_at: NullableTimestamp;
+  last_finished_at: NullableTimestamp;
+  last_succeeded_at: NullableTimestamp;
+  last_outcome: Nullable<OfferCheckOutcome>;
+  last_error_code: Nullable<string>;
+  last_error_message: Nullable<string>;
+  offers_seen: Nullable<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Pack check ----------------------------------------------------------------------------------
 
 /** Whether Pack check is on, one per account (docs/features/pack-check.md); off by default. */
@@ -1224,4 +1301,7 @@ export interface Database {
   sale_label: SaleLabelTable;
   sale_pack: SalePackTable;
   item_batch_item: ItemBatchItemTable;
+  marketplace_offer: MarketplaceOfferTable;
+  offer_response: OfferResponseTable;
+  offer_check: OfferCheckTable;
 }

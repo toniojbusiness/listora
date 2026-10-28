@@ -33,6 +33,8 @@
             "condition": "pre_owned_excellent",
             "categoryRef": "Women > Sweaters > Cardigan",
             "categoryPath": ["Women", "Sweaters", "Cardigan"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -58,6 +60,8 @@
             "condition": "pre_owned_good",
             "categoryRef": "Women > Shorts > Denim",
             "categoryPath": ["Women", "Shorts", "Denim"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -83,6 +87,8 @@
             "condition": "pre_owned_good",
             "categoryRef": "Women > Jeans > Straight leg",
             "categoryPath": ["Women", "Jeans", "Straight leg"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -108,6 +114,8 @@
             "condition": "pre_owned_excellent",
             "categoryRef": "Women > Jeans > Skinny Jeans",
             "categoryPath": ["Women", "Jeans", "Skinny Jeans"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -132,6 +140,8 @@
             "condition": "pre_owned_good",
             "categoryRef": "Women > Skirts > Maxi",
             "categoryPath": ["Women", "Skirts", "Maxi"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -159,6 +169,8 @@
             "condition": "pre_owned_excellent",
             "categoryRef": "Women > Athletic apparel > Athletic Dresses",
             "categoryPath": ["Women", "Athletic apparel", "Athletic Dresses"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -183,6 +195,8 @@
             "condition": "new_with_tags",
             "categoryRef": "Women > Tops & blouses > Blouse",
             "categoryPath": ["Women", "Tops & blouses", "Blouse"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -206,6 +220,8 @@
             "condition": "pre_owned_excellent",
             "categoryRef": "Women > Dresses > Maxi",
             "categoryPath": ["Women", "Dresses", "Maxi"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -229,6 +245,8 @@
             "condition": "pre_owned_excellent",
             "categoryRef": "Women > Tops & blouses > Blouse",
             "categoryPath": ["Women", "Tops & blouses", "Blouse"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -252,6 +270,8 @@
             "condition": "pre_owned_good",
             "categoryRef": "Women > Dresses > Knee-length",
             "categoryPath": ["Women", "Dresses", "Knee-length"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         },
@@ -276,6 +296,8 @@
             "condition": "pre_owned_excellent",
             "categoryRef": "Women > Dresses > Above knee, mini",
             "categoryPath": ["Women", "Dresses", "Above knee, mini"],
+            "colors": [],
+            "originalPriceCents": null,
             "sku": null
           }
         }
