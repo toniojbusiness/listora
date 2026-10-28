@@ -1,0 +1,38 @@
+/v1/sync:
+  get:
+    tags: [sync]
+    operationId: getSyncStatus
+    summary: Each linked marketplace's sync
+    description: |
+      What each marketplace linked by signing in is reading now, what its last sync found, and
+      when a read last got through (docs/features/sync.md).
+    responses:
+      '200':
+        description: The marketplaces' syncs.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sync.yaml#/SyncStatus'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [sync]
+    operationId: requestSync
+    summary: Sync every linked marketplace now
+    description: |
+      Asks for read-only checks of every marketplace linked by signing in: its sales, the
+      buyers' offers, and its listings once the seller imported them. Only reads; nothing changes
+      on a marketplace, and a read-only connection is read like any other. A marketplace synced
+      in the last 2 minutes (6 hours for listings) is not read again. The reads of marketplaces
+      that run on the seller's iPhone wait for it to claim them.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The marketplaces' syncs, with the reads now asked for.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sync.yaml#/SyncStatus'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

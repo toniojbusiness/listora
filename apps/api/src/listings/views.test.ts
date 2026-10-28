@@ -54,6 +54,7 @@ function row(overrides: Partial<ListingRow> = {}): ListingRow {
     created_at: AT,
     updated_at: AT,
     user_confirmed_at: null,
+    shop_unlinked_at: null,
     ...overrides,
   };
 }

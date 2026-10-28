@@ -1,6 +1,6 @@
 /**
- * The to-ship list (docs/features/pack-check.md, "The to-ship list"): one order per sale that
- * still stands and is not shipped, newest first, with its items (title, SKU, shelf), the buyer's
+ * The to-ship list (docs/features/pack-check.md, "The to-ship list"): one order per package to
+ * pack (`isPackOrder`), newest first, with its items (title, SKU, shelf), the buyer's
  * first name and the shipping label Listora read or the seller scanned, and whether it is
  * packed. Packed orders stay on the list for a day, so a packing session shows what it packed.
  * Computed from the account's own rows on every request; no marketplace call.
@@ -10,6 +10,7 @@ import { sql } from 'kysely';
 import type {
   DbExecutor,
   LabelCarrier,
+  LabelOrderState,
   LabelReadStatus,
   Marketplace,
   PackMatch,
@@ -20,15 +21,24 @@ import type {
 import { describeOrder, type DescribedItem } from './describe.ts';
 import type { VerdictOrder } from './verdict.ts';
 
-/**
- * Sale statuses that still need a package. A sale from the seller's sales history (detection
- * source `history`: it sold before the connection's history ends) never does: it is recorded
- * only.
- */
+/** Sale statuses that may still need a package (`isPackOrder`). */
 export const OPEN_SALE_STATUSES = [
   'detected',
   'confirmed',
 ] as const satisfies readonly SaleStatus[];
+
+/**
+ * Whether the sale (the query's `sale`) is a package to pack: it is open, the marketplace's order
+ * page doesn't say it shipped or was canceled there (a refunded order is never one to ship), and
+ * it isn't from the seller's sales history (detection source `history`: recorded only) unless
+ * that page says it still waits to ship: one sold before Listora watched the marketplace and not
+ * shipped yet is a package all the same.
+ */
+export function isPackOrder() {
+  const state = (states: readonly LabelOrderState[]) =>
+    sql<boolean>`exists (select 1 from sale_label as state where state.account_id = sale.account_id and state.sale_id = sale.id and state.order_state in (${sql.join(states)}))`;
+  return sql<boolean>`(sale.status in (${sql.join(OPEN_SALE_STATUSES)}) and not ${state(['shipped', 'canceled'])} and (sale.detection_source <> 'history' or ${state(['to_ship'])}))`;
+}
 /** How long a packed order stays on the list. */
 export const PACKED_SHOWN_MS = 24 * 3_600_000;
 /** How far back the list reaches: an older sale that never shipped is not a package to pack. */
@@ -86,8 +96,7 @@ export async function loadPackOrders(
     )
     .select('sale.id')
     .where('sale.account_id', '=', accountId)
-    .where('sale.status', 'in', OPEN_SALE_STATUSES)
-    .where('sale.detection_source', '<>', 'history')
+    .where(isPackOrder())
     .where('sale.sold_at', '>', new Date(now.getTime() - OPEN_ORDER_DAYS * 86_400_000))
     .where((eb) =>
       eb.or([
@@ -262,8 +271,7 @@ export async function openSalesWithLabel(
     .where('label.account_id', '=', accountId)
     .where('label.tracking_number', 'is not', null)
     .where(matchesScan('label.tracking_number', scanned))
-    .where('sale.status', 'in', OPEN_SALE_STATUSES)
-    .where('sale.detection_source', '<>', 'history')
+    .where(isPackOrder())
     .orderBy('sale.sold_at', 'desc')
     .execute();
   return rows.map((row) => row.id);
@@ -306,8 +314,7 @@ export async function openSaleWithSku(
     .select('sale.id')
     .where('sale_item.account_id', '=', accountId)
     .where('item.sku', '=', sku)
-    .where('sale.status', 'in', OPEN_SALE_STATUSES)
-    .where('sale.detection_source', '<>', 'history')
+    .where(isPackOrder())
     .orderBy('sale.sold_at', 'desc')
     .executeTakeFirst();
   return row?.id;

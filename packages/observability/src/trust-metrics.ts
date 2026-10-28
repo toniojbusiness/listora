@@ -86,6 +86,9 @@ export async function collectSettledOperations(
       'run.id as runId',
     ])
     .where('event.to_status', 'in', ['succeeded', 'failed'])
+    // A scheduled refresh is not the seller's change: it shows on its listing, and it must not move
+    // the verified-success alarms (docs/features/listing-refresh.md).
+    .where('op.kind', '<>', 'refresh')
     .where('event.created_at', '>=', window.from)
     .where('event.created_at', '<', window.to)
     .orderBy('event.created_at')

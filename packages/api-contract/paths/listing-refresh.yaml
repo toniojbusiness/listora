@@ -1,0 +1,85 @@
+/v1/listing-refresh/settings:
+  get:
+    tags: [listing-refresh]
+    operationId: getListingRefreshSettings
+    summary: Get the listing refresh setting
+    description: How often the account's live listings are refreshed, and the quiet window.
+    responses:
+      '200':
+        description: The setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listing-refresh.yaml#/ListingRefreshSettings'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [listing-refresh]
+    operationId: replaceListingRefreshSettings
+    summary: Replace the listing refresh setting
+    description: |
+      Sets how often Listora refreshes live listings that have not sold, and the quiet window,
+      in the device's time zone. It changes no listing by itself: the schedule refreshes each
+      listing when it is next due.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listing-refresh.yaml#/ListingRefreshSettingsReplace'
+    responses:
+      '200':
+        description: The saved setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listing-refresh.yaml#/ListingRefreshSettings'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/refresh:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  get:
+    tags: [listing-refresh]
+    operationId: getItemRefresh
+    summary: Get an item's refresh cadence
+    description: The item's own refresh cadence, if it has one, and the account's.
+    responses:
+      '200':
+        description: The item's refresh.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listing-refresh.yaml#/ItemRefresh'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [listing-refresh]
+    operationId: replaceItemRefresh
+    summary: Replace an item's refresh cadence
+    description: |
+      Gives the item its own refresh cadence over the account's (for example `off` for one item),
+      or, without `cadence`, makes it follow the account's again.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listing-refresh.yaml#/ItemRefreshReplace'
+    responses:
+      '200':
+        description: The item's refresh.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listing-refresh.yaml#/ItemRefresh'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

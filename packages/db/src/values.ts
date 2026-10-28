@@ -110,8 +110,20 @@ export const OPERATION_KINDS = [
   'relist',
   'mark_sold',
   'verify',
+  'refresh',
 ] as const;
 export type OperationKind = (typeof OPERATION_KINDS)[number];
+
+/** `listing_refresh_setting.cadence` and `inventory_item.refresh_cadence` (listing-refresh.md). */
+export const REFRESH_CADENCES = [
+  'off',
+  'every_72_hours',
+  'daily',
+  'every_few_days',
+  'weekly',
+  'custom',
+] as const;
+export type RefreshCadence = (typeof REFRESH_CADENCES)[number];
 
 export const OPERATION_STATUSES = [
   'queued',
@@ -129,7 +141,7 @@ export type OperationStatus = (typeof OPERATION_STATUSES)[number];
 export const SUCCESS_EVIDENCE = ['read_back', 'user_confirmation'] as const;
 export type SuccessEvidence = (typeof SUCCESS_EVIDENCE)[number];
 
-export const OPERATION_ORIGINS = ['user', 'auto_delist', 'reprice_rule'] as const;
+export const OPERATION_ORIGINS = ['user', 'auto_delist', 'reprice_rule', 'auto_refresh'] as const;
 export type OperationOrigin = (typeof OPERATION_ORIGINS)[number];
 
 export const USER_TASK_KINDS = [
@@ -331,7 +343,14 @@ export const CHALLENGE_KINDS = [
 export type ChallengeKind = (typeof CHALLENGE_KINDS)[number];
 
 /** Why a connection's next sale check is due when it is (`sale_check_schedule.next_reason`). */
-export const SALE_CHECK_REASONS = ['scheduled', 'email', 'retry', 'linked', 'offer'] as const;
+export const SALE_CHECK_REASONS = [
+  'scheduled',
+  'email',
+  'retry',
+  'linked',
+  'offer',
+  'sync',
+] as const;
 export type SaleCheckReason = (typeof SALE_CHECK_REASONS)[number];
 
 export const SALE_CHECK_OUTCOMES = ['succeeded', 'failed', 'challenge'] as const;
@@ -363,6 +382,13 @@ export type LabelCarrier = (typeof LABEL_CARRIERS)[number];
 /** The last read of a sale's order page for its label (`sale_label.read_status`). */
 export const LABEL_READ_STATUSES = ['read', 'no_label', 'not_found', 'failed'] as const;
 export type LabelReadStatus = (typeof LABEL_READ_STATUSES)[number];
+
+/**
+ * What a marketplace's order page last said of the order (`sale_label.order_state`): waiting to
+ * ship, or shipped or canceled there (delivered and refunded included).
+ */
+export const LABEL_ORDER_STATES = ['to_ship', 'shipped', 'canceled'] as const;
+export type LabelOrderState = (typeof LABEL_ORDER_STATES)[number];
 
 /** How a packed order's label was known to be its own (`sale_pack.matched_by`). */
 export const PACK_MATCHES = ['sticker', 'label', 'photo'] as const;

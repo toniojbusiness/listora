@@ -101,7 +101,7 @@ async function readSaleReceipts({ site, step, since }: SalesRead): Promise<Recei
 }
 
 /** The seller's sold listings with these product ids, newest first, by id. */
-async function soldListings(
+export async function soldListings(
   { site, step }: Pick<SalesRead, 'site' | 'step'>,
   wanted: Set<number>,
 ): Promise<Map<number, ApiProduct>> {

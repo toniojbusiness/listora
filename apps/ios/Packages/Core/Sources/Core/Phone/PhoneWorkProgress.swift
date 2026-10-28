@@ -9,6 +9,9 @@ public struct PhoneWorkProgress: Equatable, Sendable {
     public let marketplace: String
     /// The listing change the work is for; `nil` for a sign-in or sale check.
     public let operationID: String?
+    /// What the work is (the server's `purpose`: `sale_check`, `offer_check`, `listing_import`,
+    /// `operation`, ...); `nil` when the server didn't say.
+    public let purpose: String?
     /// The step running now, in plain words; `nil` before the first step.
     public let step: String?
     /// The step's number in the run, from 1; 0 before the first step.
@@ -21,6 +24,7 @@ public struct PhoneWorkProgress: Equatable, Sendable {
     public init(
         marketplace: String,
         operationID: String?,
+        purpose: String? = nil,
         step: String?,
         stepNumber: Int,
         stepCount: Int?,
@@ -28,6 +32,7 @@ public struct PhoneWorkProgress: Equatable, Sendable {
     ) {
         self.marketplace = marketplace
         self.operationID = operationID
+        self.purpose = purpose
         self.step = step
         self.stepNumber = stepNumber
         self.stepCount = stepCount

@@ -42,7 +42,8 @@
 		"price",
 		"end",
 		"relist",
-		"markSold"
+		"markSold",
+		"refresh"
 	];
 	/**
 	* Whether an earlier attempt of the operation may have posted or changed the listing, so a
@@ -64,7 +65,8 @@
 			case "price":
 			case "end":
 			case "relist":
-			case "markSold": {
+			case "markSold":
+			case "refresh": {
 				const script = scripts[call.script];
 				if (script === void 0) throw new Error(`these scripts have no ${call.script} script`);
 				return script(call.op, step);
@@ -1125,7 +1127,7 @@
 		const hhmm = `(?:[01]\\d|2[0-3]):[0-5]\\d`;
 		return typeof args.precision === "number" ? args.precision === -1 ? `${hhmm}` : args.precision === 0 ? `${hhmm}:[0-5]\\d` : `${hhmm}:[0-5]\\d\\.\\d{${args.precision}}` : args.seconds ? `${hhmm}:[0-5]\\d(?:\\.\\d+)?` : `${hhmm}(?::[0-5]\\d(?:\\.\\d+)?)?`;
 	}
-	function time$1(args) {
+	function time$2(args) {
 		return new RegExp(`^${timeSource(args)}$`);
 	}
 	function datetime$1(args) {
@@ -1790,7 +1792,7 @@
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISOTime = /*@__PURE__*/ $constructor("$ZodISOTime", (inst, def) => {
-		def.pattern ?? (def.pattern = time$1(def));
+		def.pattern ?? (def.pattern = time$2(def));
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISODuration = /*@__PURE__*/ $constructor("$ZodISODuration", (inst, def) => {
@@ -6435,7 +6437,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: dollars$1(record.price, page),
 				currency: "USD",
-				revision: revision$1(record.dateUpdated, page)
+				revision: revision$1(record.dateUpdated, page),
+				refreshedAt: new Date(revision$1(record.dateUpdated, page)).toISOString()
 			},
 			sku
 		};
@@ -6546,7 +6549,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: cents$2(price),
 				currency: "USD",
-				revision: revision$1(product.updated_at, API$2)
+				revision: revision$1(product.updated_at, API$2),
+				refreshedAt: new Date(revision$1(product.updated_at, API$2)).toISOString()
 			},
 			sku
 		};
@@ -6964,7 +6968,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				description,
 				priceCents,
 				currency: "USD",
-				revision: null
+				revision: null,
+				refreshedAt: null
 			},
 			sku
 		};
@@ -6999,41 +7004,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		};
 	}
 
-// src/adapter/label-fields.ts
-/**
-	* Pack check's label reads (docs/features/pack-check.md, "Reading labels") from marketplace data
-	* Listora has only seen empty: Depop's receipts and Poshmark's sales. Their records are read by
-	* field names that say what a value is (`tracking_number`, the buyer's `first_name`), at any
-	* depth, and nothing else: a value is never taken by its position or its look. A record that
-	* names no order id or listing at all is a shape Listora doesn't know, and the page module throws
-	* `PageChangedError` for it.
-	*/
-	/** Every value under a key `keys` names, at any depth (arrays included). */
-	function fieldValues(value, keys, depth = 0) {
-		if (depth > 6 || typeof value !== "object" || value === null) return [];
-		if (Array.isArray(value)) return value.flatMap((entry) => fieldValues(entry, keys, depth + 1));
-		return Object.entries(value).flatMap(([key, entry]) => [...keys.includes(key) ? [entry] : [], ...fieldValues(entry, keys, depth + 1)]);
-	}
-	/** The non-empty strings (and whole numbers, as text) among `values`, without repeats. */
-	function texts(values) {
-		const found = values.flatMap((value) => {
-			if (typeof value === "string" && value.trim() !== "") return [value.trim()];
-			if (typeof value === "number" && Number.isSafeInteger(value)) return [String(value)];
-			return [];
-		});
-		return [...new Set(found)];
-	}
-	/** The tracking number a record names, if any. */
-	function trackingField(record) {
-		return texts(fieldValues(record, ["tracking_number", "trackingNumber"]))[0] ?? null;
-	}
-	/** The buyer's first name a record names under its `buyer`, if any. */
-	function buyerFirstName(record) {
-		if (typeof record !== "object" || record === null) return null;
-		const buyer = record["buyer"];
-		return texts(fieldValues(buyer, ["first_name", "firstName"]))[0] ?? null;
-	}
-
 // src/depop/pages/receipts.ts
 /**
 	* The seller's receipts, as Depop's sold items page loads them: one per purchase, newest first,
@@ -7047,19 +7017,33 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* (`seller_amount`), and its `line_items`, each naming its product by `product_id` with the
 	* product's text and photo. A listing the seller marked as sold has no receipt.
 	*
-	* Sale checks read every receipt (sold-items.ts), and Pack check each one's shipping label and
-	* the buyer's first name (docs/features/pack-check.md, "Reading labels"). Nothing else of the
-	* buyer is read: no name, address, or message is kept. Only reads.
+	* Sale checks read every receipt (sales.ts), and Pack check each one's parcel (its label,
+	* carrier, deadline, and label expiry), how the purchase stands, and the buyer's first name
+	* (docs/features/pack-check.md, "Depop's receipts"). Nothing else of the buyer is read: no name,
+	* address, or message is kept. Only reads.
 	*/
 	const TOKEN_COOKIE$1 = "access_token";
 	const API$1 = "receipts API";
 	const PAGE_SIZE = 24;
 	/** A dollar amount as the receipts show it (`"18.00"`). */
 	const amount = string().regex(/^\d+(\.\d{1,2})?$/);
+	const time$1 = datetime({ offset: true });
+	/**
+	* One package of a purchase: Depop's label for it (`tracking.reference`, by `shipping_provider`),
+	* when it must ship by, and when the label expires. A bundle's items share one parcel. Its
+	* `parcel_status` is the label's, not the order's: a refunded order's parcel can still say
+	* `AWAITING_SHIPPING`, so it is never read.
+	*/
+	const parcelSchema = object({
+		shipping_provider: string().nullish(),
+		tracking: object({ reference: string().nullish() }).catchall(unknown()).nullish(),
+		shipping_deadline: time$1.nullish(),
+		label_expires_at: time$1.nullish()
+	}).catchall(unknown());
 	const receiptSchema = object({
 		purchase_id: number().int().positive(),
 		status: string(),
-		sold_timestamp: datetime({ offset: true }),
+		sold_timestamp: time$1,
 		currency: string(),
 		items_amount: amount,
 		seller_amount: amount.nullish(),
@@ -7068,7 +7052,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			product_id: number().int().positive(),
 			description: string(),
 			picture_url: string().nullish()
-		}).catchall(unknown())).min(1)
+		}).catchall(unknown())).min(1),
+		buyer: object({ first_name: string().nullish() }).catchall(unknown()).nullish(),
+		parcels: array(parcelSchema)
 	}).catchall(unknown());
 	const receiptsSchema = object({
 		objects: array(unknown()),
@@ -7143,25 +7129,37 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (/shipped|transit|deliver|complete/.test(shown)) return "shipped";
 		return "unknown";
 	}
-	/** The receipt's ids, product slugs, label, and buyer's first name, by their field names. */
+	/**
+	* Pack check's part of a receipt. A bundle is one purchase with one parcel for all its items: one
+	* package, one label. A purchase whose parcels show several tracking numbers is not one package,
+	* so it reads as having no label (the seller scans the one on the package).
+	*/
 	function receiptLabel(receipt) {
-		const ids = texts([
-			receipt["id"],
-			receipt["purchase_id"],
-			receipt["purchaseId"]
-		]);
-		const slugs = texts(fieldValues(receipt, ["slug", "product_slug"]));
-		if (ids.length === 0 && slugs.length === 0) throw changed$2(API$1, "shows a receipt without an id or a product");
+		const tracked = receipt.parcels.filter((parcel) => present(parcel.tracking?.reference));
+		const parcel = new Set(tracked.map((parcel) => parcel.tracking?.reference?.trim())).size === 1 ? tracked[0] : void 0;
+		const deadlines = receipt.parcels.flatMap((shown) => present(shown.shipping_deadline) ? [new Date(shown.shipping_deadline)] : []);
 		return {
-			ids,
-			slugs,
-			trackingNumber: texts(fieldValues(receipt["parcels"], ["reference"]))[0] ?? trackingField(receipt),
-			buyerFirstName: buyerFirstName(receipt)
+			purchaseId: String(receipt.purchase_id),
+			productIds: receipt.line_items.map((line) => line.product_id),
+			state: receiptState(receipt.status),
+			trackingNumber: parcel?.tracking?.reference?.trim() ?? null,
+			carrierName: present(parcel?.shipping_provider) ? parcel.shipping_provider.trim() : null,
+			shipBy: deadlines.length === 0 ? null : new Date(Math.min(...deadlines.map(Number))),
+			labelExpiresAt: present(parcel?.label_expires_at) ? new Date(parcel.label_expires_at) : null,
+			buyerFirstName: present(receipt.buyer?.first_name) ? receipt.buyer.first_name.trim() : null
 		};
 	}
-	/** The order's label from the receipts read, or not found. */
-	function orderLabel(order, receipts) {
-		const receipt = receipts.find((shown) => shown.ids.includes(order.externalOrderId) || shown.slugs.includes(order.externalOrderId) || order.externalListingIds.some((id) => shown.slugs.includes(id)));
+	/**
+	* The order's label from the receipts read, or not found. An order is its purchase (Listora names
+	* a Depop sale by its purchase id); one named otherwise is found by the products that sold in it,
+	* whose slugs (Listora's listing ids) `slugOf` gives by product id.
+	*/
+	function orderLabel(order, receipts, slugOf = /* @__PURE__ */ new Map()) {
+		const sold = (receipt) => receipt.productIds.flatMap((id) => {
+			const slug = slugOf.get(id);
+			return slug === void 0 ? [] : [slug];
+		});
+		const receipt = receipts.find((shown) => shown.purchaseId === order.externalOrderId) ?? receipts.find((shown) => sold(shown).some((slug) => slug === order.externalOrderId || order.externalListingIds.includes(slug)));
 		if (receipt === void 0) return {
 			externalOrderId: order.externalOrderId,
 			found: false
@@ -7170,13 +7168,56 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			externalOrderId: order.externalOrderId,
 			found: true,
 			trackingNumber: receipt.trackingNumber,
-			buyerFirstName: receipt.buyerFirstName
+			buyerFirstName: receipt.buyerFirstName,
+			...receipt.state === "unknown" ? {} : { orderState: receipt.state },
+			carrierName: receipt.carrierName,
+			shipBy: receipt.shipBy,
+			labelExpiresAt: receipt.labelExpiresAt
 		};
+	}
+	function present(value) {
+		return value !== void 0 && value !== null && value.trim() !== "";
 	}
 	/** A dollar amount (`"18.00"`) in cents. */
 	function cents$1(value) {
 		const [dollars = "0", fraction = ""] = value.split(".");
 		return Number(dollars) * 100 + Number(fraction.padEnd(2, "0"));
+	}
+
+// src/adapter/label-fields.ts
+/**
+	* Pack check's label reads (docs/features/pack-check.md, "Reading labels") from marketplace data
+	* Listora has only seen empty: Poshmark's sales. Their records are read by field names that say
+	* what a value is (`tracking_number`, the buyer's `first_name`), at any depth, and nothing else:
+	* a value is never taken by its position or its look. A record that names no order id or listing
+	* at all is a shape Listora doesn't know, and the page module throws `PageChangedError` for it.
+	* Depop's receipts, read on a real shop with sales, are read by their own shape instead
+	* (depop/pages/receipts.ts).
+	*/
+	/** Every value under a key `keys` names, at any depth (arrays included). */
+	function fieldValues(value, keys, depth = 0) {
+		if (depth > 6 || typeof value !== "object" || value === null) return [];
+		if (Array.isArray(value)) return value.flatMap((entry) => fieldValues(entry, keys, depth + 1));
+		return Object.entries(value).flatMap(([key, entry]) => [...keys.includes(key) ? [entry] : [], ...fieldValues(entry, keys, depth + 1)]);
+	}
+	/** The non-empty strings (and whole numbers, as text) among `values`, without repeats. */
+	function texts(values) {
+		const found = values.flatMap((value) => {
+			if (typeof value === "string" && value.trim() !== "") return [value.trim()];
+			if (typeof value === "number" && Number.isSafeInteger(value)) return [String(value)];
+			return [];
+		});
+		return [...new Set(found)];
+	}
+	/** The tracking number a record names, if any. */
+	function trackingField(record) {
+		return texts(fieldValues(record, ["tracking_number", "trackingNumber"]))[0] ?? null;
+	}
+	/** The buyer's first name a record names under its `buyer`, if any. */
+	function buyerFirstName(record) {
+		if (typeof record !== "object" || record === null) return null;
+		const buyer = record["buyer"];
+		return texts(fieldValues(buyer, ["first_name", "firstName"]))[0] ?? null;
 	}
 
 // src/adapter/offer-fields.ts
@@ -7913,6 +7954,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				return post(op, step);
 			},
+			refresh: async (op, step) => {
+				const opened = await editor(op, step);
+				if (!("slug" in opened)) return opened;
+				await step("check the form", { mutates: false }, (page) => expectSubmit(page, "save"));
+				return step("save unchanged", {
+					mutates: true,
+					timeScale: 2
+				}, async (page) => submitted(await submitListing$2(page, "save")));
+			},
 			read: async (ref, step) => {
 				const slug = ref.externalListingId;
 				if (slug !== null) return (await step("read the listing", { mutates: false }, (page) => readProduct(page, site, slug))).state;
@@ -7929,6 +7979,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			}),
 			labels: async (orders, step) => {
 				const receipts = [];
+				const read = (order) => receipts.some((receipt) => receipt.purchaseId === order.externalOrderId);
 				let cursor = null;
 				for (let number = 1; number <= 5; number += 1) {
 					const shown = await step("read the sold items", { mutates: false }, async (page) => {
@@ -7936,11 +7987,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 						return readReceipts(page, site, cursor);
 					});
 					receipts.push(...shown.receipts.map((receipt) => receipt.label));
-					const missing = orders.some((order) => !orderLabel(order, receipts).found);
-					if (shown.next === null || !missing) break;
+					if (shown.next === null || orders.every(read)) break;
 					cursor = shown.next;
 				}
-				return orders.map((order) => orderLabel(order, receipts));
+				const others = receipts.filter((receipt) => !orders.some((order) => order.externalOrderId === receipt.purchaseId));
+				const slugOf = /* @__PURE__ */ new Map();
+				if (others.length > 0 && orders.some((order) => !read(order))) {
+					const sold = await soldListings({
+						site,
+						step
+					}, new Set(others.flatMap((receipt) => receipt.productIds)));
+					for (const [id, product] of sold) slugOf.set(id, product.state.externalListingId);
+				}
+				return orders.map((order) => orderLabel(order, receipts, slugOf));
 			},
 			listings: async (cursor, step) => {
 				const shown = await step("read your listings for sale", { mutates: false }, async (page) => {
@@ -8200,7 +8259,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			description: null,
 			priceCents,
 			currency: "USD",
-			revision: Math.max(0, ...times)
+			revision: Math.max(0, ...times),
+			refreshedAt: null
 		};
 	}
 
@@ -8599,6 +8659,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 						priceCents: row.priceCents,
 						currency: row.priceCents === null ? null : "USD",
 						revision: null,
+						refreshedAt: null,
 						details: {
 							photoUrls: [],
 							brand: null,
@@ -8693,7 +8754,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				description: await page.text("[data-field=\"description\"]"),
 				priceCents: Number.isSafeInteger(price) ? price : null,
 				currency: "USD",
-				revision: Number.isSafeInteger(revision) ? revision : null
+				revision: Number.isSafeInteger(revision) ? revision : null,
+				refreshedAt: await attribute("data-refreshed-at")
 			};
 		}
 		return {
@@ -8760,6 +8822,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				return step("relist", { mutates: true }, async (page) => {
 					await page.click("#relist");
+					return submitted(page);
+				});
+			},
+			refresh: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await step("open the listing", { mutates: false }, (page) => readById(page, id));
+				if (!shown.found) return notListed();
+				if (shown.status !== "active") return {
+					type: "rejected",
+					code: "not_live",
+					message: "Only a live listing can be refreshed."
+				};
+				return step("refresh", { mutates: true }, async (page) => {
+					await page.click("#refresh");
 					return submitted(page);
 				});
 			},
@@ -9493,7 +9570,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				description,
 				priceCents: record$1.data.price,
 				currency: "USD",
-				revision: record$1.data.updated * 1e3
+				revision: record$1.data.updated * 1e3,
+				refreshedAt: (/* @__PURE__ */ new Date(record$1.data.updated * 1e3)).toISOString()
 			},
 			sku,
 			soldAt: record$1.data.lastSoldAt ? /* @__PURE__ */ new Date(record$1.data.lastSoldAt * 1e3) : null,
@@ -9603,11 +9681,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* table (`[data-testid="Listings"]`) of `tr[data-testid="ListingRow"]` rows, each with its
 	* listing's link (`a[data-testid="ItemLink"]`, the title as its text) and price (`ItemPrice`).
 	* A sold row shows no sold time, only the day it last changed, in its "Updated" column
-	* (`11/16/24`): the sale's time is on the listing's page (item-page.ts). An empty tab keeps
-	* Listora's earlier model. On the phone, Mercari draws the same tabs in its mobile layout (seen
-	* in the phone's evidence, 2026-10-27): rows without the table, which link to their listing
-	* only through its photo (`ProductThumbWrapper`) and show no `ItemLink` or `ItemPrice`; their
-	* title and price are on the listing's page.
+	* (`11/16/24`): the sale's time is on the listing's page (item-page.ts). An empty tab shows
+	* `ZeroListings`. On the phone, Mercari draws the same tabs in its mobile layout, which it picks
+	* for a touch screen whatever the page's width (read on the seller's session, 2026-10-28): a list of `li[data-testid="ListItem"]` rows
+	* without the table, which link to their listing through its photo (`ProductThumbWrapper`) and
+	* its title (`RowItemWithMeta`) and show no `ItemLink` or `ItemPrice`; their title and price are
+	* on the listing's page. While Mercari's own query for the rows runs (about a second on the
+	* phone), that layout shows three placeholder `ListingRow`s that link to nothing, and an empty
+	* tab then shows `ZeroListings` in their place.
 	*/
 	const LISTINGS_PAGE = {
 		/** What an empty tab shows instead of its rows. */
@@ -9624,7 +9705,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		headings: "[data-testid=\"Listings\"] th",
 		next: "a[data-testid=\"NextPage\"]"
 	};
-	/** How long a tab's rows get to draw; a tab without any by then reads as empty. */
+	/** How long a tab's rows (or its `ZeroListings`) get to draw after its list or placeholders. */
 	const ROWS_MS = 8e3;
 	/**
 	* The latest moment a day shown as `11/16/24` (Mercari's US dates) ends in any time zone: noon
@@ -9643,14 +9724,20 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		await page.goto(url);
 		const name = `${tab.replace("_", " ")} listings page`;
 		await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, "listing list");
-		if (await page.exists(LISTINGS_PAGE.empty)) return {
-			rows: [],
-			hasNext: false
-		};
 		const end = Date.now() + ROWS_MS;
-		while (!await page.exists(LISTINGS_PAGE.row) && Date.now() < end) {
-			await new Promise((resolve) => setTimeout(resolve, 500));
-			await page.waitFor("body", "attached");
+		for (;;) {
+			if (await page.exists(LISTINGS_PAGE.empty)) return {
+				rows: [],
+				hasNext: false
+			};
+			const [shown, named, photos] = await Promise.all([
+				page.count(LISTINGS_PAGE.row),
+				page.count(LISTINGS_PAGE.link),
+				page.count(LISTINGS_PAGE.photoLink)
+			]);
+			if (shown > 0 && Math.max(named, photos) === shown) break;
+			if (Date.now() >= end) throw changed(name, shown === 0 ? "shows no rows" : "has rows that link to no listing");
+			await lookAgain(page, 500);
 		}
 		const sold = tab === "in_progress" || tab === "sold";
 		const [shownRows, named, titles, prices, soldAts, headings] = await Promise.all([
@@ -9915,6 +10002,21 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				};
 				throw changed("edit page", "shows no listing form for a listing that has not sold");
 			},
+			refresh: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await onEditor(step, id);
+				if (shown === "active") return step("save unchanged", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
+				if (shown !== "inactive") {
+					if (!shown.state.found) return notListed();
+					if (shown.state.status === "sold") return sold();
+				}
+				return {
+					type: "rejected",
+					code: "not_live",
+					message: "Only a listing for sale on Mercari can be refreshed."
+				};
+			},
 			read: async (ref, step) => {
 				const id = ref.externalListingId;
 				if (id !== null) return (await step("read the listing", { mutates: false }, (page) => readItem(page, site, id))).state;
@@ -10105,8 +10207,19 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			description: record.description,
 			priceCents: cents(record.price_amount.val, page),
 			currency: "USD",
-			revision: revision(record, page)
+			revision: revision(record, page),
+			refreshedAt: refreshedAt(record, page)
 		};
+	}
+	/**
+	* When the listing last showed as fresh: its `updated_at`, which a share to followers moves, as
+	* the fake Poshmark mirrors (docs/features/listing-refresh.md has what is not yet proven on the
+	* real site). Poshmark keeps it to the second.
+	*/
+	function refreshedAt(record, page) {
+		const time = Date.parse(record.updated_at);
+		if (!Number.isFinite(time)) throw new PageChangedError(`Poshmark's ${page} shows a change time Listora can't read`);
+		return new Date(time).toISOString();
 	}
 	/**
 	* The listing's revision: its newest change time in milliseconds. Poshmark keeps `updated_at`
@@ -10652,6 +10765,25 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}).optional() }).optional()
 	}) });
 	const listingPageSchema = object({ $_listing_details: object({ listingDetails: union([listingRecordSchema, removedSchema]).nullable().optional() }) });
+	/**
+	* The listing page's Share, and its sheet's To My Followers: Poshmark's own way to bring a
+	* listing back to the top of the seller's followers' feeds, without changing it.
+	*/
+	const SHARE = {
+		button: "[data-et-name=\"share\"]",
+		toFollowers: "[data-et-name=\"share_poshmark\"]"
+	};
+	/**
+	* Shares the open listing page's listing to the seller's followers: Share, then To My Followers,
+	* and the sheet closes. A page without Share is one Listora no longer understands.
+	*/
+	async function shareToFollowers(page) {
+		if (!await page.exists(SHARE.button)) throw new PageChangedError(`Poshmark's ${PAGE$2} has no Share for this listing`);
+		await page.click(SHARE.button);
+		await page.waitFor(SHARE.toFollowers, "visible");
+		await page.click(SHARE.toFollowers);
+		await page.waitFor(SHARE.toFollowers, "hidden");
+	}
 	/** Opens the listing's page and reads what it shows of the listing. */
 	async function openListingPage(page, site, id) {
 		if (!isListingId(id)) return { type: "none" };
@@ -11279,6 +11411,22 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			},
 			end: (op, step) => changeAvailability(op, step, "not_for_sale"),
 			relist: (op, step) => changeAvailability(op, step, "for_sale"),
+			refresh: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await step("open the listing", { mutates: false }, (page) => openListingPage(page, site, id));
+				if (shown.type === "hidden") return hiddenListing();
+				if (shown.type !== "listing" || shown.record.inventory.status !== "available") return {
+					type: "rejected",
+					code: "not_live",
+					message: "Only a listing for sale on Poshmark can be shared."
+				};
+				await step("share to followers", { mutates: true }, (page) => shareToFollowers(page));
+				return {
+					type: "applied",
+					externalListingId: id
+				};
+			},
 			read: async (ref, step) => {
 				if (ref.externalListingId !== null) {
 					const id = ref.externalListingId;

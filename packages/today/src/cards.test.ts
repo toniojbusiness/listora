@@ -4,16 +4,12 @@ import { describe, expect, it } from 'vitest';
 import {
   delistCard,
   formatMoney,
-  isStale,
   orderCards,
   reconnectCard,
   reviewDraftsCard,
   shipCard,
   shipUrgency,
-  staleListingCard,
-  staleSuggestion,
   TODAY_RULES,
-  type ListedFact,
   type ShipFact,
   type TodayCard,
 } from './cards.ts';
@@ -176,97 +172,6 @@ describe('reconnect cards', () => {
   });
 });
 
-describe('stale listings', () => {
-  const fact: ListedFact = {
-    item,
-    currency: 'USD',
-    priceCents: 4500,
-    floorCents: 3500,
-    listedAt: ago(45 * DAY),
-    lastChangeAt: ago(20 * DAY),
-    marketplaces: ['ebay', 'poshmark'],
-  };
-
-  it('is stale after 30 days live with no change for 14', () => {
-    expect(isStale(fact, NOW)).toBe(true);
-    expect(isStale({ ...fact, lastChangeAt: null }, NOW)).toBe(true);
-    expect(isStale({ ...fact, listedAt: ago(TODAY_RULES.staleListedDays * DAY - 1) }, NOW)).toBe(
-      false,
-    );
-    expect(isStale({ ...fact, lastChangeAt: ago(TODAY_RULES.staleQuietDays * DAY - 1) }, NOW)).toBe(
-      false,
-    );
-  });
-
-  it('suggests 10% off in whole dollars, never below the floor', () => {
-    expect(staleSuggestion(4500, 3500)).toEqual({ kind: 'price_drop', priceCents: 4000 });
-    expect(staleSuggestion(4500, 4200)).toEqual({ kind: 'price_drop', priceCents: 4200 });
-    expect(staleSuggestion(999, 0)).toEqual({ kind: 'price_drop', priceCents: 800 });
-  });
-
-  it('suggests a relist when no price drop is possible or no floor is known', () => {
-    expect(staleSuggestion(3500, 3500)).toEqual({ kind: 'relist' });
-    expect(staleSuggestion(3000, 3500)).toEqual({ kind: 'relist' });
-    expect(staleSuggestion(4500, null)).toEqual({ kind: 'relist' });
-  });
-
-  it.each([
-    [4500, 3500],
-    [4500, 4499],
-    [12_345, 11_111],
-    [101, 100],
-    [100, 1],
-  ])('never suggests below the floor: %i with floor %i', (price, floor) => {
-    const suggestion = staleSuggestion(price, floor);
-    if (suggestion.kind === 'price_drop') {
-      expect(suggestion.priceCents).toBeGreaterThanOrEqual(floor);
-      expect(suggestion.priceCents).toBeLessThan(price);
-    }
-  });
-
-  it('offers the price drop as the action, on the item', () => {
-    expect(staleListingCard(fact, NOW)).toEqual({
-      kind: 'stale_listing',
-      id: 'stale:item-1',
-      urgency: 'normal',
-      title: "Levi's 501 jeans",
-      detail: 'Listed 45 days with no changes. Try $40, still above your $35 floor.',
-      action: {
-        label: 'Lower to $40',
-        destination: 'item',
-        itemId: 'item-1',
-        saleId: null,
-        connectionId: null,
-      },
-      item,
-      listedAt: fact.listedAt,
-      daysListed: 45,
-      currency: 'USD',
-      priceCents: 4500,
-      floorCents: 3500,
-      suggestion: { kind: 'price_drop', priceCents: 4000 },
-      marketplaces: ['ebay', 'poshmark'],
-    });
-  });
-
-  it('offers a relist at the floor, or without one', () => {
-    expect(staleListingCard({ ...fact, priceCents: 3500 }, NOW)).toMatchObject({
-      detail:
-        "Listed 45 days with no changes. It's at its floor price, so relisting can bring it back to the top of search.",
-      action: { label: 'Review listing' },
-      suggestion: { kind: 'relist' },
-    });
-    expect(staleListingCard({ ...fact, floorCents: null }, NOW)?.detail).toBe(
-      'Listed 45 days with no changes. Relisting can bring it back to the top of search.',
-    );
-  });
-
-  it('has no card for a listing that is not stale or has no price', () => {
-    expect(staleListingCard({ ...fact, lastChangeAt: ago(DAY) }, NOW)).toBeNull();
-    expect(staleListingCard({ ...fact, priceCents: null }, NOW)).toBeNull();
-  });
-});
-
 describe('drafts', () => {
   it('is one card for every draft, which opens the drafts', () => {
     expect(reviewDraftsCard({ count: 3, oldestCreatedAt: ago(DAY) })).toEqual({
@@ -297,7 +202,6 @@ describe('order', () => {
     const card = (id: string, kind: TodayCard['kind'], urgency: TodayCard['urgency']) =>
       ({ id, kind, urgency }) as TodayCard;
     const ordered = orderCards([
-      card('stale', 'stale_listing', 'normal'),
       card('ship-later', 'ship', 'normal'),
       card('drafts', 'review_drafts', 'normal'),
       card('reconnect', 'reconnect', 'high'),
@@ -312,7 +216,6 @@ describe('order', () => {
       'reconnect',
       'ship-later',
       'drafts',
-      'stale',
     ]);
   });
 });

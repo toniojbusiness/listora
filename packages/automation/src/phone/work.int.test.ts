@@ -38,7 +38,7 @@ import { loadChromium } from '../runner/playwright.ts';
 import { LISTING_IMPORT_APPLY_TASK, queueImportPage } from '../imports/schedule.ts';
 import { queueLabelReads } from '../label-reads/queue.ts';
 import { requestOfferAnswer } from '../offers/answer.ts';
-import { queueDueOfferChecks, queueOfferCheck } from '../offers/schedule.ts';
+import { queueOfferCheck, requestOfferChecks } from '../offers/schedule.ts';
 import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
 import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -637,6 +637,39 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(await operation(create.id)).toMatchObject({ status: 'succeeded' });
   });
 
+  it('finishes a sale check the phone could not run as failed, and never claims it again at once', async () => {
+    await runPhone();
+    expect(await enqueueSaleCheck(db, { accountId, connectionId, marketplace: 'depop' })).toBe(
+      true,
+    );
+    const device = { accountId, deviceId, runtimeVersion: PHONE_RUNTIME_VERSION };
+    const run = await claimPhoneRun(phone, db, device);
+    expect(run?.purpose).toBe('sale_check');
+    // The app's web views failed before the script ran: it says so instead of dropping the run.
+    const next = await answerPhoneCall(phone, {
+      accountId,
+      deviceId,
+      runId: run?.id ?? '',
+      index: run?.call?.index ?? 0,
+      answer: { type: 'not_run', message: 'WebKit stopped the page' },
+    });
+    expect(next.call).toBeNull();
+    const check = await db
+      .selectFrom('sale_check_run')
+      .select(['outcome', 'error_code', 'error_message'])
+      .where('account_id', '=', accountId)
+      .where('connection_id', '=', connectionId)
+      .orderBy('started_at', 'desc')
+      .executeTakeFirstOrThrow();
+    expect(check).toMatchObject({
+      outcome: 'failed',
+      error_code: 'browser_unavailable',
+      error_message: expect.stringContaining("Listora's browser didn't start") as unknown,
+    });
+    // Tried again later on its backoff, not handed straight back to the phone.
+    expect(await claimPhoneRun(phone, db, device)).toBeNull();
+  });
+
   it('fails work the phone has not run for a day, with a Retry', async () => {
     await runPhone();
     const create = await enqueue(await newListing(), 'create');
@@ -1136,6 +1169,59 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     ]);
   });
 
+  it('marks a sale shipped when its Depop receipt says it shipped, read on the phone', async () => {
+    await runPhone();
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    await runPhoneAndConfirm(create);
+    const listing = await db
+      .selectFrom('marketplace_listing')
+      .select(['external_listing_id', 'item_id'])
+      .where('id', '=', listingId)
+      .executeTakeFirstOrThrow();
+    const slug = listing.external_listing_id ?? '';
+    site.sell(
+      slug,
+      new Date(),
+      { trackingNumber: '9400100000000000000021', buyerFirstName: 'Robin' },
+      { status: 'delivered' },
+    );
+    const sale = await db
+      .insertInto('sale')
+      .values({
+        account_id: accountId,
+        marketplace: 'depop',
+        external_order_id: String(site.purchaseIdOf(slug)),
+        sold_at: new Date(),
+        detection_source: 'poll',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('sale_item')
+      .values({
+        account_id: accountId,
+        sale_id: sale.id,
+        marketplace: 'depop',
+        item_id: listing.item_id,
+        listing_id: listingId,
+        sale_price_cents: 1500,
+      })
+      .execute();
+
+    await queueLabelReads(db, { accountId, now: new Date() });
+    await runPhone();
+    const shown = await db
+      .selectFrom('sale')
+      .innerJoin('sale_label as label', 'label.sale_id', 'sale.id')
+      .select(['sale.status', 'sale.ship_by', 'label.order_state', 'label.read_status'])
+      .where('sale.id', '=', sale.id)
+      .executeTakeFirstOrThrow();
+    expect(shown).toMatchObject({ status: 'shipped', order_state: 'shipped', read_status: 'read' });
+    expect(shown.ship_by).toBeInstanceOf(Date);
+  });
+
   // Offers (docs/features/offers.md) -------------------------------------------------------------
 
   /** A Depop listing of an item, posted and confirmed on the phone, with a buyer's offer on it. */
@@ -1260,12 +1346,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(await offerTasks()).toHaveLength(1);
     expect(site.offers.answers).toEqual([]);
 
-    // The dispatcher asks again only once the hour since the last read is up.
+    // The seller asks again (opening Tasks, a sync) only once the gap since the last read is up.
     const offerReadsWaiting = async () =>
       (await work()).filter((row) => row.purpose === 'offer_check').length;
-    await queueDueOfferChecks(db);
+    await requestOfferChecks(db, { accountId });
     expect(await offerReadsWaiting()).toBe(0);
-    await queueDueOfferChecks(db, 0);
+    await requestOfferChecks(db, { accountId, minGapMs: 0 });
     expect(await offerReadsWaiting()).toBe(1);
     await runPhone();
 

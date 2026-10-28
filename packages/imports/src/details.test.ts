@@ -18,6 +18,7 @@ function listed(
     priceCents: 3400,
     currency: 'USD',
     revision: 1,
+    refreshedAt: null,
     ...overrides,
     details: {
       photoUrls: [],

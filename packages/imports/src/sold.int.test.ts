@@ -131,6 +131,7 @@ describe('sold items for the sales history (real Postgres, a local image CDN)', 
       priceCents: 4500,
       currency: 'USD',
       revision: 1_761_000_000_000,
+      refreshedAt: null,
       details: {
         photoUrls: Array.from(
           { length: photos },

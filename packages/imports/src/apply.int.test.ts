@@ -2,8 +2,9 @@
  * Settling an import's listings on real Postgres (docs/features/imports.md): each listing becomes
  * an item listed there with its photos (fetched from a local stand-in for the marketplace's image
  * CDN), or is added to the item it is the same as, by its SKU line or its title and photos, or
- * becomes a question the seller answers; a listing Listora has is left as it is, and one whose
- * photos can't be fetched fails visibly. Two imports settling at once never make two items of one.
+ * becomes a question the seller answers; a listing Listora has is left as it is (one from an
+ * unlinked shop rejoins the shop that shows it), and one whose photos can't be fetched fails
+ * visibly. Two imports settling at once never make two items of one.
  */
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -21,8 +22,8 @@ import {
   fakeMediaPhoto,
   linkAutomationSession,
 } from '@listora/automation';
-import { LocalTokenVault, SessionVault } from '@listora/connections';
-import { jsonb, type Db, type JsonObject, type Marketplace } from '@listora/db';
+import { LocalTokenVault, SessionVault, startConnectionDeletion } from '@listora/connections';
+import { inTransaction, jsonb, type Db, type JsonObject, type Marketplace } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import type { ListedListing } from '@listora/marketplaces';
 import type { PhotoJobPayload, PhotoJobQueue } from '@listora/photos';
@@ -143,6 +144,7 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
       priceCents: 3400,
       currency: 'USD',
       revision: 1_761_000_000_000,
+      refreshedAt: null,
       ...overrides,
       details: {
         photoUrls: [`${cdn}/media/${id}-front.jpg`, `${cdn}/media/${id}-back.jpg`],
@@ -415,6 +417,32 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
     expect(importWords(row).summary).toBe('Imported 0 from Depop, 1 already in Listora');
     expect(entries[0]?.item_id).toBe(before[0]?.id);
     expect(await items()).toHaveLength(1);
+  });
+
+  it('puts a listing from an unlinked shop back only when the linked shop shows it', async () => {
+    const first = await settled(await imported('depop', [listing('dress-1'), listing('dress-2')]));
+    expect(first.row).toMatchObject({ status: 'finished', imported: 2 });
+    const previous = first.row.connection_id;
+    await inTransaction(db, (trx) =>
+      startConnectionDeletion(trx, { accountId, connectionId: previous, reason: 'unlinked' }),
+    );
+    // The shop linked next shows only dress-1: it is that shop's; dress-2 stays the previous one's.
+    const second = await settled(await imported('depop', [listing('dress-1')]));
+    expect(second.row).toMatchObject({ status: 'finished', imported: 0, already_listed: 1 });
+    const rows = await db
+      .selectFrom('marketplace_listing')
+      .select(['external_listing_id', 'connection_id', 'shop_unlinked_at'])
+      .where('account_id', '=', accountId)
+      .orderBy('external_listing_id')
+      .execute();
+    expect(rows[0]).toEqual({
+      external_listing_id: 'dress-1',
+      connection_id: second.row.connection_id,
+      shop_unlinked_at: null,
+    });
+    expect(rows[1]).toMatchObject({ external_listing_id: 'dress-2', connection_id: null });
+    expect(rows[1]?.shop_unlinked_at).toBeInstanceOf(Date);
+    expect(second.row.connection_id).not.toBe(previous);
   });
 
   it("fails a listing whose photos can't be fetched, visibly, and imports the rest", async () => {

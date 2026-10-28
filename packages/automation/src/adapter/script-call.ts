@@ -56,6 +56,12 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
   relist?: WriteScript<P>;
   markSold?: WriteScript<P>;
   /**
+   * Refreshes a live listing in place through the marketplace's own normal mechanism (a share,
+   * an edit saved unchanged), never a delete and repost (docs/features/listing-refresh.md).
+   * The read script must then show the time of it (`refreshedAt`).
+   */
+  refresh?: WriteScript<P>;
+  /**
    * Reads the listing (by its id, else by the seller's SKU). Must say `authoritative` only for
    * the marketplace's own "removed" answer for that id. Only reads: no step may mutate.
    */
@@ -94,7 +100,15 @@ export interface ScriptSet {
   siteUrl: string;
 }
 
-export const WRITE_SCRIPTS = ['create', 'revise', 'price', 'end', 'relist', 'markSold'] as const;
+export const WRITE_SCRIPTS = [
+  'create',
+  'revise',
+  'price',
+  'end',
+  'relist',
+  'markSold',
+  'refresh',
+] as const;
 export type WriteScriptName = (typeof WRITE_SCRIPTS)[number];
 
 /** Which script runs, with its input. */
@@ -141,7 +155,8 @@ export async function runScriptCall<P extends AssistedListingPayload>(
     case 'price':
     case 'end':
     case 'relist':
-    case 'markSold': {
+    case 'markSold':
+    case 'refresh': {
       const script = scripts[call.script];
       if (script === undefined) throw new Error(`these scripts have no ${call.script} script`);
       return script(call.op, step);

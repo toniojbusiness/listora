@@ -104,6 +104,12 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    lease lapse. An operation step is recovered like any interrupted step: its job finds the
    lapsed run and a read-back decides. A check waits for the phone again. A call never answered
    is finished in `automation_run` as canceled.
+   A call the app cannot run at all (its web views failed before the script answered) is
+   answered as `{"type": "not_run", "message": ...}` with the phone's reason: the call fails as
+   `browser_unavailable` (a possible change only for a write, so a read-back decides), the
+   reason goes to the server's `automation script stopped` log line, and a check is tried again
+   on its own backoff. Without that answer the next claim would cancel the run as stopped and
+   hand the same work straight back, over and over, with nothing finishing.
 6. **Waiting too long.** An operation that waits for the phone longer than 24 hours fails with
    `phone_unavailable` and a Retry. Until then its status says what the seller can do: "Delisting... open
    Listora on your iPhone", with a detail asking them to open it (how long it waited is not shown).
@@ -143,7 +149,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   processed ([photos.md](photos.md)); the app downloads each one once and hands it to every
   marketplace that posts it.
 - **Progress.** Each step the runtime starts goes to the app (`progress`, never waited for): the
-  step in plain words ("Adding the photos", from the script's step name) and its number. The item
+  step in plain words ("Adding the photos", from the script's step name) and its number, with the
+  run's purpose, from which the sync indicator names what the phone is doing ("Checking Depop
+  sales...", [sync.md](sync.md)). The item
   screen's card for that listing shows it while the phone works on its change, each
   marketplace's on its own card: the step, "Step 4 of 9", and "Working on your iPhone, about 40
   seconds left", estimated from the same call's step times the last time it ran to the end on
@@ -153,7 +161,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   the marketplace, the call, and each step's milliseconds).
 - **The marketplace page** is an off-screen `WKWebView` with a data store of its own, filled
   with the cookies the phone keeps. It asks for desktop pages at a desktop size, as Safari's
-  "Request Desktop Website" does, so the marketplaces serve the pages the scripts read. It is
+  "Request Desktop Website" does, so the marketplaces serve the pages the scripts read. A page
+  that picks its layout by the screen's touch rather than its width still draws its mobile one:
+  Mercari's listing tabs do ([mercari.md](mercari.md)), so its scripts read both layouts. It is
   WebKit, as it says: no disguised user agent, no fingerprint changes, no proxy. The main frame
   may load only the marketplace's own origins; a window the site opens is not opened.
 - **Checks are handed to the seller.** A CAPTCHA, a bot check, a login code, or a sign-in page
@@ -186,6 +196,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   leaves nothing behind.
 - **After a change in the app**: linking a marketplace, Check again, publishing, changing a
   price, ending, relisting, retrying, recording a sale, and choosing what to relist.
+- **A sync** ([sync.md](sync.md)): opening the app, Sync now, and a pull to refresh on Today or
+  Sales hand the marketplaces' read-only checks (sales, offers, listings) to the phone, which
+  claims them at once. Nothing reads a marketplace that runs here on a timer.
 - **A push.** A sale whose delists run on the phone sends a visible, time-sensitive notification
   that says what sold and "Tap to delist it on Depop from your iPhone."; tapping it opens the app,
   which runs the delists. The same notification also asks iOS to wake the app

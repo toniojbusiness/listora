@@ -140,6 +140,7 @@ describe('DepopAdapter against the fake Depop', () => {
       priceCents: 4500,
       currency: 'USD',
       revision: null,
+      refreshedAt: null,
     });
   });
 

@@ -4,6 +4,7 @@
  * iPhone app for a seller whose Depop runs on their phone (docs/features/phone-execution.md).
  */
 import {
+  type LabelReadRequest,
   type ListedListing,
   type OperationRequest,
   type RemoteListingState,
@@ -40,7 +41,7 @@ import {
 import { depopOfferPages, readOffer, readOffers } from './pages/offers.ts';
 import { answerOnOfferPage } from '../adapter/offer-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
-import { readSales } from './sales.ts';
+import { readSales, soldListings } from './sales.ts';
 
 /**
  * Pages of the seller's newest listings for sale (24 each) a lookup by SKU looks through. A
@@ -242,6 +243,17 @@ export function createDepopScripts(
       if (shown.state.status === 'active') return { type: 'applied', externalListingId: slug };
       return post(op, step);
     },
+    // A refresh saves the listing's edit page unchanged, the way sellers refresh a Depop listing
+    // (it shows as recently updated); never a delete and repost, which loses its likes
+    // (listing-refresh.md).
+    refresh: async (op, step) => {
+      const opened = await editor(op, step);
+      if (!('slug' in opened)) return opened;
+      await step('check the form', { mutates: false }, (page) => expectSubmit(page, 'save'));
+      return step('save unchanged', { mutates: true, timeScale: 2 }, async (page) =>
+        submitted(await submitListing(page, 'save')),
+      );
+    },
     read: async (ref, step): Promise<RemoteListingState> => {
       const slug = ref.externalListingId;
       if (slug !== null) {
@@ -258,7 +270,10 @@ export function createDepopScripts(
       step('open the selling hub', { mutates: false }, (page) => openHub(page, site)),
     orders: (since, step) => readSales({ site, step, since }),
     labels: async (orders, step) => {
+      // Newest first, until every order's purchase is read.
       const receipts: ReceiptLabel[] = [];
+      const read = (order: LabelReadRequest) =>
+        receipts.some((receipt) => receipt.purchaseId === order.externalOrderId);
       let cursor: string | null = null;
       for (let number = 1; number <= MAX_RECEIPT_PAGES; number += 1) {
         const shown = await step('read the sold items', { mutates: false }, async (page) => {
@@ -266,11 +281,23 @@ export function createDepopScripts(
           return readReceipts(page, site, cursor);
         });
         receipts.push(...shown.receipts.map((receipt) => receipt.label));
-        const missing = orders.some((order) => !orderLabel(order, receipts).found);
-        if (shown.next === null || !missing) break;
+        if (shown.next === null || orders.every(read)) break;
         cursor = shown.next;
       }
-      return orders.map((order) => orderLabel(order, receipts));
+      // An order Listora names otherwise is found by its products: the sold listings give the
+      // slugs of the other receipts' products.
+      const others = receipts.filter(
+        (receipt) => !orders.some((order) => order.externalOrderId === receipt.purchaseId),
+      );
+      const slugOf = new Map<number, string>();
+      if (others.length > 0 && orders.some((order) => !read(order))) {
+        const sold = await soldListings(
+          { site, step },
+          new Set(others.flatMap((receipt) => receipt.productIds)),
+        );
+        for (const [id, product] of sold) slugOf.set(id, product.state.externalListingId);
+      }
+      return orders.map((order) => orderLabel(order, receipts, slugOf));
     },
     listings: async (cursor, step) => {
       // One page of the listings for sale (24), newest first, then each one's own edit data

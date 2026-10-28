@@ -8,6 +8,7 @@
  * whose result is unknown is always followed by a verification step, so an exhausted budget
  * never turns "maybe applied" into "failed" without reading the listing back first.
  */
+import type { OperationKind } from '@listora/db';
 
 /** 30 s, 2 m, 10 m, 30 m, 2 h, 6 h: seven attempts over about nine hours. */
 export const RETRY_DELAYS_MS: readonly number[] = [
@@ -59,6 +60,19 @@ export function queuePollIntervalMs(policy: RetryPolicy): number {
 /** Attempts an operation gets before it fails (7 with the default schedule). */
 export function maxAttempts(policy: RetryPolicy): number {
   return policy.delaysMs.length + 1;
+}
+
+/**
+ * A scheduled refresh gets at most this many: one that can't be confirmed fails soon and waits
+ * for the next refresh, rather than sharing the listing again and again within hours
+ * (docs/features/listing-refresh.md).
+ */
+export const REFRESH_MAX_ATTEMPTS = 3;
+
+/** The attempts an operation of this kind gets before it fails. */
+export function maxAttemptsFor(policy: RetryPolicy, kind: OperationKind): number {
+  const max = maxAttempts(policy);
+  return kind === 'refresh' ? Math.min(max, REFRESH_MAX_ATTEMPTS) : max;
 }
 
 /**

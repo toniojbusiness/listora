@@ -277,10 +277,8 @@ export {
   startOfferCheck,
 } from './offers/record.ts';
 export {
-  OFFER_CHECK_INTERVAL_MS,
   OFFER_CHECK_MIN_GAP_MS,
   OFFER_MARKETPLACES,
-  queueDueOfferChecks,
   queueOfferCheck,
   queueOfferResponse,
   requestOfferChecks,

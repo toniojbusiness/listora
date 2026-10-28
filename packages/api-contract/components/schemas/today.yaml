@@ -12,11 +12,10 @@ KnownTodayCardKind:
     `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
     `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
     seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
-    `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-    the item's floor) or a relist suggested. Every card is something the seller can do: Listora's
+    Every card is something the seller can do: Listora's
     own background problems (sale checks that fail or stall) are for the owner's alerts and the
     support views, never a card.
-  enum: [delist, ship, reconnect, review_drafts, stale_listing]
+  enum: [delist, ship, reconnect, review_drafts]
 TodayUrgency:
   description: |
     A `KnownTodayUrgency`, or a level added after this client was built, which clients show
@@ -54,7 +53,7 @@ TodayAction:
     label:
       type: string
       maxLength: 60
-      description: The button's title, for example `Open sale` or `Lower to $40`.
+      description: The button's title, for example `Open sale` or `Reconnect`.
     destination:
       $ref: '#/TodayDestination'
     itemId:
@@ -138,46 +137,6 @@ TodayConnection:
       maxLength: 200
     status:
       $ref: './connections.yaml#/ConnectionStatus'
-TodayStaleSuggestion:
-  description: |
-    A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
-    clients show through the card's `detail` and action.
-  anyOf:
-    - $ref: '#/KnownTodayStaleSuggestion'
-    - type: string
-      maxLength: 64
-KnownTodayStaleSuggestion:
-  type: string
-  description: |
-    `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
-    `relist`: no price drop is possible (the price is at its floor, or no floor is known).
-  enum: [price_drop, relist]
-TodayStaleListing:
-  type: object
-  description: A `stale_listing` card's listing facts and suggestion.
-  required: [listedAt, daysListed, price, suggestion, marketplaces]
-  properties:
-    listedAt:
-      $ref: './common.yaml#/Timestamp'
-      description: When its oldest live listing went live.
-    daysListed:
-      type: integer
-      format: int32
-      minimum: 0
-    price:
-      $ref: './common.yaml#/Money'
-    floor:
-      $ref: './common.yaml#/Money'
-    suggestion:
-      $ref: '#/TodayStaleSuggestion'
-    suggestedPrice:
-      $ref: './common.yaml#/Money'
-      description: Present with `price_drop`.
-    marketplaces:
-      type: array
-      description: Where it is live.
-      items:
-        $ref: './common.yaml#/Marketplace'
 TodayDrafts:
   type: object
   description: A `review_drafts` card's drafts.
@@ -194,7 +153,7 @@ TodayCard:
   description: |
     One thing that needs the seller. A card exists only while its work is not done, so it is
     gone from the next summary once the work is finished. The kind's own property (`shipment`,
-    `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+    `delist`, `connection`, or `drafts`) carries its facts.
   required: [id, kind, urgency, title, action]
   properties:
     id:
@@ -221,8 +180,6 @@ TodayCard:
       $ref: '#/TodayDelist'
     connection:
       $ref: '#/TodayConnection'
-    staleListing:
-      $ref: '#/TodayStaleListing'
     drafts:
       $ref: '#/TodayDrafts'
 TodayMoneyPeriod:

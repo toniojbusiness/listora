@@ -1,0 +1,133 @@
+RefreshCadence:
+  description: |
+    A `KnownRefreshCadence`, or a cadence added after this client was built, which clients show
+    by name.
+  anyOf:
+    - $ref: '#/KnownRefreshCadence'
+    - type: string
+      maxLength: 64
+KnownRefreshCadence:
+  type: string
+  description: |
+    How often Listora refreshes a live listing that has not sold: `off`, `every_72_hours` (the
+    default), `daily`, `every_few_days` (every 5 days), `weekly`, or `custom` (every
+    `customHours`).
+  enum: [off, every_72_hours, daily, every_few_days, weekly, custom]
+QuietWindow:
+  type: object
+  description: |
+    No refresh starts from `start` up to `end`, wall-clock in the setting's time zone. It runs
+    past midnight when `end` comes before `start` (`22:00` to `07:00`).
+  required: [start, end]
+  properties:
+    start:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    end:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+ListingRefreshSettings:
+  type: object
+  description: |
+    How Listora refreshes the account's live listings that have not sold: through each
+    marketplace's own way (Poshmark's share to followers, saving the listing unchanged on Mercari
+    and Depop), never a delete and repost, within the marketplace's pace. eBay listings are not
+    refreshed (eBay has no refresh that keeps watchers). Defaults (`every_72_hours`, no quiet
+    window) until saved.
+  required: [cadence]
+  properties:
+    cadence:
+      $ref: '#/RefreshCadence'
+    customHours:
+      type: integer
+      format: int32
+      minimum: 12
+      maximum: 720
+      description: Present with `custom`.
+    quietWindow:
+      $ref: '#/QuietWindow'
+    timeZone:
+      type: string
+      maxLength: 64
+      description: An IANA time zone name, for example `America/New_York`.
+ListingRefreshSettingsReplace:
+  type: object
+  description: |
+    The setting, with the device's time zone. `customHours` is required with `custom`, and only
+    allowed with it. A time zone the server does not know is `422 validation_failed`.
+  required: [cadence, timeZone]
+  properties:
+    cadence:
+      $ref: '#/KnownRefreshCadence'
+    customHours:
+      type: integer
+      format: int32
+      minimum: 12
+      maximum: 720
+    quietWindow:
+      $ref: '#/QuietWindow'
+    timeZone:
+      type: string
+      minLength: 1
+      maxLength: 64
+ItemRefresh:
+  type: object
+  description: |
+    An item's refresh: its own cadence when it has one (`cadence` absent: the account's), and the
+    account's.
+  required: [accountCadence]
+  properties:
+    cadence:
+      $ref: '#/RefreshCadence'
+    customHours:
+      type: integer
+      format: int32
+      minimum: 12
+      maximum: 720
+      description: Present with the item's own `custom` cadence.
+    accountCadence:
+      $ref: '#/RefreshCadence'
+    accountCustomHours:
+      type: integer
+      format: int32
+      minimum: 12
+      maximum: 720
+ItemRefreshReplace:
+  type: object
+  description: The item's own cadence; without `cadence` the item follows the account's again.
+  properties:
+    cadence:
+      $ref: '#/KnownRefreshCadence'
+    customHours:
+      type: integer
+      format: int32
+      minimum: 12
+      maximum: 720
+ListingRefreshState:
+  description: |
+    A `KnownListingRefreshState`, or a state added after this client was built, which clients
+    show without a time.
+  anyOf:
+    - $ref: '#/KnownListingRefreshState'
+    - type: string
+      maxLength: 64
+KnownListingRefreshState:
+  type: string
+  description: |
+    `scheduled`: Listora refreshes it at `nextAt`. `off`: refreshing is off for it (its item's
+    cadence or the account's). `unavailable`: Listora can't refresh it there (eBay, or no linked
+    marketplace session that works).
+  enum: [scheduled, off, unavailable]
+ListingRefresh:
+  type: object
+  description: A live listing's refresh, its next and its last.
+  required: [state]
+  properties:
+    state:
+      $ref: '#/ListingRefreshState'
+    nextAt:
+      $ref: './common.yaml#/Timestamp'
+      description: With `scheduled`; now or soon for a listing already due.
+    lastAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When its last refresh was confirmed by the marketplace.

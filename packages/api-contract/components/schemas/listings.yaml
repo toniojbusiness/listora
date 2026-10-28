@@ -195,6 +195,9 @@ Listing:
       $ref: './common.yaml#/Timestamp'
     lastVerifiedAt:
       $ref: './common.yaml#/Timestamp'
+    refresh:
+      $ref: './listing-refresh.yaml#/ListingRefresh'
+      description: For a live listing, its next and last refresh (listing refresh).
     createdAt:
       $ref: './common.yaml#/Timestamp'
     updatedAt:

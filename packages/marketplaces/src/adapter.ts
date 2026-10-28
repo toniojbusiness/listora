@@ -66,6 +66,13 @@ export interface MarketplaceCapabilities {
   updateDetails: Mode;
   delist: Mode;
   relist: Mode;
+  /**
+   * Refreshing a live listing so it shows as fresh, through the marketplace's own normal
+   * mechanism (Poshmark's share to followers, an edit saved unchanged), never a delete and
+   * repost (docs/features/listing-refresh.md). Listora refreshes on a schedule, so only `api` and
+   * `automation` are ever used: an assisted refresh would ask the seller every few days.
+   */
+  refresh: Mode;
   /** `not_needed`: the marketplace marks its own sales sold; Listora never asks. */
   markSold: Mode | 'not_needed';
   /**
@@ -121,6 +128,11 @@ export interface DesiredListingState {
   description?: string;
   priceCents?: number;
   currency?: CurrencyCode;
+  /**
+   * A refresh: the listing reads back as refreshed at or after this time (ISO 8601), the time
+   * the refresh was queued.
+   */
+  refreshedAfter?: string;
 }
 
 /** Operation kinds that write to the marketplace; `verify` only reads the listing back. */
@@ -235,6 +247,12 @@ export type RemoteListingState =
        * can be told from a current one. Required when `readFreshness` is `revision`, else `null`.
        */
       revision: number | null;
+      /**
+       * When the marketplace last showed the listing as fresh (ISO 8601): Poshmark's last share,
+       * or the last time the listing was saved on Mercari and Depop. `null` when the
+       * marketplace does not show it; a refresh is never confirmed without it.
+       */
+      refreshedAt: string | null;
     };
 
 /**
@@ -413,6 +431,18 @@ export type RemoteOrderLabel =
       /** As the page shows it; `null` while the order has no label yet. */
       trackingNumber: string | null;
       buyerFirstName: string | null;
+      /**
+       * How the order stands there, when the page says: waiting for the seller to ship it, or
+       * shipped or canceled (delivered and refunded included). Only this says whether the order
+       * is a package to pack, never the label's or parcel's own status.
+       */
+      orderState?: 'to_ship' | 'shipped' | 'canceled';
+      /** The label's carrier as the page names it (`USPS`), when it does. */
+      carrierName?: string | null;
+      /** When the order must ship by, when the page says. */
+      shipBy?: Date | null;
+      /** When the label stops being usable, when the page says. */
+      labelExpiresAt?: Date | null;
     }
   | { externalOrderId: string; found: false };
 

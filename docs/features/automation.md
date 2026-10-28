@@ -148,7 +148,8 @@ from the app
   runner's ECS service to one task. A runner holds a Postgres session named
   `listora-browser-runner:<id>`, takes only automated steps, sale checks, and session checks (`RUNNER_TASKS`), one at a time, and
   exits after `RUNNER_IDLE_EXIT_SECONDS` with nothing to do, scaling its service back to zero.
-  The worker's `automation_dispatch` task runs every minute: it queues due sale checks, starts
+  The worker's `automation_dispatch` task runs every minute: it queues the due sale checks of
+  connections that run in the cloud, starts
   the runner when its work waits and none is alive, and prunes old run records and
   screenshots.
 - **Sale checks** (`sale-checks/`). Each automation connection has a `sale_check_schedule` row.
@@ -163,7 +164,10 @@ from the app
   ones the orders since the last; a sale from before the connection's history ends is recorded
   only, with no auto-delist or notification. The worker records it, not the runner, because the auto-delist
   fan-out decides from each listing's capabilities whether it is marked sold or ended, and only
-  the worker's adapters include the API adapters. The next check is due when the expected sales since now reach what an average
+  the worker's adapters include the API adapters. A connection that runs on the seller's iPhone is
+  checked when the seller syncs (opening the app, Sync now, a pull to refresh,
+  [sync.md](sync.md)), never on a timer; its schedule's due time still says when its checks
+  become overdue. In the cloud, the next check is due when the expected sales since now reach what an average
   default interval holds (`interval.ts`): every 12 hours by default, sooner over the hours and
   days the seller's sales on that marketplace usually happen and while items are hot, later when
   idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email that
@@ -174,6 +178,11 @@ from the app
   it failed), its outcome moves the connection's sale-check health, and a check that fails or
   stops running shows on Today and is announced; a read-only **history read** proves a check
   reads the seller's real sold items without acting on any ([activity.md](activity.md)).
+- **Refreshes**: Poshmark's, Mercari's, and Depop's scripts have a `refresh` (a share to
+  followers, an edit page saved unchanged) that the listing refresh schedule queues as ordinary
+  operations, within half of each session's run limits ([listing-refresh.md](listing-refresh.md)).
+  Unlike every other kind, a refresh that meets a check or a page Listora no longer understands
+  fails instead of becoming an assisted task.
 - **Imports** (`imports/`): an import of the seller's listings reads them a page per browser
   session, read-only, where the connection runs (the runner's `automation_listing_import` task,
   or `listing_import` phone work), and keeps what each page showed for `@listora/imports` to

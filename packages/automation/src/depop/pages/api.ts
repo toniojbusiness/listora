@@ -123,6 +123,8 @@ export async function readOwnProduct(
       priceCents: cents(price),
       currency: 'USD',
       revision: revision(product.updated_at, API),
+      // A save on the edit page moves the last change, which is how a refresh shows.
+      refreshedAt: new Date(revision(product.updated_at, API)).toISOString(),
     },
     sku,
   };

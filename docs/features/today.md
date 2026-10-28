@@ -21,7 +21,6 @@ not done, so it is gone from the next summary once the work is finished.
 | `ship`          | An item sold in a sale not yet shipped (`detected`, `confirmed`) whose item is `sold` or `sold_pending_delist`, never one from the sales history ([sales.md](sales.md#sales-history)); Mark shipped on the sale screen finishes it | `urgent` with the ship-by date a day away or past, `high` within 3 days (or undated after 2) | The sale screen           |
 | `reconnect`     | A connection only the seller can fix: `reauth_required` or `revoked` ([connections.md](connections.md))                                                                                                                            | `high`                                                                                       | The marketplaces screen   |
 | `review_drafts` | Items in `draft`, as one card with the count                                                                                                                                                                                       | `normal`                                                                                     | The drafts (Add Item tab) |
-| `stale_listing` | A `listed` item whose oldest live listing went live 30 or more days ago, with no listing change (create, revise, price, relist) in 14 days; 5 at most                                                                              | `normal`                                                                                     | The item screen           |
 
 - **Only what the seller can do.** A card is work the seller can or must do, in plain words with
   one action. Listora's own background problems (sale checks that fail or stall, retries, the
@@ -30,13 +29,11 @@ not done, so it is gone from the next summary once the work is finished.
   needs the seller, it is the action it needs (a marketplace that signed them out is a
   `reconnect` card), not its internal cause.
 - **Order.** Most urgent first; within one urgency by kind in the order of the table; within one
-  kind, soonest ship-by, oldest delist, and longest listed first.
-- **Price drop, never below the floor.** A stale listing suggests 10% off its price (the item's
-  list price, else its lowest live listing price), rounded down to whole dollars and raised to the
-  item's floor (`staleSuggestion`). When that is no drop at all (the price is at its floor), or the
-  item has no floor, it suggests a relist instead: Listora never suggests a price it cannot check
-  against the floor. The action only opens the item; the seller changes the price there, through
-  the operation engine.
+  kind, soonest ship-by and oldest delist first.
+- **No card for old listings.** A listing that has gone a while without selling is not a card:
+  listing refresh keeps it fresh on its own, on the seller's schedule
+  ([listing-refresh.md](listing-refresh.md)), and the item screen shows its next and last
+  refresh.
 - **Words.** Titles, details, and action labels are the server's, so the app and the morning
   summary say the same; the app adds dates in the device's calendar ("Ship by tomorrow", "Overdue
   since Oct 24") and shows a delist's `statusDisplay` as its honest status badge.

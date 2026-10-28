@@ -226,6 +226,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
       currency: 'USD',
       // Depop's own last change time, from the read its edit page makes.
       revision: listed?.updatedAt.getTime(),
+      refreshedAt: listed?.updatedAt.toISOString(),
     });
     expect(remote).toMatchObject(
       readBackState(desiredStateForContent('create', content), adapter.capabilities()),
@@ -610,6 +611,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
         priceCents: 1250,
         currency: 'USD',
         revision: expect.any(Number) as number,
+        refreshedAt: expect.any(String) as string,
         details: {
           photoUrls: [`${fake.url}/media/front.jpg`, `${fake.url}/media/back.jpg`],
           // The brand's name, not Depop's slug of it (`levi-s`).
@@ -715,6 +717,70 @@ describe('Depop automation adapter on the fake Depop site', () => {
       expect(
         (await own.listOrdersSince(at(4.5), ctx())).map((order) => order.externalOrderId),
       ).toEqual([String(bundle), String(fake.purchaseIdOf(shipped))]);
+      // Only reads: nothing on Depop changed.
+      expect(fake.requests.filter((request) => request.method !== 'GET')).toEqual([]);
+    });
+  });
+
+  it("reads Pack check's labels from the receipts, page after page, as the receipts say they stand", async () => {
+    await withSite({ pageSize: 2 }, async (fake, own) => {
+      const at = (hoursAgo: number) => new Date(Date.now() - hoursAgo * 3_600_000);
+      const label = (trackingNumber: string) => ({ trackingNumber, buyerFirstName: 'Robin' });
+      const tee = fake.seed({ description: 'Band tee.', priceCents: 1500 });
+      const skirt = fake.seed({ description: 'Mini skirt.', priceCents: 2500 });
+      const bundleSoldAt = at(6);
+      const bundle = fake.sellBundle(
+        [
+          { slug: tee, paidCents: 1200 },
+          { slug: skirt, paidCents: 2000 },
+        ],
+        bundleSoldAt,
+        label('9400100000000000000011'),
+      );
+      const refunded = fake.seed({ description: 'Silk top.', priceCents: 3000 });
+      fake.sell(refunded, at(5), label('9400100000000000000012'), { status: 'refunded' });
+      const delivered = fake.seed({ description: 'Wool scarf.', priceCents: 2000 });
+      fake.sell(delivered, at(4), label('9400100000000000000013'), { status: 'delivered' });
+      // Newer sales first: the bundle is on the receipts' second page.
+      for (const hoursAgo of [3, 2, 1]) {
+        fake.sell(fake.seed({ description: 'Newer.', priceCents: 1000 }), at(hoursAgo));
+      }
+      const cap = fake.seed({ description: 'Cord cap.', priceCents: 1250 });
+      fake.sell(cap, at(0.5), label('9400100000000000000014'));
+
+      const labels = await own.readOrderLabels(
+        [
+          { externalOrderId: String(bundle), externalListingIds: [tee, skirt] },
+          { externalOrderId: String(fake.purchaseIdOf(refunded)), externalListingIds: [refunded] },
+          { externalOrderId: String(fake.purchaseIdOf(delivered)), externalListingIds: [] },
+          // A sale Listora named by its listing: found by the receipt's product.
+          { externalOrderId: `listing:${cap}`, externalListingIds: [cap] },
+          { externalOrderId: '424242', externalListingIds: [] },
+        ],
+        ctx(),
+      );
+      expect(labels).toEqual([
+        expect.objectContaining({
+          externalOrderId: String(bundle),
+          found: true,
+          trackingNumber: '9400100000000000000011',
+          buyerFirstName: 'Robin',
+          orderState: 'to_ship',
+          carrierName: 'USPS',
+          shipBy: new Date(bundleSoldAt.getTime() + 10 * 86_400_000),
+        }) as unknown,
+        expect.objectContaining({ found: true, orderState: 'canceled' }) as unknown,
+        expect.objectContaining({ found: true, orderState: 'shipped' }) as unknown,
+        expect.objectContaining({
+          externalOrderId: `listing:${cap}`,
+          found: true,
+          trackingNumber: '9400100000000000000014',
+          orderState: 'to_ship',
+        }) as unknown,
+        { externalOrderId: '424242', found: false },
+      ]);
+      // Every page of receipts (2 each), each read once with the last one's `after`.
+      expect(fake.requests.filter((request) => request.action === 'receipts')).toHaveLength(4);
       // Only reads: nothing on Depop changed.
       expect(fake.requests.filter((request) => request.method !== 'GET')).toEqual([]);
     });

@@ -57,6 +57,8 @@ const foundListing = z.object({
   priceCents: z.number().int().min(0).nullable(),
   currency: z.literal('USD').nullable(),
   revision: z.number().int().min(0).nullable(),
+  // An app whose scripts predate refreshes sends none.
+  refreshedAt: z.iso.datetime({ offset: true }).nullable().default(null),
 });
 
 const listingState = z.discriminatedUnion('found', [
@@ -126,7 +128,16 @@ const orders = z
   )
   .max(1_000);
 
-/** An order's label as the phone read it: only its tracking number and the buyer's first name. */
+const labelTime = z.iso
+  .datetime({ offset: true })
+  .transform((time) => new Date(time))
+  .nullable()
+  .optional();
+
+/**
+ * An order's label as the phone read it: its tracking number, carrier, and expiry, the buyer's
+ * first name only, and how the order stands and must ship by.
+ */
 const labels = z
   .array(
     z.discriminatedUnion('found', [
@@ -135,6 +146,10 @@ const labels = z
         found: z.literal(true),
         trackingNumber: z.string().min(1).max(100).nullable(),
         buyerFirstName: z.string().min(1).max(100).nullable(),
+        orderState: z.enum(['to_ship', 'shipped', 'canceled']).optional(),
+        carrierName: z.string().min(1).max(100).nullable().optional(),
+        shipBy: labelTime,
+        labelExpiresAt: labelTime,
       }),
       z.object({ externalOrderId: z.string().min(1).max(200), found: z.literal(false) }),
     ]),
@@ -185,6 +200,7 @@ function valueSchema(call: ScriptCall): z.ZodType {
     case 'end':
     case 'relist':
     case 'markSold':
+    case 'refresh':
       return writeResult;
     case 'read':
       return listingState;
@@ -220,6 +236,8 @@ export function readPhoneAnswer(call: ScriptCall, answer: unknown): SessionRun<u
   const run = z
     .discriminatedUnion('type', [
       z.object({ type: z.literal('no_session') }),
+      // The app could not run the call at all (its web views failed): what went wrong, in its words.
+      z.object({ type: z.literal('not_run'), message }),
       z.object({
         type: z.literal('ran'),
         result: z.object({
@@ -235,6 +253,7 @@ export function readPhoneAnswer(call: ScriptCall, answer: unknown): SessionRun<u
     .safeParse(answer);
   if (!run.success) return unreadable(call);
   if (run.data.type === 'no_session') return { type: 'no_session' };
+  if (run.data.type === 'not_run') return notRun(call, run.data.message);
   const { result } = run.data;
   if (result.ok) {
     const value = valueSchema(call).safeParse(result.value);
@@ -277,6 +296,30 @@ export function readPhoneEvidence(answer: unknown): PageEvidence | null {
     .object({ result: z.object({ failure: z.object({ evidence: pageEvidenceSchema }) }) })
     .safeParse(answer);
   return read.success ? read.data.result.failure.evidence : null;
+}
+
+/**
+ * A call the app could not run on the phone: the phone's failure, with its reason, and maybe a
+ * change (for a write that stopped part way), so the work fails visibly and is tried again later
+ * instead of waiting on a run that will never answer.
+ */
+function notRun(call: ScriptCall, reason: string): SessionRun<unknown> {
+  return {
+    type: 'ran',
+    result: {
+      ok: false,
+      mutated: isWriteCall(call),
+      steps: [],
+      failure: {
+        kind: 'error',
+        step: 'phone',
+        code: 'browser_unavailable',
+        message: `the phone could not run this: ${reason}`.slice(0, 200),
+        retryAfterMs: null,
+        screenshotKey: null,
+      },
+    },
+  };
 }
 
 /** An answer the server can't read: the phone's failure, and maybe a change (for a write). */

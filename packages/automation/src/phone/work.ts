@@ -70,6 +70,7 @@ import {
   type LabelReadResult,
   type LabelReadTarget,
 } from '@listora/pack-check';
+import { changeSale, SaleStateError } from '@listora/sales';
 import { createLogger, type Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
@@ -994,7 +995,9 @@ async function replay(
         diverged: sessions.diverged,
         record: async () => {
           await deleteWork(trx, work);
-          await recordLabelReads(trx, work.account_id, labelResults(step.orders, read), new Date());
+          const results = labelResults(step.orders, read);
+          await recordLabelReads(trx, work.account_id, results, new Date());
+          await markShippedOnMarketplace(trx, work.account_id, results);
           if ('error' in read) {
             logger.warn(
               { marketplace: work.marketplace, code: readErrorCode(read.error) },
@@ -1019,15 +1022,42 @@ function labelResults(
   return orders.map((order): LabelReadResult => {
     const label = read.labels.find((found) => found.externalOrderId === order.externalOrderId);
     if (!label?.found) return { saleId: order.saleId, status: 'not_found' };
+    const found = {
+      buyerFirstName: label.buyerFirstName,
+      ...(label.orderState === undefined ? {} : { orderState: label.orderState }),
+      ...(label.carrierName === undefined ? {} : { carrierName: label.carrierName }),
+      ...(label.shipBy === undefined ? {} : { shipBy: label.shipBy }),
+      ...(label.labelExpiresAt === undefined ? {} : { labelExpiresAt: label.labelExpiresAt }),
+    };
     return label.trackingNumber === null
-      ? { saleId: order.saleId, status: 'no_label', buyerFirstName: label.buyerFirstName }
-      : {
-          saleId: order.saleId,
-          status: 'read',
-          trackingNumber: label.trackingNumber,
-          buyerFirstName: label.buyerFirstName,
-        };
+      ? { saleId: order.saleId, status: 'no_label', ...found }
+      : { saleId: order.saleId, status: 'read', trackingNumber: label.trackingNumber, ...found };
   });
+}
+
+/**
+ * An order its page says shipped (or was delivered) there is shipped, as the seller would mark
+ * it and as a sale check records it.
+ */
+async function markShippedOnMarketplace(
+  trx: DbTransaction,
+  accountId: string,
+  results: readonly LabelReadResult[],
+): Promise<void> {
+  for (const result of results) {
+    if (!('orderState' in result) || result.orderState !== 'shipped') continue;
+    try {
+      await changeSale(trx, {
+        accountId,
+        saleId: result.saleId,
+        action: 'mark_shipped',
+        userId: null,
+      });
+    } catch (error) {
+      // Shipped, canceled, or returned in Listora already.
+      if (!(error instanceof SaleStateError)) throw error;
+    }
+  }
 }
 
 function readErrorCode(error: unknown): string {

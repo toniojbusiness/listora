@@ -26,7 +26,8 @@ flow end to end.
 5. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, then
    deletes what Listora holds for that marketplace (`disconnectConnection`,
    [privacy.md](privacy.md)): the row shows `Not linked` once the server answered. Items,
-   listings, and sales stay, and listings stay on the marketplace.
+   listings, and sales stay, and listings stay on the marketplace. The next link, which may be
+   another shop, never takes those listings ([Relinking another shop](#relinking-another-shop)).
 
 Marketplaces (Settings > Marketplaces) shows the same status in the same words for the same
 connection, with Retry check where Link accounts offers Check again: both screens render one
@@ -112,8 +113,8 @@ does not read sessions from the marketplaces' own iPhone apps.
 cookies with the token key (KMS envelope encryption in AWS, `TOKEN_KMS_KEY_ID`; the API's role
 may encrypt sessions but never decrypt them, only the runner's may) and stores them on the
 account's `automation` connection, which it creates or revives. In the same transaction the
-marketplace's unconnected listings join the connection, a `session_check` is requested, and a
-first sale check is due.
+marketplace's listings that were never on a shop join the connection
+([below](#relinking-another-shop)), a `session_check` is requested, and a first sale check is due.
 
 - **Validation.** The contract refuses an unknown field (a password included) and a malformed
   cookie (`422`); the vault refuses a cookie on another site's domain and a session whose
@@ -140,6 +141,28 @@ session was linked); a just-linked session has no `lastOkAt` until its check pas
 it starts a new check of that same session (`requestSessionRecheck`: a new check id and job, the
 stored cookies untouched), unless a check is still running within its deadline, which is left to
 finish. A connection without a session (`needs_relink`) answers `409 invalid_state_transition`.
+
+### Relinking another shop
+
+An account keeps one connection per marketplace, so the shop linked after an unlink may be
+another one (another seller's, or the seller's own second shop). A link therefore never takes
+the listings of the shop that was unlinked:
+
+- **Unlink** (and every deletion of a connection, [privacy.md](privacy.md)) detaches the
+  connection's listings and marks each as from that previous shop
+  (`marketplace_listing.shop_unlinked_at`).
+- **A link** takes only the marketplace's listings without a connection that were never on a
+  shop (listed before the marketplace was linked). A marked listing stays without a connection:
+  no session, not even a read, runs for it, and Listora shows it as before.
+- **An import** of the linked shop that finds a marked listing (by its id on the marketplace,
+  which only its own shop has) proves it is that shop's: it joins the connection again and loses
+  the mark ([imports.md](imports.md)). So unlinking and linking the same shop again loses
+  nothing that is still listed there.
+- A database check keeps a marked listing off every connection.
+
+**Relink** on a row that is still linked replaces the session of the same connection, and its
+listings stay on it: Listora can't tell yet which shop a session signed into, so linking another
+shop goes through Unlink first ([follow-ups](#follow-ups)).
 
 ## The session check (`packages/automation/src/session-checks/`)
 
@@ -218,8 +241,16 @@ and the runner checks the session against the fake site in local headless Chromi
   first), and links Depop.
 - `packages/automation/src/depop/adapter.int.test.ts`: the fake Depop's emailed link signs in
   once.
+- `packages/automation/src/link.int.test.ts`: a link takes the listings that were never on a
+  shop, a relink in place keeps the connection's listings, and after an unlink the next link (and
+  its relinks) takes none of the previous shop's listings, active or ended; the database refuses a
+  marked listing on a connection. `packages/imports/src/apply.int.test.ts`: an import puts back
+  only the marked listings its shop shows.
 
 ## Follow-ups
 
 - The `reconnect` task's deep link (`listora://connections/<marketplace>`) does not open Link
   accounts yet; the app handles no `listora://` links so far.
+- The session check could read which shop a session signed into (Poshmark's health read already
+  finds the seller's username), so that **Relink** of a still-linked row with another shop's
+  session detaches the previous shop's listings as an unlink does.

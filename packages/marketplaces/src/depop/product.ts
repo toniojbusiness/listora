@@ -92,5 +92,6 @@ export function depopRemoteListing(
     priceCents: depopCents(product.price_amount),
     currency: product.price_currency === 'USD' ? 'USD' : null,
     revision: null,
+    refreshedAt: null,
   };
 }

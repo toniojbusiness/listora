@@ -1,10 +1,12 @@
+import Core
 import DesignSystem
 import SwiftUI
 
 /// The app's home: what needs the seller today, most urgent first, each card with one action
 /// that opens the right screen, and how this week's sales compare with last week's. It reads the
 /// server each time it appears (back from a card's screen, a tab switch, the app coming to the
-/// front) and on pull to refresh, so finished work drops off.
+/// front), after a sync, and on pull to refresh, which syncs the marketplaces too, so finished
+/// work drops off.
 public struct TodayView<Settings: View>: View {
     private let environment: TodayEnvironment
     private let onOpenDrafts: @MainActor () -> Void
@@ -36,6 +38,9 @@ public struct TodayView<Settings: View>: View {
                 .background(Palette.background)
                 .navigationTitle("Today")
                 .toolbar {
+                    if model.phase != .signedOut, let syncButton = environment.syncButton {
+                        ToolbarItem(placement: .topBarTrailing) { syncButton() }
+                    }
                     if model.phase != .signedOut {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
@@ -61,6 +66,12 @@ public struct TodayView<Settings: View>: View {
                 .task { await model.load() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active {
+                        Task { await model.load() }
+                    }
+                }
+                // A sync that ended may have found sales, offers, or listings.
+                .onChange(of: environment.sync?.isSyncing ?? false) { _, syncing in
+                    if !syncing {
                         Task { await model.load() }
                     }
                 }
@@ -106,7 +117,7 @@ public struct TodayView<Settings: View>: View {
                         + "that could use a nudge show up here.",
                     action: onAddItem.map { .init("Add an item", systemImage: "camera.fill", handler: $0) },
                 )
-                .refreshable { await model.load() }
+                .refreshable { await refresh() }
                 .accessibilityIdentifier("today.caughtUp")
             } else {
                 summary
@@ -155,7 +166,13 @@ public struct TodayView<Settings: View>: View {
             .frame(maxWidth: Layout.readableWidth)
             .frame(maxWidth: .infinity)
         }
-        .refreshable { await model.load() }
+        .refreshable { await refresh() }
+    }
+
+    /// A pull to refresh syncs the marketplaces too (docs/features/sync.md).
+    private func refresh() async {
+        await environment.sync?.syncNow()
+        await model.load()
     }
 
     private func open(_ destination: TodayDestination) {
