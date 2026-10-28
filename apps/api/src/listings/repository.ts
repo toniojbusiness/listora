@@ -16,7 +16,7 @@ import {
   type MarketplaceOperationTable,
 } from '@listora/db';
 import { listingIsReadOnly, REFUSED_CONTENT_ERROR } from '@listora/operations';
-import { sql, type Selectable } from 'kysely';
+import { sql, type NotNull, type Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
 
@@ -33,7 +33,8 @@ export type ListingRow = Selectable<MarketplaceListingTable> & {
   test_mode: boolean;
 };
 
-export type OperationRow = Selectable<MarketplaceOperationTable>;
+/** An operation on a listing Listora tracks; a deleted item's operations are never served. */
+export type OperationRow = Selectable<MarketplaceOperationTable> & { listing_id: string };
 
 function listingQuery(db: DbExecutor, tenant: Tenant) {
   return db
@@ -206,6 +207,7 @@ export async function latestOperations(
   const rows = await db
     .selectFrom('marketplace_operation')
     .selectAll()
+    .$narrowType<{ listing_id: NotNull }>()
     .distinctOn('listing_id')
     .where('account_id', '=', tenant.accountId)
     .where('listing_id', 'in', listingIds)

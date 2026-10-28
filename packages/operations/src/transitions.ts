@@ -10,7 +10,7 @@
  *
  * `succeeded` can only be set with a `SuccessProof` (evidence.ts).
  */
-import { sql, type RawBuilder, type Selectable } from 'kysely';
+import { sql, type NotNull, type RawBuilder, type Selectable } from 'kysely';
 
 import {
   jsonb,
@@ -28,7 +28,18 @@ import { ConcurrentOperationChangeError, InvalidTransitionError } from './errors
 import { OPERATION_PRIORITY, scheduleOperationJob } from './jobs.ts';
 import { canTransition, isScheduled, isSettled } from './state-machine.ts';
 
-export type OperationRow = Selectable<MarketplaceOperationTable>;
+/**
+ * An operation on a listing Listora tracks: every one the engine runs or changes. One kept after
+ * its item was deleted (`deleted_listing_id`, no `listing_id`) is history only, and settled: a
+ * delete refuses while a change is in flight. Queries that load one for the engine filter on
+ * `listing_id is not null` and narrow with ``Tracked``.
+ */
+export type OperationRow = Selectable<MarketplaceOperationTable> & { listing_id: string };
+
+/** `$narrowType` for a query on tracked operations (``OperationRow``). */
+export interface Tracked {
+  listing_id: NotNull;
+}
 
 /** A user-readable reason, stored on the operation and in its event. */
 export interface OperationError {
@@ -74,6 +85,7 @@ export async function transitionOperation(
     .where('status', '=', op.status)
     .where('attempts', '=', op.attempts)
     .returningAll()
+    .$narrowType<Tracked>()
     .executeTakeFirst();
   if (updated === undefined) throw new ConcurrentOperationChangeError(op.id);
 
@@ -150,6 +162,7 @@ export async function attemptNow(
     .where('account_id', '=', op.account_id)
     .where('id', '=', op.id)
     .returningAll()
+    .$narrowType<Tracked>()
     .executeTakeFirstOrThrow();
   await trx
     .insertInto('operation_event')
@@ -173,6 +186,30 @@ export async function attemptNow(
   return moved;
 }
 
+/**
+ * When the seller deletes an item (docs/features/items.md, Deleting an item), moves the operations
+ * of its listings onto those listings' `deleted_listing` rows, which the caller has written, so
+ * their history outlives the listings. It changes no status, evidence, or attempt: every one is
+ * settled by then, and the listing's delete then clears its `listing_id`.
+ */
+export async function keepDeletedItemOperations(
+  trx: DbTransaction,
+  target: { accountId: string; itemId: string },
+): Promise<void> {
+  await trx
+    .updateTable('marketplace_operation')
+    .set((eb) => ({ deleted_listing_id: eb.ref('listing_id').$castTo<string>() }))
+    .where('account_id', '=', target.accountId)
+    .where('listing_id', 'in', (eb) =>
+      eb
+        .selectFrom('marketplace_listing')
+        .select('id')
+        .where('account_id', '=', target.accountId)
+        .where('item_id', '=', target.itemId),
+    )
+    .execute();
+}
+
 /** Stores a detail object as JSON with credentials removed (`redactForStorage`). */
 export function eventDetail(detail: Record<string, unknown>): JsonObject {
   const redacted = redactForStorage(detail);
@@ -189,6 +226,8 @@ export async function wakeNextOperation(trx: DbTransaction, op: OperationRow): P
   const next = await trx
     .selectFrom('marketplace_operation')
     .selectAll()
+    .where('listing_id', 'is not', null)
+    .$narrowType<Tracked>()
     .where('account_id', '=', op.account_id)
     .where('listing_id', '=', op.listing_id)
     .where('status', '=', 'queued')

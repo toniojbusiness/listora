@@ -379,7 +379,9 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   or other triggers, and the retention job's deletes of expired rows, which name the one table
   they delete from in the transaction setting `listora.retention_delete`
   ([privacy.md](features/privacy.md#retention)). So an operation goes away only with the
-  account, and its `operation_event` history with the account or 180 days after it settled.
+  account, and its `operation_event` history with the account or 180 days after it settled:
+  deleting an item moves its listings' operations onto `deleted_listing`
+  ([items.md](features/items.md#deleting-an-item)).
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
   (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. A create,
   revise, or relist has listing `content`, and no other kind does. Assisted connections can

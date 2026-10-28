@@ -227,19 +227,6 @@ extension BulkActionModel {
         return outcome(item, nil, .failed, "The list price didn't change.")
     }
 
-    func delete(_ item: Item) async -> BulkOutcome {
-        do {
-            try await send { [service] _ throws(APIFailure) in try await service.deleteItem(id: item.id) }
-            return outcome(item, nil, .done, "Deleted.")
-        } catch {
-            // Already gone (deleted on another device) is what was asked.
-            if error.statusCode == 404 {
-                return outcome(item, nil, .done, "Deleted.")
-            }
-            return outcome(item, nil, .failed, error.message)
-        }
-    }
-
     /// A listing whose last change is still running takes no other until it is done (one change
     /// at a time), which the seller is told rather than left guessing.
     private func busyOutcomes(of item: Item) -> [BulkOutcome] {
