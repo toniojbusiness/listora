@@ -116,7 +116,8 @@ packages/
                 links, sold-data label guard; pure, no I/O (@listora/pricing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator, deletion
-                completion records, Postgres notifications (LISTEN) (@listora/db)
+                completion records, Postgres notifications (LISTEN) and keyed signals for
+                long-polls (@listora/db)
   storage/      Object storage: local-disk driver with signed upload and read URLs, S3 driver
                 (presigned reads, CloudFront invalidation), checked purges (@listora/storage)
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,

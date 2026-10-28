@@ -5,7 +5,7 @@ import type { AnalysisJobQueue } from '@listora/analysis';
 import { loadAutomationSettings } from '@listora/automation';
 import { graphileBatchJobs, type BatchJobQueue } from '@listora/batches';
 import { openInviteeDirectory } from '@listora/accounts';
-import type { Db } from '@listora/db';
+import type { Db, KeyedSignals } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
@@ -20,6 +20,7 @@ import {
 import type { AuthDriver } from './auth/driver.ts';
 import type { ConnectionsDependencies } from './connections/routes.ts';
 import type { InvitesDependencies } from './invites/routes.ts';
+import { registerCompression } from './compression.ts';
 import { registerErrorHandling } from './errors.ts';
 import { API_FEATURES, type ApiRouteContext } from './features.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
@@ -69,6 +70,11 @@ export interface AppDependencies extends HealthDependencies {
   saleEmails?: SaleEmailsDependencies;
   /** The marketplace work phones run; without it, phones run nothing here. */
   phone?: PhoneWorkDependencies;
+  /**
+   * Signals keyed by item id (`listenForItemChanges`); without them the item screen's wait for a
+   * change looks every few seconds instead.
+   */
+  itemChanges?: KeyedSignals;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
@@ -119,6 +125,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   });
   closeKeepAliveConnectionsOnShutdown(app);
   registerErrorHandling(app);
+  registerCompression(app);
 
   registerHealthRoutes(app, deps);
   deps.auth.registerRoutes?.(app);
@@ -151,6 +158,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     ...(deps.ebayWebhook === undefined ? {} : { ebayWebhook: deps.ebayWebhook }),
     saleEmails: deps.saleEmails ?? { ingest: { driver: 'off' } },
     phone: deps.phone,
+    itemChanges: deps.itemChanges,
     now,
   };
   // Each feature folder's routes (features.ts), so a new feature never edits this file.

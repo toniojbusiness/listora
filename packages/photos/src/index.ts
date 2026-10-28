@@ -8,7 +8,14 @@ export {
 export type { DerivativeKind, PhotoDerivatives, StoredDerivative } from './derivatives.ts';
 export { TAG_CROP_EDGE, TAG_CROP_SHARE, tagCrop } from './crop.ts';
 export type { TagCrop } from './crop.ts';
-export { deriveFromOriginal, MAX_INPUT_PIXELS, processImage, UnusableImageError } from './image.ts';
+export {
+  deriveFromOriginal,
+  IMAGE_THREADS,
+  limitImageThreads,
+  MAX_INPUT_PIXELS,
+  processImage,
+  UnusableImageError,
+} from './image.ts';
 export type { DerivedImage, ProcessedImage, ProcessImageOptions } from './image.ts';
 export {
   graphilePhotoJobs,

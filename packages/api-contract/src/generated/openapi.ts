@@ -211,6 +211,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/items/{itemId}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Wait for a change to an item's marketplace work
+         * @description While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+         *     the item screen waits here instead of reading the item on a timer: the answer comes as
+         *     soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+         *     with none. Pass the `token` of the previous answer as `after`; without it (the first
+         *     wait) the answer is immediate, with `changed` true, so the screen reads the item once
+         *     more after starting to follow it. It only reads.
+         */
+        get: operations["waitForItemChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/skus/{sku}": {
         parameters: {
             query?: never;
@@ -3111,6 +3138,15 @@ export interface components {
              *     (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
              */
             roiBasisPoints?: number;
+        };
+        ItemChangeWaitResult: {
+            /**
+             * @description `true` when the item's operations differ from those `after` stood for (read the item
+             *     again), `false` when the wait ran out with no change.
+             */
+            changed: boolean;
+            /** @description The item's operations as of this answer; the next wait's `after`. */
+            token: string;
         };
         /** @description The item as shown in inventory lists. */
         ItemSummary: {
@@ -6457,6 +6493,7 @@ export type Item = components['schemas']['Item'];
 export type StorageLocationSummary = components['schemas']['StorageLocationSummary'];
 export type ItemRelistPrompt = components['schemas']['ItemRelistPrompt'];
 export type ItemSaleSummary = components['schemas']['ItemSaleSummary'];
+export type ItemChangeWaitResult = components['schemas']['ItemChangeWaitResult'];
 export type ItemSummary = components['schemas']['ItemSummary'];
 export type ItemPage = components['schemas']['ItemPage'];
 export type PhotoRole = components['schemas']['PhotoRole'];
@@ -7200,6 +7237,36 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    waitForItemChange: {
+        parameters: {
+            query: {
+                /** @description The `token` of the previous answer. */
+                after?: string;
+                /** @description The longest the answer may take. */
+                waitSeconds: number;
+            };
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether the item's operations changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemChangeWaitResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };

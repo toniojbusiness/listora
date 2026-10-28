@@ -103,6 +103,8 @@ paths:
     $ref: './paths/items.yaml#/~1v1~1items'
   /v1/items/{itemId}:
     $ref: './paths/items.yaml#/~1v1~1items~1{itemId}'
+  /v1/items/{itemId}/changes:
+    $ref: './paths/items.yaml#/~1v1~1items~1{itemId}~1changes'
   /v1/skus/{sku}:
     $ref: './paths/items.yaml#/~1v1~1skus~1{sku}'
   /v1/upload-sessions:
@@ -477,6 +479,8 @@ components:
       $ref: './components/schemas/items.yaml#/ItemRelistPrompt'
     ItemSaleSummary:
       $ref: './components/schemas/items.yaml#/ItemSaleSummary'
+    ItemChangeWaitResult:
+      $ref: './components/schemas/items.yaml#/ItemChangeWaitResult'
     ItemSummary:
       $ref: './components/schemas/items.yaml#/ItemSummary'
     ItemPage:

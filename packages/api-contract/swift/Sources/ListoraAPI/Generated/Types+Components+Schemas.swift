@@ -1465,6 +1465,35 @@ extension Components {
                 case roiBasisPoints
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ItemChangeWaitResult`.
+        public struct ItemChangeWaitResult: Codable, Hashable, Sendable {
+            /// `true` when the item's operations differ from those `after` stood for (read the item
+            /// again), `false` when the wait ran out with no change.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemChangeWaitResult/changed`.
+            public var changed: Swift.Bool
+            /// The item's operations as of this answer; the next wait's `after`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemChangeWaitResult/token`.
+            public var token: Swift.String
+            /// Creates a new `ItemChangeWaitResult`.
+            ///
+            /// - Parameters:
+            ///   - changed: `true` when the item's operations differ from those `after` stood for (read the item
+            ///   - token: The item's operations as of this answer; the next wait's `after`.
+            public init(
+                changed: Swift.Bool,
+                token: Swift.String
+            ) {
+                self.changed = changed
+                self.token = token
+            }
+            public enum CodingKeys: String, CodingKey {
+                case changed
+                case token
+            }
+        }
         /// The item as shown in inventory lists.
         ///
         /// - Remark: Generated from `#/components/schemas/ItemSummary`.
