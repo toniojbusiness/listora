@@ -23,6 +23,10 @@ These two rules from the product owner override every other design choice.
    confirms the desired state, or the user explicitly confirms an assisted task. Every failure
    is visible and can be retried. See [operations.md](features/operations.md).
 
+A seller can also make a linked account read only: then nothing may change it, and every new
+write path (a new operation kind, script, or automatic feature) must refuse or skip it as
+[read-only.md](features/read-only.md) describes.
+
 ## 2. Stack
 
 | Area       | Choice                                                                                            | Why                                                                                           |
@@ -467,6 +471,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/automation.md](features/automation.md)                   | Browser automation for marketplaces without an API (decision D1)               |
 | [features/poshmark.md](features/poshmark.md)                       | The Poshmark automation adapter, its mapping tables, and the fake Poshmark     |
 | [features/marketplace-linking.md](features/marketplace-linking.md) | Linking marketplaces from the iPhone by signing in, and each session's check   |
+| [features/read-only.md](features/read-only.md)                     | Read-only connections: Listora only reads the account; every write refuses     |
 | [features/phone-execution.md](features/phone-execution.md)         | Running marketplaces' automated steps on the seller's iPhone                   |
 | [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site            |
 | [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                     |

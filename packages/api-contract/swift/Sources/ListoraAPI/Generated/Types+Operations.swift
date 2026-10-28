@@ -12011,6 +12011,216 @@ public enum Operations {
             }
         }
     }
+    /// Make a connection read only, or let Listora change it again
+    ///
+    /// With `readOnly` true, Listora only reads the account (imports, listings, sold items,
+    /// sales, offers, sale checks) and never changes anything on it (docs/features/read-only.md):
+    /// every change to its listings is refused with `409 connection_read_only`, the changes
+    /// still waiting to be sent fail with that error at once, and the delists after a sale skip
+    /// it. `403 forbidden` for anyone but the account's owner; `404` when the marketplace has
+    /// no connection.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/connections/{marketplace}/read-only`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/read-only/put(setConnectionReadOnly)`.
+    public enum SetConnectionReadOnly {
+        public static let id: Swift.String = "setConnectionReadOnly"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/read-only/PUT/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/read-only/PUT/path/marketplace`.
+                public var marketplace: Components.Parameters.MarketplacePath
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - marketplace:
+                public init(marketplace: Components.Parameters.MarketplacePath) {
+                    self.marketplace = marketplace
+                }
+            }
+            public var path: Operations.SetConnectionReadOnly.Input.Path
+            /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/read-only/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SetConnectionReadOnly.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SetConnectionReadOnly.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.SetConnectionReadOnly.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/read-only/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/read-only/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.ConnectionReadOnlyChange)
+            }
+            public var body: Operations.SetConnectionReadOnly.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.SetConnectionReadOnly.Input.Path,
+                headers: Operations.SetConnectionReadOnly.Input.Headers = .init(),
+                body: Operations.SetConnectionReadOnly.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/read-only/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/read-only/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Connection)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Connection {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SetConnectionReadOnly.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SetConnectionReadOnly.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The connection.
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/read-only/put(setConnectionReadOnly)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.SetConnectionReadOnly.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.SetConnectionReadOnly.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/read-only/put(setConnectionReadOnly)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/read-only/put(setConnectionReadOnly)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/read-only/put(setConnectionReadOnly)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// The account's connection health summary
     ///
     /// Every marketplace's connection (as `listConnections`), what needs the seller's

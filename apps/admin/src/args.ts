@@ -44,8 +44,9 @@ Activity and sale detection (docs/features/activity.md):
   sale-why <sale-id>   how a sale was found (which check saw it, where, when) and each delist it
                        started on the other marketplaces, with the sale's timeline
   sale-checks [--account ID] [--marketplace M] [--limit N]
-                       each automation connection's sale-check health, then the latest checks
-                       (default 20): what each read, how many sold orders it saw, why it failed
+                       each automation connection's sale-check health (and whether it is read
+                       only), then the latest checks (default 20): what each read, how many
+                       sold orders it saw, why it failed
   sale-history read <marketplace> --account ID
                        ask for a read-only read of the seller's sold history: it records every
                        sold order the pages show and hands none to the sale intake, so nothing

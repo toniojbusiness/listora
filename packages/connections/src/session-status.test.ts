@@ -177,6 +177,7 @@ describe('describeConnection of an automation connection', () => {
     check_requested_at: null,
     runs_on: 'cloud',
     phone_device_id: null,
+    read_only: false,
     created_at: LINKED_AT,
     updated_at: LINKED_AT,
   };

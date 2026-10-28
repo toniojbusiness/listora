@@ -141,6 +141,7 @@ function contractConnection(
     statusDisplay: view.statusDisplay,
     capabilities: contractCapabilities(capabilities, canConnect),
     availableActions: view.actions,
+    readOnly: row?.read_only ?? false,
     ...(view.displayName === undefined ? {} : { displayName: view.displayName }),
     ...(view.connectedAt === undefined ? {} : { connectedAt: view.connectedAt.toISOString() }),
     ...(view.grantExpiresAt === undefined

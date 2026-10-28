@@ -225,6 +225,39 @@
         $ref: '../components/responses.yaml#/ValidationFailed'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/connections/{marketplace}/read-only:
+  parameters:
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+  put:
+    tags: [connections]
+    operationId: setConnectionReadOnly
+    summary: Make a connection read only, or let Listora change it again
+    description: |
+      With `readOnly` true, Listora only reads the account (imports, listings, sold items,
+      sales, offers, sale checks) and never changes anything on it (docs/features/read-only.md):
+      every change to its listings is refused with `409 connection_read_only`, the changes
+      still waiting to be sent fail with that error at once, and the delists after a sale skip
+      it. `403 forbidden` for anyone but the account's owner; `404` when the marketplace has
+      no connection.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/connections.yaml#/ConnectionReadOnlyChange'
+    responses:
+      '200':
+        description: The connection.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/Connection'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
 /v1/connection-health:
   get:
     tags: [connections]
