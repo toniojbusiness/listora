@@ -185,6 +185,8 @@ describe('deploy personal workflow', () => {
     expect(run).toContain("'completed success') ;;");
     // A failed server check fails the job, so nothing deploys.
     expect(run).toMatch(/completed\*\)\n.*\n\s*exit 1 ;;/);
+    // Main moved past the commit (CI cancels a superseded main run): skip, without failing.
+    expect(run).toMatch(/if \[ "\$head" != "\$SHA" \]; then\n.*\n\s*exit 0\n/);
   });
 
   it("deploys only the pushed commit, and only while it is still main's head", () => {

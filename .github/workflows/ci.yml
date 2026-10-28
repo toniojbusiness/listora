@@ -13,12 +13,13 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels its superseded run. A `main` push gets its own group (by
-# commit), so it is never cancelled or replaced while pending and every merged commit gets a
-# full result.
+# A newer run replaces a superseded one, on a pull request (its branch) and on `main` alike: the
+# newest `main` commit contains every earlier merge, so its full run covers them, and the macOS
+# runners every lane shares are not spent on commits already behind. So the latest `main` commit
+# always gets a full result, not every merged commit.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   changes:

@@ -256,9 +256,10 @@ Which jobs do real work, by change:
 | Docs only                        | changes, backend               |
 | Draft pull request               | nothing until ready for review |
 
-A new push to a pull request cancels the run it supersedes. Runs on `main` are never
-cancelled, so every merged commit gets a full result. Every job has a `timeout-minutes`
-limit.
+A new push cancels the run it supersedes, on a pull request and on `main` alike: the newest
+`main` commit contains every earlier merge, so its full run covers them, and the shared macOS
+runners are not spent on commits already behind. The latest `main` commit always gets a full
+result. Every job has a `timeout-minutes` limit.
 
 The full-stack end-to-end suite is separate: `.github/workflows/e2e-full.yml` runs
 `make e2e-full` on a macOS runner nightly and when started by hand, never on a pull request

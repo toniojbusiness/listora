@@ -48,6 +48,13 @@ jobs:
             Application image build and smoke test (Linux)
         run: |
           while :; do
+            # Once main has moved past this commit, the newer commit's run deploys it (and CI
+            # cancels this commit's superseded run, so its checks may never finish).
+            head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+            if [ "$head" != "$SHA" ]; then
+              echo "main is at $head, past $SHA; the run for $head deploys it"
+              exit 0
+            fi
             pending=0
             while IFS= read -r check; do
               [ -n "$check" ] || continue
