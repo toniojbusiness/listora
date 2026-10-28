@@ -198,6 +198,12 @@ describe('trust metrics (real Postgres)', () => {
       ]);
     });
 
+    it("leaves scheduled refreshes out: they are not the seller's changes", async () => {
+      await operation({ marketplace: 'poshmark', kind: 'refresh', status: 'failed' });
+      await operation({ marketplace: 'poshmark', kind: 'refresh', status: 'succeeded' });
+      expect(await collectSettledOperations(db, window)).toEqual([]);
+    });
+
     it('counts only operations that settled in the window, never unfinished ones', async () => {
       await operation({
         marketplace: 'ebay',

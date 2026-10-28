@@ -22,6 +22,7 @@ interface MarketplaceCapabilities {
   updateDetails: Mode;
   delist: Mode;
   relist: Mode;
+  refresh: Mode; // a live listing shown as fresh again in place; never assisted (listing-refresh.md)
   markSold: Mode | 'not_needed'; // not_needed: the marketplace marks its own sales sold
   verifyRead: 'api' | 'automation' | 'user_confirm'; // how success is established
   readFreshness: 'revision' | 'none'; // whether reads carry a revision (see operations.md)
@@ -77,7 +78,7 @@ browser runner's session vault).
 
 **Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
 reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
-an end, `relist`, `markSold`) under the listing's connection: `api` (Listora sends it and a
+an end, `relist`, `refresh`, `markSold`) under the listing's connection: `api` (Listora sends it and a
 read-back decides), `automation` (the browser runner does it in the seller's session, and a
 read-back through the same session decides), `assisted` (only the user's confirmation finishes
 it), or `unsupported` (`none`, `bulk_file`, `not_needed`, or a write without reads through its

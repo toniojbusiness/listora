@@ -265,8 +265,8 @@ export async function cancelOperation(
   });
 }
 
-/** Edits: what they change no longer matters once the listing is delisted. */
-const EDIT_KINDS = ['revise', 'price'] as const satisfies readonly OperationKind[];
+/** Edits and refreshes: what they change no longer matters once the listing is delisted. */
+const EDIT_KINDS = ['revise', 'price', 'refresh'] as const satisfies readonly OperationKind[];
 /** Publishes: they put a listing on the marketplace. */
 const PUBLISH_KINDS = ['create', 'relist'] as const satisfies readonly OperationKind[];
 
@@ -275,8 +275,8 @@ const PUBLISH_KINDS = ['create', 'relist'] as const satisfies readonly Operation
  * operations that the sale made moot and that can be canceled without losing track of what is on
  * the marketplace:
  *
- * - edits (revise, price) waiting to run or to retry, whatever an earlier attempt did: the delist
- *   ends the listing, and its own read-back decides;
+ * - edits (revise, price) and scheduled refreshes waiting to run or to retry, whatever an
+ *   earlier attempt did: the delist ends the listing, and its own read-back decides;
  * - publishes (create, relist) waiting to run or to retry that never went through the API, so
  *   nothing of them reached the marketplace and a sold item is never published.
  *
