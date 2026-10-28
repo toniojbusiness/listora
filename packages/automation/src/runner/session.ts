@@ -74,7 +74,7 @@ export class PlaywrightSession extends ScriptSession {
   }
 }
 
-class PlaywrightBackend implements PageBackend {
+export class PlaywrightBackend implements PageBackend {
   readonly #context: BrowserContext;
   readonly #page: Page;
   readonly #deps: SessionDependencies;

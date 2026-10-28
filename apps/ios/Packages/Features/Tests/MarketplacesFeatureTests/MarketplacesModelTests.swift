@@ -197,7 +197,7 @@ struct MarketplacesModelTests {
         await model.load()
         let row = try #require(model.rows.first)
         #expect(row.execution?.onPhone == true)
-        #expect(row.execution?.text == "Runs on Sam's iPhone · 2 waiting")
+        #expect(row.execution?.text == "Runs on Sam's iPhone")
         #expect(row.statusLabel == "Linked")
     }
 

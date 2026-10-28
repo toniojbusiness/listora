@@ -4,7 +4,9 @@
  * the sell form, photos in posting order, the SKU line, deactivate and activate, sold listings,
  * the seller's listings for imports, sold items for sale checks, Mercari's refusals (an account
  * to verify, a card to add), and the stops: Cloudflare's interstitial and Turnstile, a CAPTCHA,
- * a login code, a logged-out session, and a redesigned page. No traffic goes to Mercari.
+ * a login code, a logged-out session, and a redesigned page. No traffic goes to Mercari. Each of
+ * the form's shapes (every size group, petite and tall, none) is filled on the recorded real
+ * pages instead (recordings/, docs/features/recorded-pages.md).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -217,57 +219,6 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     expect(site.item(none.ref.externalListingId)?.brand).toBeNull();
   }, 90_000);
 
-  it('fills every kind of form Mercari has: each size list, and none', async () => {
-    // A category of each of Mercari's size groups (catalog/catalog.json), with a size of the
-    // item's own, and the label the form must get.
-    const shapes = [
-      ['Women > Dresses > Midi', 'women', '8', 'M (8-10)'],
-      ['Men > Tops > T-shirts', 'men', 'XXL', 'XXL (50-52)'],
-      ['Women > Jeans > Skinny Jeans', 'women', 'W29 L30', '29 in.'],
-      ['Men > Suits > Two button', 'men', '40R', '40R'],
-      ['Women > Shoes > Boots', 'women', '8 1/2', '8.5 (39)'],
-      ['Kids > Girls dresses > Girls 2T-5T', 'kids', '3T', '3T'],
-      ['Kids > Boys shoes > Boys (4+)', 'kids', '2.5', '2.5'],
-      ['Men > Shoes > Athletic', 'men', '10', '10 (43)'],
-      ['Women > Underwear > Bras', 'women', '34DD', '34E (DD)'],
-      ['Home > Bedding > Quilts', 'women', null, null],
-      ['Beauty > Makeup > Lips', 'women', null, null],
-    ] as const;
-    for (const [categoryRef, department, sizeLabel, size] of shapes) {
-      const content = sampleListingContent({
-        item: { department, sizeLabel, condition: 'new_with_tags' },
-        variant: { categoryRef },
-      });
-      expect(
-        adapter.validate(adapter.buildPayload(content.item, content.variant)),
-        categoryRef,
-      ).toEqual([]);
-      const { ref } = await create(content);
-      expect(site.item(ref.externalListingId), categoryRef).toMatchObject({
-        category: categoryRef.split(' > '),
-        size,
-      });
-    }
-  }, 240_000);
-
-  it("picks a women's petite or tall size in its own part of the size list", async () => {
-    const shapes = [
-      ['Women > Dresses > Maxi', '4P', 'S (4-6)', 'Petite'],
-      ['Women > Skirts > Pleated', 'S Petite', 'S (4-6)', 'Petite'],
-      ['Women > Pants > Casual pants', 'XL Tall', 'XL (16-18)', 'Tall'],
-      ['Women > Shorts > Denim', '0', 'XS (0-2)', 'Standard'],
-      ['Women > Jeans > Straight leg', '27/4', '27 in.', 'Inch'],
-    ] as const;
-    for (const [categoryRef, sizeLabel, size, sizeSet] of shapes) {
-      const content = sampleListingContent({
-        item: { department: 'women', sizeLabel, sizeSystem: null, condition: 'new_with_tags' },
-        variant: { categoryRef },
-      });
-      const { ref } = await create(content);
-      expect(site.item(ref.externalListingId), sizeLabel).toMatchObject({ size, sizeSet });
-    }
-  }, 120_000);
-
   it('revises every detail on the edit page and keeps the photos', async () => {
     const { ref } = await create();
     const content = sampleListingContent({
@@ -434,6 +385,20 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
       message: expect.stringContaining('credit or debit card') as unknown,
     });
     expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+  });
+
+  it("tries a create again later when Mercari's form says it could not list the item", async () => {
+    const ref = newRef();
+    inject('create', { type: 'listing_error' });
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'transient',
+      code: 'server_error',
+    });
+    expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+    // The next attempt lists it.
+    const listed = await adapter.execute({ ...request('create', ref), attempt: 2 }, ctx());
+    expect(listed).toMatchObject({ type: 'confirmed' });
+    expect(site.itemsWithSku(ref.externalSku ?? '')).toHaveLength(1);
   });
 
   it("finds a new listing by its SKU when Mercari's page after List does not link to it", async () => {

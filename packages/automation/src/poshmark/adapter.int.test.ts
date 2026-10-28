@@ -4,7 +4,8 @@
  * form field and the photo order, not for sale and back, the private SKU lookup that keeps a
  * retried create from posting twice, the closet listing and sold items across closet pages, and
  * every check and page change that has to stop the run and hand the step to the user. No real
- * Poshmark traffic.
+ * Poshmark traffic. Each of the form's shapes is filled on the recorded real pages instead
+ * (recordings/, docs/features/recorded-pages.md).
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -149,62 +150,6 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     });
     const read = await adapter.readListing(ref, ctx());
     expect(read.found && Number.isSafeInteger(read.revision)).toBe(true);
-  });
-
-  it("fills every shape of Poshmark's form: sizes by their labels, one size, groups, kids, colors", async () => {
-    // A men's shirt in a neck size, whose button reads "Neck 15.5", new with tags.
-    const shirt = await create({
-      item: {
-        department: 'men',
-        category: 'clothing/tops/shirts',
-        sizeLabel: '15.5',
-        condition: 'new_with_tags',
-        colors: ['navy', 'white'],
-      },
-      variant: { aspects: [] },
-    });
-    expect(site.listing(shirt.externalListingId)).toMatchObject({
-      department: 'Men',
-      category: 'Shirts',
-      subcategory: 'Casual Button Down Shirts',
-      sizeSet: 'Standard',
-      size: '15.5',
-      condition: 'nwt',
-      colors: ['Blue', 'White'],
-    });
-    // A one-size category, whose form chooses its size by itself.
-    const lamp = await create({
-      item: { department: null, category: 'home/decor', sizeLabel: null, colors: [] },
-      variant: { aspects: [] },
-    });
-    expect(site.listing(lamp.externalListingId)).toMatchObject({
-      department: 'Home',
-      category: 'Accents',
-      subcategory: 'Decor',
-      size: 'OS',
-    });
-    // A category in a display group, named by the listing.
-    const kurta = await create({
-      item: { department: 'women', sizeLabel: 'M' },
-      variant: { aspects: [], categoryRef: 'Women/Kurtas' },
-    });
-    expect(site.listing(kurta.externalListingId)).toMatchObject({
-      category: 'Kurtas',
-      subcategory: null,
-      size: 'M',
-    });
-    // A kids' size, under the set the size names.
-    const tee = await create({
-      item: { department: 'kids', category: 'clothing/tops/t_shirts', sizeLabel: 'Boys 8' },
-      variant: { aspects: [] },
-    });
-    expect(site.listing(tee.externalListingId)).toMatchObject({
-      department: 'Kids',
-      category: 'Shirts & Tops',
-      subcategory: 'Tees - Short Sleeve',
-      sizeSet: 'Boys',
-      size: '8B',
-    });
   });
 
   it('changes a listing Poshmark is reviewing, and reads it live only once Poshmark publishes it', async () => {

@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@listora/auto-delist": "*",
-    "@listora/automation": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
     "@listora/operations": "*",

@@ -90,7 +90,6 @@ export {
   isRetryableFailure,
   REFUSED_CONTENT_ERROR,
   relistMode,
-  waitedFor,
 } from './status-display.ts';
 export type {
   ListingStatusInput,

@@ -249,8 +249,7 @@ extension PhotoUploadStatus {
         case .readingTag: "Reading the tag on this iPhone first."
         case .uploading: "Uploading now. It keeps going if you leave the app."
         case .uploaded: "Listora has this photo with its current role."
-        case let .retrying(attempt, maxAttempts):
-            "The last try didn't work. Listora tries again on its own (\(attempt) of \(maxAttempts))."
+        case .retrying: "The last try didn't work. Listora tries again on its own."
         case .waitingForSignIn: "Saved on this iPhone. It uploads after you sign in."
         case .failed: ""
         }

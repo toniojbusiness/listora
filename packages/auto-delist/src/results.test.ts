@@ -27,7 +27,7 @@ const labelOf = (
   marketplace: Marketplace,
   operation: DelistOperationFacts,
   listingStatus: ListingStatus = 'active',
-) => describeDelistResult({ marketplace, listingStatus, operation, maxAttempts: 7 });
+) => describeDelistResult({ marketplace, listingStatus, operation });
 
 describe('delist results', () => {
   it.each<[OperationStatus, SuccessEvidence | null, DelistResultState]>([
@@ -67,11 +67,7 @@ describe('delist results', () => {
     });
     expect(
       labelOf('depop', op('retrying', { attempts: 2, errorMessage: 'Depop is busy.' })),
-    ).toEqual({
-      tone: 'in_progress',
-      label: 'Delisting... retry 2 of 6',
-      detail: 'Depop is busy.',
-    });
+    ).toEqual({ tone: 'in_progress', label: 'Delisting...' });
     expect(labelOf('depop', op('verifying'))).toMatchObject({
       tone: 'checking',
       label: 'Checking...',

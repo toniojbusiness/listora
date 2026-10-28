@@ -73,7 +73,7 @@ time it is read; the API and the SLA job both use it. Per listing:
 | ------------------- | --------------------------------------------- | ------------------------------------------------------------------ |
 | `delisted`          | The operation succeeded by a read-back        | `Delisted (confirmed by eBay)`, `Marked sold (confirmed by Depop)` |
 | `user_confirmed`    | The seller confirmed an assisted delist       | `Done (you confirmed)`                                             |
-| `pending`           | Queued, running, or waiting to retry          | `Delisting...`, `Delisting... retry 2 of 6`                        |
+| `pending`           | Queued, running, or waiting to retry          | `Delisting...`                                                     |
 | `verifying`         | Its outcome is unknown and is being read back | `Checking...`                                                      |
 | `needs_user_action` | The seller has to delist it                   | `Action needed - delist on Poshmark`                               |
 | `failed`            | It failed; the reason and Retry are shown     | `Delist failed - Retry` (Retry is `retryOperation`)                |

@@ -110,19 +110,6 @@ function cardView(
           status: card.status,
         },
       };
-    case 'sale_checks':
-      return {
-        ...base,
-        saleChecks: {
-          connectionId: card.connectionId,
-          marketplace: card.marketplace,
-          health: card.health,
-          since: card.since.toISOString(),
-          ...(card.lastSucceededAt === null
-            ? {}
-            : { lastSucceededAt: card.lastSucceededAt.toISOString() }),
-        },
-      };
     case 'stale_listing': {
       const money = (amountCents: number) => ({ amountCents, currency: card.currency });
       return {

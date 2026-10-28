@@ -92,6 +92,7 @@ has the steps.
 | `npm run dev:fake-poshmark`    | Run the fake Poshmark at `FAKE_POSHMARK_URL`, which the Poshmark automation adapter drives in development                                        |
 | `npm run dev:runner`           | Run the browser runner by hand (the worker starts it on demand otherwise)                                                                        |
 | `npm run phone:bundle`         | Rebuild the iPhone app's phone runtime (`phone-runtime.js`) from the automation code; a test fails while it is stale                             |
+| `npm run recordings:record`    | Record Depop, Poshmark, or Mercari pages, redacted, from the signed-in Chrome for the tests (docs/features/recorded-pages.md)                    |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
 | `npm run admin -- --help`      | Operator CLI: AI costs, the spend check, the AI kill switch and blocks, data purges, the activity search, sale-check health and history reads    |
 | `npm run perf:api`             | Benchmark the API's screens on a synthetic 2,000-item seller (scratch database); see [performance.md](docs/features/performance.md)              |

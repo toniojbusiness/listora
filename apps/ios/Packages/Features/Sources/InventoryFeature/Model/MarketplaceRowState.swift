@@ -76,8 +76,6 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
     let lastChange: String?
     /// The listing's own price ("$39.00"), which can differ from the item's list price.
     let priceLabel: String?
-    /// When the waiting operation tries again ("Waiting to retry at 9:41 PM"), while it waits.
-    let scheduleLabel: String?
     let actions: [Action]
 
     init(marketplace: KnownMarketplace, listing: Listing?, connection: Connection?, now: Date = Date()) {
@@ -105,13 +103,6 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         }
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
         let waiting = Self.waitingAttempt(of: listing, now: now)
-        scheduleLabel = waiting.map { operation, due in
-            let time = due.formatted(
-                date: Calendar.current.isDate(due, inSameDayAs: now) ? .omitted : .abbreviated,
-                time: .shortened,
-            )
-            return operation.status.value1 == .verifying ? "Checking again at \(time)" : "Waiting to retry at \(time)"
-        }
         if let listing {
             statusLabel = listing.statusDisplay.label
             statusDetail = listing.statusDisplay.detail

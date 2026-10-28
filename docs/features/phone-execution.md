@@ -97,8 +97,8 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    lapsed run and a read-back decides. A check waits for the phone again. A call never answered
    is finished in `automation_run` as canceled.
 5. **Waiting too long.** An operation that waits for the phone longer than 24 hours fails with
-   `phone_unavailable` and a Retry. Until then its status says so: "Delisting... waiting on your
-   iPhone (12 minutes)", with a detail asking the seller to open Listora.
+   `phone_unavailable` and a Retry. Until then its status says what the seller can do: "Delisting... open
+   Listora on your iPhone", with a detail asking them to open it (how long it waited is not shown).
 
 ## The phone runtime
 
@@ -111,6 +111,15 @@ pages, evaluates the runtime's page functions in an isolated script world, reads
 data (`pageData`, one fixed read of a page global, in the page's own world, the only place that
 data lives), reports the main frame's navigations, HTTP status, and dialogs, fetches listing
 photos, and hands checks to the seller. Every rule stays in the runtime.
+
+- **A page load during a read.** A click that loads a page (Poshmark's Update, read live on
+  2026-10-27) can cut short the page function that runs next, and its answer is lost with the
+  old page. The host reports that as `navigated`, and the runtime runs the read again on the new
+  page once it has loaded, within the step's wait; a click the page navigated away from counts as
+  done. Only reads are run again: an action that changes the page (filling, picking, uploading)
+  is never repeated. The browser test host reports Playwright's "Execution context was destroyed"
+  as `navigated`; the iPhone app reports WebKit's own message, so a lost read there still ends
+  the step (open item).
 
 - **No keyboard in the background.** The web views live in a window of their own, behind the
   app's, that can never become the key window, which the keyboard follows: a page that focuses
@@ -279,3 +288,5 @@ side in 11 to 13 s.
   equivalent); the server logs its step and reason (`automation script stopped`, `host: phone`)
   as the runner logs its own, and its run record keeps its steps and their times
   ([activity.md](activity.md)).
+- The iPhone app does not yet report a read a page load cut short as `navigated` (WebKit's
+  message for it has not been read on a device), so there such a read still ends the step.

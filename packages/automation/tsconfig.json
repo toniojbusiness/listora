@@ -18,5 +18,6 @@
     { "path": "../pack-check" },
     { "path": "../push" },
     { "path": "../sales" }
-  ]
+  ],
+  "exclude": ["src/*/recordings"]
 }

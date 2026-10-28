@@ -14,7 +14,7 @@ func saleExplanation() -> Components.Schemas.SaleExplanation {
         soldAt: checkedAt.addingTimeInterval(-3600),
         recordedAt: checkedAt.addingTimeInterval(60),
         detectionSource: .init(value1: .poll, value2: "poll"),
-        detection: "Found by a sale check of Mercari on your iPhone.",
+        detection: "Listora found it on Mercari.",
         check: .init(
             id: "check-1",
             kind: .init(value1: .scheduled, value2: "scheduled"),
@@ -39,12 +39,8 @@ func saleExplanation() -> Components.Schemas.SaleExplanation {
 @Suite("How Listora found a sale")
 struct FoundSectionTests {
     @Test
-    func `says which check saw the sale, where, and what each delist did`() {
+    func `says when it sold, never which check saw it, where, or how long anything took`() {
         let content = FoundSectionContent(saleExplanation())
-        #expect(content.facts.map(\.label) == ["Sold", "Seen by a sale check", "That check saw", "Recorded"])
-        #expect(content.facts[1].value.hasPrefix("On your iPhone, "))
-        #expect(content.facts[2].value == "3 sold orders")
-        let delist = saleExplanation().delists[0]
-        #expect(FoundSectionContent.delistTiming(delist).contains(", settled "))
+        #expect(content.facts.map(\.label) == ["Sold"])
     }
 }
