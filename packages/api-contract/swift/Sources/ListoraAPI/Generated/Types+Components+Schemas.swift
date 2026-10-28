@@ -11397,9 +11397,10 @@ extension Components {
             }
         }
         /// How Listora refreshes the account's live listings that have not sold: through each
-        /// marketplace's own way (Poshmark's share to followers, saving the listing unchanged on Mercari
-        /// and Depop), never a delete and repost, within the marketplace's pace. eBay listings are not
-        /// refreshed (eBay has no refresh that keeps watchers). Defaults (`every_72_hours`, no quiet
+        /// marketplace's own way (Poshmark's share to followers, saving the listing unchanged on
+        /// Mercari), never a delete and repost, within the marketplace's pace. eBay listings are not
+        /// refreshed (eBay has no refresh that keeps watchers), nor Depop listings (a linked Depop shop
+        /// is read-only). Defaults (`every_72_hours`, no quiet
         /// window) until saved.
         ///
         ///
@@ -11599,8 +11600,8 @@ extension Components {
             }
         }
         /// `scheduled`: Listora refreshes it at `nextAt`. `off`: refreshing is off for it (its item's
-        /// cadence or the account's). `unavailable`: Listora can't refresh it there (eBay, or no linked
-        /// marketplace session that works).
+        /// cadence or the account's). `unavailable`: Listora doesn't refresh it there (eBay, Depop, or
+        /// no linked marketplace session that works).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownListingRefreshState`.

@@ -82,8 +82,8 @@ struct ListingRefreshSettingsView: View {
     private var explanation: some View {
         Text(
             "A listing that hasn't sold is refreshed so it shows as new again: shared to your "
-                + "followers on Poshmark, and saved unchanged on Mercari and Depop. Listora never "
-                + "deletes and reposts, so likes and watchers stay. eBay listings aren't refreshed. "
+                + "followers on Poshmark, and saved unchanged on Mercari. Listora never deletes and "
+                + "reposts, so likes and watchers stay. eBay and Depop listings aren't refreshed. "
                 + "Refreshes stay within each marketplace's pace, and an item can have its own "
                 + "setting on its screen.",
         )

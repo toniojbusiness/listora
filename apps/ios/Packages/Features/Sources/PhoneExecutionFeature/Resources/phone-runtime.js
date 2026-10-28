@@ -7201,15 +7201,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				return post(op, step);
 			},
-			refresh: async (op, step) => {
-				const opened = await editor(op, step);
-				if (!("slug" in opened)) return opened;
-				await step("check the form", { mutates: false }, (page) => expectSubmit(page, "save"));
-				return step("save unchanged", {
-					mutates: true,
-					timeScale: 2
-				}, async (page) => submitted(await submitListing$2(page, "save")));
-			},
 			read: async (ref, step) => {
 				const slug = ref.externalListingId;
 				if (slug !== null) return (await step("read the listing", { mutates: false }, (page) => readProduct(page, site, slug))).state;

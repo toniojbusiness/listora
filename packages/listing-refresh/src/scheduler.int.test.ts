@@ -225,6 +225,14 @@ describe('the refresh schedule', () => {
     expect(await refreshesOf(accountId)).toEqual([]);
   });
 
+  it('never refreshes a Depop listing: a linked Depop shop is read-only', async () => {
+    // Even an adapter that claims a Depop refresh gets none queued.
+    const { accountId, connectionId } = await seller('depop');
+    await listing(accountId, connectionId, ago(500 * HOUR), 'depop');
+    await run();
+    expect(await refreshesOf(accountId)).toEqual([]);
+  });
+
   it('queues one refresh per listing per fresh period, however many runs', async () => {
     const { accountId, connectionId } = await seller();
     await listing(accountId, connectionId, ago(200 * HOUR));
