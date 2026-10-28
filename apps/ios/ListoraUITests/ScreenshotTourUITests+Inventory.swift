@@ -18,6 +18,11 @@ extension ScreenshotTourUITests {
         XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         tab("Inventory")
         let row = app.buttons["inventory.row.\(item.sku)"]
+        // At the largest text sizes the grid is one column of tall tags, and the item can be below
+        // the first screen, where the lazy grid has not made it yet.
+        for _ in 0 ..< 4 where !row.waitForExistence(timeout: 5) {
+            app.swipeUp()
+        }
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         try shot("27-inventory")
         // The list, then back to the photo grid (the default).
@@ -127,6 +132,13 @@ extension ScreenshotTourUITests {
         save.tap()
         XCTAssertTrue(app.staticTexts["sale.soldOn"].waitForExistence(timeout: 15))
         try shot("47-sold-celebration", settle: 0.5)
+        // Back on the item: the sold stamp pressed onto its tag.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["item.soldStamp"].waitForExistence(timeout: 10))
+        // Mark as sold was below the fold: back to the tag at the top.
+        app.swipeDown()
+        app.swipeDown()
+        try shot("48-item-sold")
     }
 
     private func waitForLabel(of element: XCUIElement, _ label: String, timeout: TimeInterval) -> Bool {

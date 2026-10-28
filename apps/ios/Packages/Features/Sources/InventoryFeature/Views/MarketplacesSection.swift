@@ -3,8 +3,9 @@ import DesignSystem
 import ListoraAPI
 import SwiftUI
 
-/// One card per marketplace: the listing's status as the server words it, how Listora works
-/// with the marketplace, the actions allowed now, and the listing's history.
+/// The item's marketplaces on one string, a bead per marketplace: the listing's status as the
+/// server words it, how Listora works with the marketplace, the actions allowed now, and the
+/// listing's history. The string to a marketplace the item is not on yet is loose (dashed).
 struct MarketplacesSection: View {
     let rows: [MarketplaceRowState]
     let histories: [String: [Operation]]
@@ -38,23 +39,50 @@ struct MarketplacesSection: View {
                 endAll: endAll,
                 listEverywhere: listEverywhere,
             )
-            ForEach(rows) { row in
-                MarketplaceCard(
-                    row: row,
-                    // With List everywhere at the top, each card's List is a smaller button.
-                    listIsSecondary: listEverywhere != nil && AllMarketplacesActions.showsListAll(rows),
-                    history: row.listing.flatMap { histories[$0.id] } ?? [],
-                    events: events,
-                    isBusy: busyMarketplace == row.id,
-                    isEnabled: busyMarketplace == nil,
-                    progress: phoneProgress.first { progress in
-                        progress.operationID != nil && progress.operationID == row.latestOperation?.id
-                    },
-                    perform: { action in perform(action, row) },
-                    end: { reason in end(reason, row) },
-                    loadEvents: loadEvents,
-                )
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    marketplace(row, at: index)
+                }
             }
+        }
+    }
+
+    private func marketplace(_ row: MarketplaceRowState, at index: Int) -> some View {
+        ThreadRow(
+            position: .at(index, of: rows.count),
+            above: Self.string(to: row),
+            below: index + 1 < rows.count ? Self.string(to: rows[index + 1]) : .taut,
+        ) {
+            ThreadBead(monogram: String(row.name.prefix(1)), tone: StatusTone(row.tone))
+        } content: {
+            MarketplaceCard(
+                row: row,
+                // With List everywhere at the top, each card's List is a smaller button.
+                listIsSecondary: listEverywhere != nil && AllMarketplacesActions.showsListAll(rows),
+                history: row.listing.flatMap { histories[$0.id] } ?? [],
+                events: events,
+                isBusy: busyMarketplace == row.id,
+                isEnabled: busyMarketplace == nil,
+                progress: phoneProgress.first { progress in
+                    progress.operationID != nil && progress.operationID == row.latestOperation?.id
+                },
+                perform: { action in perform(action, row) },
+                end: { reason in end(reason, row) },
+                loadEvents: loadEvents,
+            )
+            .padding(.bottom, index + 1 < rows.count ? Spacing.md : 0)
+        }
+    }
+
+    /// The string to a marketplace, from the listing's confirmed state only: tied once the
+    /// marketplace confirms the listing is live (or sold there), cut once it confirms the listing
+    /// ended (a sale ends it everywhere else), and loose while the item is not on it or the work
+    /// is still running or failed. A change animates: the knot ties, or the string is cut.
+    static func string(to row: MarketplaceRowState) -> ThreadStyle {
+        switch row.listing?.status.value1 {
+        case .active, .ending, .sold: .taut
+        case .ended: .cut
+        case .draft, .queued, .publishing, .error, .unknown, .needsUserAction, nil: .loose
         }
     }
 }
@@ -79,11 +107,6 @@ private struct MarketplaceCard: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.sm))
         VStack(alignment: .leading, spacing: Spacing.sm) {
             heading {
-                IconTile(
-                    monogram: String(row.name.prefix(1)),
-                    tone: row.tone == .success ? .success : nil,
-                    size: .card,
-                )
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(row.name)
                         .font(Typography.title3)
@@ -146,8 +169,22 @@ private struct MarketplaceCard: View {
                 HistoryView(marketplace: row.id, operations: history, events: events, loadEvents: loadEvents)
             }
         }
-        .cardStyle(row.tone == .failed ? .tinted(.failed) : .elevated)
+        // No box: the bead and the string carry the marketplace; a failure keeps its tint.
+        .modifier(FailureTint(isFailed: row.tone == .failed))
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// A failed marketplace's content on the failure's soft color, so it stands out on the string.
+private struct FailureTint: ViewModifier {
+    let isFailed: Bool
+
+    func body(content: Content) -> some View {
+        if isFailed {
+            content.cardStyle(.tinted(.failed), padding: Spacing.sm)
+        } else {
+            content
+        }
     }
 }
 

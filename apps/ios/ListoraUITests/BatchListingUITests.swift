@@ -84,10 +84,14 @@ final class BatchListingUITests: XCTestCase {
             XCTAssertTrue(app.buttons["batchGrouping.photo.\(index).2"].exists, "item \(index + 1) has no third photo")
         }
         keepScreenshot("Batch grouping")
-        for index in 1 ..< 3 where app.buttons["batchGrouping.keepApart.\(index)"].exists {
-            app.buttons["batchGrouping.keepApart.\(index)"].tap()
-        }
         let confirm = app.buttons["batchGrouping.confirm"]
+        for index in 1 ..< 3 where app.buttons["batchGrouping.keepApart.\(index)"].exists {
+            // A close call further down starts under the bottom bar; a tap there would land on
+            // the bar's Keep shooting.
+            let keepApart = app.buttons["batchGrouping.keepApart.\(index)"]
+            keepApart.scrollClear(of: confirm, in: app)
+            keepApart.tap()
+        }
         XCTAssertEqual(confirm.label, "Create 3 items")
         confirm.tap()
     }

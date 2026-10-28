@@ -135,7 +135,7 @@ struct PackOrderCard: View {
                     .foregroundStyle(Palette.textPrimary)
                     .lineLimit(2)
                 Text(itemLine)
-                    .font(Typography.metadata)
+                    .font(Typography.sku)
                     .foregroundStyle(Palette.textSecondary)
                 Text(buyerLine)
                     .font(Typography.subheadline)
@@ -154,7 +154,8 @@ struct PackOrderCard: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle(.flat)
+        // A day's orders are a list: ruled, not boxed.
+        .cardStyle(.ruled)
         .accessibilityElement(children: .combine)
     }
 

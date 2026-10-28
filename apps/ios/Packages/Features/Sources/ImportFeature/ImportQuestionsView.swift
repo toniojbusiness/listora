@@ -95,8 +95,8 @@ private struct QuestionCard: View {
                         .lineLimit(3)
                     if let price = question.price {
                         Text((Decimal(price.amountCents) / 100).formatted(.currency(code: price.currency.rawValue)))
-                            .font(Typography.number)
-                            .foregroundStyle(Palette.textPrimary)
+                            .font(Typography.price)
+                            .foregroundStyle(Palette.brand)
                     }
                 }
             }

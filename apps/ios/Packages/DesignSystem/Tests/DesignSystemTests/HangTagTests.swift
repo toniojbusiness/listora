@@ -143,6 +143,29 @@ struct HangTagTests {
         }
     }
 
+    @Test
+    func `a tied string runs solid from the top down, and a cut one opens a gap in the middle`() {
+        let rect = CGRect(x: 0, y: 0, width: 16, height: 100)
+        #expect(SnippedString(tied: 1, cut: 0).path(in: rect).boundingRect.height == 100)
+        #expect(SnippedString(tied: 0.4, cut: 0).path(in: rect).boundingRect.maxY == 40, "tying from the top")
+        #expect(SnippedString(tied: 0, cut: 0).path(in: rect).isEmpty, "loose: nothing solid yet")
+        let cut = SnippedString(tied: 1, cut: 1).path(in: rect)
+        #expect(cut.boundingRect.height == 100, "both ends stay tied on")
+        #expect(!cut.cgPath.contains(CGPoint(x: 8, y: 50)))
+        let middle = cut.cgPath.copy(strokingWithWidth: Thread.width, lineCap: .butt, lineJoin: .miter, miterLimit: 1)
+        #expect(!middle.contains(CGPoint(x: 8, y: 50)), "the middle is snipped")
+        #expect(middle.contains(CGPoint(x: 8, y: 20)) && middle.contains(CGPoint(x: 8, y: 80)))
+    }
+
+    @Test
+    func `the sold stamp fits on the item's tag at every size`() {
+        everyVariant { width, typeSize, scheme in
+            let stamp = SoldStamp(price: "$1,250.00", marketplace: "Poshmark", lands: false)
+            let measured = size(of: stamp, width: width, typeSize: typeSize, scheme: scheme)
+            #expect(measured.width <= width - 2 * Spacing.md, "\(typeSize) at \(width): \(measured)")
+        }
+    }
+
     // MARK: Stamps and labels
 
     @Test
@@ -152,6 +175,39 @@ struct HangTagTests {
         #expect(large.height > small.height)
         let long = size(of: Stamp("Ship by tomorrow morning at the latest"), width: 200, typeSize: .accessibility5)
         #expect(long.width <= 200, "a long stamp wraps instead of overflowing: \(long)")
+    }
+
+    @Test(arguments: StatusTone.allCases)
+    func `a stamped mark grows a little with the text, as big as a card's photo by default`(tone: StatusTone) {
+        let regular = size(of: StampMark(systemImage: "link", tone: tone), width: 390, typeSize: .large)
+        let largest = size(of: StampMark(systemImage: "link", tone: tone), width: 390, typeSize: .accessibility5)
+        #expect(regular == CGSize(width: StampMark.side, height: StampMark.side))
+        #expect(largest.width > regular.width && largest.width <= StampMark.side * 1.4 + 0.5)
+    }
+
+    @Test
+    func `an icon tile is a soft tile in rows and a stamp on cards`() {
+        let row = size(of: IconTile(systemImage: "link"), width: 390, typeSize: .large)
+        let card = size(of: IconTile(systemImage: "link", size: .card), width: 390, typeSize: .large)
+        let hero = size(of: IconTile(systemImage: "link", size: .hero), width: 390, typeSize: .accessibility5)
+        #expect(row == CGSize(width: 36, height: 36))
+        #expect(card == CGSize(width: 48, height: 48))
+        #expect(hero == CGSize(width: 96, height: 96), "the hero mark keeps its size, so the action stays on screen")
+    }
+
+    @Test
+    func `an item's hanging tag fits its grid cell, its photo inside the card stock`() {
+        everyVariant { width, typeSize, scheme in
+            let cell = (width - 3 * Spacing.md) / 2
+            let tag = HangingTag(railOverhang: Spacing.md / 2) {
+                Color.clear.aspectRatio(1, contentMode: .fit)
+            }
+            .frame(width: cell)
+            let measured = size(of: tag, width: width, typeSize: typeSize, scheme: scheme)
+            #expect(abs(measured.width - cell) < 0.5, "\(measured) for \(cell)")
+            // The photo, the eyelet's band above it, the margins, and the string's drop.
+            #expect(measured.height > cell + HangingTag<EmptyView>.drop, "\(measured) for \(cell)")
+        }
     }
 
     // MARK: The tab rail
