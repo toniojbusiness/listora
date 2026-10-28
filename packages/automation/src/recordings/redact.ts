@@ -30,7 +30,10 @@ interface Term {
 
 /** Keys whose value names a person or their account, by kind. */
 const IDENTITY_KEYS: readonly (readonly [RegExp, TermKind])[] = [
-  [/^(user_?name|login|handle|display_?handle|nick_?name|screen_?name|seller_?handle)$/i, 'user'],
+  // `screen_name` is a handle; Poshmark's `screenName` (camel case) is its analytics' name for the
+  // page (`my_offers`), so it is not one.
+  [/^screen_name$/, 'user'],
+  [/^(user_?name|login|handle|display_?handle|nick_?name|seller_?handle)$/i, 'user'],
   [
     /^(first_?name|last_?name|full_?name|real_?name|given_?name|family_?name|seller_?name|buyer_?name|recipient_?name|shipping_?name)$/i,
     'name',

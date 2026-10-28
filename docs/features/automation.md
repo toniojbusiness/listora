@@ -174,6 +174,10 @@ from the app
   session, read-only, where the connection runs (the runner's `automation_listing_import` task,
   or `listing_import` phone work), and keeps what each page showed for `@listora/imports` to
   turn into items ([imports.md](imports.md)).
+- **Offers** (`offers/`): reads of the buyers' offers waiting on the seller, read-only, and the
+  seller's answers to them (accept, decline, counter), sent once only on their confirmed tap and
+  done only on a read-back of the offer, where the connection runs (the phone)
+  ([offers.md](offers.md)).
 - **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the
   cookies the app captured (on the marketplace's domains only), revives the connection, moves the
   marketplace's unconnected listings to it, asks for a read-only **session check**

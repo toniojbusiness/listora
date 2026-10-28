@@ -66,13 +66,17 @@ task, and no word about it in a notification.
 - **Delists after a sale** (`@listora/auto-delist`): a listing on a read-only connection gets no
   delist; an item whose only other listings are read only is simply sold; and a sale on the
   read-only account delists nothing on the account's other marketplaces.
-- **Features to come** (the automatic listing refresh, offers): they queue through
+- **Offers** ([offers.md](offers.md)): a read-only account's offers are still read and shown,
+  but with no answers: `requestOfferAnswer` refuses one (`409 marketplace_action_unavailable`),
+  the phone's claim fails one asked for before the account became read only without sending
+  anything, and the phone dispatch would refuse its write script anyway.
+- **Features to come** (the automatic listing refresh): they queue through
   `enqueueOperation`, so a write they forget to filter is refused there, which would fail their
   transaction. Each must leave out read-only listings itself: select with `listingIsReadOnly` and
   skip them, as the fan-out does.
 
 Reads keep working on a read-only connection: imports, the listings and sold pages, sales
-history, sale checks and sale detection, session checks, label reads, and `verify`.
+history, sale checks and sale detection, session checks, label reads, offer reads, and `verify`.
 
 ## One-off: the live Depop shop
 

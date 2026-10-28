@@ -136,6 +136,17 @@ struct E2EStack {
         return try JSONDecoder().decode([DepopProduct].self, from: data)
     }
 
+    /// A buyer makes an offer on the fake Depop product (`POST /depop/offers`).
+    func addDepopOffer(slug: String, amountCents: Int) async throws {
+        _ = try await control("depop/offers", method: "POST", body: ["slug": slug, "amountCents": amountCents])
+    }
+
+    /// Every answer to an offer the fake Depop took (`GET /depop/offer-answers`).
+    func depopOfferAnswers() async throws -> [DepopOfferAnswer] {
+        let data = try await control("depop/offer-answers", method: "GET", body: nil)
+        return try JSONDecoder().decode([DepopOfferAnswer].self, from: data)
+    }
+
     /// Unlinks the marketplace through the API (`disconnectConnection`), so a test starts with
     /// nothing linked there and no work waiting for a phone; nothing to unlink is fine.
     func unlink(_ marketplace: String) async throws {
@@ -180,6 +191,12 @@ struct E2EStack {
         XCTAssertTrue((200 ..< 300).contains(status), String(bytes: data, encoding: .utf8) ?? "")
         return data
     }
+}
+
+struct DepopOfferAnswer: Decodable, Equatable {
+    let offerId: String
+    let action: String
+    let counterCents: Int?
 }
 
 struct SeededItem: Decodable {

@@ -2,7 +2,8 @@
  * The never-false-success invariant (docs/architecture.md section 1) as a check on the code
  * itself: only transitions.ts may change an operation's row, it sets `succeeded` only with a
  * `SuccessProof`, and only evidence.ts can create one. A new code path that writes operation
- * status directly fails this test.
+ * status directly fails this test. The seller's answers to offers, which are not operations, set
+ * their own evidence only after a read-back of the offer shows the answer.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -49,6 +50,8 @@ function existsDir(path: string): boolean {
 const TRANSITIONS = 'packages/operations/src/transitions.ts';
 const EVIDENCE = 'packages/operations/src/evidence.ts';
 const SCHEMA = 'packages/db/src/schema.ts';
+/** The seller's answers to offers keep their own evidence (docs/features/offers.md). */
+const OFFER_ANSWERS = 'packages/automation/src/offers/answer.ts';
 
 describe('never-false-success invariant in the code', () => {
   const sources = runtimeSources();
@@ -77,7 +80,13 @@ describe('never-false-success invariant in the code', () => {
     const setters = sources
       .filter((file) => file.path !== SCHEMA && /success_evidence\s*:/.test(file.text))
       .map((file) => file.path);
-    expect(setters).toEqual([TRANSITIONS]);
+    expect(setters).toEqual([OFFER_ANSWERS, TRANSITIONS]);
+    // An offer answer's evidence is set in one place: right after a read-back that shows it.
+    const answers = sources.find((file) => file.path === OFFER_ANSWERS)?.text ?? '';
+    expect(answers.match(/evidence: true/g)).toHaveLength(1);
+    expect(answers).toMatch(
+      /answerShown\(prepared\.request, state\)\) \{\s*await update\(\{ status: 'succeeded', sent: true, evidence: true \}\)/,
+    );
     const transitions = sources.find((file) => file.path === TRANSITIONS)?.text ?? '';
     expect(transitions).toMatch(/success_evidence: change\.proof\.evidence/);
     expect(transitions.match(/success_evidence\s*:/g)).toHaveLength(2); // the proof, or null

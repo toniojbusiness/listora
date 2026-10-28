@@ -140,6 +140,7 @@ export const USER_TASK_KINDS = [
   'reconnect',
   'review_match',
   'resolve_double_sale',
+  'answer_offer',
 ] as const;
 export type UserTaskKind = (typeof USER_TASK_KINDS)[number];
 
@@ -251,6 +252,8 @@ export const AUTOMATION_RUN_PURPOSES = [
   'health',
   'import',
   'label_read',
+  'offer_check',
+  'offer_response',
 ] as const;
 export type AutomationRunPurpose = (typeof AUTOMATION_RUN_PURPOSES)[number];
 
@@ -269,6 +272,8 @@ export const PHONE_WORK_PURPOSES = [
   'sale_history',
   'listing_import',
   'label_read',
+  'offer_check',
+  'offer_response',
 ] as const;
 export type PhoneWorkPurpose = (typeof PHONE_WORK_PURPOSES)[number];
 
@@ -322,7 +327,7 @@ export const CHALLENGE_KINDS = [
 export type ChallengeKind = (typeof CHALLENGE_KINDS)[number];
 
 /** Why a connection's next sale check is due when it is (`sale_check_schedule.next_reason`). */
-export const SALE_CHECK_REASONS = ['scheduled', 'email', 'retry', 'linked'] as const;
+export const SALE_CHECK_REASONS = ['scheduled', 'email', 'retry', 'linked', 'offer'] as const;
 export type SaleCheckReason = (typeof SALE_CHECK_REASONS)[number];
 
 export const SALE_CHECK_OUTCOMES = ['succeeded', 'failed', 'challenge'] as const;
@@ -358,3 +363,25 @@ export type LabelReadStatus = (typeof LABEL_READ_STATUSES)[number];
 /** How a packed order's label was known to be its own (`sale_pack.matched_by`). */
 export const PACK_MATCHES = ['sticker', 'label', 'photo'] as const;
 export type PackMatch = (typeof PACK_MATCHES)[number];
+
+/** `marketplace_offer.status` (docs/features/offers.md). */
+export const OFFER_STATUSES = ['pending', 'accepted', 'declined', 'countered', 'closed'] as const;
+export type OfferStatus = (typeof OFFER_STATUSES)[number];
+
+/** `offer_response.action`: the seller's answer to an offer. */
+export const OFFER_ACTIONS = ['accept', 'decline', 'counter'] as const;
+export type OfferAction = (typeof OFFER_ACTIONS)[number];
+
+/** `offer_response.status`: sent once, succeeded only with a read-back. */
+export const OFFER_RESPONSE_STATUSES = [
+  'queued',
+  'running',
+  'verifying',
+  'succeeded',
+  'failed',
+] as const;
+export type OfferResponseStatus = (typeof OFFER_RESPONSE_STATUSES)[number];
+
+/** `offer_check.last_outcome`. */
+export const OFFER_CHECK_OUTCOMES = ['succeeded', 'failed'] as const;
+export type OfferCheckOutcome = (typeof OFFER_CHECK_OUTCOMES)[number];

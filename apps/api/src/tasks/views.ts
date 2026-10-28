@@ -6,6 +6,7 @@
  */
 import type {
   CopyField,
+  Offer,
   Photo,
   UserTask,
   UserTaskItem,
@@ -22,6 +23,7 @@ import { MARKETPLACES } from '@listora/db';
 import { emailSaleOfTask, type EmailSaleTaskPayload } from '@listora/email-sales';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 
+import { offerViews } from '../offers/views.ts';
 import { photoFromRow, type PhotoRow, type PublicUrls } from '../photos/mapping.ts';
 import type { Tenant } from '../tenancy.ts';
 import { coverPhotoRows, itemSummaryRows, photoRowsById, type TaskRow } from './repository.ts';
@@ -55,6 +57,7 @@ export async function taskViews(
   tenant: Tenant,
   rows: readonly TaskRow[],
   urls: PublicUrls,
+  now: Date = new Date(),
 ): Promise<UserTask[]> {
   const copyAssists = rows.map((row) => copyAssistOf(row));
   const photoIds = copyAssists.flatMap((copy) =>
@@ -68,16 +71,24 @@ export async function taskViews(
       ...candidateIds,
     ]),
   ];
-  const [photos, covers, candidates] = await Promise.all([
+  const offerIds = rows.flatMap((row) => (row.offer_id === null ? [] : [row.offer_id]));
+  const [photos, covers, candidates, offers] = await Promise.all([
     photoRowsById(db, tenant, [...new Set(photoIds)]),
     coverPhotoRows(db, tenant, itemIds),
     itemSummaryRows(db, tenant, [...new Set(candidateIds)]),
+    offerViews(db, tenant, offerIds, now),
   ]);
   const photoById = new Map(photos.map((photo) => [photo.id, photo]));
   const coverByItem = new Map(covers.map((photo) => [photo.item_id, photo]));
   const itemById = new Map(candidates.map((item) => [item.id, item]));
   return rows.map((row, index) =>
-    taskView(row, copyAssists[index], emails[index], { photoById, coverByItem, itemById, urls }),
+    taskView(
+      row,
+      copyAssists[index],
+      emails[index],
+      row.offer_id === null ? undefined : offers.get(row.offer_id),
+      { photoById, coverByItem, itemById, urls },
+    ),
   );
 }
 
@@ -100,11 +111,18 @@ function taskView(
   row: TaskRow,
   copy: CopyAssistPayload | undefined,
   email: EmailSaleTaskPayload | undefined,
+  offer: Offer | undefined,
   photos: PhotoLookup,
 ): UserTask {
-  const marketplace = marketplaceOf(row) ?? undefined;
+  const marketplace =
+    marketplaceOf(row) ?? MARKETPLACES.find((known) => known === offer?.marketplace) ?? undefined;
   const cover = row.item_id === null ? undefined : photos.coverByItem.get(row.item_id);
-  const { title, instructions } = email === undefined ? wording(row) : emailWording(row, email);
+  const { title, instructions } =
+    email !== undefined
+      ? emailWording(row, email)
+      : offer !== undefined
+        ? offerWording(offer)
+        : wording(row);
   const copyAssist = copy === undefined ? undefined : copyAssistView(copy, photos);
   return {
     id: row.id,
@@ -131,6 +149,7 @@ function taskView(
     ...(row.deep_link === null ? {} : { deepLink: row.deep_link }),
     ...(copyAssist === undefined ? {} : { copyAssist }),
     ...(email === undefined ? {} : { saleEmail: saleEmailView(email, photos) }),
+    ...(offer === undefined ? {} : { offer }),
     createdAt: row.created_at.toISOString(),
     ...(row.completed_at === null ? {} : { completedAt: row.completed_at.toISOString() }),
   };
@@ -228,6 +247,12 @@ function wording(row: TaskRow): { title: string; instructions: string } {
         ].join('\n'),
       };
     }
+    case 'answer_offer':
+      // An offer's task without its offer (the offer was deleted with its connection).
+      return {
+        title: `An offer on ${name}`,
+        instructions: `Open ${name} to see the offer.`,
+      };
     case 'review_match':
       return {
         title: `Check a ${name} listing`,
@@ -296,6 +321,16 @@ function emailWording(
         title: `Which item sold on ${name}?`,
         instructions: `A ${name} sale email says ${what} sold${price}, and more than one of your items matches. Pick the one that sold to delist it everywhere else.`,
       };
+}
+
+/** An offer's task: the amount and the listing, and what the seller can do. */
+function offerWording(offer: Offer): { title: string; instructions: string } {
+  const known = MARKETPLACES.find((marketplace) => marketplace === offer.marketplace);
+  const name = known === undefined ? 'the marketplace' : MARKETPLACE_NAMES[known];
+  return {
+    title: `$${amount(offer.amount)} offer on ${name}`,
+    instructions: `A buyer offered $${amount(offer.amount)}. Accept, decline, or counter it here, or open it in ${name}.`,
+  };
 }
 
 function listWording(kind: OperationKind | null, name: string) {

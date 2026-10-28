@@ -64,8 +64,8 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
 1. **Handing over.** When the engine would enqueue a browser runner step for a connection that
    runs on the phone, it writes a `phone_work` row instead and keeps the operation's status and
    job. Session checks, sale checks, read-only reads of the sold history
-   ([activity.md](activity.md)), and the pages of a listing import ([imports.md](imports.md)) do
-   the same. A delist after a sale goes first (`priority`), and a history read and an import page
+   ([activity.md](activity.md)), the pages of a listing import ([imports.md](imports.md)), reads
+   of the buyers' offers and the seller's answers to them ([offers.md](offers.md)) do the same. A delist after a sale goes first (`priority`), and a history read and an import page
    wait behind routine changes.
 2. **Claiming.** The app claims the next work for its device (`POST /v1/phone-runs`). The claim
    is a lease (10 minutes, renewed by every answer). One run per connection at a time, so the
@@ -74,8 +74,13 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    stopped (the app was closed mid-call) and is recovered at once. The runner's per-seller rate
    limits and pause between sessions apply, counted in `automation_run` (`host = 'phone'`) with
    the runner's runs; the pause comes before a run's first call only, since its later calls (a
-   send's read-back) are the same visit. A device whose runtime speaks another call version is
-   told to update the app (`app_update_required`) and gets nothing. A claim that finds nothing
+   send's read-back) are the same visit. The server speaks runtime versions 2 and 3
+   (`SUPPORTED_PHONE_RUNTIME_VERSIONS`): each call names the version its phone last claimed with,
+   and a version-2 app (installed before offers) gets every call but the offers' reads and
+   answers, which wait for its update ([offers.md](offers.md)). The app also takes the server's
+   own runtime between runs (`getPhoneRuntime`), so it usually speaks the newest at once. A device
+   whose runtime speaks any other version is told to update the app (`app_update_required`) and
+   gets nothing. A claim that finds nothing
    says when to claim again (`nextClaimInSeconds`): when the device's next work is due (a check
    tried again after a failed attempt, a change the engine is about to hand over), at most 5
    seconds while marketplaces run on it (`PHONE_IDLE_CLAIM_SECONDS`), and 5 minutes when none
@@ -272,7 +277,8 @@ side in 11 to 13 s.
 - `marketplace_connection.runs_on` and `phone_device_id`: where a connection's automated steps
   run.
 - `phone_work`: work handed to the phone (an operation step, a session check, a sale check, a
-  history read, or an import page with its `import_id`), since when it waits, its lease, and the
+  history read, an import page with its `import_id`, a read of the offers, or an answer to one
+  with its `offer_response_id`), since when it waits, its lease, and the
   answered calls of the run under way. A trigger (`phone_work_notify`, migration
   `20261027195355_phone_work_notify`) notifies the `phone_work` channel with the account's id when
   work is inserted, or its due time moves or its claim ends; a claim renewing its lease notifies

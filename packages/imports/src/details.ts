@@ -14,6 +14,9 @@ import { splitDepopDescription } from '@listora/shared';
 /** The longest title an imported item gets (eBay's, Poshmark's, and Mercari's limit). */
 export const IMPORTED_TITLE_LIMIT = 80;
 
+/** A hashtag in a line of text (`#retro`, not `#1`), with the space before it. */
+const HASHTAG = /(^|\s)#\p{L}[^\s#]*/gu;
+
 /** Listora's canonical categories: every `<category>/<subcategory>`. */
 const CANONICAL_PATHS: readonly string[] = Object.entries(CATEGORY_TREE).flatMap(
   ([category, subcategories]) => subcategories.map((subcategory) => `${category}/${subcategory}`),
@@ -29,6 +32,8 @@ export interface ImportedItem {
   sizeLabel: string | null;
   sizeSystem: string | null;
   condition: ItemCondition | null;
+  colors: string[];
+  /** The listing's price before a markdown, so the item never lists elsewhere at a sale price. */
   listPriceCents: number | null;
   /** The detail fields set from the listing (their provenance is `marketplace`). */
   fromListing: string[];
@@ -58,10 +63,11 @@ export function importedItem(marketplace: Marketplace, listing: ListedListing): 
     sizeLabel: listing.details.size,
     sizeSystem: sizeSystem(listing.details.size),
     condition: listing.details.condition,
-    listPriceCents: listing.priceCents,
+    colors: listing.details.colors,
+    listPriceCents: listing.details.originalPriceCents ?? listing.priceCents,
   };
   const fromListing = Object.entries(item)
-    .filter(([, value]) => value !== null)
+    .filter(([, value]) => value !== null && !(Array.isArray(value) && value.length === 0))
     .map(([field]) => field);
   return { ...item, fromListing };
 }
@@ -88,13 +94,14 @@ export function listingDescription(marketplace: Marketplace, listing: ListedList
 }
 
 /**
- * A title for a listing without one (Depop's are all text): its first line, up to the title
- * limit at a word boundary.
+ * A title for a listing without one (Depop's are all text): its first line without the
+ * hashtags a seller put on it (`Graphic tee #retro #y2k`), up to the title limit at a word
+ * boundary.
  */
 export function titleFrom(description: string): string | null {
   const line = description
     .split(/\r?\n/)
-    .map((part) => part.trim())
+    .map((part) => part.replace(HASHTAG, ' ').trim())
     .find((part) => part !== '');
   if (line === undefined) return null;
   const words = line.replace(/\s+/g, ' ');

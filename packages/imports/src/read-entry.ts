@@ -29,6 +29,9 @@ const listedListingSchema = z.object({
     condition: z.enum(ITEM_CONDITIONS).nullable(),
     categoryRef: z.string().nullable(),
     categoryPath: z.array(z.string()),
+    // Entries read before Listora kept them have neither.
+    colors: z.array(z.string()).default([]),
+    originalPriceCents: z.number().int().min(0).nullable().default(null),
     sku: z.string().nullable(),
   }),
 });

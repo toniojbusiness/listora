@@ -31,8 +31,13 @@ import {
   type ListingVariant,
   type MarketplaceAdapter,
   type MarketplaceCapabilities,
+  type OfferAnswerOutcome,
+  type OfferAnswerRequest,
+  type OfferRef,
   type OperationRequest,
   type Outcome,
+  type RemoteOffer,
+  type RemoteOfferState,
   type ListingsPage,
   type RemoteListingState,
   type RemoteOrder,
@@ -50,6 +55,7 @@ import {
   isWriteCall,
   runScriptCall,
   type AutomationScripts,
+  type OfferAnswerResult,
   type ScriptCall,
   type ScriptSet,
   type WriteResult,
@@ -291,6 +297,65 @@ export class AutomationAdapter<
     return this.#readValue(run, 'read your shipping labels');
   }
 
+  async listOffers(ctx: AdapterContext): Promise<RemoteOffer[]> {
+    if (this.#options.scripts.offers === undefined) {
+      throw new Error(`Listora doesn't read ${this.#name} offers`);
+    }
+    const run = await this.#use<RemoteOffer[]>(
+      this.#connection(ctx),
+      'offer_check',
+      null,
+      'offers',
+      { script: 'offers' },
+      ctx.signal,
+    );
+    return this.#readValue(run, 'read your offers');
+  }
+
+  async readOffer(ref: OfferRef, ctx: AdapterContext): Promise<RemoteOfferState> {
+    if (this.#options.scripts.offer === undefined) {
+      throw new Error(`Listora doesn't read ${this.#name} offers`);
+    }
+    const run = await this.#use<RemoteOfferState>(
+      this.#connection(ctx),
+      'offer_response',
+      null,
+      'read offer',
+      { script: 'offer', ref: { ...ref } },
+      ctx.signal,
+    );
+    return this.#readValue(run, 'read the offer');
+  }
+
+  async answerOffer(request: OfferAnswerRequest, ctx: AdapterContext): Promise<OfferAnswerOutcome> {
+    if (this.#options.scripts.answerOffer === undefined || ctx.connection === null) {
+      return {
+        type: 'needs_seller',
+        code: 'unsupported',
+        message: `Answer this offer in ${this.#name}.`,
+      };
+    }
+    let run: SessionRun<OfferAnswerResult>;
+    try {
+      run = await this.#use<OfferAnswerResult>(
+        ctx.connection,
+        'offer_response',
+        null,
+        'answer offer',
+        { script: 'answerOffer', request: { ...request, offer: { ...request.offer } } },
+        ctx.signal,
+      );
+    } catch (error) {
+      this.#log.error({ err: error, responseId: request.responseId }, 'automation session failed');
+      return {
+        type: 'unknown',
+        code: 'automation_error',
+        message: `Listora lost track of your answer on ${this.#name} and is checking the offer.`,
+      };
+    }
+    return offerAnswerOutcome(run, this.#name);
+  }
+
   async listListings(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage> {
     if (this.#options.scripts.listings === undefined) {
       throw new Error(`Listora doesn't list ${this.#name} listings`);
@@ -511,6 +576,103 @@ export class AutomationAdapter<
       message: degradedMessage(code, this.#name),
     };
   }
+}
+
+/** How an offer answer's run ended (docs/features/offers.md): `sent` never claims more. */
+export function offerAnswerOutcome(
+  run: SessionRun<OfferAnswerResult>,
+  name: string,
+): OfferAnswerOutcome {
+  switch (run.type) {
+    case 'no_session':
+      return {
+        type: 'needs_seller',
+        code: 'no_session',
+        message: `Link ${name} again in Listora, or answer this offer in ${name}.`,
+      };
+    case 'rate_limited':
+    case 'busy':
+      return {
+        type: 'not_sent',
+        code: run.type === 'busy' ? 'automation_busy' : 'automation_paced',
+        message: `Listora is pacing its ${name} actions and will send your answer shortly.`,
+        retryAfterMs: run.retryAfterMs,
+      };
+    case 'read_only':
+      return { type: 'needs_seller', code: 'read_only', message: readOnlyOfferMessage(name) };
+    case 'ran':
+      break;
+    default:
+      return assertNever(run, 'session run');
+  }
+  const { result } = run;
+  if (result.ok) {
+    return result.value.type === 'applied'
+      ? { type: 'sent' }
+      : {
+          type: 'refused',
+          code: result.value.code,
+          message: result.value.message.includes(name)
+            ? result.value.message
+            : `${name}: ${result.value.message}`,
+        };
+  }
+  const { failure, mutated } = result;
+  const code = failureCode(failure);
+  const unknown: OfferAnswerOutcome = {
+    type: 'unknown',
+    code,
+    message: `Listora isn't sure your answer reached ${name} and is checking the offer.`,
+  };
+  if (mutated) return unknown;
+  switch (failure.kind) {
+    case 'challenge':
+      return {
+        type: 'needs_seller',
+        code,
+        message: `${challengeMessage(failure.challenge, name)} Or answer this offer in ${name}.`,
+      };
+    case 'timeout':
+      return { type: 'not_sent', code, message: `${name} took too long to answer.` };
+    case 'error':
+      switch (failure.code) {
+        case 'element_missing':
+          return {
+            type: 'needs_seller',
+            code,
+            message: `${name}'s offer page has changed, so Listora can't answer it. Answer it in ${name}.`,
+          };
+        case 'stopped_for_check':
+          return {
+            type: 'not_sent',
+            code,
+            message: `${name} wants you to complete a check on your iPhone. Open Listora there to finish it.`,
+          };
+        case 'rate_limited':
+          return {
+            type: 'not_sent',
+            code,
+            message: `${name} asked Listora to slow down.`,
+            ...(failure.retryAfterMs === null ? {} : { retryAfterMs: failure.retryAfterMs }),
+          };
+        case 'read_only':
+          return { type: 'needs_seller', code, message: readOnlyOfferMessage(name) };
+        case 'server_error':
+        case 'unreachable':
+        case 'aborted':
+        case 'browser_unavailable':
+        case 'script_error':
+          return { type: 'not_sent', code, message: `${name} didn't respond as expected.` };
+        default:
+          return assertNever(failure.code, 'script error code');
+      }
+    default:
+      return assertNever(failure, 'script failure');
+  }
+}
+
+function readOnlyOfferMessage(name: string): string {
+  return `This ${name} account is read only in Listora, so it can't answer its offers. Answer this one in ${name}.`;
 }
 
 function degradedMessage(code: string, name: string): string {

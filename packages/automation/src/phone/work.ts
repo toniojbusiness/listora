@@ -47,6 +47,7 @@ import {
   type Health,
   type ListingsPage,
   type MarketplaceAdapter,
+  type RemoteOffer,
   type RemoteOrder,
   type RemoteOrderLabel,
 } from '@listora/marketplaces';
@@ -72,7 +73,6 @@ import {
 import { createLogger, type Logger } from '@listora/shared';
 
 import { AutomationReadError } from '../adapter/automation-adapter.ts';
-import { isWriteCall } from '../adapter/script-call.ts';
 
 import type { AutomationSessions, SessionRequest } from '../adapter/sessions.ts';
 import { rateLimitWait, runOutcome, runSteps } from '../adapter/runner-sessions.ts';
@@ -95,6 +95,14 @@ import {
 import type { SaleCheckSettings } from '../settings.ts';
 import { prepareSessionCheck, recordSessionCheck } from '../session-checks/job.ts';
 import { prepareImportPage, recordImportPage, recordImportPageFailure } from '../imports/read.ts';
+import { isWriteCall } from '../adapter/script-call.ts';
+import {
+  prepareOfferAnswer,
+  recordOfferAnswer,
+  refuseOfferAnswer,
+  runOfferAnswer,
+} from '../offers/answer.ts';
+import { recordOfferCheckFailure, recordOffers, startOfferCheck } from '../offers/record.ts';
 import { queueSessionCheckForPhone } from '../session-checks/schedule.ts';
 import { readPhoneAnswer, readPhoneEvidence } from './answers.ts';
 import type { PhoneWorkSignals } from './signals.ts';
@@ -172,6 +180,13 @@ export class PhoneCallConflictError extends Error {
 }
 
 const DEFAULT_LEASE_MS = 10 * 60_000;
+/**
+ * The runtime versions the server hands work to. Version 2 (an app installed before offers) runs
+ * every call but the offers' (docs/features/offers.md), which wait for its update; the app also
+ * takes the server's own runtime between runs (`getPhoneRuntime`), which speaks the newest.
+ */
+export const SUPPORTED_PHONE_RUNTIME_VERSIONS: readonly number[] = [2, PHONE_RUNTIME_VERSION];
+const OFFERS_PHONE_RUNTIME_VERSION = 3;
 /** The longest a phone that runs marketplaces waits between looks while the app is open. */
 export const PHONE_IDLE_CLAIM_SECONDS = 5;
 /** About how long the engine takes to hand a due change to the phone. */
@@ -206,7 +221,14 @@ type StepState =
       since: string | null;
       checkedThrough: string | null;
     }
-  | { kind: 'label_read'; orders: LabelReadTarget[] };
+  | { kind: 'label_read'; orders: LabelReadTarget[] }
+  | { kind: 'offer_check' }
+  | {
+      kind: 'offer_response';
+      responseId: string;
+      /** Whether an earlier run may have sent the answer, as the claim found it: then it only reads. */
+      sent: boolean;
+    };
 
 /** The call the phone runs now. */
 interface PendingState {
@@ -244,7 +266,9 @@ export async function claimPhoneRun(
   executor: DbExecutor,
   device: ClaimingDevice,
 ): Promise<PhoneRunState | null> {
-  if (device.runtimeVersion !== PHONE_RUNTIME_VERSION) throw new PhoneRuntimeMismatchError();
+  if (!SUPPORTED_PHONE_RUNTIME_VERSIONS.includes(device.runtimeVersion)) {
+    throw new PhoneRuntimeMismatchError();
+  }
   return inTransaction(executor, async (trx) => {
     await releaseStoppedRuns(trx, device);
     if (device.appOpen === true) await runWaitingPhoneOperationsNow(trx, device);
@@ -498,46 +522,52 @@ async function releaseStoppedRuns(
 /** The next work due for the device, locked; one whose connection has a run under way waits. */
 async function nextWork(
   trx: DbTransaction,
-  device: { accountId: string; deviceId: string },
+  device: { accountId: string; deviceId: string; runtimeVersion: number },
 ): Promise<WorkRow | undefined> {
-  return trx
-    .selectFrom('phone_work as work')
-    .innerJoin('marketplace_connection as connection', (join) =>
-      join
-        .onRef('connection.account_id', '=', 'work.account_id')
-        .onRef('connection.id', '=', 'work.connection_id'),
-    )
-    .selectAll('work')
-    .where('work.account_id', '=', device.accountId)
-    .where('connection.runs_on', '=', 'phone')
-    .where('connection.phone_device_id', '=', device.deviceId)
-    .where('work.due_at', '<=', sql<Date>`now()`)
-    .where((eb) =>
-      eb.or([
-        eb('work.lease_expires_at', 'is', null),
-        eb('work.lease_expires_at', '<=', sql<Date>`now()`),
-      ]),
-    )
-    .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom('phone_work as other')
-            .select('other.id')
-            .whereRef('other.account_id', '=', 'work.account_id')
-            .whereRef('other.connection_id', '=', 'work.connection_id')
-            .whereRef('other.id', '<>', 'work.id')
-            .where('other.lease_expires_at', '>', sql<Date>`now()`),
+  return (
+    trx
+      .selectFrom('phone_work as work')
+      // An older runtime has no offer scripts: offers wait for the app's update.
+      .$if(device.runtimeVersion < OFFERS_PHONE_RUNTIME_VERSION, (query) =>
+        query.where('work.purpose', 'not in', ['offer_check', 'offer_response']),
+      )
+      .innerJoin('marketplace_connection as connection', (join) =>
+        join
+          .onRef('connection.account_id', '=', 'work.account_id')
+          .onRef('connection.id', '=', 'work.connection_id'),
+      )
+      .selectAll('work')
+      .where('work.account_id', '=', device.accountId)
+      .where('connection.runs_on', '=', 'phone')
+      .where('connection.phone_device_id', '=', device.deviceId)
+      .where('work.due_at', '<=', sql<Date>`now()`)
+      .where((eb) =>
+        eb.or([
+          eb('work.lease_expires_at', 'is', null),
+          eb('work.lease_expires_at', '<=', sql<Date>`now()`),
+        ]),
+      )
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('phone_work as other')
+              .select('other.id')
+              .whereRef('other.account_id', '=', 'work.account_id')
+              .whereRef('other.connection_id', '=', 'work.connection_id')
+              .whereRef('other.id', '<>', 'work.id')
+              .where('other.lease_expires_at', '>', sql<Date>`now()`),
+          ),
         ),
-      ),
-    )
-    .orderBy('work.priority')
-    .orderBy('work.waiting_since')
-    .orderBy('work.id')
-    .limit(1)
-    .forUpdate('work')
-    .skipLocked()
-    .executeTakeFirst();
+      )
+      .orderBy('work.priority')
+      .orderBy('work.waiting_since')
+      .orderBy('work.id')
+      .limit(1)
+      .forUpdate('work')
+      .skipLocked()
+      .executeTakeFirst()
+  );
 }
 
 /** Claims the work: what its run will do, under a lease. `null` when it has nothing to run. */
@@ -640,6 +670,44 @@ async function claimStepState(
       const orders = await ordersToRead(trx, work.account_id, work.marketplace, new Date());
       return orders.length === 0 ? null : { kind: 'label_read', orders };
     }
+    case 'offer_check': {
+      const connection = await connectionRef(trx, work);
+      const adapter = deps.adapters(new TranscriptSessions([])).lookup(work.marketplace);
+      if (
+        connection?.mode !== 'automation' ||
+        (connection.status !== 'connected' && connection.status !== 'degraded') ||
+        adapter?.listOffers === undefined
+      ) {
+        return null;
+      }
+      await startOfferCheck(trx, {
+        accountId: work.account_id,
+        connectionId: work.connection_id,
+        marketplace: work.marketplace,
+      });
+      return { kind: 'offer_check' };
+    }
+    case 'offer_response': {
+      if (work.offer_response_id === null) return null;
+      const prepared = await prepareOfferAnswer(trx, {
+        accountId: work.account_id,
+        responseId: work.offer_response_id,
+      });
+      if (prepared === null) return null;
+      if (!prepared.sent && (await isReadOnlyConnection(trx, work))) {
+        // Never sent on a read-only connection.
+        await refuseOfferAnswer(trx, prepared);
+        return null;
+      }
+      await trx
+        .updateTable('offer_response')
+        .set({ status: 'running' })
+        .where('account_id', '=', work.account_id)
+        .where('id', '=', prepared.responseId)
+        .where('status', '=', 'queued')
+        .execute();
+      return { kind: 'offer_response', responseId: prepared.responseId, sent: prepared.sent };
+    }
     default:
       return null;
   }
@@ -704,6 +772,16 @@ async function advance(
       };
       work = await saveTranscript(trx, work, [...transcript, answered]);
       continue;
+    }
+    if (work.purpose === 'offer_response' && isWriteCall(pending.request.call)) {
+      // From the moment the phone may send the answer, it is only ever read back, even when
+      // this run stops before its answer arrives.
+      await trx
+        .updateTable('offer_response')
+        .set({ sent: true })
+        .where('account_id', '=', work.account_id)
+        .where('id', '=', (step as Extract<StepState, { kind: 'offer_response' }>).responseId)
+        .execute();
     }
     const issued = await issueCall(deps, trx, work, pending, readOnly);
     return state(work, issued);
@@ -845,6 +923,52 @@ async function replay(
         },
       };
     }
+    case 'offer_check': {
+      const connection = await connectionRef(trx, work);
+      const adapter = lookup(work.marketplace);
+      if (connection === undefined || adapter?.listOffers === undefined) return { type: 'gone' };
+      const target = {
+        accountId: work.account_id,
+        connectionId: work.connection_id,
+        marketplace: work.marketplace,
+      };
+      let read: { offers: RemoteOffer[] } | { error: unknown };
+      try {
+        read = { offers: await adapter.listOffers({ connection, signal }) };
+      } catch (error) {
+        read = { error };
+      }
+      return {
+        type: 'ran',
+        pending: sessions.pending,
+        diverged: sessions.diverged,
+        record: async () => {
+          await deleteWork(trx, work);
+          if ('offers' in read) await recordOffers(trx, target, read.offers, logger);
+          else await recordOfferCheckFailure(trx, target, read.error, logger);
+        },
+      };
+    }
+    case 'offer_response': {
+      const adapter = lookup(work.marketplace);
+      const found = await prepareOfferAnswer(trx, {
+        accountId: work.account_id,
+        responseId: step.responseId,
+      });
+      if (found === null || adapter === undefined) return { type: 'gone' };
+      // The claim's view of whether it was sent, so every run of the work makes the same calls.
+      const prepared = { ...found, sent: step.sent };
+      const ran = await runOfferAnswer(adapter, prepared, signal);
+      return {
+        type: 'ran',
+        pending: sessions.pending,
+        diverged: sessions.diverged,
+        record: async () => {
+          await deleteWork(trx, work);
+          await recordOfferAnswer(trx, prepared, ran, logger);
+        },
+      };
+    }
     case 'label_read': {
       const connection = await connectionRef(trx, work);
       const adapter = lookup(work.marketplace);
@@ -963,7 +1087,7 @@ async function issueCall(
     .returning('id')
     .executeTakeFirstOrThrow();
   const input: PhoneCallInput = {
-    runtimeVersion: PHONE_RUNTIME_VERSION,
+    runtimeVersion: await deviceRuntimeVersion(trx, work),
     scriptSet: request.scriptSet,
     call: request.call,
     name: request.script,
@@ -1180,6 +1304,26 @@ async function connectionRef(
     .where('account_id', '=', work.account_id)
     .where('id', '=', work.connection_id)
     .executeTakeFirst();
+}
+
+/**
+ * The runtime version the work's phone speaks, as it last claimed: the calls it is handed say
+ * that version, which an older runtime checks.
+ */
+async function deviceRuntimeVersion(trx: DbTransaction, work: WorkRow): Promise<number> {
+  const device = await trx
+    .selectFrom('marketplace_connection as connection')
+    .innerJoin('app_device as device', (join) =>
+      join
+        .onRef('device.account_id', '=', 'connection.account_id')
+        .onRef('device.id', '=', 'connection.phone_device_id'),
+    )
+    .select('device.runtime_version')
+    .where('connection.account_id', '=', work.account_id)
+    .where('connection.id', '=', work.connection_id)
+    .executeTakeFirst();
+  const version = device?.runtime_version ?? PHONE_RUNTIME_VERSION;
+  return SUPPORTED_PHONE_RUNTIME_VERSIONS.includes(version) ? version : PHONE_RUNTIME_VERSION;
 }
 
 /** Whether the work's connection is read only (docs/features/read-only.md). */
