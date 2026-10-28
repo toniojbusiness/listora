@@ -2,7 +2,8 @@ import XCTest
 
 /// Inventory's select mode against the local stack with the fake eBay: List all, Change price,
 /// and End all over two items, a refused delist that lands the item in Needs you, and Delete,
-/// which keeps an item that is still live. Every status waited for is the server's own label.
+/// which asks what to do with a live listing and ends it first. Every status waited for is the
+/// server's own label.
 @MainActor
 final class BulkActionsUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -56,8 +57,9 @@ final class BulkActionsUITests: XCTestCase {
         try waitForEbay(of: second.sku, "Active (confirmed by eBay)", price: "$40.50")
 
         let failed = try await endAllWithOneRefused(stack: stack, skus: [first.sku, second.sku])
-        try deleteKeepsWhatIsLive(live: failed, spare: spare.sku)
-        try require(firstRow.exists)
+        try deleteEndingWhatIsLive(live: failed, spare: spare.sku)
+        let kept = failed == first.sku ? secondRow : firstRow
+        try require(kept.exists, "an item not chosen was deleted")
     }
 
     // MARK: Steps
@@ -91,17 +93,22 @@ final class BulkActionsUITests: XCTestCase {
         return sku
     }
 
-    /// Delete keeps an item that is still on a marketplace, with the server's reason.
-    private func deleteKeepsWhatIsLive(live: String, spare: String) throws {
+    /// Delete asks what to do with an item still on a marketplace: End listings, then delete ends
+    /// it on eBay, waits for eBay to confirm, and deletes it; the item on no marketplace is deleted.
+    private func deleteEndingWhatIsLive(live: String, spare: String) throws {
         try choose([live, spare])
         app.buttons["inventory.bulk.delete"].tap()
         try start()
-        app.buttons["bulk.delete.confirm"].firstMatch.tap()
+        try require(app.buttons["bulk.delete.leaveListings"].waitForExistence(timeout: 5), "no Listora-only choice")
+        keepScreenshot("Delete asks")
+        app.buttons["bulk.delete.endFirst"].firstMatch.tap()
         try require(waitForLabel(of: outcome(spare, "item"), "Deleted.", timeout: 30, contains: true))
-        try require(waitForLabel(of: outcome(live, "item"), "End its listings", timeout: 5, contains: true))
+        try require(waitForLabel(of: outcome(live, "ebay"), "Ended on eBay.", timeout: 150, contains: true))
+        try require(waitForLabel(of: outcome(live, "item"), "Deleted.", timeout: 5, contains: true))
         keepScreenshot("Delete results")
         app.buttons["bulk.done"].tap()
         try require(waitForAbsence(of: app.buttons["inventory.row.\(spare)"]), "the deleted item is still listed")
+        try require(waitForAbsence(of: app.buttons["inventory.row.\(live)"]), "the ended item is still listed")
     }
 
     private func launch(signedInTo stack: E2EStack) {
@@ -125,7 +132,8 @@ final class BulkActionsUITests: XCTestCase {
         for sku in skus {
             let row = app.buttons["inventory.row.\(sku)"]
             try require(row.waitForExistence(timeout: 10), "no row for \(sku)")
-            row.tap()
+            // Near its top: a card low on the screen has its middle under the selection bar.
+            row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
         }
         try require(app.staticTexts["\(skus.count) selected"].waitForExistence(timeout: 5), "not \(skus.count) chosen")
     }

@@ -127,7 +127,9 @@ it".
 ## Searching as an operator
 
 `npm run admin -- activity` searches one timeline by account, item, SKU (with `--account`),
-operation, sale, marketplace, and time (`--since`, `--until`); `sale-why` explains a sale;
+operation, sale, marketplace, and time (`--since`, `--until`). A deleted item's id or SKU still
+finds every action and error of its listings, with an `Item deleted` entry naming its SKU and
+title ([items.md](items.md#deleting-an-item)); the seller's timelines never show them; `sale-why` explains a sale;
 `sale-checks` lists every automation connection's health and the latest checks (`--json` for
 all of them). In AWS, `scripts/admin-remote.sh <env> [--profile <name>] -- <command>` runs the
 same CLI (which the application image carries) as a one-off task with the migration task's

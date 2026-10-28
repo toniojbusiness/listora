@@ -99,6 +99,7 @@ export {
   SETTLED_STATUSES,
   UNFINISHED_STATUSES,
 } from './state-machine.ts';
+export { keepDeletedItemOperations } from './transitions.ts';
 export type { OperationChange, OperationError, OperationRow } from './transitions.ts';
 export {
   describeListingStatus,
