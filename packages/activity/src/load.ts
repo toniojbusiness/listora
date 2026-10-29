@@ -135,6 +135,7 @@ async function operationEvents(db: DbExecutor, filter: ActivityFilter): Promise<
       'op.id as operation_id',
       'op.kind',
       'op.origin',
+      'deleted.reason as history_only',
     ])
     .$if(filter.accountId !== undefined, (q) =>
       q.where('event.account_id', '=', filter.accountId ?? ''),
@@ -175,7 +176,11 @@ async function operationEvents(db: DbExecutor, filter: ActivityFilter): Promise<
       source: operationEventSource(row),
       outcome: operationEventOutcome(row.to_status),
       marketplace: row.marketplace,
-      title: operationTitle(row.kind, row.origin, row.marketplace),
+      // Only the operator's timeline has these: the seller's leaves out untracked listings.
+      title:
+        row.history_only === 'unlinked'
+          ? `${operationTitle(row.kind, row.origin, row.marketplace)} (unlinked account)`
+          : operationTitle(row.kind, row.origin, row.marketplace),
       detail: message,
       itemId: row.item_id,
       listingId: row.listing_id,
@@ -789,14 +794,15 @@ async function itemChanges(db: DbExecutor, filter: ActivityFilter): Promise<Acti
 }
 
 /**
- * Items the seller deleted, by the id and title they had (`deleted_item`): their marketplace
- * history stays on the operator's timeline, and only there.
+ * Items the seller deleted, or that went when the marketplace that imported them was unlinked,
+ * by the id and title they had (`deleted_item`): their marketplace history stays on the
+ * operator's timeline, and only there.
  */
 async function deletedItems(db: DbExecutor, filter: ActivityFilter): Promise<ActivityEntry[]> {
   if (filter.saleId !== undefined) return [];
   const rows = await db
     .selectFrom('deleted_item')
-    .select(['id', 'sku', 'title', 'deleted_at'])
+    .select(['id', 'sku', 'title', 'deleted_at', 'reason'])
     .$if(filter.accountId !== undefined, (q) => q.where('account_id', '=', filter.accountId ?? ''))
     .$if(filter.itemId !== undefined, (q) => q.where('id', '=', filter.itemId ?? ''))
     .$if(filter.from !== undefined, (q) => q.where('deleted_at', '>=', filter.from ?? new Date(0)))
@@ -808,7 +814,7 @@ async function deletedItems(db: DbExecutor, filter: ActivityFilter): Promise<Act
     ...blank(`deleted_item:${row.id}`, row.deleted_at),
     kind: 'item',
     source: 'you',
-    title: 'Item deleted',
+    title: row.reason === 'unlinked' ? 'Item removed with an unlinked account' : 'Item deleted',
     detail: row.title === null ? row.sku : `${row.sku}: ${row.title}`,
     itemId: row.id,
   }));

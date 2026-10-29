@@ -66,19 +66,23 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   arrives at `/webhooks/ebay`, which verifies it and records it at once
   ([ebay-notifications.md](ebay-notifications.md)). Account deletion revokes grants through the
   marketplace's revocation endpoint (`OAuthGrantRevoker`). A connection still revoked 30 days
-  later, never reconnected, has the rest of its data deleted as if it were unlinked
-  ([privacy.md](privacy.md)).
+  later, never reconnected, has the rest of the data that came through it deleted; its listings
+  and sales stay ([privacy.md](privacy.md)).
 - **Read only.** The owner can make a connection read only (`setConnectionReadOnly`, the Read
   only switch on Link accounts): Listora still reads the account but never changes it, and every
   write path refuses ([read-only.md](read-only.md)).
 - **Unlinking.** `disconnectConnection` (`DELETE /v1/connections/{marketplace}`) deletes the
-  connection and the marketplace data that came through it at once (`startConnectionDeletion`
-  in `deletion.ts`: the tokens or session, the marketplace's user id and name, its automation
-  runs, session checks, and sale-check schedule, its listings' read-backs, and marketplace events
-  about the seller) and answers with the marketplace `not_connected`; `404` when none is linked.
-  Items, listings, and sales stay. The `connection_deletion` job then revokes an OAuth grant
-  through the marketplace's revocation endpoint (for up to 7 days), deletes the runs'
-  screenshots, checks, and records the deletion ([privacy.md](privacy.md)).
+  connection and every piece of the marketplace's data in the account at once
+  (`startConnectionDeletion` in `deletion.ts`, with `deleteMarketplaceData` in
+  `marketplace-data.ts`: the tokens or session, the marketplace's user id and name, its listings,
+  the items only its import brought in, its sales with their Pack check orders, offers, sale
+  checks, imports, tasks, and events; the history of its operations stays for the owner only)
+  and answers with the marketplace `not_connected`; `404` when none is linked. Nothing changes on
+  the marketplace. The `connection_deletion` job then revokes an OAuth grant through the
+  marketplace's revocation endpoint (for up to 7 days), deletes the stored objects (screenshots,
+  and the photos of what went), checks, and records the deletion
+  ([privacy.md](privacy.md#unlinking-a-marketplace)). A relink is a new connection and imports
+  afresh.
 
 ## Health dashboard
 

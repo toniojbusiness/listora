@@ -1,22 +1,23 @@
 /**
  * Sale checks end to end on real Postgres, headless Chromium, and the fake site: linking
  * schedules the first check, a check records each order once and schedules the next from the
- * seller's history, a check that meets a CAPTCHA waits for the relink, a forwarded email asks
- * for a check at once, and the worker's dispatcher queues due checks and starts the runner.
+ * seller's history, a relink after an unlink reads the whole sales history again, a check that
+ * meets a CAPTCHA waits for the relink, a forwarded email asks for a check at once, and the
+ * worker's dispatcher queues due checks and starts the runner.
  */
 import { randomBytes } from 'node:crypto';
 
 import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { createInventoryItem } from '@listora/db';
+import { createInventoryItem, inTransaction, jsonb } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import {
   ConnectionAwareAdapter,
   useMarketplaceFeatures,
   type AdapterLookup,
 } from '@listora/marketplaces';
-import { LocalTokenVault, SessionVault } from '@listora/connections';
+import { LocalTokenVault, SessionVault, startConnectionDeletion } from '@listora/connections';
 
 import { RunnerSessions } from '../adapter/runner-sessions.ts';
 import { AutomationDispatcher } from '../dispatch.ts';
@@ -214,6 +215,26 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
   });
 
   /** Ends the connection's sales history a day ago: the sales the site shows came after it. */
+  /** Records every order the checks handed over (the sale intake's jobs), then clears them. */
+  const recordOrders = async (maker?: SoldItemMaker<SoldItemSource>) => {
+    const { rows } = await sql<{ payload: SaleOrderJobPayload }>`
+      select payload from graphile_worker._private_jobs where task_id =
+        (select id from graphile_worker._private_tasks where identifier = ${SALE_ORDER_TASK})
+    `.execute(database.db);
+    for (const { payload } of rows) {
+      await recordSaleOrder(
+        {
+          db: database.db,
+          adapters,
+          logger: silentLogger,
+          ...(maker ? { soldItems: maker } : {}),
+        },
+        payload,
+      );
+    }
+    await clearJobs();
+  };
+
   const connectedSinceYesterday = (connectionId: string) =>
     database.db
       .updateTable('sale_check_schedule')
@@ -377,27 +398,9 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
       new Date(Date.now() - 3 * 24 * HOUR),
     ).id;
     const since = soldOnSite(1)[0] ?? '';
-    const runAll = async (maker?: SoldItemMaker<SoldItemSource>) => {
-      const { rows } = await sql<{ payload: SaleOrderJobPayload }>`
-        select payload from graphile_worker._private_jobs where task_id =
-          (select id from graphile_worker._private_tasks where identifier = ${SALE_ORDER_TASK})
-      `.execute(database.db);
-      for (const { payload } of rows) {
-        await recordSaleOrder(
-          {
-            db: database.db,
-            adapters,
-            logger: silentLogger,
-            ...(maker ? { soldItems: maker } : {}),
-          },
-          payload,
-        );
-      }
-      await clearJobs();
-    };
     // Before sold items: the first check dropped both orders.
     await check(connectionId);
-    await runAll();
+    await recordOrders();
     expect((await events()).map((event) => [event.provider_event_id, event.result])).toEqual(
       [before, since].sort().map((id) => [`order:${id}`, 'ignored']),
     );
@@ -420,7 +423,7 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
         .where('connection_id', '=', connectionId)
         .execute();
       await check(connectionId);
-      await runAll(maker);
+      await recordOrders(maker);
     }
     expect((await events()).map((event) => [event.provider_event_id, event.result])).toEqual(
       [
@@ -450,6 +453,69 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
       { external_order_id: since, detection_source: 'poll', status: 'detected', item: 'sold' },
     ]);
     expect(await pushes()).toEqual([]);
+  });
+
+  it('reads the whole sales history again after an unlink and a relink, and records it anew', async () => {
+    // Sold items made as @listora/imports makes them: items only the marketplace brought in.
+    const maker: SoldItemMaker<SoldItemSource> = {
+      prepare: (source) => Promise.resolve(source),
+      create: async (trx, source) => {
+        const item = await createInventoryItem(trx, source.accountId, { title: 'Sold jacket' });
+        await trx
+          .insertInto('audit_log')
+          .values({
+            account_id: source.accountId,
+            item_id: item.id,
+            actor_kind: 'marketplace',
+            action: 'item.imported',
+            changes: jsonb({ marketplace: source.marketplace, sold: true }),
+          })
+          .execute();
+        return { itemId: item.id, listingId: null };
+      },
+    };
+    const sales = () =>
+      database.db
+        .selectFrom('sale')
+        .select(['external_order_id', 'detection_source'])
+        .where('account_id', '=', accountId)
+        .orderBy('external_order_id')
+        .execute();
+    const first = await link();
+    const sold = soldOnSite(2).sort();
+    await check(first.connectionId);
+    await recordOrders(maker);
+    expect((await sales()).map((sale) => sale.external_order_id)).toEqual(sold);
+
+    await inTransaction(database.db, (trx) =>
+      startConnectionDeletion(trx, {
+        accountId,
+        connectionId: first.connectionId,
+        reason: 'unlinked',
+      }),
+    );
+    expect(await sales()).toEqual([]);
+    expect(await events()).toEqual([]);
+    const items = await database.db
+      .selectFrom('inventory_item')
+      .select('id')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(items).toEqual([]);
+
+    // The relink is a new connection: its first check reads the whole history, as a first
+    // link's does, and every sale is recorded again, found in the sales history.
+    const relinked = await link();
+    expect(relinked.connectionId).not.toBe(first.connectionId);
+    expect(await schedule(relinked.connectionId)).toMatchObject({
+      next_reason: 'linked',
+      checked_through: null,
+    });
+    await check(relinked.connectionId);
+    await recordOrders(maker);
+    expect(await sales()).toEqual(
+      sold.map((id) => ({ external_order_id: id, detection_source: 'history' })),
+    );
   });
 
   it("records a sale of Listora's own listing from before the history ends only: no delist, no alert", async () => {

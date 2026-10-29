@@ -7,8 +7,8 @@
  * - **The same**: nothing changes.
  * - **Another seller**: the session now signs into another shop than the one whose listings the
  *   connection holds. Its waiting changes fail (`shop_changed`), so none reaches the new shop,
- *   and its listings leave it, marked as from the previous shop, exactly as an unlink leaves them:
- *   an import of a shop that has them takes them back.
+ *   and its listings leave it, marked as from the previous shop, as a revoked connection's
+ *   deletion leaves them: an import of a shop that has them takes them back.
  *
  * The database then keeps read only by seller (migrations `20261029042234_shop_seller` and
  * `20261029233830_shop_read_only`): a connection that comes to hold a protected shop, or a seller

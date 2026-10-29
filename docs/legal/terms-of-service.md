@@ -44,8 +44,9 @@ rules, and fees.
 - **No guarantee of acceptance.** A marketplace may reject, remove, or change a listing, limit
   your account, change its API or rules, or end Listora's access. We do not control
   marketplaces and are not responsible for what they do.
-- **Unlinking.** You can unlink a marketplace at any time. Your listings stay on the
-  marketplace, but Listora can no longer manage them until you reconnect.
+- **Unlinking.** You can unlink a marketplace at any time. Listora then removes what it holds
+  from that marketplace, including its sales history in Listora (see the privacy policy). Your
+  listings stay on the marketplace, and linking it again brings them and your sales back in.
 
 ## How status works
 

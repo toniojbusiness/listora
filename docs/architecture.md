@@ -386,12 +386,14 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 - **History is kept.** A trigger rejects updates and deletes on the append-only tables, and
   deletes on `marketplace_operation`. The only changes it lets through are foreign-key actions
   caused by deleting a parent row (for example deleting the account), never direct statements
-  or other triggers, and the retention job's deletes of expired rows, which name the one table
+  or other triggers, the retention job's deletes of expired rows, which name the one table
   they delete from in the transaction setting `listora.retention_delete`
-  ([privacy.md](features/privacy.md#retention)). So an operation goes away only with the
-  account, and its `operation_event` history with the account or 180 days after it settled:
-  deleting an item moves its listings' operations onto `deleted_listing`
-  ([items.md](features/items.md#deleting-an-item)).
+  ([privacy.md](features/privacy.md#retention)), and an unlink's deletes of the item history
+  that names the marketplace, named in `listora.unlink_delete`
+  ([privacy.md](features/privacy.md#unlinking-a-marketplace)). So an operation goes away only
+  with the account, and its `operation_event` history with the account or 180 days after it
+  settled: deleting an item, or unlinking its marketplace, moves its listings' operations onto
+  `deleted_listing` ([items.md](features/items.md#deleting-an-item)).
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
   (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. A create,
   revise, or relist has listing `content`, and no other kind does. Assisted connections can

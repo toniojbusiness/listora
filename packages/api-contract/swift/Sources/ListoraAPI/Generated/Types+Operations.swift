@@ -12550,14 +12550,16 @@ public enum Operations {
     }
     /// Disconnect a marketplace account
     ///
-    /// Unlinks the marketplace: deletes the stored tokens or session and the marketplace data
-    /// that came through the connection (the marketplace's user id and name, listing read-backs,
-    /// marketplace events, automation runs and their screenshots), and asks the marketplace to
-    /// revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
-    /// marketplace but Listora can no longer change or verify them until the account is
-    /// connected again. `404` when no account of the marketplace is linked; `409
-    /// connection_read_only` while the account is read only (the owner turns Read only off
-    /// first, so an unlink and a relink never make it writable).
+    /// Unlinks the marketplace and removes all of its data from the account: the stored tokens
+    /// or session, its listings (and their links on items), the items only its import brought in
+    /// that are not listed or sold anywhere else, its sales with their fees and Pack check
+    /// orders, its offers, sale checks, imports, tasks, events, and the item history that names
+    /// it; then it asks the marketplace to revoke Listora's access. Items made in Listora, and
+    /// items listed on another marketplace, stay without that marketplace's listing. Nothing
+    /// changes on the marketplace itself: its listings stay up there, and linking it again
+    /// imports them and the sales history afresh. `404` when no account of the marketplace is
+    /// linked; `409 connection_read_only` while the account is read only (the owner turns Read
+    /// only off first, so an unlink and a relink never make it writable).
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/connections/{marketplace}`.

@@ -1012,7 +1012,9 @@ describe('schema constraints (real Postgres)', () => {
       }
     });
 
-    it('links auto-delist operations to their delist run', async () => {
+    it('links only auto-delist operations to a delist run', async () => {
+      // An auto-delist may have lost its run (its sale's marketplace was unlinked); an operation
+      // with a run is always one.
       await expectPgError(
         db
           .insertInto('marketplace_operation')
@@ -1020,9 +1022,10 @@ describe('schema constraints (real Postgres)', () => {
             account_id: a.accountId,
             listing_id: a.listingId,
             kind: 'end',
-            idempotency_key: 'auto-without-run',
+            idempotency_key: 'run-without-auto',
             desired: jsonb({ status: 'ended' }),
-            origin: 'auto_delist',
+            origin: 'user',
+            delist_run_id: crypto.randomUUID(),
           })
           .execute(),
         PG_ERROR.checkViolation,

@@ -4,7 +4,8 @@
  * CDN), or is added to the item it is the same as, by its SKU line or its title and photos, or
  * becomes a question the seller answers; a listing Listora has is left as it is (one from an
  * unlinked shop rejoins the shop that shows it), and one whose photos can't be fetched fails
- * visibly. Two imports settling at once never make two items of one.
+ * visibly. After the owner unlinks the marketplace and links it again, an import brings its
+ * listings in afresh. Two imports settling at once never make two items of one.
  */
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -419,12 +420,41 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
     expect(await items()).toHaveLength(1);
   });
 
+  it('imports afresh after an unlink and a relink: the listings come back as new items', async () => {
+    const first = await settled(await imported('depop', [listing('dress-1'), listing('dress-2')]));
+    expect(first.row).toMatchObject({ status: 'finished', imported: 2 });
+    const before = await items();
+    await inTransaction(db, (trx) =>
+      startConnectionDeletion(trx, {
+        accountId,
+        connectionId: first.row.connection_id,
+        reason: 'unlinked',
+      }),
+    );
+    // The unlink took the items only Depop's import brought in.
+    expect(await items()).toEqual([]);
+
+    const second = await settled(await imported('depop', [listing('dress-1'), listing('dress-2')]));
+    expect(second.row).toMatchObject({ status: 'finished', imported: 2, already_listed: 0 });
+    expect(second.row.connection_id).not.toBe(first.row.connection_id);
+    const after = await items();
+    expect(after).toHaveLength(2);
+    expect(after.map((row) => row.id)).not.toContain(before[0]?.id);
+    for (const row of after) {
+      expect(await listingsOf(row.id)).toMatchObject([
+        { marketplace: 'depop', connection_id: second.row.connection_id, status: 'active' },
+      ]);
+    }
+  });
+
   it('puts a listing from an unlinked shop back only when the linked shop shows it', async () => {
     const first = await settled(await imported('depop', [listing('dress-1'), listing('dress-2')]));
     expect(first.row).toMatchObject({ status: 'finished', imported: 2 });
     const previous = first.row.connection_id;
+    // A connection deleted while its listings stay (access revoked past retention); the owner's
+    // unlink removes them instead (above).
     await inTransaction(db, (trx) =>
-      startConnectionDeletion(trx, { accountId, connectionId: previous, reason: 'unlinked' }),
+      startConnectionDeletion(trx, { accountId, connectionId: previous, reason: 'revoked' }),
     );
     // The shop linked next shows only dress-1: it is that shop's; dress-2 stays the previous one's.
     const second = await settled(await imported('depop', [listing('dress-1')]));

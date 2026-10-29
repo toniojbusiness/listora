@@ -60,9 +60,11 @@ describe('linking and the marketplace listings (real Postgres)', () => {
       },
     );
 
+  // A connection deleted while its listings stay (access revoked past retention): the owner's
+  // own unlink removes the listings instead (packages/connections, marketplace-data.ts).
   const unlink = (connectionId: string) =>
     inTransaction(database.db, (trx) =>
-      startConnectionDeletion(trx, { accountId, connectionId, reason: 'unlinked' }),
+      startConnectionDeletion(trx, { accountId, connectionId, reason: 'revoked' }),
     );
 
   async function newListing(

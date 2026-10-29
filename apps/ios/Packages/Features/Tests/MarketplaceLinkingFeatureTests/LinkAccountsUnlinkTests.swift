@@ -37,6 +37,17 @@ struct LinkAccountsUnlinkTests {
     }
 
     @Test
+    func `the confirmation says plainly what goes and what stays`() {
+        let message = MarketplaceLink.poshmark(.linked).unlinkMessage
+        #expect(message.contains("removes everything it has from Poshmark"))
+        #expect(message.contains("your Poshmark listings, items that came only from Poshmark"))
+        #expect(message.contains("Poshmark sales and offers with their Pack check orders"))
+        #expect(message.contains("Items you made in Listora or listed elsewhere stay"))
+        #expect(message.contains("Nothing changes on Poshmark itself"))
+        #expect(!message.contains("sales stay"))
+    }
+
+    @Test
     func `keeps showing linked when the unlink failed, and retries it`() async throws {
         let service = FakeSessionService(
             list: [.mercari(.needsRelink(message: "Mercari logged Listora out."))],

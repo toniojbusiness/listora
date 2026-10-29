@@ -43,6 +43,7 @@ import type {
   DelistRunStatus,
   FeeKind,
   FeeSource,
+  HistoryOnlyReason,
   InboundEventResult,
   InboundEventSource,
   ItemStatus,
@@ -609,18 +610,24 @@ export interface DeletedItemTable {
   sku: string;
   title: Nullable<string>;
   deleted_at: CreatedAt;
+  /** The seller deleted it, or it went when its marketplace was unlinked (only its import made it). */
+  reason: Generated<HistoryOnlyReason>;
 }
 
-/** What a listing of a deleted item was; its id is the listing's. */
+/**
+ * What a listing of a deleted item, or of an unlinked marketplace, was; its id is the listing's.
+ * An unlinked listing's item may still be in Listora (it was listed elsewhere too).
+ */
 export interface DeletedListingTable {
   id: string;
   account_id: string;
   item_id: string;
   marketplace: Marketplace;
-  /** Its status when the item was deleted (a live listing stays up on its marketplace). */
+  /** Its status when it was deleted (a live listing stays up on its marketplace). */
   status: ListingStatus;
   external_listing_id: Nullable<string>;
   deleted_at: CreatedAt;
+  reason: Generated<HistoryOnlyReason>;
 }
 
 /** Append-only: the database rejects updates and deletes. */

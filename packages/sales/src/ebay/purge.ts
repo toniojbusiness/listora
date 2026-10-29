@@ -7,7 +7,7 @@
  * their eBay account:
  *
  * - every `marketplace_connection` to that eBay user, in every account, with the data that came
- *   through it (`deleteConnectionData`, the same deletion as unlinking): their encrypted OAuth
+ *   through it (`deleteConnectionData`, the deletion an unlink starts with): their encrypted OAuth
  *   tokens, eBay user id, and user name, the eBay listing snapshots read back under it
  *   (`remote_snapshot`), and the listings' link to it, so nothing can act for the deleted user
  *   again (connect attempts that point at it lose the link);
