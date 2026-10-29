@@ -144,6 +144,19 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `DELETE /v1/items/{itemId}`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/delete(deleteItem)`.
     func deleteItem(_ input: Operations.DeleteItem.Input) async throws -> Operations.DeleteItem.Output
+    /// Wait for a change to an item's marketplace work
+    ///
+    /// While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+    /// the item screen waits here instead of reading the item on a timer: the answer comes as
+    /// soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+    /// with none. Pass the `token` of the previous answer as `after`; without it (the first
+    /// wait) the answer is immediate, with `changed` true, so the screen reads the item once
+    /// more after starting to follow it. It only reads.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/changes`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)`.
+    func waitForItemChange(_ input: Operations.WaitForItemChange.Input) async throws -> Operations.WaitForItemChange.Output
     /// Look up an item by SKU
     ///
     /// - Remark: HTTP `GET /v1/skus/{sku}`.
@@ -1563,6 +1576,29 @@ extension APIProtocol {
         headers: Operations.DeleteItem.Input.Headers = .init()
     ) async throws -> Operations.DeleteItem.Output {
         try await deleteItem(Operations.DeleteItem.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Wait for a change to an item's marketplace work
+    ///
+    /// While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+    /// the item screen waits here instead of reading the item on a timer: the answer comes as
+    /// soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+    /// with none. Pass the `token` of the previous answer as `after`; without it (the first
+    /// wait) the answer is immediate, with `changed` true, so the screen reads the item once
+    /// more after starting to follow it. It only reads.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/changes`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)`.
+    public func waitForItemChange(
+        path: Operations.WaitForItemChange.Input.Path,
+        query: Operations.WaitForItemChange.Input.Query,
+        headers: Operations.WaitForItemChange.Input.Headers = .init()
+    ) async throws -> Operations.WaitForItemChange.Output {
+        try await waitForItemChange(Operations.WaitForItemChange.Input(
             path: path,
             query: query,
             headers: headers

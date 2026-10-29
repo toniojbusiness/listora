@@ -4,6 +4,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { DERIVATIVE_KINDS } from './derivatives.ts';
 import {
+  IMAGE_THREADS,
+  limitImageThreads,
   MAX_INPUT_PIXELS,
   processImage,
   UnusableImageError,
@@ -177,5 +179,20 @@ describe('processImage', () => {
       expect(error).not.toBeInstanceOf(UnusableImageError);
       expect((error as Error).message).toMatch(/limitInputPixels/);
     });
+  });
+});
+
+describe('limitImageThreads', () => {
+  it('keeps libvips to one thread, and photos still process', async () => {
+    const before = sharp.concurrency();
+    try {
+      limitImageThreads();
+      expect(IMAGE_THREADS).toBe(1);
+      expect(sharp.concurrency()).toBe(1);
+      const processed = await processImage(await fixtureJpeg({ width: 640, height: 480 }));
+      expect(processed.derivatives.original.width).toBe(640);
+    } finally {
+      sharp.concurrency(before);
+    }
   });
 });

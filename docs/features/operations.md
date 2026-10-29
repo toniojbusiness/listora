@@ -173,6 +173,21 @@ that was not canceled; `describeOperation` labels one operation in a listing's h
 it did ("Price changed (confirmed by eBay)"). The listing actions and the app that shows them are
 in [inventory.md](inventory.md).
 
+## Following a change
+
+The item screen shows a change as it runs (`Delisting...`, `Delist failed - Retry`) without
+reading the item on a timer. Every new or updated operation notifies the Postgres channel
+`item_change` with its listing's item id (trigger `marketplace_operation_item_change_notify`,
+migration `20261029022519_item_change_notify`). While one of the item's changes runs or waits,
+the app holds `GET /v1/items/{itemId}/changes` (`waitForItemChange`): the API listens on the
+channel (`listenForItemChanges`, `apps/api/src/items/changes.ts`) and answers the moment the
+item's operations change, or after `waitSeconds` (at most 20, under the gateway's 30 s limit),
+with `changed` and a `token`, a digest of the item's operations. The app passes the token back
+as `after`, and reads the item only when `changed`; a change committed between two waits shows
+as a different token at once. The first wait (no `after`) answers at once. While the API's
+listener is down, a wait looks every 3 s instead. When the wait fails (Listora unreachable),
+the app reads the item every second, or when a retry is due, as before.
+
 ## Data
 
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
