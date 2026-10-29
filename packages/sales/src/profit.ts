@@ -129,18 +129,26 @@ export interface ProfitReportInput {
 }
 
 /** One sold item's money: its share of its order's amounts. */
-interface ItemMoney {
-  row: ProfitItemRow;
+export interface SoldItemMoney<Row extends ProfitItemRow = ProfitItemRow> {
+  row: Row;
   revenueCents: number;
   feesCents: number;
   shippingCents: number;
+  /** The item's cost, zero without one (`row.costCents` is then null). */
   costOfGoodsCents: number;
   netProfitCents: number;
+  /**
+   * Where its sale's fees come from: the marketplace (`actual`), still the fee table's estimate
+   * (`estimated`), or no fee line at all (`none`, so the fees are not known).
+   */
+  feeSource: SoldItemFeeSource;
 }
+
+export type SoldItemFeeSource = 'actual' | 'estimated' | 'none';
 
 export function profitReport(input: ProfitReportInput): ProfitReport {
   const granularity = profitGranularity(input.period);
-  const items = itemMoney(input.items, input.fees);
+  const items = soldItemMoney(input.items, input.fees);
   const sold = input.items.length;
 
   const totals = sumTotals(items);
@@ -186,15 +194,27 @@ export function profitReport(input: ProfitReportInput): ProfitReport {
   };
 }
 
-/** Each item's share of its order's amounts, split as `saleMoney` splits them. */
-function itemMoney(rows: readonly ProfitItemRow[], fees: readonly ProfitFeeRow[]): ItemMoney[] {
+/**
+ * Each item's share of its order's amounts, split as `saleMoney` splits them, in the rows'
+ * sale order. The reports (`reports.ts`) read the same shares, so every screen agrees.
+ */
+export function soldItemMoney<Row extends ProfitItemRow>(
+  rows: readonly Row[],
+  fees: readonly ProfitFeeRow[],
+): SoldItemMoney<Row>[] {
   const bySale = groupBy(rows, (row) => row.saleId);
   const feesBySale = groupBy(fees, (fee) => fee.saleId);
-  const result: ItemMoney[] = [];
+  const result: SoldItemMoney<Row>[] = [];
   for (const [saleId, saleRows] of bySale) {
     const first = saleRows[0];
     if (first === undefined) continue;
     const saleFees = feesBySale.get(saleId) ?? [];
+    const feeSource: SoldItemFeeSource =
+      saleFees.length === 0
+        ? 'none'
+        : saleFees.some((fee) => fee.estimated)
+          ? 'estimated'
+          : 'actual';
     const ownIds = new Set(saleRows.map((row) => row.saleItemId));
     const orderLevel = saleFees.filter(
       (fee) => fee.saleItemId === null || !ownIds.has(fee.saleItemId),
@@ -225,13 +245,14 @@ function itemMoney(rows: readonly ProfitItemRow[], fees: readonly ProfitFeeRow[]
         shippingCents,
         costOfGoodsCents,
         netProfitCents: revenueCents - feesCents - shippingCents - costOfGoodsCents,
+        feeSource,
       });
     });
   }
   return result;
 }
 
-function sumTotals(items: readonly ItemMoney[]): ProfitTotals {
+function sumTotals(items: readonly SoldItemMoney[]): ProfitTotals {
   return {
     revenueCents: sum(items.map((item) => item.revenueCents)),
     feesCents: sum(items.map((item) => item.feesCents)),
@@ -249,10 +270,10 @@ function sumTotals(items: readonly ItemMoney[]): ProfitTotals {
  * as first seen; items without one are left out.
  */
 function ranking(
-  items: readonly ItemMoney[],
+  items: readonly SoldItemMoney[],
   keyOf: (row: ProfitItemRow) => string | null,
 ): ProfitRanking {
-  const groups = new Map<string, { key: string; items: ItemMoney[] }>();
+  const groups = new Map<string, { key: string; items: SoldItemMoney[] }>();
   for (const item of items) {
     const key = keyOf(item.row)?.trim();
     if (key === undefined || key === '') continue;

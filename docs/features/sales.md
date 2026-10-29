@@ -183,7 +183,8 @@ of its latest sale that stands.
   the Sort pill above them picks ([sorting.md](sorting.md)), each with
   its sold item's photo (the item's thumbnail, `SaleItem.thumbnailUrl`; the marketplace's initial
   until it has one), price and profit ("Est. profit" while fees are estimated), and the way to
-  the profit dashboard ([profit.md](profit.md)).
+  the profit dashboard ([profit.md](profit.md)) and to the year's reports and CSV exports
+  ([reports.md](reports.md)).
 
 ## Local development
 

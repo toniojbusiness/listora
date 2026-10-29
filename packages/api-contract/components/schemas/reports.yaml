@@ -1,0 +1,122 @@
+ReportTotals:
+  type: object
+  description: |
+    The totals of some of the year's sales that stand. Revenue, shipping, and the counts are
+    always known. A number Listora cannot compute reliably is absent rather than guessed:
+    `fees` while any of the sales' fees are still the fee table's estimate or not known at all
+    (`feesUnknownCount` says how many sales), `costOfGoods` while any sold item has no cost
+    (`missingCostCount` says how many), and `netProfit` while either is absent. When all are
+    present, `netProfit` is `revenue` minus `fees`, `shipping`, and `costOfGoods`.
+  required: [salesCount, itemsSold, revenue, shipping, feesUnknownCount, missingCostCount]
+  properties:
+    salesCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Orders (a bundle is one).
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 0
+    revenue:
+      $ref: './common.yaml#/Money'
+      description: 'What buyers paid: the sale prices plus the shipping they paid.'
+    shipping:
+      $ref: './common.yaml#/Money'
+      description: |
+        What the seller paid to ship: labels the marketplace deducted plus labels bought
+        outside the payout (`Sale.shippingCost`).
+    fees:
+      $ref: './common.yaml#/Money'
+      description: |
+        The marketplaces' fees except shipping labels. Absent while any sale's fees are not the
+        marketplace's own.
+    feesUnknownCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Sales whose fees are still an estimate or not known at all.
+    costOfGoods:
+      $ref: './common.yaml#/Money'
+      description: |
+        The sold items' costs; a haul item's cost is its share of the haul. Absent while any
+        sold item has no cost.
+    missingCostCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Sold items with no cost entered.
+    netProfit:
+      $ref: './common.yaml#/Money'
+      description: Absent while `fees` or `costOfGoods` is.
+MonthReport:
+  type: object
+  description: One calendar month of the year.
+  required: [month, totals]
+  properties:
+    month:
+      type: string
+      pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      description: The month, `YYYY-MM`.
+    totals:
+      $ref: '#/ReportTotals'
+MarketplaceReport:
+  type: object
+  description: |
+    The seller's own totals on one marketplace for the year. Only totals: no ranking or share,
+    so no marketplace's performance is presented relative to another's (eBay's API License
+    Agreement restricts that without eBay's consent).
+  required: [marketplace, totals]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    totals:
+      $ref: '#/ReportTotals'
+YearReport:
+  type: object
+  description: A calendar year in the seller's time zone.
+  required: [year, timeZone, total, months, marketplaces]
+  properties:
+    year:
+      type: integer
+      format: int32
+    timeZone:
+      type: string
+      maxLength: 64
+      description: The IANA time zone the days are counted in.
+    total:
+      $ref: '#/ReportTotals'
+    months:
+      type: array
+      description: All twelve months, January first; a month without sales has zero totals.
+      maxItems: 12
+      items:
+        $ref: '#/MonthReport'
+    marketplaces:
+      type: array
+      description: Each marketplace with a sale in the year, in the fixed `Marketplace` order.
+      maxItems: 64
+      items:
+        $ref: '#/MarketplaceReport'
+CsvExport:
+  type: object
+  description: |
+    A CSV file (RFC 4180: comma-separated, double-quoted where needed, CRLF line ends, UTF-8
+    with a byte order mark so spreadsheet apps read accents right). The first row names the
+    columns. Amounts are plain decimal dollars (`12.50`), days are `YYYY-MM-DD`, and a text cell
+    that a spreadsheet would read as a formula starts with an apostrophe.
+  required: [fileName, rowCount, content]
+  properties:
+    fileName:
+      type: string
+      maxLength: 100
+      description: The name to save it as, for example `listora-sales-2026.csv`.
+    rowCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Rows after the header.
+    content:
+      type: string
+      maxLength: 50000000
+      description: The file's text.

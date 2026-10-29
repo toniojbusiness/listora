@@ -57,6 +57,8 @@ tags:
     description: Sales and the automatic delist run each sale starts.
   - name: profit
     description: The profit dashboard over the seller's sales and inventory.
+  - name: reports
+    description: The year's reports and the CSV exports of sales and inventory, for taxes and bookkeeping.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
   - name: invites
@@ -231,6 +233,12 @@ paths:
     $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1relist'
   /v1/profit:
     $ref: './paths/profit.yaml#/~1v1~1profit'
+  /v1/reports/year:
+    $ref: './paths/reports.yaml#/~1v1~1reports~1year'
+  /v1/reports/sales-export:
+    $ref: './paths/reports.yaml#/~1v1~1reports~1sales-export'
+  /v1/reports/inventory-export:
+    $ref: './paths/reports.yaml#/~1v1~1reports~1inventory-export'
   /v1/tasks:
     $ref: './paths/tasks.yaml#/~1v1~1tasks'
   /v1/tasks/{taskId}:
@@ -937,6 +945,17 @@ components:
       $ref: './components/schemas/profit.yaml#/DeadStock'
     ProfitReport:
       $ref: './components/schemas/profit.yaml#/ProfitReport'
+    # ---------------------------------------------------------------- reports
+    ReportTotals:
+      $ref: './components/schemas/reports.yaml#/ReportTotals'
+    MonthReport:
+      $ref: './components/schemas/reports.yaml#/MonthReport'
+    MarketplaceReport:
+      $ref: './components/schemas/reports.yaml#/MarketplaceReport'
+    YearReport:
+      $ref: './components/schemas/reports.yaml#/YearReport'
+    CsvExport:
+      $ref: './components/schemas/reports.yaml#/CsvExport'
     # ---------------------------------------------------------------- tasks
     UserTaskKind:
       $ref: './components/schemas/tasks.yaml#/UserTaskKind'

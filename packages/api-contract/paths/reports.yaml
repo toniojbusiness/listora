@@ -1,0 +1,115 @@
+/v1/reports/year:
+  get:
+    tags: [reports]
+    operationId: getYearReport
+    summary: Get a year's report
+    description: |
+      The seller's year in `timeZone`, for taxes and bookkeeping: the year's totals, each of its
+      twelve months, and the seller's own totals per marketplace (in a fixed order, never
+      ranked). Only sales that stand count (a canceled or returned sale counts nowhere), and
+      every amount is split exactly as each sale's own money is (`Sale`), with a haul item's
+      cost its share of the haul. A number Listora cannot compute reliably is absent rather than
+      guessed: fees while a sale's fees are not yet the marketplace's own, cost of goods while an
+      item has no cost, and profit while either is missing. No AI is involved.
+      `422 validation_failed` for a year outside 2000 to 2100 or an unknown `timeZone`.
+    parameters:
+      - name: year
+        in: query
+        required: true
+        description: The calendar year.
+        schema:
+          type: integer
+          format: int32
+          minimum: 2000
+          maximum: 2100
+      - name: timeZone
+        in: query
+        required: true
+        description: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+    responses:
+      '200':
+        description: The year's report.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/reports.yaml#/YearReport'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/reports/sales-export:
+  get:
+    tags: [reports]
+    operationId: exportSales
+    summary: Export a year's sales as CSV
+    description: |
+      One CSV row per item sold in the year on a sale that stands, oldest first: the day it sold
+      in `timeZone`, the marketplace and order number, the item, its price and its share of the
+      order's shipping, fees, and label cost, its cost (and whether that is a haul share), and
+      its profit. The fees and profit cells are empty while the sale's fees are not the
+      marketplace's own, and the cost and profit cells while the item has no cost. The app
+      saves `content` as `fileName` and shares it. `422 validation_failed` as for
+      `getYearReport`.
+    parameters:
+      - name: year
+        in: query
+        required: true
+        description: The calendar year.
+        schema:
+          type: integer
+          format: int32
+          minimum: 2000
+          maximum: 2100
+      - name: timeZone
+        in: query
+        required: true
+        description: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+    responses:
+      '200':
+        description: The year's sales as a CSV file.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/reports.yaml#/CsvExport'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/reports/inventory-export:
+  get:
+    tags: [reports]
+    operationId: exportInventory
+    summary: Export the inventory as CSV
+    description: |
+      One CSV row per item the seller has now, by SKU: its details, status, the day it was added
+      in `timeZone`, its purchase date and place, its cost (and whether that is a haul share),
+      and its list price. The app saves `content` as `fileName` and shares it.
+      `422 validation_failed` for an unknown `timeZone`.
+    parameters:
+      - name: timeZone
+        in: query
+        required: true
+        description: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+    responses:
+      '200':
+        description: The inventory as a CSV file.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/reports.yaml#/CsvExport'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

@@ -52,6 +52,7 @@ describe('API feature discovery', () => {
       'pricing',
       'profile',
       'profit',
+      'reports',
       'sale-emails',
       'sales',
       'sync',

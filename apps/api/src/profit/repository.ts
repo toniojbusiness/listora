@@ -19,11 +19,11 @@ export interface ProfitPeriodQuery extends ProfitPeriodDays {
 /** Items that are for sale or being prepared: what dead stock counts. */
 const ACTIVE_ITEM_STATUSES = ['draft', 'ready', 'listed'] as const satisfies readonly ItemStatus[];
 
-function periodStart(period: ProfitPeriodQuery): RawBuilder<Date> {
+export function periodStart(period: ProfitPeriodQuery): RawBuilder<Date> {
   return sql<Date>`(${period.from}::date)::timestamp at time zone ${period.timeZone}`;
 }
 
-function periodEnd(period: ProfitPeriodQuery): RawBuilder<Date> {
+export function periodEnd(period: ProfitPeriodQuery): RawBuilder<Date> {
   return sql<Date>`(${period.to}::date + 1)::timestamp at time zone ${period.timeZone}`;
 }
 

@@ -57,6 +57,8 @@ tags:
     description: Sales and the automatic delist run each sale starts.
   - name: profit
     description: The profit dashboard over the seller's sales and inventory.
+  - name: reports
+    description: The year's reports and the CSV exports of sales and inventory, for taxes and bookkeeping.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
   - name: invites
@@ -2605,6 +2607,124 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProfitReport'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/reports/year:
+    get:
+      tags:
+        - reports
+      operationId: getYearReport
+      summary: Get a year's report
+      description: |
+        The seller's year in `timeZone`, for taxes and bookkeeping: the year's totals, each of its
+        twelve months, and the seller's own totals per marketplace (in a fixed order, never
+        ranked). Only sales that stand count (a canceled or returned sale counts nowhere), and
+        every amount is split exactly as each sale's own money is (`Sale`), with a haul item's
+        cost its share of the haul. A number Listora cannot compute reliably is absent rather than
+        guessed: fees while a sale's fees are not yet the marketplace's own, cost of goods while an
+        item has no cost, and profit while either is missing. No AI is involved.
+        `422 validation_failed` for a year outside 2000 to 2100 or an unknown `timeZone`.
+      parameters:
+        - name: year
+          in: query
+          required: true
+          description: The calendar year.
+          schema:
+            type: integer
+            format: int32
+            minimum: 2000
+            maximum: 2100
+        - name: timeZone
+          in: query
+          required: true
+          description: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        '200':
+          description: The year's report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YearReport'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/reports/sales-export:
+    get:
+      tags:
+        - reports
+      operationId: exportSales
+      summary: Export a year's sales as CSV
+      description: |
+        One CSV row per item sold in the year on a sale that stands, oldest first: the day it sold
+        in `timeZone`, the marketplace and order number, the item, its price and its share of the
+        order's shipping, fees, and label cost, its cost (and whether that is a haul share), and
+        its profit. The fees and profit cells are empty while the sale's fees are not the
+        marketplace's own, and the cost and profit cells while the item has no cost. The app
+        saves `content` as `fileName` and shares it. `422 validation_failed` as for
+        `getYearReport`.
+      parameters:
+        - name: year
+          in: query
+          required: true
+          description: The calendar year.
+          schema:
+            type: integer
+            format: int32
+            minimum: 2000
+            maximum: 2100
+        - name: timeZone
+          in: query
+          required: true
+          description: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        '200':
+          description: The year's sales as a CSV file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsvExport'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/reports/inventory-export:
+    get:
+      tags:
+        - reports
+      operationId: exportInventory
+      summary: Export the inventory as CSV
+      description: |
+        One CSV row per item the seller has now, by SKU: its details, status, the day it was added
+        in `timeZone`, its purchase date and place, its cost (and whether that is a haul share),
+        and its list price. The app saves `content` as `fileName` and shares it.
+        `422 validation_failed` for an unknown `timeZone`.
+      parameters:
+        - name: timeZone
+          in: query
+          required: true
+          description: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        '200':
+          description: The inventory as a CSV file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsvExport'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         default:
@@ -8752,6 +8872,146 @@ components:
           $ref: '#/components/schemas/ProfitRanking'
         deadStock:
           $ref: '#/components/schemas/DeadStock'
+    ReportTotals:
+      type: object
+      description: |
+        The totals of some of the year's sales that stand. Revenue, shipping, and the counts are
+        always known. A number Listora cannot compute reliably is absent rather than guessed:
+        `fees` while any of the sales' fees are still the fee table's estimate or not known at all
+        (`feesUnknownCount` says how many sales), `costOfGoods` while any sold item has no cost
+        (`missingCostCount` says how many), and `netProfit` while either is absent. When all are
+        present, `netProfit` is `revenue` minus `fees`, `shipping`, and `costOfGoods`.
+      required:
+        - salesCount
+        - itemsSold
+        - revenue
+        - shipping
+        - feesUnknownCount
+        - missingCostCount
+      properties:
+        salesCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Orders (a bundle is one).
+        itemsSold:
+          type: integer
+          format: int32
+          minimum: 0
+        revenue:
+          $ref: '#/components/schemas/Money'
+          description: 'What buyers paid: the sale prices plus the shipping they paid.'
+        shipping:
+          $ref: '#/components/schemas/Money'
+          description: |
+            What the seller paid to ship: labels the marketplace deducted plus labels bought
+            outside the payout (`Sale.shippingCost`).
+        fees:
+          $ref: '#/components/schemas/Money'
+          description: |
+            The marketplaces' fees except shipping labels. Absent while any sale's fees are not the
+            marketplace's own.
+        feesUnknownCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Sales whose fees are still an estimate or not known at all.
+        costOfGoods:
+          $ref: '#/components/schemas/Money'
+          description: |
+            The sold items' costs; a haul item's cost is its share of the haul. Absent while any
+            sold item has no cost.
+        missingCostCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Sold items with no cost entered.
+        netProfit:
+          $ref: '#/components/schemas/Money'
+          description: Absent while `fees` or `costOfGoods` is.
+    MonthReport:
+      type: object
+      description: One calendar month of the year.
+      required:
+        - month
+        - totals
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+          description: The month, `YYYY-MM`.
+        totals:
+          $ref: '#/components/schemas/ReportTotals'
+    MarketplaceReport:
+      type: object
+      description: |
+        The seller's own totals on one marketplace for the year. Only totals: no ranking or share,
+        so no marketplace's performance is presented relative to another's (eBay's API License
+        Agreement restricts that without eBay's consent).
+      required:
+        - marketplace
+        - totals
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        totals:
+          $ref: '#/components/schemas/ReportTotals'
+    YearReport:
+      type: object
+      description: A calendar year in the seller's time zone.
+      required:
+        - year
+        - timeZone
+        - total
+        - months
+        - marketplaces
+      properties:
+        year:
+          type: integer
+          format: int32
+        timeZone:
+          type: string
+          maxLength: 64
+          description: The IANA time zone the days are counted in.
+        total:
+          $ref: '#/components/schemas/ReportTotals'
+        months:
+          type: array
+          description: All twelve months, January first; a month without sales has zero totals.
+          maxItems: 12
+          items:
+            $ref: '#/components/schemas/MonthReport'
+        marketplaces:
+          type: array
+          description: Each marketplace with a sale in the year, in the fixed `Marketplace` order.
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/MarketplaceReport'
+    CsvExport:
+      type: object
+      description: |
+        A CSV file (RFC 4180: comma-separated, double-quoted where needed, CRLF line ends, UTF-8
+        with a byte order mark so spreadsheet apps read accents right). The first row names the
+        columns. Amounts are plain decimal dollars (`12.50`), days are `YYYY-MM-DD`, and a text cell
+        that a spreadsheet would read as a formula starts with an apostrophe.
+      required:
+        - fileName
+        - rowCount
+        - content
+      properties:
+        fileName:
+          type: string
+          maxLength: 100
+          description: The name to save it as, for example `listora-sales-2026.csv`.
+        rowCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Rows after the header.
+        content:
+          type: string
+          maxLength: 50000000
+          description: The file's text.
     UserTaskKind:
       description: |
         A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an

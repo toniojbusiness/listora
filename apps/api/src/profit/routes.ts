@@ -118,7 +118,7 @@ function checkedPeriod(query: { from: string; to: string; timeZone: string }): P
 }
 
 /** Whether the runtime knows the zone; Postgres and Node both use the IANA database. */
-function isTimeZone(zone: string): boolean {
+export function isTimeZone(zone: string): boolean {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: zone });
     return true;
@@ -128,7 +128,7 @@ function isTimeZone(zone: string): boolean {
 }
 
 /** The day `at` falls on in `timeZone`, as `YYYY-MM-DD`. */
-function dayIn(timeZone: string, at: Date): string {
+export function dayIn(timeZone: string, at: Date): string {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',

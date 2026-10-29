@@ -29,6 +29,7 @@ public struct PackOrdersEntry {
 public final class SalesEnvironment {
     let service: any SalesService
     let profitService: any ProfitService
+    let reportsService: any ReportsService
     let timing: SalesTiming
     /// Whether a session exists; signed out, the sales list never calls the API.
     let isSignedIn: @MainActor () -> Bool
@@ -56,6 +57,7 @@ public final class SalesEnvironment {
                 phoneWork?.runPhoneWork(.userAction)
             },
             profitService: APIProfitService(client: apiClient.client),
+            reportsService: APIReportsService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
             onSignIn: onSignIn,
             packOrders: packOrders,
@@ -65,6 +67,7 @@ public final class SalesEnvironment {
     init(
         service: any SalesService,
         profitService: any ProfitService,
+        reportsService: any ReportsService,
         timing: SalesTiming = .standard,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
         onSignIn: @escaping @MainActor () -> Void = {},
@@ -73,6 +76,7 @@ public final class SalesEnvironment {
         self.packOrders = packOrders
         self.service = service
         self.profitService = profitService
+        self.reportsService = reportsService
         self.timing = timing
         self.isSignedIn = isSignedIn
         self.onSignIn = onSignIn
@@ -102,6 +106,10 @@ public final class SalesEnvironment {
 
     func makeProfitModel() -> ProfitModel {
         ProfitModel(service: profitService, isSignedIn: isSignedIn)
+    }
+
+    func makeReportsModel() -> ReportsModel {
+        ReportsModel(service: reportsService, isSignedIn: isSignedIn)
     }
 
     func makeDetailModel(saleID: String) -> SaleDetailModel {

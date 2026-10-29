@@ -1819,6 +1819,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reports/year": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a year's report
+         * @description The seller's year in `timeZone`, for taxes and bookkeeping: the year's totals, each of its
+         *     twelve months, and the seller's own totals per marketplace (in a fixed order, never
+         *     ranked). Only sales that stand count (a canceled or returned sale counts nowhere), and
+         *     every amount is split exactly as each sale's own money is (`Sale`), with a haul item's
+         *     cost its share of the haul. A number Listora cannot compute reliably is absent rather than
+         *     guessed: fees while a sale's fees are not yet the marketplace's own, cost of goods while an
+         *     item has no cost, and profit while either is missing. No AI is involved.
+         *     `422 validation_failed` for a year outside 2000 to 2100 or an unknown `timeZone`.
+         */
+        get: operations["getYearReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/sales-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a year's sales as CSV
+         * @description One CSV row per item sold in the year on a sale that stands, oldest first: the day it sold
+         *     in `timeZone`, the marketplace and order number, the item, its price and its share of the
+         *     order's shipping, fees, and label cost, its cost (and whether that is a haul share), and
+         *     its profit. The fees and profit cells are empty while the sale's fees are not the
+         *     marketplace's own, and the cost and profit cells while the item has no cost. The app
+         *     saves `content` as `fileName` and shares it. `422 validation_failed` as for
+         *     `getYearReport`.
+         */
+        get: operations["exportSales"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/inventory-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the inventory as CSV
+         * @description One CSV row per item the seller has now, by SKU: its details, status, the day it was added
+         *     in `timeZone`, its purchase date and place, its cost (and whether that is a haul share),
+         *     and its list price. The app saves `content` as `fileName` and shares it.
+         *     `422 validation_failed` for an unknown `timeZone`.
+         */
+        get: operations["exportInventory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tasks": {
         parameters: {
             query?: never;
@@ -5188,6 +5264,96 @@ export interface components {
             deadStock: components["schemas"]["DeadStock"];
         };
         /**
+         * @description The totals of some of the year's sales that stand. Revenue, shipping, and the counts are
+         *     always known. A number Listora cannot compute reliably is absent rather than guessed:
+         *     `fees` while any of the sales' fees are still the fee table's estimate or not known at all
+         *     (`feesUnknownCount` says how many sales), `costOfGoods` while any sold item has no cost
+         *     (`missingCostCount` says how many), and `netProfit` while either is absent. When all are
+         *     present, `netProfit` is `revenue` minus `fees`, `shipping`, and `costOfGoods`.
+         */
+        ReportTotals: {
+            /**
+             * Format: int32
+             * @description Orders (a bundle is one).
+             */
+            salesCount: number;
+            /** Format: int32 */
+            itemsSold: number;
+            /** @description What buyers paid: the sale prices plus the shipping they paid. */
+            revenue: components["schemas"]["Money"];
+            /**
+             * @description What the seller paid to ship: labels the marketplace deducted plus labels bought
+             *     outside the payout (`Sale.shippingCost`).
+             */
+            shipping: components["schemas"]["Money"];
+            /**
+             * @description The marketplaces' fees except shipping labels. Absent while any sale's fees are not the
+             *     marketplace's own.
+             */
+            fees?: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description Sales whose fees are still an estimate or not known at all.
+             */
+            feesUnknownCount: number;
+            /**
+             * @description The sold items' costs; a haul item's cost is its share of the haul. Absent while any
+             *     sold item has no cost.
+             */
+            costOfGoods?: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description Sold items with no cost entered.
+             */
+            missingCostCount: number;
+            /** @description Absent while `fees` or `costOfGoods` is. */
+            netProfit?: components["schemas"]["Money"];
+        };
+        /** @description One calendar month of the year. */
+        MonthReport: {
+            /** @description The month, `YYYY-MM`. */
+            month: string;
+            totals: components["schemas"]["ReportTotals"];
+        };
+        /**
+         * @description The seller's own totals on one marketplace for the year. Only totals: no ranking or share,
+         *     so no marketplace's performance is presented relative to another's (eBay's API License
+         *     Agreement restricts that without eBay's consent).
+         */
+        MarketplaceReport: {
+            marketplace: components["schemas"]["Marketplace"];
+            totals: components["schemas"]["ReportTotals"];
+        };
+        /** @description A calendar year in the seller's time zone. */
+        YearReport: {
+            /** Format: int32 */
+            year: number;
+            /** @description The IANA time zone the days are counted in. */
+            timeZone: string;
+            total: components["schemas"]["ReportTotals"];
+            /** @description All twelve months, January first; a month without sales has zero totals. */
+            months: components["schemas"]["MonthReport"][];
+            /** @description Each marketplace with a sale in the year, in the fixed `Marketplace` order. */
+            marketplaces: components["schemas"]["MarketplaceReport"][];
+        };
+        /**
+         * @description A CSV file (RFC 4180: comma-separated, double-quoted where needed, CRLF line ends, UTF-8
+         *     with a byte order mark so spreadsheet apps read accents right). The first row names the
+         *     columns. Amounts are plain decimal dollars (`12.50`), days are `YYYY-MM-DD`, and a text cell
+         *     that a spreadsheet would read as a formula starts with an apostrophe.
+         */
+        CsvExport: {
+            /** @description The name to save it as, for example `listora-sales-2026.csv`. */
+            fileName: string;
+            /**
+             * Format: int32
+             * @description Rows after the header.
+             */
+            rowCount: number;
+            /** @description The file's text. */
+            content: string;
+        };
+        /**
          * @description A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
          *     unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
          *     the app to complete it.
@@ -6787,6 +6953,11 @@ export type DeadStockBucket = components['schemas']['DeadStockBucket'];
 export type DeadStockItem = components['schemas']['DeadStockItem'];
 export type DeadStock = components['schemas']['DeadStock'];
 export type ProfitReport = components['schemas']['ProfitReport'];
+export type ReportTotals = components['schemas']['ReportTotals'];
+export type MonthReport = components['schemas']['MonthReport'];
+export type MarketplaceReport = components['schemas']['MarketplaceReport'];
+export type YearReport = components['schemas']['YearReport'];
+export type CsvExport = components['schemas']['CsvExport'];
 export type UserTaskKind = components['schemas']['UserTaskKind'];
 export type KnownUserTaskKind = components['schemas']['KnownUserTaskKind'];
 export type UserTaskStatus = components['schemas']['UserTaskStatus'];
@@ -9547,6 +9718,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfitReport"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getYearReport: {
+        parameters: {
+            query: {
+                /** @description The calendar year. */
+                year: number;
+                /** @description The seller's IANA time zone, for example `America/New_York`; days are counted in it. */
+                timeZone: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year's report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearReport"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    exportSales: {
+        parameters: {
+            query: {
+                /** @description The calendar year. */
+                year: number;
+                /** @description The seller's IANA time zone, for example `America/New_York`; days are counted in it. */
+                timeZone: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year's sales as a CSV file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvExport"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    exportInventory: {
+        parameters: {
+            query: {
+                /** @description The seller's IANA time zone, for example `America/New_York`; days are counted in it. */
+                timeZone: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The inventory as a CSV file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvExport"];
                 };
             };
             422: components["responses"]["ValidationFailed"];
