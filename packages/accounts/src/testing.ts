@@ -13,7 +13,7 @@ import {
   type AccountDeletionDependencies,
   type AccountDeletionOutcome,
 } from './job.ts';
-import type { InviteeDirectory, InviteeEmailState } from './invitees.ts';
+import type { Invitee, InviteeDirectory, InviteeEmailState } from './invitees.ts';
 import type { GrantToRevoke, MarketplaceAccessRevoker } from './marketplace-access.ts';
 
 /**
@@ -53,6 +53,8 @@ export class FakeInviteeDirectory implements InviteeDirectory {
   readonly suspended = new Set<string>();
   readonly unverified = new Set<string>();
   readonly calls: string[] = [];
+  /** Whom each `suspend` and `resume` named, in order. */
+  readonly named: Invitee[] = [];
   failWith: Error | undefined;
 
   admit(email: string): Promise<InviteeEmailState> {
@@ -69,13 +71,17 @@ export class FakeInviteeDirectory implements InviteeDirectory {
     });
   }
 
-  suspend(email: string): Promise<void> {
+  suspend(invitee: Invitee): Promise<void> {
+    const { email } = invitee;
+    this.named.push(invitee);
     return this.#run(`suspend ${email}`, () => {
       if (this.admitted.has(email)) this.suspended.add(email);
     });
   }
 
-  resume(email: string): Promise<InviteeEmailState> {
+  resume(invitee: Invitee): Promise<InviteeEmailState> {
+    const { email } = invitee;
+    this.named.push(invitee);
     return this.#run(`resume ${email}`, () => {
       this.admitted.add(email);
       this.suspended.delete(email);

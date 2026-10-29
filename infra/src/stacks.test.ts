@@ -600,6 +600,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           AuthSessionValidity: 10,
         });
         expect(client).not.toHaveProperty('CallbackURLs');
+        // Nobody changes their own email, which names them to invites and revocation.
+        expect(client['WriteAttributes']).toEqual(['locale']);
         // Cognito's own users only: no Sign in with Apple or other provider yet.
         expect(client['SupportedIdentityProviders']).toEqual(['COGNITO']);
         // The API refuses tokens older than a day (docs/features/auth.md).

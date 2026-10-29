@@ -26,9 +26,11 @@ Code:
   account's connection on its marketplace is: the account has one connection per marketplace, so
   that is the only account on it Listora could be asked to change (`listingIsReadOnly`).
 - **A write** is every operation kind but `verify` (`isWriteKind`), and every automation script
-  but the reads (`isWriteCall` in `@listora/automation`: `create`, `revise`, `price`, `end`,
-  `relist`, `markSold`). Both lists name the reads, so a kind or script added later (a refresh,
-  an offer answer, a share) is a write until it is listed as a read.
+  but the reads (`isWriteCall` in `@listora/automation`, whose reads are `read`, `health`,
+  `orders`, `listings`, `labels`, `offers`, and `offer`). Both lists name the reads, so a kind or
+  script added later (a refresh, an offer answer, a share), or a script name the code does not
+  know, is a write until it is listed as a read. Every script is also marked read or write in
+  one table (`SCRIPT_ACCESS`), so a new one does not compile until it is classed.
 - **Its reads keep the gentler pace** of before 2026-10-28 (`readOnlyPacing` in
   `packages/automation/src/profiles.ts`): 0.3 to 0.8 s before each action on Depop and 0.45 to
   1.1 s elsewhere, where a connection that can write waits the 0.3 s floor. The server hands the

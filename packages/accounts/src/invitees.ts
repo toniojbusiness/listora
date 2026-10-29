@@ -26,6 +26,17 @@ import {
  */
 export type InviteeEmailState = 'deliverable' | 'verification_sent';
 
+/** A person who used an invite. */
+export interface Invitee {
+  /** The address the invite was claimed with. */
+  email: string;
+  /**
+   * The identity provider's id for them (Cognito's `sub`) once they signed in. It names them
+   * even if their email changed since, so a revocation always finds them.
+   */
+  subject?: string;
+}
+
 /**
  * The identity provider's side of invites (docs/features/invites.md): the users invitees sign
  * in as. Every method is safe to repeat, so a retry after a lost answer changes nothing more.
@@ -36,9 +47,9 @@ export interface InviteeDirectory {
   /** Removes the user of an address that never signed in (the invitee corrected a typo). */
   forget(email: string): Promise<void>;
   /** Ends the person's sessions and stops them signing in again (their invite was revoked). */
-  suspend(email: string): Promise<void>;
+  suspend(invitee: Invitee): Promise<void>;
   /** Lets a suspended person sign in again, recreating their user if it is gone. */
-  resume(email: string): Promise<InviteeEmailState>;
+  resume(invitee: Invitee): Promise<InviteeEmailState>;
 }
 
 /**
@@ -129,8 +140,9 @@ export interface AwsCognitoInviteeDirectoryOptions {
 }
 
 /**
- * Invitees as users of the Cognito user pool, whose username is the email
- * (`UsernameAttributes: [email]`, so the email names the user in every admin call). A new user is
+ * Invitees as users of the Cognito user pool, which signs people in by email
+ * (`UsernameAttributes: [email]`: the email is an alias of the user, whose username is its `sub`,
+ * and either names the user in an admin call; revoking and restoring use the `sub`). A new user is
  * created verified, with no password and no invitation message, like the owner: the pool's
  * emailed one-time code is what proves the address is theirs, at every sign-in.
  */
@@ -178,21 +190,36 @@ export class AwsCognitoInviteeDirectory implements InviteeDirectory {
     await this.#recipients?.forget(email);
   }
 
-  async suspend(email: string): Promise<void> {
-    const user = { UserPoolId: this.#userPoolId, Username: email };
-    // Signed out first: disabling stops new sign-ins and refreshes, but only the global sign-out
-    // revokes the tokens already issued.
-    await this.#ifUserExists(() => this.#client.send(new AdminUserGlobalSignOutCommand(user)));
-    await this.#ifUserExists(() => this.#client.send(new AdminDisableUserCommand(user)));
+  async suspend(invitee: Invitee): Promise<void> {
+    // By `sub` first: the app client cannot change a user's email (its write attributes exclude
+    // it), but if one changed anyway, the old address would name nobody and the revocation would
+    // pass over the person. The address is for an invitee who never signed in.
+    for (const username of usernames(invitee)) {
+      const user = { UserPoolId: this.#userPoolId, Username: username };
+      // Signed out first: disabling stops new sign-ins and refreshes, but only the global
+      // sign-out revokes the tokens already issued.
+      const found = await this.#ifUserExists(() =>
+        this.#client.send(new AdminUserGlobalSignOutCommand(user)),
+      );
+      const disabled = await this.#ifUserExists(() =>
+        this.#client.send(new AdminDisableUserCommand(user)),
+      );
+      if (found || disabled) return;
+    }
   }
 
-  async resume(email: string): Promise<InviteeEmailState> {
-    const user = { UserPoolId: this.#userPoolId, Username: email };
-    const enabled = await this.#ifUserExists(() =>
-      this.#client.send(new AdminEnableUserCommand(user)),
-    );
-    if (!enabled) return this.admit(email);
-    return this.#recipients === undefined ? 'deliverable' : this.#recipients.ensure(email);
+  async resume(invitee: Invitee): Promise<InviteeEmailState> {
+    const { email } = invitee;
+    for (const username of usernames(invitee)) {
+      const user = { UserPoolId: this.#userPoolId, Username: username };
+      const enabled = await this.#ifUserExists(() =>
+        this.#client.send(new AdminEnableUserCommand(user)),
+      );
+      if (enabled) {
+        return this.#recipients === undefined ? 'deliverable' : this.#recipients.ensure(email);
+      }
+    }
+    return this.admit(email);
   }
 
   /** Runs `call` on a user; false when the user does not exist. */
@@ -205,4 +232,12 @@ export class AwsCognitoInviteeDirectory implements InviteeDirectory {
       throw error;
     }
   }
+}
+
+/**
+ * What names the invitee in admin calls, most reliable first. In a pool whose usernames are
+ * emails, a user's username is their `sub`, and the email is an alias for it.
+ */
+function usernames(invitee: Invitee): string[] {
+  return invitee.subject === undefined ? [invitee.email] : [invitee.subject, invitee.email];
 }

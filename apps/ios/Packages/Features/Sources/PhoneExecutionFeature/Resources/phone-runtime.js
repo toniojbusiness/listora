@@ -36,16 +36,7 @@
 	}
 
 // src/adapter/script-call.ts
-	const WRITE_SCRIPTS = [
-		"create",
-		"revise",
-		"price",
-		"end",
-		"relist",
-		"markSold",
-		"refresh"
-	];
-	/** The longest seller id Listora keeps (`marketplace_connection.external_user_id`). */
+/** The longest seller id Listora keeps (`marketplace_connection.external_user_id`). */
 	const MAX_SELLER_ID = 255;
 	/**
 	* A seller's handle as a page shows it, as the id Listora compares and records: trimmed and
@@ -67,9 +58,34 @@
 	function mayHaveAppliedBefore(op) {
 		return op.mayHaveApplied ?? op.attempt > 1;
 	}
-	/** Whether the call may change anything: only a write script's may. */
+	/**
+	* Every script, as a read or a write. The type makes a new script choose before it compiles; at
+	* run time only the ones named `read` count as reads, so anything else (a script name from a
+	* newer server or phone, or a mistake) is a write, and a read-only connection refuses it
+	* (docs/features/read-only.md).
+	*/
+	const SCRIPT_ACCESS = {
+		create: "write",
+		revise: "write",
+		price: "write",
+		end: "write",
+		relist: "write",
+		markSold: "write",
+		refresh: "write",
+		answerOffer: "write",
+		read: "read",
+		health: "read",
+		orders: "read",
+		listings: "read",
+		labels: "read",
+		offers: "read",
+		offer: "read"
+	};
+	/** The scripts that only read: the only ones a read-only connection runs. */
+	const READ_SCRIPTS = Object.entries(SCRIPT_ACCESS).filter(([, access]) => access === "read").map(([script]) => script);
+	/** Whether the call may change anything: every script but the named reads may. */
 	function isWriteCall(call) {
-		return call.script === "answerOffer" || WRITE_SCRIPTS.includes(call.script);
+		return !READ_SCRIPTS.includes(call.script);
 	}
 	/** Runs the call's script from `scripts`; throws when the set has no such script. */
 	async function runScriptCall(scripts, call, step) {

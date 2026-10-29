@@ -85,6 +85,7 @@ import type { ContractReply, OperationId } from './contract/routes.ts';
 import { listenForItemChanges } from './items/changes.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
+import type { RateLimits } from './rate-limits.ts';
 import { resolveTenant, type SignUpPolicy, type Tenant } from './tenancy.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
@@ -395,6 +396,8 @@ export interface TestApiOptions {
   automationEnv?: Readonly<Record<string, string>>;
   /** Who gets an account at their first sign-in (default: anyone, as in development). */
   signUp?: SignUpPolicy;
+  /** Request limits per address and account (default: none, as tests send many requests). */
+  rateLimits?: RateLimits;
 }
 
 export interface TestApi {
@@ -534,6 +537,7 @@ export async function createTestApi(
     ...(options.connections === undefined ? {} : { connections: options.connections }),
     ...(options.ebayWebhook === undefined ? {} : { ebayWebhook: options.ebayWebhook }),
     ...(options.saleEmails === undefined ? {} : { saleEmails: options.saleEmails }),
+    ...(options.rateLimits === undefined ? {} : { rateLimits: options.rateLimits }),
     storage,
     photoJobs,
     ai,

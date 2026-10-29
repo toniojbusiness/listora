@@ -485,6 +485,34 @@ describe('pack check (real Postgres)', () => {
     ).toBe(404);
   });
 
+  it('is done with a package past buyer data retention, whose tracking number is gone', async () => {
+    const coat = await order({ title: 'Retained coat', tracking: '9400111899223197427777' });
+    expect((await pack(coat.saleId, { label: '9400111899223197427777' })).status).toBe(200);
+    expect((await scan({ label: '9400111899223197427777', saleId: coat.saleId })).status).toBe(200);
+    // What the retention job leaves of a sale done long ago (docs/features/privacy.md).
+    await api.db
+      .updateTable('sale')
+      .set({ status: 'shipped', shipped_at: new Date(api.clock.now - 90 * 24 * HOUR) })
+      .where('id', '=', coat.saleId)
+      .execute();
+    await api.db
+      .updateTable('sale_pack')
+      .set({ tracking_number: null })
+      .where('sale_id', '=', coat.saleId)
+      .execute();
+    // Pack check no longer has the order; before the retention job, it did.
+    expect((await scan({ label: '9400111899223197427777', saleId: coat.saleId })).status).toBe(404);
+    const explanation = await api.call('getSaleExplanation', {
+      token,
+      params: { saleId: coat.saleId },
+    });
+    expect(
+      explanation.body.entries
+        .filter((entry) => entry.kind === 'package')
+        .map((entry) => entry.title),
+    ).toEqual(['Packed']);
+  });
+
   it("asks the seller's iPhone to read the labels of orders that need one", async () => {
     await api.db
       .insertInto('marketplace_connection')

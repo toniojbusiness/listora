@@ -338,6 +338,14 @@ describe('invites (real Postgres)', () => {
         availableActions: ['restore'],
       });
       expect(api.invitees.suspended.has(email)).toBe(true);
+      // Named by their identity provider subject too, which still finds them if their email
+      // changed since.
+      const user = await api.db
+        .selectFrom('app_user')
+        .select('auth_subject')
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+      expect(api.invitees.named.at(-1)).toEqual({ email, subject: user.auth_subject });
       // Their token still verifies, but the API refuses it.
       const refused = await api.call('listItems', { token });
       expect(refused.status).toBe(403);
@@ -361,6 +369,8 @@ describe('invites (real Postgres)', () => {
       await redeem(code, email);
       await api.call('revokeInvite', { token: owner, params: { inviteId: created.id } });
       expect(api.invitees.suspended.has(email)).toBe(true);
+      // Nobody signed in with it yet, so only the email names them.
+      expect(api.invitees.named.at(-1)).toEqual({ email });
       const token = await api.signIn(email);
       expect((await api.call('listItems', { token })).status).toBe(403);
       const accounts = await api.db

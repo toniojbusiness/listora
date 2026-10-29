@@ -1407,7 +1407,8 @@ export interface SaleLabelTable {
 export interface SalePackTable {
   account_id: string;
   sale_id: string;
-  tracking_number: string;
+  /** Empty once the sale is past buyer data retention (docs/features/privacy.md#retention). */
+  tracking_number: Nullable<string>;
   matched_by: PackMatch;
   /** Set exactly when `matched_by` is `sticker`. */
   sticker_sku: Nullable<string>;

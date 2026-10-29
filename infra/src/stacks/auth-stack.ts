@@ -71,6 +71,11 @@ export class AuthStack extends ListoraStack {
       disableOAuth: true,
       preventUserExistenceErrors: true,
       enableTokenRevocation: true,
+      // Signed-in people may not change their own attributes, above all their email, which
+      // names them to invites and revocation (docs/features/invites.md). Without the setting
+      // every standard attribute is writable, and an empty list can reach Cognito as no setting,
+      // so the one writable attribute is `locale`, which Listora never reads.
+      writeAttributes: new cognito.ClientAttributes().withStandardAttributes({ locale: true }),
       idTokenValidity: Duration.minutes(60),
       accessTokenValidity: Duration.minutes(60),
       refreshTokenValidity: Duration.days(30),
