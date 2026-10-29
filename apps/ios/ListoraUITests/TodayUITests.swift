@@ -92,8 +92,14 @@ final class TodayUITests: XCTestCase {
         let enabled = app.switches["summarySettings.enabled"]
         XCTAssertTrue(enabled.waitForExistence(timeout: 5))
         XCTAssertEqual(enabled.value as? String, "1")
-        // The switch's own control, not its label.
-        enabled.switches.firstMatch.tap()
+        // The switch's own control, not its label. A tap while the sheet is still sliding in is
+        // lost on CI (the save then sent enabled: true), so it taps until the switch reads off.
+        let off = NSPredicate(format: "value == %@", "0")
+        for _ in 0 ..< 3 where enabled.value as? String != "0" {
+            enabled.switches.firstMatch.tap()
+            _ = XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: off, object: enabled)], timeout: 3)
+        }
+        XCTAssertEqual(enabled.value as? String, "0", "the switch did not turn off")
         keepScreenshot("Morning summary")
         app.buttons["summarySettings.save"].tap()
         XCTAssertTrue(enabled.waitForNonExistence(timeout: 5), "the sheet did not close after saving")

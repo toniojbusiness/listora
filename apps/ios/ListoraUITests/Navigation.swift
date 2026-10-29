@@ -11,3 +11,18 @@ extension XCUIApplication {
         return bar.waitForNonExistence(timeout: 5)
     }
 }
+
+extension XCUIElement {
+    /// Taps until `opened` exists, up to `attempts` times. Right after a swipe the scroll view may
+    /// still be settling, and a tap then only stops the scroll: the screen stays where it was
+    /// (ReportsUITests' Reports entry, October 2026 CI).
+    func tap(until opened: XCUIElement, attempts: Int = 3, timeout: TimeInterval = 10) -> Bool {
+        for _ in 0 ..< attempts {
+            tap()
+            if opened.waitForExistence(timeout: timeout) {
+                return true
+            }
+        }
+        return false
+    }
+}

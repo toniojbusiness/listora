@@ -204,8 +204,10 @@ final class PhoneExecutionUITests: XCTestCase {
         let linkAccounts = app.buttons["settings.linkAccounts"]
         XCTAssertTrue(linkAccounts.waitForExistence(timeout: 20), "no Link accounts\n\(app.debugDescription)")
         linkAccounts.tap()
+        // The list waits on the API, which answered in 30 to 40 seconds right after launch on a
+        // busy CI runner (run 40882331264), while the launch's sync and checks ran.
         XCTAssertTrue(
-            element("linkAccounts.status.depop").waitForExistence(timeout: 20),
+            element("linkAccounts.status.depop").waitForExistence(timeout: 60),
             "no Depop row\n\(app.debugDescription)",
         )
     }

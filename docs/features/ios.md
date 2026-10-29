@@ -35,6 +35,13 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   while later screens are pushed over it, so a flow's model guards its first load
   (`ReviewFlowModel.appeared()`). A setting that a navigation host reads lives in its model, not
   in `@AppStorage`, which redraws the view on every `UserDefaults` write.
+- No `ForEach` inside a `ViewThatFits`, directly or in a view it holds: write the items out.
+  ViewThatFits builds the choices it measures while it measures them, which SwiftUI does on its
+  own render thread when the main thread is busy during an animation, and a ForEach there calls
+  its main-actor content off the main thread, which stops the app (the item screen's actions,
+  `ActionButtons` in InventoryFeature, October 2026). `BrandSpinner` runs on Core
+  Animation, not a `TimelineView(.animation)`: one redrawing every frame kept the app from ever
+  going idle while it showed, and UI tests wait for idle before every tap (60 seconds each).
 - Views use `DesignSystem` tokens and components, never raw colors, sizes, or their own button
   and card styling, so light and dark mode stay consistent. A test checks WCAG AA contrast for
   every text and background pair. The design system and its rules are in

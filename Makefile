@@ -142,12 +142,17 @@ ios-unit-test: ios-simulator $(IOS_TEST_BUILD)
 	scripts/ios-test-summary.sh '$(IOS_TEST_SUMMARY_FILE)' $(IOS_BUILD_DIR)/Unit.xcresult; \
 	exit $$status
 
+# How the UI tests capture the screen (scripts/ios-ui-capture.sh): screenshots, or
+# screenRecording for a video of each test.
+IOS_UI_CAPTURE ?= screenshots
+
 ## UI tests (ListoraUITests), or the IOS_UI_SHARD shard of them. The ones that go through the
 ## backend run against the local stack (packages/e2e): the real API and worker with fakes, on a
 ## scratch database of this checkout's Postgres cluster. Its logs: .build/ios/e2e-logs.
 ios-ui-test: ios-simulator $(IOS_TEST_BUILD) ios-e2e-ready
 	$(require_products)
 	rm -rf $(IOS_BUILD_DIR)/UI*.xcresult $(IOS_BUILD_DIR)/e2e-logs
+	scripts/ios-ui-capture.sh '$(IOS_UI_CAPTURE)' "$$(ls -t $(IOS_BUILD_DIR)/DerivedData/Build/Products/*-arm64.xctestrun | head -1)"
 	@if [ -n '$(IOS_UI_SHARD)' ]; then \
 		tests=$$(scripts/ios-ui-shard.sh $(subst /, ,$(IOS_UI_SHARD))) || exit 2; \
 		echo "UI test shard $(IOS_UI_SHARD):" $$(echo "$$tests" | sed 's|-only-testing:ListoraUITests/||'); \
