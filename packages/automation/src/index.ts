@@ -262,6 +262,7 @@ export type { SessionCheckJobPayload, SessionCheckTarget } from './session-check
 export { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 export type { AutomationSettings, SaleCheckSettings } from './settings.ts';
 export { readPhoneBundle, type PhoneBundle } from './phone/bundle-file.ts';
+export { PHONE_RUNTIME_PUBLIC_KEY, signPhoneRuntime, verifyPhoneRuntime } from './phone/signing.ts';
 export {
   importedCategory,
   marketplaceCategories,

@@ -12,6 +12,7 @@ import {
 
 import {
   mayHaveAppliedBefore,
+  sellerIdentity,
   type AutomationScripts,
   type WriteResult,
 } from '../adapter/script-call.ts';
@@ -20,7 +21,7 @@ import { listingSku } from '../adapter/sku-line.ts';
 import type { StepRunner } from '../runner/types.ts';
 import { changed, type DepopSite } from './pages/common.ts';
 import { deleteListing, expectDelete, openEditor } from './pages/edit-page.ts';
-import { openHub } from './pages/hub-page.ts';
+import { hubSeller, openHub } from './pages/hub-page.ts';
 import {
   expectSubmit,
   fillListing,
@@ -267,7 +268,10 @@ export function createDepopScripts(
       return found?.state ?? { found: false, authoritative: false };
     },
     health: (step) =>
-      step('open the selling hub', { mutates: false }, (page) => openHub(page, site)),
+      step('open the selling hub', { mutates: false }, async (page) => {
+        await openHub(page, site);
+        return sellerIdentity(await hubSeller(page, site));
+      }),
     orders: (since, step) => readSales({ site, step, since }),
     labels: async (orders, step) => {
       // Newest first, until every order's purchase is read.

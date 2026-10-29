@@ -24,20 +24,20 @@ final class RuntimeLane {
         self.handle = handle
     }
 
-    /// Loads the bundle into the controller page once; the runtime's version.
-    func load(source: String?) async throws -> Int {
+    /// Loads the runtime into the controller page once; the runtime's version.
+    func load(_ script: RuntimeScript?) async throws -> Int {
         if let loaded {
             return try await loaded.value
         }
         let task = Task<Int, any Error> { @MainActor in
-            guard let source else {
+            guard let script else {
                 throw PhoneRuntimeError.bundleMissing
             }
             let configuration = WKWebViewConfiguration()
             configuration.websiteDataStore = .nonPersistent()
             let content = configuration.userContentController
             content.addUserScript(WKUserScript(
-                source: source,
+                source: script.source,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true,
                 in: .page,
@@ -49,11 +49,15 @@ final class RuntimeLane {
             let finished = ControllerLoad()
             self.controllerLoad = finished
             controller.navigationDelegate = finished
-            controller.loadHTMLString("<!doctype html><title>Listora</title>", baseURL: nil)
+            controller.loadHTMLString(Self.controllerPage, baseURL: nil)
             try await finished.loaded.value(timeout: .seconds(20))
             let version = try await controller.evaluateJavaScript("listoraPhone.runtimeVersion")
             guard let number = version as? Int else {
                 throw PhoneRuntimeError.bundleNotLoaded("the runtime has no version")
+            }
+            // A runtime the server handed out speaks the version its signature names.
+            if let signed = script.runtimeVersion, signed != number {
+                throw PhoneRuntimeError.bundleNotLoaded("the runtime isn't the version it was signed as")
             }
             return number
         }
@@ -65,6 +69,13 @@ final class RuntimeLane {
             throw error
         }
     }
+
+    /// The controller page: nothing but the runtime, which the app injects. Its policy lets the
+    /// page itself load and connect to nothing (`default-src 'none'`), so the runtime reaches the
+    /// marketplace only through the app, which keeps it to the marketplace's own sites.
+    static let controllerPage = """
+    <!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><title>Listora</title>
+    """
 
     /// The next call loads the runtime again, into a new controller page.
     func dropController() {
@@ -139,5 +150,23 @@ private final class BridgeProxy: NSObject, WKScriptMessageHandlerWithReply {
     ) async -> (Any?, String?) {
         guard let lane else { return (nil, "closed") }
         return await lane.received(message)
+    }
+}
+
+/// The controller page's one load.
+@MainActor
+final class ControllerLoad: NSObject, WKNavigationDelegate {
+    let loaded = OneShot<Void>()
+
+    func webView(_: WKWebView, didFinish _: WKNavigation?) {
+        loaded.finish(.success(()))
+    }
+
+    func webView(_: WKWebView, didFail _: WKNavigation?, withError error: any Error) {
+        loaded.finish(.failure(error))
+    }
+
+    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation?, withError error: any Error) {
+        loaded.finish(.failure(error))
     }
 }

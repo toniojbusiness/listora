@@ -179,7 +179,12 @@ public struct APIPhoneWorkService: PhoneWorkService {
         switch output {
         case let .ok(response):
             let body = try decode { try response.body.json }
-            return RemoteRuntime(digest: body.digest, source: body.source)
+            return RemoteRuntime(
+                digest: body.digest,
+                source: body.source,
+                runtimeVersion: Int(body.runtimeVersion),
+                signature: body.signature,
+            )
         case let .default(status, response):
             throw APIFailure(statusCode: status, response: response)
         }

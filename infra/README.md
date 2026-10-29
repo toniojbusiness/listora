@@ -404,6 +404,13 @@ keys exist in GitHub). With `--ci` the script:
   read nor write it): store a new key with the deploy from a Mac;
 - masks the owner's address in the log, which is public in a public repository.
 
+Before it, the workflow's **Sign the phone runtime** step signs the phone runtime the image
+carries with the release key, the `personal` environment's secret `PHONE_RUNTIME_SIGNING_KEY`,
+which only that step's environment holds ([phone-execution.md](../docs/features/phone-execution.md#the-runtimes-signature)).
+The deploy from a Mac has no key, so its image serves an unsigned runtime, which new apps never
+run (they keep the runtime they have; older apps run it); `scripts/deploy-personal.sh` says
+which it is.
+
 **The deploy role** `listora-personal-github-deploy` (the `listora-personal-deploy-access`
 stack, `src/stacks/deploy-access-stack.ts`) trusts only a GitHub OIDC token whose subject is
 this repository, named by its immutable owner and repository ids (GitHub's immutable subject
@@ -454,6 +461,22 @@ deploy can change through the bootstrap is bounded by Listora's bootstrap templa
    gh variable set AWS_REGION --env personal --body us-east-1
    gh secret set OWNER_EMAIL --env personal --body <owner, lowercase>
    ```
+
+   The phone runtime's release key (an Ed25519 key made once, offline; only its public half is
+   in the repository, as `PHONE_RUNTIME_PUBLIC_KEY` in `packages/automation/src/phone/signing.ts`
+   and `RuntimeSignature.publicKey` in the app). Make it and store it without writing it
+   anywhere but GitHub, then print the public half to pin:
+
+   ```sh
+   key=$(mktemp) && chmod 600 "$key"
+   openssl genpkey -algorithm ed25519 -out "$key"
+   gh secret set PHONE_RUNTIME_SIGNING_KEY --env personal <"$key"
+   openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | base64
+   rm -P "$key"
+   ```
+
+   A new key needs that public half in both places and a new app build; until the phone has the
+   build, it keeps the runtime it has. The key made on 2026-10-29 is set.
 
    Only when the deploy from a Mac sets them: the variables `AVAILABILITY_ZONES`,
    `ALARM_EMAIL`, and `DOMAIN` with `HOSTED_ZONE_ID`. `OWNER_EMAIL` is a secret only so that
@@ -552,8 +575,10 @@ arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protecti
 4. **GitHub environment.** In the repository settings create the environment `staging` (and
    later `prod`) with protection rules: required reviewers, and deployment branches limited to
    `main`. Add the environment variables `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
-   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES`. No secrets are
-   needed. Personal deploys with its own workflow and settings
+   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES`. The one secret is
+   `PHONE_RUNTIME_SIGNING_KEY`, the phone runtime's release key, the same as personal's
+   ([Deploying from GitHub](#deploying-from-github)); without it the environment serves an
+   unsigned runtime, which new apps never run. Personal deploys with its own workflow and settings
    ([Deploying from GitHub](#deploying-from-github)), and the first time from a Mac.
 5. **Deploy.** Run the **Deploy** workflow (Actions tab) on `main` with `staging`. It tests
    and synthesizes offline, assumes the deploy role through OIDC, deploys the registry, builds

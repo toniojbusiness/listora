@@ -13,7 +13,11 @@ import type {
 import { REMOTE_LISTING_STATUSES } from '@listora/marketplaces';
 
 import type { PhotoSource } from '../adapter/photos.ts';
-import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
+import {
+  sellerIdentity,
+  type AutomationScripts,
+  type WriteResult,
+} from '../adapter/script-call.ts';
 import type { PageDriver, StepRunner } from '../runner/types.ts';
 
 export interface FakeSiteScriptOptions {
@@ -203,6 +207,7 @@ export function createFakeSiteScripts(
       step('open the account', { mutates: false }, async (page) => {
         await page.goto(`${site}/`);
         if (!(await page.exists('[data-account]'))) throw new Error('not the account page');
+        return sellerIdentity(await page.attribute('[data-account]', 'data-account'));
       }),
     orders: (since, step) =>
       step('open the sold orders', { mutates: false }, async (page) => {

@@ -18,6 +18,9 @@ apps/ios/Generated/
 apps/ios/Config/Local.xcconfig
 apps/ios/Config/Device.xcconfig
 
+# The phone runtime's signature: written by `npm run phone:sign` in the deploys, never committed
+apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/phone-runtime.js.sig
+
 # Test output
 coverage/
 

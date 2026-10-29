@@ -15,7 +15,8 @@ each one saw. A change is shown as done only once the server has the phone's rea
 Code:
 
 - `packages/automation/src/phone/`: the phone runtime (`runtime.ts`, bundled for the app by
-  `npm run phone:bundle` into the app's `phone-runtime.js`), its page backend (`backend.ts`,
+  `npm run phone:bundle` into the app's `phone-runtime.js`, and signed in the deploys by
+  `npm run phone:sign`: `signing.ts`, `sign.ts`), its page backend (`backend.ts`,
   `dom.ts`), and the server's half of phone runs (`work.ts`, `transcript.ts`, `answers.ts`,
   `watch.ts`, and `signals.ts`, which wakes the open app's wait for work).
 - `packages/operations/src/phone-queue.ts`: operation steps handed to the phone.
@@ -82,7 +83,8 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    with the digest of the runtime it runs (`have`; the one the app ships until the server hands
    out another), so the server sends the script (about 570 KB) only when it runs a different one,
    once per app opening (and once per background run), and the app keeps a handed-out runtime in
-   its caches for the next launch, for its own build only (`RuntimeScripts`). A device
+   its caches for the next launch, for its own build only (`RuntimeScripts`). It takes one only
+   with the release key's signature ([below](#the-runtimes-signature)). A device
    whose runtime speaks any other version is told to update the app (`app_update_required`) and
    gets nothing. A claim that finds nothing
    says when to claim again (`nextClaimInSeconds`): when the device's next work is due (a check
@@ -169,7 +171,15 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   that picks its layout by the screen's touch rather than its width still draws its mobile one:
   Mercari's listing tabs do ([mercari.md](mercari.md)), so its scripts read both layouts. It is
   WebKit, as it says: no disguised user agent, no fingerprint changes, no proxy. The main frame
-  may load only the marketplace's own origins; a window the site opens is not opened.
+  may load only the marketplace's own origins; a window the site opens is not opened. Those
+  origins, its web API's, and the cookie domains of its session are the ones both the call and
+  the app name: the app is built with each marketplace's (`MarketplaceSites`, the same as
+  `profiles.ts`, which `phone/app-sites.test.ts` checks), and cuts a call's to them before the
+  runtime sees it, so a server can't send a seller's session, or a page in it, anywhere else. A
+  Dev build also lets the fake sites stand in (on `127.0.0.1`, `localhost`, or the API's host).
+- **The controller page** holds nothing but the runtime, which the app injects, under a
+  `default-src 'none'` content security policy: the page itself loads and connects to nothing,
+  and reaches the marketplace only through the app.
 - **Checks are handed to the seller.** A CAPTCHA, a bot check, a login code, or a sign-in page
   stops the run, and the app shows that page in a visible in-app browser above every screen:
   "Depop wants to check it's you. Complete the check below, then tap Done." The seller completes
@@ -178,6 +188,35 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   the work waits and retries later, and the seller gets a local notification. A sign-in page the
   seller declined counts as the check itself, which asks them to link again. Listora never
   solves, skips, or hides a check.
+
+## The runtime's signature
+
+The phone runs the runtime the server hands it, in the seller's signed-in marketplace sessions,
+so whoever could change what the API serves (a compromised image, deploy, or server) could
+otherwise run code of their own there. So the app runs a handed-out runtime only when Listora's
+release key signed it:
+
+- **The key** is an Ed25519 key made once, offline. Its private half is only the GitHub Actions
+  secret `PHONE_RUNTIME_SIGNING_KEY` of the deploy environment (`personal`); no server, image, or
+  file holds it. Its public half is pinned in the app (`RuntimeSignature.publicKey`) and in
+  `packages/automation/src/phone/signing.ts` (`PHONE_RUNTIME_PUBLIC_KEY`); `signing.test.ts`
+  checks they match. Setting it up and replacing it: [infra/README.md](../../infra/README.md#deploying-from-github).
+- **Signing.** The deploy workflows run `npm run phone:sign` in a step of their own, with the
+  key in that step's environment only, before the image is built: it signs
+  `listora-phone-runtime\n{runtimeVersion}\n{digest}` (the version the runtime speaks and the
+  SHA-256 of the bundle) and writes the signature next to the bundle (`phone-runtime.js.sig`,
+  never committed), which the image carries. A key that isn't the pinned one is refused.
+- **Serving.** The API reads the signature with the bundle and hands it out with it
+  (`getPhoneRuntime`'s `signature`) only when it verifies for that bundle and version. A local
+  server and a deploy without the key (from a Mac) serve none.
+- **Running.** The app takes a handed-out runtime only when the signature verifies with the
+  pinned key for its digest and version; otherwise it keeps the runtime it runs (its own,
+  unless it took a signed one earlier). It keeps the signature with the runtime in its caches
+  and checks it again at the next launch, dropping one that no longer verifies (or one an older
+  build kept without a signature). The loaded runtime must say it speaks the signed version.
+  The app's own runtime, which came with the app, needs no signature.
+- **Older apps** don't check signatures and run the handed-out runtime as before; the field is
+  new and optional, so they keep working. A new app build ships the check.
 
 ## When the phone runs
 
@@ -252,7 +291,8 @@ side in 11 to 13 s.
 ## Local development
 
 - `npm run phone:bundle` rebuilds the app's `phone-runtime.js`; a test fails when the
-  committed bundle is out of date.
+  committed bundle is out of date. A local server's bundle is unsigned, so the app runs its own
+  (built from the same checkout).
 - The fake sites ([poshmark.md](poshmark.md), [mercari.md](mercari.md),
   [depop-automation.md](depop-automation.md)) serve the phone too. The local stack
   (`packages/e2e`) starts a fake Depop site, and its control endpoint can make it show a check
@@ -276,7 +316,14 @@ side in 11 to 13 s.
   or a claim ending, not by a lease renewal, every few seconds without notifications, and at its
   end when nothing comes (`db/src/notifications.int.test.ts`: notifications only on commit, and
   listening again after the connection is cut).
-- **App, unit** (`PhoneExecutionFeatureTests`): the runner's loop, the claim the moment the
+- **Signature** (`phone/signing.test.ts`): only the release key's signature of the bundle and
+  its version verifies, the deploy's signing refuses another key and writes none without one, and
+  the app pins the same public key; the API hands out no signature it lacks
+  (`phone.int.test.ts`); the app's built-in sites are the profiles' (`phone/app-sites.test.ts`).
+- **App, unit** (`PhoneExecutionFeatureTests`): a handed-out runtime runs only when the release
+  key signed it, for its digest and version, and a kept one is checked again at launch
+  (`RuntimeScriptsTests`); a call's origins and cookie domains are cut to the marketplace's own,
+  the fake sites only in Dev (`MarketplaceSitesTests`); the runner's loop, the claim the moment the
   server answers the wait (at most one look a second, and the claim's own wait from a server
   without one), no claim after a wait that found nothing but the safety claim, the runtime
   checked once per opening (again when the server didn't answer), the runtime the app names and
@@ -311,6 +358,11 @@ side in 11 to 13 s.
 - Infrastructure: the APNs key (`APNS_*`) in Secrets Manager and `PUSH_DRIVER=apns` in the
   deployed environment.
 - A new runtime version needs an app update; until the phone has it, its work waits.
+- A marketplace that moves its pages to another domain needs an app update: the app keeps only
+  the sites it is built with.
+- The release key signs whatever the deploy builds from `main`, so it doesn't stop a malicious
+  commit that reaches `main`: branch protection and a deploy reviewer do (audit M2,
+  [security.md](security.md)).
 - Background runs are best effort: iOS decides when the refresh and processing tasks run, and
   a web view in the background may be suspended mid-call (its lease then lapses and the work
   is recovered).

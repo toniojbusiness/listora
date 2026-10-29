@@ -200,6 +200,46 @@ describe('read-only connections in the API (real Postgres)', () => {
     expect(ended.status).toBe(202);
   });
 
+  it('keeps a protected shop read only, even for the owner', async () => {
+    const connection = await api.db
+      .updateTable('marketplace_connection')
+      .set({ external_user_id: 'protected-depop-shop' })
+      .where('account_id', '=', accountId)
+      .where('marketplace', '=', 'depop')
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const shop = await api.db
+      .insertInto('protected_seller')
+      .values({ marketplace: 'depop', seller_id: 'protected-depop-shop', reason: 'test shop' })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    try {
+      await setReadOnly(true);
+      const refused = await setReadOnly(false);
+      expect(refused.status).toBe(409);
+      expect(refused.error).toMatchObject({
+        code: 'connection_read_only',
+        message:
+          'This Depop shop is protected, so Listora will only ever read it and Read only stays on.',
+      });
+      expect(
+        await api.db
+          .selectFrom('marketplace_connection')
+          .select('read_only')
+          .where('id', '=', connection.id)
+          .executeTakeFirstOrThrow(),
+      ).toEqual({ read_only: true });
+    } finally {
+      await api.db.deleteFrom('protected_seller').where('id', '=', shop.id).execute();
+      await api.db
+        .updateTable('marketplace_connection')
+        .set({ external_user_id: null, read_only: false })
+        .where('id', '=', connection.id)
+        .execute();
+      await api.db.deleteFrom('read_only_seller').where('account_id', '=', accountId).execute();
+    }
+  });
+
   it("refuses the change to anyone but the account's owner", async () => {
     await api.db
       .updateTable('membership')

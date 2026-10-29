@@ -14,6 +14,7 @@
     "fake-depop-site": "node --env-file-if-exists=../../.env src/depop/fake/cli.ts",
     "fake-ebay-site": "node --env-file-if-exists=../../.env src/ebay/fake/cli.ts",
     "phone:bundle": "node src/phone/bundle.ts",
+    "phone:sign": "node src/phone/sign.ts",
     "depop:taxonomy": "node src/depop/taxonomy/refresh.ts",
     "recordings:record": "node src/recordings/record.ts"
   },

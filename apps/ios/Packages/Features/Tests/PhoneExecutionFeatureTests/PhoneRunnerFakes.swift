@@ -110,7 +110,7 @@ actor FakeWorkService: PhoneWorkService {
     }
 
     func runtime(have _: String?) async throws(APIFailure) -> RemoteRuntime {
-        RemoteRuntime(digest: "bundled", source: nil)
+        RemoteRuntime(digest: "bundled", source: nil, runtimeVersion: 3, signature: nil)
     }
 
     func claim(

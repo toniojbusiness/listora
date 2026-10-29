@@ -23,6 +23,7 @@ import {
   type AdapterContext,
   type AssistedAdapter,
   type AssistedListingPayload,
+  type ConnectionRef,
   type Excerpt,
   type Health,
   type ItemSnapshot,
@@ -194,7 +195,7 @@ export class AutomationAdapter<
         'operation',
         op.operationId,
         op.kind,
-        { script: SCRIPT_FOR_KIND[op.kind], op },
+        { script: SCRIPT_FOR_KIND[op.kind], op, ...expectedSeller(connection) },
         ctx.signal,
       );
     } catch (error) {
@@ -226,9 +227,9 @@ export class AutomationAdapter<
   async healthCheck(ctx: AdapterContext): Promise<Health> {
     const connection = ctx.connection;
     if (connection === null) return { status: 'ok' };
-    let run: SessionRun<undefined>;
+    let run: SessionRun<string | null | undefined>;
     try {
-      run = await this.#use<undefined>(
+      run = await this.#use<string | null | undefined>(
         connection,
         'health',
         null,
@@ -252,7 +253,11 @@ export class AutomationAdapter<
       case 'read_only':
         return this.#degraded(run.type);
       case 'ran':
-        if (run.result.ok) return { status: 'ok' };
+        if (run.result.ok) {
+          // A runtime older than the seller's read returns nothing: the seller stays unknown.
+          const sellerId = run.result.value;
+          return typeof sellerId === 'string' ? { status: 'ok', sellerId } : { status: 'ok' };
+        }
         if (run.result.failure.kind === 'challenge') {
           return {
             status: 'reauth_required',
@@ -348,7 +353,11 @@ export class AutomationAdapter<
         'offer_response',
         null,
         'answer offer',
-        { script: 'answerOffer', request: { ...request, offer: { ...request.offer } } },
+        {
+          script: 'answerOffer',
+          request: { ...request, offer: { ...request.offer } },
+          ...expectedSeller(ctx.connection),
+        },
         ctx.signal,
       );
     } catch (error) {
@@ -750,4 +759,9 @@ function scriptExcerpt(kind: WriteOperationKind, result: ScriptResult<WriteResul
           },
         }),
   };
+}
+
+/** The seller a write must find signed in: the connection's, once a session check read it. */
+function expectedSeller(connection: ConnectionRef): { expectedSeller?: string } {
+  return typeof connection.sellerId === 'string' ? { expectedSeller: connection.sellerId } : {};
 }

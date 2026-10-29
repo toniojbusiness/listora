@@ -7801,25 +7801,38 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/PhoneRuntime/source`.
             public var source: Swift.String?
+            /// The release key's Ed25519 signature (base64) over
+            /// `listora-phone-runtime\n{runtimeVersion}\n{digest}`, made in CI when the image is built;
+            /// the server never holds that key. The app runs a runtime it was handed only with a
+            /// signature its pinned public key verifies; absent when the server's bundle is unsigned
+            /// (a local server, or a deploy without the key), and the app then runs its own.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRuntime/signature`.
+            public var signature: Swift.String?
             /// Creates a new `PhoneRuntime`.
             ///
             /// - Parameters:
             ///   - runtimeVersion: The version of phone calls the runtime speaks.
             ///   - digest: The runtime's SHA-256, hex.
             ///   - source: The runtime's script; absent when the app already has this digest.
+            ///   - signature: The release key's Ed25519 signature (base64) over
             public init(
                 runtimeVersion: Swift.Int32,
                 digest: Swift.String,
-                source: Swift.String? = nil
+                source: Swift.String? = nil,
+                signature: Swift.String? = nil
             ) {
                 self.runtimeVersion = runtimeVersion
                 self.digest = digest
                 self.source = source
+                self.signature = signature
             }
             public enum CodingKeys: String, CodingKey {
                 case runtimeVersion
                 case digest
                 case source
+                case signature
             }
         }
         /// A `KnownSaleStatus`, or a status added after this client was built. Clients show an
