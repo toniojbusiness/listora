@@ -20,6 +20,7 @@ interface Reply {
 
 const COGNITO = 'AWSCognitoIdentityProviderService.';
 const EMAIL = 'maria@example.com';
+const SUB = '0f5e8a2c-3b1d-4c7e-9a6f-2d8b4e1c7a90';
 const IDENTITY_PATH = `/v2/email/identities/${encodeURIComponent(EMAIL)}`;
 const CREDENTIALS = { accessKeyId: 'AKIDTEST', secretAccessKey: 'test-secret' };
 
@@ -125,28 +126,62 @@ describe('invitee users', () => {
     });
 
     it('signs the person out everywhere, then disables them', async () => {
-      await directory().suspend(EMAIL);
+      await directory().suspend({ email: EMAIL });
       expect(calls()).toEqual(['AdminUserGlobalSignOut', 'AdminDisableUser']);
       for (const request of received) {
         expect(request.body).toEqual({ UserPoolId: 'us-east-1_TestPool1', Username: EMAIL });
       }
     });
 
+    it("names a person who signed in by their sub, so a changed email can't dodge revocation", async () => {
+      const invitee = { email: EMAIL, subject: SUB };
+      await directory().suspend(invitee);
+      expect(calls()).toEqual(['AdminUserGlobalSignOut', 'AdminDisableUser']);
+      for (const request of received) {
+        expect(request.body).toEqual({ UserPoolId: 'us-east-1_TestPool1', Username: SUB });
+      }
+
+      received = [];
+      await expect(directory().resume(invitee)).resolves.toBe('deliverable');
+      expect(received.map((request) => [request.call, request.body])).toEqual([
+        ['AdminEnableUser', { UserPoolId: 'us-east-1_TestPool1', Username: SUB }],
+      ]);
+    });
+
+    it('falls back to the email when no user has the sub', async () => {
+      const invitee = { email: EMAIL, subject: SUB };
+      const gone = { status: 400, type: 'UserNotFoundException' };
+      replies['AdminUserGlobalSignOut'] = gone;
+      replies['AdminDisableUser'] = gone;
+      await directory().suspend(invitee);
+      expect(received.map((request) => (request.body as { Username: string }).Username)).toEqual([
+        SUB,
+        SUB,
+        EMAIL,
+        EMAIL,
+      ]);
+
+      received = [];
+      replies['AdminEnableUser'] = gone;
+      await expect(directory().resume(invitee)).resolves.toBe('deliverable');
+      expect(calls()).toEqual(['AdminEnableUser', 'AdminEnableUser', 'AdminCreateUser']);
+    });
+
     it('treats a user that is gone as suspended and forgotten', async () => {
       replies['AdminUserGlobalSignOut'] = { status: 400, type: 'UserNotFoundException' };
       replies['AdminDisableUser'] = { status: 400, type: 'UserNotFoundException' };
       replies['AdminDeleteUser'] = { status: 400, type: 'UserNotFoundException' };
-      await expect(directory().suspend(EMAIL)).resolves.toBeUndefined();
+      await expect(directory().suspend({ email: EMAIL })).resolves.toBeUndefined();
       await expect(directory().forget(EMAIL)).resolves.toBeUndefined();
     });
 
     it('enables a suspended user, and recreates one that is gone', async () => {
-      await expect(directory().resume(EMAIL)).resolves.toBe('deliverable');
+      await expect(directory().resume({ email: EMAIL })).resolves.toBe('deliverable');
       expect(calls()).toEqual(['AdminEnableUser']);
 
       received = [];
       replies['AdminEnableUser'] = { status: 400, type: 'UserNotFoundException' };
-      await expect(directory().resume(EMAIL)).resolves.toBe('deliverable');
+      await expect(directory().resume({ email: EMAIL })).resolves.toBe('deliverable');
       expect(calls()).toEqual(['AdminEnableUser', 'AdminCreateUser']);
     });
 
@@ -163,9 +198,9 @@ describe('invitee users', () => {
           AdminEnableUser: failure,
         };
         await expect(directory().admit(EMAIL), failure.type).rejects.toThrow();
-        await expect(directory().suspend(EMAIL), failure.type).rejects.toThrow();
+        await expect(directory().suspend({ email: EMAIL }), failure.type).rejects.toThrow();
         await expect(directory().forget(EMAIL), failure.type).rejects.toThrow();
-        await expect(directory().resume(EMAIL), failure.type).rejects.toThrow();
+        await expect(directory().resume({ email: EMAIL }), failure.type).rejects.toThrow();
       }
     });
 

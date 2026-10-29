@@ -24,6 +24,7 @@ import { registerCompression } from './compression.ts';
 import { registerErrorHandling } from './errors.ts';
 import { API_FEATURES, type ApiRouteContext } from './features.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
+import { createRateLimiters, registerRateLimits, type RateLimits } from './rate-limits.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { PhoneWorkDependencies } from '@listora/automation';
 
@@ -79,6 +80,11 @@ export interface AppDependencies extends HealthDependencies {
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
   now?: () => Date;
+  /**
+   * Requests per minute per source address and per account (`API_RATE_LIMIT_*`, rate-limits.ts).
+   * Without it nothing is limited, as in tests that send far more than a person would.
+   */
+  rateLimits?: RateLimits;
   /** A `createLogger()` instance from @listora/shared. Omit in tests to keep output quiet. */
   logger?: FastifyBaseLogger;
 }
@@ -125,16 +131,22 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   });
   closeKeepAliveConnectionsOnShutdown(app);
   registerErrorHandling(app);
+  const now = deps.now ?? (() => new Date());
+  const rateLimiters =
+    deps.rateLimits === undefined
+      ? undefined
+      : createRateLimiters(deps.rateLimits, () => now().getTime());
+  if (rateLimiters !== undefined) registerRateLimits(app, rateLimiters);
   registerCompression(app);
 
   registerHealthRoutes(app, deps);
   deps.auth.registerRoutes?.(app);
   if (deps.storage instanceof LocalDiskStorage) registerLocalStorageRoutes(app, deps.storage);
-  const now = deps.now ?? (() => new Date());
   const context: ApiRouteContext = {
     db: deps.db,
     auth: deps.auth,
     signUp: deps.signUp,
+    rateLimiters,
     invites: deps.invites ?? { directory: openInviteeDirectory },
     storage: deps.storage,
     uploads: deps.uploads ?? new SessionPhotoUploads(deps.storage, now),

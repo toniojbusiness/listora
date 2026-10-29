@@ -61,6 +61,7 @@ const sessionVault =
 const app = buildApp({
   logger,
   db,
+  rateLimits: config.rateLimits,
   auth: createAuthDriver(config.auth, logger),
   signUp: config.signUp,
   invites: { directory: createInviteeDirectory(config) },

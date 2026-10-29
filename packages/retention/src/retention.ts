@@ -1,7 +1,7 @@
 /**
- * Data retention (docs/features/privacy.md): how long Listora keeps logs, raw payloads, and
- * other records that only matter for a while, and the daily job (`data_retention`) that
- * deletes what expired. Each rule deletes in batches, oldest first, and a run stops after
+ * Data retention (docs/features/privacy.md): how long Listora keeps logs, raw payloads,
+ * buyers' details, and other records that only matter for a while, and the daily job
+ * (`data_retention`) that deletes or clears what expired. Each rule deletes in batches, oldest first, and a run stops after
  * `maxBatches` per rule, so a backlog (after downtime, or the first run) is worked off over a
  * few days without one long transaction.
  *
@@ -47,6 +47,16 @@ export const RETENTION_DAYS = {
   connectionAuthorizations: 1,
   /** Deletion completion records (no personal data). */
   deletionRecords: 730,
+  /**
+   * The buyer's details on a sale's label (their first name, the tracking number), after the sale
+   * is done: shipped, canceled, or returned, from the latest of those. Past the marketplaces'
+   * claim windows, like its package photo (`PACK_PHOTO_RETENTION_DAYS` in @listora/pack-check).
+   */
+  saleLabelBuyers: 60,
+  /** A packed sale's tracking number, as long as its label's; the package record stays. */
+  packageTracking: 60,
+  /** The buyer's name on an offer, once it stopped waiting on the seller (`closed_at`). */
+  offerBuyers: 60,
 } as const;
 
 export type RetentionRule = keyof typeof RETENTION_DAYS;
@@ -149,9 +159,60 @@ export async function runDataRetention(
       `.execute(db);
       return Number(result.numAffectedRows ?? 0);
     }),
+    saleLabelBuyers: await repeat(async () => {
+      const result = await sql`
+        update sale_label as label
+        set buyer_first_name = null, tracking_number = null, carrier = null, source = null
+        where (label.account_id, label.sale_id) in (
+          select label.account_id, label.sale_id from sale_label as label
+          join sale on sale.account_id = label.account_id and sale.id = label.sale_id
+          where ${saleDone(cutoff('saleLabelBuyers'))}
+            and (label.buyer_first_name is not null or label.tracking_number is not null)
+          order by label.sale_id
+          limit ${batchSize}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    }),
+    packageTracking: await repeat(async () => {
+      const result = await sql`
+        update sale_pack as pack
+        set tracking_number = null
+        where (pack.account_id, pack.sale_id) in (
+          select pack.account_id, pack.sale_id from sale_pack as pack
+          join sale on sale.account_id = pack.account_id and sale.id = pack.sale_id
+          where ${saleDone(cutoff('packageTracking'))} and pack.tracking_number is not null
+          order by pack.sale_id
+          limit ${batchSize}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    }),
+    offerBuyers: await repeat(async () => {
+      const result = await sql`
+        update marketplace_offer set buyer_name = null
+        where id in (
+          select id from marketplace_offer
+          where status <> 'pending' and closed_at < ${cutoff('offerBuyers')}
+            and buyer_name is not null
+          order by closed_at
+          limit ${batchSize}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    }),
   };
   options.logger.info({ task: DATA_RETENTION_TASK, deleted: summary }, 'data retention ran');
   return summary;
+}
+
+/**
+ * The query's `sale` is done (shipped, canceled, or returned) since before `cutoff`, counted from
+ * the latest of those: a return after shipping starts the count again.
+ */
+function saleDone(cutoff: Date) {
+  return sql<boolean>`sale.status in ('shipped', 'canceled', 'returned')
+    and greatest(sale.shipped_at, sale.canceled_at, sale.returned_at) < ${cutoff}`;
 }
 
 /**

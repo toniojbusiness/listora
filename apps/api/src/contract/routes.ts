@@ -2,7 +2,8 @@
  * `contractRoute` registers a handler for one contract operation, looked up by operationId:
  * - the method and URL come from openapi.yaml, so a route cannot drift from the contract;
  * - the request is authenticated and resolved to a `Tenant` before the body is even read
- *   (only operations the contract secures can be registered, so none is public by mistake);
+ *   (only operations the contract secures can be registered, so none is public by mistake), and
+ *   counted against its account's request limit (rate-limits.ts);
  * - path, query, and body are validated against the contract (bad path ids → 404, bad query or
  *   body → 422 `validation_failed` with `fieldErrors`);
  * - POSTs with an `Idempotency-Key` run through `runIdempotent`;
@@ -15,6 +16,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AuthDriver, Identity } from '../auth/driver.ts';
 import { ApiError, validationFailed } from '../errors.ts';
 import { runIdempotent } from '../idempotency.ts';
+import { limitAccount, type ApiRateLimiters } from '../rate-limits.ts';
 import { authenticate, type SignUpPolicy, type Tenant } from '../tenancy.ts';
 import { operationSpec } from './contract.ts';
 
@@ -73,6 +75,8 @@ export interface RouteDependencies {
   auth: AuthDriver;
   /** Who gets an account on their first sign-in. */
   signUp: SignUpPolicy;
+  /** The per-account request limit, among the others (rate-limits.ts); none without it. */
+  rateLimiters?: ApiRateLimiters | undefined;
 }
 
 const IDEMPOTENCY_KEY = 'idempotency-key';
@@ -94,9 +98,11 @@ export function contractRoute<K extends OperationId>(
   app.route({
     method: spec.method,
     url: spec.url,
+    config: { rateLimit: 'account' },
     // Before the body is parsed, so an unauthenticated client cannot make the server read it.
     onRequest: async (request) => {
       const { identity, tenant } = await authenticate(request, deps.auth, deps.db, deps.signUp);
+      limitAccount(request, deps.rateLimiters, tenant.accountId);
       request.identity = identity;
       request.tenant = tenant;
     },

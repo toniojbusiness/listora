@@ -78,6 +78,34 @@ describe('the phone API (real Postgres)', () => {
     expect((await register({ name: '', platform: 'ios' })).status).toBe(422);
   });
 
+  it("never moves a push token off another account's installation, except from the same one", async () => {
+    const pushToken = 'cd'.repeat(32);
+    const phone = randomUUID();
+    expect(
+      (await register({ name: "Tonio's iPhone", platform: 'ios', pushToken }, phone)).body,
+    ).toMatchObject({ pushEnabled: true });
+    const stranger = await api.signIn('push-stranger@example.com');
+    const registerAs = (as: string, id: string) =>
+      api.call('registerDevice', {
+        token: as,
+        params: { installationId: id },
+        body: { name: 'Not your iPhone', platform: 'ios', pushToken },
+      });
+    // Someone who knows the token, from their own installation in their own account.
+    expect((await registerAs(stranger, randomUUID())).body).toMatchObject({ pushEnabled: false });
+    const holders = await api.db
+      .selectFrom('app_device')
+      .select(['installation_id'])
+      .where('push_token', '=', pushToken)
+      .execute();
+    expect(holders).toEqual([{ installation_id: phone }]);
+    // The same phone signed into the other account takes its token along.
+    expect((await registerAs(stranger, phone)).body).toMatchObject({ pushEnabled: true });
+    expect((await register({ name: "Tonio's iPhone", platform: 'ios' }, phone)).body).toMatchObject(
+      { pushEnabled: false },
+    );
+  });
+
   it('runs a marketplace linked on the phone there, and says so on both screens', async () => {
     await register({
       name: "Tonio's iPhone",

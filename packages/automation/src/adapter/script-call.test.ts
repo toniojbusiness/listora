@@ -4,6 +4,8 @@ import type { AssistedListingPayload, OperationRequest } from '@listora/marketpl
 
 import type { PageDriver, StepRunner } from '../runner/types.ts';
 import {
+  isWriteCall,
+  READ_SCRIPTS,
   runScriptCall,
   SELLER_MISMATCH,
   sellerIdentity,
@@ -97,5 +99,29 @@ describe('the seller a write expects', () => {
     expect(sellerIdentity('   ')).toBeNull();
     expect(sellerIdentity(null)).toBeNull();
     expect(sellerIdentity('x'.repeat(256))).toBeNull();
+  });
+});
+
+describe('which calls write', () => {
+  it('names the reads; every other script, known or not, is a write', () => {
+    expect([...READ_SCRIPTS].sort()).toEqual(
+      ['health', 'labels', 'listings', 'offer', 'offers', 'orders', 'read'].sort(),
+    );
+    for (const script of READ_SCRIPTS) expect(isWriteCall({ script }), script).toBe(false);
+    for (const script of [
+      'create',
+      'revise',
+      'price',
+      'end',
+      'relist',
+      'markSold',
+      'refresh',
+      'answerOffer',
+    ] as const) {
+      expect(isWriteCall({ script }), script).toBe(true);
+    }
+    // A name no script has (a newer phone's, or a typo) is a write, so read only refuses it.
+    expect(isWriteCall({ script: 'share' } as unknown as ScriptCall)).toBe(true);
+    expect(isWriteCall({ script: 'Read' } as unknown as ScriptCall)).toBe(true);
   });
 });

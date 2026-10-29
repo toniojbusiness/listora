@@ -219,7 +219,10 @@ Migration `20261028105844_pack_check_order_state`: `sale_label.order_state` (`to
 
 All of it is deleted with the account (the package photos with it); the photos also go when the
 seller removes them or unpacks the order, and 60 days after the sale shipped
-([Package photo](#package-photo)).
+([Package photo](#package-photo)). The buyer's first name and the tracking numbers go at the same
+age: 60 days after the sale is done (shipped, canceled, or returned), the retention job clears
+them from the label and the package; the package record stays, and Pack check no longer shows
+the order ([privacy.md](privacy.md#retention)).
 
 ## Open items
 

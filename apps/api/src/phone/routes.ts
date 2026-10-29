@@ -31,8 +31,15 @@ export interface PhoneRouteDependencies extends RouteDependencies {
 }
 
 export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDependencies): void {
-  contractRoute(app, deps, 'registerDevice', async ({ tenant, db, params, body }) => {
-    const row = await registerDevice(db, tenant, params.installationId, body);
+  contractRoute(app, deps, 'registerDevice', async ({ tenant, db, params, body, request }) => {
+    const { row, pushTokenRefused } = await registerDevice(db, tenant, params.installationId, body);
+    if (pushTokenRefused) {
+      // Never the token itself: knowing it is what this refusal is about.
+      request.log.warn(
+        { accountId: tenant.accountId, deviceId: row.id },
+        "push token refused: another account's installation holds it",
+      );
+    }
     return { status: 200, body: deviceView(row) };
   });
 

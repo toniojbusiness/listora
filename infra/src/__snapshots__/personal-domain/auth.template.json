@@ -80,7 +80,10 @@
         },
         "UserPoolId": {
           "Ref": "UserPool6BA7E5F2"
-        }
+        },
+        "WriteAttributes": [
+          "locale"
+        ]
       }
     },
     "Owner": {

@@ -4,6 +4,7 @@ import type {
   KnownInviteStatus,
   StatusDisplay,
 } from '@listora/api-contract';
+import type { Invitee } from '@listora/accounts';
 import type { AccountInviteTable, DbExecutor } from '@listora/db';
 import { sql, type Selectable } from 'kysely';
 
@@ -89,6 +90,30 @@ export async function lockInvite(
     .where('id', '=', inviteId)
     .forUpdate()
     .executeTakeFirst();
+}
+
+/**
+ * The person who used a redeemed invite, as the identity provider knows them: the email they
+ * claimed it with, and once they signed in, their subject, which still names them if that email
+ * changed.
+ */
+export async function inviteeOf(
+  db: DbExecutor,
+  invite: Pick<InviteRow, 'claimed_email' | 'invitee_user_id'>,
+): Promise<Invitee | undefined> {
+  if (invite.claimed_email === null) return undefined;
+  const user =
+    invite.invitee_user_id === null
+      ? undefined
+      : await db
+          .selectFrom('app_user')
+          .select('auth_subject')
+          .where('id', '=', invite.invitee_user_id)
+          .executeTakeFirst();
+  return {
+    email: invite.claimed_email,
+    ...(user === undefined ? {} : { subject: user.auth_subject }),
+  };
 }
 
 export async function setRevoked(

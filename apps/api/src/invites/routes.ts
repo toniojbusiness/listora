@@ -20,6 +20,7 @@ import {
   canInvite,
   countOpenInvites,
   insertInvite,
+  inviteeOf,
   inviteView,
   listInviteRows,
   lockInvite,
@@ -107,8 +108,9 @@ export function registerInviteRoutes(app: FastifyInstance, deps: InviteRouteDepe
     if (invite.revoked_at !== null) return { status: 200, body: inviteView(invite, deps.now()) };
     // The sign-in provider first: when it fails, the transaction rolls back and nothing is
     // revoked, so the answer never claims a revocation that did not happen.
-    if (invite.claimed_email !== null) {
-      await atProvider(() => directory.suspend(invite.claimed_email ?? ''), 'revoke');
+    const invitee = await inviteeOf(db, invite);
+    if (invitee !== undefined) {
+      await atProvider(() => directory.suspend(invitee), 'revoke');
     }
     const revoked = await setRevoked(db, tenant, invite.id, true);
     return { status: 200, body: inviteView(revoked, deps.now()) };
@@ -117,8 +119,8 @@ export function registerInviteRoutes(app: FastifyInstance, deps: InviteRouteDepe
   contractRoute(app, deps, 'restoreInvite', async ({ tenant, db, params }) => {
     const invite = await lockInvite(db, tenant, params.inviteId);
     if (!invite) throw notFound('The invite');
-    const email = invite.claimed_email;
-    if (invite.revoked_at === null || email === null) {
+    const invitee = await inviteeOf(db, invite);
+    if (invite.revoked_at === null || invitee === undefined) {
       throw new ApiError(
         'invalid_state_transition',
         invite.revoked_at === null
@@ -126,7 +128,7 @@ export function registerInviteRoutes(app: FastifyInstance, deps: InviteRouteDepe
           : 'Nobody used this invite before it was revoked. Create a new one instead.',
       );
     }
-    await atProvider(() => directory.resume(email), 'restore');
+    await atProvider(() => directory.resume(invitee), 'restore');
     const restored = await setRevoked(db, tenant, invite.id, false);
     return { status: 200, body: inviteView(restored, deps.now()) };
   });
