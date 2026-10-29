@@ -7,7 +7,12 @@ import OpenAPIRuntime
 /// and decodes them on its own; the server compresses only for builds that send this header, so
 /// builds from before compression keep getting every answer as they did.
 struct CompressionOptInMiddleware: ClientMiddleware {
-    static let header = HTTPField.Name("X-Listora-Compression")!
+    static let header: HTTPField.Name = {
+        guard let name = HTTPField.Name("X-Listora-Compression") else {
+            preconditionFailure("X-Listora-Compression is a valid header field name")
+        }
+        return name
+    }()
 
     func intercept(
         _ request: HTTPRequest,
