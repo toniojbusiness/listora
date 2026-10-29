@@ -71,7 +71,9 @@ struct ItemDetailFollowTests {
 
     private func eventually(_ condition: () -> Bool) async throws {
         for _ in 0 ..< 200 {
-            if condition() { return }
+            if condition() {
+                return
+            }
             try await Task.sleep(for: .milliseconds(10))
         }
         Issue.record("the condition never became true")
