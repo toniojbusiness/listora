@@ -563,6 +563,9 @@ export function apiGetScript(url: string, bearerCookie: string | null): string {
 /** How many times a read of a marketplace's API is tried when the page couldn't make it. */
 const API_ATTEMPTS = 2;
 
+/** The pauses before a read of a marketplace's API that answered 5xx is asked again. */
+const SERVER_ERROR_PAUSES_MS: readonly number[] = [1_000, 4_000];
+
 /** Whether the page's request never got an answer (`fetch` rejected: the network, or a page load). */
 function fetchFailed(answer: unknown): boolean {
   return answer !== null && typeof answer === 'object' && 'failed' in answer;
@@ -761,22 +764,35 @@ class Driver implements PageDriver {
       throw new StepError('script_error', "the script asked for an API outside the marketplace's");
     }
     this.#active();
-    let answer: unknown;
-    for (let attempt = 1; ; attempt += 1) {
+    let read: ReturnType<typeof apiAnswer>;
+    for (let failedFetches = 0, serverErrors = 0; ;) {
       // A read the page's own scripts would make, paced like the actions around it.
       await this.#session.pacing.wait('action', this.#signal);
-      answer = await this.#query((backend) =>
+      const answer = await this.#query((backend) =>
         backend.read(apiGetScript(target.href, options.bearerCookie ?? null)),
       );
       this.#active();
       // A request the page couldn't make (seen right after a Depop Post, 2026-10-27, while the
       // page was still on its way to the next one) is a GET, so it is made once more.
-      if (!fetchFailed(answer)) break;
-      if (attempt === API_ATTEMPTS) {
-        throw new StepError('script_error', `the page couldn't reach the marketplace's API`);
+      if (fetchFailed(answer)) {
+        failedFetches += 1;
+        if (failedFetches === API_ATTEMPTS) {
+          throw new StepError('script_error', `the page couldn't reach the marketplace's API`);
+        }
+        continue;
       }
+      read = apiAnswer(answer);
+      // A server error is often the marketplace's for a moment only (Depop's web API answered
+      // two of a phone's reads 500 on 2026-10-29, 30 seconds apart, with 16 good answers between,
+      // and ended its offers read and its import), and a GET changes nothing, so it is asked
+      // again after a pause, at most twice, before the run stops at it.
+      const pause = read.status >= 500 ? SERVER_ERROR_PAUSES_MS[serverErrors] : undefined;
+      if (pause === undefined) break;
+      serverErrors += 1;
+      await this.#session.pacing.waitFor(pause, this.#signal);
+      this.#active();
     }
-    const { status, text, retryAfterSeconds } = apiAnswer(answer);
+    const { status, text, retryAfterSeconds } = read;
     const body = jsonOrNull(text);
     if (status === 429) {
       this.#session.stopFor({

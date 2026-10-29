@@ -7598,13 +7598,22 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (/(_PRIVATE_OFFER|^SENT_|_SENT$)/.test(value)) return "not_the_sellers";
 		return null;
 	}
-	/** The buyers' offers waiting on the seller, across her products. Only reads. */
-	async function readOffers$1(page, site) {
+	/**
+	* The seller's products with offers, each named by its listing where Listora finds it. A read
+	* of the offers asks each one's offers next (`readPendingOffers`), a step each: a shop with
+	* many offers outgrows one step's time. Only reads.
+	*/
+	async function readOfferProducts(page, site) {
 		await onDepop(page, site);
-		const offers = [];
 		const products = await readProducts(page, site);
 		await nameListings(page, site, products);
-		for (const product of products) for (const record of await readProductOffers(page, site, product, true)) {
+		return products;
+	}
+	/** The buyers' offers on one product that wait on the seller. Only reads. */
+	async function readPendingOffers(page, site, product) {
+		await onDepop(page, site);
+		const offers = [];
+		for (const record of await readProductOffers(page, site, product, true)) {
 			const offer = offerOf(record, product, site);
 			if (offer?.status === "pending") offers.push(offer.offer);
 		}
@@ -8151,7 +8160,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					next: shown.next
 				};
 			},
-			offers: (step) => step("read your offers", { mutates: false }, (page) => readOffers$1(page, site)),
+			offers: async (step) => {
+				const products = await step("read your offers", { mutates: false }, (page) => readOfferProducts(page, site));
+				const offers = [];
+				for (const product of products) offers.push(...await step("read a listing's offers", { mutates: false }, (page) => readPendingOffers(page, site, product)));
+				return offers;
+			},
 			offer: (ref, step) => step("read the offer", { mutates: false }, (page) => readOffer(page, site, ref)),
 			answerOffer: (request, step) => answerOnOfferPage(step, depopOfferPages(site), request)
 		};
@@ -12544,6 +12558,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 	/** How many times a read of a marketplace's API is tried when the page couldn't make it. */
 	const API_ATTEMPTS = 2;
+	/** The pauses before a read of a marketplace's API that answered 5xx is asked again. */
+	const SERVER_ERROR_PAUSES_MS = [1e3, 4e3];
 	/** Whether the page's request never got an answer (`fetch` rejected: the network, or a page load). */
 	function fetchFailed(answer) {
 		return answer !== null && typeof answer === "object" && "failed" in answer;
@@ -12699,15 +12715,24 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const target = URL.canParse(url) ? new URL(url) : null;
 			if (target === null || !this.#session.profile.apiOrigins.includes(target.origin)) throw new StepError("script_error", "the script asked for an API outside the marketplace's");
 			this.#active();
-			let answer;
-			for (let attempt = 1;; attempt += 1) {
+			let read;
+			for (let failedFetches = 0, serverErrors = 0;;) {
 				await this.#session.pacing.wait("action", this.#signal);
-				answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
+				const answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
 				this.#active();
-				if (!fetchFailed(answer)) break;
-				if (attempt === API_ATTEMPTS) throw new StepError("script_error", `the page couldn't reach the marketplace's API`);
+				if (fetchFailed(answer)) {
+					failedFetches += 1;
+					if (failedFetches === API_ATTEMPTS) throw new StepError("script_error", `the page couldn't reach the marketplace's API`);
+					continue;
+				}
+				read = apiAnswer(answer);
+				const pause = read.status >= 500 ? SERVER_ERROR_PAUSES_MS[serverErrors] : void 0;
+				if (pause === void 0) break;
+				serverErrors += 1;
+				await this.#session.pacing.waitFor(pause, this.#signal);
+				this.#active();
 			}
-			const { status, text, retryAfterSeconds } = apiAnswer(answer);
+			const { status, text, retryAfterSeconds } = read;
 			const body = jsonOrNull(text);
 			if (status === 429) this.#session.stopFor({
 				type: "rate_limited",

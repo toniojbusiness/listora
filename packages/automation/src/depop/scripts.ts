@@ -8,6 +8,7 @@ import {
   type ListedListing,
   type OperationRequest,
   type RemoteListingState,
+  type RemoteOffer,
 } from '@listora/marketplaces';
 
 import {
@@ -39,7 +40,12 @@ import {
   readReceipts,
   type ReceiptLabel,
 } from './pages/receipts.ts';
-import { depopOfferPages, readOffer, readOffers } from './pages/offers.ts';
+import {
+  depopOfferPages,
+  readOffer,
+  readOfferProducts,
+  readPendingOffers,
+} from './pages/offers.ts';
 import { answerOnOfferPage } from '../adapter/offer-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
 import { readSales, soldListings } from './sales.ts';
@@ -326,8 +332,22 @@ export function createDepopScripts(
       }
       return { listings, next: shown.next };
     },
-    offers: (step) =>
-      step('read your offers', { mutates: false }, (page) => readOffers(page, site)),
+    offers: async (step) => {
+      // The products with offers, then each one's offers, one read at a time and a step each:
+      // a real shop's offers, read in one step, took 24 to 28 of its 30 seconds (2026-10-28).
+      const products = await step('read your offers', { mutates: false }, (page) =>
+        readOfferProducts(page, site),
+      );
+      const offers: RemoteOffer[] = [];
+      for (const product of products) {
+        offers.push(
+          ...(await step("read a listing's offers", { mutates: false }, (page) =>
+            readPendingOffers(page, site, product),
+          )),
+        );
+      }
+      return offers;
+    },
     offer: (ref, step) =>
       step('read the offer', { mutates: false }, (page) => readOffer(page, site, ref)),
     answerOffer: (request, step) => answerOnOfferPage(step, depopOfferPages(site), request),
