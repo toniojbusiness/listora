@@ -129,6 +129,12 @@ export interface AccountTable {
    * created directly, and only those may invite.
    */
   invited_at: NullableTimestamp;
+  /**
+   * Test mode (docs/features/test-mode.md): the account sees and runs every marketplace feature
+   * that is built, not only those that passed live. Only the deployment owner's account turns
+   * it on.
+   */
+  test_mode: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -1319,6 +1325,22 @@ export interface BackgroundReadHealthTable {
   updated_at: UpdatedAt;
 }
 
+/**
+ * One run of a feature that has not passed live, in an account's Test mode
+ * (docs/features/test-mode.md): the owner's log, cited as evidence when it is marked verified.
+ */
+export interface FeatureTestRunTable {
+  id: Id;
+  account_id: string;
+  marketplace: Marketplace;
+  feature: string;
+  outcome: 'passed' | 'failed';
+  subject_id: string;
+  error_code: Nullable<string>;
+  detail: Nullable<string>;
+  created_at: CreatedAt;
+}
+
 // Pack check ----------------------------------------------------------------------------------
 
 /** Whether Pack check is on, one per account (docs/features/pack-check.md); off by default. */
@@ -1437,5 +1459,6 @@ export interface Database {
   offer_response: OfferResponseTable;
   offer_check: OfferCheckTable;
   background_read_health: BackgroundReadHealthTable;
+  feature_test_run: FeatureTestRunTable;
   haul: HaulTable;
 }

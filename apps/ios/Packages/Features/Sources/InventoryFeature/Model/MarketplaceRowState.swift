@@ -20,6 +20,8 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         /// Open the List flow (no listing yet, or a draft that was never sent).
         case list
         case changePrice
+        /// Edit the live listing's title and description (`revise`).
+        case revise
         case end
         case relist
         case check
@@ -34,6 +36,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             switch self {
             case .list: "List"
             case .changePrice: "Change price"
+            case .revise: "Edit listing"
             case .end: "End listing"
             case .relist: "Relist"
             case .check: "Check status"
@@ -48,6 +51,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             switch self {
             case .list: "list"
             case .changePrice: "changePrice"
+            case .revise: "revise"
             case .end: "end"
             case .relist: "relist"
             case .check: "check"
@@ -205,6 +209,9 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         }
         if available.contains(.changePrice) {
             actions.append(.changePrice)
+        }
+        if available.contains(.revise) {
+            actions.append(.revise)
         }
         if available.contains(.relist) {
             actions.append(.relist)

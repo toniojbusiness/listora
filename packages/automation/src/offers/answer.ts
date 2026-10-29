@@ -30,11 +30,14 @@ import {
 } from '@listora/db';
 import {
   answerShown,
-  isFeatureVerified,
+  isFeatureOn,
   isOfferMarketplace,
+  loadFeatureGate,
   MARKETPLACE_NAMES,
   OFFER_RULES,
+  recordFeatureTestRun,
   type ConnectionRef,
+  type FeatureGate,
   type MarketplaceAdapter,
   type OfferAnswerOutcome,
   type OfferAnswerRequest,
@@ -93,9 +96,13 @@ export function offerQuote(marketplace: Marketplace, priceCents: number, at: Dat
  * where answers have not passed live yet (docs/features/verified-features.md), so the app
  * shows no Accept, Decline, or Counter there and the seller answers in the marketplace's app.
  */
-export function offerActions(marketplace: Marketplace, readOnly = false): OfferAction[] {
+export function offerActions(
+  marketplace: Marketplace,
+  gate: FeatureGate,
+  readOnly = false,
+): OfferAction[] {
   if (!isOfferMarketplace(marketplace) || readOnly) return [];
-  if (!isFeatureVerified(marketplace, 'offer_answers')) return [];
+  if (!isFeatureOn(marketplace, 'offer_answers', gate)) return [];
   return OFFER_RULES[marketplace].counter
     ? ['accept', 'decline', 'counter']
     : ['accept', 'decline'];
@@ -210,10 +217,11 @@ export async function requestOfferAnswer(
         `Listora only reads this ${name} account, so it can't answer its offers. Answer this one in ${name}.`,
       );
     }
-    if (offerActions(offer.marketplace).length === 0) {
+    const answers = offerActions(offer.marketplace, await loadFeatureGate(trx, input.accountId));
+    if (answers.length === 0) {
       throw new OfferAnswerRefusedError('unavailable', `Answer this offer in ${name}.`);
     }
-    if (!offerActions(offer.marketplace).includes(input.action)) {
+    if (!answers.includes(input.action)) {
       throw new OfferAnswerRefusedError('invalid', `${name} doesn't take that answer to offers.`);
     }
     let counterCents: number | null = null;
@@ -421,13 +429,13 @@ export async function recordOfferAnswer(
   const attempts = prepared.attempts + 1;
   const { outcome, read } = step;
   const status = await inTransaction(db, async (trx): Promise<OfferResponseStatus> => {
-    const update = (values: {
+    const update = async (values: {
       status: OfferResponseStatus;
       sent?: boolean;
       error?: { code: string; message: string; retryable: boolean };
       evidence?: true;
-    }) =>
-      trx
+    }) => {
+      await trx
         .updateTable('offer_response')
         .set({
           status: values.status,
@@ -449,6 +457,19 @@ export async function recordOfferAnswer(
         .where('id', '=', prepared.responseId)
         .where('status', 'in', OPEN)
         .execute();
+      // A settled answer in Test mode (docs/features/test-mode.md) goes in the owner's log.
+      if (values.status === 'succeeded' || values.status === 'failed') {
+        await recordFeatureTestRun(trx, {
+          accountId: prepared.accountId,
+          marketplace: prepared.marketplace,
+          feature: 'offer_answers',
+          outcome: values.status === 'succeeded' ? 'passed' : 'failed',
+          subjectId: prepared.responseId,
+          errorCode: values.error?.code ?? null,
+          detail: values.error?.message ?? null,
+        });
+      }
+    };
     const target = {
       accountId: prepared.accountId,
       connectionId: prepared.connectionId,

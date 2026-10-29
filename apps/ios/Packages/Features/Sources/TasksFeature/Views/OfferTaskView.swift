@@ -12,6 +12,9 @@ struct OfferTaskView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
             OfferTag(offer: model.offer, marketplaceName: model.marketplaceName)
+            if model.isTesting {
+                TestingTag()
+            }
             if let response = model.response {
                 ResponseStatus(response: response, marketplaceName: model.marketplaceName)
             } else {

@@ -20,6 +20,7 @@ import {
   scheduleSaleCheck,
 } from '@listora/automation';
 import { inTransaction, lockConnections, type DbExecutor, type Marketplace } from '@listora/db';
+import { loadFeatureGate, type FeatureGate } from '@listora/marketplaces';
 import { ImportRefusedError, importsFrom, startListingImport } from '@listora/imports';
 
 /** A marketplace synced this recently is not read again (its sales, its offers). */
@@ -31,19 +32,25 @@ interface SyncConnection {
   id: string;
   marketplace: Marketplace;
   readOnly: boolean;
+  /** The reads shown on its marketplace (`syncReads`). */
+  reads: ReturnType<typeof syncReads>;
 }
 
-/** What a sync reads of a marketplace: only the reads shown there (verified-features.md). */
-function syncReads(marketplace: Marketplace) {
+/**
+ * What a sync reads of a marketplace: only the reads shown there (verified-features.md), every
+ * built one in the account's Test mode (test-mode.md).
+ */
+function syncReads(marketplace: Marketplace, gate: FeatureGate) {
   return {
-    sales: checksSales(marketplace),
-    offers: readsOffers(marketplace),
-    listings: importsFrom(marketplace),
+    sales: checksSales(marketplace, gate),
+    offers: readsOffers(marketplace, gate),
+    listings: importsFrom(marketplace, gate),
   };
 }
 
 /** The connections a sync reads: linked by signing in, working, and with a read shown. */
 async function syncConnections(db: DbExecutor, accountId: string): Promise<SyncConnection[]> {
+  const gate = await loadFeatureGate(db, accountId);
   const rows = await db
     .selectFrom('marketplace_connection')
     .select(['id', 'marketplace', 'read_only'])
@@ -53,8 +60,13 @@ async function syncConnections(db: DbExecutor, accountId: string): Promise<SyncC
     .orderBy('marketplace')
     .execute();
   return rows
-    .filter((row) => Object.values(syncReads(row.marketplace)).some(Boolean))
-    .map((row) => ({ id: row.id, marketplace: row.marketplace, readOnly: row.read_only }));
+    .map((row) => ({
+      id: row.id,
+      marketplace: row.marketplace,
+      readOnly: row.read_only,
+      reads: syncReads(row.marketplace, gate),
+    }))
+    .filter((connection) => Object.values(connection.reads).some(Boolean));
 }
 
 /** Asks for the read-only checks of every linked marketplace not synced in the last minutes. */
@@ -70,8 +82,8 @@ export async function requestSync(
       connectionId: connection.id,
       marketplace: connection.marketplace,
     };
-    if (checksSales(connection.marketplace)) await syncSales(db, check, gapMs);
-    if (importsFrom(connection.marketplace)) await syncListings(db, check, listingGapMs);
+    if (connection.reads.sales) await syncSales(db, check, gapMs);
+    if (connection.reads.listings) await syncListings(db, check, listingGapMs);
   }
   await requestOfferChecks(db, { accountId: request.accountId, minGapMs: gapMs });
 }
@@ -180,7 +192,7 @@ export async function syncStatus(db: DbExecutor, accountId: string): Promise<Syn
   return connections.map((connection) => {
     const id = connection.id;
     // Only the reads shown on this marketplace: a hidden one's records say nothing here.
-    const shown = syncReads(connection.marketplace);
+    const shown = connection.reads;
     const run = shown.sales ? lastRuns.find((row) => row.connection_id === id) : undefined;
     const offer = shown.offers ? offers.find((row) => row.connection_id === id) : undefined;
     const listings = shown.listings ? imports.find((row) => row.connection_id === id) : undefined;

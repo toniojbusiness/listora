@@ -328,14 +328,24 @@ export { AdapterRegistryError, createAdapterRegistry } from './registry.ts';
 export type { AdapterRegistry } from './registry.ts';
 export {
   FEATURE_REQUIRES,
+  featuresOn,
+  isFeatureInTesting,
+  isFeatureOn,
   isFeatureVerified,
   loadMarketplaceFeatures,
   MARKETPLACE_FEATURE_SETS,
   MARKETPLACE_FEATURES,
   MarketplaceFeaturesConfigError,
   marketplacesWith,
+  SELLER_FEATURES,
   useMarketplaceFeatures,
   VERIFIED_FEATURES,
-  verifiedFeatures,
 } from './features.ts';
-export type { FeatureEvidence, MarketplaceFeature, MarketplaceFeatureSet } from './features.ts';
+export type {
+  FeatureEvidence,
+  FeatureGate,
+  MarketplaceFeature,
+  MarketplaceFeatureSet,
+} from './features.ts';
+export { loadFeatureGate, recordFeatureTestRun, testModeAccountIds } from './test-mode.ts';
+export type { FeatureTestRun } from './test-mode.ts';

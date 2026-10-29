@@ -307,6 +307,8 @@ paths:
     $ref: './paths/sync.yaml#/~1v1~1sync'
   /v1/marketplace-features:
     $ref: './paths/marketplace-features.yaml#/~1v1~1marketplace-features'
+  /v1/marketplace-features/test-mode:
+    $ref: './paths/marketplace-features.yaml#/~1v1~1marketplace-features~1test-mode'
 
 components:
   securitySchemes:
@@ -1220,3 +1222,7 @@ components:
       $ref: './components/schemas/marketplace-features.yaml#/MarketplaceFeatures'
     MarketplaceFeatureList:
       $ref: './components/schemas/marketplace-features.yaml#/MarketplaceFeatureList'
+    TestMode:
+      $ref: './components/schemas/marketplace-features.yaml#/TestMode'
+    TestModeReplace:
+      $ref: './components/schemas/marketplace-features.yaml#/TestModeReplace'

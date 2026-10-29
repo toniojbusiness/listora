@@ -12,7 +12,16 @@ import { createMigratedDatabase, type MigratedDatabase } from './test-support.ts
  * it with the live schema, so the hand-maintained types cannot drift from the migrations.
  */
 const COLUMNS = {
-  account: ['id', 'name', 'sku_prefix', 'created_at', 'updated_at', 'business_name', 'invited_at'],
+  account: [
+    'id',
+    'name',
+    'sku_prefix',
+    'created_at',
+    'updated_at',
+    'business_name',
+    'invited_at',
+    'test_mode',
+  ],
   app_user: [
     'id',
     'auth_provider',
@@ -714,6 +723,17 @@ const COLUMNS = {
     'updated_at',
   ],
   description_style: ['account_id', 'depop', 'created_at', 'updated_at'],
+  feature_test_run: [
+    'id',
+    'account_id',
+    'marketplace',
+    'feature',
+    'outcome',
+    'subject_id',
+    'error_code',
+    'detail',
+    'created_at',
+  ],
   haul: [
     'id',
     'account_id',

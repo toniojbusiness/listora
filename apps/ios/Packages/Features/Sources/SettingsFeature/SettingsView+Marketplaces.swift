@@ -50,7 +50,11 @@ extension SettingsView {
                             "Listing refresh",
                             subtitle: "Keep listings that haven't sold fresh on each marketplace",
                             systemImage: "arrow.clockwise",
-                        )
+                        ) {
+                            if features?.isTestingEverywhere(.listingRefresh) == true {
+                                TestingTag()
+                            }
+                        }
                     }
                     .accessibilityIdentifier("settings.listingRefresh")
                 }

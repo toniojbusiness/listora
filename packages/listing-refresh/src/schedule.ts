@@ -10,7 +10,7 @@ import type {
   Marketplace,
   RefreshCadence,
 } from '@listora/db';
-import { marketplacesWith } from '@listora/marketplaces';
+import { marketplacesWith, type FeatureGate } from '@listora/marketplaces';
 import { sql } from 'kysely';
 
 import {
@@ -32,12 +32,13 @@ import { itemCadence } from './settings.ts';
 export const REFRESH_MARKETPLACES: readonly Marketplace[] = ['poshmark', 'mercari', 'depop'];
 
 /**
- * The marketplaces whose listings Listora refreshes for sellers: those of `REFRESH_MARKETPLACES`
- * whose refresh passed live (docs/features/verified-features.md). The others show no refresh
+ * The marketplaces whose listings Listora refreshes for the account: those of
+ * `REFRESH_MARKETPLACES` whose refresh passed live (docs/features/verified-features.md), or all
+ * of them in the account's Test mode (docs/features/test-mode.md). The others show no refresh
  * and get none queued.
  */
-export function refreshMarketplaces(): Marketplace[] {
-  return marketplacesWith('listing_refresh', REFRESH_MARKETPLACES);
+export function refreshMarketplaces(gate: FeatureGate): Marketplace[] {
+  return marketplacesWith('listing_refresh', REFRESH_MARKETPLACES, gate);
 }
 
 /** The operation kinds whose confirmed change leaves a listing fresh. */
@@ -63,6 +64,8 @@ export interface RefreshFact {
   itemCadence: Cadence | null;
   /** An operation on it is not finished yet, so a refresh would only wait behind it. */
   busy: boolean;
+  /** Its account is in Test mode (docs/features/test-mode.md). */
+  testMode: boolean;
 }
 
 /** A listing's refresh, as it shows on the item screen. */
@@ -75,10 +78,12 @@ export type ListingRefresh =
   | { state: 'unavailable'; lastAt: Date | null };
 
 /** Whether Listora can refresh the listing under its connection now. */
-export function canRefresh(fact: Pick<RefreshFact, 'marketplace' | 'connection'>): boolean {
+export function canRefresh(
+  fact: Pick<RefreshFact, 'marketplace' | 'connection' | 'testMode'>,
+): boolean {
   const { connection } = fact;
   return (
-    refreshMarketplaces().includes(fact.marketplace) &&
+    refreshMarketplaces({ testMode: fact.testMode }).includes(fact.marketplace) &&
     connection !== null &&
     // A read-only connection (a real shop that must not change, read-only.md) gets no refresh.
     !connection.readOnly &&
@@ -124,6 +129,7 @@ export async function loadRefreshFacts(
     last_fresh_at: Date | null;
     last_refreshed_at: Date | null;
     busy: boolean;
+    test_mode: boolean;
   }>`
     select listing.id, listing.item_id, listing.marketplace, listing.listed_at,
       listing.connection_id, connection.mode, connection.status, connection.read_only,
@@ -143,8 +149,10 @@ export async function loadRefreshFacts(
         select 1 from marketplace_operation op
         where op.account_id = ${accountId} and op.listing_id = listing.id
           and op.status in ${UNFINISHED}
-      ) as busy
+      ) as busy,
+      account.test_mode
     from marketplace_listing listing
+    join account on account.id = listing.account_id
     join inventory_item item on item.account_id = listing.account_id and item.id = listing.item_id
     left join marketplace_connection connection
       on connection.account_id = listing.account_id and connection.id = listing.connection_id
@@ -176,5 +184,6 @@ export async function loadRefreshFacts(
     lastRefreshedAt: row.last_refreshed_at,
     itemCadence: itemCadence(row),
     busy: row.busy,
+    testMode: row.test_mode,
   }));
 }

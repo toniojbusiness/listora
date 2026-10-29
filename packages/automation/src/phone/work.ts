@@ -42,7 +42,8 @@ import {
 } from '@listora/db';
 import type { SessionVault } from '@listora/connections';
 import {
-  isFeatureVerified,
+  isFeatureOn,
+  loadFeatureGate,
   MARKETPLACE_NAMES,
   type AdapterLookup,
   type ConnectionRef,
@@ -668,7 +669,7 @@ async function claimStepState(
   if (
     feature !== null &&
     feature !== 'offer_answers' &&
-    !isFeatureVerified(work.marketplace, feature)
+    !isFeatureOn(work.marketplace, feature, await loadFeatureGate(trx, work.account_id))
   ) {
     return null;
   }
@@ -770,7 +771,10 @@ async function claimStepState(
         await refuseOfferAnswer(trx, prepared);
         return null;
       }
-      if (!prepared.sent && !isFeatureVerified(work.marketplace, 'offer_answers')) {
+      if (
+        !prepared.sent &&
+        !isFeatureOn(work.marketplace, 'offer_answers', await loadFeatureGate(trx, work.account_id))
+      ) {
         // Never sent where answers haven't passed live: the seller answers in the marketplace.
         await refuseOfferAnswer(trx, prepared, 'unavailable');
         return null;

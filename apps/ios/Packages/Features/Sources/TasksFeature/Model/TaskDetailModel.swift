@@ -49,12 +49,15 @@ final class TaskDetailModel {
         pasteboard: any Pasteboard,
         photoSaver: any PhotoSaving,
         offers: (any OffersService)? = nil,
+        offerIsTesting: Bool = false,
         runPhoneWork: @escaping @MainActor () -> Void = {},
     ) {
         self.task = task
         presentation = TaskPresentation(task)
         offer = task.offer.flatMap { offer in
-            offers.map { OfferModel(offer: offer, service: $0, runPhoneWork: runPhoneWork) }
+            offers.map {
+                OfferModel(offer: offer, service: $0, isTesting: offerIsTesting, runPhoneWork: runPhoneWork)
+            }
         }
         self.service = service
         self.pasteboard = pasteboard

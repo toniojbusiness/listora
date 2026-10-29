@@ -17,6 +17,7 @@ import { assertNever, type Logger } from '@listora/shared';
 
 import { runActivityCommand } from './activity.ts';
 import { USAGE, type Command } from './args.ts';
+import { runFeatureTestsCommand } from './feature-tests.ts';
 import { runReadHealthCommand } from './read-health.ts';
 import {
   describePeriod,
@@ -411,6 +412,10 @@ export async function runCommand(command: Command, context: CommandContext): Pro
 
     case 'read-health':
       await runReadHealthCommand(command, context);
+      return;
+
+    case 'feature-tests':
+      await runFeatureTestsCommand(command, context);
       return;
 
     default:

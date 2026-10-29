@@ -11,6 +11,7 @@ struct ItemDetailView: View {
     @State private var model: ItemDetailModel
     @State private var listingFlow: ListingFlowModel?
     @State private var priceChange: PriceChange?
+    @State private var revision: ListingRevision?
     @State private var markingSold: MarkSoldRequest?
     @State private var openSale: SaleLink?
     @State private var openTask: OpenTask?
@@ -116,6 +117,18 @@ struct ItemDetailView: View {
             .sheet(isPresented: $editingSize) {
                 SizeEditorView(current: model.item?.details.sizeLabel) { size in
                     await model.saveSize(size)
+                }
+            }
+            .sheet(item: $revision) { revision in
+                ReviseListingView(revision: revision) { variant in
+                    Haptics.play(.tap)
+                    self.revision = nil
+                    Task {
+                        await model.perform(
+                            .revise(listingID: revision.listingID, variant: variant),
+                            marketplace: revision.marketplace,
+                        )
+                    }
                 }
             }
             .sheet(item: $priceChange) { change in
@@ -278,14 +291,8 @@ extension ItemDetailView {
         case .list:
             guard let item = model.item else { return }
             listingFlow = environment.makeListingFlow(item: item, marketplace: row.id)
-        case .changePrice:
-            guard let listing = row.listing else { return }
-            priceChange = PriceChange(
-                listingID: listing.id,
-                marketplace: row.id,
-                name: row.name,
-                current: listing.variant?.price,
-            )
+        case .changePrice, .revise:
+            openChange(action, of: row)
         case .end:
             // The End button confirms on its card first, then calls `end(_:reason:)`.
             break
@@ -302,6 +309,29 @@ extension ItemDetailView {
         case let .openTask(operationID):
             openTask = OpenTask(operationID: operationID)
         }
+    }
+
+    /// Change price, or Edit listing (tagged Testing in the owner's Test mode), for the row's live
+    /// listing.
+    private func openChange(_ action: MarketplaceRowState.Action, of row: MarketplaceRowState) {
+        guard let listing = row.listing else { return }
+        if action == .changePrice {
+            priceChange = PriceChange(
+                listingID: listing.id,
+                marketplace: row.id,
+                name: row.name,
+                current: listing.variant?.price,
+            )
+            return
+        }
+        guard let variant = listing.variant else { return }
+        revision = ListingRevision(
+            listingID: listing.id,
+            marketplace: row.id,
+            name: row.name,
+            current: variant,
+            testing: environment.features?.isTesting(.revise, on: row.id) == true,
+        )
     }
 
     /// The same change on each row's listing at once (Relist all, End all).
@@ -329,6 +359,9 @@ extension ItemDetailView {
             events: model.events,
             busyMarketplace: model.busyMarketplace,
             phoneProgress: environment.phoneProgress?.progress ?? [],
+            isTesting: { action, marketplace in
+                action == .revise && environment.features?.isTesting(.revise, on: marketplace) == true
+            },
             perform: perform,
             end: { reason, row in end(row, reason: reason) },
             relistAll: { rows in performAll(rows) { .relist(listingID: $0) } },
@@ -341,15 +374,22 @@ extension ItemDetailView {
 
     /// The item's own refresh cadence, once it is live on a marketplace whose refresh passed live
     /// (listing-refresh.md, verified-features.md).
+    /// In the owner's Test mode it is tagged Testing where refresh shows only for the test.
     @ViewBuilder
     private func refreshSection(for item: Item) -> some View {
-        if let service = environment.refreshService, let features = environment.features,
-           item.listings.contains(where: { listing in
-               let marketplace = listing.marketplace.value1?.rawValue ?? listing.marketplace.value2 ?? ""
-               return listing.status.value1 == .active && features.shows(.listingRefresh, on: marketplace)
-           })
-        {
-            ItemRefreshSection(itemID: item.id, service: service)
+        let refreshed = environment.features.map { features in
+            item.listings.compactMap { listing -> String? in
+                let marketplace = listing.marketplace.value1?.rawValue ?? listing.marketplace.value2 ?? ""
+                return listing.status.value1 == .active && features.shows(.listingRefresh, on: marketplace)
+                    ? marketplace : nil
+            }
+        } ?? []
+        if let service = environment.refreshService, let features = environment.features, !refreshed.isEmpty {
+            ItemRefreshSection(
+                itemID: item.id,
+                service: service,
+                testing: refreshed.allSatisfy { features.isTesting(.listingRefresh, on: $0) },
+            )
         }
     }
 }

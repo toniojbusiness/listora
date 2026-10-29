@@ -70,6 +70,8 @@ public struct SettingsView: View {
     /// Settings > Description style: how Listora's AI writes the seller's Depop drafts.
     let descriptionStyle: DescriptionStyleModel?
     let screens: SettingsScreens
+    /// What shows of each marketplace, and the owner's Test mode (docs/features/test-mode.md).
+    let features: MarketplaceFeatures?
     /// The marketplaces' health, on the Linked marketplaces row.
     let marketplacesSummary: SettingsSummary?
     /// The sale email forwarding's status, on the Sale emails row.
@@ -87,6 +89,7 @@ public struct SettingsView: View {
         invites: InvitesModel? = nil,
         descriptionStyle: DescriptionStyleModel? = nil,
         screens: SettingsScreens = SettingsScreens(),
+        features: MarketplaceFeatures? = nil,
         marketplacesSummary: SettingsSummary? = nil,
         saleEmailsSummary: SettingsSummary? = nil,
         legalDocument: @escaping @MainActor (LegalDocument.Kind) -> LegalDocument? = { LegalDocument.bundled($0) },
@@ -100,6 +103,7 @@ public struct SettingsView: View {
         self.invites = invites
         self.descriptionStyle = descriptionStyle
         self.screens = screens
+        self.features = features
         self.marketplacesSummary = marketplacesSummary
         self.saleEmailsSummary = saleEmailsSummary
         self.legalDocument = legalDocument
@@ -114,6 +118,7 @@ public struct SettingsView: View {
                 marketplacesSection
                 sellingSection
                 peopleSection
+                testModeSection
                 supportSection
                 accountSection
                 versionFooter

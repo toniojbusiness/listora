@@ -32,7 +32,8 @@ extension BulkActionModelTests {
             "AJ-1 item done: Removed from Listora. Its listings stay up.",
             "AJ-2 item done: Deleted.",
         ])
-        #expect(service.calls.filter { $0.hasPrefix("delete") } == [
+        // The items run side by side, so their deletes arrive in either order.
+        #expect(service.calls.filter { $0.hasPrefix("delete") }.sorted() == [
             "delete:a:leavingListings",
             "delete:b:leavingListings",
         ])

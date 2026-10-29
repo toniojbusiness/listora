@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import Foundation
 import SwiftUI
 
@@ -15,6 +16,9 @@ public final class TasksEnvironment {
     let runPhoneWork: @MainActor () -> Void
     /// Opens the sign-in, for a signed-out screen's Sign in button.
     let onSignIn: @MainActor () -> Void
+    /// What shows of each marketplace: an offer whose reads or answers show only because of the
+    /// owner's Test mode is tagged Testing (docs/features/test-mode.md).
+    public var features: MarketplaceFeatures?
 
     public convenience init(
         apiClient: APIClient,
@@ -67,9 +71,14 @@ public final class TasksEnvironment {
     }
 
     func makeDetailModel(task: UserTask) -> TaskDetailModel {
-        TaskDetailModel(
+        let marketplace = task.offer.map { $0.marketplace.value1?.rawValue ?? $0.marketplace.value2 ?? "" }
+        let testing = marketplace.map { marketplace in
+            features?.isTesting(.offers, on: marketplace) == true
+                || features?.isTesting(.offerAnswers, on: marketplace) == true
+        } ?? false
+        return TaskDetailModel(
             task: task, service: service, pasteboard: pasteboard, photoSaver: photoSaver,
-            offers: offers, runPhoneWork: runPhoneWork,
+            offers: offers, offerIsTesting: testing, runPhoneWork: runPhoneWork,
         )
     }
 

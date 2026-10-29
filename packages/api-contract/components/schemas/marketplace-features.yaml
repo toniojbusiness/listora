@@ -25,7 +25,17 @@ MarketplaceFeatures:
     features:
       type: array
       maxItems: 20
-      description: The features of this marketplace that passed a live end-to-end test.
+      description: |
+        The features of this marketplace the account is shown: those that passed a live
+        end-to-end test, or in Test mode every built one.
+      items:
+        $ref: '#/MarketplaceFeature'
+    testing:
+      type: array
+      maxItems: 20
+      description: |
+        In Test mode only: the features of `features` on only for the test (not verified). The
+        app tags each "Testing".
       items:
         $ref: '#/MarketplaceFeature'
 MarketplaceFeatureList:
@@ -37,3 +47,21 @@ MarketplaceFeatureList:
       maxItems: 20
       items:
         $ref: '#/MarketplaceFeatures'
+    testMode:
+      $ref: '#/TestMode'
+TestMode:
+  type: object
+  description: |
+    Test mode (docs/features/test-mode.md), present only for an account that may turn it on:
+    the owner or an admin of the deployment owner's account. Off until turned on.
+  required: [on]
+  properties:
+    on:
+      type: boolean
+TestModeReplace:
+  type: object
+  additionalProperties: false
+  required: [on]
+  properties:
+    on:
+      type: boolean

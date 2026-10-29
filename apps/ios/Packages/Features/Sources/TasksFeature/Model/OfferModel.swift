@@ -40,9 +40,19 @@ final class OfferModel {
     private var answerKey = UUID().uuidString
     private var keyFor: Confirmation?
 
-    init(offer: Offer, service: any OffersService, runPhoneWork: @escaping @MainActor () -> Void = {}) {
+    /// The offer's reads or answers show only because of the owner's Test mode
+    /// (docs/features/test-mode.md): the screen tags it Testing.
+    let isTesting: Bool
+
+    init(
+        offer: Offer,
+        service: any OffersService,
+        isTesting: Bool = false,
+        runPhoneWork: @escaping @MainActor () -> Void = {},
+    ) {
         self.offer = offer
         self.service = service
+        self.isTesting = isTesting
         self.runPhoneWork = runPhoneWork
     }
 

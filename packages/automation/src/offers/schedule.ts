@@ -14,24 +14,32 @@ import { sql } from 'kysely';
 
 import { inTransaction, type DbExecutor, type Marketplace } from '@listora/db';
 import {
-  isFeatureVerified,
+  isFeatureOn,
   isOfferMarketplace,
+  loadFeatureGate,
   marketplacesWith,
   OFFER_RULES,
+  type FeatureGate,
   type OfferMarketplace,
 } from '@listora/marketplaces';
 
 /** The marketplaces whose offers Listora can read (built; see `offerMarketplaces`). */
 export const OFFER_MARKETPLACES = Object.keys(OFFER_RULES) as OfferMarketplace[];
 
-/** The marketplaces whose offers Listora reads and shows: built, and verified live. */
-export function offerMarketplaces(): OfferMarketplace[] {
-  return marketplacesWith('offers', OFFER_MARKETPLACES);
+/**
+ * The marketplaces whose offers Listora reads and shows the account: built, and verified live
+ * (or the account is in Test mode, docs/features/test-mode.md).
+ */
+export function offerMarketplaces(gate: FeatureGate): OfferMarketplace[] {
+  return marketplacesWith('offers', OFFER_MARKETPLACES, gate);
 }
 
-/** Whether Listora reads and shows the marketplace's offers. */
-export function readsOffers(marketplace: Marketplace): marketplace is OfferMarketplace {
-  return isOfferMarketplace(marketplace) && isFeatureVerified(marketplace, 'offers');
+/** Whether Listora reads and shows the account the marketplace's offers. */
+export function readsOffers(
+  marketplace: Marketplace,
+  gate: FeatureGate,
+): marketplace is OfferMarketplace {
+  return isOfferMarketplace(marketplace) && isFeatureOn(marketplace, 'offers', gate);
 }
 
 /** The least time between two reads the seller asks for (opening Tasks; a sync asks sooner). */
@@ -56,7 +64,9 @@ export async function queueOfferCheck(
   executor: DbExecutor,
   target: OfferCheckTarget,
 ): Promise<boolean> {
-  if (!readsOffers(target.marketplace)) return false;
+  if (!readsOffers(target.marketplace, await loadFeatureGate(executor, target.accountId))) {
+    return false;
+  }
   return inTransaction(executor, async (trx) => {
     // Locked before its offer check and work (`lockConnections`).
     const connection = await trx
@@ -112,7 +122,7 @@ export async function requestOfferChecks(
   request: { accountId: string; minGapMs?: number },
 ): Promise<Marketplace[]> {
   const gapMs = request.minGapMs ?? OFFER_CHECK_MIN_GAP_MS;
-  const marketplaces = offerMarketplaces();
+  const marketplaces = offerMarketplaces(await loadFeatureGate(executor, request.accountId));
   if (marketplaces.length === 0) return [];
   const connections = await executor
     .selectFrom('marketplace_connection as connection')

@@ -8,7 +8,9 @@
       (docs/features/verified-features.md). The app shows a feature of a marketplace (its
       screens, rows, buttons, empty states, and errors) only when it is in that marketplace's
       `features`; anything else is hidden, and the server never queues its checks either. The
-      same for every account.
+      same for every account, except the deployment owner's in Test mode
+      (docs/features/test-mode.md): it gets every built feature, and `testing` names the ones
+      on only for the test. `testMode` is present only for an account that may turn it on.
     responses:
       '200':
         description: Every marketplace, each with its verified features.
@@ -16,5 +18,35 @@
           application/json:
             schema:
               $ref: '../components/schemas/marketplace-features.yaml#/MarketplaceFeatureList'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/marketplace-features/test-mode:
+  put:
+    tags: [marketplace-features]
+    operationId: setTestMode
+    summary: Turn Test mode on or off
+    description: |
+      Test mode (docs/features/test-mode.md) gives the deployment owner's account every
+      marketplace feature that is built but has not passed live, to live-test it; each run of one
+      is recorded in the owner's log. Only the owner or an admin of the owner's account may turn
+      it on; for any other account Test mode does not exist (`404`). A read-only connection stays
+      read-only in Test mode.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/marketplace-features.yaml#/TestModeReplace'
+    responses:
+      '200':
+        description: Every marketplace's features under the saved setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/marketplace-features.yaml#/MarketplaceFeatureList'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
       default:
         $ref: '../components/responses.yaml#/DefaultError'

@@ -17,8 +17,10 @@ import {
   type DbTransaction,
   type JsonObject,
   type MarketplaceOperationTable,
+  type OperationKind,
   type OperationStatus,
 } from '@listora/db';
+import { recordFeatureTestRun, type MarketplaceFeature } from '@listora/marketplaces';
 import { assertNever, redactForStorage } from '@listora/shared';
 
 import type { SuccessProof } from './evidence.ts';
@@ -110,7 +112,39 @@ export async function transitionOperation(
     });
   }
   if (isSettled(updated.status)) await wakeNextOperation(trx, updated);
+  await recordOperationTest(trx, updated);
   return updated;
+}
+
+/** The operations whose feature is shown only once it passed live (verified-features.md). */
+const OPERATION_FEATURES: Partial<Record<OperationKind, MarketplaceFeature>> = {
+  revise: 'revise',
+  refresh: 'listing_refresh',
+};
+
+/**
+ * A finished operation of a feature on only for Test mode goes in the owner's log
+ * (docs/features/test-mode.md): passed with its read-back, or failed with its error.
+ */
+async function recordOperationTest(trx: DbTransaction, op: OperationRow): Promise<void> {
+  const feature = OPERATION_FEATURES[op.kind];
+  if (feature === undefined || (op.status !== 'succeeded' && op.status !== 'failed')) return;
+  const listing = await trx
+    .selectFrom('marketplace_listing')
+    .select('marketplace')
+    .where('account_id', '=', op.account_id)
+    .where('id', '=', op.listing_id)
+    .executeTakeFirst();
+  if (listing === undefined) return;
+  await recordFeatureTestRun(trx, {
+    accountId: op.account_id,
+    marketplace: listing.marketplace,
+    feature,
+    outcome: op.status === 'succeeded' ? 'passed' : 'failed',
+    subjectId: op.id,
+    errorCode: op.error_code,
+    detail: op.error_message,
+  });
 }
 
 /**

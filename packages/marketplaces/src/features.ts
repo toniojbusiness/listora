@@ -105,22 +105,54 @@ export function useMarketplaceFeatures(set: MarketplaceFeatureSet): void {
   featureSet = set;
 }
 
-/** Whether the seller is shown the feature on the marketplace (and its checks run). */
+/** Whether the feature passed live on the marketplace (or this process runs `all`). */
 export function isFeatureVerified(marketplace: Marketplace, feature: MarketplaceFeature): boolean {
   return featureSet === 'all' || Object.hasOwn(VERIFIED_FEATURES[marketplace], feature);
 }
 
-/** The marketplace's verified features, in `MARKETPLACE_FEATURES` order. */
-export function verifiedFeatures(marketplace: Marketplace): MarketplaceFeature[] {
-  return MARKETPLACE_FEATURES.filter((feature) => isFeatureVerified(marketplace, feature));
+/**
+ * Whose features: what one account is shown and runs. A seller gets the verified features; the
+ * deployment owner's account in Test mode (docs/features/test-mode.md) gets every built one, to
+ * live-test them. Every gate takes one, loaded with `loadFeatureGate` for the account at hand.
+ */
+export interface FeatureGate {
+  /** The account is in Test mode. */
+  readonly testMode: boolean;
 }
 
-/** The marketplaces of `among` whose `feature` is verified. */
+/** The gate of an account not in Test mode: every customer's. */
+export const SELLER_FEATURES: FeatureGate = { testMode: false };
+
+/** Whether the account is shown the feature on the marketplace (and its checks run). */
+export function isFeatureOn(
+  marketplace: Marketplace,
+  feature: MarketplaceFeature,
+  gate: FeatureGate,
+): boolean {
+  return gate.testMode || isFeatureVerified(marketplace, feature);
+}
+
+/** Whether the feature is on only because of Test mode: the app tags it "Testing". */
+export function isFeatureInTesting(
+  marketplace: Marketplace,
+  feature: MarketplaceFeature,
+  gate: FeatureGate,
+): boolean {
+  return gate.testMode && !isFeatureVerified(marketplace, feature);
+}
+
+/** The marketplace's features on for the account, in `MARKETPLACE_FEATURES` order. */
+export function featuresOn(marketplace: Marketplace, gate: FeatureGate): MarketplaceFeature[] {
+  return MARKETPLACE_FEATURES.filter((feature) => isFeatureOn(marketplace, feature, gate));
+}
+
+/** The marketplaces of `among` whose `feature` is on for the account. */
 export function marketplacesWith<M extends Marketplace>(
   feature: MarketplaceFeature,
   among: readonly M[],
+  gate: FeatureGate,
 ): M[] {
-  return among.filter((marketplace) => isFeatureVerified(marketplace, feature));
+  return among.filter((marketplace) => isFeatureOn(marketplace, feature, gate));
 }
 
 export class MarketplaceFeaturesConfigError extends Error {

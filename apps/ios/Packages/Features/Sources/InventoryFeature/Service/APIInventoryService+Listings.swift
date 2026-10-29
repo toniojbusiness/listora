@@ -65,6 +65,8 @@ extension APIInventoryService {
         case let .publish(listingID): try await publish(listingID: listingID, key: key)
         case let .changePrice(listingID, price):
             try await changePrice(listingID: listingID, price: price, key: key)
+        case let .revise(listingID, variant):
+            try await revise(listingID: listingID, variant: variant, key: key)
         case let .end(listingID, reason): try await end(listingID: listingID, reason: reason, key: key)
         case let .relist(listingID): try await relist(listingID: listingID, key: key)
         case let .verify(listingID): try await verify(listingID: listingID, key: key)

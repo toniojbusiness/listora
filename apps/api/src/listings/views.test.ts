@@ -30,6 +30,7 @@ function row(overrides: Partial<ListingRow> = {}): ListingRow {
     connection_status: null,
     read_only: false,
     item_status: 'listed',
+    test_mode: false,
     status: 'active',
     external_listing_id: null,
     external_sku: null,
@@ -233,6 +234,10 @@ describe('listing views', () => {
       { action: 'verify', mode: 'api' },
     ]);
     expect(view(row({ ...api, status: 'draft' })).availableActions).toEqual([]);
+    // Test mode (test-mode.md) turns on hidden features, never a write on a read-only connection.
+    expect(view(row({ ...api, status: 'active', test_mode: true })).availableActions).toEqual([
+      { action: 'verify', mode: 'api' },
+    ]);
     // An assisted listing can't be checked, so it offers nothing at all.
     expect(
       view(row({ marketplace: 'poshmark', status: 'active', read_only: true })).availableActions,
