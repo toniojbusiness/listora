@@ -237,6 +237,7 @@ src/
                  redemption an invitee signs up with (docs/features/invites.md)
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
+  rate-limits.ts Request limits per source address and per account (429 before any work)
   items/ photos/ One folder per resource: routes.ts, feature.ts, repository.ts, mapping and views
   analyses/      Start, get, escalate, and apply analyses; the guard pre-check
   batches/       Batches of items photographed in one session: items by position, submits, the
@@ -314,6 +315,11 @@ src/
   the Idempotency-Key, so the table never holds a readable response (an invite's code). Each
   stored response also deletes up to 100 expired records (any account, oldest first, skipping
   rows another request holds), so the table stays about one retention period in size.
+- **Request limits.** Every request but the health checks counts against its source address, a
+  request no sign-in protects also against a smaller public budget, and a signed-in one against
+  its account (`rate-limits.ts`, `API_RATE_LIMIT_*`); past a limit the answer is
+  `429 rate_limited` with `Retry-After`, before the body is read
+  ([security.md](features/security.md)).
 - **Errors and logs.** Every error is the contract's `ErrorResponse`; unexpected failures are
   a generic `500 internal_error` and only the log has details. Each request has an id (a
   sane incoming `X-Request-Id`, otherwise a UUID) that is in the response header, in

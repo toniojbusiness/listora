@@ -85,8 +85,10 @@ Imports are offered only from marketplaces whose imports passed live (Depop and 
      never make two items of one item.
 6. **Photos** (`photos.ts`): the server fetches each listing photo from the marketplace's own
    image CDN, https only (plain http only from a local fake marketplace in development), from a
-   host with public addresses only, no redirects, an image type, at most 15 MB, at most 16 per
-   listing; a PNG or WebP becomes a JPEG. Each is stored as an upload and processed by the photo
+   host with public addresses only, resolved once and connected to at the address that passed (so
+   a DNS answer that changes in between cannot reach a private address; the certificate is still
+   checked against the host), no redirects, an image type, at most 15 MB (the read stops there),
+   at most 4096 x 4096 pixels, at most 16 per listing; a PNG or WebP becomes a JPEG. Each is stored as an upload and processed by the photo
    pipeline like any other (derivatives, metadata stripped, the upload deleted); its perceptual
    hash is computed first for the match.
 7. **The item's details** (`details.ts`): the title (Depop: the first line without the hashtags

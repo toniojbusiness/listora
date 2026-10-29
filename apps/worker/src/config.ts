@@ -32,6 +32,11 @@ import {
   type EmailIngestConfig,
 } from '@listora/email-sales';
 import { loadPushConfig, PushConfigError, type PushConfig } from '@listora/push';
+import {
+  loadBuyerDataRetention,
+  RetentionConfigError,
+  type BuyerDataRetention,
+} from '@listora/retention';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -80,6 +85,11 @@ export interface WorkerConfig {
   emailIngest: EmailIngestConfig;
   /** OWNER_ALERT*, read by @listora/alerts: how failing background reads reach the owner. */
   ownerAlerts: OwnerAlertConfig;
+  /**
+   * BUYER_DATA_RETENTION, read by @listora/retention: whether the retention job clears buyers'
+   * names and tracking numbers (`off` by default: it only logs what it would clear).
+   */
+  buyerDataRetention: BuyerDataRetention;
 }
 
 export class ConfigError extends Error {
@@ -139,6 +149,9 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const runnerLaunch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
   const emailIngest = collect(issues, EmailIngestConfigError, () => loadEmailIngestConfig(env));
   const ownerAlerts = collect(issues, OwnerAlertConfigError, () => loadOwnerAlertConfig(env));
+  const buyerDataRetention = collect(issues, RetentionConfigError, () =>
+    loadBuyerDataRetention(env),
+  );
 
   if (
     issues.length > 0 ||
@@ -153,7 +166,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     automation === undefined ||
     runnerLaunch === undefined ||
     emailIngest === undefined ||
-    ownerAlerts === undefined
+    ownerAlerts === undefined ||
+    buyerDataRetention === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -176,6 +190,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     runnerLaunch,
     emailIngest,
     ownerAlerts,
+    buyerDataRetention,
   };
 }
 

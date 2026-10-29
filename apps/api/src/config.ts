@@ -21,6 +21,7 @@ import {
 import { assertNever, LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
+import { DEFAULT_RATE_LIMITS, type RateLimits } from './rate-limits.ts';
 import type { SignUpPolicy } from './tenancy.ts';
 
 /** Auth drivers this build can run (`AUTH_DRIVER`). */
@@ -96,6 +97,8 @@ export interface ApiConfig {
    * worker's, for the steps phones run (the API records their results).
    */
   operationRetryDelayScale: number;
+  /** API_RATE_LIMIT_*: requests per minute per source address and per account. */
+  rateLimits: RateLimits;
 }
 
 export class ConfigError extends Error {
@@ -178,8 +181,25 @@ const envSchema = z.object({
     .refine((value) => value >= 0.001 && value <= 1, {
       error: 'OPERATION_RETRY_DELAY_SCALE must be a number from 0.001 to 1',
     }),
+  API_RATE_LIMIT_PER_ADDRESS: perMinute('API_RATE_LIMIT_PER_ADDRESS'),
+  API_RATE_LIMIT_PUBLIC_PER_ADDRESS: perMinute('API_RATE_LIMIT_PUBLIC_PER_ADDRESS'),
+  API_RATE_LIMIT_PER_ACCOUNT: perMinute('API_RATE_LIMIT_PER_ACCOUNT'),
 });
 type Env = z.infer<typeof envSchema>;
+
+/** A request limit per minute: absent for the default, else an integer from 1 to 1,000,000. */
+function perMinute(key: string) {
+  return z
+    .string()
+    .optional()
+    .refine((value) => value === undefined || /^[1-9]\d{0,6}$/.test(value), {
+      error: `${key} must be an integer from 1 to 1000000 (requests per minute)`,
+    })
+    .transform((value) => (value === undefined ? undefined : Number(value)))
+    .refine((value) => value === undefined || value <= 1_000_000, {
+      error: `${key} must be an integer from 1 to 1000000 (requests per minute)`,
+    });
+}
 
 /** Keys only one auth driver reads, required when that driver is selected. */
 function authConfig(values: Env): AuthConfig | string[] {
@@ -283,5 +303,11 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     automation,
     emailIngest,
     operationRetryDelayScale: values.OPERATION_RETRY_DELAY_SCALE,
+    rateLimits: {
+      perAddress: values.API_RATE_LIMIT_PER_ADDRESS ?? DEFAULT_RATE_LIMITS.perAddress,
+      publicPerAddress:
+        values.API_RATE_LIMIT_PUBLIC_PER_ADDRESS ?? DEFAULT_RATE_LIMITS.publicPerAddress,
+      perAccount: values.API_RATE_LIMIT_PER_ACCOUNT ?? DEFAULT_RATE_LIMITS.perAccount,
+    },
   };
 }

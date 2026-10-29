@@ -394,6 +394,179 @@ describe('data retention job (real Postgres)', () => {
     expect(records.map((row) => row.id)).toEqual([recentRecord]);
   });
 
+  it("clears buyers' names and tracking numbers once a sale is done, and offers' buyers once closed, only when turned on", async () => {
+    const { accountId } = await account();
+    const sale = async (
+      status: 'confirmed' | 'shipped' | 'canceled' | 'returned',
+      at: Partial<Record<'shipped_at' | 'canceled_at' | 'returned_at', Date>>,
+    ) => {
+      const { id } = await db
+        .insertInto('sale')
+        .values({
+          account_id: accountId,
+          marketplace: 'depop',
+          sold_at: ago(200),
+          detection_source: 'manual',
+          status,
+          ...at,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const tracking = `9400${randomUUID().replaceAll('-', '').slice(0, 18).toUpperCase()}`;
+      await db
+        .insertInto('sale_label')
+        .values({
+          account_id: accountId,
+          sale_id: id,
+          tracking_number: tracking,
+          carrier: 'usps',
+          source: 'marketplace',
+          buyer_first_name: 'Jordan',
+        })
+        .execute();
+      await db
+        .insertInto('sale_pack')
+        .values({
+          account_id: accountId,
+          sale_id: id,
+          tracking_number: tracking,
+          matched_by: 'label',
+        })
+        .execute();
+      return id;
+    };
+    const days = RETENTION_DAYS.saleLabelBuyers;
+    const longShipped = await sale('shipped', { shipped_at: ago(days + 1) });
+    const longCanceled = await sale('canceled', { canceled_at: ago(days + 1) });
+    const justShipped = await sale('shipped', { shipped_at: ago(days - 1) });
+    // Shipped long ago, but returned since: the count starts again at the return.
+    const returnedSince = await sale('returned', {
+      shipped_at: ago(days + 30),
+      returned_at: ago(days - 1),
+    });
+    // Never done, however old: it may still be a package to send.
+    const open = await sale('confirmed', {});
+
+    const { id: connectionId } = await db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: accountId,
+        marketplace: 'poshmark',
+        mode: 'automation',
+        status: 'connected',
+        display_name: 'closet_queen',
+        token_ciphertext: Buffer.from('sealed'),
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const offer = async (status: 'pending' | 'accepted' | 'closed', closedAt: Date | null) =>
+      (
+        await db
+          .insertInto('marketplace_offer')
+          .values({
+            account_id: accountId,
+            connection_id: connectionId,
+            marketplace: 'poshmark',
+            external_offer_id: randomUUID(),
+            status,
+            amount_cents: 2_000,
+            buyer_name: 'thrift_fan_22',
+            closed_at: closedAt,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const longClosed = await offer('accepted', ago(RETENTION_DAYS.offerBuyers + 1));
+    const justClosed = await offer('closed', ago(RETENTION_DAYS.offerBuyers - 1));
+    const pending = await offer('pending', null);
+
+    // Off (the default): nothing of buyers is cleared; the run logs what would be.
+    const lines: Record<string, unknown>[] = [];
+    const recording = createLogger({
+      service: 'retention-test',
+      level: 'info',
+      destination: {
+        write: (line: string) => lines.push(JSON.parse(line) as Record<string, unknown>),
+      },
+    });
+    const off = await runDataRetention({ db, logger: recording });
+    expect(off).toMatchObject({
+      saleLabelBuyers: 0,
+      packageTracking: 0,
+      offerBuyers: 0,
+      buyerDataWouldClear: { saleLabelBuyers: 2, packageTracking: 2, offerBuyers: 1 },
+    });
+    expect(lines.find((line) => line['buyerDataRetention'] === 'off')).toMatchObject({
+      msg: 'buyer data retention is off: nothing of buyers was cleared',
+      wouldClear: { saleLabelBuyers: 2, packageTracking: 2, offerBuyers: 1 },
+    });
+    const untouched = await db
+      .selectFrom('sale_label')
+      .select('buyer_first_name')
+      .where('account_id', '=', accountId)
+      .where('buyer_first_name', 'is', null)
+      .execute();
+    expect(untouched).toEqual([]);
+    expect(
+      await db
+        .selectFrom('marketplace_offer')
+        .select('id')
+        .where('account_id', '=', accountId)
+        .where('buyer_name', 'is', null)
+        .execute(),
+    ).toEqual([]);
+
+    // On: they are cleared.
+    const summary = await runDataRetention({ db, logger, buyerData: 'on' });
+    expect(summary).toMatchObject({ saleLabelBuyers: 2, packageTracking: 2, offerBuyers: 1 });
+    expect(summary.buyerDataWouldClear).toBeUndefined();
+    const labels = await db
+      .selectFrom('sale_label')
+      .select(['sale_id', 'buyer_first_name', 'tracking_number', 'carrier', 'source'])
+      .where('account_id', '=', accountId)
+      .execute();
+    const cleared = { buyer_first_name: null, tracking_number: null, carrier: null, source: null };
+    for (const label of labels) {
+      if ([longShipped, longCanceled].includes(label.sale_id)) {
+        expect(label, label.sale_id).toMatchObject(cleared);
+      } else {
+        expect([justShipped, returnedSince, open]).toContain(label.sale_id);
+        expect(label.buyer_first_name).toBe('Jordan');
+        expect(label.tracking_number).not.toBeNull();
+      }
+    }
+    const packs = await db
+      .selectFrom('sale_pack')
+      .select(['sale_id', 'tracking_number', 'matched_by'])
+      .where('account_id', '=', accountId)
+      .execute();
+    // The package records stay: only their tracking numbers go.
+    expect(packs).toHaveLength(5);
+    expect(
+      packs
+        .filter((pack) => pack.tracking_number === null)
+        .map((pack) => pack.sale_id)
+        .sort(),
+    ).toEqual([longShipped, longCanceled].sort());
+
+    const offers = await db
+      .selectFrom('marketplace_offer')
+      .select(['id', 'buyer_name'])
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(Object.fromEntries(offers.map((row) => [row.id, row.buyer_name]))).toEqual({
+      [longClosed]: null,
+      [justClosed]: 'thrift_fan_22',
+      [pending]: 'thrift_fan_22',
+    });
+    // Nothing is left to clear the next day.
+    expect(await runDataRetention({ db, logger, buyerData: 'on' })).toMatchObject({
+      saleLabelBuyers: 0,
+      packageTracking: 0,
+      offerBuyers: 0,
+    });
+  });
+
   it('works off a backlog in batches, a bounded amount per run', async () => {
     const seeded = await account();
     const settled = await operation(seeded, 'failed', ago(400));

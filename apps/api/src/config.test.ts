@@ -37,7 +37,31 @@ describe('loadApiConfig', () => {
       automation: loadAutomationSettings({}),
       emailIngest: loadEmailIngestConfig({}),
       operationRetryDelayScale: 1,
+      rateLimits: { perAddress: 1200, publicPerAddress: 60, perAccount: 600 },
     });
+  });
+
+  it('reads the request limits, refusing ones that are not a count per minute', () => {
+    expect(
+      loadApiConfig({
+        ...REQUIRED,
+        API_RATE_LIMIT_PER_ADDRESS: '5000',
+        API_RATE_LIMIT_PUBLIC_PER_ADDRESS: '10',
+        API_RATE_LIMIT_PER_ACCOUNT: '1',
+      }).rateLimits,
+    ).toEqual({ perAddress: 5000, publicPerAddress: 10, perAccount: 1 });
+    expect(
+      captureConfigError({
+        ...REQUIRED,
+        API_RATE_LIMIT_PER_ADDRESS: '0',
+        API_RATE_LIMIT_PUBLIC_PER_ADDRESS: '1.5',
+        API_RATE_LIMIT_PER_ACCOUNT: '10000000',
+      }).issues,
+    ).toEqual([
+      'API_RATE_LIMIT_PER_ADDRESS must be an integer from 1 to 1000000 (requests per minute)',
+      'API_RATE_LIMIT_PUBLIC_PER_ADDRESS must be an integer from 1 to 1000000 (requests per minute)',
+      'API_RATE_LIMIT_PER_ACCOUNT must be an integer from 1 to 1000000 (requests per minute)',
+    ]);
   });
 
   it('reads who may sign up, and how invitees are reached', () => {

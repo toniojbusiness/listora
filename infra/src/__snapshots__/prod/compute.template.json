@@ -784,6 +784,10 @@
               {
                 "Name": "OWNER_ALERT_ENV",
                 "Value": "prod"
+              },
+              {
+                "Name": "BUYER_DATA_RETENTION",
+                "Value": "off"
               }
             ],
             "Essential": true,

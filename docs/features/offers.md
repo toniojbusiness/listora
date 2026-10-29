@@ -159,7 +159,8 @@ Migration `20261028083845_marketplace_offers`:
   `declined`, `countered`, `closed`), its listing and item when Listora has the listing, the
   amount, the listing's price, the buyer's public username (nothing more of them), details
   (bundle size, shipping), its page, when it was made and expires, and when it was first and last
-  seen. Deleted with its connection or account.
+  seen. Deleted with its connection or account; with buyer data retention on (off by default), the buyer's
+  username is cleared 60 days after the offer closed ([privacy.md](privacy.md#retention)).
 - `offer_response`: the seller's answer, one per tap (its Idempotency-Key, one under way per
   offer): the action, what the confirmation showed, its status (`queued`, `running`, `verifying`,
   `succeeded`, `failed`), whether it may have been sent, its attempts, and its evidence (a

@@ -59,6 +59,7 @@ const context = {
     push: { driver: 'fake' },
     emailIngest: { driver: 'folder', inboundDomain: 'in.listora.test', inboxDir: '/nonexistent' },
     ownerAlerts: { environment: 'test', delivery: { driver: 'log' } },
+    buyerDataRetention: 'off',
   },
   connections: {
     tokens: undefined,

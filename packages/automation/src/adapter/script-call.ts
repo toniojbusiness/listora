@@ -169,11 +169,40 @@ export function mayHaveAppliedBefore(
   return op.mayHaveApplied ?? op.attempt > 1;
 }
 
-/** Whether the call may change anything: only a write script's may. */
-export function isWriteCall(call: ScriptCall): boolean {
-  return (
-    call.script === 'answerOffer' || (WRITE_SCRIPTS as readonly string[]).includes(call.script)
-  );
+export type ScriptName = ScriptCall['script'];
+
+/**
+ * Every script, as a read or a write. The type makes a new script choose before it compiles; at
+ * run time only the ones named `read` count as reads, so anything else (a script name from a
+ * newer server or phone, or a mistake) is a write, and a read-only connection refuses it
+ * (docs/features/read-only.md).
+ */
+const SCRIPT_ACCESS = {
+  create: 'write',
+  revise: 'write',
+  price: 'write',
+  end: 'write',
+  relist: 'write',
+  markSold: 'write',
+  refresh: 'write',
+  answerOffer: 'write',
+  read: 'read',
+  health: 'read',
+  orders: 'read',
+  listings: 'read',
+  labels: 'read',
+  offers: 'read',
+  offer: 'read',
+} as const satisfies Record<ScriptName, 'read' | 'write'>;
+
+/** The scripts that only read: the only ones a read-only connection runs. */
+export const READ_SCRIPTS: readonly ScriptName[] = Object.entries(SCRIPT_ACCESS)
+  .filter(([, access]) => access === 'read')
+  .map(([script]) => script as ScriptName);
+
+/** Whether the call may change anything: every script but the named reads may. */
+export function isWriteCall(call: Pick<ScriptCall, 'script'>): boolean {
+  return !(READ_SCRIPTS as readonly string[]).includes(call.script);
 }
 
 /** Runs the call's script from `scripts`; throws when the set has no such script. */

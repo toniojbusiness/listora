@@ -23,7 +23,11 @@ feature.
   throttles and may drop both, so nothing depends on them.
 - **Devices.** The app registers each installation with its APNs token and environment
   (`registerDevice`, the `app_device` table in [phone-execution.md](phone-execution.md#data)). A
-  token belongs to one installation: registering it elsewhere moves it.
+  token belongs to one installation: registering it elsewhere in the account, or from the same
+  installation signed into another account (the installation id lives in the phone's Keychain),
+  moves it. Another account's installation that sends a token it somehow learned gets
+  `pushEnabled: false`, the token stays where it was, and the API logs a warning without the
+  token, so knowing a token cannot stop someone else's pushes (audit L15).
 - **Drivers** (`PUSH_DRIVER`): `fake` (the default) records each notification and logs it, so
   a developer sees what a phone would show, and tests read what was sent
   (`RecordingPushSender`). `apns` (apns.ts) sends over HTTP/2 to every device token the account
