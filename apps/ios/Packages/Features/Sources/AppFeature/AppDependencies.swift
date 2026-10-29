@@ -102,7 +102,7 @@ public struct AppDependencies {
             apiClient: apiClient, meter: interactionMeter, listingCopy: listingCopy,
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
-        phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
+        phone = .init(apiClient: apiClient, accessTokens: accessTokens, version: version, sites: .for(configuration))
         packCheck = Self.makePackCheck(apiClient, accessTokens, phone, launchOptions, defaults)
         sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone, packCheck)
         tasks = Self.makeTasks(apiClient, accessTokens, showSignIn, phone)

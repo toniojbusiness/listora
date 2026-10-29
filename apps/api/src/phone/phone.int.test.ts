@@ -231,6 +231,22 @@ describe('the phone API (real Postgres)', () => {
     expect((await wait(21)).status).toBe(422);
   });
 
+  it('hands out the runtime it runs, its script only to an app without it, and no signature it lacks', async () => {
+    const full = await api.call('getPhoneRuntime', { token, query: {} });
+    expect(full.status).toBe(200);
+    expect(full.body).toMatchObject({
+      runtimeVersion: PHONE_RUNTIME_VERSION,
+      digest: expect.stringMatching(/^[0-9a-f]{64}$/) as unknown,
+      source: expect.stringContaining('listoraPhone') as unknown,
+    });
+    // This checkout's bundle is unsigned (only the deploys sign it): the app then keeps its own.
+    expect(full.body).not.toHaveProperty('signature');
+
+    const digest = (full.body as { digest: string }).digest;
+    const same = await api.call('getPhoneRuntime', { token, query: { have: digest } });
+    expect(same.body).toEqual({ runtimeVersion: PHONE_RUNTIME_VERSION, digest });
+  });
+
   it('asks to link on the phone a marketplace no phone holds a session for', async () => {
     const seller = await api.signIn('phone-unlinked@example.com');
     const linked = await api.call('linkMarketplaceSession', {

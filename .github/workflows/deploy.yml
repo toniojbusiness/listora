@@ -81,6 +81,12 @@ jobs:
         run: npx cdk deploy "listora-$LISTORA_ENV-registry" --require-approval never --no-notices
       # The application image (the Dockerfile's default `app` stage) and the browser runner's
       # (`runner`: the same sources with headless Chromium), both tagged with the commit.
+      # The release key signs the phone runtime the image carries (docs/features/phone-execution.md#the-runtimes-signature):
+      # each environment's own secret, in this step's environment only, never written to disk.
+      - name: Sign the phone runtime
+        env:
+          PHONE_RUNTIME_SIGNING_KEY: ${{ secrets.PHONE_RUNTIME_SIGNING_KEY }}
+        run: npm run phone:sign
       - name: Build and push the application image
         run: |
           registry="$LISTORA_AWS_ACCOUNT_ID.dkr.ecr.$LISTORA_AWS_REGION.amazonaws.com"

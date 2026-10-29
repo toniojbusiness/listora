@@ -14,6 +14,7 @@ interface Step {
   uses?: string;
   run?: string;
   with?: Record<string, unknown>;
+  env?: Record<string, string>;
 }
 interface Job {
   if?: string;
@@ -50,7 +51,11 @@ describe('deploy workflow', () => {
   it('assumes the deploy role through OIDC and holds no AWS keys', () => {
     expect(workflow.permissions).toEqual({ contents: 'read' });
     expect(job.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
-    expect(source).not.toMatch(/secrets\.|aws-access-key-id|aws-secret-access-key/);
+    expect(source).not.toMatch(/aws-access-key-id|aws-secret-access-key/);
+    // The one secret is the phone runtime's release key, for its signing step only (below).
+    expect([...source.matchAll(/secrets\.(\w+)/g)].map((match) => match[1])).toEqual([
+      'PHONE_RUNTIME_SIGNING_KEY',
+    ]);
     const login = job.steps.find((step) =>
       step.uses?.startsWith('aws-actions/configure-aws-credentials@'),
     );
@@ -109,6 +114,18 @@ describe('deploy workflow', () => {
     expect(run).toContain('docker build --target "$target" --tag "$image" .');
     // Tags are immutable: an image pushed before is reused, never pushed again.
     expect(run).toContain('continue');
+  });
+
+  it('signs the phone runtime before the image is built, with the key in that step only', () => {
+    const sign = job.steps[stepIndex('Sign the phone runtime')];
+    expect(sign?.run?.trim()).toBe('npm run phone:sign');
+    expect(sign?.env).toEqual({
+      PHONE_RUNTIME_SIGNING_KEY: '${{ secrets.PHONE_RUNTIME_SIGNING_KEY }}',
+    });
+    expect(job.env?.['PHONE_RUNTIME_SIGNING_KEY']).toBeUndefined();
+    expect(stepIndex('Sign the phone runtime')).toBeLessThan(
+      stepIndex('Build and push the application image'),
+    );
   });
 
   it('migrates the schema after the image push and before any service deploys', () => {
@@ -205,9 +222,11 @@ describe('deploy personal workflow', () => {
     expect(pick.permissions).toEqual({ contents: 'read' });
     expect(deploy.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
     expect(personalSource).not.toMatch(/aws-access-key-id|aws-secret-access-key/);
-    // The one secret is the owner's address, a secret only so the public log masks it.
+    // The owner's address, a secret only so the public log masks it, and the phone runtime's
+    // release key, for its signing step only (below).
     expect([...personalSource.matchAll(/secrets\.(\w+)/g)].map((match) => match[1])).toEqual([
       'OWNER_EMAIL',
+      'PHONE_RUNTIME_SIGNING_KEY',
     ]);
     const login = deploy.steps.find((step) =>
       step.uses?.startsWith('aws-actions/configure-aws-credentials@'),
@@ -227,5 +246,17 @@ describe('deploy personal workflow', () => {
   it('deploys with scripts/deploy-personal.sh, as the deploy from a Mac does', () => {
     expect(deploy.steps.at(-1)?.run?.trim()).toBe('scripts/deploy-personal.sh --ci');
     expect(deploy.env?.['LISTORA_OWNER_EMAIL']).toBe('${{ secrets.OWNER_EMAIL }}');
+  });
+
+  it('signs the phone runtime before the deploy builds the image, with the key in that step only', () => {
+    const index = deploy.steps.findIndex((step) => step.name === 'Sign the phone runtime');
+    const sign = deploy.steps[index];
+    expect(sign?.run?.trim()).toBe('npm run phone:sign');
+    expect(sign?.env).toEqual({
+      PHONE_RUNTIME_SIGNING_KEY: '${{ secrets.PHONE_RUNTIME_SIGNING_KEY }}',
+    });
+    expect(deploy.env?.['PHONE_RUNTIME_SIGNING_KEY']).toBeUndefined();
+    expect(index).toBeGreaterThan(-1);
+    expect(index).toBeLessThan(deploy.steps.length - 1);
   });
 });

@@ -35,15 +35,20 @@ extension PhoneRuntime {
     public func keepWarm(_: Bool) {}
 }
 
-/// The runtime as the server hands it out (`getPhoneRuntime`): its digest, and its script when
-/// it is not the one the app already runs.
+/// The runtime as the server hands it out (`getPhoneRuntime`): its digest, its script when it is
+/// not the one the app already runs, the version it speaks, and the release key's signature of
+/// that version and digest when the server's bundle was signed (`RuntimeSignature`).
 public struct RemoteRuntime: Sendable {
     public let digest: String
     public let source: String?
+    public let runtimeVersion: Int
+    public let signature: String?
 
-    public init(digest: String, source: String?) {
+    public init(digest: String, source: String?, runtimeVersion: Int, signature: String?) {
         self.digest = digest
         self.source = source
+        self.runtimeVersion = runtimeVersion
+        self.signature = signature
     }
 }
 
@@ -90,6 +95,9 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     private lazy var scripts = RuntimeScripts(bundled: Self.bundledSource(), store: store)
     private let store = ServedRuntimeStore.caches()
     private let fetchRuntime: @Sendable (_ have: String?) async -> RemoteRuntime?
+    /// The marketplaces' own sites, built into the app: a call's origins and cookie domains are
+    /// cut to these.
+    private let sites: MarketplaceSites
     private var stepStarted: (@MainActor (PhoneStep) -> Void)?
     private var warm = false
     private let photos = PhotoCache()
@@ -100,11 +108,13 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         sessions: any MarketplaceSessionStore,
         handOff: (any ChallengeHandOff)?,
         notifier: CheckNeededNotifier = CheckNeededNotifier(),
+        sites: MarketplaceSites = MarketplaceSites(),
         fetchRuntime: @escaping @Sendable (_ have: String?) async -> RemoteRuntime? = { _ in nil },
     ) {
         self.sessions = sessions
         self.handOff = handOff
         self.notifier = notifier
+        self.sites = sites
         self.fetchRuntime = fetchRuntime
         super.init()
         NotificationCenter.default.addObserver(
@@ -133,7 +143,7 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         // before their first call.
         for marketplace in Self.marketplaces where !sessions.cookies(for: marketplace).isEmpty {
             let lane = lane(for: marketplace)
-            Task { _ = try? await lane.load(source: self.source()) }
+            Task { _ = try? await lane.load(self.scripts.running) }
             lane.preparePage(logger: logger)
         }
     }
@@ -160,16 +170,20 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
 
     public func runtimeVersion() async throws -> Int {
         // Any marketplace's controller answers it: they all run the same bundle.
-        try await (lanes.values.first ?? lane(for: Self.marketplaces[0])).load(source: source())
+        try await (lanes.values.first ?? lane(for: Self.marketplaces[0])).load(scripts.running)
     }
 
     public func run(_ input: Data, marketplace: String) async throws -> Data {
         let lane = lane(for: marketplace)
-        _ = try await lane.load(source: source())
+        _ = try await lane.load(scripts.running)
         guard let controller = lane.controller else { throw PhoneRuntimeError.bundleNotLoaded("no controller page") }
-        let object = try JSONSerialization.jsonObject(with: input)
-        let domains = ((object as? [String: Any])?["cookieDomains"] as? [String]) ?? []
-        let origins = ((object as? [String: Any])?["origins"] as? [String]) ?? []
+        guard let call = try JSONSerialization.jsonObject(with: input) as? [String: Any] else {
+            throw PhoneRuntimeError.invalidAnswer
+        }
+        // Only the marketplace's own sites, as the app knows them, whatever the call names.
+        let object = sites.allowed(call, marketplace: marketplace)
+        let domains = (object["cookieDomains"] as? [String]) ?? []
+        let origins = (object["origins"] as? [String]) ?? []
         let stored = sessions.cookies(for: marketplace).filter { $0.belongs(to: domains) }
         let page = await lane.page(origins: origins, session: stored, logger: logger)
         lane.calling = true
@@ -207,11 +221,6 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         }
         lanes[marketplace] = lane
         return lane
-    }
-
-    /// The runtime's script: the server's when it handed one out, else the app's own.
-    private func source() -> String? {
-        scripts.running?.source
     }
 
     /// The runtime the app was built with, which runs until the server hands out its own.
@@ -372,23 +381,5 @@ final class WebViewShelf {
 private final class ShelfWindow: UIWindow {
     override var canBecomeKey: Bool {
         false
-    }
-}
-
-/// The controller page's one load.
-@MainActor
-final class ControllerLoad: NSObject, WKNavigationDelegate {
-    let loaded = OneShot<Void>()
-
-    func webView(_: WKWebView, didFinish _: WKNavigation?) {
-        loaded.finish(.success(()))
-    }
-
-    func webView(_: WKWebView, didFail _: WKNavigation?, withError error: any Error) {
-        loaded.finish(.failure(error))
-    }
-
-    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation?, withError error: any Error) {
-        loaded.finish(.failure(error))
     }
 }

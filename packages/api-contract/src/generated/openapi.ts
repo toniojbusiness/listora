@@ -2374,7 +2374,8 @@ export interface paths {
          * @description The phone runtime (`listoraPhone`, built from the server's own automation code), so the
          *     app runs exactly the marketplace scripts the server replays its answers through, and a
          *     fix to a marketplace's pages reaches the phone with the server, without an app update.
-         *     With `have` naming the digest the app already runs, the answer leaves out `source`.
+         *     With `have` naming the digest the app already runs, the answer leaves out `source`. The
+         *     app runs a runtime it was handed only when its `signature` verifies.
          */
         get: operations["getPhoneRuntime"];
         put?: never;
@@ -4567,6 +4568,14 @@ export interface components {
             digest: string;
             /** @description The runtime's script; absent when the app already has this digest. */
             source?: string;
+            /**
+             * @description The release key's Ed25519 signature (base64) over
+             *     `listora-phone-runtime\n{runtimeVersion}\n{digest}`, made in CI when the image is built;
+             *     the server never holds that key. The app runs a runtime it was handed only with a
+             *     signature its pinned public key verifies; absent when the server's bundle is unsigned
+             *     (a local server, or a deploy without the key), and the app then runs its own.
+             */
+            signature?: string;
         };
         /**
          * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an

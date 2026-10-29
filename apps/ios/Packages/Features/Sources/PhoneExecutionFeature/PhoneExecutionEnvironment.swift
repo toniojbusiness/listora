@@ -12,13 +12,19 @@ public final class PhoneExecutionEnvironment {
     public let handOff: ChallengeHandOffModel
     public let sessions: any MarketplaceSessionStore
 
-    public convenience init(apiClient: APIClient, accessTokens: AccessTokenStore, version: AppVersion) {
+    public convenience init(
+        apiClient: APIClient,
+        accessTokens: AccessTokenStore,
+        version: AppVersion,
+        sites: MarketplaceSites,
+    ) {
         let sessions = KeychainMarketplaceSessionStore()
         self.init(
             service: APIPhoneWorkService(api: apiClient),
             sessions: sessions,
             isSignedIn: { accessTokens.grant != nil },
             appVersion: version.marketing,
+            sites: sites,
         )
         // The sessions belong to the account that linked them: signing in to another account
         // on this phone removes them.
@@ -36,6 +42,7 @@ public final class PhoneExecutionEnvironment {
         sessions: any MarketplaceSessionStore,
         isSignedIn: @escaping @MainActor () -> Bool,
         appVersion: String,
+        sites: MarketplaceSites = MarketplaceSites(),
         installationID: @escaping @Sendable () -> String = Installation.id,
     ) {
         let handOff = ChallengeHandOffModel()
@@ -43,7 +50,7 @@ public final class PhoneExecutionEnvironment {
         self.sessions = sessions
         runner = PhoneRunner(
             service: service,
-            runtime: WebPhoneRuntime(sessions: sessions, handOff: handOff) { have in
+            runtime: WebPhoneRuntime(sessions: sessions, handOff: handOff, sites: sites) { have in
                 // The server's runtime when it can be reached; the app's own otherwise.
                 try? await service.runtime(have: have)
             },

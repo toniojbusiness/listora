@@ -98,6 +98,8 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
         runtimeVersion: PHONE_RUNTIME_VERSION,
         digest: bundle.digest,
         ...(query.have === bundle.digest ? {} : { source: bundle.source }),
+        // The app runs a runtime it is handed only with the release key's signature of it.
+        ...(bundle.signature === null ? {} : { signature: bundle.signature }),
       },
     };
   });

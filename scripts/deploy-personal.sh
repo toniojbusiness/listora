@@ -665,6 +665,18 @@ if [[ "$code_only" == false ]]; then
 fi
 
 step "Build and push the application and browser runner images"
+# The phone runtime the image carries is signed with the release key when the deploy workflow's
+# own step signed it (npm run phone:sign, with the GitHub Actions secret in that step only), or
+# when the operator did before a deploy from a Mac. Without it the API hands out an unsigned
+# runtime, which new apps never run (they keep their own); older apps run it as before
+# (docs/features/phone-execution.md#the-runtimes-signature).
+if node packages/automation/src/phone/sign.ts --check >/dev/null; then
+  info "the phone runtime is signed with the release key"
+elif [[ "$ci" == true ]]; then
+  printf '::warning::the phone runtime is not signed (PHONE_RUNTIME_SIGNING_KEY): new apps keep the runtime they have\n'
+else
+  info "the phone runtime is not signed: new apps keep the runtime they have (PHONE_RUNTIME_SIGNING_KEY=... npm run phone:sign signs it)"
+fi
 # The Dockerfile's `app` stage (api, worker, migrations) and `runner` stage (the same sources with
 # headless Chromium), each in its own repository, as .github/workflows/deploy.yml builds them.
 # ECS runs the tasks on X86_64 (infra/src/stacks/compute-stack.ts), whatever this machine is.

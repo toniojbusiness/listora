@@ -1183,7 +1183,8 @@ public protocol APIProtocol: Sendable {
     /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the
     /// app runs exactly the marketplace scripts the server replays its answers through, and a
     /// fix to a marketplace's pages reaches the phone with the server, without an app update.
-    /// With `have` naming the digest the app already runs, the answer leaves out `source`.
+    /// With `have` naming the digest the app already runs, the answer leaves out `source`. The
+    /// app runs a runtime it was handed only when its `signature` verifies.
     ///
     ///
     /// - Remark: HTTP `GET /v1/phone-runtime`.
@@ -3385,7 +3386,8 @@ extension APIProtocol {
     /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the
     /// app runs exactly the marketplace scripts the server replays its answers through, and a
     /// fix to a marketplace's pages reaches the phone with the server, without an app update.
-    /// With `have` naming the digest the app already runs, the answer leaves out `source`.
+    /// With `have` naming the digest the app already runs, the answer leaves out `source`. The
+    /// app runs a runtime it was handed only when its `signature` verifies.
     ///
     ///
     /// - Remark: HTTP `GET /v1/phone-runtime`.
