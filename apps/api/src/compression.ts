@@ -5,11 +5,10 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 
 /**
  * The request header a client sends, with the value `accepted`, to have its answers compressed.
- * Only clients that ask get compressed answers, whatever their `Accept-Encoding`, so the iPhone
- * app builds (whose URLSession accepts br and gzip on its own) keep getting
- * every answer as they did. The app does not ask yet: with compressed answers, the iPhone's phone
- * work stalled in the UI tests (PhoneExecutionUITests timed out on every such run, even with the
- * phone's own routes uncompressed), and why is not yet understood (docs/features/performance.md).
+ * Only clients that ask get compressed answers, whatever their `Accept-Encoding`: the app asks on
+ * every request (`CompressionOptInMiddleware`), and its builds from before it asked (whose
+ * URLSession accepts br and gzip on its own) keep getting every answer as they did, so a build
+ * already installed is never affected by how its download code handles compressed answers.
  */
 export const COMPRESSION_OPT_IN_HEADER = 'x-listora-compression';
 
@@ -33,8 +32,8 @@ type Encoding = 'br' | 'gzip';
 /**
  * Compresses every answer of at least `COMPRESS_THRESHOLD_BYTES` whose type is compressible, for
  * a client that asks (`COMPRESSION_OPT_IN_HEADER`; docs/features/performance.md, "Response
- * compression"): brotli, or gzip for a client that accepts only that. API Gateway's HTTP API does not compress, and the app's URLSession asks
- * for both and decodes them itself. A hook on the root, so it covers every route whenever it
+ * compression"): brotli, or gzip for a client that accepts only that. API Gateway's HTTP API does
+ * not compress, and the app's URLSession asks for both and decodes them itself. A hook on the root, so it covers every route whenever it
  * was registered; photos and other binary bodies are never compressed. Request bodies are not
  * decompressed: every client sends its JSON as it is.
  */

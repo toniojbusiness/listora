@@ -268,7 +268,7 @@ of its slowness in three places; all three were changed. Numbers from this lapto
 load (load average 50-57 on 12 cores), so latencies are noisy; request counts and bytes are
 exact.
 
-**Response compression** (`apps/api/src/compression.ts`), built but not yet used by the app.
+**Response compression** (`apps/api/src/compression.ts`).
 No answer was compressed: API Gateway's HTTP API does not compress, though the app's URLSession
 accepts gzip and brotli. An `onSend` hook on the root now compresses every JSON, JavaScript, or
 text answer of at least 1 KB with brotli (gzip for a client that accepts only that), never a
@@ -293,19 +293,19 @@ with `--encoding identity`):
 3-11 times fewer bytes on every screen; answers under 1 KB (Usage) go as they are. The perf
 integration test checks that every scenario of 2 KB or more is sent at under half its size.
 
-The app does not ask yet, so it gets every answer as before, and so do the builds already
-installed, which never will. With the app asking, the iPhone's phone work stalled in
-`PhoneExecutionUITests`: one or two of its 5 tests timed out (each waiting a minute at a time for
-the app to settle while the Depop sign-in page was open) on 8 of 9 runs with compressed answers,
-in every variation tried (all routes; all but the 577 KB phone runtime, the one run that passed;
-all but the phone's own routes; the app's API client buffering bodies instead of streaming
-them), and on none of 4 runs without (main twice, this branch twice). The cause is not found. The screens themselves
-read compressed answers fine: the app's own client and transport (the generated `Client` over
-`URLSessionTransport`, as `APIClient` builds it, on macOS), against a 300-item synthetic seller at
-production's sizes, decoded inventory 50 and 100 per page (63 and 123 KB, sent as 9 and 17 KB),
-item detail, a sold item, sales (97 KB, sent as 11 KB), a sale, Today, tasks (42 KB, sent as
-6 KB), an offer, and connection health, three rounds each, in 3-48 ms. Turning it on is a
-follow-up: find the stall, then have the app send the header.
+The app asks (`CompressionOptInMiddleware` in `APIClient`); its builds from before it asked
+never do, so they get every answer as before whatever their download code does with compressed
+answers. The screens read compressed answers fine: the app's own client and transport (the
+generated `Client` over `URLSessionTransport`, as `APIClient` builds it, on macOS), against a
+300-item synthetic seller at production's sizes, decoded inventory 50 and 100 per page (63 and
+123 KB, sent as 9 and 17 KB), item detail, a sold item, sales (97 KB, sent as 11 KB), a sale,
+Today, tasks (42 KB, sent as 6 KB), an offer, and connection health, three rounds each, in 3-48
+ms. While this was built, `PhoneExecutionUITests` and `LinkAccountsUITests` timed out now and then
+(the app never settling, a minute at a time, while a marketplace's sign-in page was open), at
+first only on runs with compression, so the app held off asking. They then timed out the same way
+on main, with no compression, at a load average of 150-300 from other worktrees; and on a quieter
+machine, two rounds each of this branch with the app asking and of main all passed. The stall is
+the loaded simulator's, not compression's.
 
 **The item screen waits instead of polling** (`waitForItemChange`,
 [operations.md](operations.md#following-a-change)). While a listing's change ran, the item

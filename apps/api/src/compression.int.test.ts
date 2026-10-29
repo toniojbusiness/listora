@@ -22,7 +22,7 @@ describe('response compression on the API routes (real Postgres)', () => {
     await api.close();
   });
 
-  it('sends the app, which does not ask, every answer as it is', async () => {
+  it('sends a client that does not ask (app builds before it asked) every answer as it is', async () => {
     const runtime = await api.call('getPhoneRuntime', {
       token,
       headers: { 'accept-encoding': APP_ACCEPT_ENCODING },

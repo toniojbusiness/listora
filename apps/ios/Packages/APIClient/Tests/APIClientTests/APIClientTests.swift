@@ -335,3 +335,21 @@ struct AccessTokenRefreshTests {
         #expect(grant.accessToken == "t")
     }
 }
+
+struct CompressionOptInMiddlewareTests {
+    @Test
+    func `asks the server for compressed answers on every request`() async throws {
+        let sent = Mutex<HTTPRequest?>(nil)
+        _ = try await CompressionOptInMiddleware().intercept(
+            HTTPRequest(method: .get, scheme: "https", authority: "api.test", path: "/v1/items"),
+            body: nil,
+            baseURL: URL(filePath: "/"),
+            operationID: "listItems",
+        ) { request, _, _ in
+            sent.withLock { $0 = request }
+            return (HTTPResponse(status: .ok), nil)
+        }
+        let request = try #require(sent.withLock { $0 })
+        #expect(request.headerFields[CompressionOptInMiddleware.header] == "accepted")
+    }
+}
