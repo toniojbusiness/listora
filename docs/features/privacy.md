@@ -128,6 +128,12 @@ of 1,000 and at most 50 batches per rule a run:
 | A package's tracking number (`sale_pack`)                          | 60 days after the sale is done       | Cleared; the package record stays (packed when, how it matched), its activity entry reads "Packed", and Pack check no longer shows the order ([pack-check.md](pack-check.md))                           |
 | The buyer's name on an offer (`marketplace_offer`)                 | 60 days after the offer closed       | Cleared; the offer, its amounts, and the seller's answers stay ([offers.md](offers.md))                                                                                                                 |
 
+The three buyer rows (the last three) run only with `BUYER_DATA_RETENTION=on` (worker,
+`.env.example`). Clearing them is permanent, so the setting is `off` by default and in every
+deployment (`infra/src/containers.ts`) until the owner turns it on; while it is off, each run
+clears nothing of buyers and logs how many rows each of the three would clear
+(`buyer data retention is off`, `wouldClear`), so the owner can see what turning it on will do.
+
 Kept elsewhere, by the code that writes them: automation screenshots 14 days and run records
 90 days (the automation dispatcher, [automation.md](automation.md)), package photos 60 days after
 the sale shipped, like the buyer's other details ([pack-check.md](pack-check.md#package-photo)),
@@ -163,7 +169,8 @@ Migration `20261025221245_privacy_retention`:
   outlives the connection and its account, so it has no `account_id`.
 - `deletion_record`: the completion record of every finished deletion.
 - `reject_direct_change()` allows the retention job's deletes; indexes for the retention scans.
-- `sale_pack.tracking_number` may be empty: the retention job clears it with the label's buyer
+- `sale_pack.tracking_number` may be empty: with buyer data retention on, the retention job
+  clears it with the label's buyer
   details (migration `20261029080126_buyer_data_retention`, audit L4).
 
 ## Open items
