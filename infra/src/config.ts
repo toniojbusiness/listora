@@ -154,7 +154,16 @@ export interface EnvironmentSettings {
    * month's actual cost reaches it and when AWS forecasts the month will (docs/features/alerts.md).
    */
   readonly monthlyCostAlarmUsd: number;
+  /**
+   * The worker's `BUYER_DATA_RETENTION` (docs/features/privacy.md#retention): `on` clears buyers'
+   * names and tracking numbers 60 days after a sale is done or an offer closed, permanently;
+   * `off` clears nothing of buyers and logs what it would clear. Off until the owner turns it on.
+   */
+  readonly buyerDataRetention: BuyerDataRetention;
 }
+
+/** The worker's `BUYER_DATA_RETENTION` values (packages/retention). */
+export type BuyerDataRetention = 'off' | 'on';
 
 /** Most of the default $1 daily AI budget per account (packages/ai). */
 const AI_DAILY_COST_ALARM_USD = 0.8;
@@ -203,6 +212,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
     monthlyCostAlarmUsd: 150,
+    buyerDataRetention: 'off',
   },
   prod: {
     protectData: true,
@@ -232,6 +242,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
     monthlyCostAlarmUsd: 600,
+    buyerDataRetention: 'off',
   },
   // One reseller, around 500 items, light traffic, every service running 24/7, at the lowest
   // monthly cost (docs/features/costs.md has the estimate and the alternatives it beat). The data is
@@ -277,6 +288,8 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
     // About $46 a month is expected (docs/features/costs.md); this is well past a normal month.
     monthlyCostAlarmUsd: 50,
+    // The owner turned it on (2026-10-29): buyers' details clear 60 days after the sale or offer.
+    buyerDataRetention: 'on',
   },
 };
 

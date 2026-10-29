@@ -85,6 +85,7 @@ const ANY_RESOURCES: ServiceResources = {
   runner: { cluster: '', service: '', region: '' },
   tokenKeyArn: '',
   ownerAlerts: { environment: '', email: { from: '', to: '' } },
+  buyerDataRetention: 'off',
 };
 
 describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, overrides }) => {
