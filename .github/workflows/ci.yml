@@ -29,11 +29,16 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      # paths-filter lists a pull request's files through the API.
+      # paths-filter lists a pull request's files through the API, and on main the plan step
+      # finds the merged pull request of the pushed commit.
       pull-requests: read
+      # The plan step reads that pull request's iOS result.
+      checks: read
     outputs:
-      ios: ${{ steps.filter.outputs.ios_inputs == 'true' || steps.app.outputs.ios_app == 'true' }}
-      ios_ui: ${{ steps.filter.outputs.ios_ui_inputs == 'true' || steps.app.outputs.ios_app_ui == 'true' }}
+      ios: ${{ steps.plan.outputs.ios }}
+      ios_unit: ${{ steps.plan.outputs.ios_unit }}
+      ios_ui: ${{ steps.plan.outputs.ios_ui }}
+      ios_phone_runtime: ${{ steps.plan.outputs.ios_phone_runtime }}
       image: ${{ steps.filter.outputs.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,7 +88,9 @@ jobs:
       # A file matches one of these filters only when it matches every pattern: inside apps/ios
       # and none of the exclusions. Documentation never builds anything; the unit tests'
       # sources, the app-level integration tests (ListoraTests), and the fixture generators
-      # (Tools, run by hand) cannot change what a UI test sees.
+      # (Tools, run by hand) cannot change what a UI test sees. `ios_app_code`: anything in the
+      # app but the bundled phone runtime, which only the phone runtime tests read (the plan
+      # step below).
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: app
         with:
@@ -98,14 +105,73 @@ jobs:
               - '!apps/ios/ListoraTests/**'
               - '!apps/ios/Packages/**/Tests/**'
               - '!apps/ios/Tools/**'
+            ios_app_code:
+              - 'apps/ios/**'
+              - '!**/*.md'
+              - '!apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/phone-runtime.js'
+      # Which iOS jobs run (README, CI section):
+      # - none, when no iOS input changed;
+      # - the build and the phone runtime tests only, when the one iOS file changed is the bundled
+      #   phone runtime (packages/automation/src/phone writes it; Linux tests that code through
+      #   the runtime, and on iOS only the phone execution tests read the bundle);
+      # - on a push to main whose tree is exactly the head of the merged pull request, and whose
+      #   `iOS checks` passed on that head, the build only (it saves main's caches): the same
+      #   files already passed, so the tests would only repeat that result;
+      # - otherwise the build, the unit tests, and the UI shards (those when a UI input changed).
+      - name: Plan the iOS jobs
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+          INPUTS: ${{ steps.filter.outputs.ios_inputs }}
+          UI_INPUTS: ${{ steps.filter.outputs.ios_ui_inputs }}
+          APP: ${{ steps.app.outputs.ios_app }}
+          APP_UI: ${{ steps.app.outputs.ios_app_ui }}
+          APP_CODE: ${{ steps.app.outputs.ios_app_code }}
+        run: |
+          ios=false; full=false; ui=false; phone_runtime=false
+          if [[ $INPUTS == true || $APP == true ]]; then ios=true; fi
+          if [[ $UI_INPUTS == true || $APP_UI == true ]]; then ui=true; fi
+          if [[ $ios == true ]]; then
+            if [[ $INPUTS != true && $APP_CODE != true ]]; then
+              phone_runtime=true; ui=false
+              echo "Only the bundled phone runtime changed: the phone runtime tests only."
+            else
+              full=true
+            fi
+          fi
+          if [[ $ios == true && $EVENT == push ]]; then
+            tree=$(git rev-parse 'HEAD^{tree}')
+            heads=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/pulls" \
+              --jq '.[] | select(.merged_at != null) | .head.sha')
+            for head in $heads; do
+              [[ $(gh api "repos/$GITHUB_REPOSITORY/git/commits/$head" --jq .tree.sha) == "$tree" ]] || continue
+              state=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$head/check-runs" \
+                -f check_name='iOS checks' -f filter=latest \
+                --jq '[.check_runs[] | select(.app.slug == "github-actions")][0] | "\(.status) \(.conclusion)"')
+              if [[ $state == 'completed success' ]]; then
+                echo "The tree of $SHA is that of $head, whose iOS checks passed: the build only."
+                full=false; ui=false; phone_runtime=false
+                break
+              fi
+            done
+          fi
+          {
+            echo "ios=$ios"
+            echo "ios_unit=$full"
+            echo "ios_ui=$ui"
+            echo "ios_phone_runtime=$phone_runtime"
+          } | tee -a "$GITHUB_OUTPUT"
 
-  backend:
-    name: Backend check (Linux)
+  # The backend check, as jobs that run side by side: the static checks, the unit tests, and the
+  # integration tests in two shards (`npm run check` runs the same, one after another).
+  # `Backend check (Linux)` below sums them up into one result.
+  backend-static:
+    name: Backend static checks (Linux)
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      PG_BIN_DIR: /usr/lib/postgresql/18/bin
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Every new migration must sort after the newest one on main, or the live migration step
@@ -126,41 +192,111 @@ jobs:
           else
             echo "migration order: nothing to compare with"
           fi
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install PostgreSQL 18 from PGDG
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-common
-          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y postgresql-18
-      # `npm run contract:check` (part of `npm run check`) regenerates the Swift client and
-      # runs its tests with the Swift toolchain preinstalled on the Ubuntu runner image.
+      - uses: ./.github/actions/npm-ci
+      # `npm run contract:check` (part of `npm run check:static`) regenerates the Swift client
+      # and runs its tests with the Swift toolchain preinstalled on the Ubuntu runner image.
       # The version file keys the SwiftPM cache, so a runner image with a new Swift never
       # restores modules built by the old compiler.
       - name: Show Swift toolchain
         run: |
           mkdir -p .build
           swift --version | tee .build/swift-version.txt
-      - name: Cache SwiftPM builds for the API contract
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore SwiftPM builds for the API contract
+        id: swiftpm
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build/api-contract
             .build/swiftpm-cache
           key: swiftpm-${{ runner.os }}-${{ hashFiles('.build/swift-version.txt', 'packages/api-contract/swift/Package.resolved', 'packages/api-contract/tools/swift-generator/Package.resolved') }}
-      - run: npm ci
+      - run: npm run check:static
+      - name: Save SwiftPM builds for the API contract
+        if: ${{ github.event_name == 'push' && steps.swiftpm.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/api-contract
+            .build/swiftpm-cache
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('.build/swift-version.txt', 'packages/api-contract/swift/Package.resolved', 'packages/api-contract/tools/swift-generator/Package.resolved') }}
+
+  backend-unit:
+    name: Backend unit tests (Linux)
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/npm-ci
+      - run: npm run test:unit
+
+  backend-integration:
+    name: Backend integration tests (Linux, shard ${{ matrix.shard }} of 2)
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      # Every shard reports its own failures, not only the first one's.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      PG_BIN_DIR: /usr/lib/postgresql/18/bin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/npm-ci
+      - name: Install PostgreSQL 18 from PGDG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-18
       - run: scripts/dev-db.sh
       # The browser runner's tests drive a real headless Chromium (against a local fake site).
-      - name: Cache headless Chromium
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Keyed by the Playwright version, which pins the browser: a lockfile change elsewhere keeps
+      # the cache. Only main saves it.
+      - name: Read the pinned Playwright version
+        id: playwright
+        run: echo "version=$(jq -r '.packages["node_modules/playwright-core"].version' package-lock.json)" >>"$GITHUB_OUTPUT"
+      - name: Restore headless Chromium
+        id: chromium
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .local/playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: scripts/dev-browser.sh --with-deps
-      - run: npm run check
+      - name: Save headless Chromium
+        if: ${{ github.event_name == 'push' && matrix.shard == 1 && steps.chromium.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .local/playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: npm run test:integration -- --shard=${{ matrix.shard }}/2
+
+  # One result for the backend jobs: it passes only when every one of them passed. Deploy
+  # personal waits for it (SERVER_CHECKS in deploy-personal.yml). Skipped on a draft pull request.
+  backend:
+    name: Backend check (Linux)
+    needs: [backend-static, backend-unit, backend-integration]
+    if: ${{ !cancelled() && !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every backend job to have passed
+        env:
+          STATIC: ${{ needs.backend-static.result }}
+          UNIT: ${{ needs.backend-unit.result }}
+          INTEGRATION: ${{ needs.backend-integration.result }}
+        run: |
+          status=0
+          for result in "static checks:$STATIC" "unit tests:$UNIT" "integration tests:$INTEGRATION"; do
+            if [[ ${result#*:} == success ]]; then
+              echo "${result%%:*}: success"
+            else
+              echo "::error::The backend ${result%%:*} ended with '${result#*:}'."
+              status=1
+            fi
+          done
+          exit $status
 
   # This job always reports a result, so it can be a required check: when no image input
   # changed it succeeds in seconds without building. It never succeeds when change detection
@@ -184,13 +320,8 @@ jobs:
         run: echo "No file the application image depends on changed; see the changes job for the filter."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ env.IMAGE_AFFECTED == 'true' }}
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: ./.github/actions/npm-ci
         if: ${{ env.IMAGE_AFFECTED == 'true' }}
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - if: ${{ env.IMAGE_AFFECTED == 'true' }}
-        run: npm ci
       - if: ${{ env.IMAGE_AFFECTED == 'true' }}
         run: scripts/container-smoke.sh
 
@@ -312,7 +443,7 @@ jobs:
   ios-unit:
     name: iOS unit and package tests (macOS)
     needs: [changes, ios-build]
-    if: ${{ needs.changes.outputs.ios == 'true' }}
+    if: ${{ needs.changes.outputs.ios_unit == 'true' }}
     runs-on: macos-26
     timeout-minutes: 25
     env:
@@ -378,11 +509,7 @@ jobs:
       # the API and worker from this checkout, on the scripts/dev-db.sh cluster.
       - name: Install PostgreSQL 18
         run: brew install postgresql@18
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-ci
       # As in ios-unit: it boots while the built tests download. Started after the installs,
       # which it slowed down by as much as it saved.
       - name: Start booting a clean iPhone 17 simulator
@@ -420,13 +547,68 @@ jobs:
             .local/pg/server.log
           retention-days: 7
 
+  # Only the bundled phone runtime changed (the plan step in `changes`): the tests that read it,
+  # in one job, instead of the unit job and the three UI shards. The phone execution package
+  # tests and the app's page integration tests, then the phone execution UI tests against the
+  # local stack, with the same re-runs of failed tests as the full jobs.
+  ios-phone-runtime:
+    name: iOS phone runtime tests (macOS)
+    needs: [changes, ios-build]
+    if: ${{ needs.changes.outputs.ios_phone_runtime == 'true' }}
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install PostgreSQL 18
+        run: brew install postgresql@18
+      - uses: ./.github/actions/npm-ci
+      - name: Start booting a clean iPhone 17 simulator
+        run: scripts/ios-ci-simulator.sh start
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ios-built-tests
+          path: .build/ios
+      - name: Unpack the built tests
+        run: |
+          mkdir -p .build/ios/DerivedData/Build
+          tar -xf .build/ios/built-tests.tar -C .build/ios/DerivedData/Build
+          rm .build/ios/built-tests.tar
+      - name: Wait until the simulator has booted and Xcode lists it
+        run: scripts/ios-ci-simulator.sh wait
+      - run: make ios-unit-test IOS_PREBUILT=1 IOS_UNIT_TESTS='-only-testing:PhoneExecutionFeatureTests -only-testing:ListoraTests/PhoneMarketplacePageIntegrationTests' IOS_TEST_SUMMARY_FILE=.build/ios/unit-summary.txt
+      - if: ${{ !cancelled() }}
+        run: make ios-ui-test IOS_PREBUILT=1 IOS_UI_TESTS=-only-testing:ListoraUITests/PhoneExecutionUITests IOS_TEST_SUMMARY_FILE=.build/ios/ui-summary.txt
+      - name: Show the failing-test summary
+        if: ${{ always() && hashFiles('.build/ios/*-summary.txt') != '' }}
+        run: |
+          for half in unit ui; do
+            [[ -f .build/ios/$half-summary.txt ]] || continue
+            { echo "### iOS phone runtime tests, $half"; echo '```'; cat ".build/ios/$half-summary.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Upload test results and the stack's logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-phone-runtime-test-results
+          path: |
+            .build/ios/Unit.xcresult
+            .build/ios/UI*.xcresult
+            .build/ios/e2e-logs
+            .build/ios/*-summary.txt
+            .local/pg/server.log
+          retention-days: 7
+
   # One result for the iOS jobs, so it can be the required check: it passes when every iOS job
   # that the change needs passed, and when the change needed none (the jobs are then skipped).
   # It never passes when change detection failed. Skipped (which also satisfies a required
   # check) on a draft pull request.
   ios:
     name: iOS checks
-    needs: [changes, ios-lint, ios-build, ios-unit, ios-ui]
+    needs: [changes, ios-lint, ios-build, ios-unit, ios-ui, ios-phone-runtime]
     if: ${{ !cancelled() && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -435,11 +617,14 @@ jobs:
         env:
           CHANGES: ${{ needs.changes.result }}
           IOS: ${{ needs.changes.outputs.ios }}
+          IOS_UNIT: ${{ needs.changes.outputs.ios_unit }}
           IOS_UI: ${{ needs.changes.outputs.ios_ui }}
+          IOS_PHONE_RUNTIME: ${{ needs.changes.outputs.ios_phone_runtime }}
           LINT: ${{ needs.ios-lint.result }}
           BUILD: ${{ needs.ios-build.result }}
           UNIT: ${{ needs.ios-unit.result }}
           UI: ${{ needs.ios-ui.result }}
+          PHONE_RUNTIME: ${{ needs.ios-phone-runtime.result }}
         run: |
           if [[ $CHANGES != success ]]; then
             echo "::error::Change detection ended with '$CHANGES', so the iOS result is unknown."
@@ -458,6 +643,40 @@ jobs:
           }
           check 'iOS lint' "$IOS" "$LINT"
           check 'iOS build' "$IOS" "$BUILD"
-          check 'iOS unit and package tests' "$IOS" "$UNIT"
+          check 'iOS unit and package tests' "$IOS_UNIT" "$UNIT"
           check 'iOS UI tests' "$IOS_UI" "$UI"
+          check 'iOS phone runtime tests' "$IOS_PHONE_RUNTIME" "$PHONE_RUNTIME"
           exit $status
+
+  # The repository's Actions caches are limited to 10 GB, past which GitHub evicts the least
+  # recently used, main's included. Only main saves caches, and each save of a new key supersedes
+  # the older entries of its family (the key without its last part: the lockfile hash, the
+  # Playwright version, the commit of a compilation cache). After a push to main's jobs, this
+  # deletes every main entry but the newest of each family, so the caches stay at about one entry
+  # per family instead of growing until GitHub evicts (README, CI section).
+  caches:
+    name: Prune superseded caches (Linux)
+    needs: [backend, image, ios]
+    if: ${{ !cancelled() && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete main's superseded cache entries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --limit 1000 --sort created_at --order desc \
+            --json id,key,sizeInBytes --jq '.[] | "\(.id) \(.key) \(.sizeInBytes)"' |
+            while read -r id key size; do
+              family=${key%-*}
+              if [[ " ${kept-} " == *" $family "* ]]; then
+                echo "delete $key ($(( size / 1048576 )) MB)"
+                gh cache delete "$id"
+              else
+                kept="${kept-} $family"
+                echo "keep $key ($(( size / 1048576 )) MB)"
+              fi
+            done

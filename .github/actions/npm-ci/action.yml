@@ -1,0 +1,25 @@
+name: Node and the npm dependencies
+description: >-
+  Node from .nvmrc, then npm ci from the npm download cache. Only pushes to main save the cache;
+  every other run restores main's, so pull requests add no cache entries (README, CI section).
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+    - name: Restore the npm download cache
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: npm-${{ runner.os }}-
+    - run: npm ci
+      shell: bash
+    - name: Save the npm download cache
+      if: ${{ github.event_name == 'push' && steps.restore.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}

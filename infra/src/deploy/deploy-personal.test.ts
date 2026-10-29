@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import { listoraBootstrapTemplate } from './bootstrap-template.ts';
 import { roleBoundaryPolicy } from './execution-policy.ts';
@@ -33,13 +33,24 @@ afterEach(() => {
 });
 
 /**
+ * The cloud assemblies the real `cdk synth` made in this file, one per distinct command line
+ * (so per context). A synthesis takes about 5 s and gives the same templates for the same
+ * command line, so a later test with the same settings gets a copy instead of a second run.
+ */
+const synths = mkdtempSync(join(tmpdir(), 'deploy-personal-synths-'));
+afterAll(() => {
+  rmSync(synths, { recursive: true, force: true });
+});
+
+/**
  * Runs the script with fake `aws`, `docker`, `git`, `curl`, and `npx` first on PATH. The fake
  * `aws` answers `<service> <operation>` from `answers`, or `<service> <operation> <name>` for a
  * call naming `--stack-name <name>` or `--policy-arn <arn ending in /name>` (anything else
  * fails loudly), and records every call, so a
  * test sees exactly what the script asked AWS; `awsScript`, bash run first with the call's
  * words in `args` and its stack in `stack`, answers what depends on more than that. `npx`
- * fails, except `cdk synth` with `realSynth` (offline, as the script runs it), so no test can
+ * fails, except `cdk synth` with `realSynth` (offline, as the script runs it, once per command
+ * line in this file: `synths`), so no test can
  * reach a cdk command that talks to AWS, but `cdk deploy` with `deployOk`, which only records
  * the call. `git diff` exits `gitDiff` (1: the paths changed), or `imageDiff` for the image
  * inputs (default 1, so the images build). `curl` answers healthy unless
@@ -108,7 +119,13 @@ echo "unexpected aws call: \${args[*]}" >&2; exit 99`,
     'npx',
     `echo "npx $*" >>"${calls}"
 if [[ -n "\${AWS_CONFIG_FILE:-}" ]]; then sed 's/^/config: /' "$AWS_CONFIG_FILE" >>"${calls}"; fi
-if [[ "${String(realSynth)}" == true && "$1 $2" == "cdk synth" ]]; then exec "${npx}" "$@"; fi
+if [[ "${String(realSynth)}" == true && "$1 $2" == "cdk synth" ]]; then
+  output=""; previous=""
+  for word in "$@"; do [[ "$previous" == --output ]] && output=$word; previous=$word; done
+  saved="${synths}/$(printf '%s\\n' "$@" | sha256sum | cut -c1-16)"
+  if [[ ! -d "$saved" ]]; then "${npx}" "$@" || exit; cp -R "$output" "$saved"; exit 0; fi
+  rm -rf "$output"; mkdir -p "$(dirname "$output")"; cp -R "$saved" "$output"; exit 0
+fi
 if [[ "${String(deployOk)}" == true && "$1 $2" == "cdk deploy" ]]; then exit 0; fi
 echo "npx must not run in this test" >&2; exit 98`,
   );
