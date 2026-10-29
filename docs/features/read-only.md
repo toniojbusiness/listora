@@ -15,6 +15,8 @@ Code:
 - `packages/db/migrations/20261028172246_marketplace_read_only.up.sql`: the account's setting
   per marketplace, which outlives the connection.
 - The app's Link accounts screen (`MarketplaceLinkingFeature`): the Read only switch.
+- The app's own refusal ([On the phone](#on-the-phone)): `PhoneReadOnlyGuard` in
+  `PhoneExecutionFeature`, and the marks in `Core/Phone/MarketplaceSessionStore.swift`.
 
 ## What is read only
 
@@ -56,6 +58,29 @@ Code:
 5. **The phone runtime.** Every call to a read-only connection carries `readOnly: true`, and the
    runtime refuses a write script with it before any step runs (`read_only`, nothing mutated).
    The runtime is served by the server, so the phone runs the new rule without an app update.
+6. **The app itself.** The iPhone app refuses a write script on an account it holds read only
+   before any of the runtime's script runs, whatever the call or the runtime says
+   ([On the phone](#on-the-phone)).
+
+## On the phone
+
+The phone runtime is the server's own code, and a call's `readOnly` is the server's word, so on
+their own the layers above all trust the server. The app adds one that doesn't:
+
+- **The phone holds an account read only** once it learns so: a call that says `readOnly`, the
+  seller turning Read only on in Link accounts, or Link accounts showing the account read only.
+  The mark is the app's own, in its Keychain (`MarketplaceSessionStore.setReadOnly`), per
+  marketplace, for the signed-in Listora account.
+- **It refuses there itself.** Before it loads anything for a call, the app reads the call's
+  script, and a write (any script but the reads `read`, `health`, `orders`, `listings`, `labels`,
+  `offers`, `offer`: one added later is a write until it is listed) on an account it holds read
+  only is answered as the runtime's own refusal (`read_only`, no step, nothing mutated), which the
+  server records as refused, never retried (`PhoneReadOnlyGuard`). A call that no longer says
+  `readOnly`, or a runtime that would ignore it, changes nothing.
+- **Only the seller lets it go**, by turning Read only off in Link accounts on this phone (and the
+  server taking it). Until then Link accounts shows the account read only on this phone whatever
+  the server says. A mark stays through a sign-out, and goes when another Listora account signs in
+  on the phone.
 
 **Items never cross.** An item from a read-only account is never listed on the account's other
 marketplaces, and nothing new is listed on a read-only one: creating or publishing such a listing
@@ -179,7 +204,8 @@ nothing.
   learns its seller from its connection, and is protected on any account.
 - `operations/src/shop-identity.int.test.ts` and `apps/api/src/connections/read-only.int.test.ts`:
   a seller kept read only, and the owner refused Read only off on a protected shop (`409`).
-- The app: `ReadOnlyLinkTests` and `APIMarketplaceSessionServiceTests`.
+- The app: `ReadOnlyLinkTests` and `APIMarketplaceSessionServiceTests`; its own refusal and
+  marks: `PhoneReadOnlyGuardTests`, `ReadOnlyOnPhoneLinkTests`, and `MarketplaceSessionStoreTests`.
 
 ## Data
 

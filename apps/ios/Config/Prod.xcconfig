@@ -1,8 +1,9 @@
 // Prod: the App Store build, served by the personal environment for now (its first deploy,
 // scripts/deploy-personal.sh, printed these values; apps/ios/README.md, Environments). The API
 // is the compute stack's ApiUrl output, and sign-in is the personal user pool: COGNITO_CLIENT_ID
-// is its app client (the auth stack's AppClientId output). Update both if the deploy prints new
-// ones (a domain changes the URL; replacing the auth stack changes the client id).
+// is its app client (the auth stack's AppClientId output), and MEDIA_BASE_URL its photo CDN (the
+// storage stack's PhotoCdnDomain output). Update them if the deploy prints new ones (a domain
+// changes the URL; replacing the auth stack changes the client id).
 
 #include "Base.xcconfig"
 
@@ -14,3 +15,5 @@ BUNDLE_ID_SUFFIX =
 API_BASE_URL = https:/$()/7c7l91oldf.execute-api.us-east-1.amazonaws.com
 COGNITO_REGION = us-east-1
 COGNITO_CLIENT_ID = 7sstt4lhe4qu7of40nkahc8ddh
+// The personal storage stack's PhotoCdnDomain output, where the listing photos are served.
+MEDIA_BASE_URL = https:/$()/dyrx7kuvssxv3.cloudfront.net

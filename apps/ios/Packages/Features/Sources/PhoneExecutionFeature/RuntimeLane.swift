@@ -74,8 +74,21 @@ final class RuntimeLane {
         loaded = nil
     }
 
+    /// A message from the runtime. Only the controller page's own main frame, Listora's blank
+    /// page that runs the bundle, is answered; nothing else ever reaches the handler.
     fileprivate func received(_ message: WKScriptMessage) async -> (Any?, String?) {
-        await handle(message)
+        guard let controller, message.webView === controller, message.frameInfo.isMainFrame,
+              Self.isRuntimePage(message.frameInfo.request.url)
+        else {
+            return (nil, "closed")
+        }
+        return await handle(message)
+    }
+
+    /// The blank page the runtime loads into (`about:blank`), never a page of the web.
+    nonisolated static func isRuntimePage(_ url: URL?) -> Bool {
+        guard let scheme = url?.scheme?.lowercased(), !scheme.isEmpty else { return true }
+        return scheme == "about"
     }
 
     /// A web view for the marketplace, made before its first call, so the call finds it ready.
@@ -86,8 +99,14 @@ final class RuntimeLane {
     }
 
     /// The page a call acts on: the warm one when it holds this session on these origins, else a
-    /// new one with the session.
-    func page(origins: [String], session stored: [StoredCookie], logger: Logger) async -> MarketplacePage {
+    /// new one with the session. `domains` are the marketplace's own (its cookie domains), which a
+    /// check handed to the seller may go to.
+    func page(
+        origins: [String],
+        domains: [String],
+        session stored: [StoredCookie],
+        logger: Logger,
+    ) async -> MarketplacePage {
         if let page = currentPage, !page.handingOff {
             if page.origins.isEmpty, !page.hasSession {
                 page.origins = Set(origins)
@@ -97,11 +116,13 @@ final class RuntimeLane {
                     await page.restore(stored)
                     session = stored
                 }
+                page.domains = domains
                 return page
             }
         }
         closePage()
         let page = MarketplacePage(origins: origins, logger: logger)
+        page.domains = domains
         await page.restore(stored)
         session = stored
         currentPage = page
@@ -139,5 +160,32 @@ private final class BridgeProxy: NSObject, WKScriptMessageHandlerWithReply {
     ) async -> (Any?, String?) {
         guard let lane else { return (nil, "closed") }
         return await lane.received(message)
+    }
+}
+
+/// The controller page's one load, and its navigation policy: the blank page the runtime runs in
+/// loads once, and the page never goes anywhere after it (a navigation the runtime or anything in
+/// it starts is cancelled), so the `listora` handler only ever serves Listora's own page.
+@MainActor
+final class ControllerLoad: NSObject, WKNavigationDelegate {
+    let loaded = OneShot<Void>()
+    private var started = false
+
+    func webView(_: WKWebView, decidePolicyFor _: WKNavigationAction) async -> WKNavigationActionPolicy {
+        guard !started, !loaded.isDone else { return .cancel }
+        started = true
+        return .allow
+    }
+
+    func webView(_: WKWebView, didFinish _: WKNavigation?) {
+        loaded.finish(.success(()))
+    }
+
+    func webView(_: WKWebView, didFail _: WKNavigation?, withError error: any Error) {
+        loaded.finish(.failure(error))
+    }
+
+    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation?, withError error: any Error) {
+        loaded.finish(.failure(error))
     }
 }

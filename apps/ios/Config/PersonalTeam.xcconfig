@@ -12,3 +12,7 @@
 // entitlement is signed in, so what needs one (the Dev-only DevOverrides) is off in these builds.
 CODE_SIGN_ENTITLEMENTS = Config/PersonalTeam.entitlements
 SESSION_KEYCHAIN_GROUP = $(DEVELOPMENT_TEAM).$(BASE_BUNDLE_IDENTIFIER).session
+// The app's own keychain group, for what only the app keeps (the marketplace sessions): the
+// entitlements list it first, so it is also the default group of an item that names none, never
+// the session group above, which the Share Extension reads too.
+PHONE_KEYCHAIN_GROUP = $(DEVELOPMENT_TEAM).$(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX)

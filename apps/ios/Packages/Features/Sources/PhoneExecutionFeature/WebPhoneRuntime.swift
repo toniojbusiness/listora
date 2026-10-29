@@ -92,18 +92,21 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     private let fetchRuntime: @Sendable (_ have: String?) async -> RemoteRuntime?
     private var stepStarted: (@MainActor (PhoneStep) -> Void)?
     private var warm = false
-    private let photos = PhotoCache()
+    private let photos: PhotoCache
     /// The marketplaces whose runs the phone may get, for keeping their web views ready.
     private static let marketplaces = ["poshmark", "mercari", "depop", "ebay"]
 
+    /// `photoHosts`: Listora's own photo hosts, the only ones it fetches a listing's photos from.
     public init(
         sessions: any MarketplaceSessionStore,
         handOff: (any ChallengeHandOff)?,
+        photoHosts: [URL],
         notifier: CheckNeededNotifier = CheckNeededNotifier(),
         fetchRuntime: @escaping @Sendable (_ have: String?) async -> RemoteRuntime? = { _ in nil },
     ) {
         self.sessions = sessions
         self.handOff = handOff
+        photos = PhotoCache(sources: PhotoSources(photoHosts))
         self.notifier = notifier
         self.fetchRuntime = fetchRuntime
         super.init()
@@ -145,6 +148,14 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         photos.removeAll()
     }
 
+    /// The seller signed out of Listora: every marketplace page goes, with the session it holds.
+    public func signedOut() {
+        for lane in lanes.values {
+            lane.closePage()
+        }
+        photos.removeAll()
+    }
+
     @discardableResult
     public func refresh() async -> Bool {
         // The server sends its script only when it isn't the one named here.
@@ -164,14 +175,19 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     }
 
     public func run(_ input: Data, marketplace: String) async throws -> Data {
+        let object = try JSONSerialization.jsonObject(with: input)
+        let call = object as? [String: Any] ?? [:]
+        // The phone's own read-only refusal comes first, before any of the runtime's script runs.
+        if let refused = PhoneReadOnlyGuard.refusal(of: call, marketplace: marketplace, sessions: sessions) {
+            return try JSONSerialization.data(withJSONObject: refused)
+        }
         let lane = lane(for: marketplace)
         _ = try await lane.load(source: source())
         guard let controller = lane.controller else { throw PhoneRuntimeError.bundleNotLoaded("no controller page") }
-        let object = try JSONSerialization.jsonObject(with: input)
-        let domains = ((object as? [String: Any])?["cookieDomains"] as? [String]) ?? []
-        let origins = ((object as? [String: Any])?["origins"] as? [String]) ?? []
+        let domains = call["cookieDomains"] as? [String] ?? []
+        let origins = call["origins"] as? [String] ?? []
         let stored = sessions.cookies(for: marketplace).filter { $0.belongs(to: domains) }
-        let page = await lane.page(origins: origins, session: stored, logger: logger)
+        let page = await lane.page(origins: origins, domains: domains, session: stored, logger: logger)
         lane.calling = true
         defer {
             lane.calling = false
@@ -372,23 +388,5 @@ final class WebViewShelf {
 private final class ShelfWindow: UIWindow {
     override var canBecomeKey: Bool {
         false
-    }
-}
-
-/// The controller page's one load.
-@MainActor
-final class ControllerLoad: NSObject, WKNavigationDelegate {
-    let loaded = OneShot<Void>()
-
-    func webView(_: WKWebView, didFinish _: WKNavigation?) {
-        loaded.finish(.success(()))
-    }
-
-    func webView(_: WKWebView, didFail _: WKNavigation?, withError error: any Error) {
-        loaded.finish(.failure(error))
-    }
-
-    func webView(_: WKWebView, didFailProvisionalNavigation _: WKNavigation?, withError error: any Error) {
-        loaded.finish(.failure(error))
     }
 }

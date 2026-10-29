@@ -101,14 +101,18 @@ public final class ChallengeHandOffModel: ChallengeHandOff {
     }
 }
 
-/// The visible in-app browser of a hand-off.
+/// The visible in-app browser of a hand-off. It always shows the address of the page, so the
+/// seller sees whose page they type in; the page itself only goes to the marketplace's own
+/// domains and the sign-in providers it uses (`HandOffPolicy`).
 public struct ChallengeHandOffView: View {
     let request: HandOffRequest
     let model: ChallengeHandOffModel
+    @State private var address: PageAddress
 
     public init(request: HandOffRequest, model: ChallengeHandOffModel) {
         self.request = request
         self.model = model
+        _address = State(initialValue: PageAddress(request.page))
     }
 
     public var body: some View {
@@ -116,13 +120,16 @@ public struct ChallengeHandOffView: View {
             HostedPage(page: request.page)
                 .accessibilityIdentifier("handOff.page")
                 .safeAreaInset(edge: .top) {
-                    Banner(
-                        request.title,
-                        message: request.message,
-                        tone: .actionNeeded,
-                        systemImage: "hand.raised",
-                        identifier: "handOff.banner",
-                    )
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Banner(
+                            request.title,
+                            message: request.message,
+                            tone: .actionNeeded,
+                            systemImage: "hand.raised",
+                            identifier: "handOff.banner",
+                        )
+                        addressBar
+                    }
                     .padding(Spacing.sm)
                     .background(Palette.surface)
                 }
@@ -140,6 +147,39 @@ public struct ChallengeHandOffView: View {
                 }
         }
         .tint(Palette.brand.color)
+    }
+
+    /// The page's host, with a lock while it is https.
+    private var addressBar: some View {
+        Label(address.host, systemImage: address.secure ? "lock.fill" : "exclamationmark.triangle.fill")
+            .font(Typography.footnote)
+            .foregroundStyle(Palette.textSecondary)
+            .lineLimit(1)
+            .truncationMode(.head)
+            .accessibilityLabel("Address \(address.host), \(address.secure ? "secure" : "not secure")")
+            .accessibilityIdentifier("handOff.address")
+    }
+}
+
+/// The address of the page a hand-off shows, as it changes.
+@MainActor
+@Observable
+final class PageAddress {
+    private(set) var host = ""
+    private(set) var secure = false
+    @ObservationIgnored private var observation: NSKeyValueObservation?
+
+    init(_ page: WKWebView) {
+        show(page.url)
+        observation = page.observe(\.url, options: [.new]) { [weak self] page, _ in
+            // WebKit reports a web view's changes on the main thread.
+            MainActor.assumeIsolated { self?.show(page.url) }
+        }
+    }
+
+    private func show(_ url: URL?) {
+        host = url?.host() ?? url?.absoluteString ?? ""
+        secure = url?.scheme?.lowercased() == "https"
     }
 }
 

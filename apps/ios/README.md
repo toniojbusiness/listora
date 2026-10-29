@@ -428,7 +428,9 @@ A Personal Team cannot register App Groups (Xcode makes its provisioning profile
 App Group list), so `PersonalTeam.xcconfig` also swaps the App Group entitlement for a Keychain
 Sharing group of the team, `<team id>.<prefix>.session` (`Config/PersonalTeam.entitlements`),
 and keeps the session there (`SESSION_KEYCHAIN_GROUP`). The app and the Share Extension still
-share the signed-in session. Nothing in Staging or Prod needs the App Group itself; only Dev's
+share the signed-in session. Each target's own group (`<team id>.<its bundle id>`) is listed
+first, so an item that names no group stays with the target that kept it, and the app keeps the
+marketplace sessions in its own (`PHONE_KEYCHAIN_GROUP`), never the shared one. Nothing in Staging or Prod needs the App Group itself; only Dev's
 launch overrides (`DevOverrides`) do, so a personal Dev build ignores `LISTORA_DEV_API_BASE_URL`.
 
 One-time setup:

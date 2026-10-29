@@ -9,3 +9,4 @@ LISTORA_ENVIRONMENT = staging
 APP_DISPLAY_NAME = Listora Staging
 BUNDLE_ID_SUFFIX = .staging
 API_BASE_URL = https:/$()/api.staging.listora.invalid
+MEDIA_BASE_URL = https:/$()/media.staging.listora.invalid

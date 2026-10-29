@@ -22,18 +22,61 @@ struct MarketplaceSessionStoreTests {
     @Test
     func `keeps each marketplace's session for the account signed in, and removes it for another`() {
         let store = InMemoryMarketplaceSessionStore()
-        store.keep(onlyFor: "seller@listora.test")
+        store.keep(onlyFor: "issuer#seller", formerly: "seller@listora.test")
         store.save(depop, for: "depop")
         #expect(store.cookies(for: "depop") == depop)
         #expect(store.cookies(for: "mercari").isEmpty)
 
         // The same account signing in again keeps its sessions.
-        store.keep(onlyFor: "seller@listora.test")
+        store.keep(onlyFor: "issuer#seller", formerly: "seller@listora.test")
         #expect(store.cookies(for: "depop") == depop)
 
-        // Another account never acts in them.
-        store.keep(onlyFor: "someone-else@listora.test")
+        // Another account never acts in them, even one that comes to use the same email.
+        store.keep(onlyFor: "issuer#someone-else", formerly: "seller@listora.test")
         #expect(store.cookies(for: "depop").isEmpty)
+    }
+
+    @Test
+    func `an earlier build's owner, the account's email, names the same account once`() {
+        let store = InMemoryMarketplaceSessionStore(["depop": depop], owner: "seller@listora.test")
+
+        store.keep(onlyFor: "issuer#seller", formerly: "seller@listora.test")
+        #expect(store.cookies(for: "depop") == depop)
+
+        // From then on the identity names it, so the email alone no longer does.
+        store.keep(onlyFor: "issuer#other", formerly: "seller@listora.test")
+        #expect(store.cookies(for: "depop").isEmpty)
+    }
+
+    @Test
+    func `signing out removes the sessions, and the read-only marks stay for the account`() {
+        let store = InMemoryMarketplaceSessionStore()
+        store.keep(onlyFor: "issuer#seller", formerly: nil)
+        store.save(depop, for: "depop")
+        store.setReadOnly(true, for: "depop")
+
+        store.removeAll()
+        #expect(store.cookies(for: "depop").isEmpty)
+        #expect(store.isReadOnly("depop"))
+
+        store.keep(onlyFor: "issuer#seller", formerly: nil)
+        #expect(store.isReadOnly("depop"))
+        #expect(!store.isReadOnly("mercari"))
+    }
+
+    @Test
+    func `the read-only marks go only when turned off, or for another account`() {
+        let store = InMemoryMarketplaceSessionStore()
+        store.keep(onlyFor: "issuer#seller", formerly: nil)
+        store.setReadOnly(true, for: "depop")
+        store.setReadOnly(true, for: "mercari")
+
+        store.setReadOnly(false, for: "mercari")
+        #expect(store.isReadOnly("depop"))
+        #expect(!store.isReadOnly("mercari"))
+
+        store.keep(onlyFor: "issuer#someone-else", formerly: nil)
+        #expect(!store.isReadOnly("depop"))
     }
 
     @Test

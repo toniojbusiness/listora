@@ -40,3 +40,15 @@ COGNITO_CLIENT_ID =
 // The address Settings > Help and contact emails (docs/features/profile.md). Empty means the build
 // names none, and Help says that contact isn't set up yet.
 SUPPORT_EMAIL =
+
+// Where the API's listing photos are served from when it is not the API itself: the CloudFront
+// distribution of the S3 storage driver (the storage stack's PhotoCdnDomain output, infra/README.md).
+// The phone fetches a listing's photos from API_BASE_URL and this host only. Empty: the API serves
+// them (the local storage driver, Dev).
+MEDIA_BASE_URL =
+
+// The keychain access group of what only the app keeps (the phone's marketplace sessions). Empty
+// here: the app has no keychain-access-groups entitlement, so its default group is its own.
+// Personal device builds (Config/PersonalTeam.xcconfig) set the app's own group, since their
+// default would be the group shared with the Share Extension.
+PHONE_KEYCHAIN_GROUP =

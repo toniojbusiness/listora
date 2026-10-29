@@ -102,7 +102,7 @@ public struct AppDependencies {
             apiClient: apiClient, meter: interactionMeter, listingCopy: listingCopy,
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
-        phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
+        phone = Self.makePhone(apiClient, accessTokens, version, configuration, signIn)
         packCheck = Self.makePackCheck(apiClient, accessTokens, phone, launchOptions, defaults)
         sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone, packCheck)
         tasks = Self.makeTasks(apiClient, accessTokens, showSignIn, phone)
@@ -251,7 +251,7 @@ public struct AppDependencies {
             try? FileManager.default.removeItem(at: directory)
         }
         interactionStorage.reset()
-        KeychainMarketplaceSessionStore().removeAll()
+        KeychainMarketplaceSessionStore().reset()
         ReviewEnvironment.resetLocalData(defaults: defaults)
         AddItemEnvironment.resetLocalData(defaults: defaults)
         GettingStartedModel.resetLocalData(defaults: defaults)

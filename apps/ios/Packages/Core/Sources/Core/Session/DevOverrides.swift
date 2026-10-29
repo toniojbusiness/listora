@@ -33,6 +33,8 @@
                       appGroupIdentifier: configuration.appGroupIdentifier,
                       sessionKeychainGroup: configuration.sessionKeychainGroup,
                       cognito: configuration.cognito,
+                      mediaBaseURL: configuration.mediaBaseURL,
+                      phoneKeychainGroup: configuration.phoneKeychainGroup,
                   )
             else { return configuration }
             return overridden

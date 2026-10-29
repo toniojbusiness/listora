@@ -45,7 +45,9 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   `BGTaskSchedulerPermittedIdentifiers` in `project.yml`). `ListoraAppDelegate` exists only for
   what UIKit alone reports: the APNs token and a push that wakes the app. The installation id and
   the marketplace sessions the phone keeps are Keychain items readable after the first unlock,
-  never synced (`Core/Phone`).
+  never synced (`Core/Phone`); the sessions are in the app's own keychain group, never the one
+  shared with the Share Extension (`PHONE_KEYCHAIN_GROUP` in personal device builds,
+  [phone-execution.md](phone-execution.md#where-a-marketplace-runs)).
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
   must be clean.
 - Releases are plain `xcodebuild`, no fastlane: `scripts/ios-release.sh` archives
