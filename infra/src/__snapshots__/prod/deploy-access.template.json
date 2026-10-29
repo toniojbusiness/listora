@@ -21,7 +21,8 @@
                 "StringEquals": {
                   "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
                   "token.actions.githubusercontent.com:sub": "repo:toniojbusiness@266634719/listora@1431894048:environment:prod",
-                  "token.actions.githubusercontent.com:ref": "refs/heads/main"
+                  "token.actions.githubusercontent.com:ref": "refs/heads/main",
+                  "token.actions.githubusercontent.com:job_workflow_ref": "toniojbusiness/listora/.github/workflows/deploy.yml@refs/heads/main"
                 }
               },
               "Effect": "Allow",

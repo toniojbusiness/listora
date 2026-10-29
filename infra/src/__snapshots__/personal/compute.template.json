@@ -1422,7 +1422,7 @@
                 "Fn::GetStackOutput": {
                   "StackName": "listora-personal-network",
                   "Region": "us-east-1",
-                  "OutputName": "PublishOutputFnGetAttWorkerSecurityGroup5529CF0BGroupId1D09B9A4"
+                  "OutputName": "PublishOutputFnGetAttRunnerSecurityGroupDE989EBEGroupIdF3EB8EA0"
                 }
               }
             ],
