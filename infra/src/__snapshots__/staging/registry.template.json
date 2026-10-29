@@ -9,7 +9,7 @@
         },
         "ImageTagMutability": "IMMUTABLE",
         "LifecyclePolicy": {
-          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep the newest 50 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":50},\"action\":{\"type\":\"expire\"}}]}"
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep the newest 15 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":15},\"action\":{\"type\":\"expire\"}}]}"
         },
         "RepositoryName": "listora/app"
       },
@@ -24,7 +24,7 @@
         },
         "ImageTagMutability": "IMMUTABLE",
         "LifecyclePolicy": {
-          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep the newest 50 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":50},\"action\":{\"type\":\"expire\"}}]}"
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep the newest 15 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":15},\"action\":{\"type\":\"expire\"}}]}"
         },
         "RepositoryName": "listora/runner"
       },

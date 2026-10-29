@@ -19,7 +19,6 @@ describe('the trust metric catalog', () => {
     for (const [name, metric] of Object.entries(TRUST_METRICS)) {
       expect(name).toMatch(/^[A-Z][A-Za-z]+$/);
       expect(['Count', 'Seconds', 'Milliseconds', 'None']).toContain(metric.unit);
-      expect(metric.dimensionSets.length).toBeGreaterThan(0);
       for (const set of metric.dimensionSets) {
         expect(set.length).toBeLessThanOrEqual(2);
         for (const dimension of set) expect(METRIC_DIMENSIONS).toContain(dimension);
@@ -32,31 +31,71 @@ describe('formatEmf', () => {
   it('writes one EMF line: the _aws directive, dimension values, and metric values', () => {
     const group: MetricGroup = {
       timestamp: AT,
-      dimensions: { Status: 'verifying' },
-      values: { StuckOperations: [3], OldestStuckOperationAge: [120, 60] },
+      dimensions: {},
+      values: { DelistFailed: [3], DelistEverywhereLatency: [120, 60] },
     };
     const lines = formatEmf(group, { service: 'worker' });
 
     expect(lines).toHaveLength(1);
     expect(parse(lines[0] ?? '')).toEqual({
       service: 'worker',
-      Status: 'verifying',
       _aws: {
         Timestamp: AT.getTime(),
         CloudWatchMetrics: [
           {
             Namespace: METRIC_NAMESPACE,
-            Dimensions: [['Status']],
+            Dimensions: [[]],
             Metrics: [
-              { Name: 'StuckOperations', Unit: 'Count' },
-              { Name: 'OldestStuckOperationAge', Unit: 'Seconds' },
+              { Name: 'DelistFailed', Unit: 'Count' },
+              { Name: 'DelistEverywhereLatency', Unit: 'Milliseconds' },
             ],
           },
         ],
       },
       // A single value is written as a number, as CloudWatch's own libraries do.
+      DelistFailed: 3,
+      DelistEverywhereLatency: [120, 60],
+    });
+  });
+
+  it('writes a log-only breakdown without the _aws directive, so CloudWatch bills no metric', () => {
+    const [line] = formatEmf(
+      {
+        timestamp: AT,
+        dimensions: { Status: 'verifying' },
+        values: { StuckOperations: [3], OldestStuckOperationAge: [120] },
+      },
+      { service: 'worker' },
+    );
+    expect(parse(line ?? '')).toEqual({
+      service: 'worker',
+      Status: 'verifying',
       StuckOperations: 3,
-      OldestStuckOperationAge: [120, 60],
+      OldestStuckOperationAge: 120,
+    });
+  });
+
+  it('publishes only the breakdowns an alarm reads (no per-status or per-connection metrics)', () => {
+    const published = (Object.keys(TRUST_METRICS) as TrustMetricName[]).filter(
+      (name) => TRUST_METRICS[name].dimensionSets.length > 0,
+    );
+    expect(published).not.toContain('StuckOperations');
+    expect(published).not.toContain('OldestStuckOperationAge');
+    expect(published).not.toContain('MarketplaceConnections');
+    expect(TRUST_METRICS.UnhealthySaleChecks.dimensionSets).toEqual([[]]);
+    // A marketplace still rides along as a log field for Logs Insights.
+    expect(
+      parse(
+        formatEmf({
+          timestamp: AT,
+          dimensions: { Marketplace: 'mercari' },
+          values: { UnhealthySaleChecks: [2] },
+        })[0] ?? '',
+      ),
+    ).toMatchObject({
+      Marketplace: 'mercari',
+      UnhealthySaleChecks: 2,
+      _aws: { CloudWatchMetrics: [{ Dimensions: [[]] }] },
     });
   });
 

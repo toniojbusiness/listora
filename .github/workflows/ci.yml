@@ -194,15 +194,45 @@ jobs:
       - if: ${{ env.IMAGE_AFFECTED == 'true' }}
         run: scripts/container-smoke.sh
 
-  # The iOS checks: one macOS job lints and builds, then hands the built tests (the products and
+  # SwiftLint and SwiftFormat on Linux, before any macOS runner is reserved: a lint failure costs
+  # a minute of Linux, not a macOS slot. The Linux builds, pinned to the versions the macOS
+  # runners have (Homebrew's SwiftLint, the runner image's SwiftFormat); bump them together.
+  # This SwiftLint build has no SourceKit, so it skips the one SourceKit rule the configuration
+  # enables, statement_position, whose `} else {` layout SwiftFormat's elseOnSameLine enforces.
+  ios-lint:
+    name: iOS lint (Linux)
+    needs: changes
+    if: ${{ needs.changes.outputs.ios == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SWIFTLINT_VERSION: 0.65.1
+      SWIFTLINT_SHA256: caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d
+      SWIFTFORMAT_VERSION: 0.63.1
+      SWIFTFORMAT_SHA256: 9e10090e0213378c68cedb42adc2c6461916a9c8e457cf452b5585b84096c333
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install SwiftLint and SwiftFormat
+        run: |
+          tools="$RUNNER_TEMP/swift-lint-tools"
+          mkdir -p "$tools" && cd "$tools"
+          curl -sSfL -o swiftlint.zip "https://github.com/realm/SwiftLint/releases/download/$SWIFTLINT_VERSION/swiftlint_linux_amd64.zip"
+          curl -sSfL -o swiftformat.zip "https://github.com/nicklockwood/SwiftFormat/releases/download/$SWIFTFORMAT_VERSION/swiftformat_linux.zip"
+          printf '%s  swiftlint.zip\n%s  swiftformat.zip\n' "$SWIFTLINT_SHA256" "$SWIFTFORMAT_SHA256" | sha256sum -c -
+          unzip -q swiftlint.zip swiftlint-static && mv swiftlint-static swiftlint
+          unzip -q swiftformat.zip swiftformat_linux && mv swiftformat_linux swiftformat
+          echo "$tools" >>"$GITHUB_PATH"
+      - run: make ios-lint
+
+  # The iOS checks: once the lint passed, one macOS job builds, then hands the built tests (the products and
   # their .xctestrun) to the test jobs, which run side by side on macOS runners: the unit and
   # package tests in one, and the UI tests in IOS_UI_SHARDS shards split by running time
   # (scripts/ios-ui-shard.sh), each with its own local stack. One build per run keeps the macOS
   # minutes down: an account runs only a few macOS jobs at once, shared by every open pull
   # request. `iOS checks` below sums them up into one result for a required check.
   ios-build:
-    name: iOS lint and build (macOS)
-    needs: changes
+    name: iOS build (macOS)
+    needs: [changes, ios-lint]
     if: ${{ needs.changes.outputs.ios == 'true' }}
     runs-on: macos-26
     timeout-minutes: 30
@@ -214,10 +244,10 @@ jobs:
       IOS_COMPILATION_CACHE: ${{ github.workspace }}/.build/ios/CompilationCache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install XcodeGen, SwiftLint, and SwiftFormat
+      - name: Install XcodeGen
         run: |
           xcodebuild -version
-          brew install xcodegen swiftlint swiftformat
+          brew install xcodegen
       # SwiftPM checkouts for the app's package graph, and the compilation cache (Makefile,
       # IOS_COMPILATION_CACHE): Xcode keys it on file contents, so it stays valid in a fresh
       # checkout, where DerivedData would not (Xcode keys that on timestamps). Only `main` saves
@@ -243,7 +273,6 @@ jobs:
           size_kb=$(du -sk "$IOS_COMPILATION_CACHE" 2>/dev/null | cut -f1)
           echo "Compilation cache: $(( ${size_kb:-0} / 1024 )) MB"
           if (( ${size_kb:-0} > 4 * 1024 * 1024 )); then rm -rf "$IOS_COMPILATION_CACHE"; echo 'Starting it over.'; fi
-      - run: make ios-lint
       - run: make ios-check-ats
       # The exact device the build targets (scripts/ios-ci-simulator.sh): a name alone can
       # match one device per installed iOS runtime.
@@ -397,7 +426,7 @@ jobs:
   # check) on a draft pull request.
   ios:
     name: iOS checks
-    needs: [changes, ios-build, ios-unit, ios-ui]
+    needs: [changes, ios-lint, ios-build, ios-unit, ios-ui]
     if: ${{ !cancelled() && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -407,6 +436,7 @@ jobs:
           CHANGES: ${{ needs.changes.result }}
           IOS: ${{ needs.changes.outputs.ios }}
           IOS_UI: ${{ needs.changes.outputs.ios_ui }}
+          LINT: ${{ needs.ios-lint.result }}
           BUILD: ${{ needs.ios-build.result }}
           UNIT: ${{ needs.ios-unit.result }}
           UI: ${{ needs.ios-ui.result }}
@@ -426,7 +456,8 @@ jobs:
               status=1
             fi
           }
-          check 'iOS lint and build' "$IOS" "$BUILD"
+          check 'iOS lint' "$IOS" "$LINT"
+          check 'iOS build' "$IOS" "$BUILD"
           check 'iOS unit and package tests' "$IOS" "$UNIT"
           check 'iOS UI tests' "$IOS_UI" "$UI"
           exit $status

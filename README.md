@@ -170,7 +170,8 @@ do not run CI, so one commit never runs twice. Its jobs:
 | `Detect changed areas`                           | Linux                | Always; decides whether the iOS and image jobs build        |
 | `Backend check (Linux)`                          | Linux                | Always                                                      |
 | `Application image build and smoke test (Linux)` | Linux                | Only when an image input changed; otherwise a passing no-op |
-| `iOS lint and build (macOS)`                     | macOS                | Only when an iOS input changed; otherwise skipped           |
+| `iOS lint (Linux)`                               | Linux                | Only when an iOS input changed; otherwise skipped           |
+| `iOS build (macOS)`                              | macOS                | Only when an iOS input changed, after the lint passed       |
 | `iOS unit and package tests (macOS)`             | macOS                | Only when an iOS input changed, after the build             |
 | `iOS UI tests (macOS, shard N of 3)`             | macOS, three of them | Only when a UI test input changed; otherwise skipped        |
 | `iOS checks`                                     | Linux                | Always; passes when every iOS job the change needed passed  |
@@ -195,8 +196,13 @@ files they read from the image at startup (the feature discovery indexes
 `packages/api-contract/bundled/**`), `infra/**`, `scripts/container-smoke.sh`, or
 `.github/workflows/ci.yml` (the `image` filter in the `changes` job).
 
-The iOS jobs run on macOS runners with Xcode 26.3. One build job runs `make ios-lint`,
-`make ios-check-ats`, and `make ios-build-for-testing`, then hands the built tests (the products
+The lint job runs `make ios-lint` on Linux, with the Linux builds of SwiftLint and SwiftFormat at
+the versions the macOS runners have (pinned with checksums in `ci.yml`), so a lint failure never
+reserves a macOS runner (7 of 58 failed macOS jobs in October 2026 failed only the lint). That
+SwiftLint build has no SourceKit and skips `statement_position`, whose layout SwiftFormat also
+enforces. The other iOS jobs run on macOS runners with Xcode 26.3, once the lint passed. One
+build job runs `make ios-check-ats` (one `xcodebuild -showBuildSettings` per configuration) and
+`make ios-build-for-testing`, then hands the built tests (the products
 and their `.xctestrun`, as a tar that keeps file modes and symlinks) to the test jobs, which run
 side by side: the unit job runs `make ios-unit-test IOS_PREBUILT=1` (every test target but the
 UI tests; no backend), and each UI shard runs `make ios-ui-test IOS_PREBUILT=1
@@ -256,6 +262,10 @@ Which jobs do real work, by change:
 | Infra (`infra/**`, `Dockerfile`) | changes, backend, image        |
 | Docs only                        | changes, backend               |
 | Draft pull request               | nothing until ready for review |
+
+Open a pull request as a draft while you are still pushing to it, and mark it ready once it is
+done: every push to a ready pull request starts a full run, and a run cancelled by the next push
+still spent its macOS minutes (24% of all macOS minutes in October 2026).
 
 A new push cancels the run it supersedes, on a pull request and on `main` alike: the newest
 `main` commit contains every earlier merge, so its full run covers them, and the shared macOS

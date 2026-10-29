@@ -16,7 +16,9 @@ export interface HealthDependencies {
  * Reply types come from the API contract (packages/api-contract/openapi.yaml).
  */
 export function registerHealthRoutes(app: FastifyInstance, deps: HealthDependencies): void {
-  app.get<{ Reply: HealthLive }>('/health/live', () => ({ status: 'ok' }));
+  // The load balancer asks every few seconds: about half of all requests. Their request log
+  // lines would say nothing new, so this route logs none (docs/features/costs.md).
+  app.get<{ Reply: HealthLive }>('/health/live', { logLevel: 'silent' }, () => ({ status: 'ok' }));
 
   app.get<{ Reply: HealthReady }>('/health/ready', async (request, reply) => {
     try {

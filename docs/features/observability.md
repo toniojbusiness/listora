@@ -39,11 +39,15 @@ marketplace and kind and per marketplace, `OperationFailed` per marketplace and 
 every one succeeded (one sample per sale; the target is under a minute,
 [auto-delist.md](auto-delist.md#speed)). Every scheduled tick, however late, also publishes the state at the time it runs (the
 job runs ahead of every operation step in the queue, so a backlog cannot silence it):
-`StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying, needs_user_action),
-`OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day), `MarketplaceConnections` per
-marketplace and status, `ConnectionsNeedingRelink`, `UnhealthySaleChecks` per marketplace that has
-any (working automation connections whose sale checks fail or stopped running,
-[activity.md](activity.md)), and `OverdueDeletions`. The observability stack alarms on an
+`OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day), `ConnectionsNeedingRelink`,
+`UnhealthySaleChecks` (one value per marketplace that has any, with the marketplace as a log field:
+working automation connections whose sale checks fail or stopped running,
+[activity.md](activity.md)), and `OverdueDeletions`. The breakdowns no alarm reads are log-only
+(no `dimensionSets` in the catalog): the same line without the EMF directive, so CloudWatch bills no
+metric for them and Logs Insights still reads them. They are `StuckOperations` and
+`OldestStuckOperationAge` per status (verifying, retrying, needs_user_action) and
+`MarketplaceConnections` per marketplace and status, for example
+`filter ispresent(StuckOperations) | stats max(OldestStuckOperationAge) by Status, bin(1h)`. The observability stack alarms on an
 operation unverified for 30 minutes, any failed delist, an account's AI cost today over
 `aiDailyCostAlarmUsd`, a connection needing relink, any connection whose sale checks fail or stopped
 running (`sale-checks-unhealthy`), and per marketplace on p95 delist latency over
@@ -54,6 +58,6 @@ over a day, on any account or connection deletion unfinished after 8 days (`Over
 to the alarm topic. The relink alarm fires on a level, which suits one seller; an environment with
 many sellers should alarm on increases instead, so one unlinked connection does not mask the next. A
 new metric adds a catalog entry; keep dimensions few, since CloudWatch bills each combination of
-values as a metric ([costs.md](costs.md)). A `worker-heartbeat` alarm fires when the worker publishes no
+values as a metric ([costs.md](costs.md)), and make a breakdown no alarm reads log-only. A `worker-heartbeat` alarm fires when the worker publishes no
 trust metrics for 15 minutes, and every alarm, failed deploy, and cost-budget notice is emailed to the
 operator, with a weekly health summary ([alerts.md](alerts.md)).

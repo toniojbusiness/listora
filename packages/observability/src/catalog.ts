@@ -5,7 +5,8 @@
  *
  * Every environment is its own AWS account, so one namespace serves all of them. CloudWatch
  * bills each distinct name and dimension values as one custom metric, for the hours it
- * receives data, so dimensions stay few and low in cardinality (docs/features/costs.md).
+ * receives data, so dimensions stay few and low in cardinality, and a breakdown no alarm reads
+ * is written to the log only, for Logs Insights (docs/features/costs.md).
  */
 
 export const METRIC_NAMESPACE = 'Listora';
@@ -17,7 +18,9 @@ export interface MetricDefinition {
   readonly unit: MetricUnit;
   /**
    * The dimension sets CloudWatch aggregates each value under. `[]` is the metric without
-   * dimensions, across every value of the others (what an environment-wide alarm reads).
+   * dimensions, across every value of the others (what an environment-wide alarm reads). No
+   * set at all (`[]` for the whole list) is a log-only value: the line carries the value and its
+   * dimensions as fields for Logs Insights, and CloudWatch publishes (and bills) no metric.
    */
   readonly dimensionSets: readonly (readonly MetricDimension[])[];
   readonly description: string;
@@ -62,14 +65,16 @@ export const TRUST_METRICS = {
   },
   StuckOperations: {
     unit: 'Count',
-    dimensionSets: [['Status']],
-    description: 'Operations now verifying, retrying, or waiting for the user.',
+    dimensionSets: [],
+    description:
+      'Operations now verifying, retrying, or waiting for the user (log only, per Status).',
   },
   OldestStuckOperationAge: {
     unit: 'Seconds',
-    dimensionSets: [['Status']],
+    dimensionSets: [],
     description:
-      'Age of the oldest operation now in the status, since it was last queued (0 for none).',
+      'Age of the oldest operation now in the status, since it was last queued (0 for none; ' +
+      'log only, per Status).',
   },
   OldestUnverifiedOperationAge: {
     unit: 'Seconds',
@@ -88,8 +93,10 @@ export const TRUST_METRICS = {
   },
   MarketplaceConnections: {
     unit: 'Count',
-    dimensionSets: [['Marketplace', 'Status']],
-    description: 'Marketplace connections per status, for the statuses that have any.',
+    dimensionSets: [],
+    description:
+      'Marketplace connections per status, for the statuses that have any (log only, per ' +
+      'Marketplace and Status).',
   },
   ConnectionsNeedingRelink: {
     unit: 'Count',
@@ -98,12 +105,12 @@ export const TRUST_METRICS = {
   },
   UnhealthySaleChecks: {
     unit: 'Count',
-    dimensionSets: [['Marketplace'], []],
+    dimensionSets: [[]],
     description:
       'Working automation connections whose sale checks fail or stopped running ' +
       '(`failing` or `overdue`, docs/features/activity.md): sales there are not being seen, so ' +
-      'a sold item may stay for sale elsewhere. Published per marketplace that has any; without ' +
-      'dimensions, Maximum is the worst marketplace.',
+      'a sold item may stay for sale elsewhere. One value per marketplace that has any, with ' +
+      'Marketplace as a log field; Maximum is the worst marketplace.',
   },
   OverdueDeletions: {
     unit: 'Count',

@@ -230,7 +230,7 @@
         ],
         "Code": {
           "S3Bucket": "cdk-listora-assets-333333333333-us-east-1",
-          "S3Key": "00dfc73f01b78bf1366ccd133f09fb2d808b32b8bdf09cbe7e0f39d88d9c1bb1.zip"
+          "S3Key": "3998f76921e414978f39ab9fccff304d1fffdaf6e9754c3f4b3535120b19234c.zip"
         },
         "Description": "Emails every alarm and AWS event on the alarm topic to the operator (SES).",
         "Environment": {
@@ -430,7 +430,7 @@
         ],
         "Code": {
           "S3Bucket": "cdk-listora-assets-333333333333-us-east-1",
-          "S3Key": "00dfc73f01b78bf1366ccd133f09fb2d808b32b8bdf09cbe7e0f39d88d9c1bb1.zip"
+          "S3Key": "3998f76921e414978f39ab9fccff304d1fffdaf6e9754c3f4b3535120b19234c.zip"
         },
         "Description": "Emails the operator the week's health: alarms, operations, worker, cost, and backups.",
         "Environment": {

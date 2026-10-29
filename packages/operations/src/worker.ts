@@ -243,6 +243,17 @@ interface StartedRunner {
 }
 
 /**
+ * Each runner's slots share one queue poller (Graphile Worker's local queue) instead of each
+ * slot polling on its own: an idle worker asks the database once per poll interval per runner,
+ * not once per slot (docs/performance.md). The local queue locks the jobs it fetches under the
+ * runner's pool id, as a slot does, so recovery is unchanged. Size 1 holds at most one job
+ * locked while every slot is busy, so a newly queued urgent delist waits behind one job at most.
+ * (Graphile Worker logs a warning at start that the size is below the concurrency; that is
+ * deliberate: a bigger batch would let more ordinary jobs hold their place ahead of a delist.)
+ */
+const LOCAL_QUEUE_SIZE = 1;
+
+/**
  * One Graphile Worker runner for `handlers` with its own liveness session. It takes only jobs
  * of its own tasks, and no job starts before other workers can see that this runner is alive.
  */
@@ -305,6 +316,7 @@ async function startRunner(
       events,
       taskList,
       ...(options.crontab === undefined ? {} : { crontab: options.crontab }),
+      preset: { worker: { localQueue: { size: LOCAL_QUEUE_SIZE } } },
     });
   } catch (error) {
     await liveness.close();

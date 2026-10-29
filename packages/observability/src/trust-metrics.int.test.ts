@@ -587,10 +587,14 @@ describe('trust metrics (real Postgres)', () => {
       return lines.map((line) => JSON.parse(line) as Record<string, unknown>);
     }
 
+    // The metrics CloudWatch publishes from the lines (a log-only line has no directive).
     const metricNames = (lines: Record<string, unknown>[]) =>
       lines.flatMap((line) =>
         (
-          line['_aws'] as { CloudWatchMetrics: { Metrics: { Name: string }[] }[] }
+          (line['_aws'] as
+            { CloudWatchMetrics: { Metrics: { Name: string }[] }[] } | undefined) ?? {
+            CloudWatchMetrics: [],
+          }
         ).CloudWatchMetrics.flatMap((directive) => directive.Metrics.map((metric) => metric.Name)),
       );
 
@@ -612,22 +616,32 @@ describe('trust metrics (real Postgres)', () => {
           'VerifiedSuccess',
           'OperationFailed',
           'DelistFailed',
-          'StuckOperations',
-          'OldestStuckOperationAge',
           'OldestUnverifiedOperationAge',
           'AiDailyCostUsd',
-          'MarketplaceConnections',
           'ConnectionsNeedingRelink',
           'OverdueDeletions',
         ]),
       );
       for (const line of lines) {
-        expect(line).toMatchObject({
-          service: 'worker',
-          _aws: { CloudWatchMetrics: [{ Namespace: 'Listora' }] },
-        });
+        expect(line).toMatchObject({ service: 'worker' });
+        if ('_aws' in line) {
+          expect(line).toMatchObject({ _aws: { CloudWatchMetrics: [{ Namespace: 'Listora' }] } });
+        }
       }
       const line = (metric: string) => lines.find((candidate) => metric in candidate);
+      // The breakdowns no alarm reads stay in the log for Logs Insights, with no metric.
+      expect(line('StuckOperations')).toEqual({
+        service: 'worker',
+        Status: 'verifying',
+        StuckOperations: 1,
+        OldestStuckOperationAge: 45 * 60 + 5,
+      });
+      expect(line('MarketplaceConnections')).toEqual({
+        service: 'worker',
+        Marketplace: 'ebay',
+        Status: 'reauth_required',
+        MarketplaceConnections: 1,
+      });
       expect(line('DelistFailed')).toMatchObject({
         DelistFailed: 1,
         _aws: { Timestamp: window.from.getTime(), CloudWatchMetrics: [{ Dimensions: [[]] }] },

@@ -11,7 +11,7 @@ export const IMAGE_REPOSITORY_NAME = 'listora/app';
 export const RUNNER_IMAGE_REPOSITORY_NAME = 'listora/runner';
 
 /** How many images to keep for rollbacks. */
-const KEPT_IMAGES = 50;
+const KEPT_IMAGES = 15;
 
 /**
  * The image repositories: the application's, and the browser runner's. They are their own
