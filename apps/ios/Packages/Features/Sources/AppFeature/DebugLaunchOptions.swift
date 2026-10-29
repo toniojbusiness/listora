@@ -60,7 +60,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         #if DEBUG
             from(environment: ProcessInfo.processInfo.environment)
         #else
-            return .none
+            .none
         #endif
     }
 
