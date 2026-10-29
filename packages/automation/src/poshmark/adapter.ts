@@ -44,6 +44,8 @@ export interface PoshmarkAdapterOptions {
   logger: Logger;
   /** See `PoshmarkScriptOptions.settleWaitMs`. */
   settleWaitMs?: number;
+  /** See `PoshmarkScriptOptions.newWaitMs`. */
+  newWaitMs?: number;
 }
 
 export function createPoshmarkAutomationAdapter(
@@ -65,6 +67,7 @@ export function createPoshmarkAutomationAdapter(
       site,
       photos: options.photos,
       ...(options.settleWaitMs === undefined ? {} : { settleWaitMs: options.settleWaitMs }),
+      ...(options.newWaitMs === undefined ? {} : { newWaitMs: options.newWaitMs }),
     }),
     scriptSet: { name: 'poshmark', marketplace: 'poshmark', siteUrl: origin },
     readFreshness: 'revision',

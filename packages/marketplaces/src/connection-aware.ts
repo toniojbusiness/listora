@@ -159,14 +159,18 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
   }
 
   /** The serving adapter's listings; throws when it can't read them (an assisted one never can). */
-  listListings(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage> {
+  listListings(
+    cursor: string | null,
+    ctx: AdapterContext,
+    held?: readonly string[],
+  ): Promise<ListingsPage> {
     const adapter = this.adapterFor(ctx.connection);
     if (adapter.listListings === undefined) {
       return Promise.reject(
         new Error(`the ${adapter.id} adapter for this connection reads no listings`),
       );
     }
-    return adapter.listListings(cursor, ctx);
+    return adapter.listListings(cursor, ctx, held);
   }
 
   /** The serving adapter's order labels; throws when it can't read them (an assisted one never can). */

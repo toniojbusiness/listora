@@ -228,6 +228,7 @@ describe('background read health (real Postgres)', () => {
         connectionId,
         cursor: null,
         runsOn: 'cloud',
+        held: [],
       };
     };
     const deps = { db: database.db, logger: silentLogger };

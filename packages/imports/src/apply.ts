@@ -151,6 +151,14 @@ async function decide(
     .where('marketplace', '=', entry.marketplace)
     .where('external_listing_id', '=', entry.external_listing_id)
     .executeTakeFirst();
+  // Read from the list alone because Listora held it when the page was read, and no longer
+  // does (its item was deleted meanwhile): the list's record has too little to import it from.
+  if (existing === undefined && listing.fromList === true) {
+    await settle(trx, entry, 'failed', {
+      error: 'This listing left Listora while it was read. Import again to bring it back.',
+    });
+    return 'settled';
+  }
   if (existing !== undefined) {
     // It was on a shop that was unlinked, and the linked shop shows it: it is this shop's.
     if (existing.shop_unlinked_at !== null) await rejoin(trx, entry, existing.id);

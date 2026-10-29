@@ -57,7 +57,12 @@ Imports are offered only from marketplaces whose imports passed live (Depop and 
    a sign-in the seller declined (the connection then waits for a relink, as for any run), a page
    Listora no longer reads. Listora never passes or works around a check. The listings read
    before it still import, and importing again reads from the start: listings already imported
-   settle at once.
+   settle at once. A page's listings that Listora already has (by their marketplace id, from a
+   linked shop) are not read on their own pages: the call names them (`held`), and Depop and
+   Mercari take them from the list as it shows them (`fromList`), since they settle as
+   `already_listed` by their id. So a re-import of a 118-listing Depop shop reads its 5 pages and
+   only the listings that are new, instead of 123 reads. A listing of a shop that was unlinked is
+   read in full, since settling it joins it to the new shop.
 4. **Settling** (`@listora/imports` `applyListingImport`, after every page): each entry becomes
    - `already_listed`: Listora already has this listing (its marketplace id); one from an
      unlinked shop joins the import's connection again, since this shop shows it
@@ -65,7 +70,9 @@ Imports are offered only from marketplaces whose imports passed live (Depop and 
    - `merged`: a listing of the item it is the same as; the item keeps its own details and photos;
    - `imported`: a new item, with the listing's photos;
    - `needs_you`: a question for the seller (below);
-   - `failed`: its photos could not be fetched ("Import again to try again").
+   - `failed`: its photos could not be fetched ("Import again to try again"), or it was read
+     from the list as one Listora had and its item was deleted before it settled ("Import again
+     to bring it back"): the list's record has too little to import it from.
      An imported or merged listing is `active` on its marketplace as the import read it: that read
      through the seller's session is its read-back (`last_verified_at`, `remote_snapshot`,
      `remote_revision`), so it shows as "Active (confirmed by Depop)" and its item is `listed`
@@ -131,12 +138,16 @@ marketplace is configured.
 ## Tests
 
 - Each marketplace's `listings` read against its fake site (`<marketplace>/adapter.int.test.ts`),
-  read-only.
-- The phone: an import's pages read one session each, read-only, and a check or a declined
-  sign-in stopping it with the reason (`phone/work.int.test.ts`).
+  read-only; on Depop and Mercari, only the listings Listora doesn't have read on their own
+  pages. On Mercari's recorded active tab, holding every listing reads none of their pages
+  (`recordings/recordings.int.test.ts`).
+- The phone: an import's pages read one session each, read-only, the call naming the listings
+  Listora has so their own pages are not read, and a check or a declined sign-in stopping it with
+  the reason (`phone/work.int.test.ts`).
 - Settling (`packages/imports/src/apply.int.test.ts`): new items with photos and details listed
   there, merges by SKU line and by title and photos across marketplaces, questions and their
-  answers, listings Listora already has, photos that can't be fetched, and two imports at once.
+  answers, listings Listora already has (read in full or from the list), one read from the list
+  that Listora no longer has, photos that can't be fetched, and two imports at once.
 - The match, the details and category mapping (with the categories of the captain's own Mercari
   listings), and the API (`apps/api/src/imports/imports.int.test.ts`).
 - The app: `ImportFeatureTests` and `ListOnTheOthersTests`.

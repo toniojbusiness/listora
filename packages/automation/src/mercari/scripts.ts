@@ -22,7 +22,7 @@ import type { StepRunner } from '../runner/types.ts';
 import { openAccount, salesTabPath } from './pages/account-page.ts';
 import { changed, type MercariSite } from './pages/common.ts';
 import { activate, deactivate, editorShows, openEditor } from './pages/edit-page.ts';
-import { readItem, type ItemRead } from './pages/item-page.ts';
+import { itemUrl, readItem, type ItemRead } from './pages/item-page.ts';
 import {
   fillListing,
   fillPrice,
@@ -31,7 +31,7 @@ import {
   type Submitted,
 } from './pages/listing-form.ts';
 import { listingDetails } from './pages/listing-details.ts';
-import { readListingsPage } from './pages/listings-page.ts';
+import { readListingsPage, type ListingRow } from './pages/listings-page.ts';
 import { readOrder } from './pages/order-page.ts';
 import type { MercariListingPayload } from './payload.ts';
 
@@ -403,10 +403,11 @@ export function createMercariScripts(
       }
       return labels;
     },
-    listings: async (cursor, step) => {
+    listings: async (cursor, step, held) => {
       // One page of the active tab, then each listing's own page, which holds its description,
       // photos, and details (the tab's rows show only a title and a price): the cursor is the
-      // tab's page number.
+      // tab's page number. A listing Listora already has settles by its id alone, so its row is
+      // all it needs: no read of its page.
       const number = cursor === null ? 1 : Number(cursor);
       if (!Number.isSafeInteger(number) || number < 1) {
         throw new Error(`a Mercari listings cursor is a page number, not ${String(cursor)}`);
@@ -416,6 +417,10 @@ export function createMercariScripts(
       );
       const listings: ListedListing[] = [];
       for (const row of shown.rows) {
+        if (held.has(row.id)) {
+          listings.push(heldListing(site, row));
+          continue;
+        }
         const read = await step('read a listing', { mutates: false }, (page) =>
           readItem(page, site, row.id),
         );
@@ -428,5 +433,37 @@ export function createMercariScripts(
       }
       return { listings, next: shown.hasNext ? String(number + 1) : null };
     },
+  };
+}
+
+/**
+ * A listing Listora already has, as the active tab's row shows it: for sale, its title (empty in
+ * the mobile layout) and price, and nothing the row doesn't show. Its import entry settles by its
+ * id (`fromList`).
+ */
+function heldListing(site: MercariSite, row: ListingRow): ListedListing {
+  return {
+    found: true,
+    externalListingId: row.id,
+    externalUrl: itemUrl(site, row.id),
+    status: 'active',
+    title: row.title === '' ? null : row.title,
+    description: null,
+    priceCents: row.priceCents,
+    currency: 'USD',
+    revision: null,
+    refreshedAt: null,
+    details: {
+      photoUrls: [],
+      brand: null,
+      size: null,
+      condition: null,
+      categoryRef: null,
+      categoryPath: [],
+      colors: [],
+      originalPriceCents: null,
+      sku: null,
+    },
+    fromList: true,
   };
 }

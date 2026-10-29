@@ -119,7 +119,9 @@ const FORM = 'listing form';
 const SUBCATEGORIES_MS = 3_000;
 /** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
 const APPEAR_MS = 8_000;
-const LOOK_EVERY_MS = 500;
+// A look only reads the page (no action, so no pacing): a short interval loses less time
+// after the element appears.
+const LOOK_EVERY_MS = 150;
 /** How long the brand suggestions stay the same before Listora takes them as Mercari's answer. */
 const BRAND_SETTLED_MS = 2_000;
 /** How long an empty brand list gets to fill before the search counts as finding nothing. */
@@ -170,7 +172,9 @@ export async function fillListing(
   await page.fill(LISTING_FORM.description, withSkuLine(payload.description, sku));
   if (payload.category === null) throw new Error('a listing without a category passed validation');
   await pickCategory(page, payload.category);
-  if (payload.imei || (await appears(page, LISTING_FORM.imei, 1_000))) return 'imei_required';
+  // A phone category draws its IMEI field with its subcategories, or later (checked again at the
+  // end): a look now, not a wait, so every other category loses no time here.
+  if (payload.imei || (await page.exists(LISTING_FORM.imei))) return 'imei_required';
   await pickBrand(page, payload.brand);
   if (payload.condition === null) {
     throw new Error('a listing without a condition passed validation');

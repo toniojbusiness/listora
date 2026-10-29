@@ -100,6 +100,11 @@ export type FakePoshmarkFault =
   | { type: 'slow'; delayMs: number; afterApply: boolean }
   /** A listing page shows the listing as it was before its latest change. */
   | { type: 'stale_read' }
+  /**
+   * A listing page shows no listing, and no word of what became of it, as Poshmark's did for a
+   * listing just listed or changed (for about two minutes, 2026-10-27).
+   */
+  | { type: 'not_shown_yet' }
   /** A redesigned page: none of the data or the form the adapter knows. */
   | { type: 'redesign' }
   /** A redirect to another origin (the same server under `localhost`). */
@@ -487,6 +492,7 @@ export class FakePoshmark {
       case 'reject':
       case 'slow':
       case 'stale_read':
+      case 'not_shown_yet':
       case undefined:
         break;
     }
@@ -582,7 +588,9 @@ export class FakePoshmark {
         if (stored === undefined && gone !== undefined && route.id !== null) {
           return { status: 404, body: removedPage(route.id, gone, seller) };
         }
-        if (stored === undefined) return { status: 404, body: notFound(seller) };
+        if (stored === undefined || fault?.type === 'not_shown_yet') {
+          return { status: 404, body: notFound(seller) };
+        }
         const shown =
           fault?.type === 'stale_read' && stored.previous !== null
             ? stored.previous

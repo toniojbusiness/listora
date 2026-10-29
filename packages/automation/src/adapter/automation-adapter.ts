@@ -371,7 +371,11 @@ export class AutomationAdapter<
     return offerAnswerOutcome(run, this.#name);
   }
 
-  async listListings(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage> {
+  async listListings(
+    cursor: string | null,
+    ctx: AdapterContext,
+    held: readonly string[] = [],
+  ): Promise<ListingsPage> {
     if (this.#options.scripts.listings === undefined) {
       throw new Error(`Listora doesn't list ${this.#name} listings`);
     }
@@ -381,7 +385,10 @@ export class AutomationAdapter<
       'import',
       null,
       'list listings',
-      { script: 'listings', cursor },
+      // Only when there are any, so a call without them is the call it always was.
+      held.length === 0
+        ? { script: 'listings', cursor }
+        : { script: 'listings', cursor, held: [...held] },
       ctx.signal,
     );
     return this.#readValue(run, 'read your listings');

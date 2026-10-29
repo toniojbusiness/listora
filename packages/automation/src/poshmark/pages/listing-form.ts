@@ -177,7 +177,9 @@ export async function newListingId(page: PageDriver): Promise<string | null> {
 
 /** How long the cover-photo editor gets to open after the photos are picked. */
 const EDITOR_OPENS_MS = 6_000;
-const LOOK_EVERY_MS = 500;
+// A look only reads the page (no action, so no pacing): a short interval loses less time
+// after the element appears.
+const LOOK_EVERY_MS = 150;
 
 /**
  * Adds the photos in posting order; the first is the cover. Poshmark's cover-photo editor opens

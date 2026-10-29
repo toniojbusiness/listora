@@ -303,9 +303,10 @@ export function createDepopScripts(
       }
       return orders.map((order) => orderLabel(order, receipts, slugOf));
     },
-    listings: async (cursor, step) => {
+    listings: async (cursor, step, held) => {
       // One page of the listings for sale (24), newest first, then each one's own edit data
-      // for its photos and details, one read at a time.
+      // for its photos and details, one read at a time. A listing Listora already has settles
+      // by its slug alone, so the list's record is all it needs: no read of its own.
       const shown = await step('read your listings for sale', { mutates: false }, async (page) => {
         await onDepop(page, site);
         return readOwnListings(page, site, 'selling', cursor);
@@ -314,6 +315,14 @@ export function createDepopScripts(
       for (const product of shown.products) {
         if (product.state.status !== 'active') continue;
         const slug = product.state.externalListingId;
+        if (held.has(slug)) {
+          listings.push({
+            ...product.state,
+            details: listingDetails(product.record, product.record, product.sku),
+            fromList: true,
+          });
+          continue;
+        }
         const own = await step('read a listing', { mutates: false }, (page) =>
           readOwnProduct(page, site, slug),
         );

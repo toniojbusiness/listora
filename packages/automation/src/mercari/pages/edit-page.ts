@@ -21,7 +21,9 @@ const PAGE = 'edit page';
 
 /** How long the edit page may take to draw its form, or to answer the toggle. */
 const DRAW_MS = 25_000;
-const LOOK_EVERY_MS = 500;
+// A look only reads the page (no action, so no pacing): a short interval loses less time
+// after the element appears.
+const LOOK_EVERY_MS = 150;
 
 export type EditorOpened = 'editing' | 'not_editable';
 
