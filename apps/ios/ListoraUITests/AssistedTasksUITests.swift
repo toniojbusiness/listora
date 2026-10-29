@@ -107,7 +107,7 @@ final class AssistedTasksUITests: XCTestCase {
         try require(inventory.isSelected, "the Inventory tab did not open")
         guard !status.waitForExistence(timeout: 3) else { return }
         let row = app.buttons["inventory.row.\(sku)"]
-        try require(row.waitForExistence(timeout: 30), "the item is not in the inventory")
+        try require(row.waitForExistence(timeout: 60), "the item is not in the inventory")
         row.tap()
         try require(status.waitForExistence(timeout: 30), "the item screen did not open")
     }
@@ -170,9 +170,9 @@ final class AssistedTasksUITests: XCTestCase {
         keepScreenshot("Link pasted")
         try require(bar.isEnabled, "Done is off with the link \(link.value ?? "")")
         bar.tap()
-        // Its waits are 30 seconds: on CI each look at the screen takes seconds since the Hang Tag
-        // screens (#146), and 15 seconds once held only two looks, the task closing after the wait.
-        try require(app.staticTexts["task.title"].waitForNonExistence(timeout: 30), "the task did not close on Done")
+        // Its waits are 60 seconds: on CI each look at the screen takes seconds since the Hang Tag
+        // screens (#146), and a busy runner's API once took 25 seconds to answer one request.
+        try require(app.staticTexts["task.title"].waitForNonExistence(timeout: 60), "the task did not close on Done")
     }
 
     /// End the listing: a delist task that opens the listing itself; the user removes it.
@@ -183,7 +183,8 @@ final class AssistedTasksUITests: XCTestCase {
         let endButton = app.buttons["End: no longer available"].firstMatch
         try require(endButton.waitForExistence(timeout: 5))
         endButton.tap()
-        try require(waitForLabel(of: status, "Action needed - delist on Poshmark", timeout: 30), status.label)
+        // The end request alone once took 24 seconds on a busy CI runner (run 40842344904).
+        try require(waitForLabel(of: status, "Action needed - delist on Poshmark", timeout: 60), status.label)
 
         app.buttons["marketplace.poshmark.action.openTask"].tap()
         let done = app.buttons["task.done"]

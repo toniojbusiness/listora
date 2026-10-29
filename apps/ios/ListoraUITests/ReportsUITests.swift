@@ -24,13 +24,14 @@ final class ReportsUITests: XCTestCase {
         app.tabRail.buttons["Sales"].tap()
         let entry = app.buttons["sales.reports"]
         scrollTo(entry)
-        entry.tap()
+        let shownYear = app.staticTexts["reports.year"]
+        XCTAssertTrue(entry.tap(until: shownYear), "Reports did not open")
 
         // The year's revenue, as the server computed it, and no year after this one.
         let revenue = app.descendants(matching: .any)["reports.revenue"]
         XCTAssertTrue(revenue.waitForExistence(timeout: 15))
         XCTAssertTrue(revenue.label.contains(Self.money(expected)), revenue.label)
-        XCTAssertEqual(app.staticTexts["reports.year"].label, String(year))
+        XCTAssertEqual(shownYear.label, String(year))
         XCTAssertFalse(app.buttons["reports.next"].isEnabled)
         keepScreenshot("Reports")
 

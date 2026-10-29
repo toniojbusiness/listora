@@ -2,7 +2,7 @@ import DesignSystem
 import ListoraAPI
 import SwiftUI
 
-/// Which change the bulk sheet makes.
+/// Which change the bulk sheet makes. A new kind also needs its button in `SelectionBar.buttons`.
 enum BulkActionKind: String, Identifiable, CaseIterable {
     case list
     case changePrice

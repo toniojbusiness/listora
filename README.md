@@ -221,8 +221,8 @@ caches every run uses. The cache starts over once it passes 4 GB. Each test job 
 iPhone 17 simulator (`scripts/ios-ci-simulator.sh`: by its UDID, on the iOS runtime of the
 Xcode's SDK, since a runner has one "iPhone 17" per installed runtime) while the built tests
 download, and waits until it has booted and Xcode lists it before the tests. Every run, passed or failed, uploads each test job's results (`Unit.xcresult`,
-or `UI.xcresult` and its re-runs with the UI tests' screenshots and the stack's API and worker
-logs) and the failing-test summary, and puts the summary in the job summary, so a failure names
+or `UI.xcresult` and its re-runs with the UI tests' screenshots, the app's crash reports, and the
+stack's API and worker logs) and the failing-test summary, and puts the summary in the job summary, so a failure names
 its test instead of a bare `** TEST FAILED **`. `iOS checks` is the one result to require before
 a merge.
 
@@ -234,7 +234,10 @@ once), so `scripts/ios-test-run.sh` runs the failed UI tests again by themselves
 local stack, into `UI-rerun-1.xcresult` and `UI-rerun-2.xcresult`. A test that fails every try
 fails the run. A test that passes only on a retry does not block the merge, but it is still
 flaky: the summary lists it under "Flaky", and it gets a follow-up fix (open a task for it in
-the pull request description) rather than being left to retry forever.
+the pull request description) rather than being left to retry forever. The UI tests capture
+screenshots, not a video (`IOS_UI_CAPTURE`, `scripts/ios-ui-capture.sh`): encoding a video of
+every test competed for the runner's three cores with the simulator, the app, and the local stack.
+Pass `IOS_UI_CAPTURE=screenRecording` for a video of each test.
 
 The build and unit jobs run only when the change touches a file the iOS build reads: `apps/ios/**` except
 Markdown, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI` Swift
