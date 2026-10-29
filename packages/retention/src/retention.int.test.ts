@@ -394,7 +394,7 @@ describe('data retention job (real Postgres)', () => {
     expect(records.map((row) => row.id)).toEqual([recentRecord]);
   });
 
-  it("clears buyers' names and tracking numbers once a sale is done, and offers' buyers once closed", async () => {
+  it("clears buyers' names and tracking numbers once a sale is done, and offers' buyers once closed, only when turned on", async () => {
     const { accountId } = await account();
     const sale = async (
       status: 'confirmed' | 'shipped' | 'canceled' | 'returned',
@@ -447,37 +447,6 @@ describe('data retention job (real Postgres)', () => {
     // Never done, however old: it may still be a package to send.
     const open = await sale('confirmed', {});
 
-    const summary = await runDataRetention({ db, logger });
-    expect(summary).toMatchObject({ saleLabelBuyers: 2, packageTracking: 2 });
-    const labels = await db
-      .selectFrom('sale_label')
-      .select(['sale_id', 'buyer_first_name', 'tracking_number', 'carrier', 'source'])
-      .where('account_id', '=', accountId)
-      .execute();
-    const cleared = { buyer_first_name: null, tracking_number: null, carrier: null, source: null };
-    for (const label of labels) {
-      if ([longShipped, longCanceled].includes(label.sale_id)) {
-        expect(label, label.sale_id).toMatchObject(cleared);
-      } else {
-        expect([justShipped, returnedSince, open]).toContain(label.sale_id);
-        expect(label.buyer_first_name).toBe('Jordan');
-        expect(label.tracking_number).not.toBeNull();
-      }
-    }
-    const packs = await db
-      .selectFrom('sale_pack')
-      .select(['sale_id', 'tracking_number', 'matched_by'])
-      .where('account_id', '=', accountId)
-      .execute();
-    // The package records stay: only their tracking numbers go.
-    expect(packs).toHaveLength(5);
-    expect(
-      packs
-        .filter((pack) => pack.tracking_number === null)
-        .map((pack) => pack.sale_id)
-        .sort(),
-    ).toEqual([longShipped, longCanceled].sort());
-
     const { id: connectionId } = await db
       .insertInto('marketplace_connection')
       .values({
@@ -510,7 +479,76 @@ describe('data retention job (real Postgres)', () => {
     const longClosed = await offer('accepted', ago(RETENTION_DAYS.offerBuyers + 1));
     const justClosed = await offer('closed', ago(RETENTION_DAYS.offerBuyers - 1));
     const pending = await offer('pending', null);
-    expect((await runDataRetention({ db, logger })).offerBuyers).toBe(1);
+
+    // Off (the default): nothing of buyers is cleared; the run logs what would be.
+    const lines: Record<string, unknown>[] = [];
+    const recording = createLogger({
+      service: 'retention-test',
+      level: 'info',
+      destination: {
+        write: (line: string) => lines.push(JSON.parse(line) as Record<string, unknown>),
+      },
+    });
+    const off = await runDataRetention({ db, logger: recording });
+    expect(off).toMatchObject({
+      saleLabelBuyers: 0,
+      packageTracking: 0,
+      offerBuyers: 0,
+      buyerDataWouldClear: { saleLabelBuyers: 2, packageTracking: 2, offerBuyers: 1 },
+    });
+    expect(lines.find((line) => line['buyerDataRetention'] === 'off')).toMatchObject({
+      msg: 'buyer data retention is off: nothing of buyers was cleared',
+      wouldClear: { saleLabelBuyers: 2, packageTracking: 2, offerBuyers: 1 },
+    });
+    const untouched = await db
+      .selectFrom('sale_label')
+      .select('buyer_first_name')
+      .where('account_id', '=', accountId)
+      .where('buyer_first_name', 'is', null)
+      .execute();
+    expect(untouched).toEqual([]);
+    expect(
+      await db
+        .selectFrom('marketplace_offer')
+        .select('id')
+        .where('account_id', '=', accountId)
+        .where('buyer_name', 'is', null)
+        .execute(),
+    ).toEqual([]);
+
+    // On: they are cleared.
+    const summary = await runDataRetention({ db, logger, buyerData: 'on' });
+    expect(summary).toMatchObject({ saleLabelBuyers: 2, packageTracking: 2, offerBuyers: 1 });
+    expect(summary.buyerDataWouldClear).toBeUndefined();
+    const labels = await db
+      .selectFrom('sale_label')
+      .select(['sale_id', 'buyer_first_name', 'tracking_number', 'carrier', 'source'])
+      .where('account_id', '=', accountId)
+      .execute();
+    const cleared = { buyer_first_name: null, tracking_number: null, carrier: null, source: null };
+    for (const label of labels) {
+      if ([longShipped, longCanceled].includes(label.sale_id)) {
+        expect(label, label.sale_id).toMatchObject(cleared);
+      } else {
+        expect([justShipped, returnedSince, open]).toContain(label.sale_id);
+        expect(label.buyer_first_name).toBe('Jordan');
+        expect(label.tracking_number).not.toBeNull();
+      }
+    }
+    const packs = await db
+      .selectFrom('sale_pack')
+      .select(['sale_id', 'tracking_number', 'matched_by'])
+      .where('account_id', '=', accountId)
+      .execute();
+    // The package records stay: only their tracking numbers go.
+    expect(packs).toHaveLength(5);
+    expect(
+      packs
+        .filter((pack) => pack.tracking_number === null)
+        .map((pack) => pack.sale_id)
+        .sort(),
+    ).toEqual([longShipped, longCanceled].sort());
+
     const offers = await db
       .selectFrom('marketplace_offer')
       .select(['id', 'buyer_name'])
@@ -522,7 +560,7 @@ describe('data retention job (real Postgres)', () => {
       [pending]: 'thrift_fan_22',
     });
     // Nothing is left to clear the next day.
-    expect(await runDataRetention({ db, logger })).toMatchObject({
+    expect(await runDataRetention({ db, logger, buyerData: 'on' })).toMatchObject({
       saleLabelBuyers: 0,
       packageTracking: 0,
       offerBuyers: 0,

@@ -189,6 +189,19 @@ describe('loadWorkerConfig', () => {
     ]);
   });
 
+  it('keeps buyer data retention off unless it is turned on', () => {
+    expect(loadWorkerConfig({ DATABASE_URL }).buyerDataRetention).toBe('off');
+    expect(loadWorkerConfig({ DATABASE_URL, BUYER_DATA_RETENTION: '' }).buyerDataRetention).toBe(
+      'off',
+    );
+    expect(loadWorkerConfig({ DATABASE_URL, BUYER_DATA_RETENTION: 'on' }).buyerDataRetention).toBe(
+      'on',
+    );
+    expect(captureConfigError({ DATABASE_URL, BUYER_DATA_RETENTION: 'yes' }).issues).toEqual([
+      'BUYER_DATA_RETENTION must be one of off, on',
+    ]);
+  });
+
   it("logs the owner's alerts by default, and emails them through SES when configured", () => {
     expect(loadWorkerConfig({ DATABASE_URL }).ownerAlerts).toEqual({
       environment: 'local',

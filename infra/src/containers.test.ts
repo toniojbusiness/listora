@@ -102,6 +102,13 @@ describe('the sign-in an environment gets', () => {
     });
   });
 
+  it('keeps buyer data retention off in every deployment until the owner turns it on', () => {
+    expect(containerEnvironment('worker', DATABASE_URL, RESOURCES)).toMatchObject({
+      BUYER_DATA_RETENTION: 'off',
+    });
+    expect(loadWorkerConfig(taskEnvironment('worker')).buyerDataRetention).toBe('off');
+  });
+
   it('gives a dev environment the dev driver and no Cognito keys', () => {
     const dev = { ...RESOURCES, signIn: { driver: 'dev' } } as const;
     expect(containerEnvironment('api', DATABASE_URL, dev)).toMatchObject({ AUTH_DRIVER: 'dev' });

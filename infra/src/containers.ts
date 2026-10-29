@@ -215,6 +215,10 @@ export function containerEnvironment(
         ...workerAuth(deployed().signIn),
         ...runnerService(deployed()),
         ...ownerAlerts(deployed()),
+        // Clearing buyers' names and tracking numbers is permanent, so it stays off until the
+        // owner decides to turn it on here; meanwhile the job logs what it would clear
+        // (docs/features/privacy.md#retention).
+        BUYER_DATA_RETENTION: 'off',
       };
     case 'runner':
       return {
