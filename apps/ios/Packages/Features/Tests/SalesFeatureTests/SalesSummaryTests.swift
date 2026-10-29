@@ -27,7 +27,7 @@ private final class SummaryService: SalesService, @unchecked Sendable {
         return try next.get()
     }
 
-    func sales(cursor _: String?) async throws(APIFailure) -> SalePage {
+    func sales(sort _: SaleSort, cursor _: String?) async throws(APIFailure) -> SalePage {
         SalePage(sales: [], nextCursor: nil)
     }
 

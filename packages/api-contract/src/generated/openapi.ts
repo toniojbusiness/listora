@@ -155,7 +155,9 @@ export interface paths {
         };
         /**
          * List items
-         * @description Newest first. Filters combine with AND.
+         * @description Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+         *     to the items they leave. A cursor continues only the sort it was issued for; with another
+         *     `sort` it is `400`.
          */
         get: operations["listItems"];
         put?: never;
@@ -1604,7 +1606,9 @@ export interface paths {
         };
         /**
          * List sales
-         * @description The sales feed, newest sold first, each with its delist runs.
+         * @description The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+         *     sort applies to the sales the filters leave. A cursor continues only the sort it was
+         *     issued for; with another `sort` it is `400`.
          */
         get: operations["listSales"];
         put?: never;
@@ -2978,6 +2982,20 @@ export interface components {
          * @enum {string}
          */
         UserSettableItemStatus: "draft" | "ready" | "archived";
+        /**
+         * @description The order of `listItems`. Every order ends with the newest added first, so items that tie
+         *     keep one order from page to page.
+         *     `added_newest`: newest added first (the default). `listed_newest` and `listed_oldest`: by
+         *     when the item was first listed on any marketplace (`listed_oldest` is the longest listed
+         *     first); items never listed come last. `price_high` and `price_low`: by list price; items
+         *     without one come last. `stale_first`: items still for sale (draft, ready, listed) that have
+         *     waited longest first, aged from the purchase date or, without one, from when the item was
+         *     added; sold and archived items come after them. `profit_high`: by profit at list price (list
+         *     price minus cost, a haul's share included), before fees and shipping; items without a price
+         *     or cost come last. `name_az`: by title, A to Z, ignoring case; untitled items come last.
+         * @enum {string}
+         */
+        ItemSort: "added_newest" | "listed_newest" | "listed_oldest" | "price_high" | "price_low" | "stale_first" | "profit_high" | "name_az";
         /**
          * @description Canonical condition; each marketplace adapter maps it to that marketplace's values.
          * @enum {string}
@@ -4616,6 +4634,16 @@ export interface components {
          * @enum {string}
          */
         KnownSaleStatus: "detected" | "confirmed" | "shipped" | "canceled" | "returned";
+        /**
+         * @description The order of `listSales`. Every order ends with the newest sold first, then the newest
+         *     recorded, so sales that tie keep one order from page to page.
+         *     `sold_newest`: newest sold first (the default). `sold_oldest`: oldest sold first.
+         *     `price_high` and `price_low`: by the order's sale price (`Sale.salePrice`). `profit_high`: by
+         *     the order's profit (`Sale.profit`); sales without one (fees or a cost not known yet, or the
+         *     sale canceled or returned) come last.
+         * @enum {string}
+         */
+        SaleSort: "sold_newest" | "sold_oldest" | "price_high" | "price_low" | "profit_high";
         /**
          * @description A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
          *     show an unknown source generically.
@@ -6483,6 +6511,7 @@ export type HealthReady = components['schemas']['HealthReady'];
 export type ItemStatus = components['schemas']['ItemStatus'];
 export type KnownItemStatus = components['schemas']['KnownItemStatus'];
 export type UserSettableItemStatus = components['schemas']['UserSettableItemStatus'];
+export type ItemSort = components['schemas']['ItemSort'];
 export type ItemCondition = components['schemas']['ItemCondition'];
 export type MeasurementUnit = components['schemas']['MeasurementUnit'];
 export type Measurement = components['schemas']['Measurement'];
@@ -6671,6 +6700,7 @@ export type PhoneCallAnswer = components['schemas']['PhoneCallAnswer'];
 export type PhoneRuntime = components['schemas']['PhoneRuntime'];
 export type SaleStatus = components['schemas']['SaleStatus'];
 export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
+export type SaleSort = components['schemas']['SaleSort'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
 export type KnownSaleDetectionSource = components['schemas']['KnownSaleDetectionSource'];
 export type SalesSummary = components['schemas']['SalesSummary'];
@@ -7096,6 +7126,8 @@ export interface operations {
                  *     (not counting canceled ones) failed or waits for the seller to finish a step.
                  */
                 attention?: boolean;
+                /** @description The order; `added_newest` when omitted. */
+                sort?: components["schemas"]["ItemSort"];
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -9145,6 +9177,8 @@ export interface operations {
                  *     `in_progress` and `needs_attention` for the home screen's banner.
                  */
                 delistStatus?: components["schemas"]["DelistRunStatus"][];
+                /** @description The order; `sold_newest` when omitted. */
+                sort?: components["schemas"]["SaleSort"];
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -10868,6 +10902,7 @@ export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<component
 export const healthCheckStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["HealthCheckStatus"]> = ["ok", "unavailable"];
 export const knownItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
 export const userSettableItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserSettableItemStatus"]> = ["draft", "ready", "archived"];
+export const itemSortValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ItemSort"]> = ["added_newest", "listed_newest", "listed_oldest", "price_high", "price_low", "stale_first", "profit_high", "name_az"];
 export const itemConditionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ItemCondition"]> = ["new_with_tags", "new_without_tags", "new_with_defects", "pre_owned_excellent", "pre_owned_good", "pre_owned_fair"];
 export const measurementUnitValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MeasurementUnit"]> = ["in", "cm"];
 export const photoRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PhotoRole"]> = ["front", "back", "tag", "flaw", "detail"];
@@ -10912,6 +10947,7 @@ export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<component
 export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
 export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history", "listing_import", "label_read", "offer_check", "offer_response"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
+export const saleSortValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SaleSort"]> = ["sold_newest", "sold_oldest", "price_high", "price_low", "profit_high"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual", "history"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
 export const knownDelistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownDelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed", "canceled"];

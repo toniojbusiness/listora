@@ -537,6 +537,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                      |
 | [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API               |
 | [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI    |
+| [features/sorting.md](features/sorting.md)                         | Sorting Inventory and Sales on the server, keyset paging, the kept choice      |
 | [features/email-sales.md](features/email-sales.md)                 | Sale emails: forwarding address, SES ingest, DKIM/SPF, parsers, matching       |
 | [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders           |
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule   |

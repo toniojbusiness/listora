@@ -20,8 +20,9 @@ import { coverPhotoRows } from '../items/repository.ts';
 import { relistListing } from '../listings/actions.ts';
 import { itemListingRows } from '../listings/repository.ts';
 import { listingStates, listingView, type ListingViewContext } from '../listings/views.ts';
-import { decodeTimeCursor, DEFAULT_PAGE_SIZE, encodeTimeCursor } from '../pagination.ts';
+import { DEFAULT_PAGE_SIZE } from '../pagination.ts';
 import { photoFromRow, type PublicUrls } from '../photos/mapping.ts';
+import { decodeSortCursor, encodeSortCursor } from '../sorting.ts';
 import type { Tenant } from '../tenancy.ts';
 import {
   connectedMarketplaces,
@@ -34,6 +35,7 @@ import {
   type SaleItemDetailRow,
   type SaleRow,
 } from './repository.ts';
+import { DEFAULT_SALE_SORT, saleSortTerms } from './sort.ts';
 import { saleView, type RelistOptions } from './views.ts';
 
 /** How far ahead of the server's clock a hand-entered sale time may be (a phone's clock drifts). */
@@ -54,11 +56,16 @@ export function registerSaleRoutes(app: FastifyInstance, deps: ApiRouteContext):
 
   contractRoute(app, deps, 'listSales', async ({ tenant, db, query }) => {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const sort = query.sort ?? DEFAULT_SALE_SORT;
     const rows = await listSaleRows(db, tenant, {
       itemId: query.itemId,
       statuses: query.status,
       delistStatuses: query.delistStatus,
-      after: query.cursor === undefined ? undefined : decodeTimeCursor(query.cursor),
+      sort,
+      after:
+        query.cursor === undefined
+          ? undefined
+          : decodeSortCursor(query.cursor, sort, saleSortTerms(sort)),
       limit,
     });
     const page = rows.slice(0, limit);
@@ -68,7 +75,7 @@ export function registerSaleRoutes(app: FastifyInstance, deps: ApiRouteContext):
       body: {
         data: await saleViews(db, tenant, page, views),
         ...(rows.length > limit && last
-          ? { nextCursor: encodeTimeCursor({ at: last.sold_at, id: last.id }) }
+          ? { nextCursor: encodeSortCursor(sort, last.sort_key) }
           : {}),
       },
     };

@@ -32,9 +32,10 @@ struct E2EStack {
         return try JSONDecoder().decode(SavedItem.self, from: data)
     }
 
-    /// A ready-to-list item with processed photos, made through the API (`POST /items`).
-    func seedReadyItem() async throws -> SeededItem {
-        let data = try await control("items", method: "POST", body: [:])
+    /// A ready-to-list item with processed photos, made through the API (`POST /items`); `details`
+    /// replace the control endpoint's own (for example a `listPrice`).
+    func seedReadyItem(details: [String: Any] = [:]) async throws -> SeededItem {
+        let data = try await control("items", method: "POST", body: details.isEmpty ? [:] : ["details": details])
         return try JSONDecoder().decode(SeededItem.self, from: data)
     }
 

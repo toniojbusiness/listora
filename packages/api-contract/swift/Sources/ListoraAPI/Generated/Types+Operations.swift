@@ -1201,7 +1201,10 @@ public enum Operations {
     }
     /// List items
     ///
-    /// Newest first. Filters combine with AND.
+    /// Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+    /// to the items they leave. A cursor continues only the sort it was issued for; with another
+    /// `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/items`.
     /// - Remark: Generated from `#/paths//v1/items/get(listItems)`.
@@ -1234,6 +1237,10 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/attention`.
                 public var attention: Swift.Bool?
+                /// The order; `added_newest` when omitted.
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/sort`.
+                public var sort: Components.Schemas.ItemSort?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/cursor`.
@@ -1250,6 +1257,7 @@ public enum Operations {
                 ///   - marketplace: Only items with a listing on this marketplace that is not ended or sold (a draft
                 ///   - brand: Only items of this brand (exact, ignoring case).
                 ///   - attention: `true`: only items that need the seller, those with a listing whose newest change
+                ///   - sort: The order; `added_newest` when omitted.
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
@@ -1258,6 +1266,7 @@ public enum Operations {
                     marketplace: Components.Schemas.KnownMarketplace? = nil,
                     brand: Swift.String? = nil,
                     attention: Swift.Bool? = nil,
+                    sort: Components.Schemas.ItemSort? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
@@ -1266,6 +1275,7 @@ public enum Operations {
                     self.marketplace = marketplace
                     self.brand = brand
                     self.attention = attention
+                    self.sort = sort
                     self.cursor = cursor
                     self.limit = limit
                 }
@@ -14684,7 +14694,10 @@ public enum Operations {
     }
     /// List sales
     ///
-    /// The sales feed, newest sold first, each with its delist runs.
+    /// The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+    /// sort applies to the sales the filters leave. A cursor continues only the sort it was
+    /// issued for; with another `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -14705,6 +14718,10 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/delistStatus`.
                 public var delistStatus: [Components.Schemas.DelistRunStatus]?
+                /// The order; `sold_newest` when omitted.
+                ///
+                /// - Remark: Generated from `#/paths/v1/sales/GET/query/sort`.
+                public var sort: Components.Schemas.SaleSort?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/cursor`.
@@ -14719,18 +14736,21 @@ public enum Operations {
                 ///   - itemId: Only sales whose order contains this item.
                 ///   - status:
                 ///   - delistStatus: Only sales with a delist run in one of these statuses; for example
+                ///   - sort: The order; `sold_newest` when omitted.
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
                     itemId: Components.Schemas.Id? = nil,
                     status: [Components.Schemas.KnownSaleStatus]? = nil,
                     delistStatus: [Components.Schemas.DelistRunStatus]? = nil,
+                    sort: Components.Schemas.SaleSort? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
                     self.itemId = itemId
                     self.status = status
                     self.delistStatus = delistStatus
+                    self.sort = sort
                     self.cursor = cursor
                     self.limit = limit
                 }

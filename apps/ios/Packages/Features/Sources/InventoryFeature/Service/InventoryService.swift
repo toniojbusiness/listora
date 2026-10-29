@@ -26,12 +26,18 @@ struct ItemPage: Equatable, Sendable {
     var nextCursor: String?
 }
 
-/// The inventory list's filters, as the API applies them.
+/// The inventory list's filters and order, as the API applies them.
 struct InventoryQuery: Equatable, Sendable {
     var search = ""
     var filter = InventoryFilter.all
     var marketplace: KnownMarketplace?
     var brand: String?
+    var sort = ItemSort.standard
+
+    /// The same order with no filter or search.
+    var unfiltered: InventoryQuery {
+        InventoryQuery(sort: sort)
+    }
 }
 
 /// The calls of the inventory, item, and listing screens, returning the contract's types and
@@ -105,6 +111,7 @@ struct APIInventoryService: InventoryService {
                 marketplace: query.marketplace,
                 brand: query.brand,
                 attention: query.filter.needsAttention ? true : nil,
+                sort: query.sort,
                 cursor: cursor,
                 limit: 50,
             ))

@@ -3,7 +3,10 @@
     tags: [sales]
     operationId: listSales
     summary: List sales
-    description: The sales feed, newest sold first, each with its delist runs.
+    description: |
+      The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+      sort applies to the sales the filters leave. A cursor continues only the sort it was
+      issued for; with another `sort` it is `400`.
     parameters:
       - name: itemId
         in: query
@@ -29,6 +32,11 @@
             $ref: '../components/schemas/sales.yaml#/DelistRunStatus'
         style: form
         explode: true
+      - name: sort
+        in: query
+        description: The order; `sold_newest` when omitted.
+        schema:
+          $ref: '../components/schemas/sales.yaml#/SaleSort'
       - $ref: '../components/parameters.yaml#/Cursor'
       - $ref: '../components/parameters.yaml#/Limit'
     responses:

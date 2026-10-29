@@ -459,6 +459,8 @@ components:
       $ref: './components/schemas/items.yaml#/KnownItemStatus'
     UserSettableItemStatus:
       $ref: './components/schemas/items.yaml#/UserSettableItemStatus'
+    ItemSort:
+      $ref: './components/schemas/items.yaml#/ItemSort'
     ItemCondition:
       $ref: './components/schemas/items.yaml#/ItemCondition'
     MeasurementUnit:
@@ -848,6 +850,8 @@ components:
       $ref: './components/schemas/sales.yaml#/SaleStatus'
     KnownSaleStatus:
       $ref: './components/schemas/sales.yaml#/KnownSaleStatus'
+    SaleSort:
+      $ref: './components/schemas/sales.yaml#/SaleSort'
     SaleDetectionSource:
       $ref: './components/schemas/sales.yaml#/SaleDetectionSource'
     KnownSaleDetectionSource:

@@ -2,7 +2,7 @@
  * Inventory item queries. Every function takes the request's `Tenant` and filters on its
  * account, so an item of another account is indistinguishable from one that does not exist.
  */
-import type { ItemStatus } from '@listora/api-contract';
+import type { ItemSort, ItemStatus } from '@listora/api-contract';
 import {
   createInventoryItem,
   jsonb,
@@ -18,9 +18,11 @@ import {
 import { cancelOperation, keepDeletedItemOperations } from '@listora/operations';
 import { sql } from 'kysely';
 
+import { sortedRows, type SortCursor, type SortValue } from '../sorting.ts';
 import type { Tenant } from '../tenancy.ts';
 import type { DetailColumns, FieldProvenance } from './details.ts';
 import type { PhotoRow } from '../photos/mapping.ts';
+import { itemSortTerms } from './sort.ts';
 
 /**
  * Listing statuses that are not live on a marketplace (contract: `deleteItem`): never posted,
@@ -96,20 +98,25 @@ export interface ItemListFilter {
    * failed or waits for the seller (`needs_user_action`).
    */
   attention?: boolean | undefined;
-  /** Return only items older than this one (keyset pagination). */
-  beforeId: string | undefined;
+  sort: ItemSort;
+  /** Return only items after this page's last one, in `sort` (keyset pagination). */
+  after: SortCursor | undefined;
   limit: number;
 }
 
+/** A listed item with its terms in the list's order, for the next page's cursor. */
+export type SortedItemRow = InventoryItem & { sort_key: SortValue[] };
+
 /**
- * Newest first. Item ids are UUIDv7, so id order is creation order and a page boundary is a
- * single id. Returns up to `limit + 1` rows so the caller can tell whether another page exists.
+ * In `sort` (`itemSortTerms`), which ends with the id: item ids are UUIDv7, so every order ties
+ * last on creation order. Returns up to `limit + 1` rows so the caller can tell whether another
+ * page exists.
  */
 export async function listItemRows(
   db: DbExecutor,
   tenant: Tenant,
   filter: ItemListFilter,
-): Promise<InventoryItem[]> {
+): Promise<SortedItemRow[]> {
   let query = db
     .selectFrom('inventory_item')
     .selectAll()
@@ -164,9 +171,7 @@ export async function listItemRows(
       )`,
     );
   }
-  if (filter.beforeId !== undefined) query = query.where('id', '<', filter.beforeId);
-  return query
-    .orderBy('id', 'desc')
+  return sortedRows(query, itemSortTerms(filter.sort), filter.after)
     .limit(filter.limit + 1)
     .execute();
 }

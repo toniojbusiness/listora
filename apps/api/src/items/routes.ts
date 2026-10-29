@@ -24,9 +24,10 @@ import { ApiError, notFound, validationFailed } from '../errors.ts';
 import { lockHauls, settleHaul } from '../hauls/repository.ts';
 import { itemListingRows } from '../listings/repository.ts';
 import { listingStates, type ListingViewContext } from '../listings/views.ts';
-import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor } from '../pagination.ts';
+import { DEFAULT_PAGE_SIZE } from '../pagination.ts';
 import { listPhotoRows } from '../photos/repository.ts';
 import { deletePhotoObjects } from '../photos/stored-objects.ts';
+import { decodeSortCursor, encodeSortCursor } from '../sorting.ts';
 import type { Tenant } from '../tenancy.ts';
 import {
   changedDetails,
@@ -54,6 +55,7 @@ import {
   storageLocationSummary,
   updateItem,
 } from './repository.ts';
+import { DEFAULT_ITEM_SORT, itemSortTerms } from './sort.ts';
 import { itemSummaryView, itemView } from './views.ts';
 
 export interface ItemRouteDependencies extends RouteDependencies {
@@ -67,13 +69,18 @@ export interface ItemRouteDependencies extends RouteDependencies {
 export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependencies): void {
   contractRoute(app, deps, 'listItems', async ({ tenant, db, query }) => {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+    const sort = query.sort ?? DEFAULT_ITEM_SORT;
     const rows = await listItemRows(db, tenant, {
       statuses: query.status,
       search: query.q,
       marketplace: query.marketplace,
       brand: query.brand,
       attention: query.attention,
-      beforeId: query.cursor === undefined ? undefined : decodeCursor(query.cursor),
+      sort,
+      after:
+        query.cursor === undefined
+          ? undefined
+          : decodeSortCursor(query.cursor, sort, itemSortTerms(sort)),
       limit,
     });
     const page = rows.slice(0, limit);
@@ -91,7 +98,9 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
         data: page.map((row) =>
           itemSummaryView(row, covers.get(row.id), deps.storage, listings.get(row.id)),
         ),
-        ...(rows.length > limit && last ? { nextCursor: encodeCursor(last.id) } : {}),
+        ...(rows.length > limit && last
+          ? { nextCursor: encodeSortCursor(sort, last.sort_key) }
+          : {}),
       },
     };
   });

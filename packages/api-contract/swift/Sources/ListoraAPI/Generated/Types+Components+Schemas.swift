@@ -871,6 +871,29 @@ extension Components {
             case ready = "ready"
             case archived = "archived"
         }
+        /// The order of `listItems`. Every order ends with the newest added first, so items that tie
+        /// keep one order from page to page.
+        /// `added_newest`: newest added first (the default). `listed_newest` and `listed_oldest`: by
+        /// when the item was first listed on any marketplace (`listed_oldest` is the longest listed
+        /// first); items never listed come last. `price_high` and `price_low`: by list price; items
+        /// without one come last. `stale_first`: items still for sale (draft, ready, listed) that have
+        /// waited longest first, aged from the purchase date or, without one, from when the item was
+        /// added; sold and archived items come after them. `profit_high`: by profit at list price (list
+        /// price minus cost, a haul's share included), before fees and shipping; items without a price
+        /// or cost come last. `name_az`: by title, A to Z, ignoring case; untitled items come last.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemSort`.
+        @frozen public enum ItemSort: String, Codable, Hashable, Sendable, CaseIterable {
+            case addedNewest = "added_newest"
+            case listedNewest = "listed_newest"
+            case listedOldest = "listed_oldest"
+            case priceHigh = "price_high"
+            case priceLow = "price_low"
+            case staleFirst = "stale_first"
+            case profitHigh = "profit_high"
+            case nameAz = "name_az"
+        }
         /// Canonical condition; each marketplace adapter maps it to that marketplace's values.
         ///
         /// - Remark: Generated from `#/components/schemas/ItemCondition`.
@@ -7914,6 +7937,22 @@ extension Components {
             case shipped = "shipped"
             case canceled = "canceled"
             case returned = "returned"
+        }
+        /// The order of `listSales`. Every order ends with the newest sold first, then the newest
+        /// recorded, so sales that tie keep one order from page to page.
+        /// `sold_newest`: newest sold first (the default). `sold_oldest`: oldest sold first.
+        /// `price_high` and `price_low`: by the order's sale price (`Sale.salePrice`). `profit_high`: by
+        /// the order's profit (`Sale.profit`); sales without one (fees or a cost not known yet, or the
+        /// sale canceled or returned) come last.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleSort`.
+        @frozen public enum SaleSort: String, Codable, Hashable, Sendable, CaseIterable {
+            case soldNewest = "sold_newest"
+            case soldOldest = "sold_oldest"
+            case priceHigh = "price_high"
+            case priceLow = "price_low"
+            case profitHigh = "profit_high"
         }
         /// A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
         /// show an unknown source generically.

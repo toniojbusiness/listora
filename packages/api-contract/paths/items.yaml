@@ -3,7 +3,10 @@
     tags: [items]
     operationId: listItems
     summary: List items
-    description: Newest first. Filters combine with AND.
+    description: |
+      Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+      to the items they leave. A cursor continues only the sort it was issued for; with another
+      `sort` it is `400`.
     parameters:
       - name: status
         in: query
@@ -41,6 +44,11 @@
           (not counting canceled ones) failed or waits for the seller to finish a step.
         schema:
           type: boolean
+      - name: sort
+        in: query
+        description: The order; `added_newest` when omitted.
+        schema:
+          $ref: '../components/schemas/items.yaml#/ItemSort'
       - $ref: '../components/parameters.yaml#/Cursor'
       - $ref: '../components/parameters.yaml#/Limit'
     responses:

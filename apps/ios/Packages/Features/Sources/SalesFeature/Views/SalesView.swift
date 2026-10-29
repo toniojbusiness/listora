@@ -3,8 +3,9 @@ import DesignSystem
 import ListoraAPI
 import SwiftUI
 
-/// The Sales tab: all the seller's sales in total and per marketplace, recent sales, newest sold
-/// first, with what each one sold for and its profit, and the way to the profit dashboard. The
+/// The Sales tab: all the seller's sales in total and per marketplace, the sales, newest sold
+/// first or in the order the sort menu picks, with what each one sold for and its profit, and
+/// the way to the profit dashboard. The
 /// list is read from the server each time it appears, after a sync, and on pull to refresh,
 /// which syncs the marketplaces too.
 public struct SalesView<Settings: View>: View {
@@ -60,6 +61,9 @@ public struct SalesView<Settings: View>: View {
                 .refreshable {
                     await environment.sync?.syncNow()
                     await model.load()
+                }
+                .onChange(of: model.sort) {
+                    Task { await model.load() }
                 }
                 // A sync that ended may have found sales.
                 .onChange(of: environment.sync?.isSyncing ?? false) { _, syncing in
@@ -135,6 +139,8 @@ public struct SalesView<Settings: View>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("sales.profitCard")
+                SortMenu(selection: $model.sort, options: SaleSort.allCases, title: \.title)
+                    .accessibilityIdentifier("sales.sort")
                 ForEach(model.sales, id: \.id) { sale in
                     NavigationLink(value: SaleRoute(saleID: sale.id)) {
                         SaleRow(sale: sale)

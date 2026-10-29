@@ -62,7 +62,7 @@ private final class FakeSalesService: SalesService, @unchecked Sendable {
         }
     }
 
-    func sales(cursor _: String?) async throws(APIFailure) -> SalePage {
+    func sales(sort _: SaleSort, cursor _: String?) async throws(APIFailure) -> SalePage {
         try fail()
         return locked { _pages.isEmpty ? SalePage(sales: [], nextCursor: nil) : _pages.removeFirst() }
     }

@@ -85,7 +85,8 @@ marketplace, with when the first one sold. Each marketplace with a sale or a con
 is listed, in the fixed `KnownMarketplace` order and never ranked
 ([profit.md](profit.md#marketplaces-side-by-side-never-ranked): eBay's licence forbids
 comparing). The sales feed (`listSales`) lists sales newest sold first (then newest recorded), so
-a history recorded at once still reads in order; its cursor keeps the sale time and id.
+a history recorded at once still reads in order, or in another order by date, price, or profit
+([sorting.md](sorting.md)); its cursor keeps the last sale's place in the order.
 
 ## The lifecycle
 
@@ -178,7 +179,8 @@ of its latest sale that stands.
 - **Sales tab.** All your sales on a price tag (Hang Tag, [design.md](design.md)): the total
   across every marketplace in Fraunces, how many sales and items since when, and each marketplace
   on the tag's string, a bead each with its own sales and revenue (a marketplace without a sale
-  yet hangs on a loose string, "No sales yet"). Then recent sales, newest sold first, each with
+  yet hangs on a loose string, "No sales yet"). Then the sales, newest sold first or in the order
+  the Sort pill above them picks ([sorting.md](sorting.md)), each with
   its sold item's photo (the item's thumbnail, `SaleItem.thumbnailUrl`; the marketplace's initial
   until it has one), price and profit ("Est. profit" while fees are estimated), and the way to
   the profit dashboard ([profit.md](profit.md)).
