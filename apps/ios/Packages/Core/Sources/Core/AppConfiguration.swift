@@ -13,6 +13,8 @@ public struct AppConfiguration: Equatable, Sendable {
         public static let cognitoRegion = "ListoraCognitoRegion"
         public static let cognitoClientID = "ListoraCognitoClientID"
         public static let supportEmail = "ListoraSupportEmail"
+        public static let mediaBaseURL = "ListoraMediaBaseURL"
+        public static let phoneKeychainGroup = "ListoraPhoneKeychainGroup"
     }
 
     public let environment: AppEnvironment
@@ -30,6 +32,15 @@ public struct AppConfiguration: Equatable, Sendable {
     /// Where Settings > Help and contact sends the seller's email, or nil when the build names no
     /// address (`SUPPORT_EMAIL` in the xcconfig is empty); Help then says so.
     public let supportEmail: String?
+    /// Where the API's listing photos are served from when not from the API itself (the
+    /// CloudFront distribution of the S3 storage driver), or nil when the API serves them (the
+    /// local driver, Dev). The phone fetches a listing's photos only from these two
+    /// (docs/features/phone-execution.md).
+    public let mediaBaseURL: URL?
+    /// The keychain access group of what only the app keeps (the phone's marketplace sessions):
+    /// the app's own group, set in personal device builds, whose default group is the one shared
+    /// with the Share Extension. Nil elsewhere, where the app's default group is its own.
+    public let phoneKeychainGroup: String?
 
     public init(
         environment: AppEnvironment,
@@ -38,8 +49,13 @@ public struct AppConfiguration: Equatable, Sendable {
         sessionKeychainGroup: String? = nil,
         cognito: CognitoConfiguration? = nil,
         supportEmail: String? = nil,
+        mediaBaseURL: URL? = nil,
+        phoneKeychainGroup: String? = nil,
     ) throws(ConfigurationError) {
         try Self.validate(apiBaseURL, key: InfoKey.apiBaseURL, for: environment)
+        if let mediaBaseURL {
+            try Self.validate(mediaBaseURL, key: InfoKey.mediaBaseURL, for: environment)
+        }
         if let supportEmail, supportEmail.wholeMatch(of: /[^@\s]+@[^@\s]+\.[^@\s]+/) == nil {
             throw .invalid(key: InfoKey.supportEmail, reason: "must be an email address")
         }
@@ -52,6 +68,8 @@ public struct AppConfiguration: Equatable, Sendable {
         self.sessionKeychainGroup = sessionKeychainGroup ?? appGroupIdentifier
         self.cognito = cognito
         self.supportEmail = supportEmail
+        self.mediaBaseURL = mediaBaseURL
+        self.phoneKeychainGroup = phoneKeychainGroup
     }
 
     /// Parses and validates the configuration. Errors name the bad key but never echo its value.
@@ -66,6 +84,13 @@ public struct AppConfiguration: Equatable, Sendable {
         }
         let appGroup = try Self.string(for: InfoKey.appGroup, in: infoDictionary)
         let sessionKeychainGroup = try Self.string(for: InfoKey.sessionKeychainGroup, in: infoDictionary)
+        var mediaBaseURL: URL?
+        if let media = try Self.optionalString(for: InfoKey.mediaBaseURL, in: infoDictionary) {
+            guard let parsed = URL(string: media) else {
+                throw .invalid(key: InfoKey.mediaBaseURL, reason: Self.notAnHTTPURL)
+            }
+            mediaBaseURL = parsed
+        }
         try self.init(
             environment: environment,
             apiBaseURL: url,
@@ -73,6 +98,8 @@ public struct AppConfiguration: Equatable, Sendable {
             sessionKeychainGroup: sessionKeychainGroup,
             cognito: Self.cognito(in: infoDictionary),
             supportEmail: Self.optionalString(for: InfoKey.supportEmail, in: infoDictionary),
+            mediaBaseURL: mediaBaseURL,
+            phoneKeychainGroup: Self.optionalString(for: InfoKey.phoneKeychainGroup, in: infoDictionary),
         )
     }
 

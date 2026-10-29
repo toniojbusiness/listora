@@ -60,6 +60,10 @@ public final class SignInModel {
     public private(set) var invite: InviteSignUpModel?
     /// The invite sign-up screen is open over the welcome screen.
     public var showsInvite = false
+    /// Runs on every sign-out (``signOut()``, ``signOutKeepingScreen()``), not when a session
+    /// ends by itself (it expired, or the user pool refused its refresh): what the app keeps on
+    /// the phone for the account goes with it.
+    @ObservationIgnored public var onSignOut: (@MainActor () -> Void)?
     private let method: (any SignInMethod)?
     private let tokens: AccessTokenStore
     private let now: @Sendable () -> Date
@@ -180,6 +184,7 @@ public final class SignInModel {
         notice = nil
         stage = Self.stage(method: method, grant: nil)
         tokens.signOut()
+        onSignOut?()
         startOver()
     }
 
@@ -191,6 +196,7 @@ public final class SignInModel {
             Task { await method.signOut(grant) }
         }
         tokens.signOut()
+        onSignOut?()
     }
 
     /// Shows the sign-in after ``signOutKeepingScreen()``, once the person leaves that screen.

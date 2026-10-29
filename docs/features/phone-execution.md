@@ -55,9 +55,16 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
   keeps the sign-in's own cookies in its Keychain (readable after first unlock, never synced),
   so it can act in the session; the server keeps its sealed copy as before. The session check
   then runs on the phone, at once.
-- **The phone's sessions belong to one Listora account.** Signing in to another account on the
-  phone removes them, and so does deleting the account. Every run stores the cookies the
-  marketplace refreshed.
+- **The phone's sessions belong to one Listora account**, named by its sign-in identity (the
+  session token's issuer and subject, `AccessGrant.identity`), never its email, which another
+  account can come to use. Signing in to another account on the phone removes them, and so do
+  signing out of Listora (every web view holding one closes too) and deleting the account. An
+  earlier build named the account by its email, which still names it once, so an update keeps
+  the sessions. Every run stores the cookies the marketplace refreshed.
+- **Only the app reads them.** The sessions are kept in the app's own keychain group, never the
+  one it shares with the Share Extension: in personal device builds, whose default group would be
+  the shared one, the app names its own (`PHONE_KEYCHAIN_GROUP`, listed first in
+  `Config/PersonalTeam.entitlements`), and moves what an earlier build kept elsewhere at launch.
 
 ## How a phone run works
 
@@ -151,7 +158,13 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   and the pages go when the app leaves the foreground or iOS warns of low memory. Listing
   photos are the server's `listing` image, sized and compressed once when the photo was
   processed ([photos.md](photos.md)); the app downloads each one once and hands it to every
-  marketplace that posts it.
+  marketplace that posts it. It downloads only from Listora's own photo hosts, the API and the
+  build's media host (`MEDIA_BASE_URL`, the photo CDN), over https (plain http only from a Dev
+  build's own local API), follows no redirect, and stops at 15 MB (`PhotoCache`): a call can't
+  make the phone fetch anything else, on the internet or on the seller's own network.
+- **The controller page** loads Listora's blank page once and never navigates after it: its
+  navigation policy cancels every later load (`ControllerLoad`), and the `listora` message
+  handler answers only that page's main frame (`RuntimeLane`).
 - **Progress.** Each step the runtime starts goes to the app (`progress`, never waited for): the
   step in plain words ("Adding the photos", from the script's step name) and its number, with the
   run's purpose, from which the sync indicator names what the phone is doing ("Checking Depop
@@ -172,8 +185,11 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   may load only the marketplace's own origins; a window the site opens is not opened.
 - **Checks are handed to the seller.** A CAPTCHA, a bot check, a login code, or a sign-in page
   stops the run, and the app shows that page in a visible in-app browser above every screen:
-  "Depop wants to check it's you. Complete the check below, then tap Done." The seller completes
-  it themselves. Done runs the call again from its start when it had changed nothing yet. Not
+  "Depop wants to check it's you. Complete the check below, then tap Done." The browser always
+  shows the page's address, with a lock while it is https, and its main frame stays on the
+  marketplace's own domains and the sign-in providers marketplaces offer (Google, Apple,
+  Facebook; `HandOffPolicy`), so a link or redirect on a check page can't show another site's
+  sign-in inside Listora. The seller completes it themselves. Done runs the call again from its start when it had changed nothing yet. Not
   now, or a check met while the app is in the background, ends the run as `stopped_for_check`:
   the work waits and retries later, and the seller gets a local notification. A sign-in page the
   seller declined counts as the check itself, which asks them to link again. Listora never

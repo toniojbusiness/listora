@@ -10,7 +10,10 @@ import WebKit
 ///
 /// The main frame may only load the marketplace's own origins (the server sends them), as on the
 /// browser runner; a load anywhere else is refused (`blocked`). While the seller completes a
-/// check in the visible browser, any web page may load: it is their own browsing.
+/// check in the visible browser (ChallengeHandOffView, which shows the page's address), the main
+/// frame may also go to the marketplace's own domains and the sign-in providers a marketplace's
+/// sign-in uses (`HandOffPolicy`), over https; never anywhere else, so a link or redirect on a
+/// check page can't show another site's sign-in inside Listora.
 @MainActor
 final class MarketplacePage: NSObject {
     let webView: WKWebView
@@ -19,6 +22,9 @@ final class MarketplacePage: NSObject {
     /// The marketplace's own origins, the only ones the main frame may load; empty (nothing
     /// loads) for a page made ahead of its first call, which sets them.
     var origins: Set<String>
+    /// The marketplace's own domains (its cookie domains): a check handed to the seller may go to
+    /// any page on them.
+    var domains: [String] = []
     /// The page holds a session: the phone's cookies were restored into it.
     private(set) var hasSession = false
     private let logger: Logger
@@ -201,12 +207,11 @@ extension MarketplacePage: WKNavigationDelegate {
             return .cancel
         }
         // Frames load freely (a marketplace's checks come in frames, which the run must see).
-        guard action.targetFrame?.isMainFrame ?? true, !handingOff, scheme != "about" else {
+        guard action.targetFrame?.isMainFrame ?? true, scheme != "about" else {
             return .allow
         }
-        guard let url, let host = url.host else { return .cancel }
-        let origin = url.port.map { "\(scheme ?? "https")://\(host):\($0)" } ?? "\(scheme ?? "https")://\(host)"
-        if origins.contains(origin) {
+        guard let url, let origin = url.webOrigin else { return .cancel }
+        if origins.contains(origin) || (handingOff && HandOffPolicy.allows(url, domains: domains)) {
             return .allow
         }
         logger.info("refused a page outside the marketplace")
@@ -344,5 +349,25 @@ final class OneShot<Value: Sendable> {
         return try await withCheckedThrowingContinuation { continuation in
             waiters[id] = continuation
         }
+    }
+}
+
+/// Where the main frame of a check handed to the seller may go, besides the marketplace's own
+/// origins: its own domains, and the sign-in providers marketplaces offer ("Continue with
+/// Google"), over https only.
+enum HandOffPolicy {
+    static let signInProviders: Set = [
+        "accounts.google.com",
+        "appleid.apple.com",
+        "www.facebook.com",
+        "m.facebook.com",
+    ]
+
+    static func allows(_ url: URL, domains: [String]) -> Bool {
+        guard url.scheme?.lowercased() == "https", let host = url.host()?.lowercased(), !host.isEmpty else {
+            return false
+        }
+        return signInProviders.contains(host)
+            || domains.contains { host == $0.lowercased() || host.hasSuffix(".\($0.lowercased())") }
     }
 }

@@ -2,11 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- The app's and the Share Extension's entitlements in personal device builds
      (Config/PersonalTeam.xcconfig): the Keychain Sharing group that holds the session
-     (SESSION_KEYCHAIN_GROUP) in place of the App Group. -->
+     (SESSION_KEYCHAIN_GROUP) in place of the App Group. Each target's own group comes first,
+     so an item that names no group stays with the target that kept it (the app's marketplace
+     sessions, PHONE_KEYCHAIN_GROUP, and its installation id), never in the shared group. -->
 <plist version="1.0">
 <dict>
 	<key>keychain-access-groups</key>
 	<array>
+		<string>$(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 		<string>$(AppIdentifierPrefix)$(BASE_BUNDLE_IDENTIFIER).session</string>
 	</array>
 </dict>

@@ -94,6 +94,8 @@ targets:
         ListoraCognitoRegion: $(COGNITO_REGION)
         ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         ListoraSupportEmail: $(SUPPORT_EMAIL)
+        ListoraMediaBaseURL: $(MEDIA_BASE_URL)
+        ListoraPhoneKeychainGroup: $(PHONE_KEYCHAIN_GROUP)
         ITSAppUsesNonExemptEncryption: false
         # Invite links (`listora://invite/<code>`, docs/features/invites.md) open the sign-up with
         # the code filled in.

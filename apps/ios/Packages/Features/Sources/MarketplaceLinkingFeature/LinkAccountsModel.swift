@@ -104,7 +104,7 @@ public final class LinkAccountsModel {
             loadState = .loading
         }
         do {
-            links = try await service.list()
+            links = try await service.list().map(held)
             loadState = .loaded
         } catch {
             loadState = .failed(error)
@@ -311,6 +311,7 @@ public final class LinkAccountsModel {
     }
 
     private func replace(_ link: MarketplaceLink) {
+        let link = held(link)
         if let index = links.firstIndex(where: { $0.marketplace == link.marketplace }) {
             links[index] = link
         } else {
@@ -321,6 +322,19 @@ public final class LinkAccountsModel {
 
 /// The Read only switch (docs/features/read-only.md).
 extension LinkAccountsModel {
+    /// The link as this phone holds it (docs/features/read-only.md#on-the-phone): an account the
+    /// server says is read only this phone holds read only too, until the seller turns Read only
+    /// off here; one this phone holds read only shows so, whatever the server says, since the
+    /// phone refuses writes there.
+    func held(_ link: MarketplaceLink) -> MarketplaceLink {
+        guard let sessions else { return link }
+        if link.readOnly {
+            sessions.setReadOnly(true, for: link.marketplace)
+            return link
+        }
+        return sessions.isReadOnly(link.marketplace) ? link.with(readOnly: true) : link
+    }
+
     /// The Read only switch: making the account read only takes effect at once; letting Listora
     /// change it again asks the user to confirm first (`confirmWritable`).
     public func requestReadOnly(_ link: MarketplaceLink, _ readOnly: Bool) async {
@@ -353,6 +367,8 @@ extension LinkAccountsModel {
             progress[marketplace] = .readOnlyFailed(error)
             return
         }
+        // This phone refuses writes there itself from now on, or, turned off here, no longer.
+        sessions?.setReadOnly(readOnly, for: marketplace)
         progress[marketplace] = nil
         do {
             try await replace(service.get(marketplace))

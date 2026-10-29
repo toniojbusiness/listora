@@ -26,6 +26,25 @@ public struct AccessGrant: Codable, Equatable, Sendable {
         self.email = email
         self.refreshToken = refreshToken
     }
+
+    /// Who signed in, as the API knows them: the token's issuer and subject (the identity the
+    /// server finds the account by, `app_user.auth_subject`), which stays the same across
+    /// renewals. Never the email, which another account can come to use. Nil for a token that
+    /// is not a JWT with both.
+    public var identity: String? {
+        let parts = accessToken.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3 else { return nil }
+        var payload = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let data = Data(base64Encoded: payload),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let issuer = claims["iss"] as? String, !issuer.isEmpty,
+              let subject = claims["sub"] as? String, !subject.isEmpty
+        else {
+            return nil
+        }
+        return "\(issuer)#\(subject)"
+    }
 }
 
 /// Renews a session whose token is about to expire, with its refresh token.
