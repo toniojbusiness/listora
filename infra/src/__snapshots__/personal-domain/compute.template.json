@@ -679,6 +679,10 @@
               {
                 "Name": "OWNER_ALERT_TO",
                 "Value": "owner@example.com"
+              },
+              {
+                "Name": "BUYER_DATA_RETENTION",
+                "Value": "off"
               }
             ],
             "Essential": true,

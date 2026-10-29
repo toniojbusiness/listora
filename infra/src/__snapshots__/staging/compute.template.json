@@ -784,6 +784,10 @@
               {
                 "Name": "OWNER_ALERT_ENV",
                 "Value": "staging"
+              },
+              {
+                "Name": "BUYER_DATA_RETENTION",
+                "Value": "off"
               }
             ],
             "Essential": true,

@@ -61,6 +61,39 @@ export const RETENTION_DAYS = {
 
 export type RetentionRule = keyof typeof RETENTION_DAYS;
 
+/** The rules that clear buyers' details, which run only when buyer data retention is on. */
+export type BuyerDataRule = 'saleLabelBuyers' | 'packageTracking' | 'offerBuyers';
+
+/** `BUYER_DATA_RETENTION`: `off` (the default) clears nothing of buyers; `on` clears. */
+export const BUYER_DATA_RETENTIONS = ['off', 'on'] as const;
+export type BuyerDataRetention = (typeof BUYER_DATA_RETENTIONS)[number];
+
+export class RetentionConfigError extends Error {
+  readonly issues: readonly string[];
+
+  constructor(issues: readonly string[]) {
+    super(`Invalid retention configuration:\n- ${issues.join('\n- ')}`);
+    this.name = 'RetentionConfigError';
+    this.issues = issues;
+  }
+}
+
+/**
+ * Reads `BUYER_DATA_RETENTION` (see `.env.example`) once at startup; unset or empty means `off`.
+ * Clearing buyers' details is permanent, so only an explicit `on` turns it on.
+ */
+export function loadBuyerDataRetention(env: NodeJS.ProcessEnv = process.env): BuyerDataRetention {
+  const raw = env['BUYER_DATA_RETENTION'];
+  const value = raw === undefined || raw === '' ? 'off' : raw;
+  const known = BUYER_DATA_RETENTIONS.find((candidate) => candidate === value);
+  if (known === undefined) {
+    throw new RetentionConfigError([
+      `BUYER_DATA_RETENTION must be one of ${BUYER_DATA_RETENTIONS.join(', ')}`,
+    ]);
+  }
+  return known;
+}
+
 export interface DataRetentionOptions {
   db: Db;
   logger: Logger;
@@ -70,10 +103,20 @@ export interface DataRetentionOptions {
   maxBatches?: number;
   /** Milliseconds since the epoch; injectable for tests. */
   now?: () => number;
+  /**
+   * Whether the buyer data rules clear anything (`BUYER_DATA_RETENTION`, default `off`): while
+   * off they clear nothing and the run logs, and returns, what they would clear.
+   */
+  buyerData?: BuyerDataRetention;
 }
 
-/** Rows each rule deleted (for revoked connections: connections deleted). */
-export type DataRetentionSummary = Record<RetentionRule, number>;
+/**
+ * Rows each rule deleted or cleared (for revoked connections: connections deleted); while buyer
+ * data retention is off, also what its rules would clear.
+ */
+export type DataRetentionSummary = Record<RetentionRule, number> & {
+  buyerDataWouldClear?: Record<BuyerDataRule, number>;
+};
 
 /** One run of the retention job: every rule, in order. Throws when the database fails. */
 export async function runDataRetention(
@@ -93,6 +136,7 @@ export async function runDataRetention(
     return total;
   };
   const { db } = options;
+  const buyerData = options.buyerData ?? 'off';
 
   const summary: DataRetentionSummary = {
     operationEvents: await repeat(() =>
@@ -159,51 +203,101 @@ export async function runDataRetention(
       `.execute(db);
       return Number(result.numAffectedRows ?? 0);
     }),
-    saleLabelBuyers: await repeat(async () => {
-      const result = await sql`
-        update sale_label as label
-        set buyer_first_name = null, tracking_number = null, carrier = null, source = null
-        where (label.account_id, label.sale_id) in (
-          select label.account_id, label.sale_id from sale_label as label
-          join sale on sale.account_id = label.account_id and sale.id = label.sale_id
-          where ${saleDone(cutoff('saleLabelBuyers'))}
-            and (label.buyer_first_name is not null or label.tracking_number is not null)
-          order by label.sale_id
-          limit ${batchSize}
-        )
-      `.execute(db);
-      return Number(result.numAffectedRows ?? 0);
-    }),
-    packageTracking: await repeat(async () => {
-      const result = await sql`
-        update sale_pack as pack
-        set tracking_number = null
-        where (pack.account_id, pack.sale_id) in (
-          select pack.account_id, pack.sale_id from sale_pack as pack
-          join sale on sale.account_id = pack.account_id and sale.id = pack.sale_id
-          where ${saleDone(cutoff('packageTracking'))} and pack.tracking_number is not null
-          order by pack.sale_id
-          limit ${batchSize}
-        )
-      `.execute(db);
-      return Number(result.numAffectedRows ?? 0);
-    }),
-    offerBuyers: await repeat(async () => {
-      const result = await sql`
-        update marketplace_offer set buyer_name = null
-        where id in (
-          select id from marketplace_offer
-          where status <> 'pending' and closed_at < ${cutoff('offerBuyers')}
-            and buyer_name is not null
-          order by closed_at
-          limit ${batchSize}
-        )
-      `.execute(db);
-      return Number(result.numAffectedRows ?? 0);
-    }),
+    ...(buyerData === 'on'
+      ? {
+          saleLabelBuyers: await repeat(() =>
+            clearBuyerData(db, 'saleLabelBuyers', cutoff, batchSize),
+          ),
+          packageTracking: await repeat(() =>
+            clearBuyerData(db, 'packageTracking', cutoff, batchSize),
+          ),
+          offerBuyers: await repeat(() => clearBuyerData(db, 'offerBuyers', cutoff, batchSize)),
+        }
+      : { saleLabelBuyers: 0, packageTracking: 0, offerBuyers: 0 }),
   };
   options.logger.info({ task: DATA_RETENTION_TASK, deleted: summary }, 'data retention ran');
+  if (buyerData === 'off') {
+    // Nothing of buyers is cleared until the owner turns it on; the log says what would be.
+    const wouldClear: Record<BuyerDataRule, number> = {
+      saleLabelBuyers: await countBuyerData(db, 'saleLabelBuyers', cutoff),
+      packageTracking: await countBuyerData(db, 'packageTracking', cutoff),
+      offerBuyers: await countBuyerData(db, 'offerBuyers', cutoff),
+    };
+    options.logger.info(
+      { task: DATA_RETENTION_TASK, buyerDataRetention: 'off', wouldClear },
+      'buyer data retention is off: nothing of buyers was cleared',
+    );
+    return { ...summary, buyerDataWouldClear: wouldClear };
+  }
   return summary;
+}
+
+/**
+ * The buyer data rules' rows: what each clears, and how they are found. Clearing them is
+ * permanent, so it runs only with `BUYER_DATA_RETENTION=on`.
+ */
+const BUYER_DATA_SQL = {
+  saleLabelBuyers: {
+    set: sql`buyer_first_name = null, tracking_number = null, carrier = null, source = null`,
+    table: sql`sale_label`,
+    rows: (cutoff: Date) => sql`
+      select label.account_id, label.sale_id from sale_label as label
+      join sale on sale.account_id = label.account_id and sale.id = label.sale_id
+      where ${saleDone(cutoff)}
+        and (label.buyer_first_name is not null or label.tracking_number is not null)
+      order by label.sale_id`,
+  },
+  packageTracking: {
+    set: sql`tracking_number = null`,
+    table: sql`sale_pack`,
+    rows: (cutoff: Date) => sql`
+      select pack.account_id, pack.sale_id from sale_pack as pack
+      join sale on sale.account_id = pack.account_id and sale.id = pack.sale_id
+      where ${saleDone(cutoff)} and pack.tracking_number is not null
+      order by pack.sale_id`,
+  },
+  offerBuyers: {
+    set: sql`buyer_name = null`,
+    table: sql`marketplace_offer`,
+    rows: (cutoff: Date) => sql`
+      select account_id, id from marketplace_offer
+      where status <> 'pending' and closed_at < ${cutoff} and buyer_name is not null
+      order by closed_at`,
+  },
+} as const;
+
+/** The row key each buyer data table's rows are found by. */
+const BUYER_DATA_KEYS = {
+  saleLabelBuyers: sql`(account_id, sale_id)`,
+  packageTracking: sql`(account_id, sale_id)`,
+  offerBuyers: sql`(account_id, id)`,
+} as const;
+
+/** Clears one batch of a buyer data rule's rows; the number cleared. */
+async function clearBuyerData(
+  db: Db,
+  rule: BuyerDataRule,
+  cutoff: (rule: RetentionRule) => Date,
+  batchSize: number,
+): Promise<number> {
+  const { set, table, rows } = BUYER_DATA_SQL[rule];
+  const result = await sql`
+    update ${table} set ${set}
+    where ${BUYER_DATA_KEYS[rule]} in (${rows(cutoff(rule))} limit ${batchSize})
+  `.execute(db);
+  return Number(result.numAffectedRows ?? 0);
+}
+
+/** How many rows a buyer data rule would clear now. */
+async function countBuyerData(
+  db: Db,
+  rule: BuyerDataRule,
+  cutoff: (rule: RetentionRule) => Date,
+): Promise<number> {
+  const { rows } = await sql<{ count: string }>`
+    select count(*) as count from (${BUYER_DATA_SQL[rule].rows(cutoff(rule))}) as due
+  `.execute(db);
+  return Number(rows[0]?.count ?? 0);
 }
 
 /**
