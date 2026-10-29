@@ -84,13 +84,13 @@ public struct UserNotificationReminders: TaskReminding {
     private func isAuthorized(_ center: UNUserNotificationCenter) async -> Bool {
         switch await center.notificationSettings().authorizationStatus {
         case .authorized, .provisional, .ephemeral:
-            return true
+            true
         case .notDetermined:
-            return await (try? center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+            await (try? center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         case .denied:
-            return false
+            false
         @unknown default:
-            return false
+            false
         }
     }
 }

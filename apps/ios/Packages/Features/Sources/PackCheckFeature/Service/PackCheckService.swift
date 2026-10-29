@@ -51,7 +51,7 @@ struct APIPackCheckService: PackCheckService {
 
     func setEnabled(_ enabled: Bool) async throws(APIFailure) -> Bool {
         switch try await call({ try await client.replacePackCheckSettings(body: .json(.init(enabled: enabled))) }) {
-        case let .ok(response): return try body { try response.body.json }.enabled
+        case let .ok(response): try body { try response.body.json }.enabled
         case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
