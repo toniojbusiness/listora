@@ -54,14 +54,6 @@ final class ReportsUITests: XCTestCase {
 
     // MARK: Helpers
 
-    private struct YearReportBody: Decodable {
-        struct Totals: Decodable {
-            let revenue: SavedMoney
-        }
-
-        let total: Totals
-    }
-
     /// The year's revenue, as the API reports it (`getYearReport`).
     private func yearRevenueCents(_ stack: E2EStack, year: Int) async throws -> Int {
         var components = URLComponents(
@@ -76,7 +68,7 @@ final class ReportsUITests: XCTestCase {
         request.setValue("Bearer \(stack.token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200, String(bytes: data, encoding: .utf8) ?? "")
-        return try JSONDecoder().decode(YearReportBody.self, from: data).total.revenue.amountCents
+        return try JSONDecoder().decode(ReportsYearBody.self, from: data).total.revenue.amountCents
     }
 
     /// "$12.50", as the app formats money.
@@ -109,4 +101,13 @@ final class ReportsUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+}
+
+/// The parts of the contract's `YearReport` the test checks.
+private struct ReportsYearBody: Decodable {
+    let total: ReportsYearTotals
+}
+
+private struct ReportsYearTotals: Decodable {
+    let revenue: SavedMoney
 }
