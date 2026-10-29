@@ -71,7 +71,7 @@ export function depopOfferStatus(status: string): DepopOfferStatus | null {
 }
 
 /** One product with offers, as the products list names it. */
-interface OfferProduct {
+export interface OfferProduct {
   id: string;
   slug: string | null;
   title: string | null;
@@ -80,17 +80,32 @@ interface OfferProduct {
   priceCents: number | null;
 }
 
-/** The buyers' offers waiting on the seller, across her products. Only reads. */
-export async function readOffers(page: PageDriver, site: DepopSite): Promise<RemoteOffer[]> {
+/**
+ * The seller's products with offers, each named by its listing where Listora finds it. A read
+ * of the offers asks each one's offers next (`readPendingOffers`), a step each: a shop with
+ * many offers outgrows one step's time. Only reads.
+ */
+export async function readOfferProducts(
+  page: PageDriver,
+  site: DepopSite,
+): Promise<OfferProduct[]> {
   await onDepop(page, site);
-  const offers: RemoteOffer[] = [];
   const products = await readProducts(page, site);
   await nameListings(page, site, products);
-  for (const product of products) {
-    for (const record of await readProductOffers(page, site, product, true)) {
-      const offer = offerOf(record, product, site);
-      if (offer?.status === 'pending') offers.push(offer.offer);
-    }
+  return products;
+}
+
+/** The buyers' offers on one product that wait on the seller. Only reads. */
+export async function readPendingOffers(
+  page: PageDriver,
+  site: DepopSite,
+  product: OfferProduct,
+): Promise<RemoteOffer[]> {
+  await onDepop(page, site);
+  const offers: RemoteOffer[] = [];
+  for (const record of await readProductOffers(page, site, product, true)) {
+    const offer = offerOf(record, product, site);
+    if (offer?.status === 'pending') offers.push(offer.offer);
   }
   return offers;
 }

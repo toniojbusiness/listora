@@ -452,6 +452,8 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       status: 200,
       body: '{"products":[{"slug":"ana-denim-jacket"}]}',
     };
+    // Answers given once each, before `answer`, in order.
+    const once: (typeof answer)[] = [];
     // Requests the API drops without an answer, as a page load under way cuts one short.
     let drops = 0;
     const api = createServer((request, response) => {
@@ -470,7 +472,8 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
         return;
       }
       seen.push(request.headers);
-      response.writeHead(answer.status, { ...cors, ...answer.headers }).end(answer.body);
+      const reply = once.shift() ?? answer;
+      response.writeHead(reply.status, { ...cors, ...reply.headers }).end(reply.body);
     });
     await new Promise<void>((resolve) => api.listen(0, '127.0.0.1', resolve));
     const apiOrigin = `http://127.0.0.1:${String((api.address() as AddressInfo).port)}`;
@@ -487,7 +490,8 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
           'api',
           async (step) => {
             await step('open the account', { mutates: false }, (page) => page.goto(`${site.url}/`));
-            return step('read the API', { mutates: false }, (page) =>
+            // Time for a server error's pauses before it is asked again.
+            return step('read the API', { mutates: false, timeoutMs: 10_000 }, (page) =>
               page.apiGet(url, { bearerCookie: 'api_token' }),
             );
           },
@@ -516,11 +520,24 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
         ok: false,
         failure: { kind: 'error', code: 'rate_limited', retryAfterMs: 9_000 },
       });
+      // A server error is asked again after a pause (a GET changes nothing): one that passes
+      // ends nothing, as Depop's 500s on 2026-10-29 would have ended nothing.
+      answer = { status: 200, body: '{"products":[]}' };
+      once.push({ status: 500, body: '{}' }, { status: 502, body: 'Bad gateway' });
+      let before = seen.length;
+      expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
+        ok: true,
+        value: { status: 200, body: { products: [] } },
+      });
+      expect(seen.length - before).toBe(3);
+      // One that lasts stops the run, after two more asks.
       answer = { status: 503, body: '{}' };
+      before = seen.length;
       expect(await get(`${apiOrigin}/api/products/`)).toMatchObject({
         ok: false,
         failure: { kind: 'error', code: 'server_error' },
       });
+      expect(seen.length - before).toBe(3);
       // A request the page couldn't make is made once more; one that fails again ends the step.
       // (Chromium itself sends a request again once when its connection drops, so each failed
       // fetch here is two dropped connections.)
@@ -551,7 +568,7 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
     } finally {
       await new Promise((resolve) => api.close(resolve));
     }
-  });
+  }, 30_000);
 
   it('keeps scripts on the marketplace, and reads from changing anything', async () => {
     const browser = await session();
