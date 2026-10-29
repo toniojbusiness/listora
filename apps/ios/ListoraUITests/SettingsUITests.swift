@@ -30,13 +30,25 @@ final class SettingsUITests: XCTestCase {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
-    /// Scrolls Settings until the row is built and clear of the screen's bottom edge: a list
-    /// builds only what it shows. Hittable is not enough: a row half under the bottom edge is
-    /// hittable, and on CI the tap at its middle (the home indicator's strip) closed the sheet.
+    /// Scrolls Settings until the row is built and clear of the bars: a list builds only what it
+    /// shows. Hittable is not enough: a row half under the bottom edge is hittable, and on CI the
+    /// tap at its middle (the home indicator's strip) closed the sheet. Swipes are slow and go
+    /// back down for a row above the top: on CI a fast swipe flung the list past the next row to
+    /// its end, and swiping only up never found it again.
     private func reveal(_ target: XCUIElement) -> XCUIElement {
+        let list = app.collectionViews.firstMatch
+        let top = app.navigationBars["Settings"].frame.maxY
         let bottom = app.windows.firstMatch.frame.maxY - 100
-        for _ in 0 ..< 6 where !(target.exists && target.isHittable && target.frame.maxY < bottom) {
-            app.collectionViews.firstMatch.swipeUp()
+        for attempt in 0 ..< 12 {
+            if target.exists, target.isHittable, target.frame.minY >= top, target.frame.maxY < bottom {
+                break
+            }
+            // Not built after six swipes up: it is above, out of the list's view.
+            if target.exists ? target.frame.minY < top : attempt >= 6 {
+                list.swipeDown(velocity: .slow)
+            } else {
+                list.swipeUp(velocity: .slow)
+            }
         }
         return target
     }
