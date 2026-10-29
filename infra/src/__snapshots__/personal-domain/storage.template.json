@@ -198,10 +198,32 @@
         }
       }
     },
+    "PhotoCdnCertificate8CF75B62": {
+      "Type": "AWS::CertificateManager::Certificate",
+      "Properties": {
+        "DomainName": "photos.personal.example.com",
+        "DomainValidationOptions": [
+          {
+            "DomainName": "photos.personal.example.com",
+            "HostedZoneId": "Z000000000PERSONAL"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-personal-storage/PhotoCdnCertificate"
+          }
+        ],
+        "ValidationMethod": "DNS"
+      }
+    },
     "PhotoCdn9B72B83D": {
       "Type": "AWS::CloudFront::Distribution",
       "Properties": {
         "DistributionConfig": {
+          "Aliases": [
+            "photos.personal.example.com"
+          ],
           "Comment": "listora-personal listing photos",
           "DefaultCacheBehavior": {
             "AllowedMethods": [
@@ -241,8 +263,75 @@
               }
             }
           ],
-          "PriceClass": "PriceClass_100"
+          "PriceClass": "PriceClass_100",
+          "ViewerCertificate": {
+            "AcmCertificateArn": {
+              "Ref": "PhotoCdnCertificate8CF75B62"
+            },
+            "MinimumProtocolVersion": "TLSv1.2_2021",
+            "SslSupportMethod": "sni-only"
+          }
         }
+      }
+    },
+    "PhotoCdnAlias103A5894": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "PhotoCdn9B72B83D",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": {
+            "Fn::FindInMap": [
+              "AWSCloudFrontPartitionHostedZoneIdMap",
+              {
+                "Ref": "AWS::Partition"
+              },
+              "zoneId"
+            ]
+          }
+        },
+        "HostedZoneId": "Z000000000PERSONAL",
+        "Name": "photos.personal.example.com.",
+        "Type": "A"
+      }
+    },
+    "PhotoCdnAliasIpv6FA74741C": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "PhotoCdn9B72B83D",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": {
+            "Fn::FindInMap": [
+              "AWSCloudFrontPartitionHostedZoneIdMap",
+              {
+                "Ref": "AWS::Partition"
+              },
+              "zoneId"
+            ]
+          }
+        },
+        "HostedZoneId": "Z000000000PERSONAL",
+        "Name": "photos.personal.example.com.",
+        "Type": "AAAA"
+      }
+    }
+  },
+  "Mappings": {
+    "AWSCloudFrontPartitionHostedZoneIdMap": {
+      "aws": {
+        "zoneId": "Z2FDTNDATAQYW2"
+      },
+      "aws-cn": {
+        "zoneId": "Z3RFFRIM2A3IF5"
       }
     }
   },
@@ -253,12 +342,7 @@
       }
     },
     "PhotoCdnDomain": {
-      "Value": {
-        "Fn::GetAtt": [
-          "PhotoCdn9B72B83D",
-          "DomainName"
-        ]
-      }
+      "Value": "photos.personal.example.com"
     },
     "PublishOutputFnGetAttPhotosB9552D0DArn4592B8DA": {
       "Value": {
@@ -276,14 +360,6 @@
     "PublishOutputRefPhotosB9552D0DEC068679": {
       "Value": {
         "Ref": "PhotosB9552D0D"
-      }
-    },
-    "PublishOutputFnGetAttPhotoCdn9B72B83DDomainName6A373DF8": {
-      "Value": {
-        "Fn::GetAtt": [
-          "PhotoCdn9B72B83D",
-          "DomainName"
-        ]
       }
     }
   },

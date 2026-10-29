@@ -3,7 +3,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
 
 import { CDK_BOOTSTRAP_QUALIFIER, CDK_TOOLKIT_STACK_NAME } from '../bootstrap.ts';
-import type { DeployTarget } from '../config.ts';
+import type { DeployTarget, EnvironmentName } from '../config.ts';
 import { ListoraStack, type ListoraStackProps } from './common.ts';
 import { clusterName } from './compute-stack.ts';
 import { migrateTaskNames } from './migrate-stack.ts';
@@ -34,6 +34,26 @@ export function githubOidcSubject(
   return `repo:${String(owner)}@${target.githubOwnerId}/${String(name)}@${target.githubRepositoryId}:environment:${target.environment}`;
 }
 
+/**
+ * The one workflow file that deploys an environment: personal with Deploy personal (on every
+ * push to `main`), staging and prod with the manual Deploy workflow.
+ */
+export function deployWorkflowFile(environment: EnvironmentName): string {
+  return environment === 'personal' ? 'deploy-personal.yml' : 'deploy.yml';
+}
+
+/**
+ * The `job_workflow_ref` claim of a GitHub OIDC token of a job of the environment's deploy
+ * workflow on `main`: the workflow file and branch the job's definition came from. Another
+ * workflow of the repository that names the same GitHub environment (a new or edited file, or
+ * one calling a reusable workflow) carries a different value, so it cannot assume the role.
+ */
+export function githubOidcWorkflowRef(
+  target: Pick<DeployTarget, 'environment' | 'githubRepository'>,
+): string {
+  return `${target.githubRepository}/.github/workflows/${deployWorkflowFile(target.environment)}@${DEPLOY_BRANCH_REF}`;
+}
+
 /** The bootstrap's restricted CloudFormation execution policy (deploy/execution-policy.ts). */
 export function executionPolicyName(environment: string): string {
   return `listora-${environment}-cdk-execution`;
@@ -56,9 +76,10 @@ export const DEPLOY_BOOTSTRAP_ROLES = ['deploy', 'file-publishing', 'image-publi
 
 /**
  * The role GitHub Actions assumes through OIDC to deploy one environment; no long-lived AWS
- * keys exist anywhere. Only a workflow job of this repository (named by its immutable ids)
- * running on `main` in the GitHub environment of the same name (which carries the protection
- * rules: deployments from `main` only) can assume it.
+ * keys exist anywhere. Only a job of the environment's deploy workflow (`deployWorkflowFile`) of
+ * this repository (named by its immutable ids), running on `main` in the GitHub environment of
+ * the same name (which carries the protection rules: deployments from `main` only), can assume
+ * it.
  *
  * The role itself can assume Listora's CDK bootstrap deploy and asset publishing roles of this
  * account and region (which perform the CloudFormation deployment), push to and pull from the application and runner
@@ -103,6 +124,8 @@ export class DeployAccessStack extends ListoraStack {
           // The GitHub environment allows deployments from main only; this holds even if that
           // rule is loosened by mistake.
           [`${GITHUB_OIDC_ISSUER}:ref`]: DEPLOY_BRANCH_REF,
+          // Only the environment's own deploy workflow, as committed on main.
+          [`${GITHUB_OIDC_ISSUER}:job_workflow_ref`]: githubOidcWorkflowRef(target),
         },
       }),
     });

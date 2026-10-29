@@ -243,9 +243,10 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       // No NAT gateway (about $33 a month before data); interface endpoints would cost more
       // and still leave the marketplace and AI APIs unreachable.
       taskEgress: { via: 'public-ip' },
-      // Public subnets draw constant scanner traffic; logging every rejected packet would
-      // cost more than the rest of the network.
-      rejectedFlowLogs: false,
+      // Public subnets draw constant scanner traffic, so rejected flows cost $1 to $3 a month
+      // to ingest (docs/features/costs.md), kept for the week of logRetention below: the
+      // cheapest that still covers a week away. Only rejected flows, never accepted ones.
+      rejectedFlowLogs: true,
     },
     // An ALB costs about $24 a month with its two public addresses; the HTTP API costs cents.
     // The execute-api URL stays on until every URL registered with a third party has moved
@@ -274,7 +275,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     containerInsights: false,
     aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
-    // About $44 a month is expected (docs/features/costs.md); this is well past a normal month.
+    // About $46 a month is expected (docs/features/costs.md); this is well past a normal month.
     monthlyCostAlarmUsd: 50,
   },
 };

@@ -34,7 +34,8 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   browser sessions, each only its own purpose).
 - **Deploys** run only from GitHub workflows on `main`, inside the protected GitHub
   environment, with OIDC role assumption (no stored AWS keys): staging and prod from the manual
-  Deploy workflow, personal from Deploy personal (below). Images are tagged with the
+  Deploy workflow, personal from Deploy personal (below). Each role trusts only its own workflow
+  file, and those jobs install dependencies without install scripts. Images are tagged with the
   commit and immutable. The environment's protection rules and the CDK bootstrap's
   CloudFormation execution policy bound what a deploy can change (infra/README.md). Every
   bootstrap uses the restricted execution policy in `infra/src/deploy/execution-policy.ts`,

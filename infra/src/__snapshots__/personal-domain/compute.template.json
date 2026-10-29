@@ -366,21 +366,7 @@
               },
               {
                 "Name": "STORAGE_PUBLIC_BASE_URL",
-                "Value": {
-                  "Fn::Join": [
-                    "",
-                    [
-                      "https://",
-                      {
-                        "Fn::GetStackOutput": {
-                          "StackName": "listora-personal-storage",
-                          "Region": "us-east-1",
-                          "OutputName": "PublishOutputFnGetAttPhotoCdn9B72B83DDomainName6A373DF8"
-                        }
-                      }
-                    ]
-                  ]
-                }
+                "Value": "https://photos.personal.example.com"
               },
               {
                 "Name": "TOKEN_KMS_KEY_ID",
@@ -598,21 +584,7 @@
               },
               {
                 "Name": "STORAGE_PUBLIC_BASE_URL",
-                "Value": {
-                  "Fn::Join": [
-                    "",
-                    [
-                      "https://",
-                      {
-                        "Fn::GetStackOutput": {
-                          "StackName": "listora-personal-storage",
-                          "Region": "us-east-1",
-                          "OutputName": "PublishOutputFnGetAttPhotoCdn9B72B83DDomainName6A373DF8"
-                        }
-                      }
-                    ]
-                  ]
-                }
+                "Value": "https://photos.personal.example.com"
               },
               {
                 "Name": "TOKEN_KMS_KEY_ID",
@@ -1211,21 +1183,7 @@
               },
               {
                 "Name": "STORAGE_PUBLIC_BASE_URL",
-                "Value": {
-                  "Fn::Join": [
-                    "",
-                    [
-                      "https://",
-                      {
-                        "Fn::GetStackOutput": {
-                          "StackName": "listora-personal-storage",
-                          "Region": "us-east-1",
-                          "OutputName": "PublishOutputFnGetAttPhotoCdn9B72B83DDomainName6A373DF8"
-                        }
-                      }
-                    ]
-                  ]
-                }
+                "Value": "https://photos.personal.example.com"
               },
               {
                 "Name": "BROWSER_RUNNER_LAUNCH",
@@ -1498,7 +1456,7 @@
                 "Fn::GetStackOutput": {
                   "StackName": "listora-personal-network",
                   "Region": "us-east-1",
-                  "OutputName": "PublishOutputFnGetAttWorkerSecurityGroup5529CF0BGroupId1D09B9A4"
+                  "OutputName": "PublishOutputFnGetAttRunnerSecurityGroupDE989EBEGroupIdF3EB8EA0"
                 }
               }
             ],

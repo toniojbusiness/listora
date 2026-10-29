@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { Match, Template } from 'aws-cdk-lib/assertions';
+import { Annotations, Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 
 import { CREDENTIAL_PURPOSES as VAULT_PURPOSES } from '@listora/connections';
@@ -124,11 +124,6 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         ServiceName: Match.objectLike({ 'Fn::Join': Match.anyValue() }),
       });
       t.resourceCountIs('AWS::EC2::VPCEndpoint', 1);
-      if (settings.network.rejectedFlowLogs) {
-        t.hasResourceProperties('AWS::EC2::FlowLog', { TrafficType: 'REJECT' });
-      } else {
-        t.resourceCountIs('AWS::EC2::FlowLog', 0);
-      }
     });
 
     it('gives the isolated data subnets no route out of the VPC', () => {
@@ -150,12 +145,13 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         if (id === undefined) throw new Error(`no ${prefix} security group`);
         return id;
       };
-      const [ingressGroup, api, worker, db] = [
+      const [ingressGroup, api, worker, runner, db] = [
         settings.ingress.via === 'load-balancer'
           ? 'LoadBalancerSecurityGroup'
           : 'VpcLinkSecurityGroup',
         'ApiSecurityGroup',
         'WorkerSecurityGroup',
+        'RunnerSecurityGroup',
         'DatabaseSecurityGroup',
       ].map(groupId);
 
@@ -192,15 +188,18 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       ).toEqual([
         [api, 5432, 5432],
         [worker, 5432, 5432],
+        [runner, 5432, 5432],
       ]);
       expect(into(worker)).toEqual([]);
+      expect(into(runner)).toEqual([]);
       expect(
         into(api).map((rule) => [
           (rule['SourceSecurityGroupId'] as { 'Fn::GetAtt': string[] })['Fn::GetAtt'][0],
           rule['FromPort'],
         ]),
       ).toEqual([[ingressGroup, 3000]]);
-      // The ingress group may connect only to the API tasks' port.
+      // The ingress group may connect only to the API tasks' port, the runner only to the
+      // database's.
       const egressRules = resources(t, 'AWS::EC2::SecurityGroupEgress').map(
         (rule) => rule.Properties ?? {},
       );
@@ -210,7 +209,56 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           (rule['DestinationSecurityGroupId'] as { 'Fn::GetAtt': string[] })['Fn::GetAtt'][0],
           rule['FromPort'],
         ]),
-      ).toEqual([[ingressGroup, api, 3000]]);
+      ).toEqual([
+        [ingressGroup, api, 3000],
+        [runner, db, 5432],
+      ]);
+    });
+
+    it('lets the browser runner out only on HTTPS (TCP, and UDP for HTTP/3) and to the database', () => {
+      const groups = t.findResources('AWS::EC2::SecurityGroup');
+      const out = (prefix: string) => {
+        const group = Object.entries(groups).find(([id]) => id.startsWith(prefix))?.[1] as
+          Resource | undefined;
+        return asList(group?.Properties?.['SecurityGroupEgress'] ?? []) as Record<
+          string,
+          unknown
+        >[];
+      };
+      expect(
+        out('RunnerSecurityGroup').map((rule) => [
+          rule['CidrIp'],
+          rule['IpProtocol'],
+          rule['FromPort'],
+          rule['ToPort'],
+        ]),
+      ).toEqual([
+        ['0.0.0.0/0', 'tcp', 443, 443],
+        ['0.0.0.0/0', 'udp', 443, 443],
+      ]);
+      // The API and worker still reach the marketplace, AI, and AWS APIs on any port.
+      for (const prefix of ['ApiSecurityGroup', 'WorkerSecurityGroup']) {
+        expect(out(prefix)).toEqual([
+          expect.objectContaining({ CidrIp: '0.0.0.0/0', IpProtocol: '-1' }),
+        ]);
+      }
+    });
+
+    it('logs rejected traffic, where the environment has flow logs, for its log retention', () => {
+      if (!settings.network.rejectedFlowLogs) {
+        t.resourceCountIs('AWS::EC2::FlowLog', 0);
+        return;
+      }
+      t.resourceCountIs('AWS::EC2::FlowLog', 1);
+      t.hasResourceProperties('AWS::EC2::FlowLog', {
+        ResourceType: 'VPC',
+        TrafficType: 'REJECT',
+        LogDestinationType: 'cloud-watch-logs',
+      });
+      t.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: `/listora/${environment}/vpc-rejected`,
+        RetentionInDays: settings.logRetention,
+      });
     });
   });
 
@@ -333,6 +381,46 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect.stringMatching(/"\/public\/\*"/),
       ]);
     });
+
+    if (dns === undefined) {
+      it('serves photos at the default CloudFront name, whose TLS policy AWS fixes', () => {
+        const [distribution] = resources(t, 'AWS::CloudFront::Distribution');
+        const config = distribution?.Properties?.['DistributionConfig'] as Record<string, unknown>;
+        expect(config['Aliases']).toBeUndefined();
+        expect(config['ViewerCertificate']).toBeUndefined();
+        t.resourceCountIs('AWS::CertificateManager::Certificate', 0);
+        t.resourceCountIs('AWS::Route53::RecordSet', 0);
+      });
+    } else {
+      it('serves photos at photos.<domain> to TLS 1.2 or later, with a certificate validated in DNS', () => {
+        const name = `photos.${dns.domain}`;
+        t.hasResourceProperties('AWS::CertificateManager::Certificate', {
+          DomainName: name,
+          ValidationMethod: 'DNS',
+          DomainValidationOptions: [{ DomainName: name, HostedZoneId: dns.hostedZoneId }],
+        });
+        t.hasResourceProperties('AWS::CloudFront::Distribution', {
+          DistributionConfig: Match.objectLike({
+            Aliases: [name],
+            ViewerCertificate: {
+              AcmCertificateArn: { Ref: Match.stringLikeRegexp('^PhotoCdnCertificate') },
+              MinimumProtocolVersion: 'TLSv1.2_2021',
+              SslSupportMethod: 'sni-only',
+            },
+          }),
+        });
+        // IPv4 and IPv6 aliases in the domain's zone.
+        expect(
+          resources(t, 'AWS::Route53::RecordSet')
+            .map((record) => [record.Properties?.['Name'], record.Properties?.['Type']])
+            .sort(),
+        ).toEqual([
+          [`${name}.`, 'A'],
+          [`${name}.`, 'AAAA'],
+        ]);
+        t.hasOutput('PhotoCdnDomain', { Value: name });
+      });
+    }
   });
 
   describe('email', () => {
@@ -786,8 +874,13 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           STORAGE_S3_REGION: target.region,
         });
         expect(JSON.stringify(env['STORAGE_S3_BUCKET'])).toContain('RefPhotos');
-        expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('https://');
-        expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('PhotoCdn');
+        // photos.<domain> with a domain, else the distribution's own name.
+        if (dns === undefined) {
+          expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('https://');
+          expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('PhotoCdn');
+        } else {
+          expect(env['STORAGE_PUBLIC_BASE_URL']).toBe(`https://photos.${dns.domain}`);
+        }
         expect(containerSecretNames(service)).toContain('ANTHROPIC_API_KEY');
       }
     });
@@ -1695,7 +1788,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
   describe('deploy access', () => {
     const t = template(shape, 'deployAccess');
 
-    it('trusts only GitHub OIDC tokens of this repository, on main, in the GitHub environment', () => {
+    it("trusts only GitHub OIDC tokens of this repository's deploy workflow, on main, in the GitHub environment", () => {
       t.hasResourceProperties('AWS::IAM::OIDCProvider', {
         Url: 'https://token.actions.githubusercontent.com',
         ClientIdList: ['sts.amazonaws.com'],
@@ -1713,6 +1806,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
                   // The repository's immutable subject: owner and repository by name and id.
                   'token.actions.githubusercontent.com:sub': `repo:toniojbusiness@266634719/listora@1431894048:environment:${environment}`,
                   'token.actions.githubusercontent.com:ref': 'refs/heads/main',
+                  // Only the environment's own deploy workflow file, as committed on main.
+                  'token.actions.githubusercontent.com:job_workflow_ref': `toniojbusiness/listora/.github/workflows/${environment === 'personal' ? 'deploy-personal.yml' : 'deploy.yml'}@refs/heads/main`,
                 },
               },
             }),
@@ -1859,5 +1954,20 @@ describe('the GitHub OIDC provider', () => {
         ],
       },
     });
+  });
+});
+
+describe('the photo CDN domain', () => {
+  it('stays the CloudFront default, with a warning, outside the region CloudFront takes certificates from', () => {
+    const { stacks } = synthesize('prod', { region: 'us-west-2' });
+    const t = Template.fromStack(stacks.storage);
+    t.resourceCountIs('AWS::CertificateManager::Certificate', 0);
+    t.resourceCountIs('AWS::Route53::RecordSet', 0);
+    expect(
+      Annotations.fromStack(stacks.storage).findWarning(
+        '*',
+        Match.stringLikeRegexp('photos\\.example\\.com certificate would have to be in us-east-1'),
+      ),
+    ).toHaveLength(1);
   });
 });
