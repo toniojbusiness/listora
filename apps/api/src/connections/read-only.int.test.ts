@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { PHONE_RUNTIME_VERSION } from '@listora/automation';
 import { startConnectionDeletion } from '@listora/connections';
 import { createInventoryItem, inTransaction } from '@listora/db';
+import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
@@ -200,7 +201,7 @@ describe('read-only connections in the API (real Postgres)', () => {
     expect(ended.status).toBe(202);
   });
 
-  it('keeps a protected shop read only, even for the owner', async () => {
+  it('keeps a protected shop read only, even for the owner, and not another shop linked after it', async () => {
     const connection = await api.db
       .updateTable('marketplace_connection')
       .set({ external_user_id: 'protected-depop-shop' })
@@ -210,7 +211,11 @@ describe('read-only connections in the API (real Postgres)', () => {
       .executeTakeFirstOrThrow();
     const shop = await api.db
       .insertInto('protected_seller')
-      .values({ marketplace: 'depop', seller_id: 'protected-depop-shop', reason: 'test shop' })
+      .values({
+        marketplace: 'depop',
+        seller_digest: sql<string>`seller_digest(${'protected-depop-shop'})`,
+        reason: 'test shop',
+      })
       .returning('id')
       .executeTakeFirstOrThrow();
     try {
@@ -229,6 +234,17 @@ describe('read-only connections in the API (real Postgres)', () => {
           .where('id', '=', connection.id)
           .executeTakeFirstOrThrow(),
       ).toEqual({ read_only: true });
+
+      // The owner links their own test shop on the account's Depop: its Read only works both ways.
+      await api.db
+        .updateTable('marketplace_connection')
+        .set({ external_user_id: 'owner-depop-test-shop' })
+        .where('id', '=', connection.id)
+        .execute();
+      expect(await setReadOnly(true)).toMatchObject({ status: 200, body: { readOnly: true } });
+      expect(await setReadOnly(false)).toMatchObject({ status: 200, body: { readOnly: false } });
+      expect(await setReadOnly(true)).toMatchObject({ status: 200, body: { readOnly: true } });
+      expect(await setReadOnly(false)).toMatchObject({ status: 200, body: { readOnly: false } });
     } finally {
       await api.db.deleteFrom('protected_seller').where('id', '=', shop.id).execute();
       await api.db

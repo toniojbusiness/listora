@@ -124,23 +124,34 @@ An unlink and a relink are never a way around the setting:
   becomes read only (or starts so), removed only when its setting is turned off, and kept when
   the connection is deleted. Every new connection of that marketplace on the account starts read
   only (`marketplace_connection_inherit_read_only`, before insert), whichever path creates it:
-  linking a session, OAuth, or any other.
+  linking a session, OAuth, or any other. That read only is carried
+  (`marketplace_connection.read_only_carried`): it lasts until the connection names its shop,
+  and then follows the shop ([The shop, not the row](#the-shop-not-the-row)).
 
-A later link of another shop on the same marketplace starts read only too, until the owner turns
-it off.
+So a later link of another shop on the same marketplace is read only only until its session check
+names that shop, and a marketplace whose shops are never named (Mercari, eBay by sign-in) stays
+read only until the owner turns it off.
 
 ## The shop, not the row
 
 A connection knows the seller its session is signed in as
 ([marketplace-linking.md](marketplace-linking.md#the-shop-a-connection-holds)), and read only
-follows that seller as well as the row (migration `20261029042234_shop_seller`):
+follows that seller, not the account's marketplace (migrations `20261029042234_shop_seller` and
+`20261029233830_shop_read_only`):
 
 - **The account keeps each read-only seller** (`read_only_seller`): a connection that is read
-  only while it holds a known seller remembers that seller for the account and marketplace. A
-  connection of the account that later comes to hold one of them (a relink on the same row, a new
-  link after another shop was linked and made writable) becomes read only again when its check
-  records the seller, and its waiting changes fail with `connection_read_only`. Turning Read only
-  off with a seller linked forgets that seller only; the others stay.
+  only by the owner's setting while it holds a known seller remembers that seller for the account
+  and marketplace. A connection of the account that later comes to hold one of them (a relink on
+  the same row, a new link after another shop was linked and made writable) becomes read only
+  again when its check records the seller, and its waiting changes fail with
+  `connection_read_only`. Turning Read only off with a seller linked forgets that seller only; the
+  others stay.
+- **Another shop is its own.** When a connection names its shop, read only follows that shop: it
+  stays read only for a protected shop or a seller the account kept read only, and becomes
+  writable for any other when its read only was carried from the account's marketplace or
+  belonged to the shop the connection held before. So the owner's test shop linked after their
+  live shop links writable, and its Read only switch works both ways. The owner's own setting on
+  a connection whose shop is not named yet stays, and is that shop's once it is named.
 - **Writes check the shop on the page** before their first step, whatever the setting
   (`expectedSeller`), so a session for another shop changes nothing even before its check runs.
 
@@ -155,10 +166,12 @@ A protected shop (`protected_seller`) is one Listora only ever reads, whoever li
   only ever read it and Read only stays on."). The app shows that message on the switch.
 - Only a migration adds or removes one (no API or app path writes the table), so lifting it is a
   code change the repository's owner merges.
-- A shop is named by its seller id, or by the connection that holds it until that connection's
-  first recorded seller fills the id in; from then on the seller protects it on any connection.
-  The live Depop shop below is protected this way: by its connection until its next session check
-  records its seller, so its handle is never in the repository.
+- A shop is named by its seller only, as a SHA-256 digest of the seller id
+  (`seller_digest(seller_id)`, hex), so a real shop's handle is never in the repository. It is
+  never learned from a connection: a connection only ever holds the protection of the shop its
+  own check names. (Migration `20261029042234_shop_seller` named the live shop by its connection
+  until its first recorded seller, and the first one recorded was the owner's test shop, linked on
+  that connection; see below.)
 
 Reads keep working on a read-only connection: imports, the listings and sold pages, sales
 history, sale checks and sale detection, session checks, label reads, offer reads, and `verify`.
@@ -176,8 +189,19 @@ from the owner's own test shop, which relinking the account's Depop left under t
 connection. Without a connection no session, not even a read, ever runs for it there, and it
 stays read only through the account's Depop connection. Only Listora's record changes.
 
-Migration `20261029042234_shop_seller` makes it a [protected shop](#protected-shops), named by
-that connection until its next session check records the shop's seller.
+Migration `20261029042234_shop_seller` made it a [protected shop](#protected-shops), named by
+that connection until its next session check recorded the shop's seller. Before any check had,
+on 2026-10-29, the owner linked their own test shop on the account's Depop, which replaces the
+session on the same connection, so the test shop's check was the first: the protection, and the
+account's read-only sellers, learned the test shop. Its Read only switch would not turn off
+(`409`), the live shop was no longer protected by its seller, and the live shop's listings stayed
+on the connection now signed in as the test shop. Migration `20261029233830_shop_read_only`
+protects the live shop by its seller's digest, on any connection of any account, drops the
+protection by connection, and moves the live shop's listings off that connection as an unlink
+does (marked as from the previous shop, so an import of the live shop takes them back), only
+while the connection holds another seller than the live shop. It changes nothing else about the
+connection: its Read only stays on until the owner turns it off in the app, which the phone's
+own mark needs anyway ([On the phone](#on-the-phone)).
 
 Migration `20261028133845_depop_shop_stray_listings` detaches the other three (ended, with no
 Depop listing id), so the live shop's connection holds only its own 118 listings, and marks all
@@ -205,7 +229,10 @@ nothing.
   only makes a connection read only again; a protected shop stays read only whatever sets it,
   learns its seller from its connection, and is protected on any account.
 - `operations/src/shop-identity.int.test.ts` and `apps/api/src/connections/read-only.int.test.ts`:
-  a seller kept read only, and the owner refused Read only off on a protected shop (`409`).
+  a seller kept read only, another shop on a read-only connection writable and switched both ways,
+  a new link carried read only until its shop is named, a protected shop relinked staying read
+  only and never protecting the shop linked after it, and the owner refused Read only off on a
+  protected shop (`409`).
 - The app: `ReadOnlyLinkTests` and `APIMarketplaceSessionServiceTests`; its own refusal and
   marks: `PhoneReadOnlyGuardTests`, `ReadOnlyOnPhoneLinkTests`, and `MarketplaceSessionStoreTests`.
 
@@ -220,6 +247,6 @@ nothing.
   account.
 - `read_only_seller` (account, marketplace, seller id: the sellers the account's read-only
   connections held, kept by triggers, gone with the account) and `protected_seller` (marketplace,
-  seller id or the connection that holds it, and why; not an account's, so it stays when an
-  account goes), with the triggers that keep read only by seller, migration
-  `20261029042234_shop_seller`.
+  the seller's digest, and why; not an account's, so it stays when an account goes), with the
+  triggers that keep read only by seller, migrations `20261029042234_shop_seller` and
+  `20261029233830_shop_read_only` (which also adds `marketplace_connection.read_only_carried`).

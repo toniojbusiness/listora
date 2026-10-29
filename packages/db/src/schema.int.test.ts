@@ -235,10 +235,11 @@ const COLUMNS = {
     'runs_on',
     'phone_device_id',
     'read_only',
+    'read_only_carried',
   ],
   marketplace_read_only: ['account_id', 'marketplace', 'created_at'],
   read_only_seller: ['account_id', 'marketplace', 'seller_id', 'created_at'],
-  protected_seller: ['id', 'marketplace', 'seller_id', 'connection_id', 'reason', 'created_at'],
+  protected_seller: ['id', 'marketplace', 'reason', 'created_at', 'seller_digest'],
   connection_authorization: [
     'id',
     'account_id',

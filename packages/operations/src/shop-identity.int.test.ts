@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { ProtectedShopError, READ_ONLY_ERROR, setConnectionReadOnly } from './read-only.ts';
@@ -43,6 +44,38 @@ describe('the shop a connection holds (real Postgres)', () => {
       .executeTakeFirstOrThrow();
   }
 
+  async function newConnection(): Promise<string> {
+    const connection = await harness.db
+      .insertInto('marketplace_connection')
+      .values({ account_id: harness.accountId, marketplace: 'ebay', mode: 'api' })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return connection.id;
+  }
+
+  async function readOnly(): Promise<boolean> {
+    const row = await harness.db
+      .selectFrom('marketplace_connection')
+      .select('read_only')
+      .where('id', '=', connectionId)
+      .executeTakeFirstOrThrow();
+    return row.read_only;
+  }
+
+  /** Protects the shop `sellerId` names on eBay; returns the row's id. */
+  async function protectShop(sellerId: string): Promise<string> {
+    const shop = await harness.db
+      .insertInto('protected_seller')
+      .values({
+        marketplace: 'ebay',
+        seller_digest: sql<string>`seller_digest(${sellerId})`,
+        reason: 'test shop',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return shop.id;
+  }
+
   async function heldSeller(): Promise<string | null> {
     const row = await harness.db
       .selectFrom('marketplace_connection')
@@ -60,6 +93,7 @@ describe('the shop a connection holds (real Postgres)', () => {
       marketplace: 'ebay',
       changed: false,
       becameReadOnly: false,
+      becameWritable: false,
       refused: [],
     });
     expect(await heldSeller()).toBe('first-shop');
@@ -82,6 +116,7 @@ describe('the shop a connection holds (real Postgres)', () => {
       marketplace: 'ebay',
       changed: true,
       becameReadOnly: false,
+      becameWritable: false,
       refused: [price.id],
     });
     expect(await heldSeller()).toBe('other-shop');
@@ -137,6 +172,7 @@ describe('the shop a connection holds (real Postgres)', () => {
       marketplace: 'ebay',
       changed: false,
       becameReadOnly: true,
+      becameWritable: false,
       refused: [price.id],
     });
     expect(await harness.operation(price.id)).toMatchObject({
@@ -145,13 +181,70 @@ describe('the shop a connection holds (real Postgres)', () => {
     });
   });
 
+  it('lets another shop on a read-only connection be changed: read only stays with the shop it held', async () => {
+    await recordConnectionSeller(harness.db, key(), 'live-shop');
+    await setConnectionReadOnly(harness.db, key(), true);
+
+    // The owner relinks the account with their test shop: it is not the live shop.
+    expect(await recordConnectionSeller(harness.db, key(), 'test-shop')).toMatchObject({
+      changed: true,
+      becameWritable: true,
+    });
+    expect(await readOnly()).toBe(false);
+    // Its Read only works both ways for the owner.
+    await setConnectionReadOnly(harness.db, key(), true);
+    expect(await readOnly()).toBe(true);
+    await setConnectionReadOnly(harness.db, key(), false);
+    expect(await readOnly()).toBe(false);
+    // The live shop is still kept read only by the account.
+    expect(await recordConnectionSeller(harness.db, key(), 'live-shop')).toMatchObject({
+      becameReadOnly: true,
+    });
+  });
+
+  it('starts a new link of a read-only marketplace read only, then follows the shop its check names', async () => {
+    await recordConnectionSeller(harness.db, key(), 'live-shop');
+    await setConnectionReadOnly(harness.db, key(), true);
+    // The connection goes another way (an unlink does not take a read-only one).
+    await harness.db.deleteFrom('marketplace_connection').where('id', '=', connectionId).execute();
+
+    // A new link is read only until its check names the shop.
+    connectionId = await newConnection();
+    expect(await readOnly()).toBe(true);
+    expect(await recordConnectionSeller(harness.db, key(), 'test-shop')).toMatchObject({
+      changed: false,
+      becameWritable: true,
+    });
+    expect(await readOnly()).toBe(false);
+
+    // With the account's marketplace read only again, the live shop linked the same way stays
+    // read only.
+    await setConnectionReadOnly(harness.db, key(), true);
+    await harness.db.deleteFrom('marketplace_connection').where('id', '=', connectionId).execute();
+    connectionId = await newConnection();
+    expect(await recordConnectionSeller(harness.db, key(), 'live-shop')).toMatchObject({
+      becameWritable: false,
+    });
+    expect(await readOnly()).toBe(true);
+  });
+
+  it("keeps the owner's Read only on a connection whose shop was not named yet", async () => {
+    await setConnectionReadOnly(harness.db, key(), true);
+    expect(await recordConnectionSeller(harness.db, key(), 'live-shop')).toMatchObject({
+      becameWritable: false,
+    });
+    expect(await readOnly()).toBe(true);
+    const kept = await harness.db
+      .selectFrom('read_only_seller')
+      .select('seller_id')
+      .where('account_id', '=', harness.accountId)
+      .execute();
+    expect(kept).toEqual([{ seller_id: 'live-shop' }]);
+  });
+
   it('refuses to let Listora change a protected shop, and changes nothing', async () => {
     await recordConnectionSeller(harness.db, key(), 'protected-shop');
-    const shop = await harness.db
-      .insertInto('protected_seller')
-      .values({ marketplace: 'ebay', seller_id: 'protected-shop', reason: 'test shop' })
-      .returning('id')
-      .executeTakeFirstOrThrow();
+    const shop = await protectShop('protected-shop');
     try {
       await setConnectionReadOnly(harness.db, key(), true);
       await expect(setConnectionReadOnly(harness.db, key(), false)).rejects.toBeInstanceOf(
@@ -173,7 +266,51 @@ describe('the shop a connection holds (real Postgres)', () => {
         .executeTakeFirstOrThrow();
       expect(row.read_only).toBe(true);
     } finally {
-      await harness.db.deleteFrom('protected_seller').where('id', '=', shop.id).execute();
+      await harness.db.deleteFrom('protected_seller').where('id', '=', shop).execute();
+    }
+  });
+
+  it('keeps a protected shop read only when it is linked again, and never protects the shop linked after it', async () => {
+    // The live shop's connection, read only, whose seller was never recorded (linked before
+    // connections knew their shop), relinked with the owner's test shop.
+    const shop = await protectShop('live-shop');
+    try {
+      await setConnectionReadOnly(harness.db, key(), true);
+      await recordConnectionSeller(harness.db, key(), 'test-shop');
+      // The test shop is not protected: the owner turns its Read only off and on.
+      await setConnectionReadOnly(harness.db, key(), false);
+      expect(await readOnly()).toBe(false);
+      await setConnectionReadOnly(harness.db, key(), true);
+      await setConnectionReadOnly(harness.db, key(), false);
+      expect(await readOnly()).toBe(false);
+
+      // The live shop signs in again: read only, and it stays so.
+      expect(await recordConnectionSeller(harness.db, key(), 'live-shop')).toMatchObject({
+        changed: true,
+        becameReadOnly: true,
+      });
+      await expect(setConnectionReadOnly(harness.db, key(), false)).rejects.toBeInstanceOf(
+        ProtectedShopError,
+      );
+      expect(await readOnly()).toBe(true);
+
+      // Linked on a new connection with the account's marketplace writable, it is read only as
+      // soon as its check names it.
+      await harness.db
+        .deleteFrom('marketplace_connection')
+        .where('id', '=', connectionId)
+        .execute();
+      await harness.db.deleteFrom('marketplace_read_only').execute();
+      connectionId = await newConnection();
+      expect(await readOnly()).toBe(false);
+      expect(await recordConnectionSeller(harness.db, key(), 'live-shop')).toMatchObject({
+        becameReadOnly: true,
+      });
+      await expect(setConnectionReadOnly(harness.db, key(), false)).rejects.toBeInstanceOf(
+        ProtectedShopError,
+      );
+    } finally {
+      await harness.db.deleteFrom('protected_seller').where('id', '=', shop).execute();
     }
   });
 
