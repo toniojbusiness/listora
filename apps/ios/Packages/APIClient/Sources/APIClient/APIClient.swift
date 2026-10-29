@@ -19,7 +19,7 @@ public struct APIClient: Sendable {
             serverURL: baseURL,
             configuration: Configuration(dateTranscoder: ISO8601Timestamps()),
             transport: URLSessionTransport(configuration: .init(session: session)),
-            middlewares: [BearerAuthMiddleware(accessTokens: accessTokens)],
+            middlewares: [BearerAuthMiddleware(accessTokens: accessTokens), CompressionOptInMiddleware()],
         )
     }
 }

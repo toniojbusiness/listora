@@ -10,6 +10,7 @@ describe('loadWorkerConfig', () => {
   it('applies defaults when only DATABASE_URL is set', () => {
     expect(loadWorkerConfig({ DATABASE_URL })).toMatchObject({
       databaseUrl: DATABASE_URL,
+      databaseConnectTimeoutMs: 5_000,
       logLevel: 'info',
       concurrency: 5,
       taskConcurrency: 2,
@@ -51,6 +52,7 @@ describe('loadWorkerConfig', () => {
     expect(
       loadWorkerConfig({
         DATABASE_URL,
+        DATABASE_CONNECT_TIMEOUT_MS: '30000',
         LOG_LEVEL: 'debug',
         WORKER_CONCURRENCY: '12',
         WORKER_TASK_CONCURRENCY: '3',
@@ -59,6 +61,7 @@ describe('loadWorkerConfig', () => {
         COGNITO_USER_POOL_ID: 'eu-west-2_AbC123xyZ',
       }),
     ).toMatchObject({
+      databaseConnectTimeoutMs: 30_000,
       logLevel: 'debug',
       concurrency: 12,
       taskConcurrency: 3,
@@ -164,6 +167,7 @@ describe('loadWorkerConfig', () => {
   it('reports every invalid key at once', () => {
     expect(
       captureConfigError({
+        DATABASE_CONNECT_TIMEOUT_MS: '0',
         LOG_LEVEL: 'loud',
         WORKER_CONCURRENCY: '0',
         WORKER_TASK_CONCURRENCY: '101',
@@ -174,6 +178,7 @@ describe('loadWorkerConfig', () => {
       }).issues,
     ).toEqual([
       'DATABASE_URL is required',
+      'DATABASE_CONNECT_TIMEOUT_MS must be an integer from 100 to 120000 (milliseconds)',
       'LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent',
       'WORKER_CONCURRENCY must be an integer from 1 to 100',
       'WORKER_TASK_CONCURRENCY must be an integer from 1 to 100',

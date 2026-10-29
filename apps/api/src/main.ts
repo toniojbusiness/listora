@@ -16,7 +16,7 @@ import {
   useMarketplaceFeatures,
 } from '@listora/marketplaces';
 import { scaledRetryPolicy } from '@listora/operations';
-import { graphilePhotoJobs } from '@listora/photos';
+import { graphilePhotoJobs, limitImageThreads } from '@listora/photos';
 import { ebaySellerSubscriptionsJob } from '@listora/sales';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
@@ -26,6 +26,7 @@ import { createAuthDriver } from './auth/create-driver.ts';
 import { loadApiConfig } from './config.ts';
 import { pingDatabase } from './db.ts';
 import { createInviteeDirectory } from './invites/create-directory.ts';
+import { listenForItemChanges } from './items/changes.ts';
 
 /** How long a stopping API task on ECS keeps serving (within the task's 30 s stop timeout). */
 const SHUTDOWN_DRAIN_MS = 10_000;
@@ -33,11 +34,18 @@ const SHUTDOWN_DRAIN_MS = 10_000;
 const config = loadApiConfig();
 // Only the features that passed live, unless the stack runs on the fakes (MARKETPLACE_FEATURES).
 useMarketplaceFeatures(config.marketplaces.features);
+// The pack check's photo goes through libvips here too; one thread, as in the worker.
+limitImageThreads();
 const logger = createLogger({ service: 'api', level: config.logLevel });
-const pool = createPool({ connectionString: config.databaseUrl });
+const pool = createPool({
+  connectionString: config.databaseUrl,
+  connectionTimeoutMillis: config.databaseConnectTimeoutMs,
+});
 const db = createDatabase(pool);
 // Ends the open app's wait for phone work the moment work is handed to its phone.
 const phoneSignals = listenForPhoneWork({ connectionString: config.databaseUrl, logger });
+// Ends the item screen's wait the moment one of the item's operations changes.
+const itemChanges = listenForItemChanges({ connectionString: config.databaseUrl, logger });
 
 const ebay = config.marketplaces.ebay;
 const ebayNotifications = ebay?.notifications;
@@ -116,6 +124,7 @@ const app = buildApp({
     blockedRecheckMs: 5 * 60_000,
     signals: phoneSignals.signals,
   },
+  itemChanges: itemChanges.signals,
   saleEmails: { ingest: config.emailIngest },
   pingDatabase: () => pingDatabase(pool),
 });
@@ -133,6 +142,7 @@ handleShutdownSignals({
     if (drainMs > 0) await new Promise((resolve) => setTimeout(resolve, drainMs));
     await app.close();
     await phoneSignals.close();
+    await itemChanges.close();
     await db.destroy();
   },
 });

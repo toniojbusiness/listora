@@ -26,6 +26,7 @@ import {
   inTransaction,
   MARKETPLACES,
   type DbExecutor,
+  type DbTransaction,
   type Marketplace,
 } from '@listora/db';
 import { findSaleEmailInbox, inboundDomainOf } from '@listora/email-sales';
@@ -36,11 +37,12 @@ import {
   type AdapterRegistry,
   type OAuthClients,
 } from '@listora/marketplaces';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 
 import { operationSpec } from '../contract/contract.ts';
 import { writeAudit } from '../audit.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
+import { isPgError, PG_ERROR } from '../db-errors.ts';
 import { ApiError } from '../errors.ts';
 import type { SaleEmailsDependencies } from '../sale-emails/routes.ts';
 import { saleForwardingView } from '../sale-emails/views.ts';
@@ -149,7 +151,7 @@ export function registerConnectionRoutes(
     const started =
       connection === undefined
         ? undefined
-        : await inTransaction(db, async (trx) => {
+        : await againOnDeadlock(db, request.log, async (trx) => {
             // Under the row's lock, so a setting changed meanwhile is the one that counts.
             const current = await trx
               .selectFrom('marketplace_connection')
@@ -547,4 +549,35 @@ function registerCallback(app: FastifyInstance, deps: ConnectionRouteDependencie
         .send();
     },
   });
+}
+
+/** How many times an unlink runs before a deadlock fails it. */
+const UNLINK_ATTEMPTS = 3;
+
+/**
+ * Runs the unlink's transaction, again when Postgres rolled it back to break a deadlock. Work on
+ * the connection locks it first (`lockConnections`), so an unlink waits for it instead; this
+ * keeps the unlink completing even next to work that does not (logged, to be fixed), since a
+ * deadlock's victim is rolled back whole and safe to run again.
+ */
+async function againOnDeadlock<T>(
+  db: DbExecutor,
+  log: Pick<FastifyBaseLogger, 'warn'>,
+  work: (trx: DbTransaction) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await inTransaction(db, work);
+    } catch (error) {
+      // Inside a caller's transaction, the whole of it was rolled back: only the caller can retry.
+      if (
+        db.isTransaction ||
+        attempt >= UNLINK_ATTEMPTS ||
+        !isPgError(error, PG_ERROR.deadlockDetected)
+      ) {
+        throw error;
+      }
+      log.warn({ err: error, attempt }, 'unlink deadlocked with work on the connection; again');
+    }
+  }
 }

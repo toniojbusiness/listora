@@ -22,12 +22,14 @@
  * decides from each listing's capabilities whether it is marked sold or ended, and only the
  * worker's adapters include the API adapters (eBay, Depop) that decide it.
  */
+import { sql } from 'kysely';
 import { z } from 'zod';
 
 import {
   addJob,
   FEE_KINDS,
   inTransaction,
+  lockConnections,
   type Db,
   type DbExecutor,
   type DbTransaction,
@@ -198,6 +200,16 @@ async function settleOrder(
   payload: SaleOrderJobPayload,
   prepared: readonly PreparedLine[] | null,
 ): Promise<SoldItemSource[] | null> {
+  // The check's connection before the event and the sale, which references the check's run (and
+  // a label read queues work on the connection): `lockConnections`.
+  const checked = await trx
+    .selectFrom('inbound_event')
+    .select(sql<string | null>`payload->>'connectionId'`.as('connectionId'))
+    .where('account_id', '=', payload.accountId)
+    .where('id', '=', payload.inboundEventId)
+    .executeTakeFirst();
+  const connectionId = z.uuid().safeParse(checked?.connectionId);
+  if (connectionId.success) await lockConnections(trx, payload.accountId, [connectionId.data]);
   const event = await trx
     .selectFrom('inbound_event')
     .select(['id', 'marketplace', 'payload', 'processed_at'])

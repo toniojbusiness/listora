@@ -1201,7 +1201,10 @@ public enum Operations {
     }
     /// List items
     ///
-    /// Newest first. Filters combine with AND.
+    /// Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+    /// to the items they leave. A cursor continues only the sort it was issued for; with another
+    /// `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/items`.
     /// - Remark: Generated from `#/paths//v1/items/get(listItems)`.
@@ -1234,6 +1237,10 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/attention`.
                 public var attention: Swift.Bool?
+                /// The order; `added_newest` when omitted.
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/sort`.
+                public var sort: Components.Schemas.ItemSort?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/cursor`.
@@ -1250,6 +1257,7 @@ public enum Operations {
                 ///   - marketplace: Only items with a listing on this marketplace that is not ended or sold (a draft
                 ///   - brand: Only items of this brand (exact, ignoring case).
                 ///   - attention: `true`: only items that need the seller, those with a listing whose newest change
+                ///   - sort: The order; `added_newest` when omitted.
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
@@ -1258,6 +1266,7 @@ public enum Operations {
                     marketplace: Components.Schemas.KnownMarketplace? = nil,
                     brand: Swift.String? = nil,
                     attention: Swift.Bool? = nil,
+                    sort: Components.Schemas.ItemSort? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
@@ -1266,6 +1275,7 @@ public enum Operations {
                     self.marketplace = marketplace
                     self.brand = brand
                     self.attention = attention
+                    self.sort = sort
                     self.cursor = cursor
                     self.limit = limit
                 }
@@ -2171,6 +2181,234 @@ public enum Operations {
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
             /// - Remark: Generated from `#/paths//v1/items/{itemId}/delete(deleteItem)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Wait for a change to an item's marketplace work
+    ///
+    /// While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+    /// the item screen waits here instead of reading the item on a timer: the answer comes as
+    /// soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+    /// with none. Pass the `token` of the previous answer as `after`; without it (the first
+    /// wait) the answer is immediate, with `changed` true, so the screen reads the item once
+    /// more after starting to follow it. It only reads.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/changes`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)`.
+    public enum WaitForItemChange {
+        public static let id: Swift.String = "waitForItemChange"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/path/itemId`.
+                public var itemId: Components.Parameters.ItemId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - itemId:
+                public init(itemId: Components.Parameters.ItemId) {
+                    self.itemId = itemId
+                }
+            }
+            public var path: Operations.WaitForItemChange.Input.Path
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The `token` of the previous answer.
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/query/after`.
+                public var after: Swift.String?
+                /// The longest the answer may take.
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/query/waitSeconds`.
+                public var waitSeconds: Swift.Int32
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - after: The `token` of the previous answer.
+                ///   - waitSeconds: The longest the answer may take.
+                public init(
+                    after: Swift.String? = nil,
+                    waitSeconds: Swift.Int32
+                ) {
+                    self.after = after
+                    self.waitSeconds = waitSeconds
+                }
+            }
+            public var query: Operations.WaitForItemChange.Input.Query
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.WaitForItemChange.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.WaitForItemChange.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.WaitForItemChange.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - query:
+            ///   - headers:
+            public init(
+                path: Operations.WaitForItemChange.Input.Path,
+                query: Operations.WaitForItemChange.Input.Query,
+                headers: Operations.WaitForItemChange.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/items/{itemId}/changes/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ItemChangeWaitResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ItemChangeWaitResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.WaitForItemChange.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.WaitForItemChange.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Whether the item's operations changed.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.WaitForItemChange.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.WaitForItemChange.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
@@ -14456,7 +14694,10 @@ public enum Operations {
     }
     /// List sales
     ///
-    /// The sales feed, newest sold first, each with its delist runs.
+    /// The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+    /// sort applies to the sales the filters leave. A cursor continues only the sort it was
+    /// issued for; with another `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -14477,6 +14718,10 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/delistStatus`.
                 public var delistStatus: [Components.Schemas.DelistRunStatus]?
+                /// The order; `sold_newest` when omitted.
+                ///
+                /// - Remark: Generated from `#/paths/v1/sales/GET/query/sort`.
+                public var sort: Components.Schemas.SaleSort?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/cursor`.
@@ -14491,18 +14736,21 @@ public enum Operations {
                 ///   - itemId: Only sales whose order contains this item.
                 ///   - status:
                 ///   - delistStatus: Only sales with a delist run in one of these statuses; for example
+                ///   - sort: The order; `sold_newest` when omitted.
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
                     itemId: Components.Schemas.Id? = nil,
                     status: [Components.Schemas.KnownSaleStatus]? = nil,
                     delistStatus: [Components.Schemas.DelistRunStatus]? = nil,
+                    sort: Components.Schemas.SaleSort? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
                     self.itemId = itemId
                     self.status = status
                     self.delistStatus = delistStatus
+                    self.sort = sort
                     self.cursor = cursor
                     self.limit = limit
                 }

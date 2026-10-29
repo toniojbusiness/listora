@@ -139,8 +139,10 @@ cmd_start() {
       pg initdb -D "$DATA_DIR" -U "$DB_USER" --auth=trust --encoding=UTF8 --locale=C >/dev/null
     fi
     log "starting on 127.0.0.1:$PORT (log: $LOG_FILE)"
+    # The log names statements over a second and lock waits over deadlock_timeout (1 s), so a
+    # stalled API in a UI test run (CI uploads this log) shows what it waited on.
     LC_ALL=C pg pg_ctl start -D "$DATA_DIR" -l "$LOG_FILE" -w -t 30 \
-      -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=''" >/dev/null ||
+      -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories='' -c log_min_duration_statement=1000 -c log_lock_waits=on" >/dev/null ||
       die "server failed to start; see $LOG_FILE"
   fi
 

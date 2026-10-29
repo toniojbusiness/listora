@@ -68,6 +68,7 @@ export async function queueOfferCheck(
     return false;
   }
   return inTransaction(executor, async (trx) => {
+    // Locked before its offer check and work (`lockConnections`).
     const connection = await trx
       .selectFrom('marketplace_connection')
       .select(['runs_on'])
@@ -75,6 +76,7 @@ export async function queueOfferCheck(
       .where('id', '=', target.connectionId)
       .where('mode', '=', 'automation')
       .where('status', 'in', ['connected', 'degraded'])
+      .forKeyShare()
       .executeTakeFirst();
     if (connection?.runs_on !== 'phone') return false;
     await trx

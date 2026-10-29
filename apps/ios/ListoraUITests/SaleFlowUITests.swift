@@ -114,7 +114,7 @@ final class SaleFlowUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
-        app.launch()
+        app.launchQuietly()
         let inventory = app.tabRail.buttons["Inventory"]
         XCTAssertTrue(inventory.waitForExistence(timeout: 10))
         inventory.tap()

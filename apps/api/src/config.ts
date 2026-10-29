@@ -12,6 +12,7 @@ import {
   MarketplaceConfigError,
   type MarketplaceConfig,
 } from '@listora/connections';
+import { CONNECT_TIMEOUT_ISSUE, parseConnectTimeoutMs } from '@listora/db';
 import {
   EmailIngestConfigError,
   loadEmailIngestConfig,
@@ -62,6 +63,8 @@ export interface ApiConfig {
   host: string;
   port: number;
   databaseUrl: string;
+  /** DATABASE_CONNECT_TIMEOUT_MS: how long opening a database connection may take. */
+  databaseConnectTimeoutMs: number;
   logLevel: LogLevel;
   auth: AuthConfig;
   /** SIGN_UP and SIGN_UP_OWNER_EMAIL: who gets an account at their first sign-in. */
@@ -160,6 +163,11 @@ const envSchema = z.object({
     .string({ error: 'DATABASE_URL is required' })
     .min(1, { error: 'DATABASE_URL is required', abort: true })
     .regex(/^postgres(ql)?:\/\//, { error: 'DATABASE_URL must be a postgres:// URL' }),
+  DATABASE_CONNECT_TIMEOUT_MS: z
+    .string()
+    .optional()
+    .transform(parseConnectTimeoutMs)
+    .refine((value) => value !== undefined, { error: CONNECT_TIMEOUT_ISSUE }),
   LOG_LEVEL: z
     .enum(LOG_LEVELS, { error: `LOG_LEVEL must be one of ${LOG_LEVELS.join(', ')}` })
     .default('info'),
@@ -261,6 +269,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     host: values.API_HOST,
     port: values.API_PORT,
     databaseUrl: values.DATABASE_URL,
+    databaseConnectTimeoutMs: values.DATABASE_CONNECT_TIMEOUT_MS,
     logLevel: values.LOG_LEVEL,
     auth,
     signUp:

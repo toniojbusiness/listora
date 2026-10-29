@@ -38,7 +38,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
 
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
@@ -92,7 +92,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
 
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
@@ -134,7 +134,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
 
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
@@ -177,7 +177,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()
@@ -213,7 +213,12 @@ final class LinkAccountsUITests: XCTestCase {
 
         let copyCode = app.buttons["saleEmails.copy.code"]
         copyCode.tap()
-        XCTAssertEqual(copyCode.label, "Confirmation code copied")
+        // The label changes once the copy has gone through, a moment after the tap on CI.
+        let copied = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "Confirmation code copied"),
+            object: copyCode,
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [copied], timeout: 5), .completed, copyCode.label)
     }
 
     /// Settings > Notifications: "Ask before delisting", saved on the server.
@@ -226,7 +231,7 @@ final class LinkAccountsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()

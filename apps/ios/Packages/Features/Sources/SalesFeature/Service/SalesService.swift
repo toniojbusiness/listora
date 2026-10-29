@@ -43,7 +43,8 @@ enum SaleChange: Equatable, Sendable {
 /// starts the server's auto-delist, and a relist goes through its operation engine: the screens
 /// show what the server reports and never decide an outcome themselves.
 protocol SalesService: Sendable {
-    func sales(cursor: String?) async throws(APIFailure) -> SalePage
+    /// A page of the sales feed in `sort`.
+    func sales(sort: SaleSort, cursor: String?) async throws(APIFailure) -> SalePage
     /// The seller's sales that stand, all time: in total and per marketplace.
     func summary() async throws(APIFailure) -> SalesSummary
     func sale(id: String) async throws(APIFailure) -> Sale
@@ -68,8 +69,8 @@ struct APISalesService: SalesService {
     /// takes at once the ones that run on it (docs/features/phone-execution.md).
     var queued: @MainActor @Sendable () -> Void = {}
 
-    func sales(cursor: String?) async throws(APIFailure) -> SalePage {
-        switch try await call({ try await client.listSales(query: .init(cursor: cursor, limit: 50)) }) {
+    func sales(sort: SaleSort, cursor: String?) async throws(APIFailure) -> SalePage {
+        switch try await call({ try await client.listSales(query: .init(sort: sort, cursor: cursor, limit: 50)) }) {
         case let .ok(response):
             let page = try body { try response.body.json }
             return SalePage(sales: page.data, nextCursor: page.nextCursor)

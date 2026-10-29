@@ -20,7 +20,7 @@ final class DesignPassUITests: XCTestCase {
     func testGettingStartedWalksThroughThreeStepsOnceAndOpensAdd() {
         app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1", "LISTORA_SHOW_GETTING_STARTED": "1"]
         app.signInWithoutServer()
-        app.launch()
+        app.launchQuietly()
         let guide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
         // Every control, and the page dots VoiceOver reads, is at least a 44-point tap target.
@@ -45,7 +45,7 @@ final class DesignPassUITests: XCTestCase {
         app.terminate()
         app.launchEnvironment = [:]
         app.signInWithoutServer()
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         XCTAssertFalse(guide.waitForExistence(timeout: 2))
     }
@@ -53,7 +53,7 @@ final class DesignPassUITests: XCTestCase {
     func testGettingStartedCanBeSkippedOrOpenLinkAccounts() {
         app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1", "LISTORA_SHOW_GETTING_STARTED": "1"]
         app.signInWithoutServer()
-        app.launch()
+        app.launchQuietly()
         let guide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
         app.buttons["gettingStarted.linkAccounts"].tap()
@@ -61,7 +61,7 @@ final class DesignPassUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Link accounts"].waitForExistence(timeout: 10))
 
         app.terminate()
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
         guide.tap()
         XCTAssertTrue(waitForAbsence(of: guide))
@@ -76,7 +76,7 @@ final class DesignPassUITests: XCTestCase {
             "LISTORA_FIXTURE_PHOTOS": bundled("BatchFixtures"),
         ]
         app.signInWithoutServer()
-        app.launch()
+        app.launchQuietly()
         let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
@@ -144,7 +144,7 @@ final class DesignPassUITests: XCTestCase {
         if reset {
             app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
         }
-        app.launch()
+        app.launchQuietly()
         let inventory = app.tabRail.buttons["Inventory"]
         XCTAssertTrue(inventory.waitForExistence(timeout: 10))
         inventory.tap()

@@ -25,6 +25,7 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     private var _deleted: [String] = []
     private var _categories: Schemas.MarketplaceCategories?
     private var _onPerform: (@Sendable (ListingRequest) -> Void)?
+    private var _changes: [Schemas.ItemChangeWaitResult] = []
 
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -173,6 +174,24 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
 
     func events(operationID _: String) async throws(APIFailure) -> [Schemas.OperationEvent] {
         []
+    }
+
+    /// The answers of the item's waits for a change, one per wait, in order; once none is left,
+    /// a wait answers after a moment that nothing changed.
+    var changes: [Schemas.ItemChangeWaitResult] {
+        get { locked { _changes } }
+        set { locked { _changes = newValue } }
+    }
+
+    func waitForChange(itemID _: String, after: String?, waitSeconds _: Int) async throws(APIFailure)
+        -> Schemas.ItemChangeWaitResult
+    {
+        try record("wait:\(after ?? "none")")
+        if let answer = locked({ _changes.isEmpty ? nil : _changes.removeFirst() }) {
+            return answer
+        }
+        try? await Task.sleep(for: .milliseconds(20))
+        return .init(changed: after == nil, token: after ?? "t0")
     }
 
     /// The item's activity, one page per call, in order.

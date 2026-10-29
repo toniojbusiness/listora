@@ -39,8 +39,9 @@ func sendOnce<Value: Sendable>(
     }
 }
 
-/// The Sales tab: the seller's sales in total and per marketplace, then recent sales, newest
-/// sold first, each with its profit.
+/// The Sales tab: the seller's sales in total and per marketplace, then the sales, newest sold
+/// first or in the seller's chosen order (remembered under ``SaleSort/storageKey``), each with
+/// its profit.
 @MainActor
 @Observable
 final class SalesListModel {
@@ -59,13 +60,31 @@ final class SalesListModel {
     /// The newest sale, when it arrived since the list last loaded while the app was open: the
     /// Sales tab celebrates it. The first load sets nothing.
     private(set) var newSaleID: String?
+    /// The list's order; the view reloads the list when it changes, and it is remembered.
+    var sort = SaleSort.standard {
+        didSet {
+            if sort != oldValue {
+                defaults.set(sort.rawValue, forKey: SaleSort.storageKey)
+            }
+        }
+    }
+
     private var cursor: String?
+    /// The order of the sales shown: a new sale is only told apart in the newest-first order.
+    private var loadedSort: SaleSort?
     private let service: any SalesService
     private let isSignedIn: @MainActor () -> Bool
+    private let defaults: UserDefaults
 
-    init(service: any SalesService, isSignedIn: @escaping @MainActor () -> Bool = { true }) {
+    init(
+        service: any SalesService,
+        isSignedIn: @escaping @MainActor () -> Bool = { true },
+        defaults: UserDefaults = .standard,
+    ) {
         self.service = service
         self.isSignedIn = isSignedIn
+        self.defaults = defaults
+        sort = defaults.string(forKey: SaleSort.storageKey).flatMap(SaleSort.init(rawValue:)) ?? .standard
     }
 
     func load() async {
@@ -77,27 +96,37 @@ final class SalesListModel {
         if sales.isEmpty {
             phase = .loading
         }
+        let sort = sort
         // Read at once with the list; a summary that can't be read keeps the last one.
         async let summary = try? service.summary()
         do {
-            let page = try await service.sales(cursor: nil)
+            let page = try await service.sales(sort: sort, cursor: nil)
             if let summary = await summary {
                 self.summary = summary
             }
-            if phase == .loaded, let newest = page.sales.first, !sales.contains(where: { $0.id == newest.id }) {
+            // The order changed meanwhile: the load for the new one shows its sales.
+            guard sort == self.sort else { return }
+            if phase == .loaded, sort == .soldNewest, loadedSort == .soldNewest,
+               let newest = page.sales.first, !sales.contains(where: { $0.id == newest.id })
+            {
                 newSaleID = newest.id
             }
             sales = page.sales
             cursor = page.nextCursor
             hasMore = page.nextCursor != nil
+            loadedSort = sort
             phase = .loaded
         } catch {
+            guard sort == self.sort else { return }
             phase = .failed(message: error.message)
         }
     }
 
     func loadMore() async {
-        guard let cursor, let page = try? await service.sales(cursor: cursor) else { return }
+        // A cursor continues only the order it was read in.
+        guard let cursor, let sort = loadedSort, sort == self.sort,
+              let page = try? await service.sales(sort: sort, cursor: cursor), sort == self.sort
+        else { return }
         let known = Set(sales.map(\.id))
         sales += page.sales.filter { !known.contains($0.id) }
         self.cursor = page.nextCursor

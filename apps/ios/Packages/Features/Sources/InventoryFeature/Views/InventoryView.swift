@@ -193,7 +193,7 @@ public struct InventoryView<Header: View>: View {
 
     @ViewBuilder
     private var empty: some View {
-        if model.query == InventoryQuery(filter: .needsYou) {
+        if model.query == InventoryQuery(filter: .needsYou, sort: model.query.sort) {
             EmptyStateView(
                 systemImage: "checkmark.circle",
                 tone: .success,

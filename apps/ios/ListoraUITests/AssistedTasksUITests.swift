@@ -10,7 +10,11 @@ import XCTest
 final class AssistedTasksUITests: XCTestCase {
     private let app = XCUIApplication()
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    private let listingURL = "https://poshmark.com/listing/Levis-Trucker-Jacket-64f1a2b3c4d5e6f7a8b9c0d1"
+    /// A new listing id for every try: a link stays linked to the item it finished, so a re-run
+    /// pasting the same link was refused (409, already linked) and could never pass.
+    private let listingURL = "https://poshmark.com/listing/Levis-Trucker-Jacket-" + String(
+        UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(24),
+    )
 
     override func setUp() async throws {
         continueAfterFailure = false
@@ -26,25 +30,26 @@ final class AssistedTasksUITests: XCTestCase {
         // Waiting for the user, with the task in the badged Tasks tab.
         try require(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
         try require(app.buttons["marketplace.poshmark.action.openTask"].waitForExistence(timeout: 5))
-        // The tab rail reads the badge out, as VoiceOver does.
+        // The tab rail reads the badge out, as VoiceOver does. Any count: a task of another test
+        // in this stack, or of this test's own earlier try, may still be open.
         let tasksTab = app.tabRail.buttons["Tasks"]
         let badged = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "value == %@", "1 open task"),
+            predicate: NSPredicate(format: "value MATCHES %@", "[0-9]+ open tasks?"),
             object: tasksTab,
         )
-        await fulfillment(of: [badged], timeout: 15)
+        await fulfillment(of: [badged], timeout: 30)
         keepScreenshot("Action needed, Tasks badged")
 
         app.tabRail.buttons["Tasks"].tap()
         let row = app.buttons["tasks.row.list_manually.poshmark.\(item.sku)"]
-        try require(row.waitForExistence(timeout: 15), "the list task is not in the inbox")
+        try require(row.waitForExistence(timeout: 30), "the list task is not in the inbox")
         keepScreenshot("Task inbox")
         row.tap()
         try finishListTask()
 
         // The task leaves the inbox (other tests' tasks may remain), and the item reads "you
         // confirmed".
-        try require(row.waitForNonExistence(timeout: 15), "the done task is still in the inbox")
+        try require(row.waitForNonExistence(timeout: 30), "the done task is still in the inbox")
         keepScreenshot("Task done")
         try showItem(sku: item.sku, status: status)
         try require(waitForLabel(of: status, "Done (you confirmed)", timeout: 20), status.label)
@@ -66,7 +71,7 @@ final class AssistedTasksUITests: XCTestCase {
 
         app.buttons["marketplace.poshmark.action.openTask"].tap()
         let dismiss = app.buttons["task.dismiss"]
-        try require(dismiss.waitForExistence(timeout: 15))
+        try require(dismiss.waitForExistence(timeout: 30))
         dismiss.tap()
         app.buttons["task.dismiss.confirm"].firstMatch.tap()
 
@@ -81,10 +86,12 @@ final class AssistedTasksUITests: XCTestCase {
 
     private func openItem(sku: String) throws -> XCUIElement {
         let row = app.buttons["inventory.row.\(sku)"]
-        try require(row.waitForExistence(timeout: 15), "the seeded item is not in the inventory")
+        try require(row.waitForExistence(timeout: 30), "the seeded item is not in the inventory")
         row.tap()
         let status = app.descendants(matching: .any)["marketplace.poshmark.status"]
-        try require(waitForLabel(of: status, "Not listed", timeout: 15), status.label)
+        // The item screen's first read can take longer than 15 seconds on CI's busy simulator: a
+        // run once failed here with the label already "Not listed".
+        try require(waitForLabel(of: status, "Not listed", timeout: 30), status.label)
         return status
     }
 
@@ -100,9 +107,9 @@ final class AssistedTasksUITests: XCTestCase {
         try require(inventory.isSelected, "the Inventory tab did not open")
         guard !status.waitForExistence(timeout: 3) else { return }
         let row = app.buttons["inventory.row.\(sku)"]
-        try require(row.waitForExistence(timeout: 15), "the item is not in the inventory")
+        try require(row.waitForExistence(timeout: 30), "the item is not in the inventory")
         row.tap()
-        try require(status.waitForExistence(timeout: 15), "the item screen did not open")
+        try require(status.waitForExistence(timeout: 30), "the item screen did not open")
     }
 
     /// List on the Poshmark row: Poshmark is chosen, its version reviewed, and a task created.
@@ -152,7 +159,7 @@ final class AssistedTasksUITests: XCTestCase {
         open.scrollClear(of: bar, in: app)
         open.tap()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
-        try require(safari.wait(for: .runningForeground, timeout: 15), "Poshmark did not open")
+        try require(safari.wait(for: .runningForeground, timeout: 30), "Poshmark did not open")
         app.activate()
         try require(app.wait(for: .runningForeground, timeout: 10))
         try require(bar.waitForExistence(timeout: 5), "the task closed before Done")
@@ -163,7 +170,9 @@ final class AssistedTasksUITests: XCTestCase {
         keepScreenshot("Link pasted")
         try require(bar.isEnabled, "Done is off with the link \(link.value ?? "")")
         bar.tap()
-        try require(app.staticTexts["task.title"].waitForNonExistence(timeout: 15), "the task did not close on Done")
+        // Its waits are 30 seconds: on CI each look at the screen takes seconds since the Hang Tag
+        // screens (#146), and 15 seconds once held only two looks, the task closing after the wait.
+        try require(app.staticTexts["task.title"].waitForNonExistence(timeout: 30), "the task did not close on Done")
     }
 
     /// End the listing: a delist task that opens the listing itself; the user removes it.
@@ -178,7 +187,7 @@ final class AssistedTasksUITests: XCTestCase {
 
         app.buttons["marketplace.poshmark.action.openTask"].tap()
         let done = app.buttons["task.done"]
-        try require(done.waitForExistence(timeout: 15))
+        try require(done.waitForExistence(timeout: 30))
         try require(done.label == "Done - I removed it", done.label)
         try require(app.staticTexts["task.title"].label == "Delist on Poshmark", app.staticTexts["task.title"].label)
         // The task opens the exact listing that was linked.
@@ -189,7 +198,7 @@ final class AssistedTasksUITests: XCTestCase {
         )
         keepScreenshot("Delist task")
         done.tap()
-        try require(done.waitForNonExistence(timeout: 15))
+        try require(done.waitForNonExistence(timeout: 30))
     }
 
     /// The first save asks for add-only photo access (every run: `launch` resets it); the test
@@ -221,7 +230,7 @@ final class AssistedTasksUITests: XCTestCase {
         // A simulator that already allowed it never asks; CI's is erased before every run and
         // always asks. Resetting makes every run take the asking path, the one that can break.
         app.resetAuthorizationStatus(for: .photos)
-        app.launch()
+        app.launchQuietly()
         let inventory = app.tabRail.buttons["Inventory"]
         try require(inventory.waitForExistence(timeout: 10))
         inventory.tap()

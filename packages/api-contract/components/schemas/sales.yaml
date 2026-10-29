@@ -13,6 +13,16 @@ KnownSaleStatus:
     `confirmed`: the seller confirmed it. `shipped`: the seller shipped it. `canceled` and
     `returned`: the sale no longer stands; Listora asks whether to relist (`SaleItem.relist`).
   enum: [detected, confirmed, shipped, canceled, returned]
+SaleSort:
+  type: string
+  description: |
+    The order of `listSales`. Every order ends with the newest sold first, then the newest
+    recorded, so sales that tie keep one order from page to page.
+    `sold_newest`: newest sold first (the default). `sold_oldest`: oldest sold first.
+    `price_high` and `price_low`: by the order's sale price (`Sale.salePrice`). `profit_high`: by
+    the order's profit (`Sale.profit`); sales without one (fees or a cost not known yet, or the
+    sale canceled or returned) come last.
+  enum: [sold_newest, sold_oldest, price_high, price_low, profit_high]
 SaleAction:
   description: |
     A `KnownSaleAction`, or an action added after this client was built. Clients hide

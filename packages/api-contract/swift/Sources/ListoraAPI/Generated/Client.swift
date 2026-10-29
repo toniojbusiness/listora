@@ -763,7 +763,10 @@ public struct Client: APIProtocol {
     }
     /// List items
     ///
-    /// Newest first. Filters combine with AND.
+    /// Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+    /// to the items they leave. A cursor continues only the sort it was issued for; with another
+    /// `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/items`.
     /// - Remark: Generated from `#/paths//v1/items/get(listItems)`.
@@ -815,6 +818,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "attention",
                     value: input.query.attention
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "sort",
+                    value: input.query.sort
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -1382,6 +1392,151 @@ public struct Client: APIProtocol {
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
                     return .conflict(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Wait for a change to an item's marketplace work
+    ///
+    /// While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+    /// the item screen waits here instead of reading the item on a timer: the answer comes as
+    /// soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+    /// with none. Pass the `token` of the previous answer as `after`; without it (the first
+    /// wait) the answer is immediate, with `changed` true, so the screen reads the item once
+    /// more after starting to follow it. It only reads.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/changes`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)`.
+    public func waitForItemChange(_ input: Operations.WaitForItemChange.Input) async throws -> Operations.WaitForItemChange.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.WaitForItemChange.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/items/{}/changes",
+                    parameters: [
+                        input.path.itemId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "after",
+                    value: input.query.after
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "waitSeconds",
+                    value: input.query.waitSeconds
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.WaitForItemChange.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ItemChangeWaitResult.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 404:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.NotFound.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .notFound(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.ValidationFailed.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
                 default:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Components.Responses.DefaultError.Body
@@ -9313,7 +9468,10 @@ public struct Client: APIProtocol {
     }
     /// List sales
     ///
-    /// The sales feed, newest sold first, each with its delist runs.
+    /// The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+    /// sort applies to the sales the filters leave. A cursor continues only the sort it was
+    /// issued for; with another `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -9351,6 +9509,13 @@ public struct Client: APIProtocol {
                     explode: true,
                     name: "delistStatus",
                     value: input.query.delistStatus
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "sort",
+                    value: input.query.sort
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

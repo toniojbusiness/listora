@@ -22,7 +22,7 @@ final class InviteUITests: XCTestCase {
     private func launchSignedOut() throws {
         let server = try XCTUnwrap(server)
         app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1", "LISTORA_DEV_API_BASE_URL": server.baseURL]
-        app.launch()
+        app.launchQuietly()
     }
 
     private func element(_ identifier: String) -> XCUIElement {
@@ -110,7 +110,7 @@ final class InviteUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": StubAPIServer.profileEmail,
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()

@@ -19,7 +19,7 @@ import {
   saleCheckJobKey,
   scheduleSaleCheck,
 } from '@listora/automation';
-import { inTransaction, type DbExecutor, type Marketplace } from '@listora/db';
+import { inTransaction, lockConnections, type DbExecutor, type Marketplace } from '@listora/db';
 import { loadFeatureGate, type FeatureGate } from '@listora/marketplaces';
 import { ImportRefusedError, importsFrom, startListingImport } from '@listora/imports';
 
@@ -95,6 +95,8 @@ async function syncSales(
   gapMs: number,
 ): Promise<void> {
   await inTransaction(db, async (trx) => {
+    // The connection before its schedule and work; gone (unlinked) means nothing to check.
+    if ((await lockConnections(trx, check.accountId, [check.connectionId])).size === 0) return;
     const recent = await trx
       .selectFrom('sale_check_schedule')
       .select('connection_id')

@@ -29,7 +29,7 @@ final class ShareExtensionUITests: XCTestCase {
     private func launchApp(environment: [String: String]) {
         let app = XCUIApplication()
         app.launchEnvironment = environment
-        app.launch()
+        app.launchQuietly()
         // Signed in, the app shows its tabs; signed out, the welcome screen.
         let shown = app.tabRail.waitForExistence(timeout: 10)
             || app.descendants(matching: .any)["signIn.welcome"].exists
@@ -101,11 +101,12 @@ final class ShareExtensionUITests: XCTestCase {
         let confirm = safari.buttons["share.confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         XCTAssertTrue(safari.staticTexts["Link to AJ-000184?"].exists)
-        // Nothing is recorded until the user confirms. (The app itself syncs as it opens, a POST of
-        // its own: only the extension's link counts here.)
-        let linkPath = "/v1/items/\(StubAPIServer.itemId)/listing-links"
-        let links = { server.requests.filter { $0.method == "POST" && $0.path == linkPath } }
-        XCTAssertTrue(links().isEmpty, "linked before the confirmation")
+        // Nothing is recorded until the user confirms. Only the link counts: the app also posts
+        // on its own (a sync starts when it opens).
+        let isLink = { (request: StubAPIServer.Request) in
+            request.method == "POST" && request.path.hasSuffix("/listing-links")
+        }
+        XCTAssertFalse(server.requests.contains(where: isLink))
         snapshot("2-confirm")
         confirm.tap()
 
@@ -115,8 +116,8 @@ final class ShareExtensionUITests: XCTestCase {
         XCTAssertFalse(status.label.localizedCaseInsensitiveContains("confirmed by"))
         snapshot("3-linked")
 
-        let link = try XCTUnwrap(links().first)
-        XCTAssertEqual(links().count, 1)
+        let link = try XCTUnwrap(server.requests.first(where: isLink))
+        XCTAssertEqual(link.path, "/v1/items/\(StubAPIServer.itemId)/listing-links")
         XCTAssertEqual(link.headers["authorization"], "Bearer ui-test-token")
         XCTAssertNotNil(link.headers["idempotency-key"])
         // The canonical URL: the share's tracking query is not sent.

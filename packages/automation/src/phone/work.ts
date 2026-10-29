@@ -29,6 +29,7 @@ import { sql, type Selectable } from 'kysely';
 import {
   inTransaction,
   jsonb,
+  lockConnections,
   type Db,
   type DbExecutor,
   type DbTransaction,
@@ -274,6 +275,7 @@ export async function claimPhoneRun(
     throw new PhoneRuntimeMismatchError();
   }
   return inTransaction(executor, async (trx) => {
+    await lockDeviceConnections(trx, device);
     await releaseStoppedRuns(trx, device);
     if (device.appOpen === true) await runWaitingPhoneOperationsNow(trx, device);
     for (let looked = 0; looked < MAX_CLAIM_CANDIDATES; looked += 1) {
@@ -420,6 +422,16 @@ export async function answerPhoneCall(
   answer: { accountId: string; deviceId: string; runId: string; index: number; answer: unknown },
 ): Promise<PhoneRunState> {
   return inTransaction(deps.db, async (trx) => {
+    // The connection before the run's rows, which the answer writes (`lockConnections`).
+    const target = await trx
+      .selectFrom('phone_work')
+      .select('connection_id')
+      .where('account_id', '=', answer.accountId)
+      .where('id', '=', answer.runId)
+      .executeTakeFirst();
+    if (target !== undefined) {
+      await lockConnections(trx, answer.accountId, [target.connection_id]);
+    }
     const work = await trx
       .selectFrom('phone_work as work')
       .innerJoin('marketplace_connection as connection', (join) =>
@@ -464,6 +476,27 @@ export async function answerPhoneCall(
       .executeTakeFirstOrThrow();
     return advance(deps, trx, updated);
   });
+}
+
+/**
+ * Locks the connections the device runs (`lockConnections`) before the claim writes any of
+ * their rows: its runs, their work, the checks it starts.
+ */
+async function lockDeviceConnections(
+  trx: DbTransaction,
+  device: Pick<ClaimingDevice, 'accountId' | 'deviceId'>,
+): Promise<void> {
+  const connections = await trx
+    .selectFrom('marketplace_connection')
+    .select('id')
+    .where('account_id', '=', device.accountId)
+    .where('phone_device_id', '=', device.deviceId)
+    .execute();
+  await lockConnections(
+    trx,
+    device.accountId,
+    connections.map((connection) => connection.id),
+  );
 }
 
 /**

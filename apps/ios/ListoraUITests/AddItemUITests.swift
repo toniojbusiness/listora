@@ -26,7 +26,7 @@ final class AddItemUITests: XCTestCase {
         if reset {
             app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
         }
-        app.launch()
+        app.launchQuietly()
         let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
@@ -120,6 +120,11 @@ final class AddItemUITests: XCTestCase {
         XCTAssertTrue(deleteDraft.waitForExistence(timeout: 5))
         deleteDraft.tap()
         let confirm = app.buttons["Delete"]
+        // On CI a tap on the menu while it was still opening was lost: the menu stayed open and
+        // the confirmation never came, so the item is tapped again while it is still there.
+        if !confirm.waitForExistence(timeout: 5), deleteDraft.exists {
+            deleteDraft.tap()
+        }
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
         XCTAssertTrue(app.staticTexts["Take photos once"].waitForExistence(timeout: 5))

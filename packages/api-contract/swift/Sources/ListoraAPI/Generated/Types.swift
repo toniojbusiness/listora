@@ -97,7 +97,10 @@ public protocol APIProtocol: Sendable {
     func replaceDescriptionStyle(_ input: Operations.ReplaceDescriptionStyle.Input) async throws -> Operations.ReplaceDescriptionStyle.Output
     /// List items
     ///
-    /// Newest first. Filters combine with AND.
+    /// Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+    /// to the items they leave. A cursor continues only the sort it was issued for; with another
+    /// `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/items`.
     /// - Remark: Generated from `#/paths//v1/items/get(listItems)`.
@@ -144,6 +147,19 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `DELETE /v1/items/{itemId}`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/delete(deleteItem)`.
     func deleteItem(_ input: Operations.DeleteItem.Input) async throws -> Operations.DeleteItem.Output
+    /// Wait for a change to an item's marketplace work
+    ///
+    /// While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+    /// the item screen waits here instead of reading the item on a timer: the answer comes as
+    /// soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+    /// with none. Pass the `token` of the previous answer as `after`; without it (the first
+    /// wait) the answer is immediate, with `changed` true, so the screen reads the item once
+    /// more after starting to follow it. It only reads.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/changes`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)`.
+    func waitForItemChange(_ input: Operations.WaitForItemChange.Input) async throws -> Operations.WaitForItemChange.Output
     /// Look up an item by SKU
     ///
     /// - Remark: HTTP `GET /v1/skus/{sku}`.
@@ -777,7 +793,10 @@ public protocol APIProtocol: Sendable {
     func linkMarketplaceSession(_ input: Operations.LinkMarketplaceSession.Input) async throws -> Operations.LinkMarketplaceSession.Output
     /// List sales
     ///
-    /// The sales feed, newest sold first, each with its delist runs.
+    /// The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+    /// sort applies to the sales the filters leave. A cursor continues only the sort it was
+    /// issued for; with another `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -1491,7 +1510,10 @@ extension APIProtocol {
     }
     /// List items
     ///
-    /// Newest first. Filters combine with AND.
+    /// Newest added first, or in the `sort` order. Filters combine with AND, and the sort applies
+    /// to the items they leave. A cursor continues only the sort it was issued for; with another
+    /// `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/items`.
     /// - Remark: Generated from `#/paths//v1/items/get(listItems)`.
@@ -1577,6 +1599,29 @@ extension APIProtocol {
         headers: Operations.DeleteItem.Input.Headers = .init()
     ) async throws -> Operations.DeleteItem.Output {
         try await deleteItem(Operations.DeleteItem.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Wait for a change to an item's marketplace work
+    ///
+    /// While a change to the item's listings runs or waits (for the phone, a retry, a read-back),
+    /// the item screen waits here instead of reading the item on a timer: the answer comes as
+    /// soon as one of the item's operations changes, with `changed`, or once `waitSeconds` passed
+    /// with none. Pass the `token` of the previous answer as `after`; without it (the first
+    /// wait) the answer is immediate, with `changed` true, so the screen reads the item once
+    /// more after starting to follow it. It only reads.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/changes`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/changes/get(waitForItemChange)`.
+    public func waitForItemChange(
+        path: Operations.WaitForItemChange.Input.Path,
+        query: Operations.WaitForItemChange.Input.Query,
+        headers: Operations.WaitForItemChange.Input.Headers = .init()
+    ) async throws -> Operations.WaitForItemChange.Output {
+        try await waitForItemChange(Operations.WaitForItemChange.Input(
             path: path,
             query: query,
             headers: headers
@@ -2713,7 +2758,10 @@ extension APIProtocol {
     }
     /// List sales
     ///
-    /// The sales feed, newest sold first, each with its delist runs.
+    /// The sales feed, newest sold first or in the `sort` order, each with its delist runs. The
+    /// sort applies to the sales the filters leave. A cursor continues only the sort it was
+    /// issued for; with another `sort` it is `400`.
+    ///
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.

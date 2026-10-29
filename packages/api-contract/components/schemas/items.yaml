@@ -16,6 +16,30 @@ KnownItemStatus:
     otherwise the server answers `409 invalid_state_transition` and the item stays
     archived.
   enum: [draft, ready, listed, sold_pending_delist, sold, shipped, archived]
+ItemSort:
+  type: string
+  description: |
+    The order of `listItems`. Every order ends with the newest added first, so items that tie
+    keep one order from page to page.
+    `added_newest`: newest added first (the default). `listed_newest` and `listed_oldest`: by
+    when the item was first listed on any marketplace (`listed_oldest` is the longest listed
+    first); items never listed come last. `price_high` and `price_low`: by list price; items
+    without one come last. `stale_first`: items still for sale (draft, ready, listed) that have
+    waited longest first, aged from the purchase date or, without one, from when the item was
+    added; sold and archived items come after them. `profit_high`: by profit at list price (list
+    price minus cost, a haul's share included), before fees and shipping; items without a price
+    or cost come last. `name_az`: by title, A to Z, ignoring case; untitled items come last.
+  enum:
+    [
+      added_newest,
+      listed_newest,
+      listed_oldest,
+      price_high,
+      price_low,
+      stale_first,
+      profit_high,
+      name_az,
+    ]
 UserSettableItemStatus:
   type: string
   description: The item statuses a client may set directly.
@@ -299,6 +323,19 @@ ItemSaleSummary:
       description: |
         Return on investment, `profit` divided by the item's `cost`, in basis points
         (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
+ItemChangeWaitResult:
+  type: object
+  required: [changed, token]
+  properties:
+    changed:
+      type: boolean
+      description: |
+        `true` when the item's operations differ from those `after` stood for (read the item
+        again), `false` when the wait ran out with no change.
+    token:
+      type: string
+      maxLength: 64
+      description: The item's operations as of this answer; the next wait's `after`.
 ItemSummary:
   type: object
   description: The item as shown in inventory lists.

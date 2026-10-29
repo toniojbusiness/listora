@@ -7,6 +7,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 
 import type { AccountDeletionDependencies, AccountDeletionOutcome } from '@listora/accounts';
 import {
@@ -81,6 +82,7 @@ import type { AuthDriver } from './auth/driver.ts';
 import type { ConnectionsDependencies } from './connections/routes.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
+import { listenForItemChanges } from './items/changes.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
 import { resolveTenant, type SignUpPolicy, type Tenant } from './tenancy.ts';
@@ -111,6 +113,15 @@ export interface CallResult<K extends OperationId> {
   /** The `error` of an `ErrorResponse`; throws when the response is not an error. */
   error: ApiError;
   headers: Record<string, unknown>;
+  /** The body's size as sent, compressed when the request accepted it. */
+  wireBytes: number;
+}
+
+/** A response body as text, decompressed when it was sent compressed (compression.ts). */
+function decodedBody(raw: Buffer, encoding: unknown): string {
+  if (encoding === 'br') return brotliDecompressSync(raw).toString();
+  if (encoding === 'gzip') return gunzipSync(raw).toString();
+  return raw.toString();
 }
 
 /** The `fieldErrors` fields of an error response, in order. */
@@ -447,6 +458,11 @@ export async function createTestApi(
     connectionString: scratch.url,
     logger: createLogger({ service: 'api-test', level: 'silent' }),
   });
+  // The item screen's waits hear changes as the API does (items/changes.ts).
+  const itemChanges = listenForItemChanges({
+    connectionString: scratch.url,
+    logger: createLogger({ service: 'api-test', level: 'silent' }),
+  });
   const logLines: Record<string, unknown>[] = [];
   const logger = createLogger({
     service: 'api-test',
@@ -524,6 +540,7 @@ export async function createTestApi(
     analysisJobs,
     marketplaceSessions: options.marketplaceSessions ?? marketplaceSessions,
     phone: testPhoneWork(db, logger, automation, marketplaceSessions.vault, phoneSignals.signals),
+    itemChanges: itemChanges.signals,
     batchJobs,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
@@ -580,12 +597,13 @@ export async function createTestApi(
       headers,
       ...(options.body === undefined ? {} : { payload: options.body as Record<string, unknown> }),
     });
-    const body: unknown = response.body === '' ? undefined : response.json();
+    const text = decodedBody(response.rawPayload, response.headers['content-encoding']);
+    const body: unknown = text === '' ? undefined : JSON.parse(text);
     const problems = responseContractErrors(operationId, response.statusCode, body);
     if (problems.length > 0) {
       throw new Error(
         `${operationId} answered ${String(response.statusCode)} with a body that breaks the contract: ` +
-          `${JSON.stringify(problems)}\n${response.body}`,
+          `${JSON.stringify(problems)}\n${text}`,
       );
     }
     const error = (body as Partial<ErrorResponse> | undefined)?.error;
@@ -598,6 +616,7 @@ export async function createTestApi(
         return error;
       },
       headers: response.headers,
+      wireBytes: response.rawPayload.length,
     };
   };
 
@@ -632,6 +651,7 @@ export async function createTestApi(
     close: async () => {
       await app.close();
       await phoneSignals.close();
+      await itemChanges.close();
       await db.destroy();
       await scratch.drop();
       await rm(storageDir, { recursive: true, force: true });

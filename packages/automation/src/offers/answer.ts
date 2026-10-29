@@ -131,6 +131,23 @@ export async function requestOfferAnswer(
   input: OfferAnswerInput,
 ): Promise<{ responseId: string; created: boolean }> {
   return inTransaction(executor, async (trx) => {
+    // The connection's row before the offer's, in its own statement (`lockConnections`): the
+    // one below locks both in no set order.
+    await trx
+      .selectFrom('marketplace_connection')
+      .select('id')
+      .where('account_id', '=', input.accountId)
+      .where(
+        'id',
+        '=',
+        trx
+          .selectFrom('marketplace_offer')
+          .select('connection_id')
+          .where('account_id', '=', input.accountId)
+          .where('id', '=', input.offerId),
+      )
+      .forUpdate()
+      .execute();
     const offer = await trx
       .selectFrom('marketplace_offer as offer')
       .innerJoin('marketplace_connection as connection', (join) =>

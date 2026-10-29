@@ -1,5 +1,11 @@
-export { loadMigrateConfig } from './config.ts';
+export {
+  CONNECT_TIMEOUT_ISSUE,
+  DEFAULT_CONNECT_TIMEOUT_MS,
+  loadMigrateConfig,
+  parseConnectTimeoutMs,
+} from './config.ts';
 export type { MigrateCommand, MigrateConfig } from './config.ts';
+export { lockConnections } from './connection-locks.ts';
 export { createDatabase, createPool, inTransaction, parseSafeInteger } from './database.ts';
 export type { DatabaseOptions, DatabasePool, Db, DbExecutor, DbTransaction } from './database.ts';
 export { createInventoryItem } from './items.ts';
@@ -15,6 +21,8 @@ export type { BackgroundJob, JobQueueMigrationOptions } from './job-queue.ts';
 export { jsonb } from './json.ts';
 export { listenForNotifications } from './notifications.ts';
 export type { NotificationListener, NotificationListenerOptions } from './notifications.ts';
+export { KeyedSignals, listenForSignals } from './signals.ts';
+export type { SignalSubscription, SignalWake } from './signals.ts';
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from './json.ts';
 export {
   MIGRATIONS_DIR,

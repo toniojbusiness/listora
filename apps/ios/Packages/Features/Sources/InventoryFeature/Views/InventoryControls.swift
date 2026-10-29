@@ -12,8 +12,8 @@ struct BulkSheet: Identifiable {
     }
 }
 
-/// One tap to the items that need the seller, the drafts, what's not listed yet, listed, sold,
-/// or archived. "Needs you" carries how many items need the seller.
+/// The list's order, then one tap to the items that need the seller, the drafts, what's not
+/// listed yet, listed, sold, or archived. "Needs you" carries how many items need the seller.
 struct QuickFilters: View {
     @Bindable var model: InventoryListModel
     let attention: InventoryAttention
@@ -21,6 +21,8 @@ struct QuickFilters: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.xs) {
+                SortMenu(selection: $model.query.sort, options: ItemSort.allCases, title: \.title)
+                    .accessibilityIdentifier("inventory.sort")
                 ForEach(InventoryFilter.allCases) { filter in
                     ChoiceChip(
                         title(of: filter),

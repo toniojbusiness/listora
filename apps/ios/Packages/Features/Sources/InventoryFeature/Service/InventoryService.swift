@@ -12,6 +12,7 @@ typealias Connection = Components.Schemas.Connection
 typealias Money = Components.Schemas.Money
 typealias KnownMarketplace = Components.Schemas.KnownMarketplace
 typealias ActivityEntry = Components.Schemas.ActivityEntry
+typealias ItemChangeWait = Components.Schemas.ItemChangeWaitResult
 
 /// One page of an item's activity, newest first.
 struct ActivityPage: Equatable, Sendable {
@@ -25,12 +26,18 @@ struct ItemPage: Equatable, Sendable {
     var nextCursor: String?
 }
 
-/// The inventory list's filters, as the API applies them.
+/// The inventory list's filters and order, as the API applies them.
 struct InventoryQuery: Equatable, Sendable {
     var search = ""
     var filter = InventoryFilter.all
     var marketplace: KnownMarketplace?
     var brand: String?
+    var sort = ItemSort.standard
+
+    /// The same order with no filter or search.
+    var unfiltered: InventoryQuery {
+        InventoryQuery(sort: sort)
+    }
 }
 
 /// The calls of the inventory, item, and listing screens, returning the contract's types and
@@ -52,6 +59,10 @@ protocol InventoryService: Sendable {
     func analysisVariants(analysisID: String) async throws(APIFailure) -> [Components.Schemas.VariantSuggestion]
     /// Every operation on the listing, newest first.
     func operations(listingID: String) async throws(APIFailure) -> [Operation]
+    /// Waits up to `waitSeconds` (at most 20) for a change to the item's operations
+    /// (`waitForItemChange`): `after` is the previous answer's token; without it the answer is
+    /// at once, changed.
+    func waitForChange(itemID: String, after: String?, waitSeconds: Int) async throws(APIFailure) -> ItemChangeWait
     /// The operation's history, oldest first.
     func events(operationID: String) async throws(APIFailure) -> [OperationEvent]
     /// Everything that happened to the item, newest first (docs/features/activity.md).
@@ -103,6 +114,7 @@ struct APIInventoryService: InventoryService {
                 marketplace: query.marketplace,
                 brand: query.brand,
                 attention: query.filter.needsAttention ? true : nil,
+                sort: query.sort,
                 cursor: cursor,
                 limit: 50,
             ))
@@ -159,6 +171,21 @@ struct APIInventoryService: InventoryService {
         switch try await call({ try await client.getAnalysis(path: .init(analysisId: analysisID)) }) {
         case let .ok(response): try body { try response.body.json }.result?.variants ?? []
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func waitForChange(itemID: String, after: String?, waitSeconds: Int) async throws(APIFailure) -> ItemChangeWait {
+        let output = try await call {
+            try await client.waitForItemChange(
+                path: .init(itemId: itemID),
+                query: .init(after: after, waitSeconds: Int32(max(1, min(20, waitSeconds)))),
+            )
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

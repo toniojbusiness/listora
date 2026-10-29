@@ -133,9 +133,11 @@ public final class InventoryEnvironment {
         ItemDetailView(environment: self, itemID: itemID)
     }
 
-    /// Forgets the seller's inventory layout, back to the photo grid (`LISTORA_RESET_LOCAL_DATA`).
+    /// Forgets the seller's inventory layout and order, back to the photo grid, newest added first
+    /// (`LISTORA_RESET_LOCAL_DATA`).
     public static func resetLocalData(defaults: UserDefaults) {
         defaults.removeObject(forKey: InventoryLayout.storageKey)
+        defaults.removeObject(forKey: ItemSort.storageKey)
     }
 
     /// Shows the drafts the next time the inventory appears.

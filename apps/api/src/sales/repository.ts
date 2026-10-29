@@ -2,15 +2,16 @@
  * Sale queries for the sales feed and the item's "Sold" banner. Like every repository, each
  * function takes the request's `Tenant` and filters on its account.
  */
-import type { DelistRunStatus as ContractDelistRunStatus } from '@listora/api-contract';
+import type { DelistRunStatus as ContractDelistRunStatus, SaleSort } from '@listora/api-contract';
 import type { DbExecutor, DelistRunStatus, Marketplace, SaleStatus } from '@listora/db';
 import { STANDING_SALE_STATUSES } from '@listora/sales';
-import { sql, type Selectable } from 'kysely';
+import type { Selectable } from 'kysely';
 
 import type { FeeLineTable, SaleItemTable, SaleTable, UserTaskTable } from '@listora/db';
 
-import type { TimeCursor } from '../pagination.ts';
+import { sortedRows, type SortCursor, type SortValue } from '../sorting.ts';
 import type { Tenant } from '../tenancy.ts';
+import { saleSortTerms } from './sort.ts';
 
 export type SaleRow = Selectable<SaleTable>;
 export type SaleItemRow = Selectable<SaleItemTable>;
@@ -41,24 +42,26 @@ export interface SaleListFilter {
   statuses: readonly SaleStatus[] | undefined;
   /** Sales with a delist run whose stored status (the SLA job's, at most a minute old) is one of these. */
   delistStatuses: readonly ContractDelistRunStatus[] | undefined;
-  /** Return only sales after this one in the feed's order (keyset pagination). */
-  after: TimeCursor | undefined;
+  sort: SaleSort;
+  /** Return only sales after this page's last one, in `sort` (keyset pagination). */
+  after: SortCursor | undefined;
   limit: number;
 }
 
-/** How the feed compares sale times: to the millisecond, as its cursor keeps them. */
-const SOLD_AT_MS = sql<Date>`date_trunc('milliseconds', sale.sold_at)`;
+/** A listed sale with its terms in the feed's order, for the next page's cursor. */
+export type SortedSaleRow = SaleRow & { sort_key: SortValue[] };
 
 /**
- * Newest sold first, then newest recorded (sale ids are UUIDv7, in the order Listora recorded
- * them), so a sales history recorded at once still lists by when each sold. Returns up to
- * `limit + 1` rows so the caller can tell whether another page exists.
+ * In `sort` (`saleSortTerms`), which ends with the newest sold, then the newest recorded (sale
+ * ids are UUIDv7, in the order Listora recorded them), so a sales history recorded at once still
+ * lists by when each sold. Returns up to `limit + 1` rows so the caller can tell whether another
+ * page exists.
  */
 export async function listSaleRows(
   db: DbExecutor,
   tenant: Tenant,
   filter: SaleListFilter,
-): Promise<SaleRow[]> {
+): Promise<SortedSaleRow[]> {
   let query = db.selectFrom('sale').selectAll().where('account_id', '=', tenant.accountId);
   if (filter.statuses !== undefined && filter.statuses.length > 0) {
     query = query.where('status', 'in', filter.statuses);
@@ -89,13 +92,7 @@ export async function listSaleRows(
       ),
     );
   }
-  if (filter.after !== undefined) {
-    const { at, id } = filter.after;
-    query = query.where(sql<boolean>`(${SOLD_AT_MS}, sale.id) < (${at}, ${id}::uuid)`);
-  }
-  return query
-    .orderBy(SOLD_AT_MS, 'desc')
-    .orderBy('id', 'desc')
+  return sortedRows(query, saleSortTerms(filter.sort), filter.after)
     .limit(filter.limit + 1)
     .execute();
 }
