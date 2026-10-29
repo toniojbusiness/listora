@@ -5,7 +5,7 @@ import SwiftUI
 
 /// The Sales tab: all the seller's sales in total and per marketplace, the sales, newest sold
 /// first or in the order the sort menu picks, with what each one sold for and its profit, and
-/// the way to the profit dashboard. The
+/// the ways to the profit dashboard and to the reports and exports. The
 /// list is read from the server each time it appears, after a sync, and on pull to refresh,
 /// which syncs the marketplaces too.
 public struct SalesView<Settings: View>: View {
@@ -40,6 +40,9 @@ public struct SalesView<Settings: View>: View {
                 }
                 .navigationDestination(for: ProfitRoute.self) { _ in
                     ProfitView(model: environment.makeProfitModel(), onSignIn: environment.onSignIn)
+                }
+                .navigationDestination(for: ReportsRoute.self) { _ in
+                    ReportsView(model: environment.makeReportsModel(), onSignIn: environment.onSignIn)
                 }
                 .toolbar {
                     if let syncButton = environment.syncButton {
@@ -139,6 +142,16 @@ public struct SalesView<Settings: View>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("sales.profitCard")
+                NavigationLink(value: ReportsRoute()) {
+                    ListRow(
+                        "Reports and exports",
+                        subtitle: "Your year by month and marketplace, and CSV files for taxes",
+                        systemImage: "doc.text",
+                    )
+                    .cardStyle(.flat)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("sales.reports")
                 SortMenu(selection: $model.sort, options: SaleSort.allCases, title: \.title)
                     .accessibilityIdentifier("sales.sort")
                 ForEach(model.sales, id: \.id) { sale in
@@ -168,6 +181,8 @@ struct SaleRoute: Hashable {
 }
 
 struct ProfitRoute: Hashable {}
+
+struct ReportsRoute: Hashable {}
 
 /// The way into the profit dashboard, above the sales.
 private struct ProfitEntryRow: View {

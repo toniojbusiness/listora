@@ -16790,6 +16790,565 @@ public enum Operations {
             }
         }
     }
+    /// Get a year's report
+    ///
+    /// The seller's year in `timeZone`, for taxes and bookkeeping: the year's totals, each of its
+    /// twelve months, and the seller's own totals per marketplace (in a fixed order, never
+    /// ranked). Only sales that stand count (a canceled or returned sale counts nowhere), and
+    /// every amount is split exactly as each sale's own money is (`Sale`), with a haul item's
+    /// cost its share of the haul. A number Listora cannot compute reliably is absent rather than
+    /// guessed: fees while a sale's fees are not yet the marketplace's own, cost of goods while an
+    /// item has no cost, and profit while either is missing. No AI is involved.
+    /// `422 validation_failed` for a year outside 2000 to 2100 or an unknown `timeZone`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/year`.
+    /// - Remark: Generated from `#/paths//v1/reports/year/get(getYearReport)`.
+    public enum GetYearReport {
+        public static let id: Swift.String = "getYearReport"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/reports/year/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The calendar year.
+                ///
+                /// - Remark: Generated from `#/paths/v1/reports/year/GET/query/year`.
+                public var year: Swift.Int32
+                /// The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+                ///
+                /// - Remark: Generated from `#/paths/v1/reports/year/GET/query/timeZone`.
+                public var timeZone: Swift.String
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - year: The calendar year.
+                ///   - timeZone: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+                public init(
+                    year: Swift.Int32,
+                    timeZone: Swift.String
+                ) {
+                    self.year = year
+                    self.timeZone = timeZone
+                }
+            }
+            public var query: Operations.GetYearReport.Input.Query
+            /// - Remark: Generated from `#/paths/v1/reports/year/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetYearReport.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetYearReport.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetYearReport.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.GetYearReport.Input.Query,
+                headers: Operations.GetYearReport.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/reports/year/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/reports/year/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.YearReport)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.YearReport {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetYearReport.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetYearReport.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The year's report.
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/year/get(getYearReport)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetYearReport.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetYearReport.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/year/get(getYearReport)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/year/get(getYearReport)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Export a year's sales as CSV
+    ///
+    /// One CSV row per item sold in the year on a sale that stands, oldest first: the day it sold
+    /// in `timeZone`, the marketplace and order number, the item, its price and its share of the
+    /// order's shipping, fees, and label cost, its cost (and whether that is a haul share), and
+    /// its profit. The fees and profit cells are empty while the sale's fees are not the
+    /// marketplace's own, and the cost and profit cells while the item has no cost. The app
+    /// saves `content` as `fileName` and shares it. `422 validation_failed` as for
+    /// `getYearReport`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/sales-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/sales-export/get(exportSales)`.
+    public enum ExportSales {
+        public static let id: Swift.String = "exportSales"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/reports/sales-export/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The calendar year.
+                ///
+                /// - Remark: Generated from `#/paths/v1/reports/sales-export/GET/query/year`.
+                public var year: Swift.Int32
+                /// The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+                ///
+                /// - Remark: Generated from `#/paths/v1/reports/sales-export/GET/query/timeZone`.
+                public var timeZone: Swift.String
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - year: The calendar year.
+                ///   - timeZone: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+                public init(
+                    year: Swift.Int32,
+                    timeZone: Swift.String
+                ) {
+                    self.year = year
+                    self.timeZone = timeZone
+                }
+            }
+            public var query: Operations.ExportSales.Input.Query
+            /// - Remark: Generated from `#/paths/v1/reports/sales-export/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ExportSales.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ExportSales.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ExportSales.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.ExportSales.Input.Query,
+                headers: Operations.ExportSales.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/reports/sales-export/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/reports/sales-export/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.CsvExport)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CsvExport {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ExportSales.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ExportSales.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The year's sales as a CSV file.
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/sales-export/get(exportSales)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ExportSales.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ExportSales.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/sales-export/get(exportSales)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/sales-export/get(exportSales)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Export the inventory as CSV
+    ///
+    /// One CSV row per item the seller has now, by SKU: its details, status, the day it was added
+    /// in `timeZone`, its purchase date and place, its cost (and whether that is a haul share),
+    /// and its list price. The app saves `content` as `fileName` and shares it.
+    /// `422 validation_failed` for an unknown `timeZone`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/inventory-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/inventory-export/get(exportInventory)`.
+    public enum ExportInventory {
+        public static let id: Swift.String = "exportInventory"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/reports/inventory-export/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+                ///
+                /// - Remark: Generated from `#/paths/v1/reports/inventory-export/GET/query/timeZone`.
+                public var timeZone: Swift.String
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - timeZone: The seller's IANA time zone, for example `America/New_York`; days are counted in it.
+                public init(timeZone: Swift.String) {
+                    self.timeZone = timeZone
+                }
+            }
+            public var query: Operations.ExportInventory.Input.Query
+            /// - Remark: Generated from `#/paths/v1/reports/inventory-export/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ExportInventory.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ExportInventory.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ExportInventory.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.ExportInventory.Input.Query,
+                headers: Operations.ExportInventory.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/reports/inventory-export/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/reports/inventory-export/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.CsvExport)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CsvExport {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ExportInventory.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ExportInventory.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The inventory as a CSV file.
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/inventory-export/get(exportInventory)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ExportInventory.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ExportInventory.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/inventory-export/get(exportInventory)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/reports/inventory-export/get(exportInventory)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// List assisted-mode tasks
     ///
     /// Urgent first, then oldest first.

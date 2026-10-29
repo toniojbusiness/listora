@@ -9885,6 +9885,246 @@ extension Components {
                 case deadStock
             }
         }
+        /// The totals of some of the year's sales that stand. Revenue, shipping, and the counts are
+        /// always known. A number Listora cannot compute reliably is absent rather than guessed:
+        /// `fees` while any of the sales' fees are still the fee table's estimate or not known at all
+        /// (`feesUnknownCount` says how many sales), `costOfGoods` while any sold item has no cost
+        /// (`missingCostCount` says how many), and `netProfit` while either is absent. When all are
+        /// present, `netProfit` is `revenue` minus `fees`, `shipping`, and `costOfGoods`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ReportTotals`.
+        public struct ReportTotals: Codable, Hashable, Sendable {
+            /// Orders (a bundle is one).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/salesCount`.
+            public var salesCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// What buyers paid: the sale prices plus the shipping they paid.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/revenue`.
+            public var revenue: Components.Schemas.Money
+            /// What the seller paid to ship: labels the marketplace deducted plus labels bought
+            /// outside the payout (`Sale.shippingCost`).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/shipping`.
+            public var shipping: Components.Schemas.Money
+            /// The marketplaces' fees except shipping labels. Absent while any sale's fees are not the
+            /// marketplace's own.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/fees`.
+            public var fees: Components.Schemas.Money?
+            /// Sales whose fees are still an estimate or not known at all.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/feesUnknownCount`.
+            public var feesUnknownCount: Swift.Int32
+            /// The sold items' costs; a haul item's cost is its share of the haul. Absent while any
+            /// sold item has no cost.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/costOfGoods`.
+            public var costOfGoods: Components.Schemas.Money?
+            /// Sold items with no cost entered.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/missingCostCount`.
+            public var missingCostCount: Swift.Int32
+            /// Absent while `fees` or `costOfGoods` is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReportTotals/netProfit`.
+            public var netProfit: Components.Schemas.Money?
+            /// Creates a new `ReportTotals`.
+            ///
+            /// - Parameters:
+            ///   - salesCount: Orders (a bundle is one).
+            ///   - itemsSold:
+            ///   - revenue: What buyers paid: the sale prices plus the shipping they paid.
+            ///   - shipping: What the seller paid to ship: labels the marketplace deducted plus labels bought
+            ///   - fees: The marketplaces' fees except shipping labels. Absent while any sale's fees are not the
+            ///   - feesUnknownCount: Sales whose fees are still an estimate or not known at all.
+            ///   - costOfGoods: The sold items' costs; a haul item's cost is its share of the haul. Absent while any
+            ///   - missingCostCount: Sold items with no cost entered.
+            ///   - netProfit: Absent while `fees` or `costOfGoods` is.
+            public init(
+                salesCount: Swift.Int32,
+                itemsSold: Swift.Int32,
+                revenue: Components.Schemas.Money,
+                shipping: Components.Schemas.Money,
+                fees: Components.Schemas.Money? = nil,
+                feesUnknownCount: Swift.Int32,
+                costOfGoods: Components.Schemas.Money? = nil,
+                missingCostCount: Swift.Int32,
+                netProfit: Components.Schemas.Money? = nil
+            ) {
+                self.salesCount = salesCount
+                self.itemsSold = itemsSold
+                self.revenue = revenue
+                self.shipping = shipping
+                self.fees = fees
+                self.feesUnknownCount = feesUnknownCount
+                self.costOfGoods = costOfGoods
+                self.missingCostCount = missingCostCount
+                self.netProfit = netProfit
+            }
+            public enum CodingKeys: String, CodingKey {
+                case salesCount
+                case itemsSold
+                case revenue
+                case shipping
+                case fees
+                case feesUnknownCount
+                case costOfGoods
+                case missingCostCount
+                case netProfit
+            }
+        }
+        /// One calendar month of the year.
+        ///
+        /// - Remark: Generated from `#/components/schemas/MonthReport`.
+        public struct MonthReport: Codable, Hashable, Sendable {
+            /// The month, `YYYY-MM`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MonthReport/month`.
+            public var month: Swift.String
+            /// - Remark: Generated from `#/components/schemas/MonthReport/totals`.
+            public var totals: Components.Schemas.ReportTotals
+            /// Creates a new `MonthReport`.
+            ///
+            /// - Parameters:
+            ///   - month: The month, `YYYY-MM`.
+            ///   - totals:
+            public init(
+                month: Swift.String,
+                totals: Components.Schemas.ReportTotals
+            ) {
+                self.month = month
+                self.totals = totals
+            }
+            public enum CodingKeys: String, CodingKey {
+                case month
+                case totals
+            }
+        }
+        /// The seller's own totals on one marketplace for the year. Only totals: no ranking or share,
+        /// so no marketplace's performance is presented relative to another's (eBay's API License
+        /// Agreement restricts that without eBay's consent).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceReport`.
+        public struct MarketplaceReport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceReport/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/MarketplaceReport/totals`.
+            public var totals: Components.Schemas.ReportTotals
+            /// Creates a new `MarketplaceReport`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - totals:
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                totals: Components.Schemas.ReportTotals
+            ) {
+                self.marketplace = marketplace
+                self.totals = totals
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case totals
+            }
+        }
+        /// A calendar year in the seller's time zone.
+        ///
+        /// - Remark: Generated from `#/components/schemas/YearReport`.
+        public struct YearReport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/YearReport/year`.
+            public var year: Swift.Int32
+            /// The IANA time zone the days are counted in.
+            ///
+            /// - Remark: Generated from `#/components/schemas/YearReport/timeZone`.
+            public var timeZone: Swift.String
+            /// - Remark: Generated from `#/components/schemas/YearReport/total`.
+            public var total: Components.Schemas.ReportTotals
+            /// All twelve months, January first; a month without sales has zero totals.
+            ///
+            /// - Remark: Generated from `#/components/schemas/YearReport/months`.
+            public var months: [Components.Schemas.MonthReport]
+            /// Each marketplace with a sale in the year, in the fixed `Marketplace` order.
+            ///
+            /// - Remark: Generated from `#/components/schemas/YearReport/marketplaces`.
+            public var marketplaces: [Components.Schemas.MarketplaceReport]
+            /// Creates a new `YearReport`.
+            ///
+            /// - Parameters:
+            ///   - year:
+            ///   - timeZone: The IANA time zone the days are counted in.
+            ///   - total:
+            ///   - months: All twelve months, January first; a month without sales has zero totals.
+            ///   - marketplaces: Each marketplace with a sale in the year, in the fixed `Marketplace` order.
+            public init(
+                year: Swift.Int32,
+                timeZone: Swift.String,
+                total: Components.Schemas.ReportTotals,
+                months: [Components.Schemas.MonthReport],
+                marketplaces: [Components.Schemas.MarketplaceReport]
+            ) {
+                self.year = year
+                self.timeZone = timeZone
+                self.total = total
+                self.months = months
+                self.marketplaces = marketplaces
+            }
+            public enum CodingKeys: String, CodingKey {
+                case year
+                case timeZone
+                case total
+                case months
+                case marketplaces
+            }
+        }
+        /// A CSV file (RFC 4180: comma-separated, double-quoted where needed, CRLF line ends, UTF-8
+        /// with a byte order mark so spreadsheet apps read accents right). The first row names the
+        /// columns. Amounts are plain decimal dollars (`12.50`), days are `YYYY-MM-DD`, and a text cell
+        /// that a spreadsheet would read as a formula starts with an apostrophe.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/CsvExport`.
+        public struct CsvExport: Codable, Hashable, Sendable {
+            /// The name to save it as, for example `listora-sales-2026.csv`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CsvExport/fileName`.
+            public var fileName: Swift.String
+            /// Rows after the header.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CsvExport/rowCount`.
+            public var rowCount: Swift.Int32
+            /// The file's text.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CsvExport/content`.
+            public var content: Swift.String
+            /// Creates a new `CsvExport`.
+            ///
+            /// - Parameters:
+            ///   - fileName: The name to save it as, for example `listora-sales-2026.csv`.
+            ///   - rowCount: Rows after the header.
+            ///   - content: The file's text.
+            public init(
+                fileName: Swift.String,
+                rowCount: Swift.Int32,
+                content: Swift.String
+            ) {
+                self.fileName = fileName
+                self.rowCount = rowCount
+                self.content = content
+            }
+            public enum CodingKeys: String, CodingKey {
+                case fileName
+                case rowCount
+                case content
+            }
+        }
         /// A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
         /// unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
         /// the app to complete it.

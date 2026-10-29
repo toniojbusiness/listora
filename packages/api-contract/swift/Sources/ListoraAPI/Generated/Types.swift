@@ -897,6 +897,46 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/profit`.
     /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)`.
     func getProfit(_ input: Operations.GetProfit.Input) async throws -> Operations.GetProfit.Output
+    /// Get a year's report
+    ///
+    /// The seller's year in `timeZone`, for taxes and bookkeeping: the year's totals, each of its
+    /// twelve months, and the seller's own totals per marketplace (in a fixed order, never
+    /// ranked). Only sales that stand count (a canceled or returned sale counts nowhere), and
+    /// every amount is split exactly as each sale's own money is (`Sale`), with a haul item's
+    /// cost its share of the haul. A number Listora cannot compute reliably is absent rather than
+    /// guessed: fees while a sale's fees are not yet the marketplace's own, cost of goods while an
+    /// item has no cost, and profit while either is missing. No AI is involved.
+    /// `422 validation_failed` for a year outside 2000 to 2100 or an unknown `timeZone`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/year`.
+    /// - Remark: Generated from `#/paths//v1/reports/year/get(getYearReport)`.
+    func getYearReport(_ input: Operations.GetYearReport.Input) async throws -> Operations.GetYearReport.Output
+    /// Export a year's sales as CSV
+    ///
+    /// One CSV row per item sold in the year on a sale that stands, oldest first: the day it sold
+    /// in `timeZone`, the marketplace and order number, the item, its price and its share of the
+    /// order's shipping, fees, and label cost, its cost (and whether that is a haul share), and
+    /// its profit. The fees and profit cells are empty while the sale's fees are not the
+    /// marketplace's own, and the cost and profit cells while the item has no cost. The app
+    /// saves `content` as `fileName` and shares it. `422 validation_failed` as for
+    /// `getYearReport`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/sales-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/sales-export/get(exportSales)`.
+    func exportSales(_ input: Operations.ExportSales.Input) async throws -> Operations.ExportSales.Output
+    /// Export the inventory as CSV
+    ///
+    /// One CSV row per item the seller has now, by SKU: its details, status, the day it was added
+    /// in `timeZone`, its purchase date and place, its cost (and whether that is a haul share),
+    /// and its list price. The app saves `content` as `fileName` and shares it.
+    /// `422 validation_failed` for an unknown `timeZone`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/inventory-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/inventory-export/get(exportInventory)`.
+    func exportInventory(_ input: Operations.ExportInventory.Input) async throws -> Operations.ExportInventory.Output
     /// List assisted-mode tasks
     ///
     /// Urgent first, then oldest first.
@@ -2936,6 +2976,70 @@ extension APIProtocol {
         headers: Operations.GetProfit.Input.Headers = .init()
     ) async throws -> Operations.GetProfit.Output {
         try await getProfit(Operations.GetProfit.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Get a year's report
+    ///
+    /// The seller's year in `timeZone`, for taxes and bookkeeping: the year's totals, each of its
+    /// twelve months, and the seller's own totals per marketplace (in a fixed order, never
+    /// ranked). Only sales that stand count (a canceled or returned sale counts nowhere), and
+    /// every amount is split exactly as each sale's own money is (`Sale`), with a haul item's
+    /// cost its share of the haul. A number Listora cannot compute reliably is absent rather than
+    /// guessed: fees while a sale's fees are not yet the marketplace's own, cost of goods while an
+    /// item has no cost, and profit while either is missing. No AI is involved.
+    /// `422 validation_failed` for a year outside 2000 to 2100 or an unknown `timeZone`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/year`.
+    /// - Remark: Generated from `#/paths//v1/reports/year/get(getYearReport)`.
+    public func getYearReport(
+        query: Operations.GetYearReport.Input.Query,
+        headers: Operations.GetYearReport.Input.Headers = .init()
+    ) async throws -> Operations.GetYearReport.Output {
+        try await getYearReport(Operations.GetYearReport.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Export a year's sales as CSV
+    ///
+    /// One CSV row per item sold in the year on a sale that stands, oldest first: the day it sold
+    /// in `timeZone`, the marketplace and order number, the item, its price and its share of the
+    /// order's shipping, fees, and label cost, its cost (and whether that is a haul share), and
+    /// its profit. The fees and profit cells are empty while the sale's fees are not the
+    /// marketplace's own, and the cost and profit cells while the item has no cost. The app
+    /// saves `content` as `fileName` and shares it. `422 validation_failed` as for
+    /// `getYearReport`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/sales-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/sales-export/get(exportSales)`.
+    public func exportSales(
+        query: Operations.ExportSales.Input.Query,
+        headers: Operations.ExportSales.Input.Headers = .init()
+    ) async throws -> Operations.ExportSales.Output {
+        try await exportSales(Operations.ExportSales.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Export the inventory as CSV
+    ///
+    /// One CSV row per item the seller has now, by SKU: its details, status, the day it was added
+    /// in `timeZone`, its purchase date and place, its cost (and whether that is a haul share),
+    /// and its list price. The app saves `content` as `fileName` and shares it.
+    /// `422 validation_failed` for an unknown `timeZone`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/inventory-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/inventory-export/get(exportInventory)`.
+    public func exportInventory(
+        query: Operations.ExportInventory.Input.Query,
+        headers: Operations.ExportInventory.Input.Headers = .init()
+    ) async throws -> Operations.ExportInventory.Output {
+        try await exportInventory(Operations.ExportInventory.Input(
             query: query,
             headers: headers
         ))

@@ -142,8 +142,9 @@ packages/
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
-                the sale lifecycle, fee lines, payout and profit, the profit dashboard's math;
-                eBay notifications, the order poll, eBay account deletion (@listora/sales)
+                the sale lifecycle, fee lines, payout and profit, the profit dashboard's and the
+                reports' math; eBay notifications, the order poll, eBay account deletion
+                (@listora/sales)
   email-sales/  Email sale detection: forwarding addresses, the folder and SES ingest drivers,
                 DKIM and SPF checks, the sold-email parsers, matching, confirm and review tasks
                 (@listora/email-sales)
@@ -262,6 +263,8 @@ src/
                  double sales; the sales in total and per marketplace (getSalesSummary); Mark as
                  sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
+  reports/       Reports (getYearReport) and the sales and inventory CSV exports
+                 (docs/features/reports.md)
   today/         The Today summary (getToday) and the morning summary setting
   listing-refresh/ The listing refresh setting and an item's own cadence
                  (docs/features/listing-refresh.md)
@@ -546,6 +549,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/email-sales.md](features/email-sales.md)                 | Sale emails: forwarding address, SES ingest, DKIM/SPF, parsers, matching       |
 | [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders           |
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule   |
+| [features/reports.md](features/reports.md)                         | Reports: the year by month and marketplace, the sales and inventory CSV files  |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push   |
 | [features/listing-refresh.md](features/listing-refresh.md)         | Refreshing live listings that haven't sold, its schedule, pace, and settings   |
 | [features/pack-check.md](features/pack-check.md)                   | Pack check: the to-ship list, label scans, the duplicate-print guard, stickers |

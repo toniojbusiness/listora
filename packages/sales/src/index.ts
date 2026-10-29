@@ -85,6 +85,7 @@ export {
   PROFIT_RANKING_SIZE,
   profitGranularity,
   profitReport,
+  soldItemMoney,
 } from './profit.ts';
 export type {
   MarketplaceProfit,
@@ -99,4 +100,20 @@ export type {
   ProfitReportInput,
   ProfitSummary,
   ProfitTotals,
+  SoldItemFeeSource,
+  SoldItemMoney,
 } from './profit.ts';
+export {
+  REPORT_FIRST_YEAR,
+  REPORT_LAST_YEAR,
+  reportTotals,
+  yearDays,
+  yearReport,
+} from './reports.ts';
+export type {
+  MarketplaceReport,
+  MonthReport,
+  ReportTotals,
+  YearReport,
+  YearReportInput,
+} from './reports.ts';
