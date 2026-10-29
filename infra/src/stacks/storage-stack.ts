@@ -1,7 +1,10 @@
-import { CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Annotations, CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 
@@ -22,6 +25,12 @@ export const UPLOAD_PREFIX = 'uploads/';
 /** Private: package photos, which show the buyer's label (`PACK_PHOTO_PREFIX`). */
 export const PACK_PHOTO_PREFIX = 'pack/';
 
+/** With a domain, listing photos are served at `photos.<domain>`. */
+export const PHOTO_CDN_SUBDOMAIN = 'photos';
+
+/** CloudFront takes its viewer certificates only from this region. */
+export const CLOUDFRONT_CERTIFICATE_REGION = 'us-east-1';
+
 /**
  * The photo bucket and the CloudFront distribution marketplaces fetch listing images from.
  *
@@ -32,10 +41,19 @@ export const PACK_PHOTO_PREFIX = 'pack/';
  * policy lets the distribution read only `public/` too, so a behavior or origin added later
  * cannot expose uploads, private derivatives, or screenshots. Keys must therefore be
  * unguessable (random, at least 128 bits); the storage driver (T-07) owns that.
+ *
+ * With a domain (in us-east-1, where CloudFront's certificates live), photo URLs use
+ * `photos.<domain>`, with a certificate validated in the domain's hosted zone and viewers held
+ * to TLS 1.2 or later (`TLS_V1_2_2021`). The distribution's own `*.cloudfront.net` name keeps
+ * working, so URLs handed out before stay valid, but AWS serves that name with its default
+ * certificate, whose security policy is always TLSv1 and cannot be changed: without a domain
+ * there is no minimum TLS version to set.
  */
 export class StorageStack extends ListoraStack {
   readonly photoBucket: s3.Bucket;
   readonly photoDistribution: cloudfront.Distribution;
+  /** The host photo URLs use: `photos.<domain>`, or else the distribution's own name. */
+  readonly photoCdnDomain: string;
 
   constructor(scope: Construct, id: string, props: ListoraStackProps) {
     super(scope, id, props);
@@ -88,6 +106,7 @@ export class StorageStack extends ListoraStack {
     const access = new cloudfront.S3OriginAccessControl(this, 'PhotoCdnAccess', {
       signing: cloudfront.Signing.SIGV4_ALWAYS,
     });
+    const domain = this.photoDomain(props);
     this.photoDistribution = new cloudfront.Distribution(this, 'PhotoCdn', {
       comment: `listora-${target.environment} listing photos`,
       defaultBehavior: {
@@ -103,7 +122,25 @@ export class StorageStack extends ListoraStack {
       },
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+      ...(domain === undefined
+        ? {}
+        : {
+            domainNames: [domain.name],
+            certificate: domain.certificate,
+            minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+          }),
     });
+    if (domain === undefined) {
+      this.photoCdnDomain = this.photoDistribution.distributionDomainName;
+    } else {
+      const target = route53.RecordTarget.fromAlias(
+        new route53Targets.CloudFrontTarget(this.photoDistribution),
+      );
+      const record = { zone: domain.zone, recordName: PHOTO_CDN_SUBDOMAIN, target };
+      new route53.ARecord(this, 'PhotoCdnAlias', record);
+      new route53.AaaaRecord(this, 'PhotoCdnAliasIpv6', record);
+      this.photoCdnDomain = domain.name;
+    }
     (this.photoDistribution.node.defaultChild as cloudfront.CfnDistribution).addPropertyOverride(
       'DistributionConfig.Origins.0.OriginAccessControlId',
       access.originAccessControlId,
@@ -119,8 +156,36 @@ export class StorageStack extends ListoraStack {
     );
 
     new CfnOutput(this, 'PhotoBucketName', { value: this.photoBucket.bucketName });
-    new CfnOutput(this, 'PhotoCdnDomain', {
-      value: this.photoDistribution.distributionDomainName,
+    new CfnOutput(this, 'PhotoCdnDomain', { value: this.photoCdnDomain });
+  }
+
+  /**
+   * `photos.<domain>` and its certificate, validated in the domain's hosted zone; none without
+   * a domain, or outside the region CloudFront takes certificates from.
+   */
+  private photoDomain({
+    target,
+  }: ListoraStackProps):
+    { name: string; zone: route53.IHostedZone; certificate: acm.ICertificate } | undefined {
+    const dns = target.dns;
+    if (dns === undefined) return undefined;
+    if (target.region !== CLOUDFRONT_CERTIFICATE_REGION) {
+      Annotations.of(this).addWarningV2(
+        'listora:photo-cdn-domain',
+        `Photos stay at the CloudFront default name, which allows TLS 1.0: a photos.${dns.domain} ` +
+          `certificate would have to be in ${CLOUDFRONT_CERTIFICATE_REGION}, not ${target.region}.`,
+      );
+      return undefined;
+    }
+    const name = `${PHOTO_CDN_SUBDOMAIN}.${dns.domain}`;
+    const zone = route53.PublicHostedZone.fromHostedZoneAttributes(this, 'Zone', {
+      hostedZoneId: dns.hostedZoneId,
+      zoneName: dns.domain,
     });
+    const certificate = new acm.Certificate(this, 'PhotoCdnCertificate', {
+      domainName: name,
+      validation: acm.CertificateValidation.fromDns(zone),
+    });
+    return { name, zone, certificate };
   }
 }

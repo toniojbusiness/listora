@@ -4,8 +4,10 @@ name: Deploy personal
 # Deploying from GitHub): after every push to main whose server checks passed, and by hand from the
 # Actions tab. The server checks are CI's jobs that cover the server (SERVER_CHECKS below); the
 # iPhone checks do not hold a server deploy back, because nothing they test ships with it. AWS access is short-lived OIDC role assumption; no AWS keys are stored in GitHub.
-# The deploy role trusts only this repository's main branch in the protected `personal` GitHub
-# environment. scripts/deploy-personal.sh --profile <profile> from a Mac stays the fallback.
+# The deploy role trusts only this workflow file, on this repository's main branch, in the
+# protected `personal` GitHub environment: renaming the file needs the deploy-access stack
+# redeployed first (infra/README.md). scripts/deploy-personal.sh --profile <profile> from a Mac
+# stays the fallback.
 on:
   push:
     branches: [main]
@@ -87,7 +89,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # The GitHub environment allows deployments from main only. Its name is in the OIDC subject
-    # the AWS role trusts, with the branch, so no other workflow run can assume the role.
+    # the AWS role trusts, with the branch and this workflow file, so no other workflow run can
+    # assume the role.
     environment: personal
     permissions:
       contents: read
@@ -110,7 +113,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
+      # GitHub grants id-token to the whole job, not to one step, so nothing in it runs an install
+      # script: one in any of the hundreds of packages could ask for the job's OIDC token. No
+      # package Listora uses needs one (infra/src/deploy-workflow.test.ts checks the lockfile).
+      - run: npm ci --ignore-scripts
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/listora-personal-github-deploy

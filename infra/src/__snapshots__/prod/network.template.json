@@ -842,6 +842,52 @@
         }
       }
     },
+    "RunnerSecurityGroupDE989EBE": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Listora browser runner (no inbound)",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTPS",
+            "FromPort": 443,
+            "IpProtocol": "tcp",
+            "ToPort": 443
+          },
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP/3",
+            "FromPort": 443,
+            "IpProtocol": "udp",
+            "ToPort": 443
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "RunnerSecurityGrouptolistoraprodnetworkDatabaseSecurityGroup58E3AAF954328F3210BF": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "Description": "To PostgreSQL",
+        "DestinationSecurityGroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup7319C0F6",
+            "GroupId"
+          ]
+        },
+        "FromPort": 5432,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "RunnerSecurityGroupDE989EBE",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "ToPort": 5432
+      }
+    },
     "DatabaseSecurityGroup7319C0F6": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -901,6 +947,27 @@
         },
         "ToPort": 5432
       }
+    },
+    "DatabaseSecurityGroupfromlistoraprodnetworkRunnerSecurityGroup57D6B7FE5432640079EE": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "From browser runner tasks",
+        "FromPort": 5432,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup7319C0F6",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "RunnerSecurityGroupDE989EBE",
+            "GroupId"
+          ]
+        },
+        "ToPort": 5432
+      }
     }
   },
   "Outputs": {
@@ -944,6 +1011,14 @@
       "Value": {
         "Fn::GetAtt": [
           "ApiSecurityGroup4E5BB726",
+          "GroupId"
+        ]
+      }
+    },
+    "PublishOutputFnGetAttRunnerSecurityGroupDE989EBEGroupIdF3EB8EA0": {
+      "Value": {
+        "Fn::GetAtt": [
+          "RunnerSecurityGroupDE989EBE",
           "GroupId"
         ]
       }
