@@ -19,12 +19,23 @@ set_format() { # <key path of a test target>
   "$buddy" -c "Delete $1:PreferredScreenCaptureFormat" "$xctestrun" >/dev/null 2>&1 || true
   "$buddy" -c "Add $1:PreferredScreenCaptureFormat string $format" "$xctestrun"
 }
-# Format 2 files list their targets under each test configuration.
+found=0
+# Format 1 files (what build-for-testing writes for a scheme) key each target by its name; format
+# 2 files list the targets under each test configuration.
+if "$buddy" -c "Print :ListoraUITests:BlueprintName" "$xctestrun" >/dev/null 2>&1; then
+  set_format ":ListoraUITests"
+  found=1
+fi
 for ((config = 0; ; config++)); do
   "$buddy" -c "Print :TestConfigurations:$config" "$xctestrun" >/dev/null 2>&1 || break
   for ((target = 0; ; target++)); do
     path=":TestConfigurations:$config:TestTargets:$target"
     name=$("$buddy" -c "Print $path:BlueprintName" "$xctestrun" 2>/dev/null) || break
-    [[ $name == ListoraUITests ]] && set_format "$path"
+    if [[ $name == ListoraUITests ]]; then
+      set_format "$path"
+      found=1
+    fi
   done
 done
+((found)) || { echo "error: no ListoraUITests target in $xctestrun" >&2; exit 1; }
+echo "UI tests capture: $format"

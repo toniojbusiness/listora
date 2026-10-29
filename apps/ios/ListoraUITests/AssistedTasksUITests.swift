@@ -160,6 +160,9 @@ final class AssistedTasksUITests: XCTestCase {
         open.tap()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         try require(safari.wait(for: .runningForeground, timeout: 30), "Poshmark did not open")
+        // Safari closes before the app comes back: still loading the page, it held the busy CI
+        // simulator long enough that bringing the app back timed out after 30 seconds.
+        safari.terminate()
         app.activate()
         try require(app.wait(for: .runningForeground, timeout: 10))
         try require(bar.waitForExistence(timeout: 5), "the task closed before Done")
