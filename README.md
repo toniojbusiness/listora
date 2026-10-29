@@ -72,6 +72,7 @@ has the steps.
 | Command                        | What it does                                                                                                                                     |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `npm run check`                | Format check, lint, type check, API contract check, infra synth, unit and integration tests                                                      |
+| `npm run check:static`         | The first half of `npm run check`: everything but the tests                                                                                      |
 | `npm run format`               | Rewrite files with Prettier                                                                                                                      |
 | `npm run lint`                 | ESLint (type-aware, zero warnings) and shellcheck                                                                                                |
 | `npm run typecheck`            | `tsc --build` over every workspace (type check only; no JS output)                                                                               |
@@ -165,24 +166,43 @@ docs/                   Architecture overview, roadmap, one doc per feature (doc
 ready for review starts it) and on every push to `main`. Branch pushes without a pull request
 do not run CI, so one commit never runs twice. Its jobs:
 
-| Job                                              | Runner               | When it does real work                                      |
-| ------------------------------------------------ | -------------------- | ----------------------------------------------------------- |
-| `Detect changed areas`                           | Linux                | Always; decides whether the iOS and image jobs build        |
-| `Backend check (Linux)`                          | Linux                | Always                                                      |
-| `Application image build and smoke test (Linux)` | Linux                | Only when an image input changed; otherwise a passing no-op |
-| `iOS lint (Linux)`                               | Linux                | Only when an iOS input changed; otherwise skipped           |
-| `iOS build (macOS)`                              | macOS                | Only when an iOS input changed, after the lint passed       |
-| `iOS unit and package tests (macOS)`             | macOS                | Only when an iOS input changed, after the build             |
-| `iOS UI tests (macOS, shard N of 3)`             | macOS, three of them | Only when a UI test input changed; otherwise skipped        |
-| `iOS checks`                                     | Linux                | Always; passes when every iOS job the change needed passed  |
+| Job                                               | Runner               | When it does real work                                      |
+| ------------------------------------------------- | -------------------- | ----------------------------------------------------------- |
+| `Detect changed areas`                            | Linux                | Always; decides whether the iOS and image jobs build        |
+| `Backend static checks (Linux)`                   | Linux                | Always                                                      |
+| `Backend unit tests (Linux)`                      | Linux                | Always                                                      |
+| `Backend integration tests (Linux, shard N of 2)` | Linux, two of them   | Always                                                      |
+| `Backend check (Linux)`                           | Linux                | Always; passes when every backend job passed                |
+| `Application image build and smoke test (Linux)`  | Linux                | Only when an image input changed; otherwise a passing no-op |
+| `iOS lint (Linux)`                                | Linux                | Only when an iOS input changed; otherwise skipped           |
+| `iOS build (macOS)`                               | macOS                | Only when an iOS input changed, after the lint passed       |
+| `iOS unit and package tests (macOS)`              | macOS                | Only when an iOS input changed, after the build             |
+| `iOS UI tests (macOS, shard N of 3)`              | macOS, three of them | Only when a UI test input changed; otherwise skipped        |
+| `iOS phone runtime tests (macOS)`                 | macOS                | Only when the bundled phone runtime is the one iOS change   |
+| `iOS checks`                                      | Linux                | Always; passes when every iOS job the change needed passed  |
+| `Prune superseded caches (Linux)`                 | Linux                | Pushes to `main` only                                       |
 
-The backend job first checks the migration order (`scripts/check-migration-order.sh`: every
-migration a pull request adds sorts after the newest on its base branch, and on `main` after the
-newest before the push; [architecture.md](docs/architecture.md#6-data-model)). It installs
-PostgreSQL 18 from the PGDG apt repository (Swift comes with the runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
-`PG_BIN_DIR=/usr/lib/postgresql/18/bin`), `scripts/dev-browser.sh --with-deps` (headless
-Chromium and its system libraries), and `npm run check`. It caches npm downloads, the browser,
-and the API contract's SwiftPM builds.
+The backend check is `npm run check` split into jobs that run side by side, so its result takes
+about the longest of them instead of all of them in a row (about 18 minutes in one job before,
+October 2026). The static job checks the migration order (`scripts/check-migration-order.sh`:
+every migration a pull request adds sorts after the newest on its base branch, and on `main`
+after the newest before the push; [architecture.md](docs/architecture.md#6-data-model)), then
+runs `npm run check:static` (format, lint, type check, the API contract check with the Swift
+that comes with the runner image, and the infra synth). The unit job runs `npm run test:unit`.
+Each integration shard installs PostgreSQL 18 from the PGDG apt repository, runs
+`scripts/dev-db.sh` (with `PG_BIN_DIR=/usr/lib/postgresql/18/bin`) and
+`scripts/dev-browser.sh --with-deps` (headless Chromium and its system libraries), then its half
+of the test files, `npm run test:integration -- --shard=<n>/2`. `Backend check (Linux)` sums them
+up, and is the server check Deploy personal waits for. Every job installs with
+`.github/actions/npm-ci` (Node from `.nvmrc`, then `npm ci`).
+
+**Cache rule.** The repository's Actions caches share 10 GB, past which GitHub evicts the least
+recently used. So only pushes to `main` save a cache, and pull requests restore `main`'s: the npm
+downloads (keyed by the lockfile), headless Chromium (keyed by the pinned `playwright-core`
+version, not the whole lockfile), the API contract's SwiftPM builds, and the iOS jobs' caches
+below. After each push to `main`, `Prune superseded caches` deletes every `main` entry but the
+newest of each family (the key without its last part), so the caches stay near one entry each
+(10.6 GB and evicting before, October 2026).
 
 The image job runs `scripts/container-smoke.sh`: it builds the application and runner images,
 checks that the runner image's browser starts, runs the schema migrations, and starts the
@@ -239,6 +259,24 @@ screenshots, not a video (`IOS_UI_CAPTURE`, `scripts/ios-ui-capture.sh`): encodi
 every test competed for the runner's three cores with the simulator, the app, and the local stack.
 Pass `IOS_UI_CAPTURE=screenRecording` for a video of each test.
 
+**Phone runtime rule.** When the one iOS file a change touches is the bundled phone runtime
+(`apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/phone-runtime.js`, which
+`packages/automation/src/phone` builds; the backend check tests that code through the runtime),
+the build is followed by one `iOS phone runtime tests` job instead of the unit job and the UI
+shards: the phone execution package tests (`PhoneExecutionFeatureTests`), the app's
+`PhoneMarketplacePageIntegrationTests`, and `PhoneExecutionUITests` against the local stack, the
+only iOS tests that read the bundle (`IOS_UNIT_TESTS` and `IOS_UI_TESTS` in the Makefile). A
+change to any other iOS input runs the full jobs. About 3 in 10 merged pull requests touched
+`apps/ios` only through this file (October 2026).
+
+**Tested tree rule.** A push to `main` whose tree is exactly the head of the pull request it
+merged (the pull request was up to date with `main`), and whose `iOS checks` passed on that head,
+runs only the iOS build, which saves `main`'s compilation cache and SwiftPM checkouts: the same
+files already passed the iOS tests, so running them again would only repeat that result. The
+`changes` job decides it from the merged pull request's head commit and its `iOS checks` result.
+A merge of a pull request that was behind `main` gets a tree no run has tested, and runs every
+iOS job its change needs. Pushes to `main` were about a third of all macOS minutes (October 2026).
+
 The build and unit jobs run only when the change touches a file the iOS build reads: `apps/ios/**` except
 Markdown, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI` Swift
 package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS parser
@@ -257,14 +295,15 @@ change detection fails. When a build starts reading a new file, add it to its fi
 
 Which jobs do real work, by change:
 
-| Change                           | Real work                      |
-| -------------------------------- | ------------------------------ |
-| iOS only (`apps/ios/**`)         | changes, backend, iOS          |
-| iOS unit tests only              | changes, backend, iOS unit     |
-| Backend only (`apps/api/src/**`) | changes, backend               |
-| Infra (`infra/**`, `Dockerfile`) | changes, backend, image        |
-| Docs only                        | changes, backend               |
-| Draft pull request               | nothing until ready for review |
+| Change                           | Real work                                           |
+| -------------------------------- | --------------------------------------------------- |
+| iOS only (`apps/ios/**`)         | changes, backend, iOS                               |
+| iOS unit tests only              | changes, backend, iOS unit                          |
+| The bundled phone runtime only   | changes, backend, iOS build and phone runtime tests |
+| Backend only (`apps/api/src/**`) | changes, backend                                    |
+| Infra (`infra/**`, `Dockerfile`) | changes, backend, image                             |
+| Docs only                        | changes, backend                                    |
+| Draft pull request               | nothing until ready for review                      |
 
 Open a pull request as a draft while you are still pushing to it, and mark it ready once it is
 done: every push to a ready pull request starts a full run, and a run cancelled by the next push
@@ -282,7 +321,7 @@ The full-stack end-to-end suite is separate: `.github/workflows/e2e-full.yml` ru
 Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for `staging`
 or `prod`, and `.github/workflows/deploy-personal.yml` deploys `personal` (one reseller's own
 low-cost setup, priced in [docs/features/costs.md](docs/features/costs.md)) after every push to
-`main` whose server checks pass (the backend check and the image build, not the iPhone checks),
+`main` whose server checks pass (`Backend check (Linux)` and the image build, not the iPhone checks),
 and by hand. Each runs inside the protected GitHub environment of that name and
 reaches AWS through OIDC with no stored keys. Setup and the first deploy are described in
 [infra/README.md](infra/README.md).

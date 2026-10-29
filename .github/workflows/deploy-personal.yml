@@ -27,7 +27,7 @@ jobs:
     name: Pick the commit
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    # Room for the backend check (about 15 to 25 minutes) to finish.
+    # Room for the backend check (about 7 to 10 minutes, its jobs side by side) to finish.
     timeout-minutes: 45
     permissions:
       contents: read

@@ -105,6 +105,11 @@ IOS_TEST_SUMMARY_FILE ?=
 # One shard of the UI tests, <shard>/<count> (for example 2/3): scripts/ios-ui-shard.sh splits the
 # UI test classes by their recorded running time. Empty runs every UI test.
 IOS_UI_SHARD ?=
+# The tests ios-unit-test and ios-ui-test run, as xcodebuild -only-testing or -skip-testing flags
+# (an IOS_UI_SHARD replaces IOS_UI_TESTS). CI's phone runtime job narrows both to the tests that
+# read the bundled phone runtime (README, CI section).
+IOS_UNIT_TESTS ?= -skip-testing:ListoraUITests
+IOS_UI_TESTS ?= -only-testing:ListoraUITests
 # IOS_PREBUILT=1 runs ios-unit-test and ios-ui-test on the products already in DerivedData
 # without building first: CI builds once and hands them to its test jobs.
 IOS_PREBUILT ?=
@@ -138,7 +143,7 @@ ios-unit-test: ios-simulator $(IOS_TEST_BUILD)
 	$(require_products)
 	rm -rf $(IOS_BUILD_DIR)/Unit.xcresult
 	@status=0; \
-	$(XCTEST) -skip-testing:ListoraUITests -resultBundlePath $(IOS_BUILD_DIR)/Unit.xcresult || status=$$?; \
+	$(XCTEST) $(IOS_UNIT_TESTS) -resultBundlePath $(IOS_BUILD_DIR)/Unit.xcresult || status=$$?; \
 	scripts/ios-test-summary.sh '$(IOS_TEST_SUMMARY_FILE)' $(IOS_BUILD_DIR)/Unit.xcresult; \
 	exit $$status
 
@@ -157,7 +162,7 @@ ios-ui-test: ios-simulator $(IOS_TEST_BUILD) ios-e2e-ready
 		tests=$$(scripts/ios-ui-shard.sh $(subst /, ,$(IOS_UI_SHARD))) || exit 2; \
 		echo "UI test shard $(IOS_UI_SHARD):" $$(echo "$$tests" | sed 's|-only-testing:ListoraUITests/||'); \
 	else \
-		tests=-only-testing:ListoraUITests; \
+		tests='$(IOS_UI_TESTS)'; \
 	fi; \
 	$(E2E_STACK) -- scripts/ios-test-run.sh $(IOS_BUILD_DIR)/UI.xcresult '$(IOS_TEST_SUMMARY_FILE)' -- \
 		$(XCTEST) $$tests

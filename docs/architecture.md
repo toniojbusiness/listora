@@ -508,7 +508,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   once it passes, one macOS job builds and hands the built tests to jobs that run the unit tests and three UI test
   shards side by side, but only when a file
   the iOS build reads changed (macOS runners are the scarce ones); `iOS checks` sums them up.
-  The Linux backend check runs on every non-draft pull request.
+  A change whose one iOS file is the bundled phone runtime runs only the phone runtime tests, and
+  a push to `main` whose tree already passed as a pull request's head runs only the build.
+  The Linux backend check runs on every non-draft pull request, as parallel jobs (static checks,
+  unit tests, two integration shards) that `Backend check (Linux)` sums up.
 
 ## 8. Feature docs
 
