@@ -25,7 +25,7 @@ extension FullStackUITests {
         if fixturePhotos {
             app.launchEnvironment["LISTORA_FIXTURE_PHOTOS"] = try fixturesPath()
         }
-        app.launch()
+        app.launchQuietly()
         skipGettingStartedIfShown()
         XCTAssertTrue(app.tabRail.buttons["Inventory"].waitForExistence(timeout: 15))
     }
@@ -38,7 +38,7 @@ extension FullStackUITests {
             "LISTORA_DEV_API_BASE_URL": full.stack.apiURL.absoluteString,
             "LISTORA_FIXTURE_PHOTOS": fixturesPath(),
         ]
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(element("signIn.welcome").waitForExistence(timeout: 15), "no welcome screen")
         XCTAssertFalse(app.tabRail.exists, "the tabs show only once signed in")
         let email = app.textFields["signIn.email"]

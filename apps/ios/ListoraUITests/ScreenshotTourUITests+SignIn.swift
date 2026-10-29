@@ -8,7 +8,7 @@ extension ScreenshotTourUITests {
             "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         let email = app.textFields["signIn.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 10))
         try shot("00a-sign-in-welcome")

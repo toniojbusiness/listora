@@ -37,7 +37,10 @@ useMarketplaceFeatures(config.marketplaces.features);
 // The pack check's photo goes through libvips here too; one thread, as in the worker.
 limitImageThreads();
 const logger = createLogger({ service: 'api', level: config.logLevel });
-const pool = createPool({ connectionString: config.databaseUrl });
+const pool = createPool({
+  connectionString: config.databaseUrl,
+  connectionTimeoutMillis: config.databaseConnectTimeoutMs,
+});
 const db = createDatabase(pool);
 // Ends the open app's wait for phone work the moment work is handed to its phone.
 const phoneSignals = listenForPhoneWork({ connectionString: config.databaseUrl, logger });

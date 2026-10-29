@@ -31,7 +31,7 @@ final class PackCheckUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
             "LISTORA_SCANNED_CODES": [Self.labelB, Self.labelA, Self.labelACopy].joined(separator: "|"),
         ]
-        app.launch()
+        app.launchQuietly()
         try packTheTeeAfterStoppingTheDressLabel(tee)
         try catchTheSecondPrint(on: dress)
     }

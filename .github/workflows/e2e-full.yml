@@ -52,12 +52,11 @@ jobs:
           path: .local/playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       # One clean boot of the test simulator, as in the iOS job of ci.yml.
-      - name: Boot a clean iPhone 17 simulator
-        run: |
-          xcrun simctl shutdown all
-          xcrun simctl erase 'iPhone 17'
-          xcrun simctl boot 'iPhone 17'
-          xcrun simctl bootstatus 'iPhone 17' -b
+      - name: Start booting a clean iPhone 17 simulator
+        run: scripts/ios-ci-simulator.sh start
+      # A step of its own: start exports the device's IOS_SIMULATOR_ID for the next steps.
+      - name: Wait until the simulator has booted and Xcode lists it
+        run: scripts/ios-ci-simulator.sh wait
       - run: make e2e-full IOS_TEST_SUMMARY_FILE=.build/ios/e2e-full-summary.txt
       - name: Show the failing-test summary
         if: ${{ always() && hashFiles('.build/ios/e2e-full-summary.txt') != '' }}
@@ -70,7 +69,7 @@ jobs:
         with:
           name: e2e-full-results
           path: |
-            .build/ios/E2EFull.xcresult
+            .build/ios/E2EFull*.xcresult
             .build/ios/e2e-full-logs
             .build/ios/e2e-full-summary.txt
           retention-days: 14

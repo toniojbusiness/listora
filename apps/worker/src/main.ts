@@ -36,6 +36,7 @@ limitImageThreads();
 const logger = createLogger({ service: 'worker', level: config.logLevel });
 const db = createDatabase({
   connectionString: config.databaseUrl,
+  connectionTimeoutMillis: config.databaseConnectTimeoutMs,
   max: config.concurrency + config.taskConcurrency + 5,
 });
 

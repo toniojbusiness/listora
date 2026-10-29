@@ -24,9 +24,10 @@ public struct SyncIndicator: View {
         .padding(.bottom, Spacing.sm)
         .frame(maxWidth: Layout.readableWidth)
         .animation(Motion.animation(Motion.standard, reduceMotion: reduceMotion), value: lines)
-        .onChange(of: lines.filter { $0.kind != .working }) { _, ended in
-            // VoiceOver hears what a sync found as it shows.
-            for line in ended {
+        .onChange(of: lines.filter { $0.kind != .working }) { before, ended in
+            // VoiceOver hears what a sync found as it shows, once: only the lines that are new
+            // since the last change, not every line still showing.
+            for line in ended where !before.contains(line) {
                 UIAccessibility.post(notification: .announcement, argument: line.text)
             }
         }

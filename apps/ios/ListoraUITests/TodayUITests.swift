@@ -26,7 +26,7 @@ final class TodayUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
             "LISTORA_DEV_ACCESS_TOKEN": "stub-token",
         ]
-        app.launch()
+        app.launchQuietly()
 
         // Today is the first tab and opens first, most urgent card on top.
         XCTAssertTrue(app.tabRail.buttons["Today"].waitForExistence(timeout: 10))
@@ -85,7 +85,7 @@ final class TodayUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
             "LISTORA_DEV_ACCESS_TOKEN": "stub-token",
         ]
-        app.launch()
+        app.launchQuietly()
         let bell = app.buttons["today.summarySettings"]
         XCTAssertTrue(bell.waitForExistence(timeout: 10))
         bell.tap()
@@ -117,7 +117,7 @@ final class TodayUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
-        app.launch()
+        app.launchQuietly()
 
         let id = "ship:\(sold.saleItemId)"
         let ship = card(id)

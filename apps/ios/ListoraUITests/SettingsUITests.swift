@@ -19,7 +19,7 @@ final class SettingsUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": StubAPIServer.profileEmail,
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
     }
 
     override func tearDown() async throws {
@@ -30,10 +30,25 @@ final class SettingsUITests: XCTestCase {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
-    /// Scrolls Settings until the row is built and on screen: a list builds only what it shows.
+    /// Scrolls Settings until the row is built and clear of the bars: a list builds only what it
+    /// shows. Hittable is not enough: a row half under the bottom edge is hittable, and on CI the
+    /// tap at its middle (the home indicator's strip) closed the sheet. Swipes are slow and go
+    /// back down for a row above the top: on CI a fast swipe flung the list past the next row to
+    /// its end, and swiping only up never found it again.
     private func reveal(_ target: XCUIElement) -> XCUIElement {
-        for _ in 0 ..< 6 where !(target.exists && target.isHittable) {
-            app.collectionViews.firstMatch.swipeUp()
+        let list = app.collectionViews.firstMatch
+        let top = app.navigationBars["Settings"].frame.maxY
+        let bottom = app.windows.firstMatch.frame.maxY - 100
+        for attempt in 0 ..< 12 {
+            if target.exists, target.isHittable, target.frame.minY >= top, target.frame.maxY < bottom {
+                break
+            }
+            // Not built after six swipes up: it is above, out of the list's view.
+            if target.exists ? target.frame.minY < top : attempt >= 6 {
+                list.swipeDown(velocity: .slow)
+            } else {
+                list.swipeUp(velocity: .slow)
+            }
         }
         return target
     }
@@ -156,12 +171,12 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Help and contact"].waitForExistence(timeout: 5))
         // Dev names no support address.
         XCTAssertTrue(element("help.noContact").exists)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.goBack(from: "Help and contact"), "Help did not close\n\(app.debugDescription)")
 
         reveal(app.buttons["settings.privacy"]).tap()
         XCTAssertTrue(element("legal.privacy-policy").waitForExistence(timeout: 5), "\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["Summary"].exists)
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.goBack(from: "Privacy policy"), "the privacy policy did not close")
 
         reveal(app.buttons["settings.terms"]).tap()
         XCTAssertTrue(element("legal.terms-of-service").waitForExistence(timeout: 5))

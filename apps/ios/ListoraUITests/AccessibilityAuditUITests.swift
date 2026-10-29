@@ -127,7 +127,7 @@ final class AccessibilityAuditUITests: XCTestCase {
             "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
     }
 
     /// Signed in through the stub's dev sign-in, past the getting started guide.
@@ -143,8 +143,8 @@ final class AccessibilityAuditUITests: XCTestCase {
     }
 
     private func enterEmail(_ email: XCUIElement) -> XCUIElement {
-        email.tap()
-        email.typeText("seller@listora.test")
+        // Typed and checked: CI's keyboard sometimes takes the first tap or keys without focus.
+        XCTAssertTrue(email.typeChecked("seller@listora.test"), "the email field holds \(email.value ?? "nothing")")
         app.buttons["signIn.continue"].tap()
         let code = app.textFields["signIn.code"]
         XCTAssertTrue(code.waitForExistence(timeout: 10))

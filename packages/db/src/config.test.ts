@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { ConfigError, loadMigrateConfig } from './config.ts';
+import {
+  ConfigError,
+  DEFAULT_CONNECT_TIMEOUT_MS,
+  loadMigrateConfig,
+  parseConnectTimeoutMs,
+} from './config.ts';
 
 const env = { DATABASE_URL: 'postgres://listora@127.0.0.1:55432/listora' };
 
@@ -59,5 +64,23 @@ describe('loadMigrateConfig', () => {
     expect(issuesOf(() => loadMigrateConfig([], { ...env, LOG_LEVEL: 'loud' }))).toEqual([
       expect.stringContaining('LOG_LEVEL must be one of'),
     ]);
+  });
+});
+
+describe('parseConnectTimeoutMs', () => {
+  it('defaults to failing fast when unset or empty', () => {
+    expect(DEFAULT_CONNECT_TIMEOUT_MS).toBe(5_000);
+    expect(parseConnectTimeoutMs(undefined)).toBe(5_000);
+    expect(parseConnectTimeoutMs('')).toBe(5_000);
+  });
+
+  it('reads whole milliseconds from 100 to 120000', () => {
+    expect(parseConnectTimeoutMs('100')).toBe(100);
+    expect(parseConnectTimeoutMs('30000')).toBe(30_000);
+    expect(parseConnectTimeoutMs('120000')).toBe(120_000);
+  });
+
+  it.each(['99', '120001', '0', '-1', '1.5', '5s', ' 500'])('rejects %j', (value) => {
+    expect(parseConnectTimeoutMs(value)).toBeUndefined();
   });
 });

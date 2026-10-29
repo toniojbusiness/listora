@@ -56,7 +56,7 @@ final class ScreenshotTourUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         tab("Add")
         app.buttons["addItem.importPhotos"].tap()
@@ -162,7 +162,7 @@ final class ScreenshotTourUITests: XCTestCase {
             "LISTORA_RESET_LOCAL_DATA": "1",
         ]
         app.signInWithoutServer()
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         try shot("00-today-offline")
 
@@ -202,7 +202,7 @@ final class ScreenshotTourUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": "stub-token",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(app.tabRail.waitForExistence(timeout: 10))
         // The count heads the loaded list; at the largest text sizes the money summary is several
         // screens down.

@@ -48,7 +48,7 @@ final class SalesSummaryUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(app.tabRail.buttons["Inventory"].waitForExistence(timeout: 10))
     }
 

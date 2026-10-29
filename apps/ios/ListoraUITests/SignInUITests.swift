@@ -19,7 +19,7 @@ final class SignInUITests: XCTestCase {
             "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
     }
 
     override func tearDown() async throws {
@@ -33,8 +33,9 @@ final class SignInUITests: XCTestCase {
     private func requestCode(for email: String) {
         let field = app.textFields["signIn.email"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        field.typeText(email)
+        // Typed and checked: CI's keyboard sometimes takes the first tap or keys without focus,
+        // which left Continue off.
+        XCTAssertTrue(field.typeChecked(email), "the email field holds \(field.value ?? "nothing")")
         let next = app.buttons["signIn.continue"]
         XCTAssertTrue(next.isEnabled)
         next.tap()

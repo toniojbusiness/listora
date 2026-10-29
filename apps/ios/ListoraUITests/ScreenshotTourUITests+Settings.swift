@@ -15,7 +15,7 @@ extension ScreenshotTourUITests {
             "LISTORA_DEV_ACCESS_EMAIL": StubAPIServer.profileEmail,
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
-        app.launch()
+        app.launchQuietly()
         XCTAssertTrue(app.buttons["settings.open"].waitForExistence(timeout: 10))
         try shot("50-today-header", settle: 3)
         app.buttons["settings.open"].tap()

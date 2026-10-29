@@ -1,14 +1,13 @@
 name: Deploy personal
 
 # Deploys the personal environment with scripts/deploy-personal.sh --ci (infra/README.md,
-# Deploying from GitHub): after every CI run that passed for a push to main, and by hand from the
-# Actions tab. AWS access is short-lived OIDC role assumption; no AWS keys are stored in GitHub.
+# Deploying from GitHub): after every push to main whose server checks passed, and by hand from the
+# Actions tab. The server checks are CI's jobs that cover the server (SERVER_CHECKS below); the
+# iPhone checks do not hold a server deploy back, because nothing they test ships with it. AWS access is short-lived OIDC role assumption; no AWS keys are stored in GitHub.
 # The deploy role trusts only this repository's main branch in the protected `personal` GitHub
 # environment. scripts/deploy-personal.sh --profile <profile> from a Mac stays the fallback.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -24,33 +23,61 @@ concurrency:
 jobs:
   commit:
     name: Pick the commit
-    # A fork's pull request from a branch named main also runs CI on "main": only a passed run
-    # for a push to this repository's main counts.
-    if: >-
-      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository))
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Room for the backend check (about 15 to 25 minutes) to finish.
+    timeout-minutes: 45
     permissions:
       contents: read
+      checks: read
     outputs:
       sha: ${{ steps.pick.outputs.sha }}
     steps:
-      # The commit CI tested (or main's head, by hand), unless main has moved past it: the newer
-      # commit's own run deploys that, so an older one never replaces it.
-      - name: Pick the commit
+      # The pushed commit (or main's head, by hand), once CI's server checks passed for it, and
+      # unless main has moved past it: the newer commit's own run deploys that, so an older one
+      # never replaces it. A server check that fails fails this job, so nothing deploys.
+      - name: Wait for the server checks, then pick the commit
         id: pick
         env:
           GH_TOKEN: ${{ github.token }}
-          TESTED: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SHA: ${{ github.sha }}
+          # The names of CI's jobs that cover the server (.github/workflows/ci.yml).
+          SERVER_CHECKS: |
+            Detect changed areas
+            Backend check (Linux)
+            Application image build and smoke test (Linux)
         run: |
+          while :; do
+            # Once main has moved past this commit, the newer commit's run deploys it (and CI
+            # cancels this commit's superseded run, so its checks may never finish).
+            head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+            if [ "$head" != "$SHA" ]; then
+              echo "main is at $head, past $SHA; the run for $head deploys it"
+              exit 0
+            fi
+            pending=0
+            while IFS= read -r check; do
+              [ -n "$check" ] || continue
+              # The newest run of the check for this commit, from this repository's CI.
+              state=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs" \
+                -f check_name="$check" -f filter=latest \
+                --jq '[.check_runs[] | select(.app.slug == "github-actions")][0] | "\(.status) \(.conclusion)"')
+              case "$state" in
+                'completed success') ;;
+                completed*)
+                  echo "::error::$check ended with '${state#completed }' for $SHA, so it is not deployed."
+                  exit 1 ;;
+                *) pending=1 ;;
+              esac
+            done <<<"$SERVER_CHECKS"
+            [ "$pending" = 0 ] && break
+            sleep 30
+          done
           head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
-          if [ "$head" = "$TESTED" ]; then
-            echo "sha=$TESTED" >>"$GITHUB_OUTPUT"
+          if [ "$head" = "$SHA" ]; then
+            echo "sha=$SHA" >>"$GITHUB_OUTPUT"
           else
-            echo "main is at $head, past $TESTED; the run for $head deploys it"
+            echo "main is at $head, past $SHA; the run for $head deploys it"
           fi
 
   deploy:

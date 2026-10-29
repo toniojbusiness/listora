@@ -1,5 +1,22 @@
 import { isLogLevel, type LogLevel } from '@listora/shared';
 
+/**
+ * How long opening a pool connection may take before the query fails: 5 s by default, so a
+ * process fails fast when Postgres is unreachable. DATABASE_CONNECT_TIMEOUT_MS overrides it for
+ * a machine where a healthy local Postgres can be slower than that, such as a CI runner that
+ * also runs the iOS simulator (the local stack, packages/e2e).
+ */
+export const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
+export const CONNECT_TIMEOUT_ISSUE =
+  'DATABASE_CONNECT_TIMEOUT_MS must be an integer from 100 to 120000 (milliseconds)';
+
+/** DATABASE_CONNECT_TIMEOUT_MS in milliseconds (empty or unset is the default), or undefined when invalid. */
+export function parseConnectTimeoutMs(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === '') return DEFAULT_CONNECT_TIMEOUT_MS;
+  const ms = Number(raw);
+  return /^\d+$/.test(raw) && ms >= 100 && ms <= 120_000 ? ms : undefined;
+}
+
 export const MIGRATE_COMMANDS = ['latest', 'up', 'down', 'status'] as const;
 export type MigrateCommand = (typeof MIGRATE_COMMANDS)[number];
 

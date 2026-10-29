@@ -144,7 +144,10 @@ public struct TodayView<Settings: View>: View {
 
     private var summary: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Spacing.lg) {
+            // Not lazy: the day is a handful of cards, all on one string (DayString), which made
+            // the string one tall lazy item; once scrolled, its lazy layout never settled and the
+            // screen kept re-laying out every frame (October 2026, Xcode 26 and 27).
+            VStack(alignment: .leading, spacing: Spacing.lg) {
                 if model.cards.isEmpty {
                     CaughtUpCard()
                 } else {
