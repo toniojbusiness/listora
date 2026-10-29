@@ -14,6 +14,7 @@ import { sql } from 'kysely';
 import type { BrowserType } from 'playwright-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { createInventoryItem } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import { LocalTokenVault, SessionVault } from '@listora/connections';
 
@@ -158,6 +159,46 @@ describe('session checks (real Postgres, headless Chromium)', () => {
       ['GET', 'health'],
     ]);
     expect(await connection(linked.connectionId)).toMatchObject({ status: 'connected' });
+  });
+
+  it('records the shop the session signs into, and gives up the listings of another shop it held before', async () => {
+    const linked = await link(site.issueSession('Test-Shop'));
+    await run(linked);
+    const seller = async () =>
+      (
+        await database.db
+          .selectFrom('marketplace_connection')
+          .select('external_user_id')
+          .where('id', '=', linked.connectionId)
+          .executeTakeFirstOrThrow()
+      ).external_user_id;
+    expect(await seller()).toBe('test-shop');
+    const item = await createInventoryItem(database.db, accountId, { title: 'Wool scarf' });
+    const listing = await database.db
+      .insertInto('marketplace_listing')
+      .values({
+        account_id: accountId,
+        item_id: item.id,
+        marketplace: 'poshmark',
+        connection_id: linked.connectionId,
+        status: 'active',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+
+    // Relink on the same row with another shop's sign-in: its check finds another seller.
+    const relinked = await link(site.issueSession('live-shop'));
+    expect(relinked.connectionId).toBe(linked.connectionId);
+    await run(relinked);
+    expect(await checkRow(relinked.connectionId)).toMatchObject({ status: 'passed' });
+    expect(await seller()).toBe('live-shop');
+    const left = await database.db
+      .selectFrom('marketplace_listing')
+      .select(['connection_id', 'shop_unlinked_at'])
+      .where('id', '=', listing.id)
+      .executeTakeFirstOrThrow();
+    expect(left.connection_id).toBeNull();
+    expect(left.shop_unlinked_at).not.toBeNull();
   });
 
   it('fails and asks for a relink when the marketplace rejects the session', async () => {

@@ -430,6 +430,11 @@ export interface MarketplaceConnectionTable {
   account_id: string;
   marketplace: Marketplace;
   mode: ConnectionMode;
+  /**
+   * The seller whose account the connection holds: the marketplace's immutable id of an API
+   * connection, the signed-in seller's handle an automation connection's session check read
+   * (docs/features/marketplace-linking.md#the-shop-a-connection-holds); `null` until known.
+   */
   external_user_id: Nullable<string>;
   display_name: Nullable<string>;
   /** OAuth tokens (api) or the browser session (automation), encrypted; never a password. */
@@ -474,6 +479,32 @@ export interface MarketplaceConnectionTable {
 export interface MarketplaceReadOnlyTable {
   account_id: string;
   marketplace: Marketplace;
+  created_at: CreatedAt;
+}
+
+/**
+ * A seller an account's read-only connection held: kept by triggers, so a connection of the
+ * account that comes to hold it again is read only again, until the owner turns Read only off
+ * with it linked (docs/features/read-only.md#the-shop-not-the-row).
+ */
+export interface ReadOnlySellerTable {
+  account_id: string;
+  marketplace: Marketplace;
+  seller_id: string;
+  created_at: CreatedAt;
+}
+
+/**
+ * A shop Listora only ever reads, whoever links it: every connection that holds it is read only
+ * and stays so. Named by its seller id, or by the connection that holds it until that
+ * connection's first recorded seller fills the id in. Only a migration changes it.
+ */
+export interface ProtectedSellerTable {
+  id: Id;
+  marketplace: Marketplace;
+  seller_id: Nullable<string>;
+  connection_id: Nullable<string>;
+  reason: string;
   created_at: CreatedAt;
 }
 
@@ -1411,6 +1442,8 @@ export interface Database {
   ai_control_audit: AiControlAuditTable;
   marketplace_connection: MarketplaceConnectionTable;
   marketplace_read_only: MarketplaceReadOnlyTable;
+  read_only_seller: ReadOnlySellerTable;
+  protected_seller: ProtectedSellerTable;
   connection_authorization: ConnectionAuthorizationTable;
   marketplace_listing: MarketplaceListingTable;
   marketplace_operation: MarketplaceOperationTable;

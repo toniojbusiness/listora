@@ -1407,12 +1407,20 @@ async function connectionRef(
   trx: DbTransaction,
   work: WorkRow,
 ): Promise<ConnectionRef | undefined> {
-  return trx
+  const connection = await trx
     .selectFrom('marketplace_connection')
-    .select(['id', 'mode', 'status'])
+    .select(['id', 'mode', 'status', 'external_user_id'])
     .where('account_id', '=', work.account_id)
     .where('id', '=', work.connection_id)
     .executeTakeFirst();
+  return connection === undefined
+    ? undefined
+    : {
+        id: connection.id,
+        mode: connection.mode,
+        status: connection.status,
+        sellerId: connection.external_user_id,
+      };
 }
 
 /**

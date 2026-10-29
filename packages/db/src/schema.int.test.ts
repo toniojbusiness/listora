@@ -237,6 +237,8 @@ const COLUMNS = {
     'read_only',
   ],
   marketplace_read_only: ['account_id', 'marketplace', 'created_at'],
+  read_only_seller: ['account_id', 'marketplace', 'seller_id', 'created_at'],
+  protected_seller: ['id', 'marketplace', 'seller_id', 'connection_id', 'reason', 'created_at'],
   connection_authorization: [
     'id',
     'account_id',
@@ -1062,7 +1064,8 @@ describe('schema types and values match the database', () => {
     expect(rows.filter((row) => !row.has_trigger)).toEqual([]);
   });
 
-  // Platform tables hold settings and history that belong to no single tenant.
+  // Platform tables hold settings and history that belong to no single tenant (protected shops
+  // are protected whoever links them).
   it('gives every table except the global identity and platform tables a non-null tenant account_id', async () => {
     const { rows } = await sql<{ table_name: string }>`
       select t.table_name from information_schema.tables t
@@ -1071,7 +1074,7 @@ describe('schema types and values match the database', () => {
         and t.table_name not in (
           'account', 'app_user', 'deleted_identity', 'account_deletion', 'account_deletion_grant',
           'account_deletion_object', 'connection_deletion', 'connection_deletion_object',
-          'deletion_record', 'ai_kill_switch', 'ai_control_audit'
+          'deletion_record', 'ai_kill_switch', 'ai_control_audit', 'protected_seller'
         )
         and not exists (
           select 1 from information_schema.columns c
