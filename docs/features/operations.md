@@ -178,7 +178,7 @@ in [inventory.md](inventory.md).
 The item screen shows a change as it runs (`Delisting...`, `Delist failed - Retry`) without
 reading the item on a timer. Every new or updated operation notifies the Postgres channel
 `item_change` with its listing's item id (trigger `marketplace_operation_item_change_notify`,
-migration `20261028181642_item_change_notify`). While one of the item's changes runs or waits,
+migration `20261029022519_item_change_notify`). While one of the item's changes runs or waits,
 the app holds `GET /v1/items/{itemId}/changes` (`waitForItemChange`): the API listens on the
 channel (`listenForItemChanges`, `apps/api/src/items/changes.ts`) and answers the moment the
 item's operations change, or after `waitSeconds` (at most 20, under the gateway's 30 s limit),
