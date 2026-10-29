@@ -164,6 +164,7 @@ export async function requestSaleCheck(
 ): Promise<boolean> {
   if (!checksSales(request.marketplace)) return false;
   return inTransaction(executor, async (trx) => {
+    // Locked before its schedule and work (`lockConnections`).
     const connection = await trx
       .selectFrom('marketplace_connection')
       .select('id')
@@ -171,6 +172,7 @@ export async function requestSaleCheck(
       .where('marketplace', '=', request.marketplace)
       .where('mode', '=', 'automation')
       .where('status', 'in', ['connected', 'degraded'])
+      .forKeyShare()
       .executeTakeFirst();
     if (connection === undefined) return false;
     const check = {

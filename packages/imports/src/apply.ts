@@ -30,6 +30,7 @@ import {
   createInventoryItem,
   inTransaction,
   jsonb,
+  lockConnections,
   type Db,
   type DbTransaction,
   type JsonArray,
@@ -134,6 +135,7 @@ async function decide(
   photos: ImportedPhoto[] | null,
 ): Promise<'settled' | 'needs_photos'> {
   await lockAccount(trx, entry.account_id);
+  await lockImportConnection(trx, entry.account_id, entry.import_id);
   const current = await trx
     .selectFrom('listing_import_entry')
     .select(['outcome', 'new_item'])
@@ -300,6 +302,24 @@ async function rejoin(trx: DbTransaction, entry: EntryRow, listingId: string): P
     .where('account_id', '=', entry.account_id)
     .where('id', '=', listingId)
     .execute();
+}
+
+/**
+ * Locks the import's connection (`lockConnections`) before its entries, which the import's
+ * listings then reference it after.
+ */
+export async function lockImportConnection(
+  trx: DbTransaction,
+  accountId: string,
+  importId: string,
+): Promise<void> {
+  const row = await trx
+    .selectFrom('listing_import')
+    .select('connection_id')
+    .where('account_id', '=', accountId)
+    .where('id', '=', importId)
+    .executeTakeFirst();
+  if (row !== undefined) await lockConnections(trx, accountId, [row.connection_id]);
 }
 
 function importConnection(trx: DbTransaction, entry: EntryRow) {
