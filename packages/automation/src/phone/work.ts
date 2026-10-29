@@ -215,6 +215,11 @@ type StepState =
       importId: string;
       /** The page the claim read: an import page recorded meanwhile makes the run diverge. */
       cursor: string | null;
+      /**
+       * The listings Listora held when the claim was made (`PreparedImportPage.held`), so every
+       * run of the work makes the same call; absent on a claim made before they were passed.
+       */
+      held?: string[];
     }
   | {
       kind: 'sale_check';
@@ -710,7 +715,12 @@ async function claimStepState(
         { accountId: work.account_id, importId: work.import_id },
       );
       if (prepared === null) return null;
-      return { kind: 'listing_import', importId: work.import_id, cursor: prepared.cursor };
+      return {
+        kind: 'listing_import',
+        importId: work.import_id,
+        cursor: prepared.cursor,
+        held: prepared.held,
+      };
     }
     case 'sale_check':
     case 'sale_history': {
@@ -946,10 +956,11 @@ async function replay(
       let read: { page: ListingsPage } | { error: unknown };
       try {
         read = {
-          page: await prepared.adapter.listListings(prepared.cursor, {
-            connection: prepared.connection,
-            signal,
-          }),
+          page: await prepared.adapter.listListings(
+            prepared.cursor,
+            { connection: prepared.connection, signal },
+            step.held ?? [],
+          ),
         };
       } catch (error) {
         read = { error };

@@ -397,10 +397,16 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   /**
    * One page of the seller's listings for sale on the marketplace, newest first, each with what
    * an import needs (`ListedListing`): the first page for a `null` cursor, the next one for the
-   * `next` a page returned. Only reads. Only adapters that can list them have it. Throws when
-   * the marketplace cannot be read.
+   * `next` a page returned. `held`: the ids of the listings Listora already holds there; an
+   * adapter that reads each listing's own page for its details may skip that read for them and
+   * return them as the list shows them (`fromList`). Only reads. Only adapters that can list
+   * them have it. Throws when the marketplace cannot be read.
    */
-  listListings?(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage>;
+  listListings?(
+    cursor: string | null,
+    ctx: AdapterContext,
+    held?: readonly string[],
+  ): Promise<ListingsPage>;
   /**
    * The shipping labels of the seller's orders, from each order's own page, for Pack check
    * (docs/features/pack-check.md): its tracking number and the buyer's first name. Only reads.
@@ -487,8 +493,12 @@ export interface ListingDetails {
   sku: string | null;
 }
 
-/** One of the seller's listings, as an import reads it. */
-export type ListedListing = RemoteListing & { details: ListingDetails };
+/**
+ * One of the seller's listings, as an import reads it. `fromList`: one Listora already held
+ * (`listListings`'s `held`), so only the list of listings was read for it, not its own page:
+ * its state and details are what the list shows, enough to settle it as already listed.
+ */
+export type ListedListing = RemoteListing & { details: ListingDetails; fromList?: boolean };
 
 /** One page of the seller's listings, newest first. */
 export interface ListingsPage {

@@ -1091,6 +1091,51 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(rows.map((row) => row.task_identifier)).toEqual([LISTING_IMPORT_APPLY_TASK]);
   });
 
+  it('reads on the phone the own page of only the listings Listora does not have yet', async () => {
+    await runPhone();
+    const kept = site.seed({ seller, description: 'Kept tee.', priceCents: 2000 });
+    const fresh = site.seed({ seller, description: 'New boots.', priceCents: 3000 });
+    // Listora already has the scarf and the tee: both are listed there in Listora.
+    const scarf = site
+      .products()
+      .find((product) => product.seller === seller && product.description === 'Wool scarf.');
+    for (const slug of [scarf?.slug ?? '', kept]) {
+      await db
+        .updateTable('marketplace_listing')
+        .set({ external_listing_id: slug })
+        .where('id', '=', await newListing())
+        .execute();
+    }
+    const importId = await startImport();
+    const before = site.requests.length;
+    expect(await runPhone()).toBe(1);
+    // The phone's call named them, so it read the own page of the boots alone.
+    const reads = site.requests
+      .slice(before)
+      .filter((request) => request.path.endsWith('/edit-listing/'));
+    expect(reads.map((request) => request.path)).toEqual([
+      expect.stringContaining(`/${fresh}/edit-listing/`) as string,
+    ]);
+    const entries = await db
+      .selectFrom('listing_import_entry')
+      .select(['external_listing_id', 'listing'])
+      .where('import_id', '=', importId)
+      .orderBy('external_listing_id')
+      .execute();
+    expect(
+      entries.map((entry) => [
+        entry.external_listing_id,
+        (entry.listing as { fromList?: boolean }).fromList ?? false,
+      ]),
+    ).toEqual(
+      [
+        [scarf?.slug, true],
+        [kept, true],
+        [fresh, false],
+      ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    );
+  });
+
   it('stops reading at a check the seller is not there to complete, or a sign-in they declined, with the reason', async () => {
     await runPhone();
     const importOf = (id: string) =>

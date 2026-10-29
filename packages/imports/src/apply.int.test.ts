@@ -419,6 +419,26 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
     expect(await items()).toHaveLength(1);
   });
 
+  it('settles a listing read from the list alone as already listed, and never imports one Listora no longer has', async () => {
+    await settled(await imported('depop', [listing('dress-1')]));
+    // Read from the list because Listora held both when the page was read; dress-2 is gone
+    // from Listora by the time it settles.
+    const fromList = (id: string) =>
+      listing(id, { description: null, fromList: true }, { photoUrls: [], brand: null });
+    const { row, entries } = await settled(
+      await imported('depop', [fromList('dress-1'), fromList('dress-2')]),
+    );
+    expect(row).toMatchObject({ status: 'finished', imported: 0, already_listed: 1, failed: 1 });
+    expect(entries.map((entry) => [entry.external_listing_id, entry.outcome])).toEqual([
+      ['dress-1', 'already_listed'],
+      ['dress-2', 'failed'],
+    ]);
+    expect(entries[1]?.error_message).toBe(
+      'This listing left Listora while it was read. Import again to bring it back.',
+    );
+    expect(await items()).toHaveLength(1);
+  });
+
   it('puts a listing from an unlinked shop back only when the linked shop shows it', async () => {
     const first = await settled(await imported('depop', [listing('dress-1'), listing('dress-2')]));
     expect(first.row).toMatchObject({ status: 'finished', imported: 2 });

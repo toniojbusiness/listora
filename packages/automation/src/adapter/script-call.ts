@@ -76,9 +76,15 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
   orders?: (since: Date | null, step: StepRunner) => Promise<RemoteOrder[]>;
   /**
    * One page of the seller's listings for sale, with what an import needs: the first for a
-   * `null` cursor, else the page the cursor a page returned names. Only reads.
+   * `null` cursor, else the page the cursor a page returned names. A listing whose id is in
+   * `held` (Listora already has it) may be returned from the list alone, without reading its own
+   * page (`fromList`). Only reads.
    */
-  listings?: (cursor: string | null, step: StepRunner) => Promise<ListingsPage>;
+  listings?: (
+    cursor: string | null,
+    step: StepRunner,
+    held: ReadonlySet<string>,
+  ) => Promise<ListingsPage>;
   /** The orders' shipping labels from their order pages, for Pack check. Only reads. */
   labels?: (orders: readonly LabelReadRequest[], step: StepRunner) => Promise<RemoteOrderLabel[]>;
   /** The offers on the seller's listings that wait on the seller or the buyer. Only reads. */
@@ -132,8 +138,11 @@ export type ScriptCall<P extends AssistedListingPayload = AssistedListingPayload
   | { script: 'health' }
   /** `since` is an ISO time, or `null` for every order the pages show. */
   | { script: 'orders'; since: string | null }
-  /** `cursor`: `null` for the first page, else the `next` of the page before. */
-  | { script: 'listings'; cursor: string | null }
+  /**
+   * `cursor`: `null` for the first page, else the `next` of the page before. `held`: the ids of
+   * the listings Listora already has there (none when absent).
+   */
+  | { script: 'listings'; cursor: string | null; held?: string[] }
   | { script: 'labels'; orders: LabelReadRequest[] }
   | { script: 'offers' }
   | { script: 'offer'; ref: OfferRef }
@@ -238,7 +247,7 @@ export async function runScriptCall<P extends AssistedListingPayload>(
     case 'listings': {
       const listings = scripts.listings;
       if (listings === undefined) throw new Error('these scripts list no listings');
-      return listings(call.cursor, step);
+      return listings(call.cursor, step, new Set(call.held ?? []));
     }
     case 'labels': {
       const labels = scripts.labels;

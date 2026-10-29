@@ -124,6 +124,11 @@ export interface PoshmarkScriptOptions {
    * (default 30 seconds, as Poshmark takes); tests shorten it.
    */
   settleWaitMs?: number;
+  /**
+   * How long between looks at a listing just listed whose page shows none yet (default 5
+   * seconds); tests shorten it.
+   */
+  newWaitMs?: number;
 }
 
 export function createPoshmarkScripts(
@@ -131,6 +136,7 @@ export function createPoshmarkScripts(
 ): AutomationScripts<PoshmarkListingPayload> {
   const { site } = options;
   const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
+  const newWaitMs = options.newWaitMs ?? NEW_WAIT_MS;
   const skuOf = (listing: ListingRef): string => listing.externalSku ?? listing.listingId;
 
   const notListed = (): WriteResult => ({
@@ -180,17 +186,23 @@ export function createPoshmarkScripts(
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
       .slice(0, SKU_LOOKUP.candidates);
     for (const [index, candidate] of candidates.entries()) {
-      // Each candidate's SKU is on its edit form, as heavy a page as the listing form.
-      const found = await step(
-        `check the SKU of candidate ${String(index + 1)}`,
-        { mutates: false, timeScale: 2 },
-        async (page) =>
-          (await openForm(page, site.editListing(candidate.id))) &&
-          (await privateSku(page)) === sku,
-      );
-      if (found) return candidate.id;
+      if (
+        await hasSku(step, candidate.id, sku, `check the SKU of candidate ${String(index + 1)}`)
+      ) {
+        return candidate.id;
+      }
     }
     return null;
+  }
+
+  /** Whether the listing's edit form, as heavy a page as the listing form, shows this SKU. */
+  function hasSku(step: StepRunner, id: string, sku: string, name: string): Promise<boolean> {
+    return step(
+      name,
+      { mutates: false, timeScale: 2 },
+      async (page) =>
+        (await openForm(page, site.editListing(id))) && (await privateSku(page)) === sku,
+    );
   }
 
   /** The logged-in seller's username (closets are addressed by it). */
@@ -301,7 +313,7 @@ export function createPoshmarkScripts(
         };
       }
       if (shown.type === 'hidden') return { type: 'applied', externalListingId: id };
-      if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
+      if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, newWaitMs));
     }
     return null;
   }
@@ -411,11 +423,18 @@ export function createPoshmarkScripts(
     const result = await save(step, 'list');
     if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
     // After List, Poshmark shows the closet, which doesn't name the new listing: its own page,
-    // by the id its form named, confirms it at once. Without that, it is looked for by its SKU
-    // in the same run. Not finding it yet leaves it to the operation's check.
+    // by the id its form named, confirms it at once. While that page shows none yet, the same
+    // id's edit form shows the SKU it was listed with, which names it as surely as a lookup by
+    // SKU, without the seller's closet. Without either, it is looked for by its SKU in the same
+    // run. Not finding it yet leaves it to the operation's check, which then reads it by SKU.
     try {
-      const listed = opened.id === null ? null : await newListing(step, opened.id);
-      if (listed !== null) return listed;
+      if (opened.id !== null) {
+        const listed = await newListing(step, opened.id);
+        if (listed !== null) return listed;
+        if (await hasSku(step, opened.id, sku, 'check the SKU of the new listing')) {
+          return { ...result, externalListingId: opened.id };
+        }
+      }
       const id = await findBySku(step, sku, payload.title, { search: false });
       if (id !== null) return { ...result, externalListingId: id };
     } catch {

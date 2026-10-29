@@ -64,6 +64,7 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
       photos: sizedPhotos,
       logger: silentLogger,
       settleWaitMs: 50,
+      newWaitMs: 50,
     });
   });
 
@@ -216,6 +217,28 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     const seen = site.requests.slice(before);
     const listed = seen.findIndex((request) => request.action === 'create');
     expect(seen.slice(listed + 1).map((request) => request.action)).toEqual(['closet', 'listing']);
+  });
+
+  it("confirms a new listing whose page shows none yet by its edit form's SKU, without the seller or the closet", async () => {
+    // Its own page shows no listing for every look the create makes.
+    site.inject({ action: 'listing', fault: { type: 'not_shown_yet' }, times: 3 });
+    const ref = newRef();
+    const before = site.requests.length;
+    const outcome = await adapter.execute(request('create', ref), ctx());
+    expect(outcome).toMatchObject({ type: 'confirmed' });
+    const id = outcome.type === 'confirmed' ? (outcome.externalListingId ?? '') : '';
+    expect(site.listing(id)).toMatchObject({ sku: ref.externalSku });
+    // After List, its page three times, then the edit form of the id its form named, which
+    // shows its SKU: no listing form to find the seller, and no closet page to search.
+    const seen = site.requests.slice(before);
+    const listed = seen.findIndex((request) => request.action === 'create');
+    expect(seen.slice(listed + 1).map((request) => request.action)).toEqual([
+      'closet',
+      'listing',
+      'listing',
+      'listing',
+      'edit_form',
+    ]);
   });
 
   it('edits details and price, ends as not for sale, and relists, each with a newer revision', async () => {

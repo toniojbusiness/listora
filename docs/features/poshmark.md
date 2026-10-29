@@ -191,11 +191,15 @@ Listora's own test listings:
   section carries the new listing's id in `data-et-prop-listing_id`, and a listing keeps that
   id once listed (its id dates from the form's opening, not from its List). So the same run
   reads the new listing on its own page right away (a page that still holds it back, `hidden`,
-  names it too). The closet can lag minutes behind a new
-  listing (3 to 20 minutes on the captain's closet, 2026-10-27), so finding it by its SKU there
-  (the closet searched by title, each candidate's edit form, whose data holds the SKU at
-  `$_listing_editor.post.seller_private_info.sku`) is only the fallback when the form named no
-  id or the page never showed it.
+  names it too). While that page shows no listing yet (three looks), the edit form of the same
+  id shows the SKU the listing was listed with, which names it as surely as a lookup by SKU
+  does, without loading the listing form to find the seller or a closet page: the create returns
+  the id, and the operation's read-back reads the listing by it. The closet can lag minutes
+  behind a new listing (3 to 20 minutes on the captain's closet, 2026-10-27), so finding it by
+  its SKU there (the closet searched by title, each candidate's edit form, whose data holds the
+  SKU at `$_listing_editor.post.seller_private_info.sku`) is only the fallback when the form
+  named no id or its edit form showed another SKU. The edit form's SKU check on a listing just
+  listed is proved on the fake Poshmark only; a live check on a test account is still to do.
 - **Read** and **End** (phone): the listing page, availability Not For Sale. A listing off the
   site answers 404, and its page holds Poshmark's record of what became of it
   (`listingDetails.error`, a `PostRemovedError` whose `params.post_info.status` says): `archived`

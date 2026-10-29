@@ -51,6 +51,11 @@ export interface PreparedImportPage {
   /** The page to read: `null` for the first. */
   cursor: string | null;
   runsOn: 'cloud' | 'phone';
+  /**
+   * The ids of the listings Listora already has on the marketplace, from linked shops (`held`):
+   * the read skips their own pages, since they settle as already listed by their id.
+   */
+  held: string[];
 }
 
 /** How long a page waits when Listora is pacing its sessions in the seller's account. */
@@ -73,10 +78,14 @@ export async function runImportPage(
   }
   let page: ListingsPage;
   try {
-    page = await prepared.adapter.listListings(prepared.cursor, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(deps.timeoutMs ?? 300_000)]),
-      connection: prepared.connection,
-    });
+    page = await prepared.adapter.listListings(
+      prepared.cursor,
+      {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(deps.timeoutMs ?? 300_000)]),
+        connection: prepared.connection,
+      },
+      prepared.held,
+    );
   } catch (error) {
     await recordImportPageFailure(deps, prepared, error);
     return;
@@ -130,6 +139,16 @@ export async function prepareImportPage(
     });
     return null;
   }
+  // A listing of a shop that was unlinked is read in full: settling it joins it to this shop.
+  const held = await deps.db
+    .selectFrom('marketplace_listing')
+    .select('external_listing_id')
+    .where('account_id', '=', payload.accountId)
+    .where('marketplace', '=', found.marketplace)
+    .where('external_listing_id', 'is not', null)
+    .where('shop_unlinked_at', 'is', null)
+    .orderBy('external_listing_id')
+    .execute();
   return {
     key: payload,
     marketplace: found.marketplace,
@@ -138,6 +157,9 @@ export async function prepareImportPage(
     connectionId: found.id,
     cursor: found.cursor,
     runsOn: found.runs_on,
+    held: held.flatMap((row) =>
+      row.external_listing_id === null ? [] : [row.external_listing_id],
+    ),
   };
 }
 

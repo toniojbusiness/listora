@@ -635,6 +635,41 @@ describe('Depop automation adapter on the fake Depop site', () => {
     });
   });
 
+  it('reads the own page of only the listings Listora does not have: the ones it holds come from the list', async () => {
+    await withSite({}, async (fake, own) => {
+      const held = ['Faded tee.', 'Baggy jeans.'].map((description) =>
+        fake.seed({ description, priceCents: 2000, photos: ['front.jpg'] }),
+      );
+      const fresh = fake.seed({ description: 'Chelsea boots.', priceCents: 3000 });
+      const ownReads = () =>
+        fake.requests.filter((request) => request.path.endsWith('/edit-listing/')).length;
+
+      const before = ownReads();
+      const page = await own.listListings(null, ctx(), held);
+      // One read of its own page, for the listing Listora doesn't have yet.
+      expect(ownReads() - before).toBe(1);
+      expect(page.listings.map((listing) => listing.externalListingId).sort()).toEqual(
+        [...held, fresh].sort(),
+      );
+      const read = page.listings.find((listing) => listing.externalListingId === fresh);
+      expect(read?.fromList).toBeUndefined();
+      for (const slug of held) {
+        // As the list shows it: for sale, its text and price, settled by its slug.
+        expect(page.listings.find((listing) => listing.externalListingId === slug)).toMatchObject({
+          found: true,
+          status: 'active',
+          priceCents: 2000,
+          fromList: true,
+        });
+      }
+      // Without any held, every listing's own page is read, as before.
+      const all = ownReads();
+      await own.listListings(null, ctx());
+      expect(ownReads() - all).toBe(3);
+      expect(fake.requests.filter((request) => request.method !== 'GET')).toEqual([]);
+    });
+  });
+
   it('finds no sales on the sold items page of a seller without any, for sale checks', async () => {
     await withSite({}, async (fake, own) => {
       fake.seed({ description: 'Still for sale.', priceCents: 1000 });

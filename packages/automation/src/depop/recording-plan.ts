@@ -84,7 +84,7 @@ export const depopRecordingPlan: RecordingPlan = {
       name: 'listings',
       page: 'shop',
       mode: 'read',
-      script: () => (step) => present(scripts.listings)(null, step),
+      script: () => (step) => present(scripts.listings)(null, step, new Set()),
     },
     {
       name: 'listing',

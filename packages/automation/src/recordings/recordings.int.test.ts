@@ -8,6 +8,10 @@
 import type { Browser } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { ListingsPage } from '@listora/marketplaces';
+
+import { createMercariScripts } from '../mercari/scripts.ts';
+import { MERCARI_SITE_URL } from '../mercari/site.ts';
 import { loadChromium } from '../runner/playwright.ts';
 import { recordingPlan } from './plans.ts';
 import { expandRecording, loadRecordings, RECORDED_MARKETPLACES } from './recording.ts';
@@ -68,3 +72,36 @@ for (const marketplace of RECORDED_MARKETPLACES) {
     }
   });
 }
+
+describe('an import that already holds listings, on recorded real pages', () => {
+  it("Mercari: reads the active tab and none of the held listings' pages", async () => {
+    const plan = recordingPlan('mercari');
+    const recorded = (await loadRecordings('mercari')).get('listings');
+    if (recorded === undefined) throw new Error('mercari has a listings recording');
+    const shown = (recorded.result.ok ? recorded.result.value : null) as ListingsPage | null;
+    const ids = shown?.listings.map((listing) => listing.externalListingId) ?? [];
+    expect(ids.length).toBeGreaterThan(1);
+    const scripts = createMercariScripts({
+      site: { origin: MERCARI_SITE_URL },
+      photos: { fetch: () => Promise.reject(new Error('a recording sends no photos')) },
+    });
+    const replayed = await replayRecording(
+      browser,
+      expandRecording(recorded),
+      { profile: plan.profile, stepTimeoutMs: plan.stepTimeoutMs, read: true },
+      (step) => scripts.listings?.(null, step, new Set(ids)) ?? Promise.reject(new Error('none')),
+    );
+    // The tab as recorded, then nothing: each listing's page the full read went on to is left.
+    expect(replayed.divergences).toEqual([
+      expect.stringMatching(
+        new RegExp(
+          `^the script finished before .*\\(${String(ids.length)} recorded actions left\\)$`,
+        ),
+      ) as string,
+    ]);
+    expect(replayed.result.ok).toBe(true);
+    const page = replayed.result.ok ? replayed.result.value : null;
+    expect(page?.listings.map((listing) => listing.externalListingId)).toEqual(ids);
+    expect(page?.listings.every((listing) => listing.fromList === true)).toBe(true);
+  }, 60_000);
+});
