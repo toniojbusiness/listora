@@ -3,6 +3,7 @@ import { assertNever } from '@listora/shared';
 import {
   APP_SECRETS,
   SERVICE_NAMES,
+  type BuyerDataRetention,
   type InviteEmailVerification,
   type ServiceName,
   type SignIn,
@@ -124,6 +125,8 @@ export interface ServiceResources {
     readonly environment: string;
     readonly email?: { readonly from: string; readonly to: string };
   };
+  /** The worker's `BUYER_DATA_RETENTION`, the environment's `buyerDataRetention` setting. */
+  readonly buyerDataRetention: BuyerDataRetention;
 }
 
 /**
@@ -215,10 +218,10 @@ export function containerEnvironment(
         ...workerAuth(deployed().signIn),
         ...runnerService(deployed()),
         ...ownerAlerts(deployed()),
-        // Clearing buyers' names and tracking numbers is permanent, so it stays off until the
-        // owner decides to turn it on here; meanwhile the job logs what it would clear
+        // Clearing buyers' names and tracking numbers is permanent, so each environment turns it
+        // on only once its owner decides to; while off, the job logs what it would clear
         // (docs/features/privacy.md#retention).
-        BUYER_DATA_RETENTION: 'off',
+        BUYER_DATA_RETENTION: deployed().buyerDataRetention,
       };
     case 'runner':
       return {

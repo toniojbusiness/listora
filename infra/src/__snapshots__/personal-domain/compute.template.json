@@ -682,7 +682,7 @@
               },
               {
                 "Name": "BUYER_DATA_RETENTION",
-                "Value": "off"
+                "Value": "on"
               }
             ],
             "Essential": true,

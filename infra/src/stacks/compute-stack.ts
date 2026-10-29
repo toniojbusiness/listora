@@ -200,6 +200,7 @@ export class ComputeStack extends ListoraStack {
           ? {}
           : { email: { from: alertSender(target).address, to: target.alarmEmail } }),
       },
+      buyerDataRetention: settings.buyerDataRetention,
     };
     this.containerOptions = (service) => ({
       image,

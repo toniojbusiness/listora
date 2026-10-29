@@ -6,6 +6,7 @@ import { loadWorkerConfig } from '@listora/worker/src/config.ts';
 import { loadRunnerConfig } from '@listora/worker/src/runner/config.ts';
 import { describe, expect, it } from 'vitest';
 
+import { ENVIRONMENT_SETTINGS } from './config.ts';
 import {
   API_PORT,
   CONTAINER_NAMES,
@@ -42,13 +43,17 @@ const RESOURCES: ServiceResources = {
     environment: 'staging',
     email: { from: 'alerts@example.com', to: 'owner@example.com' },
   },
+  buyerDataRetention: 'off',
 };
 
 /** What a task's process sees: the plain environment, the image's, and every injected secret. */
 function taskEnvironment(container: ContainerName): NodeJS.ProcessEnv {
+  return { NODE_ENV: 'production', ...taskEnvironmentOf(container, RESOURCES) };
+}
+
+function taskEnvironmentOf(container: ContainerName, resources: ServiceResources) {
   return {
-    NODE_ENV: 'production',
-    ...containerEnvironment(container, DATABASE_URL, RESOURCES),
+    ...containerEnvironment(container, DATABASE_URL, resources),
     ...Object.fromEntries(containerSecretNames(container).map((name) => [name, 'placeholder'])),
   };
 }
@@ -102,11 +107,22 @@ describe('the sign-in an environment gets', () => {
     });
   });
 
-  it('keeps buyer data retention off in every deployment until the owner turns it on', () => {
+  it("gives the worker the environment's buyer data retention", () => {
     expect(containerEnvironment('worker', DATABASE_URL, RESOURCES)).toMatchObject({
       BUYER_DATA_RETENTION: 'off',
     });
     expect(loadWorkerConfig(taskEnvironment('worker')).buyerDataRetention).toBe('off');
+    const on = { ...RESOURCES, buyerDataRetention: 'on' } as const;
+    expect(
+      loadWorkerConfig({ NODE_ENV: 'production', ...taskEnvironmentOf('worker', on) })
+        .buyerDataRetention,
+    ).toBe('on');
+  });
+
+  it('turns buyer data retention on only in personal, where the owner turned it on', () => {
+    expect(ENVIRONMENT_SETTINGS.personal.buyerDataRetention).toBe('on');
+    expect(ENVIRONMENT_SETTINGS.staging.buyerDataRetention).toBe('off');
+    expect(ENVIRONMENT_SETTINGS.prod.buyerDataRetention).toBe('off');
   });
 
   it('gives a dev environment the dev driver and no Cognito keys', () => {

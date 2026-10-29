@@ -129,10 +129,13 @@ of 1,000 and at most 50 batches per rule a run:
 | The buyer's name on an offer (`marketplace_offer`)                 | 60 days after the offer closed       | Cleared; the offer, its amounts, and the seller's answers stay ([offers.md](offers.md))                                                                                                                 |
 
 The three buyer rows (the last three) run only with `BUYER_DATA_RETENTION=on` (worker,
-`.env.example`). Clearing them is permanent, so the setting is `off` by default and in every
-deployment (`infra/src/containers.ts`) until the owner turns it on; while it is off, each run
-clears nothing of buyers and logs how many rows each of the three would clear
-(`buyer data retention is off`, `wouldClear`), so the owner can see what turning it on will do.
+`.env.example`). Clearing them is permanent, so the setting is `off` by default and each
+environment turns it on only once its owner decides to (`buyerDataRetention` in
+`infra/src/config.ts`). It is `on` in personal, where the owner turned it on on 2026-10-29, so
+buyers' details there clear 60 days after the sale is done or the offer closed; staging and prod
+keep it `off`. While it is off, each run clears nothing of buyers and logs how many rows each of
+the three would clear (`buyer data retention is off`, `wouldClear`), so the owner can see what
+turning it on will do.
 
 Kept elsewhere, by the code that writes them: automation screenshots 14 days and run records
 90 days (the automation dispatcher, [automation.md](automation.md)), package photos 60 days after
