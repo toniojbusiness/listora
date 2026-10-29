@@ -81,7 +81,8 @@ the owner's, not the seller's:
 - **Support** reads the connection's `saleChecks` (when sales were last checked and last worked,
   the next check, the last error) from `listConnections` and `admin sale-checks`; the app does
   not show it.
-- **The operator** sees `UnhealthySaleChecks` per marketplace in the trust metrics, and the
+- **The operator** sees `UnhealthySaleChecks` in the trust metrics (per marketplace in the
+  worker's log lines, through Logs Insights), and the
   `sale-checks-unhealthy` alarm ([observability.md](observability.md)); the task logs
   `event: "sale_check_overdue"` and `event: "sale_check_alert"`, and each check
   `event: "sale_check_failed"`, `"sale_check_finished"`, or `"sale_history_read"`.

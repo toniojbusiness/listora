@@ -77,11 +77,13 @@ ios-build: ios-generate ios-simulator
 	$(XCODEBUILD) build
 
 ## Check that only the Dev Info.plists (app and Share Extension) carry the ATS exception, so
-## Staging and Prod ship without it.
+## Staging and Prod ship without it. One xcodebuild call per configuration reads every target's
+## settings (each call resolves the packages, so one per target and configuration took minutes).
 ios-check-ats: ios-generate
-	@for target in Listora ShareExtension; do for config in Dev-Debug Staging-Release Prod-Release; do \
-		plist=$$(xcodebuild -project $(IOS_PROJECT) -target $$target -configuration $$config $(IOS_PACKAGE_PATHS) -showBuildSettings 2>/dev/null \
-			| awk -F ' = ' '$$1 ~ /^ *INFOPLIST_FILE$$/ { print $$2 }'); \
+	@for config in Dev-Debug Staging-Release Prod-Release; do \
+		settings=$$(xcodebuild -project $(IOS_PROJECT) -alltargets -configuration $$config $(IOS_PACKAGE_PATHS) -showBuildSettings 2>/dev/null); \
+		for target in Listora ShareExtension; do \
+		plist=$$(printf '%s\n' "$$settings" | awk -F ' = ' -v target="$$target" '/^Build settings for action / { current = $$0; sub(/.* target /, "", current); sub(/:$$/, "", current); next } current == target && $$1 ~ /^ *INFOPLIST_FILE$$/ { print $$2; exit }'); \
 		[ -n "$$plist" ] || { echo "error: no INFOPLIST_FILE for $$target $$config" >&2; exit 1; }; \
 		if plutil -extract NSAppTransportSecurity xml1 -o /dev/null "$(IOS_DIR)/$$plist" 2>/dev/null; then ats=yes; else ats=no; fi; \
 		case "$$config:$$ats" in \

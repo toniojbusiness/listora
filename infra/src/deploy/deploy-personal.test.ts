@@ -41,7 +41,8 @@ afterEach(() => {
  * words in `args` and its stack in `stack`, answers what depends on more than that. `npx`
  * fails, except `cdk synth` with `realSynth` (offline, as the script runs it), so no test can
  * reach a cdk command that talks to AWS, but `cdk deploy` with `deployOk`, which only records
- * the call. `git diff` exits `gitDiff` (1: the paths changed). `curl` answers healthy unless
+ * the call. `git diff` exits `gitDiff` (1: the paths changed), or `imageDiff` for the image
+ * inputs (default 1, so the images build). `curl` answers healthy unless
  * `curlScript`, bash run first with the call's words in `$*`, exits. `sleep` returns at once.
  * `env` adds to the script's environment.
  */
@@ -54,6 +55,7 @@ function deploy(
     owner = 'Owner@Example.com',
     awsScript = '',
     gitDiff = 0,
+    imageDiff = 1,
     deployOk = false,
     curlScript = '',
     env = {},
@@ -94,7 +96,7 @@ echo "unexpected aws call: \${args[*]}" >&2; exit 99`,
   stub('docker', `[[ "$1" == info ]] || echo "docker $*" >>"${calls}"`);
   stub(
     'git',
-    `case "$1" in status | cat-file) exit 0 ;; rev-parse) echo ${HEAD} ;; diff) exit ${String(gitDiff)} ;; esac`,
+    `case "$1" in status | cat-file) exit 0 ;; rev-parse) echo ${HEAD} ;; diff) if [[ " $* " == *" Dockerfile "* ]]; then exit ${String(imageDiff)}; fi; exit ${String(gitDiff)} ;; esac`,
   );
   stub(
     'curl',
@@ -654,6 +656,53 @@ esac`;
       expect(run.calls.findIndex((call) => call.includes('ecs update-service'))).toBeGreaterThan(
         migrate,
       );
+    }, 120_000);
+
+    it('tags the deployed images with the commit, building nothing, when no image input changed', () => {
+      const run = deploy(
+        ['--code-only', '--profile', 'p'],
+        {
+          ...deployed,
+          'ecr batch-get-image': {
+            stdout: 'application/vnd.oci.image.manifest.v1+json\t{"schemaVersion":2}\n',
+          },
+          'ecr put-image': { stdout: '{}' },
+        },
+        { realSynth: true, awsScript: environment(), imageDiff: 0 },
+      );
+      expect(run.output).toContain(`no image input changed since ${DEPLOYED.slice(0, 12)}`);
+      expect(run.calls.some((call) => call.startsWith('docker build'))).toBe(false);
+      expect(run.calls.some((call) => call.startsWith('docker push'))).toBe(false);
+      for (const target of ['app', 'runner']) {
+        expect(run.calls).toContainEqual(
+          expect.stringContaining(
+            `ecr batch-get-image --repository-name listora/${target} --image-ids imageTag=${DEPLOYED}`,
+          ),
+        );
+        expect(run.calls).toContainEqual(
+          expect.stringContaining(
+            `ecr put-image --repository-name listora/${target} --image-tag ${HEAD} --image-manifest {"schemaVersion":2} --image-manifest-media-type application/vnd.oci.image.manifest.v1+json`,
+          ),
+        );
+        expect(run.output).toContain(`${target}: tagged the deployed image`);
+      }
+      // The services still move to this commit's tag, which now names the deployed images.
+      expect(registered(run.dir, 'listora-personal-runner').containerDefinitions[0]?.image).toBe(
+        `${REGISTRY}/listora/runner:${HEAD}`,
+      );
+    }, 120_000);
+
+    it('builds the image when the deployed one is gone from the repository', () => {
+      const run = deploy(
+        ['--code-only', '--profile', 'p'],
+        {
+          ...deployed,
+          'ecr batch-get-image': { stderr: 'ImageNotFoundException', status: 254 },
+        },
+        { realSynth: true, awsScript: environment(), imageDiff: 0 },
+      );
+      expect(run.calls.some((call) => call.includes('ecr put-image'))).toBe(false);
+      expect(run.calls).toContain(`docker push ${REGISTRY}/listora/runner:${HEAD}`);
     }, 120_000);
 
     it('refuses a commit that changes the infrastructure, naming the stack, and changes nothing', () => {

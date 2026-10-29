@@ -1,4 +1,5 @@
 import { createDatabase } from '@listora/db';
+import { createLogger } from '@listora/shared';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import { offlineDependencies } from './test-support.ts';
@@ -31,6 +32,27 @@ describe('health routes', () => {
     const response = await app.inject({ method: 'GET', url: '/health/live' });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: 'ok' });
+  });
+
+  it('writes no request log lines for liveness, and still logs the other routes', async () => {
+    const lines: Record<string, unknown>[] = [];
+    app = buildApp({
+      db,
+      auth,
+      ...offlineDependencies(),
+      pingDatabase: () => Promise.resolve(),
+      logger: createLogger({
+        service: 'api',
+        level: 'info',
+        destination: {
+          write: (line: string) => lines.push(JSON.parse(line) as Record<string, unknown>),
+        },
+      }),
+    });
+    await app.inject({ method: 'GET', url: '/health/live' });
+    expect(lines).toEqual([]);
+    await app.inject({ method: 'GET', url: '/health/ready' });
+    expect(lines.map((line) => line['msg'])).toContain('request completed');
   });
 
   it('reports ready when the database answers', async () => {

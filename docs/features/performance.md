@@ -101,7 +101,9 @@ Checked and left as they are:
 ## Worker
 
 The worker runs operation steps on Graphile Worker with 5 slots and its other jobs (photos,
-analyses, scheduled tasks) with 2 more, and every slot polls the queue on its own. New jobs never
+analyses, scheduled tasks) with 2 more. Each of the two runners polls the queue once per
+interval for all its slots (Graphile Worker's local queue, `LOCAL_QUEUE_SIZE` in
+`packages/operations/src/worker.ts`); before 2026-10-29 every slot polled on its own. New jobs never
 wait for a poll: Graphile Worker hears of them through LISTEN/NOTIFY. Only jobs dated in the
 future (retries, read-backs, rechecks) are found by polling, and in production the shortest of
 those is 30 s away.
@@ -114,6 +116,11 @@ those is 30 s away.
 | Resident memory                                      |        110-200 MB |       110-155 MB |
 
 \* Both within the measurement's noise: the idle worker is already cheap on CPU.
+
+One shared poller per runner, measured 2026-10-29 (an idle worker with production's 5 + 2 slots
+and 5 s poll, 60 s, `pg_stat_statements` on the local cluster): 77 queue polls a minute before,
+24 after. The local queue holds at most one fetched job while every slot is busy, so a newly
+queued delist waits behind one job at most. `engine.int.test.ts` checks that 8 slots poll as one.
 
 The poll interval is now a sixth of the shortest retry delay, between 2 s and 5 s
 (`queuePollIntervalMs` in `packages/operations/src/policy.ts`): 5 s in production, so a retry
@@ -333,14 +340,65 @@ ms of CPU here against 97-99 ms with 6 (24 photos, two rounds each), and its wal
 same or a little longer (61-95 ms against 63-75 ms on this loaded laptop); the work no longer
 fans out over several cores at once.
 
+## Production and CI baselines of 2026-10-28
+
+The efficiency audit's measurements, from production aggregates (Logs Insights and CloudWatch
+over 7 days, no seller data) and the GitHub Actions API, before the fixes above. Re-measure
+against them.
+
+**API latency in production** (the API's own `responseTime`, no network; 0.25 vCPU task then):
+
+| Route                                  | Requests | p50 ms | p95 ms | p99 ms |
+| -------------------------------------- | -------: | -----: | -----: | -----: |
+| `GET /health/live`                     |   15,980 |    0.3 |    0.8 |     84 |
+| `GET /v1/operations?listingId=` (poll) |    9,018 |    3.7 |    8.5 |     72 |
+| `GET /v1/items/{id}` (poll)            |    3,065 |   10.6 |    101 |    297 |
+| `POST /v1/phone-runs`                  |    1,022 |   19.6 |    239 |    600 |
+| `GET /v1/phone-runtime`                |      605 |    2.6 |    500 |    750 |
+| `GET /v1/tasks`                        |      525 |    7.5 |    533 |    721 |
+| `GET /v1/connection-health`            |      399 |   11.1 |    700 |  1,253 |
+| `GET /v1/items`                        |      307 |   17.1 |    704 |  1,272 |
+| `GET /v1/today`                        |      248 |    312 |  1,007 |  1,475 |
+| `GET /v1/account/profile`              |      112 |    142 |    668 |    895 |
+
+No 5xx in 7 days. Locally the same routes take 1-12 ms, so the slow ones were CPU starvation on
+the shared task: photo bursts (`GET /v1/items` p50 15 ms calm, 204 ms within a minute of a
+processed photo) and the launch burst of about 10 parallel requests (Today, profile). The task
+is now 0.5 vCPU with one libvips thread.
+
+**The phone's traffic** (Debug build on a simulator, against the local stack): a launch sent
+about 638 KB (146 KB if compressed), 569 KB of it the phone runtime the app already ships; the
+open, idle app made 11 requests a minute (about 86 KB a minute); the item screen's 1 s poll
+was 70% of production's non-health requests. Compression and the item screen's wait are above.
+
+**Phone marketplace actions** (production p50 / p90 of the script on the phone): Depop listing
+39 / 54 s, Mercari 27 / 28 s, Poshmark 52 / 91 s, a delist 7-9 s. Deliberate pacing is about
+16-22 s of each listing (measured on the fake sites, [automation.md](automation.md)); the
+read-back by SKU is the slow tail (Depop p90 24.5 s, Poshmark 37 s).
+
+**Worker idle:** 93 queue polls a minute in production at the 5 s interval; one shared poller
+per runner (above) cuts the local measurement from 77 to 24.
+
+**CI** (the last 200 runs of `ci.yml`): a pull request's run took 49 min p50 and 66 min p90, the
+iPhone checks being the critical path; the backend check 13.6 min p50. Of 8,861 macOS minutes
+in 2.6 days, 24% were runs cancelled by a newer push and 16% failed runs; 7 of the 58 failed
+macOS jobs failed only the lint, which now runs on Linux first. The ATS check made 6
+`xcodebuild -showBuildSettings` calls (about 3 min); it now makes 3. The 10 slowest UI tests
+took 19.3 of the 43.5 UI test minutes (`scripts/ios-ui-test-seconds.tsv` has the current times).
+
 ## Cloud cost
 
-The personal environment's monthly estimate is unchanged at about $35, or $36 with browser
-automation ([costs.md](costs.md)): none of these changes adds or removes a billed resource or
-changes a task size. The quieter idle worker takes database load off the `db.t4g.micro`, whose
-only usage charge is CPU above its burst baseline.
+The personal environment's monthly estimate is about $41 with browser automation
+([costs.md](costs.md), which has the measured bill). The 0.5 vCPU task added $7.39; the log-only
+metric breakdowns, the silent `/health/live`, and the ECR retention took about $1.80 off. The
+quieter idle worker takes database load off the `db.t4g.micro`, whose only usage charge is CPU
+above its burst baseline.
 
 ## Follow-ups (not done here)
+
+- Graviton (arm64) tasks for the app, migrations, and runner, built natively on the free
+  `ubuntu-24.04-arm` runner: about -$3.60 a month at 0.5 vCPU; a separate decision.
+- Profile the 10 slowest UI tests (19.3 of 43.5 UI test minutes) on a Mac.
 
 - Profile inventory scrolling with Instruments (Animation Hitches) on a device with a 2,000-item
   account; the image work above is measured in bytes and decodes, not in hitches.

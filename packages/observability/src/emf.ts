@@ -26,7 +26,11 @@ export interface MetricGroup {
   readonly values: Partial<Readonly<Record<TrustMetricName, readonly number[]>>>;
 }
 
-/** Formats a group as EMF lines (more than one when a metric has over 100 values). */
+/**
+ * Formats a group as EMF lines (more than one when a metric has over 100 values). A log-only
+ * group (no dimension sets in the catalog) is the same line without the `_aws` directive, so
+ * CloudWatch publishes no metric from it.
+ */
 export function formatEmf(group: MetricGroup, properties: Record<string, string> = {}): string[] {
   const entries = Object.entries(group.values) as [TrustMetricName, readonly number[]][];
   const first = entries[0];
@@ -51,20 +55,21 @@ export function formatEmf(group: MetricGroup, properties: Record<string, string>
     const chunk = entries
       .map(([name, values]) => [name, values.slice(start, start + MAX_VALUES_PER_LINE)] as const)
       .filter(([, values]) => values.length > 0);
+    const directive = {
+      Timestamp: group.timestamp.getTime(),
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: dimensionSets,
+          Metrics: chunk.map(([name]) => ({ Name: name, Unit: TRUST_METRICS[name].unit })),
+        },
+      ],
+    };
     lines.push(
       JSON.stringify({
         ...properties,
         ...group.dimensions,
-        _aws: {
-          Timestamp: group.timestamp.getTime(),
-          CloudWatchMetrics: [
-            {
-              Namespace: METRIC_NAMESPACE,
-              Dimensions: dimensionSets,
-              Metrics: chunk.map(([name]) => ({ Name: name, Unit: TRUST_METRICS[name].unit })),
-            },
-          ],
-        },
+        ...(dimensionSets.length === 0 ? {} : { _aws: directive }),
         ...Object.fromEntries(
           chunk.map(([name, values]) => [name, values.length === 1 ? values[0] : values]),
         ),

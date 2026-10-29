@@ -87,6 +87,28 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     return harness.listing(listing.id);
   }
 
+  it('polls the queue once per interval for the whole runner, not once per slot', async () => {
+    await worker?.stop();
+    worker = await harness.startWorker({ concurrency: 8, pollIntervalMs: 100 });
+    // Every poll reads the jobs table; Postgres counts those reads per table. A backend reports
+    // its counts within about a second, so the window is long and the bound loose.
+    const reads = async () => {
+      const { rows } = await sql<{ reads: string }>`
+        select (coalesce(seq_scan, 0) + coalesce(idx_scan, 0))::text as reads
+        from pg_stat_user_tables
+        where schemaname = 'graphile_worker' and relname = '_private_jobs'
+      `.execute(harness.db);
+      return Number(rows[0]?.reads ?? 0);
+    };
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    const before = await reads();
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    const polled = (await reads()) - before;
+    // About 30 polls in 3 s from one shared poller; one poller per slot would be about 240.
+    expect(polled).toBeGreaterThan(0);
+    expect(polled).toBeLessThan(100);
+  });
+
   it('creates a listing and succeeds only after reading it back', async () => {
     const listing = await harness.createListing();
     const op = await harness.enqueue(listing, 'create', {

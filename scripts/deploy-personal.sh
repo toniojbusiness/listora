@@ -61,6 +61,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 readonly ASSEMBLY=cdk.out/deploy-$ENVIRONMENT
 # The schema migrations the image carries (docs/architecture.md, Migrations).
 readonly MIGRATIONS=packages/db/migrations
+# Everything both images copy (the Dockerfile and its build context); tests are not copied. When
+# none changed since the deployed commit, the deployed images are tagged again, not rebuilt.
+readonly IMAGE_INPUTS=(
+  Dockerfile .dockerignore .npmrc package.json package-lock.json
+  apps/api apps/worker apps/admin infra/package.json packages
+  apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/phone-runtime.js
+  ':(exclude,glob)**/*.test.ts'
+)
 
 dry_run=false
 code_only=false
@@ -664,12 +672,36 @@ if [[ "$code_only" == false ]]; then
   fi
 fi
 
+# Tags the deployed image of repository listora/$1 with this commit, without pulling or pushing
+# a layer. Fails (and the caller builds) when that image is gone, such as expired from the
+# repository.
+retag_image() {
+  local manifest
+  manifest=$(aws_ ecr batch-get-image --repository-name "listora/$1" --image-ids "imageTag=$deployed_tag" \
+    --query 'images[0].[imageManifestMediaType,imageManifest]' --output text 2>/dev/null) || return 1
+  local media_type=${manifest%%$'\t'*}
+  manifest=${manifest#*$'\t'}
+  [[ -n "$manifest" && "$manifest" != None ]] || return 1
+  local media=()
+  [[ "$media_type" == None ]] || media=(--image-manifest-media-type "$media_type")
+  aws_ ecr put-image --repository-name "listora/$1" --image-tag "$image_tag" \
+    --image-manifest "$manifest" ${media[@]+"${media[@]}"} >/dev/null
+}
+
 step "Build and push the application and browser runner images"
 # The Dockerfile's `app` stage (api, worker, migrations) and `runner` stage (the same sources with
 # headless Chromium), each in its own repository, as .github/workflows/deploy.yml builds them.
 # ECS runs the tasks on X86_64 (infra/src/stacks/compute-stack.ts), whatever this machine is.
 # Each image carries its layer cache (inline), and a build reuses the deployed images' layers as
 # well as the builder's own cache, so only the layers whose inputs changed are built and pushed.
+# When no image input changed since the commit the services run, both images are the deployed
+# ones: ECR tags them with this commit too (the same digest, so no new image is stored).
+images_unchanged=false
+if [[ "$dry_run" == false && -n "$deployed_tag" ]] && git cat-file -e "$deployed_tag^{commit}" 2>/dev/null &&
+  git diff --quiet "$deployed_tag" HEAD -- "${IMAGE_INPUTS[@]}"; then
+  images_unchanged=true
+  info "no image input changed since ${deployed_tag:0:12}, which the services run"
+fi
 [[ "$dry_run" == true ]] || aws_ ecr get-login-password |
   "$container_cli" login --username AWS --password-stdin "$registry" >/dev/null ||
   fail "cannot log in to $registry"
@@ -682,10 +714,13 @@ for target in app runner; do
   fi
   if [[ "$dry_run" == true ]]; then
     would "aws ecr describe-images --repository-name listora/$target --image-ids imageTag=$image_tag  (skip the build when it exists)"
+    would "git diff --quiet <the deployed commit> HEAD -- <the image inputs>  (none changed: aws ecr put-image tags the deployed $target image with this commit instead of building)"
     would "$container_cli build --platform linux/amd64 --target $target --tag $target_image ${cache[*]} [--cache-from <the deployed $target image>] ."
     would "$container_cli push $target_image"
   elif aws_ ecr describe-images --repository-name "listora/$target" --image-ids "imageTag=$image_tag" >/dev/null 2>&1; then
     info "$target_image already exists; reusing it"
+  elif [[ "$images_unchanged" == true ]] && retag_image "$target"; then
+    info "$target: tagged the deployed image ${deployed_tag:0:12} with $image_tag (nothing to build)"
   else
     "$container_cli" build --platform linux/amd64 --target "$target" --tag "$target_image" "${cache[@]}" . ||
       fail "the $target image build failed"

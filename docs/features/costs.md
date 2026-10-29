@@ -6,8 +6,8 @@ page estimates its monthly AWS bill, explains the choices that keep it low, and 
 levers that would cut it further. The design is described in
 [infra/README.md](../../infra/README.md#the-personal-environment).
 
-**Estimate: about $45 a month, or about $46 a month with browser automation**, before any
-Free Tier credit, deployed as it starts: without a domain
+**Estimate: about $42 a month, or about $43 a month with browser automation**, deployed as it
+starts: without a domain
 ([infra/README.md](../../infra/README.md#without-a-domain)). It costs $0.56 more once a domain is
 added (its Route 53 hosted zone and SES inbound sale email), plus the domain's registration.
 A copy of the staging layout (NAT gateway, load balancer, two services) would cost about $100.
@@ -24,6 +24,25 @@ On 2026-10-28 the task went from 0.25 to 0.5 vCPU (the captain's call on the eff
 the smaller task's CPU starvation was behind slow launches and photo bursts), $7.39 a month
 more. No one-year commitment was taken (levers, item 4).
 
+Measured on 2026-10-28 (the efficiency audit; Cost Explorer, CloudWatch, and the logs over 7
+days, on the 0.25 vCPU task): about $34.50 to $35 a month, so about $42 with the 0.5 vCPU task.
+81% of it is fixed (the database, the task, and its address). The audit's measurements replaced
+the traffic, log, and runner assumptions below, and three of its fixes then lowered the bill
+by about $1.80 a month:
+
+- 12 of the 16 metrics published every minute were breakdowns no alarm reads (stuck operations
+  and their ages per status, connections per marketplace and status, unhealthy sale checks per
+  marketplace). They are now log fields only, for Logs Insights ([observability.md](observability.md)):
+  4 metrics are published every minute, under the free 10.
+- `/health/live`, the load balancer's check and 48% of all API requests, writes no request log
+  lines.
+- ECR keeps 15 images per repository instead of 50, and a deploy whose image inputs did not change
+  tags the deployed images with the new commit instead of building and storing new ones
+  (`scripts/deploy-personal.sh`; 57 runner images were pushed in 3 days before).
+
+The cost budget (`infra/src/config.ts`) and the account's free allowances are shared with any
+other workload in the same AWS account; the captain's personal account also runs another project.
+
 On 2026-10-29 rejected-traffic VPC flow logs were turned on (security audit L16; the earlier
 follow-up 14 in [security.md](security.md)), about $2 a month: only rejected flows, kept 7 days.
 
@@ -33,14 +52,16 @@ domain registration, and the Anthropic API bill are not included.
 
 ## Assumptions
 
-- One reseller, about 500 items with 6 photos each, light traffic: about 100,000 API
-  requests and 1 GB of logs a month, plus 300 forwarded sale emails once a domain is added.
+- One reseller, about 500 items with 6 photos each: about 250,000 API requests a month
+  (measured; 70% of them the item screen's poll while a listing is in progress) and about 0.25 GB
+  of logs (measured 0.31 GB, 57% of it request lines, before `/health/live` stopped logging), plus
+  300 forwarded sale emails once a domain is added.
 - The worker's trust metrics (CloudWatch Embedded Metric Format, about ten small log lines a
-  minute) add about 0.15 GB of logs. About 15 of them are published every minute (operations
-  stuck per status and their ages, the oldest unverified operation, the AI cost of each
-  account active today, the connections per marketplace and status, unhealthy sale checks, and overdue deletions),
-  and per-marketplace operation results (per kind, and the verified-success rate per
-  marketplace) only in the hours operations settle: about 18 metrics billed for a full month.
+  minute) are 37% of the logs. Four are published every minute (the oldest unverified
+  operation, connections needing relink, unhealthy sale checks, and overdue deletions), the AI
+  cost while an account is active, and per-marketplace operation results (per kind, and the
+  verified-success rate per marketplace) only in the hours operations settle: about 10 metrics
+  billed for a full month.
 - Each photo stores about 2.2 MB (a full-size original plus the listing, AI, and thumbnail
   derivatives), so photos take about 7 GB, about 8 GB with replaced versions kept for 30 days.
 - Marketplaces fetch listing photos well within CloudFront's always-free tier.
@@ -57,7 +78,7 @@ domain registration, and the Anthropic API bill are not included.
 | RDS automated backups                | 7 days; free up to the provisioned storage                        |      $0.00 |
 | Fargate task (API and worker)        | 0.5 vCPU at $0.04048 and 1 GB at $0.004446 an hour (x86)          |     $18.02 |
 | Public IPv4 address of the task      | 1 address at $0.005 an hour                                       |      $3.65 |
-| API Gateway HTTP API                 | 100,000 requests at $1.00 per million; the VPC link is free       |      $0.10 |
+| API Gateway HTTP API                 | 250,000 requests at $1.00 per million; the VPC link is free       |      $0.25 |
 | Cloud Map                            | 1 registered task at $0.10, plus its private DNS zone at $0.50    |      $0.60 |
 | Route 53 public hosted zone          | None without a domain (the API uses its execute-api URL)          |      $0.00 |
 | S3 photo storage and requests        | 8 GB at $0.023 per GB, 15,000 PUTs at $0.005 per 1,000            |      $0.27 |
@@ -67,16 +88,16 @@ domain registration, and the Anthropic API bill are not included.
 | SES sign-in codes                    | About 60 emails at $0.10 per 1,000: under a cent                  |      $0.00 |
 | Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                      |      $0.80 |
 | KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)      |      $1.00 |
-| CloudWatch Logs                      | 1.15 GB ingested at $0.50, kept 7 days at $0.03 per GB            |      $0.59 |
+| CloudWatch Logs                      | 0.25 GB ingested at $0.50, kept 7 days at $0.03 per GB            |      $0.13 |
 | VPC flow logs, rejected traffic only | About 4 GB of internet scanner flows at $0.50 (1 to 6 GB), 7 days |      $2.00 |
-| CloudWatch custom metrics (EMF)      | About 18 metrics; the first 10 are always free, then $0.30 each   |      $2.40 |
+| CloudWatch custom metrics (EMF)      | About 10 metrics; the first 10 are always free, then $0.30 each   |      $0.30 |
 | CloudWatch alarms                    | 23 standard alarms; the first 10 are always free, then $0.10      |      $1.30 |
 | EventBridge task and deploy rules    | AWS service events delivered to SNS have no EventBridge charge    |      $0.00 |
 | Alert emails and weekly summary      | 2 Lambda functions in the free tier; 4 Cost Explorer reads $0.01  |      $0.04 |
 | AWS Budget                           | 1 budget; an account's first two are free                         |      $0.00 |
-| ECR image storage                    | About 1 GB at $0.10 per GB                                        |      $0.10 |
+| ECR image storage                    | About 1 GB at $0.10 per GB (15 images kept)                       |      $0.10 |
 | ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)      |      $0.00 |
-| **Total**                            |                                                                   | **$44.85** |
+| **Total**                            |                                                                   | **$42.44** |
 
 ## With a domain
 
@@ -87,20 +108,21 @@ charge (ACM certificates and alias queries to API Gateway are free):
 | --------------------------- | ---------------------------------------------------------------- | ---------: |
 | Route 53 public hosted zone | 1 zone at $0.50; alias queries to API Gateway are free           |      $0.50 |
 | SES inbound sale email      | 300 emails at $0.10 per 1,000, plus 256 KB chunks at $0.09/1,000 |      $0.06 |
-| **Total with a domain**     | $44.85 plus these                                                | **$45.41** |
+| **Total with a domain**     | $42.44 plus these                                                | **$43.00** |
 
 The sale emails' SNS topic and SQS queue add nothing: SNS delivers to SQS for free, and the
 worker's once-a-minute poll is about 45,000 SQS requests a month, inside the free 1 million
 ([email-sales.md](email-sales.md)).
 
-With browser automation as well, the total is $46.89. The domain's registration is billed by
+With browser automation as well, the total is $43.41. The domain's registration is billed by
 its registrar and is not included.
 
 ## Browser automation
 
-Poshmark, Mercari, Depop (until its partner API is granted), and eBay (until its API keys exist)
-are automated in the cloud by the headless-Chromium runner (decision D1 in
-[automation.md](automation.md)). The runner
+Since marketplace actions and sale checks run on the seller's iPhone
+([automation.md](automation.md)), only eBay's browser automation (until its API keys exist) can
+use the cloud's headless-Chromium runner: it ran about 20 minutes in all in October 2026. The
+runner
 is reserved at 1 vCPU and 4 GB, with no task while idle (`browserRunner` in
 `infra/src/config.ts`): it is the compute stack's `runner` service at a desired count of 0.
 The worker sets the count to 1 when automated listing actions or sale checks wait, and the
@@ -115,31 +137,28 @@ about a minute, and starts a check at once only when it cannot be matched to an 
 On demand the runner costs $0.0583 an hour (1 vCPU at $0.04048 and 4 GB at $0.004446, x86),
 plus $0.005 an hour for its public address while it runs. Assumptions:
 
-- About 60 scheduled checks a month at about 6 billed minutes each (task startup, all three
-  marketplaces checked at human pace, then the two idle minutes before it exits): 6 hours.
-- About 300 listing actions a month (creates, edits, delists), batched into runs that total
-  about 15 hours.
+- About 2 hours a month of eBay listing actions and 2 of eBay sale checks, an upper bound well
+  above the 20 minutes measured.
 - The worker's dispatch task (every minute, inside the worker's task) starts the runner; it
   adds nothing to the bill.
 - The runner image adds about 1.5 GB of Chromium layers to ECR, stored again only when the
-  dependencies change; each release adds its application layer, as the app image does.
+  dependencies change; a release that changes the application adds its application layer, as
+  the app image does.
 
 | Item                               | Usage                                          |    Monthly |
 | ---------------------------------- | ---------------------------------------------- | ---------: |
-| Fargate runner, scheduled checks   | 6 hours at $0.0583 an hour                     |      $0.35 |
-| Fargate runner, listing jobs       | 15 hours at $0.0583 an hour                    |      $0.87 |
-| Public IPv4 address while running  | 21 hours at $0.005 an hour                     |      $0.11 |
+| Fargate runner, eBay listing jobs  | 2 hours at $0.0583 an hour                     |      $0.12 |
+| Fargate runner, eBay sale checks   | 2 hours at $0.0583 an hour                     |      $0.12 |
+| Public IPv4 address while running  | 4 hours at $0.005 an hour                      |      $0.02 |
 | Worker dispatch task               | Every minute, inside the always-on worker task |      $0.00 |
 | ECR storage for the Chromium image | About 1.5 GB more at $0.10 per GB              |      $0.15 |
-| **Automation subtotal**            |                                                |  **$1.48** |
-| **Total with browser automation**  | $44.85 plus the automation subtotal            | **$46.33** |
+| **Automation subtotal**            |                                                |  **$0.41** |
+| **Total with browser automation**  | $42.44 plus the automation subtotal            | **$42.85** |
 
-An always-on runner (one 1 vCPU / 4 GB task 24/7) is the alternative if per-job startup ever
-gets in the way: about $42.56 a month, plus $3.65 for its address. Listing jobs scale with
-listing volume, at about $0.06 an hour of browser work. Checks are bounded by the 2-hour
-minimum: even a seller selling around the clock on all three marketplaces, with every check
-starting the runner, keeps scheduled checks under about 36 hours a month (about $2.30 with
-the address).
+If the cloud ran every marketplace's listing actions and sale checks again (before on-phone
+execution, about 300 listing actions and 60 checks a month: 21 hours), the subtotal would be
+about $1.48. An always-on runner (one 1 vCPU / 4 GB task 24/7) would cost about $42.56 a month,
+plus $3.65 for its address.
 
 ## What the design avoids
 
@@ -176,9 +195,12 @@ What the savings give up, and why that is acceptable for one person:
 ## Levers to cut it further
 
 1. **Free Tier credits.** New AWS accounts receive $100 in credits, and up to $100 more for
-   trying foundational services, valid for up to 12 months: about six months of this bill.
+   trying foundational services, valid for up to 12 months. None were applied to the captain's
+   account (October 2026): it is an existing account in an AWS organization, which may not be
+   eligible. Do not count on them.
 2. **Graviton Fargate.** ARM tasks cost $0.03238 per vCPU and $0.00356 per GB an hour, so the
-   task drops from $18.02 to $14.42. The deploy workflow would have to build an `arm64` image.
+   task drops from $18.02 to $14.42. The deploy workflow would have to build an `arm64` image
+   (natively, on GitHub's free `ubuntu-24.04-arm` runner). Not done yet: a separate decision.
 3. **Fargate Spot.** Up to 70% off the task (about $13 a month), but AWS can stop it with two
    minutes' notice. Sale emails and delists wait until a replacement starts, so this trades
    away the reliability of auto-delist; not recommended.
@@ -190,11 +212,11 @@ Costs to watch: the `db.t4g.micro` bills $0.075 per vCPU-hour if its average CPU
 its baseline for a day (unlimited burst mode; the `database-cpu` alarm fires first), photo
 storage grows by about $0.02 per 100 items a month, each KMS key rotation adds $1 a month
 for the first two years, alarms beyond the always-free ten cost $0.10 each (the
-environment has 22: the eight platform alarms and the 14 trust alarms, six plus delist
-latency and verified success per marketplace, which are worth more than the $1.20), and each
-custom metric beyond the always-free ten costs $0.30 a month
-for the hours it receives data (each AI-active account adds one, each connected marketplace
-status one).
+environment has 23: the eight platform alarms, the worker heartbeat, and the 14 trust alarms,
+six plus delist latency and verified success per marketplace, which are worth more than the
+$1.30), and each custom metric beyond the always-free ten costs $0.30 a month for the hours it
+receives data (each AI-active account adds one). A breakdown no alarm reads belongs in the log
+line, not in a metric's dimensions ([observability.md](observability.md)).
 
 ## Sources (read 2026-10-24)
 

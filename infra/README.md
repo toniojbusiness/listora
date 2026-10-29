@@ -35,7 +35,7 @@ snapshot diff.
 ### The personal environment
 
 The same stacks, image, and deploy workflow, with every hourly charge that one user does not need
-removed. It costs about $45 a month, or about $46 a month with browser automation, and $0.56 more
+removed. It costs about $42 a month, or about $43 a month with browser automation, and $0.56 more
 once a domain is added; [docs/features/costs.md](../docs/features/costs.md) has the line items, the
 alternatives each choice beat, and the levers left.
 
