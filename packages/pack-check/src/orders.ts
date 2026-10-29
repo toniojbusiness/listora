@@ -115,7 +115,11 @@ export async function loadPackOrders(
   );
 }
 
-/** The orders with these sale ids, in that order (an id that isn't the account's is left out). */
+/**
+ * The orders with these sale ids, in that order. An id that isn't the account's is left out, and
+ * so is a packed sale past buyer data retention, whose package no longer has its tracking number
+ * (docs/features/privacy.md#retention): it is done, so it is no longer an order to pack.
+ */
 export async function loadPackOrdersById(
   executor: DbExecutor,
   accountId: string,
@@ -196,6 +200,7 @@ export async function loadPackOrdersById(
     const orderItems = itemsOf.get(saleId) ?? [];
     const label = labelOf.get(saleId);
     const pack = packOf.get(saleId);
+    if (pack?.tracking_number === null) return [];
     return [
       {
         saleId,

@@ -50,7 +50,11 @@ someone redeemed, it turns off their access at once: the identity provider signs
 everywhere and disables their user (`AdminUserGlobalSignOut`, `AdminDisableUser`), and the
 tenancy guard refuses their tokens with `403` from the next request (a token issued earlier
 still verifies, so the guard checks the invite on every request). Their account and data are
-kept, and `restoreInvite` gives the access back (`AdminEnableUser`). The identity provider is
+kept, and `restoreInvite` gives the access back (`AdminEnableUser`). Both name the person by
+their Cognito `sub` once they signed in (their `app_user.auth_subject`), and by the claimed email
+only when no user has that `sub` or they never signed in, so a changed email cannot slip past a
+revocation. Nobody can change their own email anyway: the app client may write only `locale`
+(audit L14, [auth.md](auth.md)). The identity provider is
 called first, inside the request's transaction: when it fails, the answer is a retryable `503`
 and nothing was revoked, so the app never shows a revocation that did not happen.
 

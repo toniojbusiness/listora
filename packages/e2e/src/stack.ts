@@ -155,6 +155,10 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       API_PORT: String(port),
       AUTH_DRIVER: 'dev',
       AUTH_DEV_SECRET: randomBytes(32).toString('base64'),
+      // UI tests drive the app far faster than a person, all from one address.
+      API_RATE_LIMIT_PER_ADDRESS: '1000000',
+      API_RATE_LIMIT_PUBLIC_PER_ADDRESS: '1000000',
+      API_RATE_LIMIT_PER_ACCOUNT: '1000000',
     });
     processes.push({ name: 'api', process: api });
     await api.waitForLog(

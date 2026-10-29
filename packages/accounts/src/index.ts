@@ -44,6 +44,7 @@ export {
 export type {
   AwsCognitoInviteeDirectoryOptions,
   AwsSesRecipientVerifierOptions,
+  Invitee,
   InviteeDirectory,
   InviteeEmailState,
   RecipientVerifier,

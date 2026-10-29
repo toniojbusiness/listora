@@ -167,6 +167,8 @@ needed only to run against a real pool (gates G-AWS and G-Apple).
   email limit. The SES account must be out of the sandbox.
 - `PreventUserExistenceErrors: ENABLED`, token revocation enabled (the default), and deletion
   protection on in production.
+- The app client's write attributes are `locale` only, so nobody changes their own email
+  (which names them to invites and revoking, [invites.md](invites.md)).
 
 **Sign in with Apple identity provider** (`SignInWithApple`)
 

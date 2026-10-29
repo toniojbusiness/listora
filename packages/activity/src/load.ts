@@ -546,7 +546,11 @@ async function packages(db: DbExecutor, filter: ActivityFilter): Promise<Activit
     const packed: ActivityEntry = {
       ...blank(`package:${row.sale_id}`, row.packed_at),
       ...base,
-      title: `Packed with the label ending ${row.tracking_number.slice(-4)}`,
+      // Past buyer data retention the package keeps no tracking number.
+      title:
+        row.tracking_number === null
+          ? 'Packed'
+          : `Packed with the label ending ${row.tracking_number.slice(-4)}`,
       detail: MATCH_WORDS[row.matched_by],
     };
     if (row.photo_key === null || row.photo_added_at === null) return [packed];
