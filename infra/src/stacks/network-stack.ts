@@ -26,6 +26,11 @@ export class NetworkStack extends ListoraStack {
   readonly ingressSecurityGroup: ec2.SecurityGroup;
   readonly apiSecurityGroup: ec2.SecurityGroup;
   readonly workerSecurityGroup: ec2.SecurityGroup;
+  /**
+   * The browser runner's group: HTTPS out (TCP, and UDP for HTTP/3) and the database, nothing
+   * else, so a page Chromium is sent to cannot reach any other port (docs/features/security.md).
+   */
+  readonly runnerSecurityGroup: ec2.SecurityGroup;
   readonly databaseSecurityGroup: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: ListoraStackProps) {
@@ -96,11 +101,20 @@ export class NetworkStack extends ListoraStack {
     );
 
     this.workerSecurityGroup = this.securityGroup('Worker', 'Worker tasks (no inbound)', true);
+    this.runnerSecurityGroup = this.securityGroup('Runner', 'browser runner (no inbound)');
+    this.runnerSecurityGroup.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
+    this.runnerSecurityGroup.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.udp(443), 'HTTP/3');
 
     this.databaseSecurityGroup = this.securityGroup('Database', 'PostgreSQL');
+    this.runnerSecurityGroup.addEgressRule(
+      this.databaseSecurityGroup,
+      ec2.Port.tcp(DATABASE_PORT),
+      'To PostgreSQL',
+    );
     for (const [peer, name] of [
       [this.apiSecurityGroup, 'API'],
       [this.workerSecurityGroup, 'worker'],
+      [this.runnerSecurityGroup, 'browser runner'],
     ] as const) {
       this.databaseSecurityGroup.addIngressRule(
         peer,
@@ -111,8 +125,10 @@ export class NetworkStack extends ListoraStack {
   }
 
   /**
-   * A security group with no rules yet. Only task groups get unrestricted egress (marketplace,
-   * AI, and AWS APIs); the ingress and database groups get explicit rules only.
+   * A security group with no rules yet. Only the API and worker groups get unrestricted egress
+   * (marketplace, AI, and AWS APIs); the ingress, runner, and database groups get explicit rules
+   * only. (The VPC's DNS resolver and the task metadata endpoints are not subject to security
+   * groups.)
    */
   private securityGroup(id: string, description: string, allowAllOutbound = false) {
     return new ec2.SecurityGroup(this, `${id}SecurityGroup`, {

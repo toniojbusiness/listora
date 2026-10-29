@@ -357,6 +357,86 @@
       "UpdateReplacePolicy": "Delete",
       "DeletionPolicy": "Delete"
     },
+    "VpcRejectedTrafficIAMRole1D6CF132": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-personal-network/Vpc/RejectedTraffic"
+          }
+        ]
+      }
+    },
+    "VpcRejectedTrafficIAMRoleDefaultPolicyA182BCA3": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:DescribeLogStreams",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "RejectedFlowLogsDB7DF1C0",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "VpcRejectedTrafficIAMRoleDefaultPolicyA182BCA3",
+        "Roles": [
+          {
+            "Ref": "VpcRejectedTrafficIAMRole1D6CF132"
+          }
+        ]
+      }
+    },
+    "VpcRejectedTrafficFlowLog2E62DEAE": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "VpcRejectedTrafficIAMRole1D6CF132",
+            "Arn"
+          ]
+        },
+        "LogDestinationType": "cloud-watch-logs",
+        "LogGroupName": {
+          "Ref": "RejectedFlowLogsDB7DF1C0"
+        },
+        "ResourceId": {
+          "Ref": "Vpc8378EB38"
+        },
+        "ResourceType": "VPC",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-personal-network/Vpc/RejectedTraffic"
+          }
+        ],
+        "TrafficType": "REJECT"
+      }
+    },
     "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -437,6 +517,15 @@
       "DependsOn": [
         "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
       ]
+    },
+    "RejectedFlowLogsDB7DF1C0": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/listora/personal/vpc-rejected",
+        "RetentionInDays": 7
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
     },
     "VpcLinkSecurityGroupB3941EDC": {
       "Type": "AWS::EC2::SecurityGroup",
@@ -521,6 +610,52 @@
         }
       }
     },
+    "RunnerSecurityGroupDE989EBE": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Listora browser runner (no inbound)",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTPS",
+            "FromPort": 443,
+            "IpProtocol": "tcp",
+            "ToPort": 443
+          },
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP/3",
+            "FromPort": 443,
+            "IpProtocol": "udp",
+            "ToPort": 443
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "RunnerSecurityGrouptolistorapersonalnetworkDatabaseSecurityGroupBA33D6EA5432002028B2": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "Description": "To PostgreSQL",
+        "DestinationSecurityGroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup7319C0F6",
+            "GroupId"
+          ]
+        },
+        "FromPort": 5432,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "RunnerSecurityGroupDE989EBE",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "ToPort": 5432
+      }
+    },
     "DatabaseSecurityGroup7319C0F6": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -580,6 +715,27 @@
         },
         "ToPort": 5432
       }
+    },
+    "DatabaseSecurityGroupfromlistorapersonalnetworkRunnerSecurityGroupE5EF8C81543205A6C524": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "From browser runner tasks",
+        "FromPort": 5432,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup7319C0F6",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "RunnerSecurityGroupDE989EBE",
+            "GroupId"
+          ]
+        },
+        "ToPort": 5432
+      }
     }
   },
   "Outputs": {
@@ -623,6 +779,14 @@
       "Value": {
         "Fn::GetAtt": [
           "ApiSecurityGroup4E5BB726",
+          "GroupId"
+        ]
+      }
+    },
+    "PublishOutputFnGetAttRunnerSecurityGroupDE989EBEGroupIdF3EB8EA0": {
+      "Value": {
+        "Fn::GetAtt": [
+          "RunnerSecurityGroupDE989EBE",
           "GroupId"
         ]
       }

@@ -1,10 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
 import { ENVIRONMENT_NAMES } from './config.ts';
-import { DEPLOY_BRANCH_REF, deployRoleName } from './stacks/deploy-access-stack.ts';
+import {
+  DEPLOY_BRANCH_REF,
+  deployRoleName,
+  deployWorkflowFile,
+} from './stacks/deploy-access-stack.ts';
 import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
 import { stackList, synthesize } from './test-support.ts';
 
@@ -232,5 +236,68 @@ describe('deploy personal workflow', () => {
   it('deploys with scripts/deploy-personal.sh, as the deploy from a Mac does', () => {
     expect(deploy.steps.at(-1)?.run?.trim()).toBe('scripts/deploy-personal.sh --ci');
     expect(deploy.env?.['LISTORA_OWNER_EMAIL']).toBe('${{ secrets.OWNER_EMAIL }}');
+  });
+});
+
+const workflowsDirectory = new URL('../../.github/workflows/', import.meta.url);
+const workflows = readdirSync(workflowsDirectory)
+  .filter((file) => file.endsWith('.yml'))
+  .map((file) => ({
+    file,
+    jobs: (
+      parse(readFileSync(new URL(file, workflowsDirectory), 'utf8')) as {
+        jobs: Record<string, Job>;
+      }
+    ).jobs,
+  }));
+
+describe('OIDC token exposure', () => {
+  // GitHub grants id-token to a whole job, never to one step, so any code a job runs could ask
+  // for its OIDC token: an install script of any dependency included.
+  it('installs dependencies without their install scripts in every job that can get an OIDC token', () => {
+    const installs = workflows.flatMap(({ file, jobs }) =>
+      Object.entries(jobs)
+        .filter(([, job]) => job.permissions?.['id-token'] === 'write')
+        .flatMap(([name, job]) =>
+          job.steps
+            .filter((step) => /\bnpm (ci|install|i)\b/.test(step.run ?? ''))
+            .map((step) => [`${file} ${name}`, step.run?.trim()]),
+        ),
+    );
+    expect(installs).toEqual([
+      ['deploy-personal.yml deploy', 'npm ci --ignore-scripts'],
+      ['deploy.yml deploy', 'npm ci --ignore-scripts'],
+    ]);
+  });
+
+  it('needs no install script: no locked package has one, except macOS-only fsevents', () => {
+    const lock = JSON.parse(
+      readFileSync(new URL('../../package-lock.json', import.meta.url), 'utf8'),
+    ) as { packages: Record<string, { hasInstallScript?: boolean; os?: string[] }> };
+    const scripted = Object.entries(lock.packages).filter(([, entry]) => entry.hasInstallScript);
+    expect(scripted.map(([path, entry]) => [path, entry.os])).toEqual([
+      ['node_modules/fsevents', ['darwin']],
+    ]);
+  });
+
+  it("names, in each environment's role trust, the one workflow that deploys it", () => {
+    for (const environment of ENVIRONMENT_NAMES) {
+      const file = deployWorkflowFile(environment);
+      const role = deployRoleName(
+        environment === 'personal' ? 'personal' : '${{ inputs.environment }}',
+      );
+      const logins = workflows.flatMap(({ file: name, jobs }) =>
+        Object.values(jobs).flatMap((job) =>
+          job.steps
+            .filter((step) => step.uses?.startsWith('aws-actions/configure-aws-credentials@'))
+            .filter((step) => String(step.with?.['role-to-assume']).endsWith(`:role/${role}`))
+            .map(() => name),
+        ),
+      );
+      expect(logins).toEqual([file]);
+    }
+    expect(workflow.on['workflow_dispatch']?.inputs['environment']?.options).toEqual(
+      ENVIRONMENT_NAMES.filter((environment) => deployWorkflowFile(environment) === 'deploy.yml'),
+    );
   });
 });

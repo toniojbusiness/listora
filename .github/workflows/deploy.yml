@@ -28,8 +28,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     # The GitHub environment carries the protection rules (required reviewers, main only) and
-    # the non-secret settings below. Its name is also the OIDC subject the AWS role trusts, so
-    # no other workflow, branch, or environment can assume the role.
+    # the non-secret settings below. Its name is also in the OIDC subject the AWS role trusts,
+    # with the branch and this workflow file, so no other workflow, branch, or environment can
+    # assume the role.
     environment: ${{ inputs.environment }}
     permissions:
       contents: read
@@ -52,7 +53,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
+      # GitHub grants id-token to the whole job, not to one step, so nothing in it runs an install
+      # script: one in any of the hundreds of packages could ask for the job's OIDC token. No
+      # package Listora uses needs one (infra/src/deploy-workflow.test.ts checks the lockfile).
+      - run: npm ci --ignore-scripts
       - name: Test and synthesize the infrastructure (offline)
         run: |
           npx vitest run --project unit infra

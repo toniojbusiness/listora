@@ -353,7 +353,8 @@ describe('ENVIRONMENT_SETTINGS', () => {
     expect(personal.protectData).toBe(true);
     // No NAT gateway and no load balancer: their hourly charges dwarf everything else.
     expect(personal.network.taskEgress).toEqual({ via: 'public-ip' });
-    expect(personal.network.rejectedFlowLogs).toBe(false);
+    // Rejected flows only, kept the environment's week (about $2 a month).
+    expect(personal.network.rejectedFlowLogs).toBe(true);
     // The execute-api URL stays on, so adding a domain breaks no registered callback URL.
     expect(personal.ingress).toEqual({ via: 'http-api', disableDefaultEndpoint: false });
     // The smallest Graviton class, one zone, autoscaled storage, automated backups.
