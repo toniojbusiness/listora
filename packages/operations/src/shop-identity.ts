@@ -10,9 +10,11 @@
  *   and its listings leave it, marked as from the previous shop, exactly as an unlink leaves them:
  *   an import of a shop that has them takes them back.
  *
- * The database then keeps read only by seller (migration `20261029042234_shop_seller`): a
- * connection that comes to hold a protected shop, or a seller the account kept read only,
- * becomes read only, and its waiting changes fail with the read-only error.
+ * The database then keeps read only by seller (migrations `20261029042234_shop_seller` and
+ * `20261029233830_shop_read_only`): a connection that comes to hold a protected shop, or a seller
+ * the account kept read only, becomes read only, and its waiting changes fail with the read-only
+ * error; one whose read only was carried from the account's marketplace, or belonged to the shop
+ * it held before, becomes writable for any other seller.
  */
 import { sql } from 'kysely';
 
@@ -36,6 +38,12 @@ export interface RecordedSeller {
   changed: boolean;
   /** The connection became read only because of the seller it now holds. */
   becameReadOnly: boolean;
+  /**
+   * The connection is no longer read only: its read only was carried from the account's
+   * marketplace, or belonged to the shop it held before, and the seller it now holds is neither
+   * protected nor kept read only.
+   */
+  becameWritable: boolean;
   /** The changes that waited on the connection and failed, oldest first. */
   refused: string[];
 }
@@ -60,7 +68,13 @@ export async function recordConnectionSeller(
     if (connection === undefined) return undefined;
     const { marketplace } = connection;
     if (connection.external_user_id === sellerId) {
-      return { marketplace, changed: false, becameReadOnly: false, refused: [] };
+      return {
+        marketplace,
+        changed: false,
+        becameReadOnly: false,
+        becameWritable: false,
+        refused: [],
+      };
     }
 
     const changed = connection.external_user_id !== null;
@@ -91,6 +105,7 @@ export async function recordConnectionSeller(
       .executeTakeFirstOrThrow();
 
     const becameReadOnly = updated.read_only && !connection.read_only;
+    const becameWritable = !updated.read_only && connection.read_only;
     if (becameReadOnly) {
       refused.push(
         ...(await failWaitingWrites(trx, {
@@ -104,6 +119,6 @@ export async function recordConnectionSeller(
         })),
       );
     }
-    return { marketplace, changed, becameReadOnly, refused };
+    return { marketplace, changed, becameReadOnly, becameWritable, refused };
   });
 }

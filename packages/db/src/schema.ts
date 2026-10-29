@@ -467,6 +467,11 @@ export interface MarketplaceConnectionTable {
   phone_device_id: Nullable<string>;
   /** Listora only reads the account: every write refuses (docs/features/read-only.md). */
   read_only: Generated<boolean>;
+  /**
+   * Read only only because the account's marketplace was when the connection was made: it stays
+   * so until the session check names the shop, then follows that shop (read-only.md).
+   */
+  read_only_carried: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -483,9 +488,9 @@ export interface MarketplaceReadOnlyTable {
 }
 
 /**
- * A seller an account's read-only connection held: kept by triggers, so a connection of the
- * account that comes to hold it again is read only again, until the owner turns Read only off
- * with it linked (docs/features/read-only.md#the-shop-not-the-row).
+ * A seller an account's connection held while read only by the owner's setting: kept by
+ * triggers, so a connection of the account that comes to hold it again is read only again, until
+ * the owner turns Read only off with it linked (docs/features/read-only.md#the-shop-not-the-row).
  */
 export interface ReadOnlySellerTable {
   account_id: string;
@@ -496,14 +501,13 @@ export interface ReadOnlySellerTable {
 
 /**
  * A shop Listora only ever reads, whoever links it: every connection that holds it is read only
- * and stays so. Named by its seller id, or by the connection that holds it until that
- * connection's first recorded seller fills the id in. Only a migration changes it.
+ * and stays so. Named by its seller only, as `seller_digest(seller_id)` (SHA-256, hex), so a
+ * real shop's handle is never in the repository. Only a migration changes it.
  */
 export interface ProtectedSellerTable {
   id: Id;
   marketplace: Marketplace;
-  seller_id: Nullable<string>;
-  connection_id: Nullable<string>;
+  seller_digest: string;
   reason: string;
   created_at: CreatedAt;
 }

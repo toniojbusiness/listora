@@ -198,7 +198,8 @@ export async function setConnectionReadOnly(
     }
     const connection = await trx
       .updateTable('marketplace_connection')
-      .set({ read_only: readOnly })
+      // The owner's own setting: the seller's from now on, never carried.
+      .set({ read_only: readOnly, read_only_carried: false })
       .where('account_id', '=', target.accountId)
       .where('id', '=', target.connectionId)
       .returning(['marketplace'])
@@ -224,10 +225,7 @@ export function holdsProtectedShop(alias: string): RawBuilder<boolean> {
   return sql<boolean>`exists (
     select 1 from protected_seller as shop
     where shop.marketplace = ${connection('marketplace')}
-      and (
-        shop.seller_id = ${connection('external_user_id')}
-        or (shop.seller_id is null and shop.connection_id = ${connection('id')})
-      )
+      and shop.seller_digest = seller_digest(${connection('external_user_id')})
   )`;
 }
 
