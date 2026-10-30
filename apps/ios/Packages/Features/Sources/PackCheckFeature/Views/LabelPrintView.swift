@@ -81,6 +81,8 @@ struct LabelPrintView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .cardStyle(.flat)
+        // Read as one: what the job prints.
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("labelPrint.contents")
     }
 

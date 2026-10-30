@@ -42,6 +42,7 @@ struct PackCheckExplainer: View {
                 .foregroundStyle(Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("packCheck.explainer")
     }
 

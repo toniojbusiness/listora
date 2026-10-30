@@ -18,7 +18,7 @@ extension AppDependencies {
         _ defaults: UserDefaults,
     ) -> PackCheckEnvironment {
         let (configuration, launchOptions) = build
-        PackCheckEnvironment(
+        return PackCheckEnvironment(
             apiClient: apiClient,
             accessTokens: accessTokens,
             phoneWork: phone.runner,

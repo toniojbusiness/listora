@@ -111,6 +111,10 @@ final class PackCheckUITests: XCTestCase {
         let packOrders = app.buttons["sales.packOrders"]
         XCTAssertTrue(packOrders.waitForExistence(timeout: 15), "no Pack orders entry")
         packOrders.tap()
+        // The first opening explains how Pack check works.
+        let gotIt = app.buttons["packCheck.explainer.done"]
+        XCTAssertTrue(gotIt.waitForExistence(timeout: 10), "no How Pack check works")
+        gotIt.tap()
 
         // Order A: the tee. Its card names the buyer and the label read from the marketplace.
         let teeCard = app.buttons["pack.order.\(tee.sku)"]
