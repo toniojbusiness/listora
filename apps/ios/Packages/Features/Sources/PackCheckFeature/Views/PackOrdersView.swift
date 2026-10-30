@@ -101,12 +101,14 @@ struct PackOrdersView: View {
                     .accessibilityIdentifier("pack.startAll")
                     SectionHeader("To pack", subtitle: "\(model.unpacked.count) not packed")
                     ForEach(model.unpacked, id: \.saleId) { order in
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Button { start([order]) } label: { PackOrderCard(order: order) }
+                        // The order and its print actions, ruled off from the next order together.
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Button { start([order]) } label: { PackOrderCard(order: order, ruled: false) }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("pack.order.\(order.items.first?.sku ?? order.saleId)")
                             printActions(order)
                         }
+                        .cardStyle(.ruled)
                     }
                 }
                 if !model.packed.isEmpty {
@@ -201,6 +203,8 @@ extension PackSessionModel: Identifiable {
 /// One order on the to-ship list: what to pull from the shelf, who it goes to, and its label.
 struct PackOrderCard: View {
     let order: PackOrder
+    /// Ruled off from the next card; off where the card's container is ruled instead.
+    var ruled = true
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
@@ -231,7 +235,7 @@ struct PackOrderCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // A day's orders are a list: ruled, not boxed.
-        .cardStyle(.ruled)
+        .modifier(RuledCard(ruled: ruled))
         .accessibilityElement(children: .combine)
     }
 
@@ -295,6 +299,19 @@ extension StatusTone {
         case .failed: self = .failed
         case .actionNeeded: self = .actionNeeded
         case .neutral, nil: self = .neutral
+        }
+    }
+}
+
+/// A card ruled off from the next one, or plain.
+private struct RuledCard: ViewModifier {
+    let ruled: Bool
+
+    func body(content: Content) -> some View {
+        if ruled {
+            content.cardStyle(.ruled)
+        } else {
+            content
         }
     }
 }

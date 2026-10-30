@@ -84,7 +84,8 @@ final class PackCheckUITests: XCTestCase {
         app.buttons["pack.printLabel.\(tee.sku)"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["labelPrint.printedBefore"].waitForExistence(timeout: 10))
         app.buttons["labelPrint.print"].tap()
-        let again = app.buttons["labelPrint.again"]
+        // The system's dialog nests its button in another of the same identifier.
+        let again = app.buttons["labelPrint.again"].firstMatch
         XCTAssertTrue(again.waitForExistence(timeout: 5), "no question before the second print")
         keepScreenshot("Pack check - print again?")
         again.tap()
