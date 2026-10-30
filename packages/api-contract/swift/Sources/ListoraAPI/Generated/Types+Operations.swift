@@ -21407,6 +21407,183 @@ public enum Operations {
             }
         }
     }
+    /// Get one sale's package
+    ///
+    /// One sale's order as Pack check sees it, for the sale's own screen: its items, label, and
+    /// whether it is packed (when, and how it matched). Any of the account's sales, packed or
+    /// not, also once it is off the to-ship list; whether it still needs shipping is the sale's
+    /// own status. A sale that isn't the account's, or whose package is past buyer data
+    /// retention, is `404`. Only reads; no marketplace call.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/orders/{saleId}`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/get(getPackOrder)`.
+    public enum GetPackOrder {
+        public static let id: Swift.String = "getPackOrder"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/GET/path/saleId`.
+                public var saleId: Components.Parameters.SaleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - saleId:
+                public init(saleId: Components.Parameters.SaleId) {
+                    self.saleId = saleId
+                }
+            }
+            public var path: Operations.GetPackOrder.Input.Path
+            /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetPackOrder.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetPackOrder.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetPackOrder.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetPackOrder.Input.Path,
+                headers: Operations.GetPackOrder.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PackOrder)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PackOrder {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetPackOrder.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetPackOrder.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The order.
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/get(getPackOrder)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetPackOrder.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetPackOrder.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/get(getPackOrder)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/get(getPackOrder)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Pack an order
     ///
     /// Records that the scanned label went on this order's package. The scan is checked again:

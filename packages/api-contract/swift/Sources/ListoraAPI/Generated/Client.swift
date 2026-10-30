@@ -13777,6 +13777,114 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// Get one sale's package
+    ///
+    /// One sale's order as Pack check sees it, for the sale's own screen: its items, label, and
+    /// whether it is packed (when, and how it matched). Any of the account's sales, packed or
+    /// not, also once it is off the to-ship list; whether it still needs shipping is the sale's
+    /// own status. A sale that isn't the account's, or whose package is past buyer data
+    /// retention, is `404`. Only reads; no marketplace call.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/orders/{saleId}`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/get(getPackOrder)`.
+    public func getPackOrder(_ input: Operations.GetPackOrder.Input) async throws -> Operations.GetPackOrder.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetPackOrder.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/pack-check/orders/{}",
+                    parameters: [
+                        input.path.saleId
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetPackOrder.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.PackOrder.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 404:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.NotFound.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .notFound(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// Pack an order
     ///
     /// Records that the scanned label went on this order's package. The scan is checked again:

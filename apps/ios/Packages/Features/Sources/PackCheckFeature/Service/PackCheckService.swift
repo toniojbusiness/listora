@@ -13,6 +13,9 @@ protocol PackCheckService: Sendable {
     func setEnabled(_ enabled: Bool) async throws(APIFailure) -> Bool
     /// The to-ship list (`listPackOrders`).
     func orders() async throws(APIFailure) -> [PackOrder]
+    /// One sale's order, packed or not, for the sale's own screen (`getPackOrder`); `nil` when
+    /// Pack check has none for it.
+    func saleOrder(saleID: String) async throws(APIFailure) -> PackOrder?
     /// Asks for label reads; returns how many orders' labels will be read.
     func refreshLabels() async throws(APIFailure) -> Int
     /// What a scan means for the order being packed (`checkPackScan`); only reads.
@@ -64,6 +67,14 @@ struct APIPackCheckService: PackCheckService {
     func orders() async throws(APIFailure) -> [PackOrder] {
         switch try await call({ try await client.listPackOrders() }) {
         case let .ok(response): try body { try response.body.json }.data
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func saleOrder(saleID: String) async throws(APIFailure) -> PackOrder? {
+        switch try await call({ try await client.getPackOrder(path: .init(saleId: saleID)) }) {
+        case let .ok(response): try body { try response.body.json }
+        case .notFound: nil
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

@@ -371,6 +371,42 @@ describe('pack check (real Postgres)', () => {
     expect((await pack(second.saleId, { label: DOUBLE_PRINT.labelB })).status).toBe(200);
   });
 
+  it("shows one sale's package for its screen: not packed, packed, and still after a day", async () => {
+    const order1 = await order({ title: 'Sale screen tee', tracking: '9400111899223197426161' });
+    const get = (saleId: string) => api.call('getPackOrder', { token, params: { saleId } });
+    const before = await get(order1.saleId);
+    expect(before.status).toBe(200);
+    expect(before.body).toMatchObject({
+      saleId: order1.saleId,
+      labelStatus: { label: 'USPS •••• 6161 (from Depop)' },
+      packStatus: { tone: 'neutral', label: 'Not packed' },
+    });
+    expect(before.body.pack).toBeUndefined();
+
+    await pack(order1.saleId, {
+      label: '9400111899223197426161',
+      sticker: `LISTORA:${order1.sku}`,
+    });
+    // Packed a day ago and more (the session's clock stays, so the sign-in holds).
+    await api.db
+      .updateTable('sale_pack')
+      .set({ packed_at: new Date(api.clock.now - 26 * HOUR) })
+      .where('sale_id', '=', order1.saleId)
+      .execute();
+    // Off the to-ship list after a day, still packed on its own screen.
+    const listed = await api.call('listPackOrders', { token });
+    expect(listed.body.data.some((entry) => entry.saleId === order1.saleId)).toBe(false);
+    const after = await get(order1.saleId);
+    expect(after.body).toMatchObject({
+      pack: { matchedBy: 'sticker', stickerSku: order1.sku },
+      packStatus: { tone: 'success', label: 'Packed yesterday (label and sticker matched)' },
+    });
+
+    const other = await api.tenantOf(OTHER);
+    const theirs = await order({ title: 'Their sale', accountId: other.accountId });
+    expect((await get(theirs.saleId)).status).toBe(404);
+  });
+
   it("makes the match exact with the item sticker and stops another item's sticker", async () => {
     const tee = await order({ title: 'Sticker tee', tracking: '9400111899223197423333' });
     const other = await order({ title: 'Other item', tracking: '9400111899223197424444' });

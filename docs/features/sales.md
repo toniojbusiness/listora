@@ -112,7 +112,9 @@ items' audit log.
 
 - **Confirm** (`confirmSale`) records `confirmed_at`.
 - **Ship** (`markSaleShipped`) records `shipped_at`, the label cost the seller paid outside the
-  payout (`shippingCost`, optional), and moves the items to `shipped`.
+  payout (`shippingCost`, optional), and moves the items to `shipped`. On the sale's screen it
+  is the main step, except while Pack check is on and the order is not packed yet: then "Pack
+  this order" comes first ([pack-check.md](pack-check.md#on-the-sales-screen)).
 - **Cancel** (`cancelSale`, before shipping) and **return** (`recordSaleReturn`, once confirmed
   or shipped). The sale no longer stands, so:
   - its delists that reached no marketplace yet are canceled (`cancelUnsentDelists` in

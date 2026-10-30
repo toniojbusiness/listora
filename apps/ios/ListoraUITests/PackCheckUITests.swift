@@ -103,6 +103,64 @@ final class PackCheckUITests: XCTestCase {
         keepScreenshot("Pack check - item sticker")
     }
 
+    /// A sale still to ship packs from its own screen: "Pack this order" first, Mark shipped
+    /// below; the same scan and its stickers' print; and once packed, the sale says when and how,
+    /// with Mark shipped its next step.
+    func testASaleToShipPacksFromItsOwnScreen() async throws {
+        let stack = try E2EStack.fromEnvironment()
+        let orders = try await stack.seedPackOrders()
+        let tee = try XCTUnwrap(orders.first)
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
+            "LISTORA_DEV_ACCESS_TOKEN": stack.token,
+            "LISTORA_DEV_ACCESS_EMAIL": stack.email,
+            "LISTORA_SCANNED_CODES": Self.labelA,
+            "LISTORA_SCRIPTED_PRINTING": "1",
+        ]
+        app.launchQuietly()
+        app.tabRail.buttons["Sales"].tap()
+        let row = app.buttons["sales.row.\(tee.sku)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "no sale for the tee")
+        row.tap()
+
+        let pack = app.buttons["sale.action.pack"]
+        XCTAssertTrue(pack.waitForExistence(timeout: 15), "no Pack this order")
+        XCTAssertTrue(app.buttons["sale.action.markShipped"].exists, "no Mark shipped below it")
+        keepScreenshot("Sale - pack this order")
+        pack.tap()
+
+        // The same flow as Pack orders, for this order: its label and stickers print from it.
+        XCTAssertTrue(app.buttons["pack.printLabel.\(tee.sku)"].waitForExistence(timeout: 10))
+        keepScreenshot("Sale - packing")
+        scanLabel(app.buttons["pack.scanLabel"])
+        XCTAssertTrue(app.descendants(matching: .any)["pack.verdict.match"].waitForExistence(timeout: 10))
+        app.buttons["pack.packed"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["pack.packedBanner"].waitForExistence(timeout: 10))
+        app.buttons["pack.next"].tap()
+        app.buttons["pack.close"].tap()
+
+        // Packed: when and how, and Mark shipped is next.
+        let status = app.descendants(matching: .any)["sale.package.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 15), "no packed state")
+        XCTAssertTrue(status.label.contains("Packed just now (label matched)"), status.label)
+        XCTAssertFalse(app.buttons["sale.action.pack"].exists)
+        XCTAssertTrue(app.buttons["sale.action.markShipped"].exists)
+        keepScreenshot("Sale - packed")
+
+        // Open package shows it in Pack check, on its package; unpacked, it is to pack again (and
+        // its label, a shared fixture, is free for the other tests).
+        app.buttons["sale.package.open"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["pack.packedBanner"].waitForExistence(timeout: 10))
+        app.buttons["pack.unpack"].tap()
+        XCTAssertTrue(app.buttons["pack.scanLabel"].waitForExistence(timeout: 10), "not unpacked")
+        app.buttons["pack.end"].tap()
+        let close = app.buttons["pack.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        close.tap()
+        XCTAssertTrue(app.buttons["sale.action.pack"].waitForExistence(timeout: 15), "not to pack again")
+    }
+
     /// Sales > Pack orders, then the tee: the dress's label is a red stop, its own label packs.
     private func packTheTeeAfterStoppingTheDressLabel(_ tee: PackOrderSeed) throws {
         // Sales shows the way in while Pack check is on.

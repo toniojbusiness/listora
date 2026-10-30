@@ -11,8 +11,6 @@ struct PackOrdersView: View {
     let environment: PackCheckEnvironment
     @Bindable var model: PackOrdersModel
     @State private var session: PackSessionModel?
-    @State private var printingStickers: StickerBatch?
-    @State private var printingLabel: LabelPrintModel?
     @State private var explaining = false
 
     var body: some View {
@@ -35,13 +33,11 @@ struct PackOrdersView: View {
             }
             .refreshable { await model.refresh() }
             .fullScreenCover(item: sessionBinding) { session in
-                PackSessionView(model: session, scanSource: environment.scanSource) {
+                PackSessionView(model: session, environment: environment) {
                     self.session = nil
                 }
             }
             .sheet(isPresented: $explaining) { PackCheckExplainerSheet() }
-            .sheet(item: $printingStickers) { batch in StickerPrintView(stickers: batch.stickers) }
-            .sheet(item: $printingLabel) { print in LabelPrintView(model: print) }
     }
 
     @ViewBuilder
@@ -106,7 +102,9 @@ struct PackOrdersView: View {
                             Button { start([order]) } label: { PackOrderCard(order: order, ruled: false) }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("pack.order.\(order.items.first?.sku ?? order.saleId)")
-                            printActions(order)
+                            OrderPrintActions(order: order, environment: environment) { [model] changed in
+                                model.replace(changed)
+                            }
                         }
                         .cardStyle(.ruled)
                     }
@@ -123,39 +121,6 @@ struct PackOrdersView: View {
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth)
             .frame(maxWidth: .infinity)
-        }
-    }
-
-    /// The order's stickers, and its label with them, or the order's page on the marketplace.
-    private func printActions(_ order: PackOrder) -> some View {
-        let key = order.items.first?.sku ?? order.saleId
-        let stickers = order.items.map(StickerRequest.init)
-        return HStack(spacing: Spacing.sm) {
-            Button {
-                printingStickers = StickerBatch(stickers: stickers)
-            } label: {
-                Label(stickers.count == 1 ? "Print sticker" : "Print \(stickers.count) stickers", systemImage: "qrcode")
-            }
-            .buttonStyle(ListoraButtonStyle(.secondary, size: .compact))
-            .accessibilityIdentifier("pack.printStickers.\(key)")
-            if order.label?.fileUrl != nil {
-                Button {
-                    printingLabel = environment.makeLabelPrint(order) { [model] changed in model.replace(changed) }
-                } label: {
-                    Label("Print label and stickers", systemImage: "printer")
-                }
-                .buttonStyle(ListoraButtonStyle(.secondary, size: .compact))
-                .accessibilityIdentifier("pack.printLabel.\(key)")
-            } else if let page = order.labelPageUrl.flatMap(URL.init(string:)) {
-                Link(destination: page) {
-                    Label(
-                        "Open label on \(MarketplaceName.of(order.marketplace))",
-                        systemImage: "arrow.up.right.square",
-                    )
-                }
-                .buttonStyle(ListoraButtonStyle(.secondary, size: .compact))
-                .accessibilityIdentifier("pack.openLabel.\(key)")
-            }
         }
     }
 

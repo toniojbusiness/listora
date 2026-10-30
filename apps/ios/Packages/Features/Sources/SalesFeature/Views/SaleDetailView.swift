@@ -6,16 +6,23 @@ import SwiftUI
 /// One sale: what sold, where, and for how much; each fee (estimated until the marketplace
 /// reports it); the payout, profit, and ROI; the delist on every other marketplace, exactly as
 /// the server words it; and the steps the sale's status allows. After a cancel or return it asks
-/// whether to relist, and relists only where the seller chooses.
+/// whether to relist, and relists only where the seller chooses. With Pack check on, an order
+/// still to ship is packed from here first ("Pack this order"), and a packed one says when and how.
 struct SaleDetailView: View {
     @State private var model: SaleDetailModel
+    /// The sale's package, while Pack check is on.
+    @State private var package: SalePackModel?
     @State private var confirming: Components.Schemas.KnownSaleAction?
     @State private var shipping = false
+    @State private var packing: Packing?
     private let phoneProgress: (any PhoneWorkProgressSource)?
+    private let packScreen: (@MainActor (SalePackOrder, @escaping @MainActor () -> Void) -> AnyView)?
 
     init(environment: SalesEnvironment, saleID: String) {
         _model = State(initialValue: environment.makeDetailModel(saleID: saleID))
+        _package = State(initialValue: environment.makePackModel(saleID: saleID))
         phoneProgress = environment.phoneProgress
+        packScreen = environment.salePacking?.packScreen
     }
 
     var body: some View {
@@ -25,13 +32,26 @@ struct SaleDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await model.load()
+                await package?.load()
                 await model.followChanges()
             }
-            .refreshable { await model.load() }
+            .refreshable {
+                await model.load()
+                await package?.load()
+            }
             .sheet(isPresented: $shipping) {
                 ShipSaleView { labelCost in
                     shipping = false
                     Task { await model.perform(.markShipped(labelCostCents: labelCost)) }
+                }
+            }
+            .fullScreenCover(item: $packing) { packing in
+                packScreen?(packing.order) {
+                    self.packing = nil
+                    Task {
+                        await package?.load()
+                        await model.load()
+                    }
                 }
             }
     }
@@ -80,6 +100,9 @@ struct SaleDetailView: View {
                     )
                     .transition(.rise)
                 }
+                if let packed = package?.packedOrder {
+                    PackageSection(order: packed) { packing = Packing(order: packed) }
+                }
                 ForEach(sale.doubleSales, id: \.taskId) { double in
                     Banner(double.title, message: double.steps.joined(separator: " "), tone: .actionNeeded)
                 }
@@ -109,23 +132,49 @@ struct SaleDetailView: View {
         }
     }
 
-    /// The main next step (ship, or record a return) full width; the others as text buttons below.
+    /// The main next step (packing, shipping, or recording a return) full width; the others as text
+    /// buttons below.
     private func actions(for sale: Sale) -> some View {
-        let actions = sale.knownActions
-        let primary = actions.first { $0 == .markShipped || $0 == .recordReturn }
+        let steps = SaleSteps(actions: sale.knownActions, package: package?.state)
         return VStack(spacing: Spacing.xs) {
-            if let primary {
-                actionButton(primary)
+            if let primary = steps.primary {
+                stepButton(primary)
                     .buttonStyle(.listoraPrimary)
             }
             HStack(spacing: Spacing.md) {
-                ForEach(actions.filter { $0 != primary }, id: \.self) { action in
-                    actionButton(action)
-                        .buttonStyle(.listora(action == .cancel ? .destructiveText : .tertiary, size: .compact))
+                ForEach(steps.others, id: \.self) { step in
+                    stepButton(step)
+                        .buttonStyle(.listora(step == .sale(.cancel) ? .destructiveText : .tertiary, size: .compact))
                 }
             }
         }
         .disabled(model.isSending)
+    }
+
+    @ViewBuilder
+    private func stepButton(_ step: SaleStep) -> some View {
+        switch step {
+        case .pack:
+            Button("Pack this order", systemImage: "barcode.viewfinder") { Task { await startPacking() } }
+                .accessibilityIdentifier("sale.action.pack")
+        case let .sale(action):
+            actionButton(action)
+        }
+    }
+
+    /// Opens Pack check's flow for this order; a package that couldn't load is read again first.
+    private func startPacking() async {
+        if package?.orderToPack == nil {
+            await package?.load()
+        }
+        switch package?.state {
+        case let .loaded(order)?:
+            packing = Packing(order: order)
+        case let .failed(message)?:
+            model.notice = message
+        case .loading?, .none?, nil:
+            break
+        }
     }
 
     @ViewBuilder
@@ -213,4 +262,10 @@ private struct SaleHeader: View {
             }
         }
     }
+}
+
+/// The order being packed, for the packing flow's cover.
+private struct Packing: Identifiable {
+    let id = UUID()
+    let order: SalePackOrder
 }

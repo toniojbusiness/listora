@@ -53,6 +53,9 @@ final class PackSessionModel {
         index = orders.firstIndex { $0.pack == nil } ?? 0
         if orders.isEmpty {
             stage = .finished
+        } else if orders[index].pack != nil {
+            // Every order is packed (one opened from its sale's screen): it opens on its package.
+            stage = .packed
         }
     }
 
@@ -206,6 +209,11 @@ final class PackSessionModel {
         } catch {
             photoError = error.message
         }
+    }
+
+    /// An order changed outside the session (its label printed): it shows as it is now.
+    func replaced(_ order: PackOrder) {
+        update(order)
     }
 
     private func update(_ order: PackOrder) {

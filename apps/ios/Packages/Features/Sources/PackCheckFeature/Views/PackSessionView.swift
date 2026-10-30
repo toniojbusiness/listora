@@ -5,11 +5,11 @@ import UIKit
 
 /// Packing at the table, one order at a time: the item to put in the box (its photo large), then
 /// the label's scan and what it means, in big clear words: green when it's this order's label, a
-/// red stop when it's another's or was already used. After the last order, the ones still not
-/// packed are named.
+/// red stop when it's another's or was already used. Before the scan, the order's label and
+/// stickers print from here. After the last order, the ones still not packed are named.
 struct PackSessionView: View {
     @Bindable var model: PackSessionModel
-    let scanSource: ScanSource
+    let environment: PackCheckEnvironment
     let onClose: @MainActor () -> Void
     @State private var scanning: ScanTarget?
     @State private var takingPhoto = false
@@ -49,7 +49,7 @@ struct PackSessionView: View {
                 }
             }
             .sheet(item: $scanning) { target in
-                CodeScannerView(target: target, source: scanSource) { code in
+                CodeScannerView(target: target, source: environment.scanSource) { code in
                     Task {
                         switch target {
                         case .label: await model.scannedLabel(code)
@@ -59,7 +59,7 @@ struct PackSessionView: View {
                 }
             }
             .sheet(isPresented: $takingPhoto) {
-                PackagePhotoPicker(scripted: scanSource.isScripted) { image in
+                PackagePhotoPicker(scripted: environment.scanSource.isScripted) { image in
                     Task { await model.savePhoto(image) }
                 }
             }
@@ -88,6 +88,8 @@ struct PackSessionView: View {
                     .buttonStyle(ListoraButtonStyle(.secondary))
                     .accessibilityIdentifier("pack.scanSticker")
                 }
+                OrderPrintActions(order: order, environment: environment) { changed in model.replaced(changed) }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Button("Skip this order for now") { model.skip() }
                     .buttonStyle(ListoraButtonStyle(.tertiary))
                     .accessibilityIdentifier("pack.skip")

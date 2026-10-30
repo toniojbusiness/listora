@@ -1,6 +1,7 @@
 import APIClient
 import Core
 import Foundation
+import ListoraAPI
 import SwiftUI
 
 /// Pack check (docs/features/pack-check.md): an optional mode, off until the seller turns it on
@@ -77,6 +78,20 @@ public final class PackCheckEnvironment {
         PackOrdersScreen(environment: self)
     }
 
+    /// One sale's order as Pack check sees it, for the sale's screen; `nil` when it has none.
+    public func saleOrder(saleID: String) async throws(APIFailure) -> Components.Schemas.PackOrder? {
+        try await service.saleOrder(saleID: saleID)
+    }
+
+    /// Packing one order from its sale's screen: the same flow as the to-ship list's, for that
+    /// order alone (its label and stickers print from it). A packed order opens on its package.
+    public func salePackScreen(
+        _ order: Components.Schemas.PackOrder,
+        onClose: @escaping @MainActor () -> Void,
+    ) -> some View {
+        SalePackScreen(environment: self, order: order, onClose: onClose)
+    }
+
     /// Printing an item's sticker (the item screen, and after listing).
     public func stickerScreen(_ request: StickerRequest) -> some View {
         StickerPrintView(stickers: [request])
@@ -100,6 +115,23 @@ public final class PackCheckEnvironment {
     public static func resetLocalData(defaults: UserDefaults) {
         PackCheckSettingsModel.resetLocalData(defaults: defaults)
         PackCheckExplainer.resetLocalData(defaults: defaults)
+    }
+}
+
+/// Holds one order's packing session for as long as its cover shows.
+private struct SalePackScreen: View {
+    let environment: PackCheckEnvironment
+    let onClose: @MainActor () -> Void
+    @State private var session: PackSessionModel
+
+    init(environment: PackCheckEnvironment, order: PackOrder, onClose: @escaping @MainActor () -> Void) {
+        self.environment = environment
+        self.onClose = onClose
+        _session = State(initialValue: PackSessionModel(orders: [order], service: environment.service))
+    }
+
+    var body: some View {
+        PackSessionView(model: session, environment: environment, onClose: onClose)
     }
 }
 

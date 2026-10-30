@@ -37,6 +37,8 @@ public final class SalesEnvironment {
     let onSignIn: @MainActor () -> Void
     /// Pack check's to-ship list, while Pack check is on.
     let packOrders: PackOrdersEntry?
+    /// Packing an order from its sale's screen, while Pack check is on.
+    let salePacking: SalePackEntry?
     /// The work this iPhone runs now, which a sale's delists show while the phone works on them.
     public weak var phoneProgress: (any PhoneWorkProgressSource)?
     /// Syncs the linked marketplaces on a pull to refresh (docs/features/sync.md).
@@ -51,6 +53,7 @@ public final class SalesEnvironment {
         onSignIn: @escaping @MainActor () -> Void = {},
         phoneWork: (any PhoneWorkTrigger)? = nil,
         packOrders: PackOrdersEntry? = nil,
+        salePacking: SalePackEntry? = nil,
     ) {
         self.init(
             service: APISalesService(client: apiClient.client) { [weak phoneWork] in
@@ -61,6 +64,7 @@ public final class SalesEnvironment {
             isSignedIn: { accessTokens.grant != nil },
             onSignIn: onSignIn,
             packOrders: packOrders,
+            salePacking: salePacking,
         )
     }
 
@@ -72,8 +76,10 @@ public final class SalesEnvironment {
         isSignedIn: @escaping @MainActor () -> Bool = { true },
         onSignIn: @escaping @MainActor () -> Void = {},
         packOrders: PackOrdersEntry? = nil,
+        salePacking: SalePackEntry? = nil,
     ) {
         self.packOrders = packOrders
+        self.salePacking = salePacking
         self.service = service
         self.profitService = profitService
         self.reportsService = reportsService
@@ -110,6 +116,12 @@ public final class SalesEnvironment {
 
     func makeReportsModel() -> ReportsModel {
         ReportsModel(service: reportsService, isSignedIn: isSignedIn)
+    }
+
+    /// The sale's package, while Pack check is on; `nil` with it off.
+    func makePackModel(saleID: String) -> SalePackModel? {
+        guard let salePacking, salePacking.isOn() else { return nil }
+        return SalePackModel(saleID: saleID, fetch: salePacking.order)
     }
 
     func makeDetailModel(saleID: String) -> SaleDetailModel {
