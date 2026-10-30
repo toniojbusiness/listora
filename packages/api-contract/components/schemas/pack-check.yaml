@@ -99,6 +99,47 @@ PackLabel:
       $ref: '#/LabelCarrier'
     source:
       $ref: '#/LabelSource'
+    fileUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+      description: |
+        The label's file (a PDF) on the marketplace's own site, as its order page names it. The
+        app downloads it through this iPhone's own session for the marketplace, never through
+        Listora, and prints it with the order's item stickers, then records the print
+        (`recordLabelPrint`). Absent when the marketplace names none: the seller prints the
+        label on the marketplace (`PackOrder.labelPageUrl`).
+    printed:
+      $ref: '#/PackLabelPrint'
+PackLabelPrint:
+  type: object
+  description: |
+    Listora printed this label already: printing it again warns first, since a second copy on
+    another package ships one buyer two packages.
+  required: [printedAt, count, label]
+  properties:
+    printedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: The last print.
+    count:
+      type: integer
+      format: int32
+      minimum: 1
+      description: How many times Listora printed this label.
+    label:
+      type: string
+      maxLength: 100
+      description: The server's words, `Label printed 12 minutes ago`.
+PackLabelPrintRecord:
+  type: object
+  additionalProperties: false
+  required: [trackingNumber]
+  properties:
+    trackingNumber:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: The label the app printed (`PackLabel.trackingNumber`).
 PackRecord:
   type: object
   description: The order's package, once packed.
@@ -163,6 +204,13 @@ PackOrder:
       $ref: '#/PackLabel'
     labelStatus:
       $ref: './common.yaml#/StatusDisplay'
+    labelPageUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+      description: |
+        The order's own page on the marketplace, where the seller prints its label there when
+        Listora can't (`PackLabel.fileUrl` absent). The app opens it as a plain link.
     pack:
       $ref: '#/PackRecord'
     packStatus:

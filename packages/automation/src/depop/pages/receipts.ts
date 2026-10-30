@@ -11,15 +11,16 @@
  * product's text and photo. A listing the seller marked as sold has no receipt.
  *
  * Sale checks read every receipt (sales.ts), and Pack check each one's parcel (its label,
- * carrier, deadline, and label expiry), how the purchase stands, and the buyer's first name
- * (docs/features/pack-check.md, "Depop's receipts"). Nothing else of the buyer is read: no name,
- * address, or message is kept. Only reads.
+ * carrier, deadline, label expiry, and the label's file), how the purchase stands, and the
+ * buyer's first name (docs/features/pack-check.md, "Depop's receipts"). Nothing else of the buyer
+ * is read: no name, address, or message is kept. Only reads.
  */
 import { z } from 'zod';
 
 import type { LabelReadRequest, RemoteOrderLabel } from '@listora/marketplaces';
 
 import type { PageDriver } from '../../runner/types.ts';
+import { DEPOP_SITE_URL, depopSite } from '../site.ts';
 import { changed, type DepopSite } from './common.ts';
 import { expectShape } from './page-data.ts';
 
@@ -35,9 +36,9 @@ const time = z.iso.datetime({ offset: true });
 
 /**
  * One package of a purchase: Depop's label for it (`tracking.reference`, by `shipping_provider`),
- * when it must ship by, and when the label expires. A bundle's items share one parcel. Its
- * `parcel_status` is the label's, not the order's: a refunded order's parcel can still say
- * `AWAITING_SHIPPING`, so it is never read.
+ * when it must ship by, when the label expires, and the label's file (`LABEL_FILE_FIELDS`). A
+ * bundle's items share one parcel. Its `parcel_status` is the label's, not the order's: a
+ * refunded order's parcel can still say `AWAITING_SHIPPING`, so it is never read.
  */
 const parcelSchema = z
   .object({
@@ -47,6 +48,16 @@ const parcelSchema = z
     label_expires_at: time.nullish(),
   })
   .catchall(z.unknown());
+
+/**
+ * The parcel fields that can name the label's file, in the order they are read: a URL directly
+ * under the parcel, or a `url` under a label object. Only a field that says it is the label's
+ * counts, never the tracking page (`tracking.url`). Not seen on a real receipt yet: the live test
+ * on the captain's test shop confirms which one Depop uses (docs/features/pack-check.md,
+ * "Printing the label"); a receipt that names none prints from Depop instead.
+ */
+const LABEL_FILE_FIELDS = ['label_url', 'shipping_label_url', 'label_pdf_url'] as const;
+const LABEL_FILE_OBJECTS = ['label', 'shipping_label'] as const;
 
 const receiptSchema = z
   .object({
@@ -128,6 +139,8 @@ export interface ReceiptLabel {
   /** The earliest of its parcels' shipping deadlines. */
   shipBy: Date | null;
   labelExpiresAt: Date | null;
+  /** The label's file on Depop's own site, when its parcel names one. */
+  labelFileUrl: string | null;
   buyerFirstName: string | null;
 }
 
@@ -146,7 +159,7 @@ export async function readReceipts(
   if (answer.status !== 200)
     throw changed(API, `answered ${String(answer.status)} for the receipts`);
   const shown = expectShape(receiptsSchema, answer.body, API);
-  const receipts = shown.objects.map((receipt) => readReceipt(receipt));
+  const receipts = shown.objects.map((receipt) => readReceipt(receipt, site));
   const next = shown.page_info.has_more ? (shown.page_info.last ?? null) : null;
   if (shown.page_info.has_more && next === null)
     throw changed(API, 'has more receipts but no cursor');
@@ -175,8 +188,11 @@ export async function readReceiptLines(
   );
 }
 
-/** A receipt as Listora reads it; a shape Listora doesn't know throws `PageChangedError`. */
-export function readReceipt(value: unknown): Receipt {
+/**
+ * A receipt as Listora reads it, from Depop's site (or its stand-in); a shape Listora doesn't
+ * know throws `PageChangedError`.
+ */
+export function readReceipt(value: unknown, site: DepopSite = depopSite(DEPOP_SITE_URL)): Receipt {
   const receipt = expectShape(receiptSchema, value, API);
   if (receipt.currency !== 'USD') throw changed(API, 'shows a sale that is not in US dollars');
   return {
@@ -194,7 +210,7 @@ export function readReceipt(value: unknown): Receipt {
       description: line.description,
       pictureUrl: line.picture_url ?? null,
     })),
-    label: receiptLabel(receipt),
+    label: receiptLabel(receipt, site),
   };
 }
 
@@ -215,7 +231,7 @@ export function receiptState(status: string): ReceiptState {
  * package, one label. A purchase whose parcels show several tracking numbers is not one package,
  * so it reads as having no label (the seller scans the one on the package).
  */
-function receiptLabel(receipt: ShownReceipt): ReceiptLabel {
+function receiptLabel(receipt: ShownReceipt, site: DepopSite): ReceiptLabel {
   const tracked = receipt.parcels.filter((parcel) => present(parcel.tracking?.reference));
   const references = new Set(tracked.map((parcel) => parcel.tracking?.reference?.trim()));
   const parcel = references.size === 1 ? tracked[0] : undefined;
@@ -230,6 +246,7 @@ function receiptLabel(receipt: ShownReceipt): ReceiptLabel {
     carrierName: present(parcel?.shipping_provider) ? parcel.shipping_provider.trim() : null,
     shipBy: deadlines.length === 0 ? null : new Date(Math.min(...deadlines.map(Number))),
     labelExpiresAt: present(parcel?.label_expires_at) ? new Date(parcel.label_expires_at) : null,
+    labelFileUrl: parcel === undefined ? null : labelFile(parcel, site),
     buyerFirstName: present(receipt.buyer?.first_name) ? receipt.buyer.first_name.trim() : null,
   };
 }
@@ -266,7 +283,34 @@ export function orderLabel(
     carrierName: receipt.carrierName,
     shipBy: receipt.shipBy,
     labelExpiresAt: receipt.labelExpiresAt,
+    labelFileUrl: receipt.labelFileUrl,
   };
+}
+
+/**
+ * The label's file a parcel names (`LABEL_FILE_FIELDS`), when it is on Depop's own site: the
+ * phone downloads it through the seller's session, so a file anywhere else is not taken.
+ */
+function labelFile(parcel: Record<string, unknown>, site: DepopSite): string | null {
+  const named = [
+    ...LABEL_FILE_FIELDS.map((field) => parcel[field]),
+    ...LABEL_FILE_OBJECTS.map((field) => {
+      const shown = parcel[field];
+      return shown !== null && typeof shown === 'object' ? (shown as { url?: unknown }).url : null;
+    }),
+  ].find((value): value is string => typeof value === 'string' && value.trim() !== '');
+  if (named === undefined || !URL.canParse(named.trim(), site.origin)) return null;
+  const url = new URL(named.trim(), site.origin);
+  return onDepop(url, site) ? url.href : null;
+}
+
+/** Whether a URL is on Depop's site or web API (or their local stand-in). */
+function onDepop(url: URL, site: DepopSite): boolean {
+  if (url.origin === site.origin || url.origin === site.api) return true;
+  return (
+    url.protocol === 'https:' &&
+    (url.hostname === 'depop.com' || url.hostname.endsWith('.depop.com'))
+  );
 }
 
 function present(value: string | null | undefined): value is string {

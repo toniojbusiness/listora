@@ -19,6 +19,7 @@ import type {
 } from '@listora/db';
 
 import { describeOrder, type DescribedItem } from './describe.ts';
+import type { LabelPrintRecord } from './label-print.ts';
 import type { VerdictOrder } from './verdict.ts';
 
 /** Sale statuses that may still need a package (`isPackOrder`). */
@@ -55,6 +56,10 @@ export interface PackLabelRecord {
   trackingNumber: string;
   carrier: LabelCarrier;
   source: SaleLabelSource;
+  /** The label's file on the marketplace's own site, when its order page names one. */
+  fileUrl: string | null;
+  /** Listora's prints of this label; `null` before the first. */
+  print: LabelPrintRecord | null;
 }
 
 export interface PackRecord {
@@ -222,6 +227,12 @@ export async function loadPackOrdersById(
                 trackingNumber: label.tracking_number,
                 carrier: label.carrier,
                 source: label.source,
+                fileUrl: label.label_file_url,
+                print:
+                  label.printed_at === null ||
+                  label.printed_tracking_number !== label.tracking_number
+                    ? null
+                    : { printedAt: label.printed_at, count: label.print_count },
               },
         read:
           label === undefined || label.read_status === null || label.read_at === null

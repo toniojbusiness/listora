@@ -30,6 +30,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     /// `LISTORA_SCANNED_CODES=<code>|<code>...`: Pack check's scanner "reads" these, one per tap
     /// of Scan, instead of the camera the simulator lacks.
     public var scannedCodes: [String]?
+    /// `LISTORA_SCRIPTED_PRINTING=1`: Pack check's label printing gets a test label instead of the
+    /// marketplace's, and every print "prints" at once, with no print sheet.
+    public var scriptedPrinting = false
 
     public static let none = DebugLaunchOptions()
 
@@ -43,6 +46,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         voicePermission: SpeechAuthorization = .authorized,
         showsGettingStarted: Bool = false,
         scannedCodes: [String]? = nil,
+        scriptedPrinting: Bool = false,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
@@ -53,6 +57,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         self.voicePermission = voicePermission
         self.showsGettingStarted = showsGettingStarted
         self.scannedCodes = scannedCodes
+        self.scriptedPrinting = scriptedPrinting
     }
 
     /// The options in this process's environment (debug builds), otherwise ``none``.
@@ -88,6 +93,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
             voicePermission: voicePermission(environment["LISTORA_VOICE_PERMISSION"]),
             showsGettingStarted: environment["LISTORA_SHOW_GETTING_STARTED"] == "1",
             scannedCodes: environment["LISTORA_SCANNED_CODES"].map { $0.split(separator: "|").map(String.init) },
+            scriptedPrinting: environment["LISTORA_SCRIPTED_PRINTING"] == "1",
         )
     }
 

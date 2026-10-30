@@ -157,6 +157,63 @@ actor FakePackService: PackCheckService {
     func removePhoto(saleID: String) async throws(APIFailure) -> PackOrder {
         do { return try order(saleID, title: "without photo", packed: true) } catch { throw APIFailure(error) }
     }
+
+    /// The label prints recorded, by idempotency key: a retry with the same key counts once.
+    var labelPrints: [String: String] = [:]
+    var failRecord = false
+
+    func setFailRecord(_ value: Bool) {
+        failRecord = value
+    }
+
+    func recordLabelPrint(
+        saleID: String,
+        trackingNumber: String,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> PackOrder {
+        if failRecord {
+            throw .networkUnavailable
+        }
+        labelPrints[idempotencyKey] = trackingNumber
+        do {
+            return try labeledOrder(saleID, printed: "Label printed just now")
+        } catch {
+            throw APIFailure(error)
+        }
+    }
+}
+
+/// An order whose label's file Listora can print, printed before when `printed` says so.
+func labeledOrder(_ saleID: String, printed: String? = nil, file: Bool = true) throws -> PackOrder {
+    var label: [String: Any] = [
+        "trackingNumber": "9400111899223197428490", "carrier": "usps", "source": "marketplace",
+    ]
+    if file {
+        label["fileUrl"] = "https://webapi.depop.com/presentation/api/v1/receipts/412/label/"
+    }
+    if let printed {
+        label["printed"] = ["printedAt": "2026-10-27T12:30:00Z", "count": 1, "label": printed]
+    }
+    return try decode(PackOrder.self, [
+        "saleId": saleID,
+        "marketplace": "depop",
+        "soldAt": "2026-10-27T12:00:00Z",
+        "description": "the black Shaka Wear tee, 2XL",
+        "items": [
+            [
+                "itemId": "item-1",
+                "sku": "AJ-000184",
+                "description": "black tee",
+                "title": "Shaka Wear tee",
+                "location": ["code": "B-12"],
+            ],
+            ["itemId": "item-2", "sku": "AJ-000185", "description": "green dress"],
+        ],
+        "label": label,
+        "labelStatus": ["tone": "neutral", "label": "USPS •••• 8490 (from Depop)"],
+        "labelPageUrl": "https://www.depop.com/sellinghub/sold-items/",
+        "packStatus": ["tone": "neutral", "label": "Not packed"],
+    ])
 }
 
 @MainActor

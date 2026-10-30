@@ -238,7 +238,8 @@ export async function runDataRetention(
  */
 const BUYER_DATA_SQL = {
   saleLabelBuyers: {
-    set: sql`buyer_first_name = null, tracking_number = null, carrier = null, source = null`,
+    // The label's file and Listora's last print of it go with the label.
+    set: sql`buyer_first_name = null, tracking_number = null, carrier = null, source = null, label_file_url = null, printed_tracking_number = null, printed_at = null`,
     table: sql`sale_label`,
     rows: (cutoff: Date) => sql`
       select label.account_id, label.sale_id from sale_label as label

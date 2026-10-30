@@ -12,16 +12,26 @@ public final class PackCheckEnvironment {
     let isSignedIn: @MainActor () -> Bool
     let runPhoneWork: @MainActor () -> Void
     let scanSource: ScanSource
+    /// Where an order's label comes from to print it, and the printer.
+    let labelFiles: any LabelFileSource
+    let printer: any LabelPrinter
+    /// Whether the seller saw "How Pack check works", which the to-ship list shows once.
+    let defaults: UserDefaults
     /// On or off; the Sales tab shows "Pack orders" while it is on.
     public let settings: PackCheckSettingsModel
 
-    /// `phoneWork` reads the labels Listora asks this phone for; `scannedCodes` stands in for the
-    /// camera in UI tests (`LISTORA_SCANNED_CODES`).
+    /// `phoneWork` reads the labels Listora asks this phone for, and `sessions` are the
+    /// marketplace sessions it downloads a label to print through; `scannedCodes` stands in for
+    /// the camera in UI tests (`LISTORA_SCANNED_CODES`), and `scriptedPrinting` for the
+    /// marketplace's label and the print sheet (`LISTORA_SCRIPTED_PRINTING`).
     public convenience init(
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
         phoneWork: (any PhoneWorkTrigger)? = nil,
+        sessions: any MarketplaceSessionStore,
+        allowsLocalHTTP: Bool = false,
         scannedCodes: [String]? = nil,
+        scriptedPrinting: Bool = false,
         defaults: UserDefaults = .standard,
     ) {
         let run: @MainActor () -> Void = { [weak phoneWork] in phoneWork?.runPhoneWork(.userAction) }
@@ -30,6 +40,10 @@ public final class PackCheckEnvironment {
             isSignedIn: { accessTokens.grant != nil },
             runPhoneWork: run,
             scanSource: scannedCodes.map { .scripted(ScriptedScans($0)) } ?? .camera,
+            labelFiles: scriptedPrinting
+                ? ScriptedLabelFiles()
+                : SessionLabelFiles(sessions: sessions, allowsLocalHTTP: allowsLocalHTTP),
+            printer: scriptedPrinting ? ScriptedPrinter() : AirPrinter(),
             defaults: defaults,
         )
     }
@@ -39,12 +53,17 @@ public final class PackCheckEnvironment {
         isSignedIn: @escaping @MainActor () -> Bool = { true },
         runPhoneWork: @escaping @MainActor () -> Void = {},
         scanSource: ScanSource = .camera,
+        labelFiles: any LabelFileSource = ScriptedLabelFiles(),
+        printer: any LabelPrinter = ScriptedPrinter(),
         defaults: UserDefaults = .standard,
     ) {
         self.service = service
         self.isSignedIn = isSignedIn
         self.runPhoneWork = runPhoneWork
         self.scanSource = scanSource
+        self.labelFiles = labelFiles
+        self.printer = printer
+        self.defaults = defaults
         settings = PackCheckSettingsModel(service: service, defaults: defaults, onEnabled: runPhoneWork)
     }
 
@@ -67,6 +86,11 @@ public final class PackCheckEnvironment {
         PackOrdersModel(service: service, isSignedIn: isSignedIn, runPhoneWork: runPhoneWork)
     }
 
+    /// Printing an order's label with its stickers.
+    func makeLabelPrint(_ order: PackOrder, onChange: @escaping @MainActor (PackOrder) -> Void) -> LabelPrintModel {
+        LabelPrintModel(order: order, service: service, files: labelFiles, printer: printer, onChange: onChange)
+    }
+
     /// Refreshes the setting the Sales tab shows the way in by.
     public func refreshSetting() async {
         guard isSignedIn() else { return }
@@ -75,6 +99,7 @@ public final class PackCheckEnvironment {
 
     public static func resetLocalData(defaults: UserDefaults) {
         PackCheckSettingsModel.resetLocalData(defaults: defaults)
+        PackCheckExplainer.resetLocalData(defaults: defaults)
     }
 }
 

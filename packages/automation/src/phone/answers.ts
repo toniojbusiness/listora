@@ -152,6 +152,11 @@ const labels = z
         carrierName: z.string().min(1).max(100).nullable().optional(),
         shipBy: labelTime,
         labelExpiresAt: labelTime,
+        labelFileUrl: z
+          .url({ protocol: /^https?$/ })
+          .max(2_048)
+          .nullable()
+          .optional(),
       }),
       z.object({ externalOrderId: z.string().min(1).max(200), found: z.literal(false) }),
     ]),

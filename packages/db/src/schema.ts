@@ -1410,6 +1410,13 @@ export interface SaleLabelTable {
   order_state: Nullable<LabelOrderState>;
   /** When the marketplace's label expires, as its page shows it. */
   label_expires_at: NullableTimestamp;
+  /** The label's file on the marketplace's own site (https), when its page names one. */
+  label_file_url: Nullable<string>;
+  /** The label Listora last printed for the order (canonical); set with `printed_at`. */
+  printed_tracking_number: Nullable<string>;
+  printed_at: NullableTimestamp;
+  /** How many times Listora printed `printed_tracking_number`. */
+  print_count: Generated<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

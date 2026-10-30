@@ -36,6 +36,73 @@ final class PackCheckUITests: XCTestCase {
         try catchTheSecondPrint(on: dress)
     }
 
+    /// How the label and the stickers are printed: "How Pack check works" the first time Pack
+    /// orders opens; under each order its stickers, and its label with them in one job (asking
+    /// first before the same label again), or the order's page on the marketplace where Listora
+    /// can't print its label; and on the item screen, "Print sticker" up top while Pack check is
+    /// on. Scripted printing stands in for the marketplace's label and the print sheet.
+    func testTheLabelAndItsStickersPrintTogetherAndASecondPrintAsksFirst() async throws {
+        let stack = try E2EStack.fromEnvironment()
+        let orders = try await stack.seedPackOrders()
+        let tee = try XCTUnwrap(orders.first)
+        let dress = try XCTUnwrap(orders.last)
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
+            "LISTORA_DEV_ACCESS_TOKEN": stack.token,
+            "LISTORA_DEV_ACCESS_EMAIL": stack.email,
+            "LISTORA_SCRIPTED_PRINTING": "1",
+        ]
+        app.launchQuietly()
+        app.tabRail.buttons["Sales"].tap()
+        let packOrders = app.buttons["sales.packOrders"]
+        XCTAssertTrue(packOrders.waitForExistence(timeout: 15), "no Pack orders entry")
+        packOrders.tap()
+
+        // The first time: how it works.
+        XCTAssertTrue(app.descendants(matching: .any)["packCheck.explainer"].waitForExistence(timeout: 10))
+        keepScreenshot("Pack check - how it works")
+        app.buttons["packCheck.explainer.done"].tap()
+
+        // Each order: its sticker, and the tee's label with its sticker; the dress's label opens on eBay.
+        XCTAssertTrue(app.buttons["pack.printStickers.\(tee.sku)"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["pack.printStickers.\(dress.sku)"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["pack.openLabel.\(dress.sku)"].exists)
+        keepScreenshot("Pack check - print actions")
+        app.buttons["pack.printLabel.\(tee.sku)"].tap()
+        let print = app.buttons["labelPrint.print"]
+        XCTAssertTrue(print.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["labelPrint.contents"].label.contains(tee.sku))
+        print.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["labelPrint.printed"].waitForExistence(timeout: 15),
+            "not printed",
+        )
+        app.buttons["labelPrint.done"].tap()
+
+        // The same label again asks first.
+        app.buttons["pack.printLabel.\(tee.sku)"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["labelPrint.printedBefore"].waitForExistence(timeout: 10))
+        app.buttons["labelPrint.print"].tap()
+        // The system's dialog nests its button in another of the same identifier.
+        let again = app.buttons["labelPrint.again"].firstMatch
+        XCTAssertTrue(again.waitForExistence(timeout: 5), "no question before the second print")
+        keepScreenshot("Pack check - print again?")
+        again.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["labelPrint.printed"].waitForExistence(timeout: 15))
+        app.buttons["labelPrint.done"].tap()
+
+        // The item screen: Print sticker without scrolling, while Pack check is on.
+        app.tabRail.buttons["Inventory"].tap()
+        let row = app.buttons["inventory.row.\(tee.sku)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        row.tap()
+        let sticker = app.buttons["item.printSticker"]
+        XCTAssertTrue(sticker.waitForExistence(timeout: 15))
+        XCTAssertTrue(sticker.isHittable, "Print sticker is off screen")
+        keepScreenshot("Pack check - item sticker")
+    }
+
     /// Sales > Pack orders, then the tee: the dress's label is a red stop, its own label packs.
     private func packTheTeeAfterStoppingTheDressLabel(_ tee: PackOrderSeed) throws {
         // Sales shows the way in while Pack check is on.
@@ -45,6 +112,10 @@ final class PackCheckUITests: XCTestCase {
         let packOrders = app.buttons["sales.packOrders"]
         XCTAssertTrue(packOrders.waitForExistence(timeout: 15), "no Pack orders entry")
         packOrders.tap()
+        // The first opening explains how Pack check works.
+        let gotIt = app.buttons["packCheck.explainer.done"]
+        XCTAssertTrue(gotIt.waitForExistence(timeout: 10), "no How Pack check works")
+        gotIt.tap()
 
         // Order A: the tee. Its card names the buyer and the label read from the marketplace.
         let teeCard = app.buttons["pack.order.\(tee.sku)"]

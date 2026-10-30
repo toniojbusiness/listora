@@ -67,7 +67,7 @@ struct ItemDetailView: View {
             .sheet(
                 item: $listingFlow,
                 onDismiss: {
-                    offersSticker = environment.stickerScreen != nil && environment.offersStickerAfterListing()
+                    offersSticker = environment.stickerScreen != nil && environment.isPackCheckOn()
                     Task { await model.refresh() }
                 },
                 content: { flow in ListingFlowView(model: flow) { listingFlow = nil } },
@@ -211,6 +211,10 @@ struct ItemDetailView: View {
                         identifier: "item.draft",
                     )
                 }
+                if stickerOnTop {
+                    // Pack check is on: the sticker for the item's bag is the first thing to do.
+                    stickerSection(for: item)
+                }
                 marketplaces(of: item)
                 MoneySection(item: item)
                 itemActions(for: item)
@@ -248,32 +252,26 @@ struct ItemDetailView: View {
         }
     }
 
-    /// "Mark as sold", and the item's sticker.
+    /// "Mark as sold", and the item's sticker while Pack check is off.
     @ViewBuilder
     private func itemActions(for item: Item) -> some View {
-        markSoldButton(for: item)
-        if environment.stickerScreen != nil {
-            ItemStickerSection(offers: $offersSticker) { printingSticker = StickerRequest(item) }
+        if environment.saleScreens != nil {
+            MarkSoldButton(item: item, request: $markingSold)
+        }
+        if !stickerOnTop {
+            stickerSection(for: item)
         }
     }
 
-    /// "Mark as sold", for an item that is not sold yet.
+    /// Whether "Print sticker" shows near the top of the screen: while Pack check is on.
+    private var stickerOnTop: Bool {
+        environment.stickerScreen != nil && environment.isPackCheckOn()
+    }
+
     @ViewBuilder
-    private func markSoldButton(for item: Item) -> some View {
-        if environment.saleScreens != nil, item.canBeMarkedSold {
-            Button("Mark as sold", systemImage: "dollarsign.circle") {
-                markingSold = MarkSoldRequest(
-                    itemID: item.id,
-                    sku: item.sku,
-                    title: item.details.title,
-                    listPriceCents: item.details.listPrice?.amountCents,
-                    listedOn: item.listings
-                        .filter { $0.status.value1 == .active }
-                        .compactMap { $0.marketplace.value1?.rawValue },
-                )
-            }
-            .buttonStyle(.listoraSecondary)
-            .accessibilityIdentifier("item.markSold")
+    private func stickerSection(for item: Item) -> some View {
+        if environment.stickerScreen != nil {
+            ItemStickerSection(offers: $offersSticker) { printingSticker = StickerRequest(item) }
         }
     }
 }

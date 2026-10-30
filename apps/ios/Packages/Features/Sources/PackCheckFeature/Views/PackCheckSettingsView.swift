@@ -1,7 +1,7 @@
 import DesignSystem
 import SwiftUI
 
-/// Settings > Pack check: the switch, and what it does, in plain words. Off by default.
+/// Settings > Pack check: the switch, and "How Pack check works" in plain words. Off by default.
 struct PackCheckSettingsView: View {
     let environment: PackCheckEnvironment
     private var model: PackCheckSettingsModel {
@@ -42,35 +42,10 @@ struct PackCheckSettingsView: View {
                         Banner("Couldn't save", message: error, tone: .failed)
                     }
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        explanation(
-                            "list.bullet.rectangle",
-                            "A to-ship list",
-                            "Every sale to pack, with the item's photo, SKU, shelf, the buyer's first name, "
-                                + "and the label's tracking number from the marketplace.",
-                        )
-                        explanation(
-                            "barcode.viewfinder",
-                            "Scan the label",
-                            "Listora shows which item the label is for, and stops you if it's another "
-                                + "package's label or one you already used.",
-                        )
-                        explanation(
-                            "qrcode",
-                            "Item stickers",
-                            "Print a small SKU sticker for each item. Scanning it with the label makes "
-                                + "the match exact.",
-                        )
-                        explanation(
-                            "camera",
-                            "Package photo and packing slip",
-                            "Keep a photo of the open package for a claim, and print a slip to put inside.",
-                        )
+                        SectionHeader("How Pack check works")
+                        PackCheckExplainer()
                     }
                     .cardStyle(.flat)
-                    Text("Pack check only reads your marketplaces. It never changes a listing or an order.")
-                        .font(Typography.footnote)
-                        .foregroundStyle(Palette.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
                     if model.isEnabled {
                         NavigationLink {
                             environment.ordersScreen()
@@ -93,22 +68,5 @@ struct PackCheckSettingsView: View {
             get: { model.isEnabled },
             set: { value in Task { await model.setEnabled(value) } },
         )
-    }
-
-    private func explanation(_ systemImage: String, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: Spacing.sm) {
-            Image(systemName: systemImage)
-                .foregroundStyle(Palette.brand.color)
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(title).font(Typography.headline)
-                Text(detail)
-                    .font(Typography.subheadline)
-                    .foregroundStyle(Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 }

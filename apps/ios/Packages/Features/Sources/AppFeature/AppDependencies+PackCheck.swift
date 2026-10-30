@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import Foundation
 import InventoryFeature
 import PackCheckFeature
@@ -13,14 +14,18 @@ extension AppDependencies {
         _ apiClient: APIClient,
         _ accessTokens: AccessTokenStore,
         _ phone: PhoneExecutionEnvironment,
-        _ launchOptions: DebugLaunchOptions,
+        _ build: (configuration: AppConfiguration, launchOptions: DebugLaunchOptions),
         _ defaults: UserDefaults,
     ) -> PackCheckEnvironment {
-        PackCheckEnvironment(
+        let (configuration, launchOptions) = build
+        return PackCheckEnvironment(
             apiClient: apiClient,
             accessTokens: accessTokens,
             phoneWork: phone.runner,
+            sessions: phone.sessions,
+            allowsLocalHTTP: configuration.environment.allowsInsecureHTTP,
             scannedCodes: launchOptions.scannedCodes,
+            scriptedPrinting: launchOptions.scriptedPrinting,
             defaults: defaults,
         )
     }
@@ -54,9 +59,10 @@ extension PackCheckEnvironment {
         )
     }
 
-    /// The item screen's "Print sticker", and its offer after listing while Pack check is on.
+    /// The item screen's "Print sticker" (near the top while Pack check is on), and its offer
+    /// after listing while Pack check is on.
     func attach(to inventory: InventoryEnvironment) {
         inventory.stickerScreen = { [self] request in AnyView(stickerScreen(request)) }
-        inventory.offersStickerAfterListing = { [settings] in settings.isEnabled }
+        inventory.isPackCheckOn = { [settings] in settings.isEnabled }
     }
 }

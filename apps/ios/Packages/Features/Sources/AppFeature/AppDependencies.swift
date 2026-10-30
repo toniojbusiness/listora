@@ -103,7 +103,7 @@ public struct AppDependencies {
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
         phone = Self.makePhone(apiClient, accessTokens, version, configuration, signIn)
-        packCheck = Self.makePackCheck(apiClient, accessTokens, phone, launchOptions, defaults)
+        packCheck = Self.makePackCheck(apiClient, accessTokens, phone, (configuration, launchOptions), defaults)
         sales = Self.makeSales(apiClient, accessTokens, showSignIn, phone, packCheck)
         tasks = Self.makeTasks(apiClient, accessTokens, showSignIn, phone)
         inventory = InventoryEnvironment(

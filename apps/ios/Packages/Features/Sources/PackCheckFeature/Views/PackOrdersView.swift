@@ -1,26 +1,47 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
 
 /// The to-ship list: one card per order that still needs a package, then the ones packed today.
-/// "Pack all" goes through every unpacked order in turn; a card packs just that one.
+/// "Pack all" goes through every unpacked order in turn; a card packs just that one. Under each
+/// card: its stickers to print, and its label with them (or the order's page on the marketplace,
+/// where Listora can't print its label). The first time it opens, "How Pack check works" shows.
 struct PackOrdersView: View {
     let environment: PackCheckEnvironment
     @Bindable var model: PackOrdersModel
     @State private var session: PackSessionModel?
+    @State private var printingStickers: StickerBatch?
+    @State private var printingLabel: LabelPrintModel?
+    @State private var explaining = false
 
     var body: some View {
         content
             .background(Palette.background)
             .navigationTitle("Pack orders")
             .navigationBarTitleDisplayMode(.inline)
-            .task { await model.refresh() }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("How it works", systemImage: "questionmark.circle") { explaining = true }
+                        .accessibilityIdentifier("pack.howItWorks")
+                }
+            }
+            .task {
+                if !environment.defaults.bool(forKey: PackCheckExplainer.seenKey) {
+                    environment.defaults.set(true, forKey: PackCheckExplainer.seenKey)
+                    explaining = true
+                }
+                await model.refresh()
+            }
             .refreshable { await model.refresh() }
             .fullScreenCover(item: sessionBinding) { session in
                 PackSessionView(model: session, scanSource: environment.scanSource) {
                     self.session = nil
                 }
             }
+            .sheet(isPresented: $explaining) { PackCheckExplainerSheet() }
+            .sheet(item: $printingStickers) { batch in StickerPrintView(stickers: batch.stickers) }
+            .sheet(item: $printingLabel) { print in LabelPrintView(model: print) }
     }
 
     @ViewBuilder
@@ -80,9 +101,14 @@ struct PackOrdersView: View {
                     .accessibilityIdentifier("pack.startAll")
                     SectionHeader("To pack", subtitle: "\(model.unpacked.count) not packed")
                     ForEach(model.unpacked, id: \.saleId) { order in
-                        Button { start([order]) } label: { PackOrderCard(order: order) }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("pack.order.\(order.items.first?.sku ?? order.saleId)")
+                        // The order and its print actions, ruled off from the next order together.
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Button { start([order]) } label: { PackOrderCard(order: order, ruled: false) }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("pack.order.\(order.items.first?.sku ?? order.saleId)")
+                            printActions(order)
+                        }
+                        .cardStyle(.ruled)
                     }
                 }
                 if !model.packed.isEmpty {
@@ -97,6 +123,39 @@ struct PackOrdersView: View {
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth)
             .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// The order's stickers, and its label with them, or the order's page on the marketplace.
+    private func printActions(_ order: PackOrder) -> some View {
+        let key = order.items.first?.sku ?? order.saleId
+        let stickers = order.items.map(StickerRequest.init)
+        return HStack(spacing: Spacing.sm) {
+            Button {
+                printingStickers = StickerBatch(stickers: stickers)
+            } label: {
+                Label(stickers.count == 1 ? "Print sticker" : "Print \(stickers.count) stickers", systemImage: "qrcode")
+            }
+            .buttonStyle(ListoraButtonStyle(.secondary, size: .compact))
+            .accessibilityIdentifier("pack.printStickers.\(key)")
+            if order.label?.fileUrl != nil {
+                Button {
+                    printingLabel = environment.makeLabelPrint(order) { [model] changed in model.replace(changed) }
+                } label: {
+                    Label("Print label and stickers", systemImage: "printer")
+                }
+                .buttonStyle(ListoraButtonStyle(.secondary, size: .compact))
+                .accessibilityIdentifier("pack.printLabel.\(key)")
+            } else if let page = order.labelPageUrl.flatMap(URL.init(string:)) {
+                Link(destination: page) {
+                    Label(
+                        "Open label on \(MarketplaceName.of(order.marketplace))",
+                        systemImage: "arrow.up.right.square",
+                    )
+                }
+                .buttonStyle(ListoraButtonStyle(.secondary, size: .compact))
+                .accessibilityIdentifier("pack.openLabel.\(key)")
+            }
         }
     }
 
@@ -116,6 +175,25 @@ struct PackOrdersView: View {
     }
 }
 
+/// Stickers to print together, for the sheet.
+struct StickerBatch: Identifiable {
+    let id = UUID()
+    let stickers: [StickerRequest]
+}
+
+extension StickerRequest {
+    /// An order's item as its sticker: its SKU, title, and shelf.
+    init(_ item: PackItem) {
+        self.init(sku: item.sku, title: item.title ?? item.description, locationCode: item.location?.code)
+    }
+}
+
+extension LabelPrintModel: Identifiable {
+    nonisolated var id: ObjectIdentifier {
+        ObjectIdentifier(self)
+    }
+}
+
 extension PackSessionModel: Identifiable {
     nonisolated var id: ObjectIdentifier {
         ObjectIdentifier(self)
@@ -125,6 +203,8 @@ extension PackSessionModel: Identifiable {
 /// One order on the to-ship list: what to pull from the shelf, who it goes to, and its label.
 struct PackOrderCard: View {
     let order: PackOrder
+    /// Ruled off from the next card; off where the card's container is ruled instead.
+    var ruled = true
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
@@ -155,7 +235,7 @@ struct PackOrderCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // A day's orders are a list: ruled, not boxed.
-        .cardStyle(.ruled)
+        .modifier(RuledCard(ruled: ruled))
         .accessibilityElement(children: .combine)
     }
 
@@ -219,6 +299,19 @@ extension StatusTone {
         case .failed: self = .failed
         case .actionNeeded: self = .actionNeeded
         case .neutral, nil: self = .neutral
+        }
+    }
+}
+
+/// A card ruled off from the next one, or plain.
+private struct RuledCard: ViewModifier {
+    let ruled: Bool
+
+    func body(content: Content) -> some View {
+        if ruled {
+            content.cardStyle(.ruled)
+        } else {
+            content
         }
     }
 }

@@ -59,8 +59,9 @@ public final class InventoryEnvironment {
     /// Prints the item's SKU sticker (Pack check's, docs/features/pack-check.md); without it, the
     /// item screen offers no "Print sticker".
     public var stickerScreen: (@MainActor (StickerRequest) -> AnyView)?
-    /// Whether to offer the sticker once an item is listed (Pack check is on).
-    public var offersStickerAfterListing: @MainActor () -> Bool = { false }
+    /// Whether Pack check is on: the item screen then shows "Print sticker" near its top, and
+    /// offers the sticker once the item is listed.
+    public var isPackCheckOn: @MainActor () -> Bool = { false }
     /// The marketplace work this iPhone runs now, for the item screen's progress; without it,
     /// the screen shows only the server's status.
     public weak var phoneProgress: (any PhoneWorkProgressSource)?

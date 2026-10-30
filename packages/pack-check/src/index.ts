@@ -10,6 +10,13 @@ export {
 } from './labels.ts';
 export type { FoundOrder, LabelReadResult, LabelReadTarget } from './labels.ts';
 export {
+  LabelChangedError,
+  LabelOrderClosedError,
+  labelPageUrl,
+  recordLabelPrint,
+} from './label-print.ts';
+export type { LabelPrintRecord } from './label-print.ts';
+export {
   loadPackOrders,
   loadPackOrdersById,
   MAX_PACK_ORDERS,

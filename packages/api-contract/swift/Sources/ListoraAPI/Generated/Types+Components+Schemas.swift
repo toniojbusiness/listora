@@ -12746,25 +12746,110 @@ extension Components {
             public var carrier: Components.Schemas.LabelCarrier
             /// - Remark: Generated from `#/components/schemas/PackLabel/source`.
             public var source: Components.Schemas.LabelSource
+            /// The label's file (a PDF) on the marketplace's own site, as its order page names it. The
+            /// app downloads it through this iPhone's own session for the marketplace, never through
+            /// Listora, and prints it with the order's item stickers, then records the print
+            /// (`recordLabelPrint`). Absent when the marketplace names none: the seller prints the
+            /// label on the marketplace (`PackOrder.labelPageUrl`).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabel/fileUrl`.
+            public var fileUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PackLabel/printed`.
+            public var printed: Components.Schemas.PackLabelPrint?
             /// Creates a new `PackLabel`.
             ///
             /// - Parameters:
             ///   - trackingNumber:
             ///   - carrier:
             ///   - source:
+            ///   - fileUrl: The label's file (a PDF) on the marketplace's own site, as its order page names it. The
+            ///   - printed:
             public init(
                 trackingNumber: Swift.String,
                 carrier: Components.Schemas.LabelCarrier,
-                source: Components.Schemas.LabelSource
+                source: Components.Schemas.LabelSource,
+                fileUrl: Swift.String? = nil,
+                printed: Components.Schemas.PackLabelPrint? = nil
             ) {
                 self.trackingNumber = trackingNumber
                 self.carrier = carrier
                 self.source = source
+                self.fileUrl = fileUrl
+                self.printed = printed
             }
             public enum CodingKeys: String, CodingKey {
                 case trackingNumber
                 case carrier
                 case source
+                case fileUrl
+                case printed
+            }
+        }
+        /// Listora printed this label already: printing it again warns first, since a second copy on
+        /// another package ships one buyer two packages.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PackLabelPrint`.
+        public struct PackLabelPrint: Codable, Hashable, Sendable {
+            /// The last print.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabelPrint/printedAt`.
+            public var printedAt: Components.Schemas.Timestamp
+            /// How many times Listora printed this label.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabelPrint/count`.
+            public var count: Swift.Int32
+            /// The server's words, `Label printed 12 minutes ago`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabelPrint/label`.
+            public var label: Swift.String
+            /// Creates a new `PackLabelPrint`.
+            ///
+            /// - Parameters:
+            ///   - printedAt: The last print.
+            ///   - count: How many times Listora printed this label.
+            ///   - label: The server's words, `Label printed 12 minutes ago`.
+            public init(
+                printedAt: Components.Schemas.Timestamp,
+                count: Swift.Int32,
+                label: Swift.String
+            ) {
+                self.printedAt = printedAt
+                self.count = count
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case printedAt
+                case count
+                case label
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PackLabelPrintRecord`.
+        public struct PackLabelPrintRecord: Codable, Hashable, Sendable {
+            /// The label the app printed (`PackLabel.trackingNumber`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabelPrintRecord/trackingNumber`.
+            public var trackingNumber: Swift.String
+            /// Creates a new `PackLabelPrintRecord`.
+            ///
+            /// - Parameters:
+            ///   - trackingNumber: The label the app printed (`PackLabel.trackingNumber`).
+            public init(trackingNumber: Swift.String) {
+                self.trackingNumber = trackingNumber
+            }
+            public enum CodingKeys: String, CodingKey {
+                case trackingNumber
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.trackingNumber = try container.decode(
+                    Swift.String.self,
+                    forKey: .trackingNumber
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "trackingNumber"
+                ])
             }
         }
         /// The order's package, once packed.
@@ -12863,6 +12948,12 @@ extension Components {
             public var label: Components.Schemas.PackLabel?
             /// - Remark: Generated from `#/components/schemas/PackOrder/labelStatus`.
             public var labelStatus: Components.Schemas.StatusDisplay
+            /// The order's own page on the marketplace, where the seller prints its label there when
+            /// Listora can't (`PackLabel.fileUrl` absent). The app opens it as a plain link.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrder/labelPageUrl`.
+            public var labelPageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/PackOrder/pack`.
             public var pack: Components.Schemas.PackRecord?
             /// - Remark: Generated from `#/components/schemas/PackOrder/packStatus`.
@@ -12880,6 +12971,7 @@ extension Components {
             ///   - items:
             ///   - label:
             ///   - labelStatus:
+            ///   - labelPageUrl: The order's own page on the marketplace, where the seller prints its label there when
             ///   - pack:
             ///   - packStatus:
             public init(
@@ -12893,6 +12985,7 @@ extension Components {
                 items: [Components.Schemas.PackItem],
                 label: Components.Schemas.PackLabel? = nil,
                 labelStatus: Components.Schemas.StatusDisplay,
+                labelPageUrl: Swift.String? = nil,
                 pack: Components.Schemas.PackRecord? = nil,
                 packStatus: Components.Schemas.StatusDisplay
             ) {
@@ -12906,6 +12999,7 @@ extension Components {
                 self.items = items
                 self.label = label
                 self.labelStatus = labelStatus
+                self.labelPageUrl = labelPageUrl
                 self.pack = pack
                 self.packStatus = packStatus
             }
@@ -12920,6 +13014,7 @@ extension Components {
                 case items
                 case label
                 case labelStatus
+                case labelPageUrl
                 case pack
                 case packStatus
             }
