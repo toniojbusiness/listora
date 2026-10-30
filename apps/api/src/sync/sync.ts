@@ -1,8 +1,9 @@
 /**
  * Syncing the linked marketplaces (docs/features/sync.md): the seller's Sync now, a pull to
  * refresh, and opening the app ask for read-only checks of every marketplace linked by signing
- * in: its sales (a sale check), the buyers' offers, and its listings once the seller imported
- * them (another import, which brings in what was listed there since). Every one only reads, so a
+ * in: its sales (a sale check, which also brings what changed of sales recorded before), the
+ * buyers' offers, and its listings (an import, which brings in what was listed there since and
+ * the price each listing Listora has shows now). Every one only reads, so a
  * read-only connection is synced like any other; the reads of a marketplace that runs on the
  * seller's iPhone wait there for the app to claim them. Only the reads that passed live on the
  * marketplace are asked for and shown (docs/features/verified-features.md); a marketplace with
@@ -23,10 +24,12 @@ import { inTransaction, lockConnections, type DbExecutor, type Marketplace } fro
 import { loadFeatureGate, type FeatureGate } from '@listora/marketplaces';
 import { ImportRefusedError, importsFrom, startListingImport } from '@listora/imports';
 
-/** A marketplace synced this recently is not read again (its sales, its offers). */
+/**
+ * A marketplace synced this recently is not read again (its sales, its offers, its listings). A
+ * read of the listings Listora has takes the marketplace's list pages only (imports.md), so
+ * every sync reads them too.
+ */
 export const SYNC_MIN_GAP_MS = 2 * 60_000;
-/** Listings are read again at most this often: a read goes through every listing. */
-export const LISTING_SYNC_MIN_GAP_MS = 6 * 60 * 60_000;
 
 interface SyncConnection {
   id: string;
@@ -72,10 +75,9 @@ async function syncConnections(db: DbExecutor, accountId: string): Promise<SyncC
 /** Asks for the read-only checks of every linked marketplace not synced in the last minutes. */
 export async function requestSync(
   db: DbExecutor,
-  request: { accountId: string; minGapMs?: number; listingGapMs?: number },
+  request: { accountId: string; minGapMs?: number },
 ): Promise<void> {
   const gapMs = request.minGapMs ?? SYNC_MIN_GAP_MS;
-  const listingGapMs = request.listingGapMs ?? LISTING_SYNC_MIN_GAP_MS;
   for (const connection of await syncConnections(db, request.accountId)) {
     const check = {
       accountId: request.accountId,
@@ -83,7 +85,7 @@ export async function requestSync(
       marketplace: connection.marketplace,
     };
     if (connection.reads.sales) await syncSales(db, check, gapMs);
-    if (connection.reads.listings) await syncListings(db, check, listingGapMs);
+    if (connection.reads.listings) await syncListings(db, check, gapMs);
   }
   await requestOfferChecks(db, { accountId: request.accountId, minGapMs: gapMs });
 }
@@ -111,9 +113,9 @@ async function syncSales(
 }
 
 /**
- * Reads the marketplace's listings again, when the seller imported them before (an import
- * brings in what was listed there since, and settles the rest at once) and the last read is
- * `gapMs` old.
+ * Reads the marketplace's listings: an import, which brings in what was listed there since and
+ * the price each listing Listora has shows now. The first when none ran yet (a connection linked
+ * before linking imported), else when the last one finished `gapMs` ago.
  */
 async function syncListings(
   db: DbExecutor,
@@ -128,8 +130,10 @@ async function syncListings(
     .orderBy('created_at', 'desc')
     .limit(1)
     .executeTakeFirst();
-  if (newest?.status !== 'finished') return;
-  if (Date.now() - newest.created_at.getTime() < gapMs) return;
+  if (newest !== undefined) {
+    if (newest.status !== 'finished') return;
+    if (Date.now() - newest.created_at.getTime() < gapMs) return;
+  }
   try {
     await startListingImport(db, { accountId: check.accountId, marketplace: check.marketplace });
   } catch (error) {

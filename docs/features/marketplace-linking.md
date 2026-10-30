@@ -122,6 +122,10 @@ may encrypt sessions but never decrypt them, only the runner's may) and stores t
 account's `automation` connection, which it creates or revives. In the same transaction the
 marketplace's listings that were never on a shop join the connection
 ([below](#relinking-another-shop)), a `session_check` is requested, and a first sale check is due.
+Then an import of the seller's listings for sale there starts where Listora imports from that
+marketplace ([imports.md](imports.md)), unless one is under way: its pages run after the session
+check and the first sale check, so linking brings in the sales history and the listings for sale
+without another tap.
 
 - **Validation.** The contract refuses an unknown field (a password included) and a malformed
   cookie (`422`); the vault refuses a cookie on another site's domain and a session whose

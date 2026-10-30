@@ -48,7 +48,7 @@ import type { SaleCheckSettings } from '../settings.ts';
 import { readFailure, recordReadFailed, recordReadSucceeded } from '../read-health/health.ts';
 import { saleCheckError, saleCheckErrorMessage } from './health.ts';
 import { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './interval.ts';
-import { orderEventPayload, queueSaleOrder } from './orders.ts';
+import { orderEventPayload, queueSaleOrder, updateRecordedOrder } from './orders.ts';
 import { checksSales, queueSaleCheckForPhone, type SaleCheckJobPayload } from './schedule.ts';
 import { queueSoldItemPhotos } from './sold-photos.ts';
 
@@ -63,6 +63,11 @@ export interface SaleCheckDependencies {
 
 /** Orders from a little before the last check, in case one showed up late. */
 const OVERLAP_MS = 24 * 3_600_000;
+/**
+ * A sale that waits to ship is read again by every check while it sold this recently, so its
+ * shipping on the marketplace reaches it (`updateRecordedOrder`).
+ */
+export const OPEN_SALE_LOOKBACK_MS = 30 * 24 * 3_600_000;
 /** Orders a check's record keeps of what it read (newest first). */
 const RECORDED_ORDERS = 100;
 
@@ -198,10 +203,35 @@ export async function prepareSaleCheck(
     since:
       kind === 'history' || found.checked_through === null
         ? null
-        : new Date(found.checked_through.getTime() - OVERLAP_MS),
+        : await checkSince(db, payload.accountId, found.marketplace, found.checked_through),
     checkedThrough: found.checked_through,
     runsOn: found.runs_on,
   };
+}
+
+/**
+ * Where a check's read starts: a little before the last check, or further back to the oldest
+ * sale on the marketplace that still waits to ship (sold in the last 30 days), so the read shows
+ * whether it shipped since.
+ */
+async function checkSince(
+  db: DbExecutor,
+  accountId: string,
+  marketplace: Marketplace,
+  checkedThrough: Date,
+): Promise<Date> {
+  const since = new Date(checkedThrough.getTime() - OVERLAP_MS);
+  const open = await db
+    .selectFrom('sale')
+    .select((eb) => eb.fn.min('sold_at').as('oldest'))
+    .where('account_id', '=', accountId)
+    .where('marketplace', '=', marketplace)
+    .where('status', 'in', ['detected', 'confirmed'])
+    .where('external_order_id', 'is not', null)
+    .where('sold_at', '>', new Date(Date.now() - OPEN_SALE_LOOKBACK_MS))
+    .executeTakeFirst();
+  const oldest = open?.oldest ?? null;
+  return oldest !== null && oldest < since ? new Date(oldest) : since;
 }
 
 /**
@@ -423,6 +453,8 @@ async function recordOrders(
         event = await handOver(`history:order:${order.externalOrderId}`);
       }
       if (event.duplicate) {
+        // Recorded before: what changed on the marketplace since (it shipped) reaches the sale.
+        await updateRecordedOrder(trx, { accountId: key.accountId, marketplace }, order);
         await queueSoldItemPhotos(trx, { ...key, marketplace, runId: prepared.runId }, order);
         return;
       }

@@ -15,8 +15,11 @@
  * An order that sold before the connection's sales history ends (when it was linked, or the
  * deploy that brought sales history in) is the seller's sales history (detection source
  * `history`), of Listora's listings too: Listora wasn't acting on it then, so the sale is
- * recorded only, with no auto-delist, delist, notification, or request to ship it. An order the
- * marketplace says shipped is `shipped`, and the fees it showed replace the estimate.
+ * recorded only, with no auto-delist, delist, notification, or request to ship it. Except an
+ * order the marketplace says still waits to ship that sold in the week before the history ends:
+ * the seller has it to ship now, so it is a sale like any a check finds (`poll`). An order the
+ * marketplace says shipped is `shipped`, and the fees it showed replace the estimate; one a
+ * check reads again after it was recorded brings its shipping then (`updateRecordedOrder`).
  *
  * The runner hands the sale over instead of recording it, because the auto-delist fan-out
  * decides from each listing's capabilities whether it is marked sold or ended, and only the
@@ -43,6 +46,7 @@ import {
   finishInboundEvent,
   recordSale,
   replaceWithActualFees,
+  SaleStateError,
   type SaleLine,
 } from '@listora/sales';
 import type { Logger } from '@listora/shared';
@@ -320,9 +324,17 @@ async function settleOrder(
 }
 
 /**
+ * An order that sold this long before the connection's history ends and still waits to ship is
+ * the seller's to ship now, not their history (Depop asks for shipping within days).
+ */
+export const UNSHIPPED_BEFORE_HISTORY_MS = 7 * 24 * 3_600_000;
+
+/**
  * How the sale was found: in the seller's sales history when it sold before the connection's
  * history ends (`sale_check_schedule.history_until`: when it was linked, or the deploy that
- * brought sales history in), otherwise by the sale check. A history sale is recorded only.
+ * brought sales history in), otherwise by the sale check. A history sale is recorded only. An
+ * order the marketplace says still waits to ship, sold in the week before the history ends, is
+ * the sale check's: the seller ships it now.
  */
 async function detectedBy(
   trx: DbTransaction,
@@ -336,9 +348,48 @@ async function detectedBy(
     .where('account_id', '=', accountId)
     .where('connection_id', '=', order.connectionId)
     .executeTakeFirst();
-  return schedule !== undefined && new Date(order.soldAt) < schedule.history_until
-    ? 'history'
-    : 'poll';
+  if (schedule === undefined) return 'poll';
+  const soldAt = new Date(order.soldAt).getTime();
+  const historyEnds = schedule.history_until.getTime();
+  if (soldAt >= historyEnds) return 'poll';
+  const toShip = order.shipped === false && soldAt >= historyEnds - UNSHIPPED_BEFORE_HISTORY_MS;
+  return toShip ? 'poll' : 'history';
+}
+
+/**
+ * An order a check reads again after its sale was recorded: what changed on the marketplace
+ * since reaches the sale. An order the marketplace now says shipped (or delivered) is shipped,
+ * as the seller would mark it; one shipped, canceled, or returned in Listora is left as it is.
+ * In the check's transaction; returns whether the sale changed.
+ */
+export async function updateRecordedOrder(
+  trx: DbTransaction,
+  sale: { accountId: string; marketplace: Marketplace },
+  order: RemoteOrder,
+): Promise<boolean> {
+  if (order.shipped !== true) return false;
+  const recorded = await trx
+    .selectFrom('sale')
+    .select('id')
+    .where('account_id', '=', sale.accountId)
+    .where('marketplace', '=', sale.marketplace)
+    .where('external_order_id', '=', order.externalOrderId)
+    .where('status', 'in', ['detected', 'confirmed'])
+    .executeTakeFirst();
+  if (recorded === undefined) return false;
+  try {
+    await changeSale(trx, {
+      accountId: sale.accountId,
+      saleId: recorded.id,
+      action: 'mark_shipped',
+      userId: null,
+    });
+    return true;
+  } catch (error) {
+    // Shipped, canceled, or returned in Listora meanwhile.
+    if (error instanceof SaleStateError) return false;
+    throw error;
+  }
 }
 
 function soldItemSources(

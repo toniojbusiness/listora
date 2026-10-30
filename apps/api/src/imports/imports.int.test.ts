@@ -77,6 +77,25 @@ describe('listing imports (real Postgres)', () => {
       },
     });
     expect(linked.status).toBeLessThan(300);
+    // Linking started the first import; its first page waits for the browser runner.
+    const firstPages = async () =>
+      (
+        await sql<{ key: string }>`
+          select key from graphile_worker.jobs where task_identifier = 'automation_listing_import'
+        `.execute(api.db)
+      ).rows.map((row) => row.key);
+    const onLink = await api.call('listListingImports', { token });
+    const linkImport = onLink.body.marketplaces[0]?.latest?.id ?? '';
+    expect(onLink.body.marketplaces[0]?.latest).toMatchObject({ status: 'reading' });
+    expect(await firstPages()).toEqual([`listing-import-read:${linkImport}`]);
+    expect(await start('depop')).toMatchObject({ status: 409, error: { code: 'already_exists' } });
+
+    // Once it finished, the seller can import again.
+    await sql`
+      update listing_import set status = 'finished', read_at = now(), finished_at = now()
+      where id = ${linkImport}
+    `.execute(api.db);
+    await sql`delete from graphile_worker._private_jobs`.execute(api.db);
     const started = await start('depop');
     expect(started).toMatchObject({
       status: 202,
@@ -88,11 +107,7 @@ describe('listing imports (real Postgres)', () => {
         counts: { read: 0, imported: 0, merged: 0, alreadyListed: 0, needsYou: 0, failed: 0 },
       },
     });
-    // The first page waits for the browser runner.
-    const { rows } = await sql<{ key: string }>`
-      select key from graphile_worker.jobs where task_identifier = 'automation_listing_import'
-    `.execute(api.db);
-    expect(rows.map((row) => row.key)).toEqual([`listing-import-read:${started.body.id}`]);
+    expect(await firstPages()).toEqual([`listing-import-read:${started.body.id}`]);
     expect(await start('depop')).toMatchObject({ status: 409, error: { code: 'already_exists' } });
     const during = await api.call('listListingImports', { token });
     expect(during.body.marketplaces[0]).toMatchObject({

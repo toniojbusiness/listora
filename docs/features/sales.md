@@ -71,7 +71,16 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
   auto-delist, delist run, or delist of any other listing, no notification, no Today ship card,
   and no Pack check order, unless the marketplace's order page says it still waits to ship
   ([pack-check.md](pack-check.md), "The to-ship list"). Only a sale that sold after the history
-  ends is acted on.
+  ends is acted on, and one the seller has to ship now: an order the marketplace says still
+  waits to ship that sold in the week before the history ends (`UNSHIPPED_BEFORE_HISTORY_MS`)
+  is the sale check's (`poll`), with its delists, notification, Today ship card, and label read.
+  Migration `20261030181825_unshipped_before_link` made the ones recorded as history before this
+  the sale check's.
+- **What changed reaches a sale recorded before.** A check that reads an order Listora has
+  recorded, which the marketplace now says shipped (or delivered), marks its sale shipped
+  (`updateRecordedOrder`), as the seller would. Each check reads back to the oldest sale on the
+  marketplace still waiting to ship (sold in the last 30 days, `OPEN_SALE_LOOKBACK_MS`), not
+  only the day before its last check, so a sale's shipping reaches it at the next sync.
 - **One sale, reported twice.** A sale the seller marked sold by hand on a marketplace and then
   found there by a check (or its history) is the same order, not a double sale
   (`findSaleOfSameListing`, `@listora/sales`).
@@ -198,7 +207,10 @@ lets the seller mark one as sold elsewhere (`FakeDepopSite.sell`, `sellBundle`, 
 Tests: `packages/imports/src/sold.int.test.ts` (sold items from a check's orders, with and
 without the listing, never joining an item, without photos),
 `packages/automation/src/sale-checks/sale-checks.int.test.ts` (the full history read and a
-dropped order handed over again), `packages/sales/src/same-order.int.test.ts`,
+dropped order handed over again), `packages/automation/src/phone/work.int.test.ts` (Depop on the
+phone: an unshipped sale from the week before linking is one to ship, an older one and a shipped
+one are history, and a later check marks it shipped once its receipt says so),
+`packages/sales/src/same-order.int.test.ts`,
 `packages/imports/src/sold-photos.int.test.ts` (a sold item made without photos gets its sold
 listing's from a later full read, once; a CDN that doesn't give them, and the next try; an item
 that got photos meanwhile), `apps/api/src/sales/summary.int.test.ts` (with each sale item's
@@ -219,6 +231,10 @@ Migration `20261028095905_sales_history`: `sale.detection_source` gains `history
 creation at linking, and the deploy for every existing connection); and every
 `sale_check_schedule.checked_through` is reset so each connection's next check reads its whole
 sales history. Down drops the column and turns `history` sales back into `poll` ones.
+
+Migration `20261030181825_unshipped_before_link`: a sale recorded as history that is still
+open, whose order the marketplace said waits to ship, and that sold in the week before its
+connection's history ends, becomes `poll`. Down does nothing.
 
 Migration `20261028152207_sold_item_photos`: resets `sale_check_schedule.checked_through` of each
 Mercari connection whose account has a sale there of an item without photos, so its
