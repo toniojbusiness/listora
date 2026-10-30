@@ -40,7 +40,7 @@ import {
   type Marketplace,
 } from '@listora/db';
 import { MARKETPLACE_NAMES, type ListedListing } from '@listora/marketplaces';
-import { remoteSnapshot, syncItemListedStatus } from '@listora/operations';
+import { remoteSnapshot, syncItemListedStatus, UNFINISHED_STATUSES } from '@listora/operations';
 import { graphilePhotoJobs, storageKeys, type PhotoJobQueue } from '@listora/photos';
 import type { Logger } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
@@ -162,6 +162,7 @@ async function decide(
   if (existing !== undefined) {
     // It was on a shop that was unlinked, and the linked shop shows it: it is this shop's.
     if (existing.shop_unlinked_at !== null) await rejoin(trx, entry, existing.id);
+    await refreshHeldListing(trx, entry, listing, existing.id);
     await settle(trx, entry, 'already_listed', {
       itemId: existing.item_id,
       listingId: existing.id,
@@ -299,6 +300,52 @@ export async function insertItemPhotos(
       .executeTakeFirstOrThrow();
     await jobs.enqueue(trx, { accountId, photoId: row.id });
   }
+}
+
+/**
+ * A listing Listora already has, as the import read it for sale on its marketplace: the read
+ * through the seller's session is its read-back, so a price the seller changed there is the
+ * listing's price now (`last_verified_at`, `remote_snapshot`). Only an active listing with no
+ * operation under way and no newer read: an operation's own read-back records what it changed,
+ * and a listing
+ * Listora has as ended or sold is left to the operations and sale checks that know why.
+ */
+async function refreshHeldListing(
+  trx: DbTransaction,
+  entry: EntryRow,
+  listing: ListedListing,
+  listingId: string,
+): Promise<void> {
+  const row = await trx
+    .selectFrom('marketplace_listing')
+    .select(['status', 'pending_external_listing_id', 'last_verified_at'])
+    .where('account_id', '=', entry.account_id)
+    .where('id', '=', listingId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (row?.status !== 'active' || row.pending_external_listing_id !== null) return;
+  // Verified since this page was read (an operation's read-back): that read is newer.
+  if (row.last_verified_at !== null && row.last_verified_at > entry.created_at) return;
+  const busy = await trx
+    .selectFrom('marketplace_operation')
+    .select('id')
+    .where('account_id', '=', entry.account_id)
+    .where('listing_id', '=', listingId)
+    .where('status', 'in', [...UNFINISHED_STATUSES])
+    .executeTakeFirst();
+  if (busy !== undefined) return;
+  await trx
+    .updateTable('marketplace_listing')
+    .set({
+      price_cents: listing.priceCents,
+      external_url: listing.externalUrl,
+      last_verified_at: entry.created_at,
+      remote_snapshot: jsonb(remoteSnapshot(listing)),
+      remote_revision: sql<number | null>`greatest(remote_revision, ${listing.revision}::bigint)`,
+    })
+    .where('account_id', '=', entry.account_id)
+    .where('id', '=', listingId)
+    .execute();
 }
 
 /** Puts a listing from an unlinked shop back on the import's connection. */

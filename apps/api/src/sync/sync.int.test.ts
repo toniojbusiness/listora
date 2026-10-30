@@ -1,6 +1,6 @@
 /**
  * Sync in the API (docs/features/sync.md), on real Postgres: Sync now asks for read-only checks
- * of every linked marketplace (its sales, its offers, its listings once imported) on the phone or
+ * of every linked marketplace (its sales, its offers, its listings) on the phone or
  * in the cloud where it runs, never twice within minutes; a read-only connection is synced like
  * any other and nothing that could change it is queued; and the status says what each one is
  * doing and what its last sync found, in the seller's words.
@@ -90,9 +90,14 @@ describe('sync (real Postgres)', () => {
         readOnly: false,
       },
     ]);
-    // Depop runs on the phone: its sale check and offer read wait there. Mercari runs in the
-    // cloud: its sale check is the runner's job (Mercari's offers are not read).
-    expect(await phoneWork()).toEqual(['depop:offer_check', 'depop:sale_check']);
+    // Depop runs on the phone: its sale check, offer read, and listings (never imported: the
+    // first import) wait there. Mercari runs in the cloud: its sale check is the runner's job
+    // (Mercari's offers are not read).
+    expect(await phoneWork()).toEqual([
+      'depop:listing_import',
+      'depop:offer_check',
+      'depop:sale_check',
+    ]);
     const { rows } = await sql<{ key: string }>`
       select key from graphile_worker.jobs where key = ${`sale-check:${ids.mercari ?? ''}`}
     `.execute(api.db);
@@ -110,7 +115,11 @@ describe('sync (real Postgres)', () => {
 
     // Synced again while the reads wait: nothing more is queued.
     await api.call('requestSync', { token });
-    expect(await phoneWork()).toEqual(['depop:offer_check', 'depop:sale_check']);
+    expect(await phoneWork()).toEqual([
+      'depop:listing_import',
+      'depop:offer_check',
+      'depop:sale_check',
+    ]);
   });
 
   it('does not read a marketplace again within 2 minutes of its last check', async () => {
@@ -150,7 +159,11 @@ describe('sync (real Postgres)', () => {
     expect(synced.body.data).toEqual([
       { marketplace: 'depop', state: 'syncing', statusText: 'Checking sales...', readOnly: true },
     ]);
-    expect(await phoneWork()).toEqual(['depop:offer_check', 'depop:sale_check']);
+    expect(await phoneWork()).toEqual([
+      'depop:listing_import',
+      'depop:offer_check',
+      'depop:sale_check',
+    ]);
     const operations = await api.db
       .selectFrom('marketplace_operation')
       .select('id')
@@ -159,47 +172,54 @@ describe('sync (real Postgres)', () => {
     expect(operations).toEqual([]);
   });
 
-  it('reads the listings again once the seller imported them, at most every 6 hours', async () => {
-    const { token, accountId, ids, phoneWork } = await seller([
+  it('reads the listings on every sync: the first import when none ran, then again once the last one finished', async () => {
+    const { token, accountId, phoneWork } = await seller([
       { marketplace: 'depop', runsOn: 'phone' },
-      { marketplace: 'poshmark', runsOn: 'phone' },
     ]);
-    // Depop was imported 7 hours ago; Poshmark never was, so a sync doesn't import it.
-    await api.db
-      .insertInto('listing_import')
-      .values({
-        account_id: accountId,
-        connection_id: ids.depop ?? '',
-        marketplace: 'depop',
-        host: 'phone',
-        status: 'finished',
-        read_at: sql<Date>`now() - interval '7 hours'`,
-        created_at: sql<Date>`now() - interval '7 hours'`,
-        finished_at: sql<Date>`now() - interval '7 hours'`,
-      })
-      .execute();
-    const synced = await api.call('requestSync', { token });
+    const imports = () =>
+      api.db
+        .selectFrom('listing_import')
+        .select(['status'])
+        .where('account_id', '=', accountId)
+        .orderBy('created_at')
+        .execute();
+    // Never imported (linked before linking imported): the sync imports.
+    await api.call('requestSync', { token });
+    expect(await imports()).toEqual([{ status: 'reading' }]);
+
+    // While it reads, a sync reads nothing more of the listings.
+    await api.db.deleteFrom('phone_work').where('account_id', '=', accountId).execute();
+    await api.db.deleteFrom('sale_check_schedule').where('account_id', '=', accountId).execute();
+    await api.db.deleteFrom('offer_check').where('account_id', '=', accountId).execute();
+    await api.call('requestSync', { token });
+    expect(await imports()).toEqual([{ status: 'reading' }]);
+    expect(await phoneWork()).toEqual(['depop:offer_check', 'depop:sale_check']);
+
+    // Finished 3 minutes ago: the next sync reads them again (a read of the listings Listora
+    // has takes its list pages only).
+    const finish = (ago: string) =>
+      sql`
+      update listing_import set status = 'finished', read_at = now() - ${ago}::interval,
+        created_at = now() - ${ago}::interval, finished_at = now() - ${ago}::interval
+      where account_id = ${accountId} and status = 'reading'
+    `.execute(api.db);
+    await finish('3 minutes');
+    await api.db.deleteFrom('phone_work').where('account_id', '=', accountId).execute();
+    await api.db.deleteFrom('sale_check_schedule').where('account_id', '=', accountId).execute();
+    await api.db.deleteFrom('offer_check').where('account_id', '=', accountId).execute();
+    await api.call('requestSync', { token });
+    expect(await imports()).toEqual([{ status: 'finished' }, { status: 'reading' }]);
     expect(await phoneWork()).toEqual([
       'depop:listing_import',
       'depop:offer_check',
       'depop:sale_check',
-      'poshmark:offer_check',
-      'poshmark:sale_check',
     ]);
-    expect(synced.body.data.map((row) => row.statusText)).toEqual([
-      'Checking sales...',
-      'Checking sales...',
-    ]);
-    const imports = await api.db
-      .selectFrom('listing_import')
-      .select(['marketplace', 'status'])
-      .where('account_id', '=', accountId)
-      .orderBy('created_at')
-      .execute();
-    expect(imports).toEqual([
-      { marketplace: 'depop', status: 'finished' },
-      { marketplace: 'depop', status: 'reading' },
-    ]);
+
+    // One that finished within the last 2 minutes is not read again.
+    await finish('0 seconds');
+    await api.db.deleteFrom('phone_work').where('account_id', '=', accountId).execute();
+    await api.call('requestSync', { token });
+    expect(await imports()).toHaveLength(2);
   });
 
   it('says what the last sync found, and a failure in words the seller can act on', async () => {

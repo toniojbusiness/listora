@@ -126,10 +126,11 @@ describe('the phone API (real Postgres)', () => {
       cloudAllowed: false,
       cloudBlockedReason: 'Depop blocks cloud servers, so Listora runs it from your phone',
     };
+    // Waiting there: the session check, the first sale check, and the import of the listings.
     expect(linked.body).toMatchObject({
       status: 'checking',
       statusDisplay: { tone: 'checking', label: 'Checking on your iPhone...' },
-      execution: { ...runsHere, waiting: 2 },
+      execution: { ...runsHere, waiting: 3 },
     });
     expect((await connection()).body).toMatchObject({
       statusDisplay: { label: 'Checking on your iPhone...' },

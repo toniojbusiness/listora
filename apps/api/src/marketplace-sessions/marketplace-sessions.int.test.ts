@@ -247,6 +247,31 @@ describe('marketplace sessions (real Postgres)', () => {
     expect(JSON.stringify(rows)).not.toContain(SECRET);
   });
 
+  it("imports the seller's listings for sale on linking, where Listora imports from that marketplace, once", async () => {
+    const seller = 'importer@example.com';
+    const as = await api.signIn(seller);
+    const imports = async () => {
+      const tenant = await api.tenantOf(seller);
+      return api.db
+        .selectFrom('listing_import')
+        .select(['marketplace', 'status', 'host'])
+        .where('account_id', '=', tenant.accountId)
+        .orderBy('marketplace')
+        .execute();
+    };
+    const mercari = cookie({ domain: '.mercari.com' });
+    expect((await link('mercari', { cookies: [mercari] }, { as })).status).toBe(201);
+    // eBay's Seller Hub rows carry no photos or details: linking it imports nothing.
+    const ebay = cookie({ name: 'nonsession', domain: '.ebay.com' });
+    expect((await link('ebay', { cookies: [ebay] }, { as })).status).toBe(201);
+    expect(await imports()).toEqual([
+      { marketplace: 'mercari', status: 'reading', host: 'runner' },
+    ]);
+    // A relink while it reads starts no second one.
+    expect((await link('mercari', { cookies: [mercari] }, { as })).status).toBe(201);
+    expect(await imports()).toHaveLength(1);
+  });
+
   it('shows linked only once the check passed, and the failure when it did not', async () => {
     const tenant = await api.tenantOf(OWNER);
     const setCheck = (values: Record<string, unknown>) =>

@@ -440,6 +440,61 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
     expect(await items()).toHaveLength(1);
   });
 
+  it('takes the price a listing Listora has shows now, unless a newer read or Listora ended it', async () => {
+    await settled(
+      await imported('depop', [listing('dress-1'), listing('dress-2'), listing('dress-3')]),
+    );
+    const byId = async () =>
+      new Map(
+        (
+          await db
+            .selectFrom('marketplace_listing')
+            .select([
+              'external_listing_id',
+              'status',
+              'price_cents',
+              'last_verified_at',
+              'remote_snapshot',
+            ])
+            .where('account_id', '=', accountId)
+            .execute()
+        ).map((row) => [row.external_listing_id, row]),
+      );
+    // Listora ended dress-2; an operation's read-back verified dress-3 after the next page's read.
+    await db
+      .updateTable('marketplace_listing')
+      .set({ status: 'ended', ended_at: new Date() })
+      .where('account_id', '=', accountId)
+      .where('external_listing_id', '=', 'dress-2')
+      .execute();
+    await db
+      .updateTable('marketplace_listing')
+      .set({ last_verified_at: sql<Date>`now() + interval '1 hour'` })
+      .where('account_id', '=', accountId)
+      .where('external_listing_id', '=', 'dress-3')
+      .execute();
+    // The seller lowered every price on Depop; a sync's import reads them from the list.
+    const lowered = (id: string) =>
+      listing(
+        id,
+        { description: null, fromList: true, priceCents: 2800, revision: 1_762_000_000_000 },
+        { photoUrls: [], brand: null },
+      );
+    const { row } = await settled(
+      await imported('depop', [lowered('dress-1'), lowered('dress-2'), lowered('dress-3')]),
+    );
+    expect(row).toMatchObject({ status: 'finished', imported: 0, already_listed: 3 });
+    const after = await byId();
+    expect(after.get('dress-1')).toMatchObject({
+      status: 'active',
+      price_cents: 2800,
+      remote_snapshot: expect.objectContaining({ priceCents: 2800 }) as unknown,
+    });
+    expect(after.get('dress-2')).toMatchObject({ status: 'ended', price_cents: 3400 });
+    expect(after.get('dress-3')).toMatchObject({ status: 'active', price_cents: 3400 });
+    expect(await items()).toHaveLength(3);
+  });
+
   it('imports afresh after an unlink and a relink: the listings come back as new items', async () => {
     const first = await settled(await imported('depop', [listing('dress-1'), listing('dress-2')]));
     expect(first.row).toMatchObject({ status: 'finished', imported: 2 });

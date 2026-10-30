@@ -43,6 +43,11 @@ import { LISTING_IMPORT_APPLY_TASK, queueImportPage } from '../imports/schedule.
 import { queueLabelReads } from '../label-reads/queue.ts';
 import { requestOfferAnswer } from '../offers/answer.ts';
 import { queueOfferCheck, requestOfferChecks } from '../offers/schedule.ts';
+import {
+  recordSaleOrder,
+  SALE_ORDER_TASK,
+  type SaleOrderJobPayload,
+} from '../sale-checks/orders.ts';
 import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
 import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
@@ -53,6 +58,7 @@ import { PlaywrightPhoneHost } from './test-host.ts';
 
 /** A read-only shop's pace in these tests: slower than `QUICK_PACING`, still quick to run. */
 const GENTLE_PACING = { ...QUICK_PACING, actionDelayMs: [5, 8] } as const;
+const DAY = 86_400_000;
 import {
   answerPhoneCall,
   claimPhoneRun,
@@ -273,6 +279,17 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     runOperationStep(worker, { accountId, operationId: op.id }, AbortSignal.timeout(30_000));
   const work = () =>
     db.selectFrom('phone_work').selectAll().where('account_id', '=', accountId).execute();
+  /** The worker's jobs that record the sales the checks handed over, run as the worker runs them. */
+  const recordSaleOrders = async () => {
+    const { rows } = await sql<{ payload: SaleOrderJobPayload }>`
+      select payload from graphile_worker._private_jobs where task_id =
+        (select id from graphile_worker._private_tasks where identifier = ${SALE_ORDER_TASK})
+    `.execute(db);
+    for (const { payload } of rows) {
+      if (payload.accountId !== accountId) continue;
+      await recordSaleOrder({ db, adapters: worker.adapters, logger: silentLogger }, payload);
+    }
+  };
   const jobOf = async (op: { id: string }) => {
     const { rows } = await sql<{ task_identifier: string; run_at: Date }>`
       select task_identifier, run_at from graphile_worker.jobs where key = ${`operation:${op.id}`}
@@ -1391,6 +1408,85 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       .set({ due_at: sql<Date>`now()` })
       .where('account_id', '=', accountId)
       .execute();
+
+  it('records a Depop sale from the week before linking that waits to ship as one to ship, and brings its shipping from a later check', async () => {
+    await runPhone();
+    const listed = async () => {
+      const listingId = await newListing();
+      const create = await enqueue(listingId, 'create');
+      await step(create);
+      await runPhoneAndConfirm(create);
+      const row = await db
+        .selectFrom('marketplace_listing')
+        .select('external_listing_id')
+        .where('id', '=', listingId)
+        .executeTakeFirstOrThrow();
+      return row.external_listing_id ?? '';
+    };
+    // Before the shop was linked: one sold 5 days before, still waiting to ship; one sold 10
+    // days before and never shipped (the seller's history); one sold 3 days before, shipped.
+    const toShip = await listed();
+    const old = await listed();
+    const shipped = await listed();
+    const linkedAt = Date.now();
+    site.sell(toShip, new Date(linkedAt - 5 * DAY));
+    site.sell(old, new Date(linkedAt - 10 * DAY));
+    site.sell(shipped, new Date(linkedAt - 3 * DAY), undefined, { status: 'shipped' });
+    await db
+      .updateTable('sale_check_schedule')
+      .set({ checked_through: null, history_until: new Date(linkedAt) })
+      .where('account_id', '=', accountId)
+      .execute();
+    await enqueueSaleCheck(db, { accountId, connectionId, marketplace: 'depop' });
+    await runPhone();
+    await recordSaleOrders();
+    const sales = async () =>
+      new Map(
+        (
+          await db
+            .selectFrom('sale')
+            .select(['external_order_id', 'detection_source', 'status'])
+            .where('account_id', '=', accountId)
+            .execute()
+        ).map((row) => [row.external_order_id, row]),
+      );
+    const order = (slug: string) => String(site.purchaseIdOf(slug));
+    const recorded = await sales();
+    expect(recorded.get(order(toShip))).toMatchObject({
+      detection_source: 'poll',
+      status: 'detected',
+    });
+    expect(recorded.get(order(old))).toMatchObject({
+      detection_source: 'history',
+      status: 'detected',
+    });
+    expect(recorded.get(order(shipped))).toMatchObject({
+      detection_source: 'history',
+      status: 'shipped',
+    });
+
+    // Days later (checks ran since), the seller ships it on Depop: the next check reads back to
+    // the oldest sale waiting to ship, and the sale is shipped.
+    await db
+      .updateTable('sale_check_schedule')
+      .set({ checked_through: new Date() })
+      .where('account_id', '=', accountId)
+      .execute();
+    site.purchaseStatus(toShip, 'shipped');
+    await enqueueSaleCheck(db, { accountId, connectionId, marketplace: 'depop' });
+    await runPhone();
+    const run = await db
+      .selectFrom('sale_check_run')
+      .select(['since', 'new_orders'])
+      .where('account_id', '=', accountId)
+      .orderBy('started_at', 'desc')
+      .executeTakeFirstOrThrow();
+    expect(run.new_orders).toBe(0);
+    expect(run.since?.getTime()).toBeLessThanOrEqual(linkedAt - 10 * DAY);
+    const after = await sales();
+    expect(after.get(order(toShip))).toMatchObject({ status: 'shipped' });
+    expect(after.get(order(old))).toMatchObject({ status: 'detected' });
+  });
 
   it("reads the seller's offers on the phone read-only: each pending one is a task, and one that goes away closes it", async () => {
     const { listingId, itemId, offer } = await listingWithOffer();
