@@ -23,11 +23,15 @@ flow end to end.
 4. **Read only** (a switch on every linked row: "Listora will never change anything on this
    account") makes the account read only at once; turning it off asks to confirm first. The
    switch shows the server's setting ([read-only.md](read-only.md)).
-5. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, then
-   deletes what Listora holds for that marketplace (`disconnectConnection`,
-   [privacy.md](privacy.md)): the row shows `Not linked` once the server answered. Items,
-   listings, and sales stay, and listings stay on the marketplace. The next link, which may be
-   another shop, never takes those listings ([Relinking another shop](#relinking-another-shop)).
+5. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, saying
+   what goes ("Listora removes everything it has from Depop: your Depop listings, items that came
+   only from Depop, Depop sales and offers with their Pack check orders, and tasks about Depop.
+   Items you made in Listora or listed elsewhere stay, without their Depop listing. Nothing
+   changes on Depop itself. ..."), then removes it all (`disconnectConnection`,
+   [privacy.md](privacy.md#unlinking-a-marketplace)): the row shows `Not linked` once the server
+   answered. Listings stay up on the marketplace. The next link, of the same shop or another,
+   starts afresh: its first sale check reads the whole sales history, and an import brings the
+   listings in again.
    A read-only account is never unlinked: the server answers `409 connection_read_only` until the
    owner turns Read only off, and the row shows that message with Try again
    ([read-only.md](read-only.md#unlinking-and-relinking)).
@@ -151,7 +155,9 @@ An account keeps one connection per marketplace, so the shop linked after an unl
 another one (another seller's, or the seller's own second shop). A link therefore never takes
 the listings of the shop that was unlinked:
 
-- **Unlink** (and every deletion of a connection, [privacy.md](privacy.md)) detaches the
+- **Unlink** removes the marketplace's listings altogether
+  ([privacy.md](privacy.md#unlinking-a-marketplace)). Every other deletion of a connection
+  (access revoked past retention, an operator's purge, eBay's account deletion) detaches the
   connection's listings and marks each as from that previous shop
   (`marketplace_listing.shop_unlinked_at`).
 - **A link** takes only the marketplace's listings without a connection that were never on a
@@ -184,8 +190,8 @@ listings of the shop the connection held (audit M3, [security.md](security.md#au
   recorded; the same seller changes nothing; **another seller** fails every change still waiting
   on the connection's listings (`shop_changed`: "Your Depop login is for another shop than the
   one this listing is on, so Listora didn't change it. Listora will find the listing again when
-  you link its shop.") and detaches the listings as an unlink does (marked as from the previous
-  shop, so an import of a shop that has them takes them back). A failed check records nothing.
+  you link its shop.") and detaches the listings (marked as from the previous shop, as a revoked
+  connection's deletion leaves them, so an import of a shop that has them takes them back). A failed check records nothing.
 - **Before every write.** A write script (and an offer answer) on a connection whose seller is
   known carries it as `expectedSeller`: before its first step, the call runs the health script
   and, when the page shows another seller, changes nothing and answers `rejected`

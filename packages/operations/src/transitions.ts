@@ -16,6 +16,7 @@ import {
   jsonb,
   type DbTransaction,
   type JsonObject,
+  type Marketplace,
   type MarketplaceOperationTable,
   type OperationKind,
   type OperationStatus,
@@ -206,6 +207,30 @@ export async function keepDeletedItemOperations(
         .select('id')
         .where('account_id', '=', target.accountId)
         .where('item_id', '=', target.itemId),
+    )
+    .execute();
+}
+
+/**
+ * Moves the operations of the account's listings on `marketplace` onto those listings'
+ * `deleted_listing` rows, which the caller has written, so their history outlives the listings
+ * (the listing's delete then clears `listing_id`). Every one is settled by then
+ * (`settleUnlinkedOperations`, unlinked.ts).
+ */
+export async function keepUnlinkedOperations(
+  trx: DbTransaction,
+  target: { accountId: string; marketplace: Marketplace },
+): Promise<void> {
+  await trx
+    .updateTable('marketplace_operation')
+    .set((eb) => ({ deleted_listing_id: eb.ref('listing_id').$castTo<string>() }))
+    .where('account_id', '=', target.accountId)
+    .where('listing_id', 'in', (eb) =>
+      eb
+        .selectFrom('marketplace_listing')
+        .select('id')
+        .where('account_id', '=', target.accountId)
+        .where('marketplace', '=', target.marketplace),
     )
     .execute();
 }

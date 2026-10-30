@@ -61,6 +61,17 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
         state != .notLinked
     }
 
+    /// What the unlink confirmation says will go: everything Listora has from the marketplace
+    /// (docs/features/privacy.md, Unlinking a marketplace), and that the marketplace itself is
+    /// left as it is.
+    public var unlinkMessage: String {
+        "Listora removes everything it has from \(name): your \(name) listings, items that came "
+            + "only from \(name), \(name) sales and offers with their Pack check orders, and tasks "
+            + "about \(name). Items you made in Listora or listed elsewhere stay, without their "
+            + "\(name) listing. Nothing changes on \(name) itself. Link \(name) again to bring "
+            + "in its listings and sales afresh."
+    }
+
     /// Whether the account can be made read only, or writable again: only a linked one.
     public var canSetReadOnly: Bool {
         state != .notLinked

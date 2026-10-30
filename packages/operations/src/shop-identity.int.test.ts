@@ -125,7 +125,8 @@ describe('the shop a connection holds (real Postgres)', () => {
       status: 'failed',
       error_code: SHOP_CHANGED_ERROR,
     });
-    // The listing left the connection as an unlink leaves it: from the previous shop.
+    // The listing left the connection as a revoked connection's deletion leaves it: from the
+    // previous shop.
     const left = await harness.listing(listing.id);
     expect(left.connection_id).toBeNull();
     expect(left.shop_unlinked_at).not.toBeNull();

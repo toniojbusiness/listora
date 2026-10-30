@@ -105,7 +105,8 @@ export {
   SETTLED_STATUSES,
   UNFINISHED_STATUSES,
 } from './state-machine.ts';
-export { keepDeletedItemOperations } from './transitions.ts';
+export { keepDeletedItemOperations, keepUnlinkedOperations } from './transitions.ts';
+export { settleUnlinkedOperations, UNLINKED_REASON, unlinkedOperationError } from './unlinked.ts';
 export type { OperationChange, OperationError, OperationRow } from './transitions.ts';
 export {
   describeListingStatus,

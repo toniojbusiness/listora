@@ -123,9 +123,9 @@ notification adds one `ebay_user_deletion` job per eBay user, whether or not Lis
 and stores nothing about them first. `purgeEbayUser` then deletes, in one transaction:
 
 - every `marketplace_connection` to that eBay user, in every account (tokens, eBay user id, user
-  name), with the same deletion as unlinking (`deleteConnectionData`,
-  [privacy.md](privacy.md)): the eBay listing snapshots read back under those connections, the
-  listings' link to them, and the connection's runs and checks;
+  name), with the data that came through it (`deleteConnectionData`, the deletion an unlink
+  starts with, [privacy.md](privacy.md)): the eBay listing snapshots read back under those
+  connections, the listings' link to them, and the connection's runs and checks;
 - every eBay `inbound_event` about them, in every account.
 
 In the same transaction it checks that no connection or event names them any more and writes a

@@ -143,10 +143,11 @@ export function registerConnectionRoutes(
   const inboundDomain = inboundDomainOf(deps.saleEmails.ingest);
 
   /**
-   * Unlinking: deletes the connection and the marketplace data that came through it at once
-   * (`startConnectionDeletion`), and leaves the job that asks the marketplace to revoke the
-   * grant, deletes the connection's screenshots, and records the checked deletion
-   * (docs/features/privacy.md). Listings stay on the marketplace. A read-only connection is
+   * Unlinking: deletes the connection and every piece of the marketplace's data in the account
+   * at once (`startConnectionDeletion`: its listings, sales, offers, tasks, and the items only
+   * its import brought in), and leaves the job that asks the marketplace to revoke the grant,
+   * deletes the stored objects, and records the checked deletion (docs/features/privacy.md).
+   * Nothing changes on the marketplace: its listings stay up there. A read-only connection is
    * never unlinked: the owner turns Read only off first, so an unlink and a relink are never a
    * way around it (docs/features/read-only.md#unlinking-and-relinking).
    */
@@ -184,6 +185,10 @@ export function registerConnectionRoutes(
         connectionDeletionId: started.deletionId,
         marketplace: params.marketplace,
         listings: started.deleted.listings,
+        items: started.deleted.marketplaceData?.items ?? 0,
+        sales: started.deleted.marketplaceData?.sales ?? 0,
+        tasks: started.deleted.marketplaceData?.tasks ?? 0,
+        settledOperations: started.deleted.marketplaceData?.settledOperations ?? 0,
         inboundEvents: started.deleted.inboundEvents,
         automationRuns: started.deleted.automationRuns,
         revokeGrant: started.deleted.grantCiphertext !== null,
