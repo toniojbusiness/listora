@@ -386,6 +386,32 @@ macOS jobs failed only the lint, which now runs on Linux first. The ATS check ma
 `xcodebuild -showBuildSettings` calls (about 3 min); it now makes 3. The 10 slowest UI tests
 took 19.3 of the 43.5 UI test minutes (`scripts/ios-ui-test-seconds.tsv` has the current times).
 
+## Live phone timings of 2026-10-30
+
+The phone's own runtime and marketplace scripts, run in a signed-in Mac Chrome tab at normal
+pacing on the captain's own test shops: main (983214fc) against the phone time savings of
+[#192](https://github.com/toniojbusiness/listora/pull/192) (R13-R15, 038e1686). One create of a
+marked test listing, its read-back, a delete, and one re-import (every listings page) per run;
+each test listing was deleted and read back as gone.
+
+| Marketplace | Code | Create | Confirm (read-back) | Delete | Re-import           |
+| ----------- | ---- | -----: | ------------------: | -----: | ------------------- |
+| Poshmark    | main | 16.9 s |       0.8 s, 1 read |  8.7 s | 1.8 s, 0 listings   |
+| Poshmark    | #192 | 16.9 s |       1.3 s, 1 read |  8.3 s | 1.8 s, 0 listings   |
+| Depop       | main | 19.3 s |       2.6 s, 1 read |  7.6 s | 1.4 s, 0 listings   |
+| Depop       | #192 | 17.7 s |       1.8 s, 1 read |  7.9 s | 1.4 s, 0 listings   |
+| Mercari     | main |      - |                   - |      - | 16.5 s, 11 listings |
+
+- On both test shops the new listing's page showed at once, so every create took the path #192
+  leaves unchanged; the differences are run to run. Poshmark's confirm by the edit form's SKU
+  (R13) and a re-import that skips the listings Listora holds (R14) did not run live: the test
+  shops had no other listings.
+- Mercari was not live-checked. A create on main got no answer after the submit, one on #192
+  got "the item could not be listed due to an error", and its sessions showed bot checks, so
+  Mercari stopped for the day to protect the account. No test listing was left (read back by SKU and on the active listings).
+- Depop refused a dress whose title names no length ("it marked a field as needing a fix"):
+  its dress length is read only from the title (`depop/attributes.ts`).
+
 ## Cloud cost
 
 The personal environment's monthly estimate is about $41 with browser automation
@@ -406,3 +432,7 @@ above its burst baseline.
   scrolled past; keeping them (and refreshing the item that changed) would keep the position.
 - Measure the runner's memory on real marketplace pages, then consider 2 GB.
 - Decide the AI image size (768 px) with the real-provider eval.
+- Live-check #192's R13 and R14 on a test shop that already holds listings, and Mercari creates
+  once its sessions are clear (above).
+- A Depop dress with no length in its title: ask for the length before posting, and name the
+  field in Depop's refusal instead of "a field".
