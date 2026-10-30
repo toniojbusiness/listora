@@ -2364,6 +2364,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/pack-check/orders/{saleId}/label-print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a print of the order's label
+         * @description Records that the app printed this order's shipping label (with its item stickers), so the
+         *     next print of the same label warns first (`PackLabel.printed`). The label must still be
+         *     the order's: one that changed since the app loaded it, or an order with no label Listora
+         *     knows, is `409 invalid_state_transition`, and so is an order that no longer needs a
+         *     package. Listora never sees the label's file, which the app downloads from the
+         *     marketplace itself.
+         */
+        post: operations["recordLabelPrint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pack-check/orders/{saleId}/photo": {
         parameters: {
             query?: never;
@@ -5971,6 +5998,35 @@ export interface components {
             trackingNumber: string;
             carrier: components["schemas"]["LabelCarrier"];
             source: components["schemas"]["LabelSource"];
+            /**
+             * Format: uri
+             * @description The label's file (a PDF) on the marketplace's own site, as its order page names it. The
+             *     app downloads it through this iPhone's own session for the marketplace, never through
+             *     Listora, and prints it with the order's item stickers, then records the print
+             *     (`recordLabelPrint`). Absent when the marketplace names none: the seller prints the
+             *     label on the marketplace (`PackOrder.labelPageUrl`).
+             */
+            fileUrl?: string;
+            printed?: components["schemas"]["PackLabelPrint"];
+        };
+        /**
+         * @description Listora printed this label already: printing it again warns first, since a second copy on
+         *     another package ships one buyer two packages.
+         */
+        PackLabelPrint: {
+            /** @description The last print. */
+            printedAt: components["schemas"]["Timestamp"];
+            /**
+             * Format: int32
+             * @description How many times Listora printed this label.
+             */
+            count: number;
+            /** @description The server's words, `Label printed 12 minutes ago`. */
+            label: string;
+        };
+        PackLabelPrintRecord: {
+            /** @description The label the app printed (`PackLabel.trackingNumber`). */
+            trackingNumber: string;
         };
         /** @description The order's package, once packed. */
         PackRecord: {
@@ -6010,6 +6066,12 @@ export interface components {
             items: components["schemas"]["PackItem"][];
             label?: components["schemas"]["PackLabel"];
             labelStatus: components["schemas"]["StatusDisplay"];
+            /**
+             * Format: uri
+             * @description The order's own page on the marketplace, where the seller prints its label there when
+             *     Listora can't (`PackLabel.fileUrl` absent). The app opens it as a plain link.
+             */
+            labelPageUrl?: string;
             pack?: components["schemas"]["PackRecord"];
             packStatus: components["schemas"]["StatusDisplay"];
         };
@@ -7031,6 +7093,8 @@ export type KnownPackMatch = components['schemas']['KnownPackMatch'];
 export type PackLocation = components['schemas']['PackLocation'];
 export type PackItem = components['schemas']['PackItem'];
 export type PackLabel = components['schemas']['PackLabel'];
+export type PackLabelPrint = components['schemas']['PackLabelPrint'];
+export type PackLabelPrintRecord = components['schemas']['PackLabelPrintRecord'];
 export type PackRecord = components['schemas']['PackRecord'];
 export type PackOrder = components['schemas']['PackOrder'];
 export type PackOrderList = components['schemas']['PackOrderList'];
@@ -10512,6 +10576,47 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    recordLabelPrint: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PackLabelPrintRecord"];
+            };
+        };
+        responses: {
+            /** @description The order, with the print recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOrder"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };

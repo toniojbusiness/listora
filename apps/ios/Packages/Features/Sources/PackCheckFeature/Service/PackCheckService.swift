@@ -25,6 +25,10 @@ protocol PackCheckService: Sendable {
         idempotencyKey: String,
     ) async throws(APIFailure) -> PackOrder
     func unpack(saleID: String) async throws(APIFailure) -> PackOrder
+    /// Records that this phone printed the order's label (`recordLabelPrint`), so the next print
+    /// of it warns first.
+    func recordLabelPrint(saleID: String, trackingNumber: String, idempotencyKey: String) async throws(APIFailure)
+        -> PackOrder
     /// Uploads the package photo (a JPEG without metadata) and keeps it with the order; the keys
     /// are kept for every retry of the same photo, so it is never uploaded or kept twice.
     func addPhoto(saleID: String, jpeg: Data, keys: PackPhotoKeys) async throws(APIFailure) -> PackOrder
@@ -113,6 +117,27 @@ struct APIPackCheckService: PackCheckService {
         switch try await call({ try await client.unpackOrder(path: .init(saleId: saleID)) }) {
         case let .ok(response): try body { try response.body.json }
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func recordLabelPrint(
+        saleID: String,
+        trackingNumber: String,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> PackOrder {
+        let output = try await call {
+            try await client.recordLabelPrint(
+                path: .init(saleId: saleID),
+                headers: .init(idempotencyKey: idempotencyKey),
+                body: .json(.init(trackingNumber: trackingNumber)),
+            )
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

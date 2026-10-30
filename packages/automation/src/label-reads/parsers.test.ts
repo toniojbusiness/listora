@@ -17,6 +17,8 @@ function depopReceipt(
     parcelStatus?: string;
     tracking?: string | null;
     parcels?: unknown[];
+    /** More of the parcel's fields (the label's file). */
+    parcel?: Record<string, unknown>;
   } = {},
 ): Record<string, unknown> {
   const productIds = options.productIds ?? [purchaseId + 1000];
@@ -55,6 +57,7 @@ function depopReceipt(
         shipping_deadline: '2026-11-07T21:52:10.127Z',
         label_expires_at: '2026-11-24T21:52:17.000Z',
         purchase_line_items: productIds.map((_id, index) => 900 + index),
+        ...options.parcel,
       },
     ],
     shipping_address: { name: 'Invented Person', city: 'Nowhere', state: 'NA' },
@@ -74,6 +77,7 @@ describe('label reads: the pages read by field names only', () => {
       carrierName: 'USPS',
       shipBy: new Date('2026-11-07T21:52:10.127Z'),
       labelExpiresAt: new Date('2026-11-24T21:52:17.000Z'),
+      labelFileUrl: null,
       buyerFirstName: 'Robin',
     });
     expect(orderLabel({ externalOrderId: '412', externalListingIds: [] }, [label])).toEqual({
@@ -85,11 +89,43 @@ describe('label reads: the pages read by field names only', () => {
       carrierName: 'USPS',
       shipBy: new Date('2026-11-07T21:52:10.127Z'),
       labelExpiresAt: new Date('2026-11-24T21:52:17.000Z'),
+      labelFileUrl: null,
     });
     expect(orderLabel({ externalOrderId: '999', externalListingIds: ['x'] }, [label])).toEqual({
       externalOrderId: '999',
       found: false,
     });
+  });
+
+  it("takes the label's file only under a field that names it, and only on Depop's own site", () => {
+    const fileOf = (parcel: Record<string, unknown>) =>
+      labelOf(depopReceipt(412, 'shipping_pending', { parcel })).labelFileUrl;
+    const file = 'https://webapi.depop.com/presentation/api/v1/receipts/412/label/';
+    expect(fileOf({ label_url: file })).toBe(file);
+    expect(fileOf({ shipping_label_url: 'https://www.depop.com/labels/412.pdf' })).toBe(
+      'https://www.depop.com/labels/412.pdf',
+    );
+    expect(fileOf({ label: { url: file } })).toBe(file);
+    // A path is on Depop's site.
+    expect(fileOf({ label_pdf_url: '/labels/412.pdf' })).toBe(
+      'https://www.depop.com/labels/412.pdf',
+    );
+    // Never the tracking page, a file elsewhere, or plain http.
+    expect(fileOf({})).toBeNull();
+    expect(fileOf({ label_url: 'https://labels.example.com/412.pdf' })).toBeNull();
+    expect(fileOf({ label_url: 'http://www.depop.com/labels/412.pdf' })).toBeNull();
+    expect(fileOf({ label_url: 'https://depop.com.example.com/412.pdf' })).toBeNull();
+    expect(fileOf({ label_url: '' })).toBeNull();
+    // A purchase whose parcels show several labels has no one label to print.
+    const several = labelOf(
+      depopReceipt(5, 'shipping_pending', {
+        parcels: [
+          { tracking: { reference: '9400100000000000000001' }, label_url: file },
+          { tracking: { reference: '9400100000000000000002' }, label_url: file },
+        ],
+      }),
+    );
+    expect(several.labelFileUrl).toBeNull();
   });
 
   it('decides to ship by the receipt, never the parcel: a refunded order still shows one waiting', () => {

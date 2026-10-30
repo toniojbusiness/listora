@@ -2,6 +2,8 @@ import { queueLabelReads } from '@listora/automation';
 import { inTransaction, type DbExecutor } from '@listora/db';
 import {
   checkScan,
+  LabelChangedError,
+  LabelOrderClosedError,
   loadPackCheckSettings,
   loadPackOrders,
   loadPackOrdersById,
@@ -12,6 +14,7 @@ import {
   packPhotoKey,
   packPhotoUrls,
   PackRefusedError,
+  recordLabelPrint,
   removePackPhoto,
   savePackCheckSettings,
   savePackPhoto,
@@ -41,8 +44,9 @@ export interface PackCheckRouteDependencies extends RouteDependencies {
 
 /**
  * Pack check (docs/features/pack-check.md): the setting, the to-ship list, label reads, scans,
- * packing, and the package photo. Nothing here changes anything on a marketplace: label reads
- * only read the marketplaces' order pages, on the seller's iPhone.
+ * packing, label prints, and the package photo. Nothing here changes anything on a marketplace:
+ * label reads only read the marketplaces' order pages, on the seller's iPhone, which also
+ * downloads a label to print it (Listora's server never sees the file).
  */
 export function registerPackCheckRoutes(
   app: FastifyInstance,
@@ -119,6 +123,26 @@ export function registerPackCheckRoutes(
       if (error instanceof PackRefusedError) {
         const words = verdictWords(error.verdict, now);
         throw new ApiError('pack_refused', `${words.headline} ${words.detail}`, { cause: error });
+      }
+      throw error;
+    }
+    return { status: 200, body: await oneView(db, tenant, deps, params.saleId, now) };
+  });
+
+  contractRoute(app, deps, 'recordLabelPrint', async ({ tenant, db, params, body }) => {
+    const now = deps.now();
+    try {
+      await inTransaction(db, (trx) =>
+        recordLabelPrint(trx, tenant.accountId, {
+          saleId: params.saleId,
+          trackingNumber: body.trackingNumber,
+          now,
+        }),
+      );
+    } catch (error) {
+      if (error instanceof PackOrderNotFoundError) throw notFound('Order');
+      if (error instanceof LabelChangedError || error instanceof LabelOrderClosedError) {
+        throw new ApiError('invalid_state_transition', error.message, { cause: error });
       }
       throw error;
     }

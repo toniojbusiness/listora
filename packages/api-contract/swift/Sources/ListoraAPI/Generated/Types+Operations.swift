@@ -21831,6 +21831,257 @@ public enum Operations {
             }
         }
     }
+    /// Record a print of the order's label
+    ///
+    /// Records that the app printed this order's shipping label (with its item stickers), so the
+    /// next print of the same label warns first (`PackLabel.printed`). The label must still be
+    /// the order's: one that changed since the app loaded it, or an order with no label Listora
+    /// knows, is `409 invalid_state_transition`, and so is an order that no longer needs a
+    /// package. Listora never sees the label's file, which the app downloads from the
+    /// marketplace itself.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/orders/{saleId}/label-print`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)`.
+    public enum RecordLabelPrint {
+        public static let id: Swift.String = "recordLabelPrint"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/path/saleId`.
+                public var saleId: Components.Parameters.SaleId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - saleId:
+                public init(saleId: Components.Parameters.SaleId) {
+                    self.saleId = saleId
+                }
+            }
+            public var path: Operations.RecordLabelPrint.Input.Path
+            /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RecordLabelPrint.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RecordLabelPrint.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.RecordLabelPrint.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.PackLabelPrintRecord)
+            }
+            public var body: Operations.RecordLabelPrint.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.RecordLabelPrint.Input.Path,
+                headers: Operations.RecordLabelPrint.Input.Headers,
+                body: Operations.RecordLabelPrint.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/pack-check/orders/{saleId}/label-print/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PackOrder)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PackOrder {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.RecordLabelPrint.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.RecordLabelPrint.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The order, with the print recorded.
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.RecordLabelPrint.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.RecordLabelPrint.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Add the package photo
     ///
     /// Keeps one photo of the open package with its label, for a claim. It is stored without its

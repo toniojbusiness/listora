@@ -277,6 +277,8 @@ paths:
     $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1scan'
   /v1/pack-check/orders/{saleId}/pack:
     $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1orders~1{saleId}~1pack'
+  /v1/pack-check/orders/{saleId}/label-print:
+    $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1orders~1{saleId}~1label-print'
   /v1/pack-check/orders/{saleId}/photo:
     $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1orders~1{saleId}~1photo'
   /v1/devices/{installationId}:
@@ -1104,6 +1106,10 @@ components:
       $ref: './components/schemas/pack-check.yaml#/PackItem'
     PackLabel:
       $ref: './components/schemas/pack-check.yaml#/PackLabel'
+    PackLabelPrint:
+      $ref: './components/schemas/pack-check.yaml#/PackLabelPrint'
+    PackLabelPrintRecord:
+      $ref: './components/schemas/pack-check.yaml#/PackLabelPrintRecord'
     PackRecord:
       $ref: './components/schemas/pack-check.yaml#/PackRecord'
     PackOrder:

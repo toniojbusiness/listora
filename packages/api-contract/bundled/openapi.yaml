@@ -3372,6 +3372,44 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/orders/{saleId}/label-print:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - pack-check
+      operationId: recordLabelPrint
+      summary: Record a print of the order's label
+      description: |
+        Records that the app printed this order's shipping label (with its item stickers), so the
+        next print of the same label warns first (`PackLabel.printed`). The label must still be
+        the order's: one that changed since the app loaded it, or an order with no label Listora
+        knows, is `409 invalid_state_transition`, and so is an order that no longer needs a
+        package. Listora never sees the label's file, which the app downloads from the
+        marketplace itself.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PackLabelPrintRecord'
+      responses:
+        '200':
+          description: The order, with the print recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/pack-check/orders/{saleId}/photo:
     parameters:
       - $ref: '#/components/parameters/SaleId'
@@ -10143,6 +10181,51 @@ components:
           $ref: '#/components/schemas/LabelCarrier'
         source:
           $ref: '#/components/schemas/LabelSource'
+        fileUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: |
+            The label's file (a PDF) on the marketplace's own site, as its order page names it. The
+            app downloads it through this iPhone's own session for the marketplace, never through
+            Listora, and prints it with the order's item stickers, then records the print
+            (`recordLabelPrint`). Absent when the marketplace names none: the seller prints the
+            label on the marketplace (`PackOrder.labelPageUrl`).
+        printed:
+          $ref: '#/components/schemas/PackLabelPrint'
+    PackLabelPrint:
+      type: object
+      description: |
+        Listora printed this label already: printing it again warns first, since a second copy on
+        another package ships one buyer two packages.
+      required:
+        - printedAt
+        - count
+        - label
+      properties:
+        printedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: The last print.
+        count:
+          type: integer
+          format: int32
+          minimum: 1
+          description: How many times Listora printed this label.
+        label:
+          type: string
+          maxLength: 100
+          description: The server's words, `Label printed 12 minutes ago`.
+    PackLabelPrintRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - trackingNumber
+      properties:
+        trackingNumber:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The label the app printed (`PackLabel.trackingNumber`).
     PackRecord:
       type: object
       description: The order's package, once packed.
@@ -10218,6 +10301,13 @@ components:
           $ref: '#/components/schemas/PackLabel'
         labelStatus:
           $ref: '#/components/schemas/StatusDisplay'
+        labelPageUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: |
+            The order's own page on the marketplace, where the seller prints its label there when
+            Listora can't (`PackLabel.fileUrl` absent). The app opens it as a plain link.
         pack:
           $ref: '#/components/schemas/PackRecord'
         packStatus:

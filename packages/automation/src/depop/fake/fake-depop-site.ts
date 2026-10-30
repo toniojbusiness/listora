@@ -31,6 +31,8 @@
  *   GET  /presentation/api/v1/receipts/ the seller's receipts (web API), as the sold items page loads
  *                                      them; a receipt's own fields are Listora's assumption until a
  *                                      real sale shows them (depop/pages/receipts.ts)
+ *   GET  /presentation/api/v1/receipts/<id>/label/ a purchase's shipping label, a PDF (web API), where
+ *                                      its parcel names it (`label_url`, Listora's assumption)
  *   GET  /presentation/api/v1/offers/me/products/ buyers' offers on the seller's products (web API),
  *                                      as the Offers page loads them (fields: Listora's assumption,
  *                                      depop/pages/offers.ts)
@@ -110,6 +112,7 @@ export type FakeDepopSiteAction =
   | 'sold'
   | 'receipts'
   | 'receipt'
+  | 'label'
   | 'health'
   | 'form'
   | 'offers'
@@ -223,6 +226,8 @@ interface StoredProduct {
 export interface FakeDepopShipping {
   trackingNumber: string | null;
   buyerFirstName: string | null;
+  /** Whether the parcel names the label's file (`label_url`), which the web API then serves. */
+  labelFile?: boolean;
 }
 
 /** A receipt's status, as Depop's receipts name them. */
@@ -896,6 +901,21 @@ export class FakeDepopSite {
         if (lines === undefined) return json(404, { message: 'Receipt not found' });
         return json(200, receiptDetailData(lines, this.#idOf.bind(this)));
       }
+      case 'label': {
+        // The purchase's label, as a PDF, where its parcel names one.
+        const first = this.#purchasesOf(session.seller).find(
+          (purchase) => String(purchase[0]?.purchaseId) === route.slug,
+        )?.[0];
+        const tracking = first?.shipping?.trackingNumber ?? null;
+        if (first?.shipping?.labelFile !== true || tracking === null) {
+          return json(404, { message: 'Label not found' });
+        }
+        return {
+          status: 200,
+          headers: { 'content-type': 'application/pdf' },
+          body: fakeLabelPdf(tracking),
+        };
+      }
       case 'sold': {
         const sales = [...this.#products.values()]
           .flatMap((stored) =>
@@ -1087,6 +1107,8 @@ function matchRoute(method: string, path: string): Route | null {
   }
   const receipt = /^\/presentation\/api\/v1\/receipts\/(\d+)\/$/.exec(path)?.[1];
   if (get && receipt !== undefined) return { method, action: 'receipt', slug: receipt, api: true };
+  const label = /^\/presentation\/api\/v1\/receipts\/(\d+)\/label\/$/.exec(path)?.[1];
+  if (get && label !== undefined) return { method, action: 'label', slug: label, api: true };
   if (path === '/products/create/') {
     if (get) return { method, action: 'form', slug: null };
     if (post) return { method, action: 'create', slug: null };
@@ -1447,6 +1469,9 @@ function receiptData(
               },
         shipping_deadline: new Date(soldAt.getTime() + 10 * DAY_MS).toISOString(),
         label_expires_at: new Date(soldAt.getTime() + 27 * DAY_MS).toISOString(),
+        ...(first.shipping?.labelFile === true
+          ? { label_url: `/presentation/api/v1/receipts/${String(first.purchaseId)}/label/` }
+          : {}),
         purchase_line_items: lines.map((_line, index) => 100 + index),
       },
     ],
@@ -1454,6 +1479,32 @@ function receiptData(
 }
 
 const DAY_MS = 86_400_000;
+
+/**
+ * A shipping label as a one-page 4 × 6 in PDF naming its tracking number: invented, plain ASCII,
+ * with the byte offsets a PDF reader looks its objects up by.
+ */
+export function fakeLabelPdf(trackingNumber: string): string {
+  const text = `BT /F1 18 Tf 24 380 Td (USPS TRACKING # ${trackingNumber.replace(/[^A-Z0-9]/gi, '')}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${String(text.length)} >>\nstream\n${text}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((body, index) => {
+    const offset = pdf.length;
+    pdf += `${String(index + 1)} 0 obj\n${body}\nendobj\n`;
+    return offset;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${String(objects.length + 1)}\n0000000000 65535 f \n`;
+  pdf += offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += `trailer\n<< /Size ${String(objects.length + 1)} /Root 1 0 R >>\nstartxref\n${String(xref)}\n%%EOF\n`;
+  return pdf;
+}
 
 /** A receipt's parcel status for each purchase status, as Depop's receipts show them. */
 const PARCEL_STATUS: Readonly<Record<FakeDepopPurchaseStatus, string>> = {

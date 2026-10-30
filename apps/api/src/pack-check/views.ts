@@ -3,6 +3,7 @@ import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import {
   ago,
   describeItem,
+  labelPageUrl,
   trackingTail,
   verdictWords,
   type CheckedScan,
@@ -76,9 +77,20 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
             trackingNumber: order.label.trackingNumber,
             carrier: order.label.carrier,
             source: order.label.source,
+            ...(order.label.fileUrl === null ? {} : { fileUrl: order.label.fileUrl }),
+            ...(order.label.print === null
+              ? {}
+              : {
+                  printed: {
+                    printedAt: order.label.print.printedAt.toISOString(),
+                    count: order.label.print.count,
+                    label: `Label printed ${ago(order.label.print.printedAt, context.now)}`,
+                  },
+                }),
           },
         }),
     labelStatus: labelStatus(order, context),
+    labelPageUrl: labelPageUrl(order.marketplace, order.externalOrderId),
     ...(pack === null
       ? {}
       : {

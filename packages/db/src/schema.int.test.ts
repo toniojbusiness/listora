@@ -774,6 +774,10 @@ const COLUMNS = {
     'updated_at',
     'order_state',
     'label_expires_at',
+    'label_file_url',
+    'printed_tracking_number',
+    'printed_at',
+    'print_count',
   ],
   sale_pack: [
     'account_id',

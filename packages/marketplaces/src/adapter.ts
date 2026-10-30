@@ -460,6 +460,12 @@ export type RemoteOrderLabel =
       shipBy?: Date | null;
       /** When the label stops being usable, when the page says. */
       labelExpiresAt?: Date | null;
+      /**
+       * The label's file (a PDF) on the marketplace's own site, when the page names one under a
+       * field that says it is the label's: the phone downloads it through the seller's session
+       * to print it (docs/features/pack-check.md, "Printing the label").
+       */
+      labelFileUrl?: string | null;
     }
   | { externalOrderId: string; found: false };
 

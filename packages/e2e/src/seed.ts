@@ -323,7 +323,9 @@ export async function recordSoldItem(
 /**
  * Pack check's to-ship list for the UI tests (docs/features/pack-check.md): Pack check on, and
  * two sold items whose labels Listora read from the marketplace, order A's and order B's (the
- * double-print fixtures of `@listora/pack-check/testing`), with the buyers' first names.
+ * double-print fixtures of `@listora/pack-check/testing`), with the buyers' first names. Order
+ * A's page names its label's file (an invented URL: the UI tests' scripted printing stands in
+ * for the download), so it prints with its sticker; order B's prints on the marketplace.
  */
 export async function seedPackOrders(
   db: Db,
@@ -355,6 +357,7 @@ export async function seedPackOrders(
         buyer_first_name: index === 0 ? 'Sarah' : 'Maya',
         read_status: 'read',
         read_at: new Date(),
+        label_file_url: index === 0 ? `https://labels.listora.invalid/e2e/${tracking}.pdf` : null,
       })
       .execute();
     seeded.push({ ...item, saleId: sold.saleId, trackingNumber: tracking });

@@ -543,6 +543,121 @@ describe('pack check (real Postgres)', () => {
     });
   });
 
+  const printLabel = (saleId: string, trackingNumber: string) =>
+    api.call('recordLabelPrint', { token, params: { saleId }, body: { trackingNumber } });
+
+  it("offers the label's file to print with the stickers, and warns before printing it again", async () => {
+    const tee = await order({ title: 'Printed tee' });
+    const now = new Date(api.clock.now);
+    const fileUrl = 'https://webapi.depop.com/presentation/api/v1/receipts/412/label/';
+    await recordLabelReads(
+      api.db,
+      tenant.accountId,
+      [
+        {
+          saleId: tee.saleId,
+          status: 'read',
+          trackingNumber: '9400111899223197421111',
+          buyerFirstName: 'Sam',
+          labelFileUrl: fileUrl,
+        },
+      ],
+      now,
+    );
+    const listed = async () =>
+      (await api.call('listPackOrders', { token })).body.data.find(
+        (entry) => entry.saleId === tee.saleId,
+      );
+    // Not printed yet: the file to print, and the order's page on Depop.
+    expect(await listed()).toMatchObject({
+      label: { trackingNumber: '9400111899223197421111', fileUrl },
+      labelPageUrl: 'https://www.depop.com/sellinghub/sold-items/',
+    });
+    expect((await listed())?.label?.printed).toBeUndefined();
+
+    const first = await printLabel(tee.saleId, '9400111899223197421111');
+    expect(first.status).toBe(200);
+    expect(first.body.label?.printed).toEqual({
+      printedAt: now.toISOString(),
+      count: 1,
+      label: 'Label printed just now',
+    });
+    api.clock.now += 12 * 60_000;
+    expect((await listed())?.label?.printed?.label).toBe('Label printed 12 minutes ago');
+    // A second print of the same label: the app warned first, and it counts.
+    expect((await printLabel(tee.saleId, '9400111899223197421111')).body.label?.printed).toEqual({
+      printedAt: new Date(api.clock.now).toISOString(),
+      count: 2,
+      label: 'Label printed just now',
+    });
+
+    // Depop made a new label: nothing of it is printed yet, and a print of the old one is refused.
+    await recordLabelReads(
+      api.db,
+      tenant.accountId,
+      [
+        {
+          saleId: tee.saleId,
+          status: 'read',
+          trackingNumber: '9400111899223197422222',
+          buyerFirstName: 'Sam',
+        },
+      ],
+      new Date(api.clock.now),
+    );
+    const renewed = await listed();
+    expect(renewed?.label?.trackingNumber).toBe('9400111899223197422222');
+    expect(renewed?.label?.printed).toBeUndefined();
+    expect(renewed?.label?.fileUrl).toBeUndefined();
+    const stale = await printLabel(tee.saleId, '9400111899223197421111');
+    expect(stale.status).toBe(409);
+    expect(
+      (await printLabel(tee.saleId, '9400111899223197422222')).body.label?.printed?.count,
+    ).toBe(1);
+  });
+
+  it("opens the order's page on the marketplace where Listora can't print its label", async () => {
+    const mercari = await order({
+      title: 'Mercari vest',
+      marketplace: 'mercari',
+      tracking: '9400111899223197428888',
+    });
+    const posh = await order({ title: 'Posh scarf', marketplace: 'poshmark' });
+    await api.db
+      .updateTable('sale')
+      .set({ external_order_id: 'listing:abc123' })
+      .where('id', '=', posh.saleId)
+      .execute();
+    const data = (await api.call('listPackOrders', { token })).body.data;
+    const mercariOrder = data.find((entry) => entry.saleId === mercari.saleId);
+    expect(mercariOrder?.label?.fileUrl).toBeUndefined();
+    expect(mercariOrder?.labelPageUrl).toBe(
+      `https://www.mercari.com/transaction/order_status/order-${mercari.itemId}/`,
+    );
+    expect(data.find((entry) => entry.saleId === posh.saleId)?.labelPageUrl).toBe(
+      'https://poshmark.com/order/sales',
+    );
+  });
+
+  it('records a print only of the label an open order of the account has', async () => {
+    const unlabeled = await order({ title: 'Unlabeled cap' });
+    expect((await printLabel(unlabeled.saleId, '9400111899223197429999')).status).toBe(409);
+    const shipped = await order({ title: 'Shipped socks', tracking: '9400111899223197420101' });
+    await api.db
+      .updateTable('sale')
+      .set({ status: 'shipped', shipped_at: new Date(api.clock.now) })
+      .where('id', '=', shipped.saleId)
+      .execute();
+    expect((await printLabel(shipped.saleId, '9400111899223197420101')).status).toBe(409);
+    const other = await api.tenantOf(OTHER);
+    const theirs = await order({
+      title: 'Their print',
+      tracking: '9400111899223197420202',
+      accountId: other.accountId,
+    });
+    expect((await printLabel(theirs.saleId, '9400111899223197420202')).status).toBe(404);
+  });
+
   it("never shows or packs another account's order", async () => {
     const other = await api.tenantOf(OTHER);
     const theirs = await order({

@@ -781,7 +781,8 @@ describe('Depop automation adapter on the fake Depop site', () => {
         fake.sell(fake.seed({ description: 'Newer.', priceCents: 1000 }), at(hoursAgo));
       }
       const cap = fake.seed({ description: 'Cord cap.', priceCents: 1250 });
-      fake.sell(cap, at(0.5), label('9400100000000000000014'));
+      // Its parcel names the label's file, which Pack check prints from the phone.
+      fake.sell(cap, at(0.5), { ...label('9400100000000000000014'), labelFile: true });
 
       const labels = await own.readOrderLabels(
         [
@@ -803,6 +804,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
           orderState: 'to_ship',
           carrierName: 'USPS',
           shipBy: new Date(bundleSoldAt.getTime() + 10 * 86_400_000),
+          labelFileUrl: null,
         }) as unknown,
         expect.objectContaining({ found: true, orderState: 'canceled' }) as unknown,
         expect.objectContaining({ found: true, orderState: 'shipped' }) as unknown,
@@ -811,13 +813,44 @@ describe('Depop automation adapter on the fake Depop site', () => {
           found: true,
           trackingNumber: '9400100000000000000014',
           orderState: 'to_ship',
+          labelFileUrl: `${fake.url}/presentation/api/v1/receipts/${String(fake.purchaseIdOf(cap))}/label/`,
         }) as unknown,
         { externalOrderId: '424242', found: false },
       ]);
+      // The read never downloads the file: only the phone does, to print it.
+      expect(fake.requests.filter((request) => request.action === 'label')).toEqual([]);
       // Every page of receipts (2 each), each read once with the last one's `after`.
       expect(fake.requests.filter((request) => request.action === 'receipts')).toHaveLength(4);
       // Only reads: nothing on Depop changed.
       expect(fake.requests.filter((request) => request.method !== 'GET')).toEqual([]);
+    });
+  });
+
+  it("serves a sold purchase's label file to its seller's session only", async () => {
+    await withSite({}, async (fake) => {
+      const tee = fake.seed({ description: 'Band tee.', priceCents: 1500 });
+      fake.sell(tee, new Date(), {
+        trackingNumber: '9400100000000000000031',
+        buyerFirstName: 'Robin',
+        labelFile: true,
+      });
+      const plain = fake.seed({ description: 'Plain tee.', priceCents: 1500 });
+      fake.sell(plain, new Date(), {
+        trackingNumber: '9400100000000000000032',
+        buyerFirstName: null,
+      });
+      const fileOf = (slug: string) =>
+        `${fake.url}/presentation/api/v1/receipts/${String(fake.purchaseIdOf(slug))}/label/`;
+      const { value } = fake.issueSession();
+      const bearer = { authorization: `Bearer ${value}` };
+      const file = await fetch(fileOf(tee), { headers: bearer });
+      expect(file.status).toBe(200);
+      expect(file.headers.get('content-type')).toBe('application/pdf');
+      const text = await file.text();
+      expect(text.startsWith('%PDF-')).toBe(true);
+      expect(text).toContain('9400100000000000000031');
+      expect((await fetch(fileOf(tee))).status).toBe(401);
+      expect((await fetch(fileOf(plain), { headers: bearer })).status).toBe(404);
     });
   });
 

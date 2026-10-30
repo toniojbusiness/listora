@@ -1188,6 +1188,7 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     site.sell(slug, new Date(), {
       trackingNumber: '9400 1118 9922 3197 4284 90',
       buyerFirstName: 'Sarah M.',
+      labelFile: true,
     });
     const sale = await db
       .insertInto('sale')
@@ -1222,7 +1223,14 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     await runPhone();
     const label = await db
       .selectFrom('sale_label')
-      .select(['tracking_number', 'carrier', 'source', 'buyer_first_name', 'read_status'])
+      .select([
+        'tracking_number',
+        'carrier',
+        'source',
+        'buyer_first_name',
+        'read_status',
+        'label_file_url',
+      ])
       .where('account_id', '=', accountId)
       .where('sale_id', '=', sale.id)
       .executeTakeFirstOrThrow();
@@ -1232,7 +1240,10 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       source: 'marketplace',
       buyer_first_name: 'Sarah',
       read_status: 'read',
+      // Where Depop offers the label's file; the phone downloads it only to print it.
+      label_file_url: `${site.url}/presentation/api/v1/receipts/${String(site.purchaseIdOf(slug))}/label/`,
     });
+    expect(site.requests.filter((request) => request.action === 'label')).toEqual([]);
     const runs = await db
       .selectFrom('automation_run')
       .select(['purpose', 'host', 'outcome'])

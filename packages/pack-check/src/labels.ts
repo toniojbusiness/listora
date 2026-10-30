@@ -144,6 +144,8 @@ export interface FoundOrder {
   carrierName?: string | null;
   shipBy?: Date | null;
   labelExpiresAt?: Date | null;
+  /** The label's file on the marketplace's own site, when the page names one. */
+  labelFileUrl?: string | null;
 }
 
 /**
@@ -175,6 +177,7 @@ export async function recordLabelReads(
             carrier: namedCarrier(found?.carrierName) ?? carrierOf(tracking),
             source: 'marketplace' as const,
             label_expires_at: found?.labelExpiresAt ?? null,
+            label_file_url: labelFileUrl(found?.labelFileUrl),
           };
     const name = firstName === null ? {} : { buyer_first_name: firstName };
     const state = found?.orderState === undefined ? {} : { order_state: found.orderState };
@@ -210,6 +213,19 @@ export async function recordLabelReads(
         .execute();
     }
   }
+}
+
+/** The longest label file URL Listora keeps (`sale_label.label_file_url`). */
+const MAX_LABEL_FILE_URL = 2_048;
+
+/**
+ * A label file's URL Listora can keep, or none: the read took it only from the marketplace's own
+ * site, which is https (a local stand-in's http in development).
+ */
+function labelFileUrl(url: string | null | undefined): string | null {
+  if (url === undefined || url === null || url.length > MAX_LABEL_FILE_URL) return null;
+  const protocol = URL.canParse(url) ? new URL(url).protocol : null;
+  return protocol === 'https:' || protocol === 'http:' ? url : null;
 }
 
 /** A carrier Listora knows by the name a page gives it (`USPS`). */

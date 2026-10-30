@@ -1118,6 +1118,7 @@ function labelResults(
       ...(label.carrierName === undefined ? {} : { carrierName: label.carrierName }),
       ...(label.shipBy === undefined ? {} : { shipBy: label.shipBy }),
       ...(label.labelExpiresAt === undefined ? {} : { labelExpiresAt: label.labelExpiresAt }),
+      ...(label.labelFileUrl === undefined ? {} : { labelFileUrl: label.labelFileUrl }),
     };
     return label.trackingNumber === null
       ? { saleId: order.saleId, status: 'no_label', ...found }

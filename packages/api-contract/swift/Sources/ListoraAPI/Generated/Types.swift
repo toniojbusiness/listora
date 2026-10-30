@@ -1182,6 +1182,19 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `DELETE /v1/pack-check/orders/{saleId}/pack`.
     /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/pack/delete(unpackOrder)`.
     func unpackOrder(_ input: Operations.UnpackOrder.Input) async throws -> Operations.UnpackOrder.Output
+    /// Record a print of the order's label
+    ///
+    /// Records that the app printed this order's shipping label (with its item stickers), so the
+    /// next print of the same label warns first (`PackLabel.printed`). The label must still be
+    /// the order's: one that changed since the app loaded it, or an order with no label Listora
+    /// knows, is `409 invalid_state_transition`, and so is an order that no longer needs a
+    /// package. Listora never sees the label's file, which the app downloads from the
+    /// marketplace itself.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/orders/{saleId}/label-print`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)`.
+    func recordLabelPrint(_ input: Operations.RecordLabelPrint.Input) async throws -> Operations.RecordLabelPrint.Output
     /// Add the package photo
     ///
     /// Keeps one photo of the open package with its label, for a claim. It is stored without its
@@ -3447,6 +3460,29 @@ extension APIProtocol {
         try await unpackOrder(Operations.UnpackOrder.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Record a print of the order's label
+    ///
+    /// Records that the app printed this order's shipping label (with its item stickers), so the
+    /// next print of the same label warns first (`PackLabel.printed`). The label must still be
+    /// the order's: one that changed since the app loaded it, or an order with no label Listora
+    /// knows, is `409 invalid_state_transition`, and so is an order that no longer needs a
+    /// package. Listora never sees the label's file, which the app downloads from the
+    /// marketplace itself.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/pack-check/orders/{saleId}/label-print`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/label-print/post(recordLabelPrint)`.
+    public func recordLabelPrint(
+        path: Operations.RecordLabelPrint.Input.Path,
+        headers: Operations.RecordLabelPrint.Input.Headers,
+        body: Operations.RecordLabelPrint.Input.Body
+    ) async throws -> Operations.RecordLabelPrint.Output {
+        try await recordLabelPrint(Operations.RecordLabelPrint.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// Add the package photo

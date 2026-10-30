@@ -6607,7 +6607,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		STATUS_BANNED: "ended"
 	};
 	/** Opens a Depop page first when the tab has none, so the read goes from Depop's own page. */
-	async function onDepop(page, site) {
+	async function onDepop$1(page, site) {
 		if (page.url().startsWith(`${site.origin}/`)) return;
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
 	}
@@ -7106,9 +7106,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* product's text and photo. A listing the seller marked as sold has no receipt.
 	*
 	* Sale checks read every receipt (sales.ts), and Pack check each one's parcel (its label,
-	* carrier, deadline, and label expiry), how the purchase stands, and the buyer's first name
-	* (docs/features/pack-check.md, "Depop's receipts"). Nothing else of the buyer is read: no name,
-	* address, or message is kept. Only reads.
+	* carrier, deadline, label expiry, and the label's file), how the purchase stands, and the
+	* buyer's first name (docs/features/pack-check.md, "Depop's receipts"). Nothing else of the buyer
+	* is read: no name, address, or message is kept. Only reads.
 	*/
 	const TOKEN_COOKIE$1 = "access_token";
 	const API$1 = "receipts API";
@@ -7118,9 +7118,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const time$1 = datetime({ offset: true });
 	/**
 	* One package of a purchase: Depop's label for it (`tracking.reference`, by `shipping_provider`),
-	* when it must ship by, and when the label expires. A bundle's items share one parcel. Its
-	* `parcel_status` is the label's, not the order's: a refunded order's parcel can still say
-	* `AWAITING_SHIPPING`, so it is never read.
+	* when it must ship by, when the label expires, and the label's file (`LABEL_FILE_FIELDS`). A
+	* bundle's items share one parcel. Its `parcel_status` is the label's, not the order's: a
+	* refunded order's parcel can still say `AWAITING_SHIPPING`, so it is never read.
 	*/
 	const parcelSchema = object({
 		shipping_provider: string().nullish(),
@@ -7128,6 +7128,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		shipping_deadline: time$1.nullish(),
 		label_expires_at: time$1.nullish()
 	}).catchall(unknown());
+	/**
+	* The parcel fields that can name the label's file, in the order they are read: a URL directly
+	* under the parcel, or a `url` under a label object. Only a field that says it is the label's
+	* counts, never the tracking page (`tracking.url`). Not seen on a real receipt yet: the live test
+	* on the captain's test shop confirms which one Depop uses (docs/features/pack-check.md,
+	* "Printing the label"); a receipt that names none prints from Depop instead.
+	*/
+	const LABEL_FILE_FIELDS = [
+		"label_url",
+		"shipping_label_url",
+		"label_pdf_url"
+	];
+	const LABEL_FILE_OBJECTS = ["label", "shipping_label"];
 	const receiptSchema = object({
 		purchase_id: number().int().positive(),
 		status: string(),
@@ -7169,7 +7182,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
 		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for the receipts`);
 		const shown = expectShape$1(receiptsSchema, answer.body, API$1);
-		const receipts = shown.objects.map((receipt) => readReceipt(receipt));
+		const receipts = shown.objects.map((receipt) => readReceipt(receipt, site));
 		const next = shown.page_info.has_more ? shown.page_info.last ?? null : null;
 		if (shown.page_info.has_more && next === null) throw changed$2(API$1, "has more receipts but no cursor");
 		return {
@@ -7187,8 +7200,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			priceCents: cents$1(line.product_amount)
 		}]));
 	}
-	/** A receipt as Listora reads it; a shape Listora doesn't know throws `PageChangedError`. */
-	function readReceipt(value) {
+	/**
+	* A receipt as Listora reads it, from Depop's site (or its stand-in); a shape Listora doesn't
+	* know throws `PageChangedError`.
+	*/
+	function readReceipt(value, site = depopSite(DEPOP_SITE_URL)) {
 		const receipt = expectShape$1(receiptSchema, value, API$1);
 		if (receipt.currency !== "USD") throw changed$2(API$1, "shows a sale that is not in US dollars");
 		return {
@@ -7203,7 +7219,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				description: line.description,
 				pictureUrl: line.picture_url ?? null
 			})),
-			label: receiptLabel(receipt)
+			label: receiptLabel(receipt, site)
 		};
 	}
 	/**
@@ -7222,7 +7238,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* package, one label. A purchase whose parcels show several tracking numbers is not one package,
 	* so it reads as having no label (the seller scans the one on the package).
 	*/
-	function receiptLabel(receipt) {
+	function receiptLabel(receipt, site) {
 		const tracked = receipt.parcels.filter((parcel) => present(parcel.tracking?.reference));
 		const parcel = new Set(tracked.map((parcel) => parcel.tracking?.reference?.trim())).size === 1 ? tracked[0] : void 0;
 		const deadlines = receipt.parcels.flatMap((shown) => present(shown.shipping_deadline) ? [new Date(shown.shipping_deadline)] : []);
@@ -7234,6 +7250,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			carrierName: present(parcel?.shipping_provider) ? parcel.shipping_provider.trim() : null,
 			shipBy: deadlines.length === 0 ? null : new Date(Math.min(...deadlines.map(Number))),
 			labelExpiresAt: present(parcel?.label_expires_at) ? new Date(parcel.label_expires_at) : null,
+			labelFileUrl: parcel === void 0 ? null : labelFile(parcel, site),
 			buyerFirstName: present(receipt.buyer?.first_name) ? receipt.buyer.first_name.trim() : null
 		};
 	}
@@ -7260,8 +7277,27 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			...receipt.state === "unknown" ? {} : { orderState: receipt.state },
 			carrierName: receipt.carrierName,
 			shipBy: receipt.shipBy,
-			labelExpiresAt: receipt.labelExpiresAt
+			labelExpiresAt: receipt.labelExpiresAt,
+			labelFileUrl: receipt.labelFileUrl
 		};
+	}
+	/**
+	* The label's file a parcel names (`LABEL_FILE_FIELDS`), when it is on Depop's own site: the
+	* phone downloads it through the seller's session, so a file anywhere else is not taken.
+	*/
+	function labelFile(parcel, site) {
+		const named = [...LABEL_FILE_FIELDS.map((field) => parcel[field]), ...LABEL_FILE_OBJECTS.map((field) => {
+			const shown = parcel[field];
+			return shown !== null && typeof shown === "object" ? shown.url : null;
+		})].find((value) => typeof value === "string" && value.trim() !== "");
+		if (named === void 0 || !URL.canParse(named.trim(), site.origin)) return null;
+		const url = new URL(named.trim(), site.origin);
+		return onDepop(url, site) ? url.href : null;
+	}
+	/** Whether a URL is on Depop's site or web API (or their local stand-in). */
+	function onDepop(url, site) {
+		if (url.origin === site.origin || url.origin === site.api) return true;
+		return url.protocol === "https:" && (url.hostname === "depop.com" || url.hostname.endsWith(".depop.com"));
 	}
 	function present(value) {
 		return value !== void 0 && value !== null && value.trim() !== "";
@@ -7604,14 +7640,14 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* many offers outgrows one step's time. Only reads.
 	*/
 	async function readOfferProducts(page, site) {
-		await onDepop(page, site);
+		await onDepop$1(page, site);
 		const products = await readProducts(page, site);
 		await nameListings(page, site, products);
 		return products;
 	}
 	/** The buyers' offers on one product that wait on the seller. Only reads. */
 	async function readPendingOffers(page, site, product) {
-		await onDepop(page, site);
+		await onDepop$1(page, site);
 		const offers = [];
 		for (const record of await readProductOffers(page, site, product, true)) {
 			const offer = offerOf(record, product, site);
@@ -7623,7 +7659,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function readOffer(page, site, ref) {
 		const ids = splitOfferId(ref.externalOfferId);
 		if (ids === null) return { found: false };
-		await onDepop(page, site);
+		await onDepop$1(page, site);
 		const product = {
 			id: ids.productId,
 			slug: ref.externalListingId,
@@ -7851,7 +7887,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let cursor = null;
 		for (let number = 1; number <= pages; number += 1) {
 			const shown = await step("read your sales", { mutates: false }, async (page) => {
-				await onDepop(page, site);
+				await onDepop$1(page, site);
 				return readReceipts(page, site, cursor);
 			});
 			let older = false;
@@ -7873,7 +7909,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let cursor = null;
 		for (let number = 1; number <= 30 && found.size < wanted.size; number += 1) {
 			const shown = await step("read your sold items", { mutates: false }, async (page) => {
-				await onDepop(page, site);
+				await onDepop$1(page, site);
 				return readOwnListings(page, site, "sold", cursor);
 			});
 			for (const product of shown.products) {
@@ -7944,7 +7980,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		*/
 		async function findBySku(step, sku) {
 			return step("look for the listing", { mutates: false }, async (page) => {
-				await onDepop(page, site);
+				await onDepop$1(page, site);
 				let cursor = null;
 				for (let number = 1; number <= 1; number += 1) {
 					const shown = await readOwnListings(page, site, "selling", cursor);
@@ -8121,7 +8157,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				let cursor = null;
 				for (let number = 1; number <= 5; number += 1) {
 					const shown = await step("read the sold items", { mutates: false }, async (page) => {
-						await onDepop(page, site);
+						await onDepop$1(page, site);
 						return readReceipts(page, site, cursor);
 					});
 					receipts.push(...shown.receipts.map((receipt) => receipt.label));
@@ -8141,7 +8177,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			},
 			listings: async (cursor, step, held) => {
 				const shown = await step("read your listings for sale", { mutates: false }, async (page) => {
-					await onDepop(page, site);
+					await onDepop$1(page, site);
 					return readOwnListings(page, site, "selling", cursor);
 				});
 				const listings = [];
