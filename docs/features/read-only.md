@@ -210,6 +210,18 @@ four as from the previous shop, so relinking the live shop never takes them back
 by id, account, connection, and marketplace and checks its state; its down migration does
 nothing.
 
+On 2026-10-30 the repository's owner lifted the protection: the shop's seller now has their own
+Listora account and lists from it as any seller does. Migration
+`20261030173934_live_shop_unprotected` removes the shop from `protected_seller` (by its digest),
+turns off the read only that the protection put on any connection holding the shop, on any
+account, and forgets the shop's seller in `read_only_seller` (the triggers also clear the
+account's `marketplace_read_only` for Depop when its connection turns writable). So the shop is
+writable wherever it is linked, a relink of it is writable, and its Read only switch works both
+ways like any seller's. Nothing else about the shop, its connections, or its listings changes,
+and other protected shops stay protected. Its down migration protects the shop again. A phone
+that already marked the account read only keeps showing it read only until the seller turns Read
+only off once in Link accounts on that phone ([On the phone](#on-the-phone)).
+
 ## Tests
 
 - `operations/src/read-only.int.test.ts`: every write kind refused and nothing queued, a check
@@ -233,6 +245,11 @@ nothing.
   a new link carried read only until its shop is named, a protected shop relinked staying read
   only and never protecting the shop linked after it, and the owner refused Read only off on a
   protected shop (`409`).
+- `operations/src/live-shop-unprotected.int.test.ts`: migration
+  `20261030173934_live_shop_unprotected` on a formerly protected shop (an invented seller given
+  its digest): writable after it, nothing of the protection left on its account, its Read only
+  switch working both ways, a relink writable, another protected shop and an owner's own read only
+  unchanged, and protected again when it is reverted.
 - The app: `ReadOnlyLinkTests` and `APIMarketplaceSessionServiceTests`; its own refusal and
   marks: `PhoneReadOnlyGuardTests`, `ReadOnlyOnPhoneLinkTests`, and `MarketplaceSessionStoreTests`.
 
