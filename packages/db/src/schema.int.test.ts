@@ -235,10 +235,11 @@ const COLUMNS = {
     'runs_on',
     'phone_device_id',
     'read_only',
+    'read_only_carried',
   ],
   marketplace_read_only: ['account_id', 'marketplace', 'created_at'],
   read_only_seller: ['account_id', 'marketplace', 'seller_id', 'created_at'],
-  protected_seller: ['id', 'marketplace', 'seller_id', 'connection_id', 'reason', 'created_at'],
+  protected_seller: ['id', 'marketplace', 'reason', 'created_at', 'seller_digest'],
   connection_authorization: [
     'id',
     'account_id',
@@ -307,7 +308,7 @@ const COLUMNS = {
     'content',
     'deleted_listing_id',
   ],
-  deleted_item: ['id', 'account_id', 'sku', 'title', 'deleted_at'],
+  deleted_item: ['id', 'account_id', 'sku', 'title', 'deleted_at', 'reason'],
   deleted_listing: [
     'id',
     'account_id',
@@ -316,6 +317,7 @@ const COLUMNS = {
     'status',
     'external_listing_id',
     'deleted_at',
+    'reason',
   ],
   operation_event: [
     'id',
@@ -958,6 +960,8 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['background_read_health', 'read', values.BACKGROUND_READS],
   ['marketplace_listing', 'status', values.LISTING_STATUSES],
   ['deleted_listing', 'status', values.LISTING_STATUSES],
+  ['deleted_listing', 'reason', values.HISTORY_ONLY_REASONS],
+  ['deleted_item', 'reason', values.HISTORY_ONLY_REASONS],
   ['marketplace_operation', 'kind', values.OPERATION_KINDS],
   ['marketplace_operation', 'status', values.OPERATION_STATUSES],
   ['marketplace_operation', 'success_evidence', values.SUCCESS_EVIDENCE],

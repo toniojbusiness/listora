@@ -243,6 +243,13 @@ export const ACCOUNT_DELETION_GRANT_OUTCOMES = ['pending', 'revoked', 'manual'] 
 export type AccountDeletionGrantOutcome = (typeof ACCOUNT_DELETION_GRANT_OUTCOMES)[number];
 
 /**
+ * Why a listing (`deleted_listing`) or item (`deleted_item`) is kept as history only: its item
+ * was deleted, or its marketplace was unlinked (docs/features/privacy.md).
+ */
+export const HISTORY_ONLY_REASONS = ['item_deleted', 'unlinked'] as const;
+export type HistoryOnlyReason = (typeof HISTORY_ONLY_REASONS)[number];
+
+/**
  * Why a connection's data was deleted: the seller unlinked it, its access stayed revoked past
  * the retention period, or the marketplace ended Listora's access (an operator's purge).
  */

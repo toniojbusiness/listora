@@ -16,11 +16,15 @@
  *   shop's (`shop_unlinked_at`), so the next link, which may be another shop, never takes them;
  * - the marketplace events about that seller in the account (webhook and poll payloads).
  *
- * The seller's own records stay: items, listings and their history, sales, and fees. Then it
- * leaves a tombstone (`connection_deletion`) and its job, which does what needs outside
- * services: it asks the marketplace to revoke the grant (an OAuth connection's tokens are kept,
- * encrypted, only for that), deletes the automation screenshots, checks that nothing is left,
- * and writes the deletion's completion record (`deletion_record`).
+ * When the owner unlinks the marketplace (reason `unlinked`), the marketplace's data leaves the
+ * account too: its listings, sales, tasks, and the items only its import brought in
+ * (`deleteMarketplaceData`, marketplace-data.ts). The other reasons keep the seller's records:
+ * items, listings and their history, sales, and fees. Then it leaves a tombstone
+ * (`connection_deletion`) and its job, which does what needs outside services: it asks the
+ * marketplace to revoke the grant (an OAuth connection's tokens are kept, encrypted, only for
+ * that), deletes the stored objects (automation screenshots, and an unlink's item and package
+ * photos), checks that nothing is left, and writes the deletion's completion record
+ * (`deletion_record`).
  */
 import {
   DELETION_COMPLETION_DEADLINE_MS,
@@ -36,6 +40,7 @@ import type { Logger } from '@listora/shared';
 import { purgeObjects, type ObjectStorage } from '@listora/storage';
 import { sql, type Selectable } from 'kysely';
 
+import { deleteMarketplaceData, type DeletedMarketplaceData } from './marketplace-data.ts';
 import type { GrantTokens } from './revoker.ts';
 
 /** The Graphile Worker task that finishes a connection deletion. */
@@ -89,15 +94,19 @@ export interface DeletedConnectionData {
   screenshotKeys: string[];
   /** The OAuth grant's encrypted tokens, when the marketplace has not revoked it yet. */
   grantCiphertext: Buffer | null;
+  /** The marketplace's data removed from the account, when the owner unlinked it. */
+  marketplaceData: DeletedMarketplaceData | null;
 }
 
 /**
  * Deletes the connection and the marketplace data that came through it, on the caller's
- * transaction. Undefined when the account has no such connection.
+ * transaction; with `marketplaceData` (the owner's unlink), also the marketplace's data in the
+ * account (`deleteMarketplaceData`). Undefined when the account has no such connection.
  */
 export async function deleteConnectionData(
   trx: DbTransaction,
   connection: { accountId: string; connectionId: string },
+  options: { marketplaceData?: boolean } = {},
 ): Promise<DeletedConnectionData | undefined> {
   const { accountId, connectionId } = connection;
   const row = await trx
@@ -108,6 +117,10 @@ export async function deleteConnectionData(
     .forUpdate()
     .executeTakeFirst();
   if (row === undefined) return undefined;
+  const marketplaceData =
+    options.marketplaceData === true
+      ? await deleteMarketplaceData(trx, { accountId, marketplace: row.marketplace })
+      : null;
   const runs = await trx
     .selectFrom('automation_run')
     .select('screenshot_key')
@@ -123,7 +136,7 @@ export async function deleteConnectionData(
     .where('connection_id', '=', connectionId)
     .executeTakeFirst();
   const events =
-    row.external_user_id === null
+    row.external_user_id === null || marketplaceData !== null
       ? undefined
       : await trx
           .deleteFrom('inbound_event')
@@ -138,13 +151,14 @@ export async function deleteConnectionData(
     .execute();
   return {
     marketplace: row.marketplace,
-    listings: Number(listings.numUpdatedRows),
-    inboundEvents: Number(events?.numDeletedRows ?? 0),
+    listings: Number(listings.numUpdatedRows) + (marketplaceData?.listings ?? 0),
+    inboundEvents: Number(events?.numDeletedRows ?? 0) + (marketplaceData?.inboundEvents ?? 0),
     automationRuns: runs.length,
     screenshotKeys: runs.flatMap((run) =>
       run.screenshot_key === null ? [] : [run.screenshot_key],
     ),
     grantCiphertext: row.mode === 'api' && row.status !== 'revoked' ? row.token_ciphertext : null,
+    marketplaceData,
   };
 }
 
@@ -154,15 +168,17 @@ export interface StartedConnectionDeletion {
 }
 
 /**
- * Deletes the connection's data (`deleteConnectionData`) and leaves the tombstone and job that
- * finish the deletion, all on the caller's transaction. Undefined when there is no such
- * connection.
+ * Deletes the connection's data (`deleteConnectionData`; the owner's unlink, reason `unlinked`,
+ * also the marketplace's data in the account) and leaves the tombstone and job that finish the
+ * deletion, all on the caller's transaction. Undefined when there is no such connection.
  */
 export async function startConnectionDeletion(
   trx: DbTransaction,
   connection: { accountId: string; connectionId: string; reason: ConnectionDeletionReason },
 ): Promise<StartedConnectionDeletion | undefined> {
-  const deleted = await deleteConnectionData(trx, connection);
+  const deleted = await deleteConnectionData(trx, connection, {
+    marketplaceData: connection.reason === 'unlinked',
+  });
   if (deleted === undefined) return undefined;
   const { id: deletionId } = await trx
     .insertInto('connection_deletion')
@@ -175,7 +191,9 @@ export async function startConnectionDeletion(
     })
     .returning('id')
     .executeTakeFirstOrThrow();
-  const keys = [...new Set(deleted.screenshotKeys)];
+  const keys = [
+    ...new Set([...deleted.screenshotKeys, ...(deleted.marketplaceData?.objectKeys ?? [])]),
+  ];
   if (keys.length > 0) {
     await trx
       .insertInto('connection_deletion_object')

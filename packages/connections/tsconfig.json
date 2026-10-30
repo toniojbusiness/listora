@@ -11,6 +11,7 @@
     { "path": "../testing" },
     { "path": "../db" },
     { "path": "../marketplaces" },
+    { "path": "../operations" },
     { "path": "../push" },
     { "path": "../storage" }
   ]

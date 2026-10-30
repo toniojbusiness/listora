@@ -104,11 +104,17 @@ kept for 2 years.
 
 ### Unlinking a marketplace
 
-When you unlink a marketplace, Listora deletes at once that connection's tokens or session, the
-marketplace user id and name, listing read-backs, marketplace notification payloads, and its
-browser automation runs. A job deletes the connection's screenshots within minutes. Listora asks
-the marketplace to revoke its access. Your own items, listing history, and sales stay. Listings
-stay on the marketplace, but Listora can no longer change or check them until you reconnect.
+When you unlink a marketplace, Listora deletes at once everything it holds from that
+marketplace: the connection's tokens or session, the marketplace user id and name, your listings
+there, the items that came only from that marketplace, its sales with their fees and Pack check
+orders (buyers' first names, tracking numbers, package photos), offers and buyers' usernames,
+sale checks, imports, marketplace notifications and sale emails, tasks, and browser automation
+runs. A job deletes the stored photos and screenshots within minutes. Listora asks the
+marketplace to revoke its access. Items you made in Listora, and items listed on another
+marketplace, stay without that marketplace's listing. A record of what Listora did on the
+marketplace's listings stays, for support only, and is never shown in the app. Nothing changes
+on the marketplace itself: your listings stay up there, and linking it again brings them and
+your sales in afresh.
 
 ### When a marketplace ends access
 

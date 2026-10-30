@@ -197,7 +197,7 @@ describe('connection deletion (real Postgres)', () => {
     expect(started.deleted).toMatchObject({
       marketplace: 'ebay',
       listings: 1,
-      inboundEvents: 1,
+      inboundEvents: 2,
       automationRuns: 0,
     });
 
@@ -208,20 +208,20 @@ describe('connection deletion (real Postgres)', () => {
       .where('id', '=', seeded.connectionId)
       .execute();
     expect(connections).toEqual([]);
-    // The listing stays the seller's record, without the marketplace's read-back.
+    // The owner's unlink takes the marketplace's listings and events with it
+    // (marketplace-data.int.test.ts has the rest).
     const listing = await db
       .selectFrom('marketplace_listing')
-      .select(['connection_id', 'remote_snapshot', 'status'])
+      .select('id')
       .where('id', '=', seeded.listingId)
-      .executeTakeFirstOrThrow();
-    expect(listing).toEqual({ connection_id: null, remote_snapshot: null, status: 'active' });
+      .executeTakeFirst();
+    expect(listing).toBeUndefined();
     const events = await db
       .selectFrom('inbound_event')
       .select('external_user_id')
       .where('account_id', '=', seeded.accountId)
       .execute();
-    expect(events.map((event) => event.external_user_id)).not.toContain(seeded.sellerId);
-    expect(events).toHaveLength(1);
+    expect(events).toEqual([]);
     // Only the tokens are kept, for the revocation, and only in the tombstone.
     expect(await tombstone(started.deletionId)).toMatchObject({
       connection_id: seeded.connectionId,
@@ -252,6 +252,31 @@ describe('connection deletion (real Postgres)', () => {
     expect(JSON.stringify(completed)).not.toContain(seeded.sellerId);
     expect(JSON.stringify(completed)).not.toContain(seeded.accountId);
     expect(await completeConnectionDeletion(deps, started.deletionId)).toBe('not_found');
+  });
+
+  it("keeps the seller's listing, without its read-back, when access stayed revoked", async () => {
+    const seeded = await seed({ marketplace: 'ebay', mode: 'api' });
+    const started = await database.db
+      .transaction()
+      .execute((trx) => startConnectionDeletion(trx, { ...seeded, reason: 'revoked' }));
+    expect(started?.deleted).toMatchObject({
+      listings: 1,
+      inboundEvents: 1,
+      marketplaceData: null,
+    });
+    const listing = await database.db
+      .selectFrom('marketplace_listing')
+      .select(['connection_id', 'remote_snapshot', 'status'])
+      .where('id', '=', seeded.listingId)
+      .executeTakeFirstOrThrow();
+    expect(listing).toEqual({ connection_id: null, remote_snapshot: null, status: 'active' });
+    const events = await database.db
+      .selectFrom('inbound_event')
+      .select('external_user_id')
+      .where('account_id', '=', seeded.accountId)
+      .execute();
+    expect(events.map((event) => event.external_user_id)).not.toContain(seeded.sellerId);
+    expect(events).toHaveLength(1);
   });
 
   it('deletes a browser session connection with its runs and their screenshots', async () => {

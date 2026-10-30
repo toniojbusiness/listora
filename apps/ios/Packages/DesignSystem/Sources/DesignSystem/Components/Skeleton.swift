@@ -105,9 +105,9 @@ struct ShimmerModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// One sweep of the highlight, left to right.
-    static let sweep: TimeInterval = 1.3
+    nonisolated static let sweep: TimeInterval = 1.3
     /// One fade of the Reduce Motion pulse, from full to dimmed or back.
-    static let pulse: TimeInterval = 1.2
+    nonisolated static let pulse: TimeInterval = 1.2
 
     func body(content: Content) -> some View {
         TimelineView(.animation) { timeline in
@@ -132,12 +132,12 @@ struct ShimmerModifier: ViewModifier {
     }
 
     /// Where the highlight is, from -1 (off the leading edge) to 1, restarting every sweep.
-    static func sweepPhase(at time: TimeInterval) -> CGFloat {
+    nonisolated static func sweepPhase(at time: TimeInterval) -> CGFloat {
         -1 + 2 * CGFloat(time.truncatingRemainder(dividingBy: sweep) / sweep)
     }
 
     /// The Reduce Motion pulse: 1 to 0.6 and back, eased in and out.
-    static func pulseOpacity(at time: TimeInterval) -> Double {
+    nonisolated static func pulseOpacity(at time: TimeInterval) -> Double {
         let position = time.truncatingRemainder(dividingBy: 2 * pulse) / pulse
         let fade = position <= 1 ? position : 2 - position
         let eased = fade * fade * (3 - 2 * fade)

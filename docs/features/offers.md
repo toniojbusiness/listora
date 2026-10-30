@@ -60,7 +60,10 @@ Decline, or Counter ("Answer this offer in Depop."), and asking for an answer is
     status Listora doesn't know stops the read rather than guess. Depop's offers name no listing
     price, so the listing's own price (as Listora last confirmed it) bounds a counteroffer, and
     an offer's Open in Depop is the selling hub's Offers page. Listora's id of a Depop offer is
-    `<product id>/<variant id>/<offer id>`, so its read-back asks that product's offers.
+    `<product id>/<variant id>/<offer id>`, so its read-back asks that product's offers. A read
+    is a step for the products with offers (`read your offers`), then a step for each product's
+    offers (`read a listing's offers`): read in one step, a real shop's offers took 24 to 28 of
+    its 30 seconds.
 - **What a read records** (`offers/record.ts`): each offer waiting on the seller is a
   `marketplace_offer` (`pending`) with the Listora listing and item it is for, and has one open
   `answer_offer` task. An offer Listora had as pending that a read no longer shows waiting on the

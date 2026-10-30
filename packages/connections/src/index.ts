@@ -35,6 +35,8 @@ export {
   scheduleConnectionDeletionJob,
   startConnectionDeletion,
 } from './deletion.ts';
+export { deleteMarketplaceData } from './marketplace-data.ts';
+export type { DeletedMarketplaceData } from './marketplace-data.ts';
 export type {
   ConnectionDeletionDependencies,
   ConnectionDeletionJobPayload,

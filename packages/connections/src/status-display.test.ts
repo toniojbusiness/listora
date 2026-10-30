@@ -31,6 +31,7 @@ function row(overrides: Partial<ConnectionRow> = {}): ConnectionRow {
     runs_on: 'cloud',
     phone_device_id: null,
     read_only: false,
+    read_only_carried: false,
     created_at: NOW,
     updated_at: NOW,
     ...overrides,

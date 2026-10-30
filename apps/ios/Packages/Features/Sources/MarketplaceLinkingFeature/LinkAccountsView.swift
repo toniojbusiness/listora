@@ -6,8 +6,8 @@ import SwiftUI
 /// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
 /// server's status, a one-tap Link or Relink that opens the marketplace's own sign-in page, a Read
 /// only switch (Listora then never changes anything on that account; turning it off asks first),
-/// and Unlink (after a confirmation), which deletes what Listora holds for that marketplace. Sale
-/// emails have their own screen (``SaleEmailsView``).
+/// and Unlink (after a confirmation that says what goes), which removes everything Listora has
+/// from that marketplace. Sale emails have their own screen (``SaleEmailsView``).
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 
@@ -257,12 +257,7 @@ private struct LinkAccountRow: View {
                             .accessibilityIdentifier("linkAccounts.confirmUnlink")
                         Button("Cancel", role: .cancel) { confirmingUnlink = false }
                     } message: {
-                        Text(
-                            "Listora deletes its \(link.name) sign-in and what it read from \(link.name), "
-                                + "and asks \(link.name) to end its access. Your items, listings, and sales stay. "
-                                + "Listings stay on \(link.name), but Listora can't update them until you link "
-                                + "it again.",
-                        )
+                        Text(link.unlinkMessage)
                     }
             }
         }

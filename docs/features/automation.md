@@ -54,8 +54,10 @@ from the app
   only, with the page's own credentials (`bearerCookie` names the site's cookie whose value its
   own scripts send as their bearer token; the value never leaves the page). It is paced like an
   action, allowed in reads, and only ever a GET: every change still goes through the site's own
-  pages. A 429 or 5xx stops the run as a rate limit or a marketplace error, a 403 that is not
-  JSON as a bot check; any other status is the script's to read. A request the page couldn't
+  pages. A 5xx is asked again after a pause, at most twice (1 then 4 seconds; a GET changes
+  nothing, and Depop's web API answered single 500s among a phone's good reads on 2026-10-29),
+  and one that lasts stops the run as a marketplace error. A 429 stops the run as a rate limit,
+  a 403 that is not JSON as a bot check; any other status is the script's to read. A request the page couldn't
   make at all (`fetch` rejected: the network, or the page on its way to the next one, seen right
   after a Depop Post) is made once more, and a second failure ends the step. Both hosts run it
   the same way (the phone's runtime receives the API origins with each call).

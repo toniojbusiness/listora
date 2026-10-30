@@ -28,6 +28,10 @@ them. An operation still waiting for the seller is canceled first (reason `item_
 its task goes with the listing. Photos, analyses, tasks, and the item's own change history go with
 the item. It never changes a marketplace.
 
+Unlinking a marketplace keeps its listings' history the same way, on `deleted_listing` rows
+marked `reason = 'unlinked'` (and a `deleted_item` for each item only its import brought in),
+whether or not the item stays ([privacy.md](privacy.md#unlinking-a-marketplace)).
+
 That history is for the owner and operators only: `admin activity --item <id>` (or `--sku`)
 shows every action and error under the old id, and an `Item deleted` entry with its SKU and
 title ([activity.md](activity.md#searching-as-an-operator)). No seller view shows it: the

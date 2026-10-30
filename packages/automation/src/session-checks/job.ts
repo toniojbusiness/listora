@@ -223,12 +223,17 @@ async function record(
           : undefined,
     };
   });
-  if (seller?.changed === true || seller?.becameReadOnly === true) {
+  if (
+    seller?.changed === true ||
+    seller?.becameReadOnly === true ||
+    seller?.becameWritable === true
+  ) {
     // Ids and counts only: the seller's handle is marketplace data, never logged.
     log.warn(
       {
         shopChanged: seller.changed,
         becameReadOnly: seller.becameReadOnly,
+        becameWritable: seller.becameWritable,
         refusedOperations: seller.refused.length,
       },
       'the seller the session check read changed the connection',

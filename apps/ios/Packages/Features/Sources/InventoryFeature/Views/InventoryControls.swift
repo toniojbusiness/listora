@@ -69,26 +69,36 @@ struct SelectionBar: View {
         }
     }
 
+    /// One button per kind, written out rather than a ForEach: ViewThatFits builds the rows it
+    /// measures on SwiftUI's render thread at times, where a ForEach's main-actor content stops
+    /// the app (`ActionButtons.secondary`).
+    @ViewBuilder
     private var buttons: some View {
-        ForEach(BulkActionKind.allCases) { kind in
-            Button { open(kind) } label: {
-                VStack(spacing: Spacing.xxs) {
-                    Image(systemName: kind.systemImage)
-                        .font(Typography.headline)
-                    Text(kind.buttonTitle)
-                        .font(Typography.smallEmphasis)
-                        .lineLimit(1)
-                }
-                .foregroundStyle(kind == .delete ? Palette.danger : Palette.brand)
-                .frame(maxWidth: .infinity, minHeight: Layout.minimumTapTarget)
-                .contentShape(Rectangle())
-                .opacity(chosen == 0 ? 0.45 : 1)
+        button(.list)
+        button(.changePrice)
+        button(.end)
+        button(.relist)
+        button(.delete)
+    }
+
+    private func button(_ kind: BulkActionKind) -> some View {
+        Button { open(kind) } label: {
+            VStack(spacing: Spacing.xxs) {
+                Image(systemName: kind.systemImage)
+                    .font(Typography.headline)
+                Text(kind.buttonTitle)
+                    .font(Typography.smallEmphasis)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .disabled(chosen == 0)
-            .accessibilityLabel(kind.accessibilityLabel)
-            .accessibilityIdentifier("inventory.bulk.\(kind.rawValue)")
+            .foregroundStyle(kind == .delete ? Palette.danger : Palette.brand)
+            .frame(maxWidth: .infinity, minHeight: Layout.minimumTapTarget)
+            .contentShape(Rectangle())
+            .opacity(chosen == 0 ? 0.45 : 1)
         }
+        .buttonStyle(.plain)
+        .disabled(chosen == 0)
+        .accessibilityLabel(kind.accessibilityLabel)
+        .accessibilityIdentifier("inventory.bulk.\(kind.rawValue)")
     }
 }
 

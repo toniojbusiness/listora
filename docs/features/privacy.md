@@ -42,23 +42,73 @@ after their retention period (7 days for personal, 30 for production).
 
 ## What each deletion covers
 
-| Trigger                                          | Deleted at once                                                                                                                                                                                                                    | The job                                                                                                           | Kept                                                                                                                                                                                                    |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Account deletion (`DELETE /v1/account`)          | The account and every row in it (photos, items, listings, sales, AI usage and analyses, operation history, deleted items' records, connections with their tokens and sessions), and the user ([auth.md](auth.md#account-deletion)) | Deletes the identity provider user, revokes grants, deletes every stored object, checks rows and objects, records | Nothing about the person                                                                                                                                                                                |
-| Deleting an item (`deleteItem`)                  | The item, its photos, analyses, listings, tasks, and change history ([items.md](items.md#deleting-an-item))                                                                                                                        | None: the API deletes the photos' stored objects after the delete commits                                         | The history of its marketplace actions, for the owner: the item's id, SKU, and title (`deleted_item`), its listings' (`deleted_listing`), their operations and browser sessions; never shown in the app |
-| Unlinking a marketplace (`disconnectConnection`) | The connection (tokens or browser session, the marketplace's user id and name, health), its automation runs, session checks, and sale-check schedule; its listings' read-backs; marketplace events about the seller                | Revokes the grant, deletes the runs' screenshots, checks, records                                                 | Items, listings and their history, sales, fees                                                                                                                                                          |
-| Access revoked by the marketplace                | The tokens, when the notice arrives ([connections.md](connections.md))                                                                                                                                                             | 30 days later, unless reconnected, the retention job deletes the rest as an unlink (reason `revoked`)             | The same as an unlink                                                                                                                                                                                   |
-| eBay Marketplace Account Deletion                | Every connection to that eBay user in every account (as an unlink), and every eBay event about them, in one transaction that checks and records ([ebay-notifications.md](ebay-notifications.md))                                   | None needed: eBay deleted the user                                                                                | The Listora account's own records                                                                                                                                                                       |
-| The marketplace ends Listora's access (Depop)    | Every connection to the marketplace in one mode, in every account, as an unlink (reason `marketplace_terminated`)                                                                                                                  | As an unlink                                                                                                      | The same as an unlink                                                                                                                                                                                   |
+| Trigger                                          | Deleted at once                                                                                                                                                                                                                                                                                 | The job                                                                                                           | Kept                                                                                                                                                                                                    |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account deletion (`DELETE /v1/account`)          | The account and every row in it (photos, items, listings, sales, AI usage and analyses, operation history, deleted items' records, connections with their tokens and sessions), and the user ([auth.md](auth.md#account-deletion))                                                              | Deletes the identity provider user, revokes grants, deletes every stored object, checks rows and objects, records | Nothing about the person                                                                                                                                                                                |
+| Deleting an item (`deleteItem`)                  | The item, its photos, analyses, listings, tasks, and change history ([items.md](items.md#deleting-an-item))                                                                                                                                                                                     | None: the API deletes the photos' stored objects after the delete commits                                         | The history of its marketplace actions, for the owner: the item's id, SKU, and title (`deleted_item`), its listings' (`deleted_listing`), their operations and browser sessions; never shown in the app |
+| Unlinking a marketplace (`disconnectConnection`) | Every piece of the marketplace's data in the account: the connection (tokens or session, user id and name, health), its listings, the items only its import brought in, its sales with their Pack check orders, offers, sale checks, imports, tasks, events ([below](#unlinking-a-marketplace)) | Revokes the grant, deletes the screenshots and the photos of what went, checks, records                           | Items made in Listora or listed elsewhere (without its listing); the history of its operations, for the owner                                                                                           |
+| Access revoked by the marketplace                | The tokens, when the notice arrives ([connections.md](connections.md))                                                                                                                                                                                                                          | 30 days later, unless reconnected, the retention job deletes the rest of the connection's data (reason `revoked`) | Items, listings and their history, sales, fees                                                                                                                                                          |
+| eBay Marketplace Account Deletion                | Every connection to that eBay user in every account with the data that came through it, and every eBay event about them, in one transaction that checks and records ([ebay-notifications.md](ebay-notifications.md))                                                                            | None needed: eBay deleted the user                                                                                | The Listora account's own records                                                                                                                                                                       |
+| The marketplace ends Listora's access (Depop)    | Every connection to the marketplace in one mode, in every account, with the data that came through it (reason `marketplace_terminated`)                                                                                                                                                         | As for a revoked access                                                                                           | Items, listings and their history, sales, fees                                                                                                                                                          |
 
-Two records of a marketplace seller's handle outlive a connection on purpose
+Two records of a marketplace seller outlive a connection on purpose
 ([read-only.md](read-only.md#the-shop-not-the-row)). The sellers an account kept read only
 (`read_only_seller`) stay through an unlink, as the Read only setting does, and go with the
-account. A protected shop (`protected_seller`) belongs to no account: its seller id stays when an
-account that linked it is deleted, because keeping that shop safe is its only use, and only a
-migration removes it.
+account. A protected shop (`protected_seller`) belongs to no account and holds only a SHA-256
+digest of its seller id, never the handle: it stays when an account that linked it is deleted,
+because keeping that shop safe is its only use, and only a migration removes it.
 
 In the app, a person deletes their account in Settings > Delete account ([auth.md](auth.md#account-deletion)) and unlinks a marketplace with Unlink in Settings > Link accounts ([marketplace-linking.md](marketplace-linking.md)).
+
+### Unlinking a marketplace
+
+The owner's unlink (`disconnectConnection`, reason `unlinked`) removes the marketplace from the
+account, so nothing about it shows anywhere in Listora until it is linked again
+(`deleteMarketplaceData`, `packages/connections/src/marketplace-data.ts`, in the transaction
+that deletes the connection):
+
+- **Its listings**, and their links on items, whatever their status (assisted ones included).
+  The operations on them are settled without asking the marketplace: one waiting to run, to
+  retry, or for the seller is canceled; one whose step may be under way (`running`,
+  `verifying`) fails as `marketplace_unlinked` ("Depop was unlinked before Listora could
+  confirm this change, ..."). They then stay as history only, as a deleted item's do
+  ([items.md](items.md#deleting-an-item)): each listing's `deleted_listing` row, marked
+  `reason = 'unlinked'`, keeps its operations and their events for the owner and operators
+  (`admin activity`, where they read "(unlinked account)"); no seller view shows them.
+- **The items only its import brought in**: an item whose `item.imported` history names the
+  marketplace (a listing import, or a sold item of its sales history) and that has no listing or
+  sale on another marketplace and is in no haul. It is deleted with its photos, analyses, and
+  history, and recorded as a `deleted_item` (reason `unlinked`, "Item removed with an unlinked
+  account" on the operator's timeline). Items made in Listora, and items listed or sold on
+  another marketplace, stay without that marketplace's listing: one no longer listed anywhere is
+  `ready` again, one that waited for the sale's delist runs is `sold`.
+- **Its sales**, with their items, fees, delist runs, Pack check labels and packages, and tasks.
+  A delist one of its sales started on another marketplace's listing keeps going (the item did
+  sell) and loses only its run, so an auto-delist may have no run
+  (`marketplace_operation_auto_delist_has_run`).
+- **Its tasks** (assisted steps, reconnects, sale emails' questions, a double sale whose earlier
+  sale was there), its marketplace events and sale emails (`inbound_event`), and the item history
+  that names it or one of its sales (`audit_log`, which lets this one delete through when the
+  transaction names it in `listora.unlink_delete`). Its offers, sale checks and their records,
+  imports, read health, session checks, automation runs, and phone work go with the connection.
+- **Stored objects**: the deleted items' photos and the sales' package photos join the
+  screenshots in `connection_deletion_object`, which the deletion's job purges.
+
+Nothing is sent to the marketplace while unlinking, and its listings stay up there; afterwards
+the job asks it to revoke an OAuth grant, as before. The account's Read only settings
+(`marketplace_read_only`, `read_only_seller`) and protected shops stay, and a read-only
+connection is never unlinked ([read-only.md](read-only.md#unlinking-and-relinking)). Another
+marketplace's data is never touched.
+
+**Relinking imports afresh.** The next link is a new connection, as a first link is: its first
+sale check reads the whole sales history (each sale recorded again, found in the sales history,
+[sales.md](sales.md#sales-history)), and an import brings the listings in as new items, or adds
+them to the items made in Listora that they match ([imports.md](imports.md)).
+
+The other deletions of a connection (access revoked past retention, an operator's purge, eBay's
+account deletion) delete only what came through the connection, as before: its listings stay,
+detached and marked as from the previous shop
+([marketplace-linking.md](marketplace-linking.md#relinking-another-shop)), and so do sales.
 
 The marketplaces that run on the seller's iPhone ([phone-execution.md](phone-execution.md)) add
 two things. An unlink also deletes the connection's work waiting for the phone (`phone_work`), and
@@ -121,7 +171,7 @@ of 1,000 and at most 50 batches per rule a run:
 | Raw marketplace notifications, poll results, parsed emails         | 90 days after processing             | Unprocessed events stay. Sales keep their own row; their `inbound_event_id` is cleared                                                                                                                  |
 | Sale-check records (`sale_check_run`, what each check read)        | 90 days after the check              | The schedule keeps the health; a sale keeps its detection source, and its `sale_check_run_id` is cleared ([activity.md](activity.md))                                                                   |
 | AI usage events                                                    | 400 days                             | Daily totals (`ai_usage_daily`) stay with the account for cost reports                                                                                                                                  |
-| A connection whose access the marketplace revoked                  | 30 days unless reconnected           | Then deleted as an unlink                                                                                                                                                                               |
+| A connection whose access the marketplace revoked                  | 30 days unless reconnected           | Then its data is deleted, its listings and sales kept                                                                                                                                                   |
 | Connect attempts (`connection_authorization`)                      | 1 day after expiry                   | Starting a new attempt also prunes the account's old ones                                                                                                                                               |
 | Deletion completion records                                        | 2 years                              | No personal data                                                                                                                                                                                        |
 | A sale label's buyer first name and tracking number (`sale_label`) | 60 days after the sale is done       | Done: shipped, canceled, or returned, from the latest of those, so a return starts the count again. Cleared, with the label's carrier and source; the sale stays. A sale that never got done keeps them |
@@ -168,10 +218,17 @@ Migration `20261025221245_privacy_retention`:
   unguessable, so only the rows find them).
 - `connection_deletion` (the tombstone of an unlinked connection: its id, marketplace, reason, the
   grant's encrypted tokens only while its revocation is pending, the revocation outcome, attempts)
-  and `connection_deletion_object` (the screenshots still to delete). Like `account_deletion`, it
+  and `connection_deletion_object` (the stored objects still to delete: screenshots, and an
+  unlink's item and package photos). Like `account_deletion`, it
   outlives the connection and its account, so it has no `account_id`.
 - `deletion_record`: the completion record of every finished deletion.
 - `reject_direct_change()` allows the retention job's deletes; indexes for the retention scans.
+- Migration `20261030002319_unlink_marketplace_data`: `deleted_item.reason` and
+  `deleted_listing.reason` (`item_deleted` or `unlinked`; an unlinked listing's item may still be
+  in Listora, so `deleted_listing` no longer needs a `deleted_item`); a sale's delete clears its
+  runs from the delists they started elsewhere (`on delete set null`), and an auto-delist may
+  then have no run; `reject_direct_change()` also lets through the deletes a transaction names in
+  `listora.unlink_delete`; an index on the item history's marketplace.
 - `sale_pack.tracking_number` may be empty: with buyer data retention on, the retention job
   clears it with the label's buyer
   details (migration `20261029080126_buyer_data_retention`, audit L4).

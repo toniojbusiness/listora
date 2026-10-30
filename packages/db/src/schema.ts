@@ -43,6 +43,7 @@ import type {
   DelistRunStatus,
   FeeKind,
   FeeSource,
+  HistoryOnlyReason,
   InboundEventResult,
   InboundEventSource,
   ItemStatus,
@@ -467,6 +468,11 @@ export interface MarketplaceConnectionTable {
   phone_device_id: Nullable<string>;
   /** Listora only reads the account: every write refuses (docs/features/read-only.md). */
   read_only: Generated<boolean>;
+  /**
+   * Read only only because the account's marketplace was when the connection was made: it stays
+   * so until the session check names the shop, then follows that shop (read-only.md).
+   */
+  read_only_carried: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -483,9 +489,9 @@ export interface MarketplaceReadOnlyTable {
 }
 
 /**
- * A seller an account's read-only connection held: kept by triggers, so a connection of the
- * account that comes to hold it again is read only again, until the owner turns Read only off
- * with it linked (docs/features/read-only.md#the-shop-not-the-row).
+ * A seller an account's connection held while read only by the owner's setting: kept by
+ * triggers, so a connection of the account that comes to hold it again is read only again, until
+ * the owner turns Read only off with it linked (docs/features/read-only.md#the-shop-not-the-row).
  */
 export interface ReadOnlySellerTable {
   account_id: string;
@@ -496,14 +502,13 @@ export interface ReadOnlySellerTable {
 
 /**
  * A shop Listora only ever reads, whoever links it: every connection that holds it is read only
- * and stays so. Named by its seller id, or by the connection that holds it until that
- * connection's first recorded seller fills the id in. Only a migration changes it.
+ * and stays so. Named by its seller only, as `seller_digest(seller_id)` (SHA-256, hex), so a
+ * real shop's handle is never in the repository. Only a migration changes it.
  */
 export interface ProtectedSellerTable {
   id: Id;
   marketplace: Marketplace;
-  seller_id: Nullable<string>;
-  connection_id: Nullable<string>;
+  seller_digest: string;
   reason: string;
   created_at: CreatedAt;
 }
@@ -605,18 +610,24 @@ export interface DeletedItemTable {
   sku: string;
   title: Nullable<string>;
   deleted_at: CreatedAt;
+  /** The seller deleted it, or it went when its marketplace was unlinked (only its import made it). */
+  reason: Generated<HistoryOnlyReason>;
 }
 
-/** What a listing of a deleted item was; its id is the listing's. */
+/**
+ * What a listing of a deleted item, or of an unlinked marketplace, was; its id is the listing's.
+ * An unlinked listing's item may still be in Listora (it was listed elsewhere too).
+ */
 export interface DeletedListingTable {
   id: string;
   account_id: string;
   item_id: string;
   marketplace: Marketplace;
-  /** Its status when the item was deleted (a live listing stays up on its marketplace). */
+  /** Its status when it was deleted (a live listing stays up on its marketplace). */
   status: ListingStatus;
   external_listing_id: Nullable<string>;
   deleted_at: CreatedAt;
+  reason: Generated<HistoryOnlyReason>;
 }
 
 /** Append-only: the database rejects updates and deletes. */

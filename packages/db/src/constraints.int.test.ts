@@ -930,31 +930,49 @@ describe('schema constraints (real Postgres)', () => {
           .where('account_id', '=', accountId)
           .execute(),
       ).toEqual([]);
-      await unlink(first.id);
 
-      // A protected shop known only by its connection: read only whatever sets it, and it learns
-      // the seller from the connection's first recorded seller.
-      const held = await link();
+      // A new connection of a read-only marketplace starts read only, carried, and follows the
+      // shop its check names: another shop is writable, a kept one stays read only.
+      await set(first.id, { external_user_id: 'rs-live-shop' });
+      await set(first.id, { read_only: true });
+      await unlink(first.id);
+      const carried = await link();
+      expect(carried.read_only).toBe(true);
+      expect(await set(carried.id, { external_user_id: 'rs-test-shop' })).toMatchObject({
+        read_only: false,
+      });
+      expect(await set(carried.id, { external_user_id: 'rs-live-shop' })).toMatchObject({
+        read_only: true,
+      });
+      await unlink(carried.id);
+      const again = await link();
+      expect(await set(again.id, { external_user_id: 'rs-live-shop' })).toMatchObject({
+        read_only: true,
+      });
+      await unlink(again.id);
+
+      // A protected shop, named by its seller's digest: read only whatever sets it, on any
+      // connection of any account, and never another seller on its connection.
       const shop = await db
         .insertInto('protected_seller')
-        .values({ marketplace: 'depop', connection_id: held.id, reason: 'test shop' })
+        .values({
+          marketplace: 'depop',
+          seller_digest: sql<string>`seller_digest(${'rs-protected-shop'})`,
+          reason: 'test shop',
+        })
         .returning('id')
         .executeTakeFirstOrThrow();
       try {
-        expect(await set(held.id, { read_only: false })).toMatchObject({ read_only: true });
-        await set(held.id, { external_user_id: 'rs-protected-shop' });
-        expect(
-          await db
-            .selectFrom('protected_seller')
-            .select('seller_id')
-            .where('id', '=', shop.id)
-            .executeTakeFirstOrThrow(),
-        ).toEqual({ seller_id: 'rs-protected-shop' });
-        // From then on the seller is protected, on any connection of any account.
-        await unlink(held.id);
         await db.deleteFrom('marketplace_read_only').where('account_id', '=', accountId).execute();
         await db.deleteFrom('read_only_seller').where('account_id', '=', accountId).execute();
-        expect((await link('rs-protected-shop')).read_only).toBe(true);
+        const held = await link('rs-protected-shop');
+        expect(held.read_only).toBe(true);
+        expect(await set(held.id, { read_only: false })).toMatchObject({ read_only: true });
+        // Another shop relinked on its connection is not protected.
+        expect(await set(held.id, { external_user_id: 'rs-test-shop' })).toMatchObject({
+          read_only: false,
+        });
+        await unlink(held.id);
         const elsewhere = await insertAccount(db, 'RT');
         const theirs = await db
           .insertInto('marketplace_connection')
@@ -982,12 +1000,21 @@ describe('schema constraints (real Postgres)', () => {
           .returning('read_only')
           .executeTakeFirstOrThrow();
         expect(other.read_only).toBe(false);
+        // The digest is SHA-256 of the seller id, in hex.
+        const digest = await sql<{ digest: string }>`select seller_digest('abc') as digest`.execute(
+          db,
+        );
+        expect(digest.rows[0]?.digest).toBe(
+          'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+        );
       } finally {
         await db.deleteFrom('protected_seller').where('id', '=', shop.id).execute();
       }
     });
 
-    it('links auto-delist operations to their delist run', async () => {
+    it('links only auto-delist operations to a delist run', async () => {
+      // An auto-delist may have lost its run (its sale's marketplace was unlinked); an operation
+      // with a run is always one.
       await expectPgError(
         db
           .insertInto('marketplace_operation')
@@ -995,9 +1022,10 @@ describe('schema constraints (real Postgres)', () => {
             account_id: a.accountId,
             listing_id: a.listingId,
             kind: 'end',
-            idempotency_key: 'auto-without-run',
+            idempotency_key: 'run-without-auto',
             desired: jsonb({ status: 'ended' }),
-            origin: 'auto_delist',
+            origin: 'user',
+            delist_run_id: crypto.randomUUID(),
           })
           .execute(),
         PG_ERROR.checkViolation,

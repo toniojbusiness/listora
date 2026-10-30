@@ -15,7 +15,8 @@
     "apps/admin"
   ],
   "scripts": {
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run contract:check && npm run infra:synth && npm run test:unit && npm run test:integration",
+    "check": "npm run check:static && npm run test:unit && npm run test:integration",
+    "check:static": "npm run format:check && npm run lint && npm run typecheck && npm run contract:check && npm run infra:synth",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "node --max-old-space-size=6144 node_modules/eslint/bin/eslint.js --max-warnings=0 . && shellcheck scripts/*.sh",

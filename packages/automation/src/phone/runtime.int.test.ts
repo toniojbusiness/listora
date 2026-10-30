@@ -5,7 +5,8 @@
  * start when nothing had changed yet; one they decline, or could not be asked about (the app in
  * the background), stops the run as `stopped_for_check`, which retries later, except a sign-in
  * page they decline, which asks for a new link. The shared conformance suites
- * (conformance.int.test.ts) cover everything the phone does the same way as the runner.
+ * (conformance-<marketplace>.int.test.ts) cover everything the phone does the same way as the
+ * runner.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
