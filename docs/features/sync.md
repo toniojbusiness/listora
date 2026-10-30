@@ -20,19 +20,24 @@ connection that works), read-only:
 
 - **Sales**: a sale check now (`sale_check_schedule.next_reason` `sync`), on the phone as
   `sale_check` phone work, or the browser runner's job in the cloud
-  ([automation.md](automation.md)). A sale it finds starts its delists as any check's does.
+  ([automation.md](automation.md)). A sale it finds starts its delists as any check's does, and
+  a sale recorded before that the marketplace now says shipped is marked shipped: the check
+  reads back to the oldest sale still waiting to ship ([sales.md](sales.md#sales-history)).
 - **Offers**: a read of the buyers' offers (`requestOfferChecks`, [offers.md](offers.md)).
 
 Each read happens only where it passed live ([verified-features.md](verified-features.md)):
 Depop's sales, offers, and listings, and Mercari's sales and listings. Nothing of Poshmark is read.
 A marketplace with no verified read is not part of a sync, and its status is not shown.
 
-- **Listings**: once the seller imported a marketplace's listings, another import, which brings
-  in what was listed there since and settles the rest at once ([imports.md](imports.md)). At most
-  every 6 hours (`LISTING_SYNC_MIN_GAP_MS`): a read goes through every listing.
+- **Listings**: an import ([imports.md](imports.md)), which brings in what was listed there
+  since and gives each listing Listora has the price the marketplace shows now. The first one
+  when none ran yet (a marketplace linked before linking imported its listings), then once the
+  last one finished. It reads the listings Listora has from the marketplace's list pages only
+  (#192), so every sync reads them; one under way is never started twice.
 
 A marketplace whose sale check started in the last 2 minutes (`SYNC_MIN_GAP_MS`) is not checked
-again, and neither are offers read in that time, so repeated taps and pulls read nothing twice.
+again, and neither are offers read nor listings imported in that time, so repeated taps and pulls
+read nothing twice.
 Every read is a read: a read-only connection ([read-only.md](read-only.md)) is synced like any
 other, and nothing a sync queues can change a marketplace.
 
@@ -81,8 +86,9 @@ In the app (`SyncModel`):
 
 - API (`apps/api/src/sync/sync.int.test.ts`): the checks a sync asks for, on the phone and in
   the cloud; nothing again within 2 minutes; a read-only account synced with nothing that could
-  change it queued; listings read again only once imported and 6 hours on; the words of what a
-  sync found and of a failure; another account sees nothing.
+  change it queued; listings imported on the first sync when none were, never twice at once, and
+  again once the last import finished; the words of what a sync found and of a failure; another
+  account sees nothing.
 - No timer (`packages/automation/src/phone/work.int.test.ts`): offer reads only when asked.
 - App (`SyncFeatureTests`): the indicator's lines while the phone works and after, a result that
   goes and a failure that stays with Try again, Listora unreachable, one sync on opening, none

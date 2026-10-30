@@ -27,7 +27,10 @@ Imports are offered only from marketplaces whose imports passed live (Depop and 
 
 1. **Starting** (`startListingImport`, `POST /v1/imports`): only on a marketplace linked by
    signing in (an automation connection that works), one import at a time per marketplace.
-   eBay is not offered yet: Seller Hub's rows carry no photos or details.
+   eBay is not offered yet: Seller Hub's rows carry no photos or details. **Linking starts one**
+   (`linkMarketplaceSession`, after the session check and the first sale check on the phone), so
+   a seller's listings for sale come in with their sales history without a tap; and every sync
+   starts another ([sync.md](sync.md)), the first when the marketplace was linked before this.
 2. **Reading** (automation `imports/`): one page per browser session, where the connection runs:
    on the seller's iPhone as `listing_import` phone work (behind routine changes, with the pause
    between sessions and the per-seller rate limits like any run), or in the cloud as the browser
@@ -66,7 +69,11 @@ Imports are offered only from marketplaces whose imports passed live (Depop and 
 4. **Settling** (`@listora/imports` `applyListingImport`, after every page): each entry becomes
    - `already_listed`: Listora already has this listing (its marketplace id); one from an
      unlinked shop joins the import's connection again, since this shop shows it
-     ([marketplace-linking.md](marketplace-linking.md#relinking-another-shop));
+     ([marketplace-linking.md](marketplace-linking.md#relinking-another-shop)). The read is its
+     read-back: an active listing takes the price the marketplace shows now (`price_cents`,
+     `remote_snapshot`, `last_verified_at`), so a price the seller changed there reaches
+     Listora; not while an operation on it is under way, after a newer read, or when Listora has
+     it ended or sold (the operations and sale checks that know why keep those);
    - `merged`: a listing of the item it is the same as; the item keeps its own details and photos;
    - `imported`: a new item, with the listing's photos;
    - `needs_you`: a question for the seller (below);

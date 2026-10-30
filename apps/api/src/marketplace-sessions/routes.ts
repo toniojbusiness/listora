@@ -3,7 +3,9 @@
  * user signs into the marketplace's own sign-in page in the app, and the app hands over that
  * site's cookies, never the password. `linkMarketplaceSession` stores them encrypted on the
  * account's automation connection (`linkAutomationSession`, which also asks the browser runner
- * to check them), and the app polls `getMarketplaceSession` until the check decided. Cookie
+ * to check them and a first sale check to read the sales history), starts an import of the
+ * seller's listings for sale there (docs/features/imports.md), and the app polls
+ * `getMarketplaceSession` until the check decided. Cookie
  * values are never logged or returned: only the session vault's ciphertext keeps them.
  */
 import type { SessionCookie as ContractSessionCookie } from '@listora/api-contract';
@@ -25,6 +27,7 @@ import {
   type SessionVault,
 } from '@listora/connections';
 import type { DbExecutor, Marketplace } from '@listora/db';
+import { ImportRefusedError, startListingImport } from '@listora/imports';
 import { assertNever } from '@listora/shared';
 import type { FastifyInstance } from 'fastify';
 
@@ -131,12 +134,31 @@ export function registerMarketplaceSessionRoutes(
       }
       throw error;
     }
+    await importLinkedListings(db, tenant.accountId, marketplace);
     const rows = await sessionRows(db, tenant, deps.profiles, [marketplace]);
     return {
       status: 201,
       body: marketplaceSessionView(rowFor(rows, marketplace), profile, deps.now()),
     };
   });
+}
+
+/**
+ * Linking brings in the seller's listings for sale there, as Import your listings does: where
+ * Listora imports from that marketplace, unless an import is under way already (a relink while
+ * one reads). Its pages wait behind the session check and the first sale check, where the
+ * connection runs.
+ */
+async function importLinkedListings(
+  db: DbExecutor,
+  accountId: string,
+  marketplace: Marketplace,
+): Promise<void> {
+  try {
+    await startListingImport(db, { accountId, marketplace });
+  } catch (error) {
+    if (!(error instanceof ImportRefusedError)) throw error;
+  }
 }
 
 /**

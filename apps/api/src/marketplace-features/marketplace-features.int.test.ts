@@ -119,10 +119,13 @@ describe('marketplace features (real Postgres, verified features)', () => {
     const { token, phoneWork } = await seller(['depop', 'poshmark', 'mercari']);
     const synced = await api.call('requestSync', { token });
     expect(synced.status).toBe(200);
-    // Poshmark's sale checks and offer reads never passed live: nothing of it is queued or shown.
+    // Poshmark's sale checks, offer reads, and imports never passed live: nothing of it is
+    // queued or shown.
     expect(await phoneWork()).toEqual([
+      'depop:listing_import',
       'depop:offer_check',
       'depop:sale_check',
+      'mercari:listing_import',
       'mercari:sale_check',
     ]);
     expect(synced.body.data.map((sync) => sync.marketplace)).toEqual(['depop', 'mercari']);
