@@ -255,7 +255,9 @@ struct ItemDetailView: View {
     /// "Mark as sold", and the item's sticker while Pack check is off.
     @ViewBuilder
     private func itemActions(for item: Item) -> some View {
-        markSoldButton(for: item)
+        if environment.saleScreens != nil {
+            MarkSoldButton(item: item, request: $markingSold)
+        }
         if !stickerOnTop {
             stickerSection(for: item)
         }
@@ -270,26 +272,6 @@ struct ItemDetailView: View {
     private func stickerSection(for item: Item) -> some View {
         if environment.stickerScreen != nil {
             ItemStickerSection(offers: $offersSticker) { printingSticker = StickerRequest(item) }
-        }
-    }
-
-    /// "Mark as sold", for an item that is not sold yet.
-    @ViewBuilder
-    private func markSoldButton(for item: Item) -> some View {
-        if environment.saleScreens != nil, item.canBeMarkedSold {
-            Button("Mark as sold", systemImage: "dollarsign.circle") {
-                markingSold = MarkSoldRequest(
-                    itemID: item.id,
-                    sku: item.sku,
-                    title: item.details.title,
-                    listPriceCents: item.details.listPrice?.amountCents,
-                    listedOn: item.listings
-                        .filter { $0.status.value1 == .active }
-                        .compactMap { $0.marketplace.value1?.rawValue },
-                )
-            }
-            .buttonStyle(.listoraSecondary)
-            .accessibilityIdentifier("item.markSold")
         }
     }
 }

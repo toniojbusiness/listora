@@ -22,13 +22,13 @@ enum LabelPrintJob {
             for page in pages {
                 let bounds = page.bounds(for: .mediaBox)
                 context.beginPage(withBounds: CGRect(origin: .zero, size: bounds.size), pageInfo: [:])
-                let cg = context.cgContext
-                cg.saveGState()
+                let page2D = context.cgContext
+                page2D.saveGState()
                 // PDF pages draw bottom-up; the renderer's context is top-down.
-                cg.translateBy(x: 0, y: bounds.height)
-                cg.scaleBy(x: 1, y: -1)
-                page.draw(with: .mediaBox, to: cg)
-                cg.restoreGState()
+                page2D.translateBy(x: 0, y: bounds.height)
+                page2D.scaleBy(x: 1, y: -1)
+                page.draw(with: .mediaBox, to: page2D)
+                page2D.restoreGState()
             }
             drawStickers(stickers, pageSize: pageSize, in: context)
         }
@@ -36,7 +36,11 @@ enum LabelPrintJob {
 
     /// The stickers stacked down label-size pages, each 2.25 × 1.25 in with a thin line to cut
     /// along, as many to a page as fit.
-    private static func drawStickers(_ stickers: [StickerRequest], pageSize: CGSize, in context: UIGraphicsPDFRendererContext) {
+    private static func drawStickers(
+        _ stickers: [StickerRequest],
+        pageSize: CGSize,
+        in context: UIGraphicsPDFRendererContext,
+    ) {
         let size = StickerFormat.roll225x125.stickerSize
         let perPage = max(1, Int((pageSize.height - margin) / (size.height + margin)))
         for (offset, sticker) in stickers.enumerated() {

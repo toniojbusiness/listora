@@ -200,8 +200,13 @@ func labeledOrder(_ saleID: String, printed: String? = nil, file: Bool = true) t
         "soldAt": "2026-10-27T12:00:00Z",
         "description": "the black Shaka Wear tee, 2XL",
         "items": [
-            ["itemId": "item-1", "sku": "AJ-000184", "description": "black tee", "title": "Shaka Wear tee",
-             "location": ["code": "B-12"]],
+            [
+                "itemId": "item-1",
+                "sku": "AJ-000184",
+                "description": "black tee",
+                "title": "Shaka Wear tee",
+                "location": ["code": "B-12"],
+            ],
             ["itemId": "item-2", "sku": "AJ-000185", "description": "green dress"],
         ],
         "label": label,

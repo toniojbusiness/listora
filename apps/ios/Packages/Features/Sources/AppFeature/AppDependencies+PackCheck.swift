@@ -14,10 +14,10 @@ extension AppDependencies {
         _ apiClient: APIClient,
         _ accessTokens: AccessTokenStore,
         _ phone: PhoneExecutionEnvironment,
-        _ configuration: AppConfiguration,
-        _ launchOptions: DebugLaunchOptions,
+        _ build: (configuration: AppConfiguration, launchOptions: DebugLaunchOptions),
         _ defaults: UserDefaults,
     ) -> PackCheckEnvironment {
+        let (configuration, launchOptions) = build
         PackCheckEnvironment(
             apiClient: apiClient,
             accessTokens: accessTokens,

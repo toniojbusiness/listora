@@ -163,11 +163,11 @@ final class LabelStubProtocol: URLProtocol, @unchecked Sendable {
         lock.withLock { requests.last { $0.url?.absoluteString == url } }
     }
 
-    override class func canInit(with _: URLRequest) -> Bool {
+    override static func canInit(with _: URLRequest) -> Bool {
         true
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
         request
     }
 
@@ -177,8 +177,11 @@ final class LabelStubProtocol: URLProtocol, @unchecked Sendable {
             Self.requests.append(request)
             return Self.answers[url]
         } ?? (status: 404, body: Data())
-        let response = HTTPURLResponse(url: request.url!, statusCode: answer.status, httpVersion: nil, headerFields: nil)!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if let url = request.url,
+           let response = HTTPURLResponse(url: url, statusCode: answer.status, httpVersion: nil, headerFields: nil)
+        {
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        }
         client?.urlProtocol(self, didLoad: answer.body)
         client?.urlProtocolDidFinishLoading(self)
     }

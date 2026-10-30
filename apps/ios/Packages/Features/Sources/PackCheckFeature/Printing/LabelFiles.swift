@@ -92,7 +92,10 @@ struct SessionLabelFiles: LabelFileSource {
         request.setValue("application/pdf", forHTTPHeaderField: "Accept")
         let sent = cookies.filter { $0.isSent(to: url) }
         if !sent.isEmpty {
-            request.setValue(sent.map { "\($0.name)=\($0.value)" }.joined(separator: "; "), forHTTPHeaderField: "Cookie")
+            request.setValue(
+                sent.map { "\($0.name)=\($0.value)" }.joined(separator: "; "),
+                forHTTPHeaderField: "Cookie",
+            )
         }
         if let name = bearerCookies[marketplace], let token = cookies.first(where: { $0.name == name })?.value {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -159,7 +162,8 @@ extension StoredCookie {
             return false
         }
         let requested = url.path().isEmpty ? "/" : url.path()
-        return path.isEmpty || path == "/" || requested == path || requested.hasPrefix(path.hasSuffix("/") ? path : path + "/")
+        return path.isEmpty || path == "/" || requested == path || requested
+            .hasPrefix(path.hasSuffix("/") ? path : path + "/")
     }
 }
 

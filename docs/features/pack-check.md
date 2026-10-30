@@ -7,11 +7,30 @@ packages and another none. Pack check only ever **reads** the marketplaces; it n
 listing or an order.
 
 Code: `packages/pack-check` (the scan rules, the to-ship list, packing, label reads' records,
-the setting), `packages/automation/src/label-reads` and each marketplace's `labels` script (the
-reads themselves), `apps/api/src/pack-check`, the activity timeline's `package` entries
-(`packages/activity`), and the iPhone's `PackCheckFeature` (with the "Print sticker" button in
-`InventoryFeature`, "Pack orders" in `SalesFeature`, and the package photo in the sale's "How
-Listora found it").
+label prints, the setting), `packages/automation/src/label-reads` and each marketplace's
+`labels` script (the reads themselves), `apps/api/src/pack-check`, the activity timeline's
+`package` entries (`packages/activity`), and the iPhone's `PackCheckFeature` (with the "Print
+sticker" button in `InventoryFeature`, "Pack orders" in `SalesFeature`, and the package photo in
+the sale's "How Listora found it").
+
+## How it works, for the seller
+
+Settings > Pack check and the first opening of Pack orders (then its "How it works" button) show
+the same four steps (`PackCheckExplainer`):
+
+1. **A sticker for each item**, printed from the item's screen when it is listed and stuck on its
+   bag; its QR code is the SKU.
+2. **The label and its stickers, together**: when it sells, Pack orders prints the marketplace's
+   shipping label with that order's stickers in one job, so they always match; where Listora
+   can't get a marketplace's label, Open label takes the seller to the order there.
+3. **Scan both when you pack**: green is this order's package; a red stop is another order's
+   label or one already used.
+4. **A second copy is caught**: Listora asks before printing a label again, and a copy scanned
+   on another package is stopped.
+
+Before October 30, 2026 the only way to print a sticker was the item screen's "Print sticker",
+below its marketplace cards and Money (off the first screen on a phone), and the after-listing
+offer; Pack orders offered no printing at all, so sellers couldn't find it.
 
 ## The to-ship list
 
@@ -70,7 +89,8 @@ One receipt per purchase (`depop/pages/receipts.ts`):
   Never the parcel's `parcel_status`: a refunded order's parcel can still say
   `AWAITING_SHIPPING`.
 - **The label.** Its parcel's `tracking.reference`, by `shipping_provider` (`USPS`), with the
-  parcel's `shipping_deadline` (the sale's ship-by date) and `label_expires_at`. A bundle is one
+  parcel's `shipping_deadline` (the sale's ship-by date), `label_expires_at`, and the label's
+  file where the parcel names one on Depop's site ([Printing the label](#printing-the-label)). A bundle is one
   purchase with several items and one parcel: one package with one label, so the bundle's one
   sale is packed once, and the duplicate-print guard stops a second print of its label. A
   purchase whose parcels show several tracking numbers is not one package, so it reads as having
@@ -124,10 +144,55 @@ orders still not packed, so none is forgotten.
 
 ## Item stickers
 
-Printed from the item screen ("Print sticker", and offered after listing while Pack check is
-on) through AirPrint: a QR code holding `LISTORA:<SKU>`, the SKU, the shelf code, and the title,
-on a 2.25 × 1.25 in or 2.125 × 1 in label roll (Dymo, Rollo, Zebra, Munbyn, Brother) or a letter
-sheet of 30 (Avery 5160).
+A QR code holding `LISTORA:<SKU>`, the SKU, the shelf code, and the title, printed through
+AirPrint on a 2.25 × 1.25 in or 2.125 × 1 in label roll (Dymo, Rollo, Zebra, Munbyn, Brother) or
+a letter sheet of 30 (Avery 5160). Every item has a SKU (`inventory_item.sku` is required, and
+an import makes one like any new item), so every item has a sticker. It prints from:
+
+- **The item's screen**: "Print sticker", right under the item's name while Pack check is on
+  (below Money while it is off), and offered once just after listing while Pack check is on.
+- **Pack orders**: "Print sticker" (or "Print 3 stickers") under each order, for its items.
+- **With the order's label** ([Printing the label](#printing-the-label)).
+
+## Printing the label
+
+Under each order in Pack orders, "Print label and stickers" prints the order's shipping label
+and a sticker for each of its items in one AirPrint job: the label's own pages, then the
+stickers (2.25 × 1.25 in, up to four, with cut lines) on pages of the label's size, so a label
+printer prints both on the same roll (`LabelPrintJob`). The label and the stickers that come out
+together are always the same order's.
+
+- **Where the label comes from.** The marketplace's own file, which the label read records when
+  the order's page names it (`sale_label.label_file_url`, `PackLabel.fileUrl`). The phone
+  downloads it through the seller's session there (`SessionLabelFiles`: a plain GET with the
+  session's cookies for that host, and Depop's web API bearer token, as the marketplace's own
+  page would), only over https to a host the session is for (plain http only to a local
+  stand-in in a Dev build), following no redirect elsewhere, at most 10 MB, and only a PDF. It
+  only reads a label that already exists: it never buys, makes, or changes one. The file shows
+  the buyer's name and address, so it never goes through Listora's server: the server never
+  fetches or keeps it, and a phone run's answers (which go to the server) never carry it, which
+  is why this download is the app's and not a phone runtime script.
+- **The duplicate-print guard.** After a print, the app records it (`recordLabelPrint`, with the
+  tracking number it printed, under a lock on the label, refused when the label changed since:
+  `409`); the order then shows `PackLabel.printed` ("Label printed 12 minutes ago"), and printing
+  the same label again asks first ("a second copy on another package ships one buyer two
+  packages"). A new label from the marketplace starts over. A print canceled in the print sheet
+  records nothing; one that printed but couldn't be recorded says so, with Try again (the same
+  idempotency key, so it counts once). A copy scanned on a second package is still stopped at
+  packing.
+- **Where Listora can't print it**, the order offers "Open label on Depop" instead: a plain link
+  to the order's page on the marketplace (`PackOrder.labelPageUrl`, `labelPageUrl`), where the
+  seller prints it there. So does a failed download (not linked on this iPhone, signed out, not a
+  PDF).
+
+Per marketplace (2026-10-30, not live-tested yet; the captain tests it on the test shops):
+
+| Marketplace | Prints in Listora                                                                                                                                                                                                                                                                                                 | Otherwise opens                                   |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Depop       | When the receipt's parcel names the label's file on Depop's own site (`label_url`, `shipping_label_url`, `label_pdf_url`, or a `label` / `shipping_label` object's `url`). No real receipt has shown which field Depop uses yet: until the live test confirms one, a receipt that names none opens Depop instead. | `depop.com/sellinghub/sold-items/`                |
+| Poshmark    | No: its label read is mapped from an empty sales page only, so where it offers the file is not known.                                                                                                                                                                                                             | The order, `poshmark.com/order/sales/<id>`        |
+| Mercari     | No: its order page makes the label when it is printed (`shippingLabelCreation`), so getting the file may not be only a read.                                                                                                                                                                                      | `mercari.com/transaction/order_status/<item id>/` |
+| eBay        | No: eBay sells its labels; buying one is not a read.                                                                                                                                                                                                                                                              | `ebay.com/sh/ord/details?orderid=<id>`            |
 
 ## Package photo
 
@@ -177,7 +242,10 @@ sheet, which needs no permission; the sticker screen says it shows the printers 
 
 Nothing needs a credential. The fake Depop site serves the receipts API in Depop's shape, with
 each purchase's one parcel and its label (`FakeDepopSite.sell(slug, soldAt, { trackingNumber,
-buyerFirstName }, { status })`, `sellBundle(lines, soldAt, shipping)`). The local stack's control
+buyerFirstName, labelFile }, { status })`, `sellBundle(lines, soldAt, shipping)`); with
+`labelFile` the parcel names its label's file (`label_url`), which the fake's web API serves as a
+4 × 6 in PDF to the seller's session. UI tests set `LISTORA_SCRIPTED_PRINTING=1`: the label is a
+test PDF and every print "prints" at once, with no print sheet. The local stack's control
 endpoint seeds two orders to pack with the double-print fixtures (`POST /pack/orders`), and the
 app's scanner reads `LISTORA_SCANNED_CODES` (codes separated by `|`) in UI tests. The
 scanned-label fixtures are in `@listora/pack-check/testing`.
@@ -198,8 +266,16 @@ scanned-label fixtures are in `@listora/pack-check/testing`.
 - `apps/api/src/pack-check/pack-check.int.test.ts` also: a history order listed only once its
   page says it waits to ship, refunded and shipped orders never listed, and a bundle packed once.
 - iPhone: `PackCheckFeatureTests` (sessions, the double print, the end-of-session summary, retries,
-  settings, stickers, slips, the photo's metadata) and `PackCheckUITests` (the whole flow on the
-  local stack with scanned-label fixtures).
+  settings, stickers, slips, the photo's metadata; and `LabelPrintTests`: the label and the
+  order's stickers in one job, asking before a second print, a failed download, a canceled
+  print, a print recorded once on a retry, the download's session, hosts, and answers) and
+  `PackCheckUITests` (the whole flow on the local stack with scanned-label fixtures; how it works,
+  each order's print actions, the label printed then asked about again, and the item screen's
+  sticker on its first screen).
+- Label printing on the server: `pack-check.int.test.ts` (the label's file and the order's page,
+  prints counted, a new label starting over, a stale or closed order refused, tenancy),
+  `label-reads/parsers.test.ts` (which parcel fields name the file, only on Depop's site), and
+  the Depop adapter and phone work tests (the read records the file and never downloads it).
 
 ## Data
 
@@ -216,6 +292,10 @@ Migration `20261027234658_pack_check`:
 
 Migration `20261028105844_pack_check_order_state`: `sale_label.order_state` (`to_ship`,
 `shipped`, `canceled`; null when the page doesn't say) and `label_expires_at`.
+
+Migration `20261030182456_pack_label_print`: `sale_label.label_file_url` (the label's file on
+the marketplace's site), and Listora's last print of the label: `printed_tracking_number`,
+`printed_at`, `print_count`.
 
 All of it is deleted with the account (the package photos with it); the photos also go when the
 seller removes them or unpacks the order, and 60 days after the sale shipped
@@ -237,3 +317,6 @@ the order ([privacy.md](privacy.md#retention)).
   list until the seller packs or ships it in Listora.
 - The label's expiry is recorded but not shown yet ("label expires Nov 24").
 - eBay's labels (its Fulfillment API) are not read; eBay orders are packed with the photo check.
+- Label printing is live-tested on the captain's test shops next: which receipt field holds
+  Depop's label file (a file on another host, such as a storage link, is not taken now), and
+  whether Poshmark's order page offers its file as a plain read.

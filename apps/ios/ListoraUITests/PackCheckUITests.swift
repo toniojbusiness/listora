@@ -74,7 +74,10 @@ final class PackCheckUITests: XCTestCase {
         XCTAssertTrue(print.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["labelPrint.contents"].label.contains(tee.sku))
         print.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["labelPrint.printed"].waitForExistence(timeout: 15), "not printed")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["labelPrint.printed"].waitForExistence(timeout: 15),
+            "not printed",
+        )
         app.buttons["labelPrint.done"].tap()
 
         // The same label again asks first.

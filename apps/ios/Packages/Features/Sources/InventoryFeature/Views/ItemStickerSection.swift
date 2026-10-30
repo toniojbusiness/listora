@@ -34,3 +34,27 @@ extension StickerRequest {
         self.init(sku: item.sku, title: item.details.title, locationCode: item.storageLocation?.code)
     }
 }
+
+/// "Mark as sold", for an item that is not sold yet.
+struct MarkSoldButton: View {
+    let item: Item
+    @Binding var request: MarkSoldRequest?
+
+    var body: some View {
+        if item.canBeMarkedSold {
+            Button("Mark as sold", systemImage: "dollarsign.circle") {
+                request = MarkSoldRequest(
+                    itemID: item.id,
+                    sku: item.sku,
+                    title: item.details.title,
+                    listPriceCents: item.details.listPrice?.amountCents,
+                    listedOn: item.listings
+                        .filter { $0.status.value1 == .active }
+                        .compactMap { $0.marketplace.value1?.rawValue },
+                )
+            }
+            .buttonStyle(.listoraSecondary)
+            .accessibilityIdentifier("item.markSold")
+        }
+    }
+}

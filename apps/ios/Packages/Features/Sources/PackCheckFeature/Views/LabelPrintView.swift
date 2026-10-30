@@ -124,12 +124,14 @@ struct LabelPrintView: View {
         }
     }
 
-    @ViewBuilder
     private var actions: some View {
         VStack(spacing: Spacing.sm) {
             if model.stage != .printed {
                 Button { Task { await model.print() } } label: {
-                    Label(model.printedBefore == nil ? "Print label and stickers" : "Print again", systemImage: "printer")
+                    Label(
+                        model.printedBefore == nil ? "Print label and stickers" : "Print again",
+                        systemImage: "printer",
+                    )
                 }
                 .buttonStyle(ListoraButtonStyle(.primary))
                 .disabled(model.isWorking || !Printer.isAvailable)
