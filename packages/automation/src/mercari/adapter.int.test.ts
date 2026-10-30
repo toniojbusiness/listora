@@ -478,6 +478,45 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     await expect(adapter.readListing(ref, ctx())).rejects.toThrow('element_missing');
   });
 
+  it('reads the page of only the listings Listora does not have: the ones it holds come from their rows', async () => {
+    const seller = await FakeMercariSite.start(0, { pageSize: 10 });
+    try {
+      const own = adapterOn(seller);
+      const held = ['Tee', 'Jeans'].map((title) => seller.seed({ title, priceCents: 2000 }));
+      const fresh = seller.seed({ title: 'Boots', priceCents: 3000, photos: ['front.jpg'] });
+      const itemReads = () =>
+        seller.requests.filter((request) => request.path.startsWith('/us/item/')).length;
+
+      const before = itemReads();
+      const page = await own.listListings(null, ctx(), held);
+      // One read of a listing's page, for the one Listora doesn't have yet.
+      expect(itemReads() - before).toBe(1);
+      expect(page.listings.map((listing) => listing.externalListingId).sort()).toEqual(
+        [...held, fresh].sort(),
+      );
+      expect(page.listings.find((listing) => listing.externalListingId === fresh)).toMatchObject({
+        title: 'Boots',
+        details: { photoUrls: [expect.stringContaining('front.jpg') as string] },
+      });
+      for (const id of held) {
+        // As its row shows it: for sale at its price, settled by its id.
+        expect(page.listings.find((listing) => listing.externalListingId === id)).toMatchObject({
+          found: true,
+          externalUrl: `${seller.url}/us/item/${id}/`,
+          status: 'active',
+          priceCents: 2000,
+          fromList: true,
+        });
+      }
+      // Without any held, every listing's page is read, as before.
+      const all = itemReads();
+      await own.listListings(null, ctx());
+      expect(itemReads() - all).toBe(3);
+    } finally {
+      await seller.close();
+    }
+  });
+
   it("reads the seller's listings for sale a page at a time, with what an import needs", async () => {
     const seller = await FakeMercariSite.start(0, { pageSize: 2 });
     try {

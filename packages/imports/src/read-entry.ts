@@ -35,6 +35,8 @@ const listedListingSchema = z.object({
     originalPriceCents: z.number().int().min(0).nullable().default(null),
     sku: z.string().nullable(),
   }),
+  // Read from the list alone, as one Listora already held (`ListedListing`).
+  fromList: z.boolean().default(false),
 });
 
 export function listedListing(stored: unknown): ListedListing | null {

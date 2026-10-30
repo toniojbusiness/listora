@@ -80,6 +80,8 @@ const listedListing = foundListing.extend({
     originalPriceCents: z.number().int().min(0).nullable().default(null),
     sku: z.string().min(1).max(64).nullable(),
   }),
+  // One Listora already held, read from the list alone (`ListedListing`).
+  fromList: z.literal(true).optional(),
 });
 
 const writeResult = z.discriminatedUnion('type', [

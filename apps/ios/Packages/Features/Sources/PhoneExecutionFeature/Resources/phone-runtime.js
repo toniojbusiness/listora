@@ -116,7 +116,7 @@
 			case "listings": {
 				const listings = scripts.listings;
 				if (listings === void 0) throw new Error("these scripts list no listings");
-				return listings(call.cursor, step);
+				return listings(call.cursor, step, new Set(call.held ?? []));
 			}
 			case "labels": {
 				const labels = scripts.labels;
@@ -6087,7 +6087,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 	const ANSWER_MS$1 = 45e3;
-	const LOOK_EVERY_MS$3 = 500;
+	const LOOK_EVERY_MS$3 = 150;
 	/**
 	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
 	* its options while closed and shows them through a style variable (`--display: block`), so
@@ -8139,7 +8139,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				}
 				return orders.map((order) => orderLabel(order, receipts, slugOf));
 			},
-			listings: async (cursor, step) => {
+			listings: async (cursor, step, held) => {
 				const shown = await step("read your listings for sale", { mutates: false }, async (page) => {
 					await onDepop(page, site);
 					return readOwnListings(page, site, "selling", cursor);
@@ -8148,6 +8148,14 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				for (const product of shown.products) {
 					if (product.state.status !== "active") continue;
 					const slug = product.state.externalListingId;
+					if (held.has(slug)) {
+						listings.push({
+							...product.state,
+							details: listingDetails$2(product.record, product.record, product.sku),
+							fromList: true
+						});
+						continue;
+					}
 					const own = await step("read a listing", { mutates: false }, (page) => readOwnProduct(page, site, slug));
 					if (own?.state.status !== "active") continue;
 					listings.push({
@@ -9263,7 +9271,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const SUBCATEGORIES_MS = 3e3;
 	/** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
 	const APPEAR_MS = 8e3;
-	const LOOK_EVERY_MS$2 = 500;
+	const LOOK_EVERY_MS$2 = 150;
 	/** How long the brand suggestions stay the same before Listora takes them as Mercari's answer. */
 	const BRAND_SETTLED_MS = 2e3;
 	/** How long an empty brand list gets to fill before the search counts as finding nothing. */
@@ -9302,7 +9310,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await page.fill(LISTING_FORM.description, withSkuLine(payload.description, sku));
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
 		await pickCategory(page, payload.category);
-		if (payload.imei || await appears$1(page, LISTING_FORM.imei, 1e3)) return "imei_required";
+		if (payload.imei || await page.exists(LISTING_FORM.imei)) return "imei_required";
 		await pickBrand(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM, `condition "${payload.condition.label}"`);
@@ -9536,7 +9544,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	const PAGE$6 = "edit page";
 	/** How long the edit page may take to draw its form, or to answer the toggle. */
 	const DRAW_MS = 25e3;
-	const LOOK_EVERY_MS$1 = 500;
+	const LOOK_EVERY_MS$1 = 150;
 	/**
 	* Opens the editor; `not_editable` when Mercari showed something else (a sold listing's page) or
 	* answered with an error (a listing it removed).
@@ -10239,12 +10247,16 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				}
 				return labels;
 			},
-			listings: async (cursor, step) => {
+			listings: async (cursor, step, held) => {
 				const number = cursor === null ? 1 : Number(cursor);
 				if (!Number.isSafeInteger(number) || number < 1) throw new Error(`a Mercari listings cursor is a page number, not ${String(cursor)}`);
 				const shown = await step("read your listings for sale", { mutates: false }, (page) => readListingsPage(page, site, "active", number));
 				const listings = [];
 				for (const row of shown.rows) {
+					if (held.has(row.id)) {
+						listings.push(heldListing(site, row));
+						continue;
+					}
 					const read = await step("read a listing", { mutates: false }, (page) => readItem(page, site, row.id));
 					if (!read.state.found || read.state.status !== "active") continue;
 					listings.push({
@@ -10257,6 +10269,37 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					next: shown.hasNext ? String(number + 1) : null
 				};
 			}
+		};
+	}
+	/**
+	* A listing Listora already has, as the active tab's row shows it: for sale, its title (empty in
+	* the mobile layout) and price, and nothing the row doesn't show. Its import entry settles by its
+	* id (`fromList`).
+	*/
+	function heldListing(site, row) {
+		return {
+			found: true,
+			externalListingId: row.id,
+			externalUrl: itemUrl(site, row.id),
+			status: "active",
+			title: row.title === "" ? null : row.title,
+			description: null,
+			priceCents: row.priceCents,
+			currency: "USD",
+			revision: null,
+			refreshedAt: null,
+			details: {
+				photoUrls: [],
+				brand: null,
+				size: null,
+				condition: null,
+				categoryRef: null,
+				categoryPath: [],
+				colors: [],
+				originalPriceCents: null,
+				sku: null
+			},
+			fromList: true
 		};
 	}
 
@@ -10595,7 +10638,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 	/** How long the cover-photo editor gets to open after the photos are picked. */
 	const EDITOR_OPENS_MS = 6e3;
-	const LOOK_EVERY_MS = 500;
+	const LOOK_EVERY_MS = 150;
 	/**
 	* Adds the photos in posting order; the first is the cover. Poshmark's cover-photo editor opens
 	* on them, and they are kept once its Apply confirms the cover as it is.
@@ -11281,6 +11324,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	function createPoshmarkScripts(options) {
 		const { site } = options;
 		const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
+		const newWaitMs = options.newWaitMs ?? NEW_WAIT_MS;
 		const skuOf = (listing) => listing.externalSku ?? listing.listingId;
 		const notListed = () => ({
 			type: "rejected",
@@ -11311,11 +11355,15 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				enough: (found) => found.filter(matches).length >= SKU_LOOKUP.candidates
 			});
 			const candidates = listings.filter(matches).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).slice(0, SKU_LOOKUP.candidates);
-			for (const [index, candidate] of candidates.entries()) if (await step(`check the SKU of candidate ${String(index + 1)}`, {
+			for (const [index, candidate] of candidates.entries()) if (await hasSku(step, candidate.id, sku, `check the SKU of candidate ${String(index + 1)}`)) return candidate.id;
+			return null;
+		}
+		/** Whether the listing's edit form, as heavy a page as the listing form, shows this SKU. */
+		function hasSku(step, id, sku, name) {
+			return step(name, {
 				mutates: false,
 				timeScale: 2
-			}, async (page) => await openForm(page, site.editListing(candidate.id)) && await privateSku(page) === sku)) return candidate.id;
-			return null;
+			}, async (page) => await openForm(page, site.editListing(id)) && await privateSku(page) === sku);
 		}
 		/** The logged-in seller's username (closets are addressed by it). */
 		function seller(step) {
@@ -11418,7 +11466,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					type: "applied",
 					externalListingId: id
 				};
-				if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
+				if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, newWaitMs));
 			}
 			return null;
 		}
@@ -11506,8 +11554,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const result = await save(step, "list");
 			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
 			try {
-				const listed = opened.id === null ? null : await newListing(step, opened.id);
-				if (listed !== null) return listed;
+				if (opened.id !== null) {
+					const listed = await newListing(step, opened.id);
+					if (listed !== null) return listed;
+					if (await hasSku(step, opened.id, sku, "check the SKU of the new listing")) return {
+						...result,
+						externalListingId: opened.id
+					};
+				}
 				const id = await findBySku(step, sku, payload.title, { search: false });
 				if (id !== null) return {
 					...result,

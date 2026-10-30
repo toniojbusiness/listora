@@ -72,7 +72,9 @@ const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 
 /** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 const ANSWER_MS = 45_000;
-const LOOK_EVERY_MS = 500;
+// A look only reads the page (no action, so no pacing): a short interval loses less time
+// after the element appears.
+const LOOK_EVERY_MS = 150;
 
 /**
  * One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps

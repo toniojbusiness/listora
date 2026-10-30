@@ -94,7 +94,9 @@ a phone's IMEI. Read 2026-10-27:
 - One category's form asks for a phone's IMEI: `Electronics > Cell phones & accessories > Cell
 phones & smartphones`. The sell check, sent for every phone, tablet, and wearable category, said
   no for all of them, but the form showed its IMEI field for that one once filled, so the
-  refresh keeps the categories seen on the form (`IMEI_SEEN_ON_FORM` in `refresh.ts`).
+  refresh keeps the categories seen on the form (`IMEI_SEEN_ON_FORM` in `refresh.ts`). The form
+  filling looks for the field once after the category (no wait: every other category lost a
+  second there) and again once the form is filled, where a late field still stops the create.
 
 Every listing's form has the same fields besides those: photos (1 to 12), title (up to 80
 characters), description (5 words to 1,000 characters), category, brand (required: one from
