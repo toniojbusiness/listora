@@ -1,3 +1,4 @@
+import Core
 import Foundation
 import ListoraAPI
 
@@ -15,6 +16,8 @@ enum VoiceChange: Equatable, Hashable, Sendable {
     case purchaseSource(String)
     /// The price to list it at, in cents.
     case listPrice(Int64)
+    /// One measurement ("pit to pit 21").
+    case measurement(ItemMeasurement)
 
     /// What the change is to; two changes to one target cannot both apply.
     enum Target: Hashable, Sendable {
@@ -22,6 +25,8 @@ enum VoiceChange: Equatable, Hashable, Sendable {
         case cost
         case purchaseSource
         case listPrice
+        /// The measurement by its canonical name.
+        case measurement(String)
     }
 
     var target: Target {
@@ -30,6 +35,7 @@ enum VoiceChange: Equatable, Hashable, Sendable {
         case .cost: .cost
         case .purchaseSource: .purchaseSource
         case .listPrice: .listPrice
+        case let .measurement(measurement): .measurement(measurement.name)
         }
     }
 
@@ -40,16 +46,18 @@ enum VoiceChange: Equatable, Hashable, Sendable {
         case .cost: "Paid"
         case .purchaseSource: "Bought at"
         case .listPrice: "Price"
+        case let .measurement(measurement): measurement.title
         }
     }
 
-    /// The new value as the chip shows it: "M", "+ Small stain on the left cuff", "$4.00".
+    /// The new value as the chip shows it: "M", "+ Small stain on the left cuff", "$4.00", `21"`.
     var valueText: String {
         switch self {
         case let .set(key, value): value.isEmpty ? "None" : key.display(value)
         case let .add(_, entry): "+ \(entry)"
         case let .cost(cents), let .listPrice(cents): Formatting.money(cents: cents)
         case let .purchaseSource(source): source
+        case let .measurement(measurement): measurement.valueText
         }
     }
 

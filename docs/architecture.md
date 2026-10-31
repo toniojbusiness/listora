@@ -557,6 +557,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/invites.md](features/invites.md)                         | Invite-based sign-up: invites, redemption, revoking, separate accounts                       |
 | [features/profile.md](features/profile.md)                         | Profile and settings: the avatar, names, the photo, diagnostics, the API                     |
 | [features/description-style.md](features/description-style.md)     | The seller's description style: Listora's default Depop style, their own                     |
+| [features/measurements.md](features/measurements.md)               | Garment measurements on the review (spoken or keypad), written into the Depop description    |
 | [features/infra.md](features/infra.md)                             | Hosting and deploys                                                                          |
 | [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                                      |
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                                 |

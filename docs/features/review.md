@@ -54,6 +54,9 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
   Every source label is the server's, shown as sent. Sold data bound to one
   marketplace (Depop Pricing Inspiration) is not shown here, since this is no listing context.
 - **Save** stores the price, the highest floor, and status `ready`, and shows the SKU.
+- **Measurements.** Pit to pit, length, waist, inseam, and rise, only those that fit the item's
+  category, on the in-app keypad or spoken; they go into the Depop description
+  ([measurements.md](measurements.md)).
 - **Voice and fast corrections.** Hold the mic and say what to change, touch and hold a detail
   for common values, or swipe to the next detail to check: [voice.md](voice.md).
 
