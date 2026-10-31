@@ -10,6 +10,7 @@ protocol ScanService: Sendable {
     func endSourcingRun(runID: String, idempotencyKey: String) async throws(APIFailure)
     /// The household's own sales for the offline call (`getSourcingKit`).
     func sourcingKit() async throws(APIFailure) -> SourcingKit
+    func saveScanComparison(scanID: String, comparisonID: String, answer: Data) async throws(APIFailure) -> ItemScan
 }
 
 extension UploadAPI: ScanService {}

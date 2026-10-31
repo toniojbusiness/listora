@@ -73,7 +73,11 @@ struct ScanRunModelTests {
         var kept: [Kept] = []
     }
 
-    private func makeRun(_ service: FakeScanService, saver: Saver = Saver()) -> ScanRunModel {
+    private func makeRun(
+        _ service: FakeScanService,
+        saver: Saver = Saver(),
+        comparisons: FakeComparisons? = nil,
+    ) -> ScanRunModel {
         ScanRunModel(
             service: service,
             tagReader: FakeTagReader(),
@@ -82,6 +86,8 @@ struct ScanRunModelTests {
                 saver.kept.append(Kept(photos: photos, scan: scan))
                 return "draft-\(saver.kept.count)"
             },
+            comparisons: comparisons,
+            comparing: comparisons == nil ? [] : ["depop"],
         )
     }
 
@@ -229,6 +235,64 @@ struct ScanRunModelTests {
         #expect(card.web?.models == "Models: 501, 517, 527")
         #expect(card.web?.resale == "Asks $30-$50 on poshmark.com, ebay.com")
         #expect(card.web?.label == "Web info - not sold listings")
+    }
+
+    @Test
+    func `warms the comparison pages, reads each comparison once, and the card takes it in`() async throws {
+        let service = FakeScanService()
+        let comparisons = FakeComparisons()
+        let run = makeRun(service, comparisons: comparisons)
+        #expect(comparisons.warmed == [["depop"]])
+        service.answer(scanJSON: comparedScanJSON(id: "scan-1", status: "checking"))
+        service.answerComparison(comparedScanJSON(id: "scan-1", status: "read"))
+        await run.shoot(capture())
+        #expect(run.current?.card?.comparisons.first?.status == .checking)
+        #expect(try await eventually { run.current?.card?.comparisons.first?.status == .read })
+        // The read the server handed out, as it is; the runtime's numbers back to the server.
+        #expect(comparisons.reads.count == 1)
+        #expect(comparisons.reads.first?.marketplace == "depop")
+        let query = comparisons.reads.first?.input["query"] as? [String: Any]
+        #expect(query?["words"] as? String == "levis 501 jeans")
+        let sent = try #require(service.comparisonsSent.first)
+        #expect(sent.scanID == "scan-1" && sent.readID == "read-1")
+        #expect(sent.answer["outcome"] as? String == "read")
+        let card = try #require(run.current?.card)
+        let depop = try #require(card.comparisons.first)
+        #expect(depop.label == "Depop: asking $15-$25, 6 like it for sale")
+        #expect(depop.askingLabel == "Asking prices - not sold listings")
+        #expect(depop.demand == "Sells for you, little competition")
+        // The asking signal shows with its row, not again among the signals.
+        #expect(card.signals.map(\.kind) == ["asking"])
+        #expect(card.listedSignals.isEmpty)
+        await run.end()
+        #expect(comparisons.cooled == 1)
+    }
+
+    @Test
+    func `answers a read the lane can't make as failed, and shows one whose answer never arrived`() async throws {
+        let service = FakeScanService()
+        let comparisons = FakeComparisons()
+        comparisons.answer = nil
+        let run = makeRun(service, comparisons: comparisons)
+        service.answer(scanJSON: comparedScanJSON(id: "scan-1", status: "checking"))
+        await run.shoot(capture())
+        #expect(try await eventually { !service.comparisonsSent.isEmpty })
+        #expect(service.comparisonsSent.first?.answer["outcome"] as? String == "failed")
+        // The server never answered (the fake's default): the card says so rather than "Checking".
+        #expect(try await eventually { run.current?.card?.comparisons.first?.status == .unavailable })
+        #expect(run.current?.card?.comparisons.first?.label == "Couldn't check Depop")
+    }
+
+    @Test
+    func `reads nothing where comparisons are off, and shows a paused marketplace in words`() async throws {
+        let service = FakeScanService()
+        let run = makeRun(service)
+        service.answer(scanJSON: comparedScanJSON(id: "scan-1", status: "checking"))
+        await run.shoot(capture())
+        #expect(service.comparisonsSent.isEmpty)
+        let paused = try ScanCard(decodeScan(comparedScanJSON(id: "scan-2", status: "paused")))
+        #expect(paused.comparisons.first?.status == .unavailable)
+        #expect(paused.comparisons.first?.label == "Depop prices paused today")
     }
 
     @Test

@@ -62,3 +62,22 @@ export {
   TREND_WINDOW_DAYS,
 } from './trend.ts';
 export type { SalesTrend, TrendDirection, TrendSource } from './trend.ts';
+export {
+  DEMAND_CROWDED_SUPPLY,
+  DEMAND_LOW_SUPPLY,
+  DEMAND_STRONG_OWN_SALES,
+  MARKET_DEMANDS,
+  MARKET_MATCH_LEVELS,
+  MIN_MARKET_MATCHES,
+  marketDemand,
+  marketStats,
+  withoutOutliers,
+} from './market.ts';
+export type {
+  MarketDemand,
+  MarketDemandRead,
+  MarketListing,
+  MarketMatchLevel,
+  MarketStats,
+  MarketTarget,
+} from './market.ts';

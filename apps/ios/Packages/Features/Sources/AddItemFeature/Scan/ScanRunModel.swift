@@ -63,6 +63,10 @@ final class ScanRunModel {
     /// A note said while the entry's first read was still running: read again once it lands.
     var notesAfterRead: [String: String] = [:]
     var isDraining = false
+    /// The marketplace comparison lane, where `market_comps` is on (docs/features/thrift-scan.md).
+    private(set) var comparisons: (any MarketComparisons)?
+    /// The comparison reads this run started, by id: each is read once.
+    var startedReads: Set<String> = []
 
     /// The longest the tag text reading may hold up a read; past it the read goes without.
     static let tagReadDeadline: Duration = .milliseconds(400)
@@ -97,12 +101,22 @@ final class ScanRunModel {
         tagReader: any TagReader,
         directory: URL,
         saveDraft: @escaping ScanDraftSaver,
+        comparisons: (any MarketComparisons)? = nil,
+        comparing marketplaces: [String] = [],
         now: @escaping () -> Date = Date.init,
     ) {
         self.init(
             dependencies: ScanRunDependencies(service: service, tagReader: tagReader, saveDraft: saveDraft, now: now),
             directory: directory,
         )
+        compare(with: comparisons, on: marketplaces)
+    }
+
+    /// Compares each read on these marketplaces from now on (where `market_comps` is on): their
+    /// pages load at once, while the seller walks to the bins.
+    func compare(with lane: (any MarketComparisons)?, on marketplaces: [String]) {
+        comparisons = marketplaces.isEmpty ? nil : lane
+        comparisons?.warmUp(marketplaces)
     }
 
     var service: any ScanService {

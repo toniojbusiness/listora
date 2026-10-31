@@ -3092,6 +3092,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/scans/{scanId}/comparisons/{comparisonId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scanId: components["parameters"]["ScanId"];
+                comparisonId: components["parameters"]["ComparisonId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer a marketplace comparison read
+         * @description The phone's answer to a scan's comparison it was asked to read (a `checking` entry of
+         *     `comparisons`, docs/features/thrift-scan.md, "Marketplace comparisons"): the counts and
+         *     quartiles of the listings like the item in the marketplace's public search, read logged
+         *     out, or why there are none. Answers the scan with the comparison in it and the call made
+         *     again. A check (`check`) pauses the marketplace's comparisons for the account for 24 hours,
+         *     and a request to slow down (`rate_limited`) for an hour; Listora never passes a check. An
+         *     answer to a comparison already answered changes nothing and answers the scan as it is.
+         *     `404` where the thrift scan or the marketplace's comparisons are not on for the account,
+         *     or for another account's scan.
+         */
+        put: operations["saveScanComparison"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6781,10 +6812,11 @@ export interface components {
          *     buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
          *     offer from Listora. `listing_import`: importing the seller's existing listings.
          *     `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
-         *     listing's details from Listora (`reviseListing`).
+         *     listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
+         *     comparisons from the marketplace's public search, read on the iPhone logged out.
          * @enum {string}
          */
-        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise";
+        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise" | "market_comps";
         MarketplaceFeatures: {
             marketplace: components["schemas"]["Marketplace"];
             /**
@@ -7024,6 +7056,12 @@ export interface components {
             /** @description The words a buyer would search to find items like it. */
             searchWords: string;
             /**
+             * @description Each marketplace's comparisons, in `KnownMarketplace` order, where they are on for the
+             *     account (`market_comps`): listings like the item in the marketplace's public search,
+             *     read on the seller's iPhone logged out. Absent where none are on.
+             */
+            comparisons?: components["schemas"]["ScanComparison"][];
+            /**
              * @description Searches the seller opens in their own browser to look at prices themselves, Depop
              *     first. Listora never fetches or reads these pages.
              */
@@ -7051,6 +7089,129 @@ export interface components {
             style?: string;
             /** @description How sure the AI is of the brand and item together. */
             confidence: components["schemas"]["Confidence"];
+        };
+        /**
+         * @description One marketplace's comparisons for the scanned item (docs/features/thrift-scan.md,
+         *     "Marketplace comparisons"): listings of the same brand and item type (and the model and size
+         *     where the scan read them) in the marketplace's public search, read on the seller's iPhone in
+         *     a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
+         *     asking prices (`asking`), always labeled so; the household's own sales (`ownSales`) are the
+         *     sold side. While `status` is `checking`, the phone reads `read` and answers it with
+         *     `saveScanComparison`.
+         */
+        ScanComparison: {
+            marketplace: components["schemas"]["Marketplace"];
+            status: components["schemas"]["ScanComparisonStatus"];
+            /**
+             * @description The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+             *     "Not enough similar listings on Depop", "Depop prices paused today", "Not checked: Depop
+             *     limit for this hour", "Couldn't check Depop".
+             */
+            label: string;
+            read?: components["schemas"]["ScanComparisonRead"];
+            asking?: components["schemas"]["ScanAskingPrices"];
+            /**
+             * Format: int32
+             * @description Listings for sale in the marketplace's search for the item, by its own count.
+             */
+            supply?: number;
+            demand?: components["schemas"]["ScanDemand"];
+            /** @description The numbers are a read of the same search from the last 24 hours. */
+            cached?: boolean;
+        };
+        /** @description A `KnownScanComparisonStatus`, or one added after this client was built (shown by `label`). */
+        ScanComparisonStatus: components["schemas"]["KnownScanComparisonStatus"];
+        /**
+         * @description `checking`: the phone reads it now (`read`). `read`: the numbers came in. `not_enough`: too
+         *     few similar listings to show, or nothing to search for (no brand or item type). `paused`:
+         *     the marketplace showed a check or asked to slow down, so its comparisons wait (for the day,
+         *     or an hour). `limit`: this hour's or day's reads are used up. `failed`: the read did not go
+         *     through.
+         * @enum {string}
+         */
+        KnownScanComparisonStatus: "checking" | "read" | "not_enough" | "paused" | "limit" | "failed";
+        /** @description What the phone reads, passed to the phone runtime's comparison reader as it is. */
+        ScanComparisonRead: {
+            id: components["schemas"]["Id"];
+            input: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description What similar listings for sale ask; never what anything sold for. */
+        ScanAskingPrices: {
+            /** Format: int32 */
+            count: number;
+            /** @description The low quartile of the asking prices. */
+            low: components["schemas"]["Money"];
+            median: components["schemas"]["Money"];
+            high: components["schemas"]["Money"];
+            /** @description Shown with them, always ("Asking prices - not sold listings"). */
+            label: string;
+        };
+        /**
+         * @description How the item sells against the competition: the household's own recent sales like it
+         *     against what the marketplace has for sale now. `label` only when the numbers say so.
+         */
+        ScanDemand: {
+            demand: components["schemas"]["ScanDemandKind"];
+            label?: string;
+            basedOn: string;
+        };
+        /** @description A `KnownScanDemandKind`, or one added after this client was built. */
+        ScanDemandKind: components["schemas"]["KnownScanDemandKind"];
+        /** @enum {string} */
+        KnownScanDemandKind: "strong" | "steady" | "crowded" | "unknown";
+        /**
+         * @description The phone's comparison read: numbers only, never a listing, a seller, or a photo.
+         *     `check`: the marketplace showed a bot check or CAPTCHA (never passed); `rate_limited`: it
+         *     asked to slow down; `failed`: the read did not go through.
+         */
+        ScanComparisonAnswer: {
+            outcome: components["schemas"]["ScanComparisonOutcome"];
+            stats?: components["schemas"]["ScanComparisonStats"];
+            /**
+             * Format: int32
+             * @description Listings for sale in the whole search, as the marketplace counts them.
+             */
+            forSaleTotal?: number;
+            /** Format: int32 */
+            ms: number;
+            /** @description Why a read did not go through, for the server's log; never page text. */
+            message?: string;
+        };
+        /** @description A `KnownScanComparisonOutcome`; requests hold to the known values. */
+        ScanComparisonOutcome: components["schemas"]["KnownScanComparisonOutcome"];
+        /** @enum {string} */
+        KnownScanComparisonOutcome: "read" | "check" | "rate_limited" | "failed";
+        ScanComparisonStats: {
+            /**
+             * @description How closely the counted listings match; absent when none matched.
+             * @enum {string}
+             */
+            level?: "model_and_size" | "model" | "type_and_size" | "type";
+            forSale?: components["schemas"]["ScanPriceQuartiles"];
+            sold?: components["schemas"]["ScanPriceQuartiles"];
+            read: {
+                /** Format: int32 */
+                sold: number;
+                /** Format: int32 */
+                forSale: number;
+            };
+        };
+        ScanPriceQuartiles: {
+            /** Format: int32 */
+            count: number;
+            /** Format: int32 */
+            lowCents: number;
+            /** Format: int32 */
+            medianCents: number;
+            /** Format: int32 */
+            highCents: number;
+            /**
+             * Format: int32
+             * @description How many days back the oldest sold one sold, where the marketplace dates them.
+             */
+            windowDays?: number;
         };
         /** @description The AI's guess of what a buyer would pay on Depop; never sold data. */
         ScanAiEstimate: {
@@ -7154,11 +7315,12 @@ export interface components {
          * @description `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
          *     are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
          *     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
-         *     `unsold`: the household already has items like it in inventory, not sold (it never moves
-         *     the call).
+         *     `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
+         *     household's recent sales against the marketplace's supply. `unsold`: the household already
+         *     has items like it in inventory, not sold (it never moves the call).
          * @enum {string}
          */
-        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style" | "unsold";
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style" | "asking" | "demand" | "unsold";
         /**
          * @description The item's original retail price, with where it came from: one model's price (`low` equals
          *     `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -7391,6 +7553,7 @@ export interface components {
         ImportId: components["schemas"]["Id"];
         QuestionId: components["schemas"]["Id"];
         ScanId: components["schemas"]["Id"];
+        ComparisonId: components["schemas"]["Id"];
     };
     requestBodies: never;
     headers: never;
@@ -7822,6 +7985,19 @@ export type ScanImageRole = components['schemas']['ScanImageRole'];
 export type KnownScanImageRole = components['schemas']['KnownScanImageRole'];
 export type ItemScan = components['schemas']['ItemScan'];
 export type ScanIdentity = components['schemas']['ScanIdentity'];
+export type ScanComparison = components['schemas']['ScanComparison'];
+export type ScanComparisonStatus = components['schemas']['ScanComparisonStatus'];
+export type KnownScanComparisonStatus = components['schemas']['KnownScanComparisonStatus'];
+export type ScanComparisonRead = components['schemas']['ScanComparisonRead'];
+export type ScanAskingPrices = components['schemas']['ScanAskingPrices'];
+export type ScanDemand = components['schemas']['ScanDemand'];
+export type ScanDemandKind = components['schemas']['ScanDemandKind'];
+export type KnownScanDemandKind = components['schemas']['KnownScanDemandKind'];
+export type ScanComparisonAnswer = components['schemas']['ScanComparisonAnswer'];
+export type ScanComparisonOutcome = components['schemas']['ScanComparisonOutcome'];
+export type KnownScanComparisonOutcome = components['schemas']['KnownScanComparisonOutcome'];
+export type ScanComparisonStats = components['schemas']['ScanComparisonStats'];
+export type ScanPriceQuartiles = components['schemas']['ScanPriceQuartiles'];
 export type ScanAiEstimate = components['schemas']['ScanAiEstimate'];
 export type ScanFlags = components['schemas']['ScanFlags'];
 export type ScanOwnSales = components['schemas']['ScanOwnSales'];
@@ -7886,6 +8062,7 @@ export type ParameterCallIndex = components['parameters']['CallIndex'];
 export type ParameterImportId = components['parameters']['ImportId'];
 export type ParameterQuestionId = components['parameters']['QuestionId'];
 export type ParameterScanId = components['parameters']['ScanId'];
+export type ParameterComparisonId = components['parameters']['ComparisonId'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -12264,6 +12441,36 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    saveScanComparison: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scanId: components["parameters"]["ScanId"];
+                comparisonId: components["parameters"]["ComparisonId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanComparisonAnswer"];
+            };
+        };
+        responses: {
+            /** @description The scan with the comparison. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemScan"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -12367,14 +12574,18 @@ export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
 export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];
-export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise"];
+export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise", "market_comps"];
 export const knownAppFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownAppFeature"]> = ["thrift_scan"];
 export const knownScanImageRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanImageRole"]> = ["item", "tag"];
+export const knownScanComparisonStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanComparisonStatus"]> = ["checking", "read", "not_enough", "paused", "limit", "failed"];
+export const knownScanDemandKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDemandKind"]> = ["strong", "steady", "crowded", "unknown"];
+export const knownScanComparisonOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanComparisonOutcome"]> = ["read", "check", "rate_limited", "failed"];
+export const scanComparisonStatsLevelValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ScanComparisonStats"]["level"]> = ["model_and_size", "model", "type_and_size", "type"];
 export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanCallKind"]> = ["buy", "your_call", "skip"];
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
-export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "unsold"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "asking", "demand", "unsold"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
 export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
 export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];

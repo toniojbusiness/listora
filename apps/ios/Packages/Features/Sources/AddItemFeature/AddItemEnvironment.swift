@@ -34,6 +34,9 @@ public final class AddItemEnvironment {
     /// What the app shows (docs/features/verified-features.md): Scan mode only once the thrift
     /// scan passed live, or in the owner's Test mode. Set by the app; without it, no Scan mode.
     public var features: MarketplaceFeatures?
+    /// The scan's marketplace comparisons, read on this iPhone logged out (the phone execution
+    /// feature's lane). Set by the app; without it, or where `market_comps` is off, none.
+    public var comparisons: (any MarketComparisons)?
 
     enum State {
         case ready(DraftStore, PhotoUploader)

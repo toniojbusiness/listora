@@ -21,6 +21,8 @@ public final class MarketplaceFeatures {
         case listingImport = "listing_import"
         case listingRefresh = "listing_refresh"
         case revise
+        /// The thrift scan's comparisons from the marketplace's public search, read logged out.
+        case marketComps = "market_comps"
     }
 
     /// A feature of Listora itself rather than of one marketplace (`KnownAppFeature`), held to the

@@ -26,6 +26,8 @@ struct ScanCard: Equatable, Sendable {
 
     /// What else the call weighed: "Retail about $98", with what it rests on.
     struct Signal: Equatable, Sendable {
+        /// `KnownScanSignalKind`'s raw value: `asking` and `demand` show with their comparison.
+        var kind: String = ""
         let label: String
         let basedOn: String
 
@@ -78,6 +80,8 @@ struct ScanCard: Equatable, Sendable {
     let signals: [Signal]
     /// The research, once it came in.
     let web: WebInfo?
+    /// Each marketplace's comparisons, Depop first.
+    var comparisons: [ScanComparisonLine]
 
     init(_ scan: ItemScan) {
         scanID = scan.id
@@ -123,8 +127,54 @@ struct ScanCard: Equatable, Sendable {
         links = scan.researchLinks.compactMap { link in URL(string: link.url).map { Link(label: link.label, url: $0) } }
         wantsTag = brand.isEmpty || identity.confidence < 0.6
         hasBrand = !brand.isEmpty
-        signals = scan.call.signals.map { Signal(label: $0.label, basedOn: $0.basedOn) }
+        signals = scan.call.signals.map(Self.signal)
         web = scan.research.map(Self.webInfo)
+        comparisons = (scan.comparisons ?? []).map(Self.comparison)
+    }
+
+    static func signal(_ signal: Components.Schemas.ScanSignal) -> Signal {
+        Signal(
+            kind: signal.kind.value1?.rawValue ?? signal.kind.value2 ?? "",
+            label: signal.label,
+            basedOn: signal.basedOn,
+        )
+    }
+
+    static func comparison(_ row: Components.Schemas.ScanComparison) -> ScanComparisonLine {
+        let status: ScanComparisonLine.Status = switch row.status.value1 {
+        case .checking?: .checking
+        case .read?: .read
+        case .notEnough?, .paused?, .limit?, .failed?, nil: .unavailable
+        }
+        return ScanComparisonLine(
+            marketplace: marketplaceName(row.marketplace),
+            status: status,
+            label: row.label,
+            askingLabel: row.asking?.label,
+            demand: row.demand?.label,
+            demandBasedOn: row.demand?.basedOn,
+        )
+    }
+
+    /// The signals the card lists on their own: asking prices and the demand show with their
+    /// marketplace's comparison row instead.
+    var listedSignals: [Signal] {
+        comparisons.isEmpty ? signals : signals.filter { $0.kind != "asking" && $0.kind != "demand" }
+    }
+
+    /// The card with a marketplace's read shown as not gone through (its answer never reached
+    /// Listora), so it never says "Checking..." for one that will not come.
+    func comparisonFailed(_ marketplace: String) -> ScanCard {
+        var card = self
+        let name = Self.marketplaceName(.init(value1: .init(rawValue: marketplace), value2: marketplace))
+        card.comparisons = comparisons.map { row in
+            guard row.marketplace == name, row.status == .checking else { return row }
+            return ScanComparisonLine(
+                marketplace: row.marketplace, status: .unavailable, label: "Couldn't check \(name)",
+                askingLabel: nil, demand: nil, demandBasedOn: nil,
+            )
+        }
+        return card
     }
 
     static func webInfo(_ research: Components.Schemas.ScanResearch) -> WebInfo {
@@ -210,4 +260,25 @@ struct ScanCard: Equatable, Sendable {
         case .preOwnedFair: "Pre-owned fair"
         }
     }
+}
+
+/// One marketplace's comparisons: listings like it in its public search, read logged out.
+/// Depop's are asking prices, always shown under their label; never sold prices.
+struct ScanComparisonLine: Equatable, Sendable {
+    enum Status: Equatable, Sendable {
+        case checking
+        case read
+        /// Not enough similar listings, a pause, a used-up limit, or a read that failed.
+        case unavailable
+    }
+
+    let marketplace: String
+    let status: Status
+    /// "Depop: asking $15-$25, 6 like it for sale", "Checking Depop...".
+    let label: String
+    /// "Asking prices - not sold listings", with numbers only.
+    let askingLabel: String?
+    /// "Sells for you, little competition", and what it rests on.
+    let demand: String?
+    let demandBasedOn: String?
 }

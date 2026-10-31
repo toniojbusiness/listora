@@ -15484,7 +15484,8 @@ extension Components {
         /// buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
         /// offer from Listora. `listing_import`: importing the seller's existing listings.
         /// `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
-        /// listing's details from Listora (`reviseListing`).
+        /// listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
+        /// comparisons from the marketplace's public search, read on the iPhone logged out.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownMarketplaceFeature`.
@@ -15496,6 +15497,7 @@ extension Components {
             case listingImport = "listing_import"
             case listingRefresh = "listing_refresh"
             case revise = "revise"
+            case marketComps = "market_comps"
         }
         /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures`.
         public struct MarketplaceFeatures: Codable, Hashable, Sendable {
@@ -16295,6 +16297,13 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ItemScan/searchWords`.
             public var searchWords: Swift.String
+            /// Each marketplace's comparisons, in `KnownMarketplace` order, where they are on for the
+            /// account (`market_comps`): listings like the item in the marketplace's public search,
+            /// read on the seller's iPhone logged out. Absent where none are on.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemScan/comparisons`.
+            public var comparisons: [Components.Schemas.ScanComparison]?
             /// Searches the seller opens in their own browser to look at prices themselves, Depop
             /// first. Listora never fetches or reads these pages.
             ///
@@ -16322,6 +16331,7 @@ extension Components {
             ///   - ownSales: The household's own sales of items like it, per marketplace in `KnownMarketplace`
             ///   - call:
             ///   - searchWords: The words a buyer would search to find items like it.
+            ///   - comparisons: Each marketplace's comparisons, in `KnownMarketplace` order, where they are on for the
             ///   - researchLinks: Searches the seller opens in their own browser to look at prices themselves, Depop
             ///   - decision:
             ///   - itemId: The item the scan was kept as.
@@ -16338,6 +16348,7 @@ extension Components {
                 ownSales: [Components.Schemas.ScanOwnSales],
                 call: Components.Schemas.ScanCall,
                 searchWords: Swift.String,
+                comparisons: [Components.Schemas.ScanComparison]? = nil,
                 researchLinks: [Components.Schemas.ResearchLink],
                 decision: Components.Schemas.ScanDecision,
                 itemId: Components.Schemas.Id? = nil
@@ -16354,6 +16365,7 @@ extension Components {
                 self.ownSales = ownSales
                 self.call = call
                 self.searchWords = searchWords
+                self.comparisons = comparisons
                 self.researchLinks = researchLinks
                 self.decision = decision
                 self.itemId = itemId
@@ -16371,6 +16383,7 @@ extension Components {
                 case ownSales
                 case call
                 case searchWords
+                case comparisons
                 case researchLinks
                 case decision
                 case itemId
@@ -16465,6 +16478,645 @@ extension Components {
                 case era
                 case style
                 case confidence
+            }
+        }
+        /// One marketplace's comparisons for the scanned item (docs/features/thrift-scan.md,
+        /// "Marketplace comparisons"): listings of the same brand and item type (and the model and size
+        /// where the scan read them) in the marketplace's public search, read on the seller's iPhone in
+        /// a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
+        /// asking prices (`asking`), always labeled so; the household's own sales (`ownSales`) are the
+        /// sold side. While `status` is `checking`, the phone reads `read` and answers it with
+        /// `saveScanComparison`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanComparison`.
+        public struct ScanComparison: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/status`.
+            public var status: Components.Schemas.ScanComparisonStatus
+            /// The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+            /// "Not enough similar listings on Depop", "Depop prices paused today", "Not checked: Depop
+            /// limit for this hour", "Couldn't check Depop".
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/read`.
+            public var read: Components.Schemas.ScanComparisonRead?
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/asking`.
+            public var asking: Components.Schemas.ScanAskingPrices?
+            /// Listings for sale in the marketplace's search for the item, by its own count.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/supply`.
+            public var supply: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/demand`.
+            public var demand: Components.Schemas.ScanDemand?
+            /// The numbers are a read of the same search from the last 24 hours.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/cached`.
+            public var cached: Swift.Bool?
+            /// Creates a new `ScanComparison`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - status:
+            ///   - label: The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+            ///   - read:
+            ///   - asking:
+            ///   - supply: Listings for sale in the marketplace's search for the item, by its own count.
+            ///   - demand:
+            ///   - cached: The numbers are a read of the same search from the last 24 hours.
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                status: Components.Schemas.ScanComparisonStatus,
+                label: Swift.String,
+                read: Components.Schemas.ScanComparisonRead? = nil,
+                asking: Components.Schemas.ScanAskingPrices? = nil,
+                supply: Swift.Int32? = nil,
+                demand: Components.Schemas.ScanDemand? = nil,
+                cached: Swift.Bool? = nil
+            ) {
+                self.marketplace = marketplace
+                self.status = status
+                self.label = label
+                self.read = read
+                self.asking = asking
+                self.supply = supply
+                self.demand = demand
+                self.cached = cached
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case status
+                case label
+                case read
+                case asking
+                case supply
+                case demand
+                case cached
+            }
+        }
+        /// A `KnownScanComparisonStatus`, or one added after this client was built (shown by `label`).
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanComparisonStatus`.
+        public struct ScanComparisonStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStatus/value1`.
+            public var value1: Components.Schemas.KnownScanComparisonStatus?
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanComparisonStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanComparisonStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `checking`: the phone reads it now (`read`). `read`: the numbers came in. `not_enough`: too
+        /// few similar listings to show, or nothing to search for (no brand or item type). `paused`:
+        /// the marketplace showed a check or asked to slow down, so its comparisons wait (for the day,
+        /// or an hour). `limit`: this hour's or day's reads are used up. `failed`: the read did not go
+        /// through.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanComparisonStatus`.
+        @frozen public enum KnownScanComparisonStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case checking = "checking"
+            case read = "read"
+            case notEnough = "not_enough"
+            case paused = "paused"
+            case limit = "limit"
+            case failed = "failed"
+        }
+        /// What the phone reads, passed to the phone runtime's comparison reader as it is.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanComparisonRead`.
+        public struct ScanComparisonRead: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonRead/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonRead/input`.
+            public struct InputPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                /// Creates a new `InputPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonRead/input`.
+            public var input: Components.Schemas.ScanComparisonRead.InputPayload
+            /// Creates a new `ScanComparisonRead`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - input:
+            public init(
+                id: Components.Schemas.Id,
+                input: Components.Schemas.ScanComparisonRead.InputPayload
+            ) {
+                self.id = id
+                self.input = input
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case input
+            }
+        }
+        /// What similar listings for sale ask; never what anything sold for.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanAskingPrices`.
+        public struct ScanAskingPrices: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanAskingPrices/count`.
+            public var count: Swift.Int32
+            /// The low quartile of the asking prices.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanAskingPrices/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanAskingPrices/median`.
+            public var median: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanAskingPrices/high`.
+            public var high: Components.Schemas.Money
+            /// Shown with them, always ("Asking prices - not sold listings").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanAskingPrices/label`.
+            public var label: Swift.String
+            /// Creates a new `ScanAskingPrices`.
+            ///
+            /// - Parameters:
+            ///   - count:
+            ///   - low: The low quartile of the asking prices.
+            ///   - median:
+            ///   - high:
+            ///   - label: Shown with them, always ("Asking prices - not sold listings").
+            public init(
+                count: Swift.Int32,
+                low: Components.Schemas.Money,
+                median: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                label: Swift.String
+            ) {
+                self.count = count
+                self.low = low
+                self.median = median
+                self.high = high
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case count
+                case low
+                case median
+                case high
+                case label
+            }
+        }
+        /// How the item sells against the competition: the household's own recent sales like it
+        /// against what the marketplace has for sale now. `label` only when the numbers say so.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanDemand`.
+        public struct ScanDemand: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanDemand/demand`.
+            public var demand: Components.Schemas.ScanDemandKind
+            /// - Remark: Generated from `#/components/schemas/ScanDemand/label`.
+            public var label: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ScanDemand/basedOn`.
+            public var basedOn: Swift.String
+            /// Creates a new `ScanDemand`.
+            ///
+            /// - Parameters:
+            ///   - demand:
+            ///   - label:
+            ///   - basedOn:
+            public init(
+                demand: Components.Schemas.ScanDemandKind,
+                label: Swift.String? = nil,
+                basedOn: Swift.String
+            ) {
+                self.demand = demand
+                self.label = label
+                self.basedOn = basedOn
+            }
+            public enum CodingKeys: String, CodingKey {
+                case demand
+                case label
+                case basedOn
+            }
+        }
+        /// A `KnownScanDemandKind`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanDemandKind`.
+        public struct ScanDemandKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanDemandKind/value1`.
+            public var value1: Components.Schemas.KnownScanDemandKind?
+            /// - Remark: Generated from `#/components/schemas/ScanDemandKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanDemandKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanDemandKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownScanDemandKind`.
+        @frozen public enum KnownScanDemandKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case strong = "strong"
+            case steady = "steady"
+            case crowded = "crowded"
+            case unknown = "unknown"
+        }
+        /// The phone's comparison read: numbers only, never a listing, a seller, or a photo.
+        /// `check`: the marketplace showed a bot check or CAPTCHA (never passed); `rate_limited`: it
+        /// asked to slow down; `failed`: the read did not go through.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer`.
+        public struct ScanComparisonAnswer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/outcome`.
+            public var outcome: Components.Schemas.ScanComparisonOutcome
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/stats`.
+            public var stats: Components.Schemas.ScanComparisonStats?
+            /// Listings for sale in the whole search, as the marketplace counts them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/forSaleTotal`.
+            public var forSaleTotal: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/ms`.
+            public var ms: Swift.Int32
+            /// Why a read did not go through, for the server's log; never page text.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/message`.
+            public var message: Swift.String?
+            /// Creates a new `ScanComparisonAnswer`.
+            ///
+            /// - Parameters:
+            ///   - outcome:
+            ///   - stats:
+            ///   - forSaleTotal: Listings for sale in the whole search, as the marketplace counts them.
+            ///   - ms:
+            ///   - message: Why a read did not go through, for the server's log; never page text.
+            public init(
+                outcome: Components.Schemas.ScanComparisonOutcome,
+                stats: Components.Schemas.ScanComparisonStats? = nil,
+                forSaleTotal: Swift.Int32? = nil,
+                ms: Swift.Int32,
+                message: Swift.String? = nil
+            ) {
+                self.outcome = outcome
+                self.stats = stats
+                self.forSaleTotal = forSaleTotal
+                self.ms = ms
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case outcome
+                case stats
+                case forSaleTotal
+                case ms
+                case message
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.outcome = try container.decode(
+                    Components.Schemas.ScanComparisonOutcome.self,
+                    forKey: .outcome
+                )
+                self.stats = try container.decodeIfPresent(
+                    Components.Schemas.ScanComparisonStats.self,
+                    forKey: .stats
+                )
+                self.forSaleTotal = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .forSaleTotal
+                )
+                self.ms = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .ms
+                )
+                self.message = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .message
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "outcome",
+                    "stats",
+                    "forSaleTotal",
+                    "ms",
+                    "message"
+                ])
+            }
+        }
+        /// A `KnownScanComparisonOutcome`; requests hold to the known values.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanComparisonOutcome`.
+        public struct ScanComparisonOutcome: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonOutcome/value1`.
+            public var value1: Components.Schemas.KnownScanComparisonOutcome?
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonOutcome/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanComparisonOutcome`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanComparisonOutcome? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownScanComparisonOutcome`.
+        @frozen public enum KnownScanComparisonOutcome: String, Codable, Hashable, Sendable, CaseIterable {
+            case read = "read"
+            case check = "check"
+            case rateLimited = "rate_limited"
+            case failed = "failed"
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanComparisonStats`.
+        public struct ScanComparisonStats: Codable, Hashable, Sendable {
+            /// How closely the counted listings match; absent when none matched.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/level`.
+            @frozen public enum LevelPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case modelAndSize = "model_and_size"
+                case model = "model"
+                case typeAndSize = "type_and_size"
+                case _type = "type"
+            }
+            /// How closely the counted listings match; absent when none matched.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/level`.
+            public var level: Components.Schemas.ScanComparisonStats.LevelPayload?
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/forSale`.
+            public var forSale: Components.Schemas.ScanPriceQuartiles?
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/sold`.
+            public var sold: Components.Schemas.ScanPriceQuartiles?
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/read`.
+            public struct ReadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/read/sold`.
+                public var sold: Swift.Int32
+                /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/read/forSale`.
+                public var forSale: Swift.Int32
+                /// Creates a new `ReadPayload`.
+                ///
+                /// - Parameters:
+                ///   - sold:
+                ///   - forSale:
+                public init(
+                    sold: Swift.Int32,
+                    forSale: Swift.Int32
+                ) {
+                    self.sold = sold
+                    self.forSale = forSale
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case sold
+                    case forSale
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.sold = try container.decode(
+                        Swift.Int32.self,
+                        forKey: .sold
+                    )
+                    self.forSale = try container.decode(
+                        Swift.Int32.self,
+                        forKey: .forSale
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "sold",
+                        "forSale"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonStats/read`.
+            public var read: Components.Schemas.ScanComparisonStats.ReadPayload
+            /// Creates a new `ScanComparisonStats`.
+            ///
+            /// - Parameters:
+            ///   - level: How closely the counted listings match; absent when none matched.
+            ///   - forSale:
+            ///   - sold:
+            ///   - read:
+            public init(
+                level: Components.Schemas.ScanComparisonStats.LevelPayload? = nil,
+                forSale: Components.Schemas.ScanPriceQuartiles? = nil,
+                sold: Components.Schemas.ScanPriceQuartiles? = nil,
+                read: Components.Schemas.ScanComparisonStats.ReadPayload
+            ) {
+                self.level = level
+                self.forSale = forSale
+                self.sold = sold
+                self.read = read
+            }
+            public enum CodingKeys: String, CodingKey {
+                case level
+                case forSale
+                case sold
+                case read
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.level = try container.decodeIfPresent(
+                    Components.Schemas.ScanComparisonStats.LevelPayload.self,
+                    forKey: .level
+                )
+                self.forSale = try container.decodeIfPresent(
+                    Components.Schemas.ScanPriceQuartiles.self,
+                    forKey: .forSale
+                )
+                self.sold = try container.decodeIfPresent(
+                    Components.Schemas.ScanPriceQuartiles.self,
+                    forKey: .sold
+                )
+                self.read = try container.decode(
+                    Components.Schemas.ScanComparisonStats.ReadPayload.self,
+                    forKey: .read
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "level",
+                    "forSale",
+                    "sold",
+                    "read"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanPriceQuartiles`.
+        public struct ScanPriceQuartiles: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanPriceQuartiles/count`.
+            public var count: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ScanPriceQuartiles/lowCents`.
+            public var lowCents: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ScanPriceQuartiles/medianCents`.
+            public var medianCents: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ScanPriceQuartiles/highCents`.
+            public var highCents: Swift.Int32
+            /// How many days back the oldest sold one sold, where the marketplace dates them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanPriceQuartiles/windowDays`.
+            public var windowDays: Swift.Int32?
+            /// Creates a new `ScanPriceQuartiles`.
+            ///
+            /// - Parameters:
+            ///   - count:
+            ///   - lowCents:
+            ///   - medianCents:
+            ///   - highCents:
+            ///   - windowDays: How many days back the oldest sold one sold, where the marketplace dates them.
+            public init(
+                count: Swift.Int32,
+                lowCents: Swift.Int32,
+                medianCents: Swift.Int32,
+                highCents: Swift.Int32,
+                windowDays: Swift.Int32? = nil
+            ) {
+                self.count = count
+                self.lowCents = lowCents
+                self.medianCents = medianCents
+                self.highCents = highCents
+                self.windowDays = windowDays
+            }
+            public enum CodingKeys: String, CodingKey {
+                case count
+                case lowCents
+                case medianCents
+                case highCents
+                case windowDays
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.count = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .count
+                )
+                self.lowCents = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .lowCents
+                )
+                self.medianCents = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .medianCents
+                )
+                self.highCents = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .highCents
+                )
+                self.windowDays = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .windowDays
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "count",
+                    "lowCents",
+                    "medianCents",
+                    "highCents",
+                    "windowDays"
+                ])
             }
         }
         /// The AI's guess of what a buyer would pay on Depop; never sold data.
@@ -17028,8 +17680,9 @@ extension Components {
         /// `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
         /// are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
         /// own sales of items like it coming faster or slower. `style`: the AI's read of the style.
-        /// `unsold`: the household already has items like it in inventory, not sold (it never moves
-        /// the call).
+        /// `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
+        /// household's recent sales against the marketplace's supply. `unsold`: the household already
+        /// has items like it in inventory, not sold (it never moves the call).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
@@ -17039,6 +17692,8 @@ extension Components {
             case webResale = "web_resale"
             case trend = "trend"
             case style = "style"
+            case asking = "asking"
+            case demand = "demand"
             case unsold = "unsold"
         }
         /// The item's original retail price, with where it came from: one model's price (`low` equals

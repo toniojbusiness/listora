@@ -21,7 +21,7 @@ struct ScanCardView: View {
             case let .read(card):
                 read(card)
             case let .failed(message, retryable):
-                failed(message, retryable: retryable)
+                ScanReadFailed(number: entry.number, message: message, retryable: retryable, onRetry: onRetry)
             case .waiting:
                 waiting
             }
@@ -87,21 +87,6 @@ struct ScanCardView: View {
         }
     }
 
-    private func failed(_ message: String, retryable: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Label("Couldn't read item \(entry.number)", systemImage: "exclamationmark.triangle.fill")
-                .font(Typography.headline)
-                .foregroundStyle(Palette.danger)
-            Text(message).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
-            if retryable {
-                Button("Retry", action: onRetry)
-                    .buttonStyle(.listora(.secondary, size: .compact))
-                    .accessibilityIdentifier("scan.retry")
-            }
-        }
-        .padding(.leading, Spacing.md)
-    }
-
     private func read(_ card: ScanCard) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
@@ -159,6 +144,9 @@ struct ScanCardView: View {
                 .font(Typography.footnote)
                 .accessibilityLabel(line.label + ", " + line.summary)
         }
+        ForEach(card.comparisons, id: \.marketplace) { comparison in
+            ComparisonLine(comparison: comparison)
+        }
         // Shown under its label whenever it is there, even when own sales lead the call.
         if let estimate = card.aiEstimate, let label = card.aiEstimateLabel, card.range != estimate {
             Text("\(estimate) · \(label)")
@@ -202,7 +190,7 @@ struct ScanCardView: View {
         case .none, .failed:
             EmptyView()
         }
-        ForEach(card.signals, id: \.label) { signal in
+        ForEach(card.listedSignals, id: \.label) { signal in
             Text("\(Text(signal.label).font(Typography.smallEmphasis)) · \(signal.shortBasedOn)")
                 .font(Typography.caption)
                 .foregroundStyle(Palette.textSecondary)
@@ -327,5 +315,58 @@ private struct ScanDuplicateWarning: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Looks like item \(earlier), already scanned")
             .accessibilityIdentifier("scan.duplicate")
+    }
+}
+
+/// One marketplace's comparisons on the card: what close matches ask there, always under the
+/// asking-prices label (never sold prices), and the demand; or why there are none, in words.
+private struct ComparisonLine: View {
+    let comparison: ScanComparisonLine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: Spacing.xxs) {
+                if comparison.status == .checking {
+                    BrandSpinner().controlSize(.mini)
+                }
+                Text(comparison.label)
+                    .font(Typography.footnote)
+                    .foregroundStyle(comparison.status == .read ? Palette.textPrimary : Palette.textSecondary)
+            }
+            if let asking = comparison.askingLabel {
+                Text(asking).font(Typography.caption).foregroundStyle(Palette.textSecondary)
+            }
+            if let demand = comparison.demand {
+                Text("\(Text(demand).font(Typography.smallEmphasis)) · \(comparison.demandBasedOn ?? "")")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("scan.comparison.\(comparison.marketplace.lowercased())")
+    }
+}
+
+/// A read that failed, with why and, when it may pass, Retry.
+private struct ScanReadFailed: View {
+    let number: Int
+    let message: String
+    let retryable: Bool
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Label("Couldn't read item \(number)", systemImage: "exclamationmark.triangle.fill")
+                .font(Typography.headline)
+                .foregroundStyle(Palette.danger)
+            Text(message).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+            if retryable {
+                Button("Retry", action: onRetry)
+                    .buttonStyle(.listora(.secondary, size: .compact))
+                    .accessibilityIdentifier("scan.retry")
+            }
+        }
+        .padding(.leading, Spacing.md)
     }
 }

@@ -119,6 +119,7 @@ public struct AppDependencies {
             dataDirectory, (apiClient, accessTokens), (interactionMeter, review), tagReader, launchOptions,
         )
         addItem.features = features
+        addItem.comparisons = phone.comparisons
         marketplaces = Self.makeMarketplaces(apiClient, accessTokens, phone)
         linkAccounts = Self.makeLinkAccounts(apiClient, phone, configuration)
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)

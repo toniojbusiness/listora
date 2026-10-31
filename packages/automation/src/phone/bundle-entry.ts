@@ -3,8 +3,15 @@
  * loads the bundle into a hidden web view of its own and calls `listoraPhone.run(input)` for each
  * call the server hands it; the runtime reaches the app back through the `listora` script
  * message handler, whose every message is answered (`WKScriptMessageHandlerWithReply`).
+ *
+ * The comparison lane (docs/features/thrift-scan.md, "Marketplace comparisons") runs in the same
+ * bundle, in controller pages of its own: `listoraPhone.compare(input)` reads a marketplace's
+ * public search for a scanned item and `listoraPhone.warmUp(input)` opens its search page, both
+ * on a page that holds no session.
  */
 import { isWriteCall } from '../adapter/script-call.ts';
+import { runComparison, warmUpComparisons, type WarmUpInput } from '../comps/run.ts';
+import { COMPARISON_VERSION, type ComparisonInput } from '../comps/types.ts';
 import type { HandOffAnswer, HostPageState, HostPhoto, PhoneHost } from './host.ts';
 import {
   PHONE_RUNTIME_VERSION,
@@ -74,7 +81,19 @@ async function run(input: PhoneCallInput): Promise<PhoneCallOutput> {
   }
 }
 
+/** One comparison read; its output is plain JSON for the app to hand the server. */
+async function compare(input: ComparisonInput): Promise<unknown> {
+  return JSON.parse(JSON.stringify(await runComparison(input, webkitHost()))) as unknown;
+}
+
+async function warmUp(input: WarmUpInput): Promise<unknown> {
+  return JSON.parse(JSON.stringify(await warmUpComparisons(input, webkitHost()))) as unknown;
+}
+
 (globalThis as Record<string, unknown>)['listoraPhone'] = {
   runtimeVersion: PHONE_RUNTIME_VERSION,
   run,
+  comparisonVersion: COMPARISON_VERSION,
+  compare,
+  warmUp,
 };

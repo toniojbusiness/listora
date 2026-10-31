@@ -32,12 +32,18 @@ final class ScanRuns {
         restore()
     }
 
-    /// The run going on, or a new one.
-    func startOrResume() -> ScanRunModel {
+    /// The run going on, or a new one, comparing on `marketplaces` through `comparisons` from now
+    /// on (where `market_comps` is on).
+    func startOrResume(
+        comparisons: (any MarketComparisons)? = nil,
+        comparing marketplaces: [String] = [],
+    ) -> ScanRunModel {
         if let current, !current.isEnded {
+            current.compare(with: comparisons, on: marketplaces)
             return current
         }
         let run = ScanRunModel(dependencies: dependencies, directory: directory)
+        run.compare(with: comparisons, on: marketplaces)
         current = run
         Task { await refresh() }
         return run

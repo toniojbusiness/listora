@@ -8,9 +8,17 @@ extension AddItemModel {
         scanRuns?.current
     }
 
+    /// The marketplaces with a comparison reader on this iPhone.
+    static let comparedMarketplaces = ["depop"]
+
     /// The run going on, or a new one.
-    func startScanRun() -> ScanRunModel? {
-        guard let run = scanRuns?.startOrResume() else { return nil }
+    func startScanRun(in environment: AddItemEnvironment) -> ScanRunModel? {
+        // Comparisons only where they passed live (or the owner's Test mode), Depop first.
+        let comparing = Self.comparedMarketplaces.filter {
+            environment.features?.shows(.marketComps, on: $0) == true
+        }
+        guard let run = scanRuns?.startOrResume(comparisons: environment.comparisons, comparing: comparing)
+        else { return nil }
         meter.begin(run.meterSession)
         return run
     }

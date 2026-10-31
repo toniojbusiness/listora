@@ -31,6 +31,8 @@ export const RECORDED_PAGES = [
   'sell-form',
   'sold',
   'offers',
+  /** A marketplace's public search, as a logged-out visitor sees it (comparisons). */
+  'search',
 ] as const;
 export type RecordedPage = (typeof RECORDED_PAGES)[number];
 

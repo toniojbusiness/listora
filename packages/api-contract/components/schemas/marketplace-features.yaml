@@ -14,8 +14,19 @@ KnownMarketplaceFeature:
     buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
     offer from Listora. `listing_import`: importing the seller's existing listings.
     `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
-    listing's details from Listora (`reviseListing`).
-  enum: [sales_history, sale_checks, offers, offer_answers, listing_import, listing_refresh, revise]
+    listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
+    comparisons from the marketplace's public search, read on the iPhone logged out.
+  enum:
+    [
+      sales_history,
+      sale_checks,
+      offers,
+      offer_answers,
+      listing_import,
+      listing_refresh,
+      revise,
+      market_comps,
+    ]
 MarketplaceFeatures:
   type: object
   required: [marketplace, features]

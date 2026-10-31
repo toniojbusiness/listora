@@ -253,7 +253,7 @@ struct DraftListView: View {
     private var scanActions: some View {
         if environment.isCameraAvailable {
             ScanActions(model: model) {
-                if let run = model.startScanRun() {
+                if let run = model.startScanRun(in: environment) {
                     camera = .scan(run)
                 }
             }

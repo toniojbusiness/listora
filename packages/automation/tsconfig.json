@@ -18,7 +18,8 @@
     { "path": "../pack-check" },
     { "path": "../pricing" },
     { "path": "../push" },
-    { "path": "../sales" }
+    { "path": "../sales" },
+    { "path": "../sourcing" }
   ],
   "exclude": ["src/*/recordings"]
 }

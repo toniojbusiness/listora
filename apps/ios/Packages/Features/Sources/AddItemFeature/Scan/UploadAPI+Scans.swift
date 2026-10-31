@@ -115,6 +115,39 @@ extension UploadAPI {
         }
     }
 
+    /// The phone's answer to a comparison read of the scan (the runtime's JSON); answers the scan
+    /// with the comparison in it and the call made again.
+    func saveScanComparison(scanID: String, comparisonID: String, answer: Data) async throws(APIFailure) -> ItemScan {
+        let decoded: Components.Schemas.ScanComparisonAnswer
+        do {
+            decoded = try JSONDecoder().decode(Components.Schemas.ScanComparisonAnswer.self, from: answer)
+        } catch {
+            // The runtime answered something the contract doesn't take: never sent as a read.
+            throw APIFailure(
+                statusCode: nil,
+                code: "invalid_comparison",
+                message: "Couldn't check prices on this item.",
+                retryable: false,
+            )
+        }
+        let output = try await call {
+            try await client.saveScanComparison(
+                path: .init(scanId: scanID, comparisonId: comparisonID),
+                body: .json(decoded),
+            )
+        }
+        switch output {
+        case let .ok(answer):
+            return try body { try answer.body.json }
+        case let .notFound(response):
+            throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response):
+            throw APIFailure(statusCode: 422, response: response)
+        case let .default(statusCode, response):
+            throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
     /// The kept scan's draft item: created now, or the one it was already kept as.
     func keepScan(scanID: String, idempotencyKey: String) async throws(APIFailure) -> (id: String, sku: String) {
         let output = try await call {

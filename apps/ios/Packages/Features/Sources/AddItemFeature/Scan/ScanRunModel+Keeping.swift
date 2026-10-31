@@ -137,6 +137,7 @@ extension ScanRunModel {
             task.cancel()
         }
         try? FileManager.default.removeItem(at: directory)
+        comparisons?.coolDown()
         do {
             try dependencies.queue?.deleteRun(id)
         } catch {
