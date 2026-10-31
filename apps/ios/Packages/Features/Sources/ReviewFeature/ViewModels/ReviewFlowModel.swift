@@ -60,17 +60,6 @@ final class ReviewFlowModel {
         var text: String
     }
 
-    struct SavedItem: Equatable {
-        let itemID: String
-        let sku: String
-        let title: String?
-        let price: String?
-        /// The interaction metric, when this flow measured the item.
-        let summary: InteractionSummary?
-        /// The bin it is in, when it is in one.
-        var bin: BinChoice?
-    }
-
     let request: ItemReviewRequest
     let service: any ReviewService
     let meter: InteractionMeter

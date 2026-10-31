@@ -89,3 +89,19 @@ extension BinRequest {
         )
     }
 }
+
+extension View {
+    /// The bin picker for `request` while it is set; `onDone` runs once the bin changed.
+    func binPickerSheet(
+        _ request: Binding<BinRequest?>,
+        picker: (@MainActor (BinRequest, @escaping @MainActor (BinChoice?) -> Void) -> AnyView)?,
+        onDone: @escaping @MainActor () -> Void,
+    ) -> some View {
+        sheet(item: request) { shown in
+            picker?(shown) { _ in
+                request.wrappedValue = nil
+                onDone()
+            }
+        }
+    }
+}

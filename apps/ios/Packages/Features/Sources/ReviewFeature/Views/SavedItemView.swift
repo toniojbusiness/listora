@@ -104,3 +104,17 @@ struct SavedItemView: View {
         .accessibilityIdentifier("saved.metric")
     }
 }
+
+extension ReviewFlowModel {
+    /// The item the saved screen shows: its SKU, title, price, and bin.
+    struct SavedItem: Equatable {
+        let itemID: String
+        let sku: String
+        let title: String?
+        let price: String?
+        /// The interaction metric, when this flow measured the item.
+        let summary: InteractionSummary?
+        /// The bin it is in, when it is in one.
+        var bin: BinChoice?
+    }
+}

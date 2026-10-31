@@ -231,7 +231,11 @@ struct BinDetailView: View {
                 action: .init("Try again", systemImage: "arrow.clockwise") { Task { await model.load() } },
             )
         case .gone:
-            EmptyStateView(systemImage: "archivebox", title: "Bin deleted", message: "Its items are still in your inventory.")
+            EmptyStateView(
+                systemImage: "archivebox",
+                title: "Bin deleted",
+                message: "Its items are still in your inventory.",
+            )
         case .loaded:
             if let detail = model.detail {
                 loaded(detail)
@@ -254,35 +258,19 @@ struct BinDetailView: View {
                     }
                 }
                 if let failure = model.failure {
-                    Banner("That didn't go through", message: failure, tone: .failed, onDismiss: { model.failure = nil })
+                    Banner(
+                        "That didn't go through",
+                        message: failure,
+                        tone: .failed,
+                        onDismiss: { model.failure = nil },
+                    )
                 }
                 Button("Print bin sticker", systemImage: "qrcode") {
                     printing = StickerRequest(binCode: detail.location.code, label: detail.location.label)
                 }
                 .buttonStyle(.listoraPrimary)
                 .accessibilityIdentifier("bin.printSticker")
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    SectionHeader(
-                        detail.location.itemCount == 1 ? "1 item" : "\(detail.location.itemCount) items",
-                        subtitle: "Sold items leave the bin.",
-                    )
-                    if detail.items.isEmpty {
-                        Text("Nothing in it yet. Scan this bin's sticker from an item's screen to put the item in.")
-                            .font(Typography.subheadline)
-                            .foregroundStyle(Palette.textSecondary)
-                            .cardStyle(.flat)
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(detail.items.enumerated()), id: \.element.itemId) { index, item in
-                                if index > 0 {
-                                    Divider().overlay(Palette.separator.color)
-                                }
-                                itemRow(item)
-                            }
-                        }
-                        .cardStyle(.flat, padding: 0)
-                    }
-                }
+                items(of: detail)
                 HStack(spacing: Spacing.sm) {
                     Button("Rename") { form = model.makeRenameForm() }
                         .buttonStyle(.listoraSecondary)
@@ -296,6 +284,31 @@ struct BinDetailView: View {
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func items(of detail: BinDetail) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            SectionHeader(
+                detail.location.itemCount == 1 ? "1 item" : "\(detail.location.itemCount) items",
+                subtitle: "Sold items leave the bin.",
+            )
+            if detail.items.isEmpty {
+                Text("Nothing in it yet. Scan this bin's sticker from an item's screen to put the item in.")
+                    .font(Typography.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+                    .cardStyle(.flat)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(detail.items.enumerated()), id: \.element.itemId) { index, item in
+                        if index > 0 {
+                            Divider().overlay(Palette.separator.color)
+                        }
+                        itemRow(item)
+                    }
+                }
+                .cardStyle(.flat, padding: 0)
+            }
         }
     }
 
@@ -318,122 +331,5 @@ struct BinDetailView: View {
                 .accessibilityIdentifier("bin.takeOut.\(item.sku)")
         }
         .padding(Spacing.sm)
-    }
-}
-
-/// Putting items in a bin: Scan bin sticker first (one hand, the phone over the bin), the bins
-/// to tap, a new bin, or taking the item out of its bin. Closes once Listora has the choice.
-struct BinPickerView: View {
-    let environment: PackCheckEnvironment
-    @State private var model: BinPickerModel
-    @State private var scanning = false
-    @State private var form: BinFormModel?
-    @Environment(\.dismiss) private var dismiss
-
-    init(
-        environment: PackCheckEnvironment,
-        request: BinRequest,
-        onDone: @escaping @MainActor (BinChoice?) -> Void,
-    ) {
-        self.environment = environment
-        _model = State(initialValue: BinPickerModel(request: request, service: environment.bins, onDone: onDone))
-    }
-
-    var body: some View {
-        NavigationStack {
-            content
-                .background(Palette.background)
-                .navigationTitle(model.title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }.disabled(model.isWorking)
-                    }
-                }
-        }
-        .sheet(isPresented: $scanning) {
-            CodeScannerView(target: .bin, source: environment.scanSource) { code in
-                Task { await model.scanned(code) }
-            }
-        }
-        .sheet(item: $form) { BinFormView(model: $0) }
-        .task { await model.load() }
-        .interactiveDismissDisabled(model.isWorking)
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch model.phase {
-        case .loading:
-            SkeletonList(count: 3, label: "Loading your bins")
-        case let .failed(message):
-            EmptyStateView(
-                systemImage: "archivebox",
-                tone: .failed,
-                title: "Bins unavailable",
-                message: message,
-                action: .init("Try again", systemImage: "arrow.clockwise") { Task { await model.load() } },
-            )
-        case .loaded:
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    Button("Scan bin sticker", systemImage: "qrcode.viewfinder") { scanning = true }
-                        .buttonStyle(.listoraPrimary)
-                        .disabled(model.isWorking)
-                        .accessibilityIdentifier("binPicker.scan")
-                    if let code = model.unknownCode {
-                        Banner(
-                            "No bin \(code) yet",
-                            message: "Make it, and the item goes in it.",
-                            tone: .actionNeeded,
-                            systemImage: "archivebox",
-                            action: .init("Make bin \(code)", identifier: "binPicker.makeScanned") {
-                                form = model.makeForm()
-                            },
-                            identifier: "binPicker.unknown",
-                        )
-                    }
-                    if let failure = model.failure {
-                        Banner("Not saved", message: failure, tone: .failed, identifier: "binPicker.failure")
-                    }
-                    if model.isWorking {
-                        ProgressView("Saving")
-                            .frame(maxWidth: .infinity)
-                    }
-                    if !model.bins.isEmpty {
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            SectionHeader("Your bins")
-                            VStack(spacing: 0) {
-                                ForEach(Array(model.bins.enumerated()), id: \.element.id) { index, bin in
-                                    if index > 0 {
-                                        Divider().overlay(Palette.separator.color)
-                                    }
-                                    Button { Task { await model.put(in: bin) } } label: {
-                                        BinRow(bin: bin, isCurrent: model.request.current?.id == bin.id)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(model.isWorking)
-                                    .accessibilityIdentifier("binPicker.bin.\(bin.code)")
-                                }
-                            }
-                            .cardStyle(.flat, padding: 0)
-                        }
-                    }
-                    Button("New bin \(model.nextCode)", systemImage: "plus") { form = model.makeForm() }
-                        .buttonStyle(.listoraSecondary)
-                        .disabled(model.isWorking)
-                        .accessibilityIdentifier("binPicker.new")
-                    if let current = model.request.current {
-                        Button("Take out of bin \(current.code)") { Task { await model.takeOut() } }
-                            .buttonStyle(.listora(.tertiary, size: .compact))
-                            .disabled(model.isWorking)
-                            .accessibilityIdentifier("binPicker.takeOut")
-                    }
-                }
-                .padding(Spacing.md)
-                .frame(maxWidth: Layout.readableWidth)
-                .frame(maxWidth: .infinity)
-            }
-        }
     }
 }

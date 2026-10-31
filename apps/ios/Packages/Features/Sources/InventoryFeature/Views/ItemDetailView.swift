@@ -76,12 +76,7 @@ struct ItemDetailView: View {
             .sheet(item: $printingSticker) { request in
                 environment.stickerScreen?(request)
             }
-            .sheet(item: $choosingBin) { request in
-                environment.binPicker?(request) { _ in
-                    choosingBin = nil
-                    Task { await model.refresh() }
-                }
-            }
+            .binPickerSheet($choosingBin, picker: environment.binPicker) { Task { await model.refresh() } }
             .sheet(
                 item: $markingSold,
                 onDismiss: { Task { await model.refresh() } },
@@ -225,10 +220,8 @@ struct ItemDetailView: View {
                 marketplaces(of: item)
                 MoneySection(item: item)
                 itemActions(for: item)
-                DetailsSection(
-                    item: item,
-                    chooseBin: environment.binPicker == nil ? nil : { choosingBin = BinRequest(item) },
-                ) { editingSize = true }
+                let chooseBin = environment.binPicker.map { _ in { choosingBin = BinRequest(item) } }
+                DetailsSection(item: item, chooseBin: chooseBin) { editingSize = true }
                 ActivityLink { showsActivity = true }
             }
             .padding(Spacing.md)

@@ -31,10 +31,13 @@ struct BinPutAwayView: View {
     private var content: some View {
         if let bin {
             HStack(spacing: Spacing.sm) {
-                Label(itemIDs.count == 1 ? "In bin \(bin.code)" : "All in bin \(bin.code)", systemImage: "archivebox.fill")
-                    .font(Typography.emphasis)
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityIdentifier("putAway.bin")
+                Label(
+                    itemIDs.count == 1 ? "In bin \(bin.code)" : "All in bin \(bin.code)",
+                    systemImage: "archivebox.fill",
+                )
+                .font(Typography.emphasis)
+                .foregroundStyle(Palette.textPrimary)
+                .accessibilityIdentifier("putAway.bin")
                 Spacer(minLength: Spacing.sm)
                 Button("Change") { request = BinRequest(itemIDs: itemIDs, current: bin) }
                     .buttonStyle(.listora(.tertiary, size: .compact))
