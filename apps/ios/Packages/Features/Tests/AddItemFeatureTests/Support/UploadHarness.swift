@@ -84,8 +84,11 @@ final class UploadHarness {
     }
 
     /// A draft kept from a thrift scan: its server item is the scan's.
-    func createScanDraft(scanID: String) throws -> DraftRecord {
-        try store.createDraft(photos: [(TestImages.prepared(seed: 7), .front)], scanID: scanID)
+    func createScanDraft(scanID: String, runID: String = "run-1") throws -> DraftRecord {
+        try store.createDraft(
+            photos: [(TestImages.prepared(seed: 7), .front)],
+            scan: DraftScanOrigin(scanID: scanID, runID: runID, title: "Acme blue shirt"),
+        )
     }
 
     func draft(_ id: String) throws -> Draft? {

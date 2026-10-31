@@ -103,6 +103,15 @@ final class DraftDatabase: Sendable {
                 table.add(column: "scanID", .text)
             }
         }
+        migrator.registerMigration("v5: scan drafts' runs and shots") { db in
+            try db.alter(table: DraftRecord.databaseTableName) { table in
+                table.add(column: "scanRunID", .text)
+                table.add(column: "scanTitle", .text)
+            }
+            try db.alter(table: DraftPhotoRecord.databaseTableName) { table in
+                table.add(column: "isScanShot", .boolean).notNull().defaults(to: false)
+            }
+        }
         return migrator
     }
 }

@@ -6,6 +6,7 @@ import Testing
 private typealias Schemas = Components.Schemas
 
 @Suite("Sale row thumbnail")
+@MainActor
 struct SaleThumbnailTests {
     @Test
     func `a sale row shows its sold item's thumbnail once it has one`() {

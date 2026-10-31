@@ -59,7 +59,7 @@ final class ScanRunModel {
 
     /// The ``InteractionMeter`` session of the run's camera.
     var meterSession: String {
-        "scan-\(id)"
+        KeptScanRun.meterSession(id)
     }
 
     var current: ScanEntry? {
@@ -315,7 +315,7 @@ extension ScanRunModel {
     /// from the scan in the background. The camera stays open.
     func keep(_ entryID: String) async {
         guard let entry = entries.first(where: { $0.id == entryID }), let scanID = entry.scanID,
-              entry.card != nil, entry.decision == .open || isKeepFailed(entry)
+              let card = entry.card, entry.decision == .open || isKeepFailed(entry)
         else { return }
         update(entryID) { $0.decision = .keeping }
         do {
@@ -324,7 +324,8 @@ extension ScanRunModel {
             if let tag = try await tagPhotos[entryID]?.value {
                 try shots.append((tag.preparedPhoto(), .tag))
             }
-            guard let draftID = await saveDraft(shots, scanID) else { throw ScanKeepError.notSaved }
+            let origin = DraftScanOrigin(scanID: scanID, runID: id, title: card.title)
+            guard let draftID = await saveDraft(shots, origin) else { throw ScanKeepError.notSaved }
             update(entryID) { $0.decision = .kept(draftID: draftID) }
             Haptics.play(.success)
         } catch {
