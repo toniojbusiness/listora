@@ -7778,6 +7778,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	function stem(word) {
 		return word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
 	}
+	/** Whether the words name the brand whose key is `key` ("Levi's 501" names Levi's). */
+	function namesBrand(text, key) {
+		return text.some((_, start) => brandKey$1(text.slice(start, start + 2).join(" ")) === key);
+	}
 	/** The listings of the item's brand and type, and whether each is its model and its size. */
 	function matched(listings, target) {
 		const brand = brandKey$1(target.brand);
@@ -7789,8 +7793,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const out = [];
 		for (const listing of listings) {
 			if (!Number.isSafeInteger(listing.priceCents) || listing.priceCents <= 0) continue;
-			if (brandKey$1(listing.brand) !== brand) continue;
 			const text = words(listing.text);
+			if (listing.brand === null ? !namesBrand(text, brand) : brandKey$1(listing.brand) !== brand) continue;
 			if (!(listing.productType !== null && types.size > 0 ? types.has(listing.productType) : text.some((word) => typeStems.has(stem(word))))) continue;
 			out.push({
 				listing,
@@ -7921,7 +7925,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* item's own, without shipping). Only those are read: never the seller (the slug names them),
 	* the photos, or the location.
 	*/
-	const PAGE$12 = "search";
+	const PAGE$13 = "search";
 	/** Statuses of a product that sold, as Depop names them (page-data.ts). */
 	const SOLD_STATUSES = /* @__PURE__ */ new Set([
 		"STATUS_SOLD",
@@ -7969,18 +7973,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readDepopSearch(page, site, words) {
 		if (!page.url().startsWith(`${site.origin}/`)) await page.goto(depopSearchPageUrl(site));
 		const answer = await page.apiGet(depopSearchApiUrl(site, words));
-		if (answer.status !== 200) throw changed$2(PAGE$12, `answered ${String(answer.status)}`);
+		if (answer.status !== 200) throw changed$2(PAGE$13, `answered ${String(answer.status)}`);
 		return depopSearchFromAnswer(answer.body);
 	}
 	/** The search's products and count, out of its API answer. */
 	function depopSearchFromAnswer(body) {
 		const read = searchAnswerSchema.safeParse(body);
-		if (!read.success) throw changed$2(PAGE$12, "answered with results Listora does not know");
+		if (!read.success) throw changed$2(PAGE$13, "answered with results Listora does not know");
 		const listings = [];
 		for (const entry of read.data.objects) {
 			const product = searchProductSchema.safeParse(entry);
-			if (!product.success) throw changed$2(PAGE$12, "shows a product Listora does not know");
-			const listing = listingOf(product.data);
+			if (!product.success) throw changed$2(PAGE$13, "shows a product Listora does not know");
+			const listing = listingOf$1(product.data);
 			if (listing !== null) listings.push(listing);
 		}
 		return {
@@ -7988,7 +7992,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			total: read.data.meta.total_count ?? null
 		};
 	}
-	function listingOf(product) {
+	function listingOf$1(product) {
 		if (product.pricing.currency_name !== "USD") return null;
 		const sold = SOLD_STATUSES.has(product.status);
 		if (!sold && !ON_SALE_STATUSES.has(product.status)) return null;
@@ -7997,7 +8001,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return {
 			priceCents,
 			sold,
-			brand: product.brand_name ?? null,
+			brand: product.brand_name ?? "",
 			productType: product.attributes?.product_type ?? null,
 			sizes: (product.sizes ?? []).map((size) => size.name),
 			text: product.description,
@@ -8052,6 +8056,310 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 
+// src/ebay/pages/common.ts
+/**
+	* What every eBay page module shares: absolute URLs on the site the adapter runs against (eBay,
+	* or the fake eBay site in development and tests), eBay's price and time formats, and the
+	* failure every page module throws for a page that is not as it expects.
+	*/
+	function absolute$1(site, path) {
+		return `${site.origin}${path}`;
+	}
+	/** A listing's page: the listing's `externalUrl`. */
+	function itemUrl$1(site, itemId) {
+		return absolute$1(site, EBAY_PATHS.item(itemId));
+	}
+	/**
+	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
+	* page has `selector`.
+	*/
+	async function expectElement$1(page, selector, pageName, what) {
+		if (!await page.exists(selector)) throw changed$1(pageName, `has no ${what} (${selector})`);
+	}
+	/** The failure for an eBay page that is not as the script expects. */
+	function changed$1(pageName, problem) {
+		return new PageChangedError(`eBay's ${pageName} ${problem}.`);
+	}
+	/** A US dollar price as eBay shows it (`US $45.00`, `$1,045.00`) in cents; `null` otherwise. */
+	function parsePrice$1(text) {
+		const match = /^(?:US\s*)?\$\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?$/.exec(text?.trim() ?? "");
+		if (match?.[1] === void 0) return null;
+		return Number(match[1].replaceAll(",", "")) * 100 + Number(match[2] ?? "0");
+	}
+	/** US time zones eBay shows times in (Pacific time on ebay.com), as offsets from UTC in hours. */
+	const ZONES = {
+		PST: -8,
+		PDT: -7,
+		MST: -7,
+		MDT: -6,
+		CST: -6,
+		CDT: -5,
+		EST: -5,
+		EDT: -4,
+		AKST: -9,
+		AKDT: -8,
+		HST: -10,
+		GMT: 0,
+		UTC: 0
+	};
+	const MONTHS$1 = [
+		"Jan",
+		"Feb",
+		"Mar",
+		"Apr",
+		"May",
+		"Jun",
+		"Jul",
+		"Aug",
+		"Sep",
+		"Oct",
+		"Nov",
+		"Dec"
+	];
+	/** eBay's time format: `Oct 25, 2026 09:12:45 PDT`, to the second. */
+	const EBAY_TIME = /\b([A-Z][a-z]{2}) (\d{1,2}), (\d{4}) (\d{2}):(\d{2}):(\d{2}) ([A-Z]{3,4})\b/;
+	/**
+	* The first time in eBay's format within `text` ("Last updated on Oct 25, 2026 09:12:45 PDT"),
+	* or `null` when it has none Listora can read.
+	*/
+	function ebayTimeIn(text) {
+		const match = EBAY_TIME.exec(text ?? "");
+		if (match === null) return null;
+		const [, month, day, year, hours, minutes, seconds, zone] = match;
+		const monthIndex = MONTHS$1.indexOf(month ?? "");
+		const offset = ZONES[zone ?? ""];
+		if (monthIndex === -1 || offset === void 0) return null;
+		const local = new Date(Date.UTC(Number(year), monthIndex, Number(day), Number(hours), Number(minutes), Number(seconds)));
+		if (local.getUTCMonth() !== monthIndex || local.getUTCDate() !== Number(day) || local.getUTCHours() !== Number(hours) || local.getUTCMinutes() !== Number(minutes) || local.getUTCSeconds() !== Number(seconds)) return null;
+		return /* @__PURE__ */ new Date(local.getTime() - offset * 36e5);
+	}
+
+// src/ebay/pages/search-page.ts
+	const PAGE$12 = "search results";
+	/**
+	* The results page, in eBay's current card layout (`s-card`) and its earlier one (`s-item`),
+	* which eBay still serves to some visitors.
+	*/
+	const EBAY_SEARCH_PAGE = {
+		results: "ul.srp-results",
+		count: ".srp-controls__count-heading",
+		/**
+		* One selector for every part read, so one read of their classes and one of their texts come
+		* back in the page's order and line up: each result, then its title, price, and caption, and
+		* the "Results matching fewer words" line between results.
+		*/
+		parts: [
+			"ul.srp-results > li.s-card",
+			"ul.srp-results > li.s-item",
+			"ul.srp-results > li.srp-river-answer",
+			"ul.srp-results > li .s-card__title",
+			"ul.srp-results > li .s-item__title",
+			"ul.srp-results > li .s-card__price",
+			"ul.srp-results > li .s-item__price",
+			"ul.srp-results > li .s-card__caption",
+			"ul.srp-results > li .s-item__caption",
+			"ul.srp-results > li .s-item__title--tagblock"
+		].join(", ")
+	};
+	/** The search's results page URL, as the page's own sold filter and sort make it. */
+	function ebaySearchUrl(site, words, kind) {
+		const query = new URLSearchParams({ _nkw: words.trim() });
+		if (kind === "sold") {
+			query.set("LH_Sold", "1");
+			query.set("LH_Complete", "1");
+			query.set("_sop", "13");
+		}
+		return absolute$1(site, `/sch/i.html?${query.toString()}`);
+	}
+	/** Loads the search's results page and reads it. */
+	async function readEbaySearch(page, site, words, kind) {
+		await page.goto(ebaySearchUrl(site, words, kind));
+		if (!await page.exists(EBAY_SEARCH_PAGE.results)) {
+			if (resultCount(await page.text(EBAY_SEARCH_PAGE.count)) === 0) return {
+				listings: [],
+				total: 0,
+				shown: 0
+			};
+			throw changed$1(PAGE$12, `has no results (${EBAY_SEARCH_PAGE.results})`);
+		}
+		const classes = await page.attributes(EBAY_SEARCH_PAGE.parts, "class");
+		const texts = await page.texts(EBAY_SEARCH_PAGE.parts);
+		if (classes.length !== texts.length) throw changed$1(PAGE$12, "changed while it was read");
+		const results = groupResults(classes, texts);
+		return {
+			listings: results.flatMap((result) => {
+				const listing = listingOf(result, kind);
+				return listing === null ? [] : [listing];
+			}),
+			total: resultCount(await page.text(EBAY_SEARCH_PAGE.count)),
+			shown: results.length
+		};
+	}
+	/**
+	* The page's parts, in its order, into results: each result's own title, first price, and
+	* captions, up to the "Results matching fewer words" line.
+	*/
+	function groupResults(classes, texts) {
+		const results = [];
+		for (const [index, names] of classes.entries()) {
+			const role = roleOf(names ?? "");
+			const text = texts[index] ?? "";
+			if (role === "fewer_words") break;
+			if (role === "result") {
+				results.push({
+					text,
+					title: null,
+					price: null,
+					captions: []
+				});
+				continue;
+			}
+			const current = results.at(-1);
+			if (current === void 0) continue;
+			if (role === "title") current.title ??= text;
+			else if (role === "price") current.price ??= text;
+			else if (role === "caption") current.captions.push(text);
+		}
+		return results;
+	}
+	function roleOf(classAttribute) {
+		const names = new Set(classAttribute.split(/\s+/));
+		if (names.has("srp-river-answer")) return [...names].some((name) => name.includes("REWRITE_START")) ? "fewer_words" : "other";
+		if (names.has("s-card") || names.has("s-item")) return "result";
+		if (names.has("s-card__title") || names.has("s-item__title")) return "title";
+		if (names.has("s-card__price") || names.has("s-item__price")) return "price";
+		if (names.has("s-card__caption") || names.has("s-item__caption") || names.has("s-item__title--tagblock")) return "caption";
+		return "other";
+	}
+	/** Words that make a result many items, or no item at all. */
+	const LOT = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	/** What eBay adds to a title for screen readers and new listings. */
+	const TITLE_NOISE = [/^new listing\s*/i, /\s*opens in a new window or tab\s*$/i];
+	/** eBay's placeholder result that is no listing. */
+	const PLACEHOLDER_TITLES = /* @__PURE__ */ new Set(["shop on ebay"]);
+	/** A result as a listing; `null` for one the comparisons must not count. */
+	function listingOf(result, kind) {
+		let title = (result.title ?? "").replace(/\s+/g, " ").trim();
+		for (const noise of TITLE_NOISE) title = title.replace(noise, "");
+		if (title === "" || PLACEHOLDER_TITLES.has(title.toLowerCase())) return null;
+		if (LOT.test(title)) return null;
+		const priceCents = parsePrice$1((result.price ?? "").replace(/\s+/g, " "));
+		if (priceCents === null) return null;
+		const sold = kind === "sold";
+		if (sold && /best offer accepted/i.test(result.text)) return null;
+		const at = sold ? soldDay(result.captions) : null;
+		if (sold && at === null) return null;
+		return {
+			priceCents,
+			sold,
+			brand: null,
+			productType: null,
+			sizes: titleSizes(title),
+			text: title,
+			at
+		};
+	}
+	const MONTHS = [
+		"Jan",
+		"Feb",
+		"Mar",
+		"Apr",
+		"May",
+		"Jun",
+		"Jul",
+		"Aug",
+		"Sep",
+		"Oct",
+		"Nov",
+		"Dec"
+	];
+	/** The day a sold result sold ("Sold  Oct 28, 2026"), at noon UTC; `null` when it shows none. */
+	function soldDay(captions) {
+		for (const caption of captions) {
+			const match = /\bSold\s+([A-Z][a-z]{2})\s+(\d{1,2}),\s+(\d{4})\b/.exec(caption);
+			if (match === null) continue;
+			const month = MONTHS.indexOf(match[1] ?? "");
+			const day = Number(match[2]);
+			if (month === -1) continue;
+			const date = new Date(Date.UTC(Number(match[3]), month, day, 12));
+			if (date.getUTCDate() === day) return date;
+		}
+		return null;
+	}
+	/** Letter sizes a title names without "size" before them (one-letter ones need it). */
+	const LETTER_SIZE = /\b(XXS|XS|XL|XXL|XXXL|[2-5]XL|small|medium|large|x-large|xx-large)\b/gi;
+	/**
+	* The sizes a title names: "Size 32", "Sz M", "W32 L30" and "32x30" (a waist and length, also
+	* as the waist alone), and letter sizes.
+	*/
+	function titleSizes(title) {
+		const sizes = /* @__PURE__ */ new Set();
+		for (const match of title.matchAll(/\b(?:size|sz)\.?\s*:?\s*([a-z0-9]+(?:[./][0-9]+)?)\b/gi)) if (match[1] !== void 0) sizes.add(match[1]);
+		for (const match of title.matchAll(/\bW\s?(\d{2})\s*(?:x\s*)?L\s?(\d{2})\b/gi)) sizes.add(`${match[1] ?? ""}x${match[2] ?? ""}`).add(match[1] ?? "");
+		for (const match of title.matchAll(/\b(\d{2})\s?[x×]\s?(\d{2})\b/gi)) sizes.add(`${match[1] ?? ""}x${match[2] ?? ""}`).add(match[1] ?? "");
+		for (const match of title.matchAll(LETTER_SIZE)) if (match[1] !== void 0) sizes.add(match[1]);
+		sizes.delete("");
+		return [...sizes];
+	}
+	/** The search's count of results ("1,234 results for ...", "1,000+ results"); null without. */
+	function resultCount(text) {
+		const match = /(\d{1,3}(?:,\d{3})+|\d+)\+?\s+results?\b/i.exec(text ?? "");
+		if (match?.[1] === void 0) return null;
+		return Number(match[1].replaceAll(",", ""));
+	}
+
+// src/comps/ebay.ts
+/**
+	* eBay's comparison reader (docs/features/thrift-scan.md, "eBay"): the item's public search on
+	* eBay, read in a web view that holds no session, twice: its sold listings (eBay shows a visitor
+	* those of about the last 90 days), the most recently sold first, and its listings for sale now.
+	* Both are matched to the item (the brand and the type in the title, then the model and the
+	* size) and reduced to counts and quartiles (`marketStats`), with each search's own count of
+	* results. Nothing in it signs in, watches, bids, or buys anything: it only loads the results
+	* pages any visitor's browser loads.
+	*/
+	/** eBay's site for comparison reads: its own origin only. */
+	function ebayComparisonSite(siteUrl) {
+		return { origin: new URL(siteUrl).origin };
+	}
+	/** The warm-up: eBay's home page, loaded once while the seller walks to the bins. */
+	function ebayWarmUpScript(siteUrl) {
+		const site = ebayComparisonSite(siteUrl);
+		return (step) => step("open eBay", { mutates: false }, async (page) => {
+			await page.goto(`${site.origin}/`);
+			return "warm";
+		});
+	}
+	/** One comparison read: the item's sold and for-sale searches, matched and counted. */
+	function ebayComparisonScript(siteUrl, query, now) {
+		const site = ebayComparisonSite(siteUrl);
+		return async (step) => {
+			const sold = await step("search eBay sold listings", { mutates: false }, (page) => readEbaySearch(page, site, query.words, "sold"));
+			const forSale = await step("search eBay listings for sale", { mutates: false }, (page) => readEbaySearch(page, site, query.words, "for_sale"));
+			return {
+				stats: marketStats([...sold.listings, ...forSale.listings], {
+					brand: query.brand,
+					productTypes: query.productTypes,
+					typeWords: query.typeWords,
+					model: query.model,
+					sizeLabel: query.sizeLabel
+				}, now),
+				forSaleTotal: forSale.total,
+				soldTotal: sold.total
+			};
+		};
+	}
+
+// src/comps/types.ts
+/** `MarketStats` as the phone sends them. */
+	function comparisonStats(stats) {
+		const { level, ...rest } = stats;
+		return level === null ? rest : {
+			...rest,
+			level
+		};
+	}
+
 // src/comps/run.ts
 /**
 	* Runs a comparison read on the phone (docs/features/thrift-scan.md, "Marketplace
@@ -8064,10 +8372,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* involved, so there is nothing of theirs to unblock).
 	*/
 	/** The marketplaces' sites the comparison lane reads; never configurable by a call. */
-	const SITES = { depop: "https://www.depop.com" };
+	const SITES = {
+		depop: "https://www.depop.com",
+		ebay: "https://www.ebay.com"
+	};
+	/** Each marketplace's read and warm-up. */
+	const READERS = {
+		depop: {
+			read: (siteUrl, input) => depopComparisonScript(siteUrl, input.query, new Date(input.now)),
+			warmUp: depopWarmUpScript
+		},
+		ebay: {
+			read: (siteUrl, input) => ebayComparisonScript(siteUrl, input.query, new Date(input.now)),
+			warmUp: ebayWarmUpScript
+		}
+	};
 	/**
 	* The marketplace's profile for a logged-out read: its own origins and checks, its site's
-	* origin as the only API it may read, and no cookie domains (a read never holds a cookie).
+	* origin as the only API it may read, no cookie domains (a read never holds a cookie), and the
+	* phone as where it runs (comparisons never run in the cloud).
 	*/
 	function comparisonProfile(marketplace, input, siteUrl = SITES[marketplace]) {
 		const builtIn = automationProfile(marketplace);
@@ -8079,7 +8402,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			apiOrigins: [origin],
 			cookieDomains: [],
 			pacing: input.pacing,
-			readOnlyPacing: input.pacing
+			readOnlyPacing: input.pacing,
+			runsOn: "phone",
+			cloudAllowed: false
 		};
 	}
 	/** Runs one comparison read; a failure of the runtime itself is reported as one, never thrown. */
@@ -8092,12 +8417,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			message: "this app reads another comparison version",
 			ms: ms()
 		};
+		const reader = Object.hasOwn(READERS, input.marketplace) ? READERS[input.marketplace] : null;
+		if (reader === null) return {
+			outcome: "failed",
+			message: "this app reads no such marketplace",
+			ms: ms()
+		};
 		const siteUrl = options.siteUrl ?? SITES[input.marketplace];
-		const result = await runRead(input, host, depopComparisonScript(siteUrl, input.query, new Date(input.now)), siteUrl, options);
+		const result = await runRead(input, host, reader.read(siteUrl, input), siteUrl, options);
 		if (result.ok) return {
 			outcome: "read",
-			stats: result.value.stats,
+			stats: comparisonStats(result.value.stats),
 			forSaleTotal: result.value.forSaleTotal,
+			...result.value.soldTotal === void 0 ? {} : { soldTotal: result.value.soldTotal },
 			ms: ms()
 		};
 		return {
@@ -8113,13 +8445,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const now = options.now ?? Date.now;
 		const started = now();
 		const ms = () => Math.max(0, Math.round(now() - started));
+		if (!Object.hasOwn(READERS, input.marketplace)) return {
+			outcome: "failed",
+			message: "this app reads no such marketplace",
+			ms: ms()
+		};
 		const siteUrl = options.siteUrl ?? SITES[input.marketplace];
 		const result = await runRead({
 			marketplace: input.marketplace,
 			pacing: input.pacing ?? automationProfile(input.marketplace).readOnlyPacing,
 			stepTimeoutMs: input.stepTimeoutMs ?? WARM_UP_STEP_MS,
 			callTimeoutMs: input.callTimeoutMs ?? WARM_UP_CALL_MS
-		}, host, depopWarmUpScript(siteUrl), siteUrl, options);
+		}, host, READERS[input.marketplace].warmUp(siteUrl), siteUrl, options);
 		return result.ok ? {
 			outcome: "warm",
 			ms: ms()
@@ -10439,84 +10776,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			type: "applied",
 			revision: read.state.revision
 		} : { type: "applied" };
-	}
-
-// src/ebay/pages/common.ts
-/**
-	* What every eBay page module shares: absolute URLs on the site the adapter runs against (eBay,
-	* or the fake eBay site in development and tests), eBay's price and time formats, and the
-	* failure every page module throws for a page that is not as it expects.
-	*/
-	function absolute$1(site, path) {
-		return `${site.origin}${path}`;
-	}
-	/** A listing's page: the listing's `externalUrl`. */
-	function itemUrl$1(site, itemId) {
-		return absolute$1(site, EBAY_PATHS.item(itemId));
-	}
-	/**
-	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
-	* page has `selector`.
-	*/
-	async function expectElement$1(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed$1(pageName, `has no ${what} (${selector})`);
-	}
-	/** The failure for an eBay page that is not as the script expects. */
-	function changed$1(pageName, problem) {
-		return new PageChangedError(`eBay's ${pageName} ${problem}.`);
-	}
-	/** A US dollar price as eBay shows it (`US $45.00`, `$1,045.00`) in cents; `null` otherwise. */
-	function parsePrice$1(text) {
-		const match = /^(?:US\s*)?\$\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?$/.exec(text?.trim() ?? "");
-		if (match?.[1] === void 0) return null;
-		return Number(match[1].replaceAll(",", "")) * 100 + Number(match[2] ?? "0");
-	}
-	/** US time zones eBay shows times in (Pacific time on ebay.com), as offsets from UTC in hours. */
-	const ZONES = {
-		PST: -8,
-		PDT: -7,
-		MST: -7,
-		MDT: -6,
-		CST: -6,
-		CDT: -5,
-		EST: -5,
-		EDT: -4,
-		AKST: -9,
-		AKDT: -8,
-		HST: -10,
-		GMT: 0,
-		UTC: 0
-	};
-	const MONTHS = [
-		"Jan",
-		"Feb",
-		"Mar",
-		"Apr",
-		"May",
-		"Jun",
-		"Jul",
-		"Aug",
-		"Sep",
-		"Oct",
-		"Nov",
-		"Dec"
-	];
-	/** eBay's time format: `Oct 25, 2026 09:12:45 PDT`, to the second. */
-	const EBAY_TIME = /\b([A-Z][a-z]{2}) (\d{1,2}), (\d{4}) (\d{2}):(\d{2}):(\d{2}) ([A-Z]{3,4})\b/;
-	/**
-	* The first time in eBay's format within `text` ("Last updated on Oct 25, 2026 09:12:45 PDT"),
-	* or `null` when it has none Listora can read.
-	*/
-	function ebayTimeIn(text) {
-		const match = EBAY_TIME.exec(text ?? "");
-		if (match === null) return null;
-		const [, month, day, year, hours, minutes, seconds, zone] = match;
-		const monthIndex = MONTHS.indexOf(month ?? "");
-		const offset = ZONES[zone ?? ""];
-		if (monthIndex === -1 || offset === void 0) return null;
-		const local = new Date(Date.UTC(Number(year), monthIndex, Number(day), Number(hours), Number(minutes), Number(seconds)));
-		if (local.getUTCMonth() !== monthIndex || local.getUTCDate() !== Number(day) || local.getUTCHours() !== Number(hours) || local.getUTCMinutes() !== Number(minutes) || local.getUTCSeconds() !== Number(seconds)) return null;
-		return /* @__PURE__ */ new Date(local.getTime() - offset * 36e5);
 	}
 
 // src/ebay/pages/active-listings-page.ts

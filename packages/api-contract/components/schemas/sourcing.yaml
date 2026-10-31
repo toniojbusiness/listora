@@ -383,8 +383,9 @@ ScanComparison:
     "Marketplace comparisons"): listings of the same brand and item type (and the model and size
     where the scan read them) in the marketplace's public search, read on the seller's iPhone in
     a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
-    asking prices (`asking`), always labeled so; the household's own sales (`ownSales`) are the
-    sold side. While `status` is `checking`, the phone reads `read` and answers it with
+    asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
+    the sold side; eBay shows its sold listings, so its row has what close matches sold for
+    (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
     `saveScanComparison`.
   required: [marketplace, status, label]
   properties:
@@ -396,13 +397,16 @@ ScanComparison:
       type: string
       maxLength: 120
       description: |
-        The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+        The row in words: "Depop: asking $25-$40, 12 like it for sale", "eBay: sold $18-$30, 9
+        like it in the last 14 days", "Checking Depop...",
         "Not enough similar listings on Depop", "Depop prices paused today", "Not checked: Depop
         limit for this hour", "Couldn't check Depop".
     read:
       $ref: '#/ScanComparisonRead'
     asking:
       $ref: '#/ScanAskingPrices'
+    sold:
+      $ref: '#/ScanSoldPrices'
     supply:
       type: integer
       format: int32
@@ -458,11 +462,40 @@ ScanAskingPrices:
       type: string
       maxLength: 80
       description: Shown with them, always ("Asking prices - not sold listings").
+ScanSoldPrices:
+  type: object
+  description: |
+    What similar listings sold for in a marketplace's public search (eBay's): other sellers'
+    real sales, never the household's own.
+  required: [count, low, median, high, label]
+  properties:
+    count:
+      type: integer
+      format: int32
+      minimum: 1
+    low:
+      $ref: './common.yaml#/Money'
+      description: The low quartile of the sold prices.
+    median:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+    windowDays:
+      type: integer
+      format: int32
+      minimum: 0
+      description: How many days back the oldest of them sold.
+    label:
+      type: string
+      maxLength: 80
+      description: Shown with them, always ("Sold listings on eBay").
 ScanDemand:
   type: object
   description: |
-    How the item sells against the competition: the household's own recent sales like it
-    against what the marketplace has for sale now. `label` only when the numbers say so.
+    How the item sells against the competition: on a marketplace that shows sold listings
+    (eBay), how many its search sold lately against how many it has for sale now; elsewhere the
+    household's own recent sales like it against what the marketplace has for sale now. `label`
+    only when the numbers say so.
   required: [demand, basedOn]
   properties:
     demand:
@@ -500,6 +533,13 @@ ScanComparisonAnswer:
       format: int32
       minimum: 0
       description: Listings for sale in the whole search, as the marketplace counts them.
+    soldTotal:
+      type: integer
+      format: int32
+      minimum: 0
+      description: |
+        Sold listings in the whole sold search, as the marketplace counts them, where it shows a
+        visitor sold listings (eBay's last 90 days).
     ms:
       type: integer
       format: int32
@@ -747,10 +787,12 @@ ScanBasis:
 KnownScanBasis:
   type: string
   description: |
-    `own_history`: the household's own sales like it. `web_info`: what web pages say such items
-    resell for (the research, with its sites), never a high-confidence call. `ai_estimate`: the
-    AI's estimate alone, never a high-confidence Buy. `none`: nothing to go on.
-  enum: [own_history, web_info, ai_estimate, none]
+    `own_history`: the household's own sales like it. `market_sold`: what close matches sold for
+    in a marketplace's public search (eBay's sold listings, `comparisons`), when the household's
+    own sales are too few. `web_info`: what web pages say such items resell for (the research,
+    with its sites), never a high-confidence call. `ai_estimate`: the AI's estimate alone, never
+    a high-confidence Buy. `none`: nothing to go on.
+  enum: [own_history, market_sold, web_info, ai_estimate, none]
 ScanDecision:
   description: A `KnownScanDecision`, or one added after this client was built.
   anyOf:
