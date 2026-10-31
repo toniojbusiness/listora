@@ -1,7 +1,8 @@
 /**
  * The scan's call (docs/features/thrift-scan.md): from the AI's read, the household's own sales
- * like the item and their trend, the retail price (off a tag, or from the web research), and
- * what the web says such items resell for. Made when the read lands, and again when the web
+ * like the item and their trend, the retail price (off a tag, or from the web research), what
+ * the web says such items resell for, and each marketplace's comparisons (eBay's sold listings
+ * among them). Made when the read lands, and again when the web
  * research comes in.
  */
 import type { ScanRetail, ScanTrend } from '@listora/api-contract';
@@ -24,7 +25,7 @@ import {
 
 import { recentObservedSales } from '../pricing/repository.ts';
 import { ownSales, ownSalesMarketplaces } from '../sourcing/repository.ts';
-import { marketInput, type StoredComparison } from './comparisons.ts';
+import { marketInputs, type StoredComparison } from './comparisons.ts';
 import type { Tenant } from '../tenancy.ts';
 import type { ScanCallDetail } from './repository.ts';
 import { callDetail } from './views.ts';
@@ -51,11 +52,8 @@ export async function assessScan(
           now,
         );
   const recentOwnSales = trend?.recentSales ?? 0;
-  // Depop first: the marketplace whose comparisons the call weighs.
-  const market = marketInput(
-    comparisons.find((comparison) => comparison.stats !== undefined),
-    recentOwnSales,
-  );
+  // Each marketplace's comparisons that came in, Depop first.
+  const markets = marketInputs(comparisons, recentOwnSales);
   const retail = retailOf(read, research);
   const fees = await payoutFees(db, tenant, history.payoutMarketplace, now);
   const settings = DEFAULT_SCAN_CALL_SETTINGS;
@@ -87,7 +85,7 @@ export async function assessScan(
     newWithTags: read.condition === 'new_with_tags',
     trend,
     style: read.style ?? undefined,
-    market,
+    markets,
   };
   const rule = scanCall(input, settings);
   return {

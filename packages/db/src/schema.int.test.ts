@@ -799,6 +799,7 @@ const COLUMNS = {
     'answered_at',
     'created_at',
     'updated_at',
+    'sold_total',
   ],
   item_batch: [
     'id',

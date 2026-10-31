@@ -34,6 +34,8 @@ const PRODUCT_TYPES: Readonly<
   Record<ComparisonMarketplace, (category: string, department: string | null) => string[]>
 > = {
   depop: (category, department) => depopProductTypes(category, department),
+  // eBay's results name no category: its listings are matched by their titles' words.
+  ebay: () => [],
 };
 
 /** The query for one marketplace, or `null` without a brand or an item type. */

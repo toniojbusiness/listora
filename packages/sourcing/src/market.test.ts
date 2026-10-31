@@ -112,6 +112,45 @@ describe('marketStats', () => {
   });
 });
 
+describe('marketStats on a marketplace whose results name no brand or type (eBay)', () => {
+  /** A result as eBay's search shows one: a title, a price, and the day it sold. */
+  const result = (text: string, overrides: Partial<MarketListing> = {}): MarketListing =>
+    listing({ brand: null, productType: null, sizes: [], text, ...overrides });
+  const words = { ...target, productTypes: [], typeWords: ['jeans', 'denim'], sizeLabel: null };
+
+  it('reads the brand and the type from the title, never the brand alone', () => {
+    const stats = marketStats(
+      [
+        result("Levi's 501 Original Fit Jeans Men's"),
+        result('LEVIS 501 jeans light wash'),
+        result('Vintage Levi 501 denim'),
+        result("Levi's trucker jacket"),
+        result('Wrangler jeans like Levis 501', { priceCents: 999 }),
+        result('Lee 501 style jeans'),
+      ],
+      words,
+      now,
+    );
+    // "Levi" is Levi's own key; the trucker jacket is not jeans; Lee is another brand. The
+    // Wrangler title names Levis too, and is counted: a title's words are all it has.
+    expect(stats).toMatchObject({ level: 'model', forSale: { count: 4 } });
+  });
+
+  it("never reads a brand from the words of a listing whose marketplace names it (Depop's)", () => {
+    const unbranded = Array.from({ length: 5 }, () =>
+      listing({ brand: '', text: "Levi's 501 style jeans" }),
+    );
+    expect(marketStats(unbranded, target, now).level).toBeNull();
+  });
+
+  it('dates the sold window from the oldest sold match', () => {
+    const sold = [3, 8, 14, 20, 30].map((days) =>
+      result("Levi's 501 jeans", { sold: true, at: daysAgo(days) }),
+    );
+    expect(marketStats(sold, words, now).sold).toMatchObject({ count: 5, windowDays: 30 });
+  });
+});
+
 describe('marketDemand', () => {
   it('reads the household pace against live supply', () => {
     expect(marketDemand(4, 30, 'Depop')).toEqual({

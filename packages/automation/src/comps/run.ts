@@ -9,6 +9,7 @@
  * involved, so there is nothing of theirs to unblock).
  */
 import { assertNever } from '@listora/shared';
+import type { MarketStats } from '@listora/sourcing/market';
 
 import { automationProfile, type AutomationProfile } from '../profiles.ts';
 import { BridgeBackend } from '../phone/backend.ts';
@@ -17,7 +18,9 @@ import { ScriptSession } from '../runner/script-session.ts';
 import type { Script, ScriptFailure, ScriptResult } from '../runner/types.ts';
 import { Pacing, type PacingOptions } from '../safety/pacing.ts';
 import { depopComparisonScript, depopWarmUpScript } from './depop.ts';
+import { ebayComparisonScript, ebayWarmUpScript } from './ebay.ts';
 import {
+  comparisonStats,
   COMPARISON_VERSION,
   type ComparisonInput,
   type ComparisonMarketplace,
@@ -27,6 +30,34 @@ import {
 /** The marketplaces' sites the comparison lane reads; never configurable by a call. */
 const SITES: Readonly<Record<ComparisonMarketplace, string>> = {
   depop: 'https://www.depop.com',
+  ebay: 'https://www.ebay.com',
+};
+
+/** What a read found, whichever marketplace read it. */
+interface Found {
+  readonly stats: MarketStats;
+  readonly forSaleTotal: number | null;
+  readonly soldTotal?: number | null;
+}
+
+/** Each marketplace's read and warm-up. */
+const READERS: Readonly<
+  Record<
+    ComparisonMarketplace,
+    {
+      readonly read: (siteUrl: string, input: ComparisonInput) => Script<Found>;
+      readonly warmUp: (siteUrl: string) => Script<string>;
+    }
+  >
+> = {
+  depop: {
+    read: (siteUrl, input) => depopComparisonScript(siteUrl, input.query, new Date(input.now)),
+    warmUp: depopWarmUpScript,
+  },
+  ebay: {
+    read: (siteUrl, input) => ebayComparisonScript(siteUrl, input.query, new Date(input.now)),
+    warmUp: ebayWarmUpScript,
+  },
 };
 
 export interface ComparisonRunOptions {
@@ -38,7 +69,8 @@ export interface ComparisonRunOptions {
 
 /**
  * The marketplace's profile for a logged-out read: its own origins and checks, its site's
- * origin as the only API it may read, and no cookie domains (a read never holds a cookie).
+ * origin as the only API it may read, no cookie domains (a read never holds a cookie), and the
+ * phone as where it runs (comparisons never run in the cloud).
  */
 export function comparisonProfile(
   marketplace: ComparisonMarketplace,
@@ -55,6 +87,8 @@ export function comparisonProfile(
     cookieDomains: [],
     pacing: input.pacing,
     readOnlyPacing: input.pacing,
+    runsOn: 'phone',
+    cloudAllowed: false,
   };
 }
 
@@ -70,19 +104,18 @@ export async function runComparison(
   if (input.version !== COMPARISON_VERSION) {
     return { outcome: 'failed', message: 'this app reads another comparison version', ms: ms() };
   }
+  const reader = Object.hasOwn(READERS, input.marketplace) ? READERS[input.marketplace] : null;
+  if (reader === null) {
+    return { outcome: 'failed', message: 'this app reads no such marketplace', ms: ms() };
+  }
   const siteUrl = options.siteUrl ?? SITES[input.marketplace];
-  const result = await runRead(
-    input,
-    host,
-    depopComparisonScript(siteUrl, input.query, new Date(input.now)),
-    siteUrl,
-    options,
-  );
+  const result = await runRead(input, host, reader.read(siteUrl, input), siteUrl, options);
   if (result.ok) {
     return {
       outcome: 'read',
-      stats: result.value.stats,
+      stats: comparisonStats(result.value.stats),
       forSaleTotal: result.value.forSaleTotal,
+      ...(result.value.soldTotal === undefined ? {} : { soldTotal: result.value.soldTotal }),
       ms: ms(),
     };
   }
@@ -110,6 +143,9 @@ export async function warmUpComparisons(
   const now = options.now ?? Date.now;
   const started = now();
   const ms = () => Math.max(0, Math.round(now() - started));
+  if (!Object.hasOwn(READERS, input.marketplace)) {
+    return { outcome: 'failed', message: 'this app reads no such marketplace', ms: ms() };
+  }
   const siteUrl = options.siteUrl ?? SITES[input.marketplace];
   const read = {
     marketplace: input.marketplace,
@@ -117,7 +153,13 @@ export async function warmUpComparisons(
     stepTimeoutMs: input.stepTimeoutMs ?? WARM_UP_STEP_MS,
     callTimeoutMs: input.callTimeoutMs ?? WARM_UP_CALL_MS,
   };
-  const result = await runRead(read, host, depopWarmUpScript(siteUrl), siteUrl, options);
+  const result = await runRead(
+    read,
+    host,
+    READERS[input.marketplace].warmUp(siteUrl),
+    siteUrl,
+    options,
+  );
   return result.ok
     ? { outcome: 'warm', ms: ms() }
     : { ...failureOutcome(result.failure), ms: ms() };

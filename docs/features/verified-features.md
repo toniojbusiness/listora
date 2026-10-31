@@ -135,6 +135,7 @@ write ran only on the captain's own accounts. Tristin's Depop shop was only ever
 | Poshmark    | `listing_import`               | Hidden: the only live run was on an empty closet                                                                                                      |
 | Poshmark    | answers, refresh               | Hidden: no live run                                                                                                                                   |
 | eBay        | every feature                  | Hidden: no eBay connection has run live                                                                                                               |
+| eBay        | `market_comps`                 | Hidden: the logged-out reader is tested on a recorded public search; its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))    |
 
 Listing actions, as they ran live (only revise is gated, see above):
 
