@@ -1,5 +1,6 @@
-/// What the Add Item flow hands to the batch's rapid review: the items of a batch the seller can
-/// review now, in haul order. The review feature implements the screens; Add Item only knows this
+/// What the Add Item flow hands to the batch's rapid review: the items of a batch (or of a thrift
+/// run's kept drafts) the seller can review now, in haul order. The review feature implements the screens; Add Item
+/// only knows this
 /// request and the events back, so neither imports the other.
 public struct BatchReviewRequest: Hashable, Sendable {
     public struct Item: Hashable, Sendable {
@@ -16,16 +17,26 @@ public struct BatchReviewRequest: Hashable, Sendable {
         }
     }
 
-    /// The server batch (`ItemBatch.id`).
+    /// Where the items come from, for the review's words.
+    public enum Source: Hashable, Sendable {
+        /// A haul shot as a batch (docs/features/batch.md).
+        case batch
+        /// The drafts a thrift run kept (docs/features/thrift-scan.md, "Upgrading drafts").
+        case scanRun
+    }
+
+    /// The server batch (`ItemBatch.id`), or the thrift run on this iPhone.
     public let batchID: String
     public let items: [Item]
+    public let source: Source
     /// The batch's own ``InteractionMeter`` session (capture, grouping, the batch screen), so the
     /// review's summary can show the whole batch's time.
     public let batchSessionID: String
 
-    public init(batchID: String, items: [Item], batchSessionID: String) {
+    public init(batchID: String, items: [Item], batchSessionID: String, source: Source = .batch) {
         self.batchID = batchID
         self.items = items
+        self.source = source
         self.batchSessionID = batchSessionID
     }
 }

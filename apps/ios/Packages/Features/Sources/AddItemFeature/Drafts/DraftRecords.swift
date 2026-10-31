@@ -56,6 +56,11 @@ struct DraftRecord: Codable, Equatable, Identifiable, Sendable, FetchableRecord,
     /// The thrift scan this draft was kept from (docs/features/thrift-scan.md): its server item is
     /// the scan's (`keepScan`, with `createItemKey` as the key), carrying what the scan read.
     var scanID: String?
+    /// The run on this iPhone the scan was kept in (``ScanRunModel/id``), so the run's drafts
+    /// can be shot and reviewed together, and the item the scan read ("Patagonia green fleece"),
+    /// shown until the server's details arrive.
+    var scanRunID: String?
+    var scanTitle: String?
 
     enum Columns {
         static let createdAt = Column(CodingKeys.createdAt)
@@ -65,6 +70,16 @@ struct DraftRecord: Codable, Equatable, Identifiable, Sendable, FetchableRecord,
     static func new(now: Date) -> DraftRecord {
         DraftRecord(id: UUID().uuidString.lowercased(), createdAt: now, createItemKey: UUID().uuidString.lowercased())
     }
+}
+
+/// The thrift scan a draft is kept from (docs/features/thrift-scan.md).
+struct DraftScanOrigin: Equatable, Sendable {
+    /// The server's scan (`ItemScan.id`): the draft's server item is its kept item.
+    let scanID: String
+    /// The run on this iPhone (``ScanRunModel/id``).
+    let runID: String
+    /// What the scan read, "Patagonia green fleece".
+    let title: String
 }
 
 /// How far a photo's upload has come.
@@ -140,6 +155,10 @@ struct DraftPhotoRecord: Codable, Equatable, Identifiable, Sendable, FetchableRe
     var tagReadState: TagReadState
     var tagReads: PhotoTagReadUpload?
     var createdAt: Date
+    /// A thrift scan's shot (the item in hand, or its tag close-up), not a listing photo: a
+    /// draft with only these "Needs photos", and they go once the real photos are taken unless
+    /// the seller keeps them.
+    var isScanShot = false
 
     var step: UploadStep = .session
     /// The `Idempotency-Key` of this photo's `createUploadSession`.

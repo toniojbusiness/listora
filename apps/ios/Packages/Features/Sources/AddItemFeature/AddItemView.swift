@@ -110,6 +110,10 @@ struct DraftListView: View {
                     environment.batchReviewDestination?(request) { event in
                         finishBatchReview(batchID, event)
                     }
+                case let .runReview(request):
+                    environment.batchReviewDestination?(request) { event in
+                        finishRunReview(event)
+                    }
                 }
             }
             .task { await model.observeDrafts() }
@@ -134,6 +138,8 @@ struct DraftListView: View {
                     .measuresInteraction(model.meter, session: BatchRecord.meterSession(batchID))
                 case let .scan(run):
                     ScanCamera(run: run, model: model, environment: environment) { camera = nil }
+                case let .runShoot(_, draftIDs):
+                    RunShootView(draftIDs: draftIDs, model: model, environment: environment) { camera = nil }
                 }
             }
             .alert("Couldn't save", isPresented: errorBinding) {
@@ -174,35 +180,21 @@ struct DraftListView: View {
                 .listRowBackground(Palette.surface.color)
                 .listSectionSeparatorTint(Palette.separator.color)
             }
-            if !model.drafts.isEmpty {
-                draftSection
+            ForEach(model.keptRuns) { run in
+                KeptRunSection(
+                    run: run,
+                    model: model,
+                    canShoot: environment.isCameraAvailable,
+                    onShoot: { camera = .runShoot(runID: run.id, draftIDs: run.needingPhotos.map(\.id)) },
+                    onReview: { path.append(.runReview($0)) },
+                )
+            }
+            let loose = model.looseDrafts
+            if !loose.isEmpty {
+                draftSection(loose)
             }
         }
         .scrollContentBackground(.hidden)
-    }
-
-    private var draftSection: some View {
-        Section {
-            ForEach(model.drafts) { draft in
-                NavigationLink(value: AddItemRoute.draft(draft.id)) {
-                    DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
-                }
-                .accessibilityIdentifier("draft.row")
-            }
-            .onDelete { offsets in
-                for index in offsets {
-                    model.deleteDraft(model.drafts[index].id)
-                }
-            }
-        } header: {
-            SectionHeader(
-                model.drafts.count == 1 ? "1 draft" : "\(model.drafts.count) drafts",
-                subtitle: "Saved on this iPhone. Uploads keep going in the background.",
-            )
-            .padding(.bottom, Spacing.xxs)
-        }
-        .listRowBackground(Palette.surface.color)
-        .listSectionSeparatorTint(Palette.separator.color)
     }
 
     @ViewBuilder
@@ -344,6 +336,13 @@ extension DraftListView {
     /// The items are created: back to the batch, which shows them uploading and analyzing.
     private func showBatch(_ batchID: String) {
         path = [.batch(batchID)]
+    }
+
+    private func finishRunReview(_ event: BatchReviewEvent) {
+        model.handleRunReview(event)
+        if event == .finished, case .runReview = path.last {
+            path.removeLast()
+        }
     }
 
     private func finishBatchReview(_ batchID: String, _ event: BatchReviewEvent) {

@@ -6,7 +6,9 @@ from the seller's own sales or the AI, and a call of **Buy**, **Your call**, or 
 confidence word. Built so far: the rules, the AI read, and a backtest on real sold items (plan
 milestone M0); the seller's own sales as real sold data (`own_history`, M1) on the item's
 price screen and in the sourcing kit (`GET /v1/sourcing/kit`); and the scan itself online
-(M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray. Scan mode is
+(M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray; and
+upgrading a run's kept drafts with real photos (M6): "Needs photos", Shoot this run, the full
+analysis with the scan's read as a hint, and the run's rapid review. Scan mode is
 hidden from sellers until it passes live (`thrift_scan`, [verified-features.md](verified-features.md)):
 only the owner's Test mode has it. Nothing in it reads or writes a marketplace.
 
@@ -27,7 +29,10 @@ Code:
   (below); `scanOwnHistory` in `@listora/sourcing` and `scanResearchLinks` and
   `scanLabelViolations` in `@listora/pricing`.
 - iPhone: `AddItemFeature/Scan` (the camera, the card, the tray, the run, the note, the
-  measurements); a kept scan is an ordinary draft whose server item `keepScan` creates.
+  measurements, and the kept run's section, guided shoot, and review); a kept scan is an
+  ordinary draft whose server item `keepScan` creates.
+- `packages/analysis/src/load-input.ts`: the full analysis of a kept item carries its scan's
+  read as a hint (`scanRead`, `scanReadHint`).
 
 ## The call
 
@@ -370,6 +375,65 @@ no-thinking setting for this one call), then streaming the identity first.
 
 **The phone needs a new app build** for Scan mode.
 
+## Upgrading drafts (M6)
+
+A kept scan's draft has only the scan's shot (and its tag close-up). Before it can be listed it
+needs its real photos; this is how a whole run gets them.
+
+### On the iPhone
+
+- **The list.** Add Item lists each run's kept drafts together under **Kept at the store** ("5
+  kept · 4 need photos"), in the order they were kept, newest run first. A draft is named by the
+  scan's read ("Acme Outfitters blue button-up shirt", its SKU underneath once the server has
+  one), and a draft whose only photos are the scan's shots is marked **Needs photos**
+  (`Draft.needsPhotos`). Today's `review_drafts` card opens this list, as before.
+- **Shoot this run** opens the guided camera (`CameraCaptureView`, front, back, tag, details) on
+  the run's drafts that need photos, one after another (`RunShootView`), with each one's scan
+  shot and name on screen ("3 of 23: Acme Outfitters blue button-up shirt"). Each item's
+  boundary is known, so there is no grouping step. **Done** saves the item's photos and moves to
+  the next; **Skip item** leaves it for later; closing the camera ends the shoot and keeps the
+  items already shot. Background cleanup is in the draft's editor, as for any draft.
+- **The scan shot goes** once the real photos are taken (`replaceScanShots`): the new photos come
+  first, and the scan's shots are deleted, on the server too by the upload queue, unless the
+  seller taps **Keep scan photo**, which keeps them after the new ones.
+- **Review N items** opens the batch's rapid review (`BatchReviewView`, [batch.md](batch.md)) on
+  the run's drafts whose real photos are all on the server, in the order kept; a draft still
+  uploading waits ("1 item uploading its photos, then ready to review"), so an analysis never
+  runs on half of an item's photos. Each page starts the item's analysis as the single-item
+  review does; approving saves the item and its draft on this iPhone is done. The summary says
+  "Run reviewed".
+- **Data** (GRDB migration "v5: scan drafts' runs and shots"): `draft.scanRunID` (the run on this
+  iPhone) and `draft.scanTitle` (the read's name), and `draftPhoto.isScanShot`. A scan kept
+  before this version has no run: it shows with the other drafts, still marked Needs photos.
+
+### The analysis
+
+The item's full analysis (the ordinary `item_analysis`, `ai_items` quota, about $0.0015) runs once
+on the real photos, with the read of the scan it was kept from sent as `scanRead` in the request
+(`loadAnalysisInput` reads `item_scan.read` of the kept scan). It is the identity only (brand,
+item, model or line, style number, era, material, category, department, size, condition, the
+read's confidence, and visible damage), never the scan's price guess, so the analysis prices from
+its own photos. The cached system prompt tells the model it is a quick read of one shot at the
+store: a hint to check, where the photos always win, as an escalation checks `firstAnalysis`.
+
+### Tests
+
+- `packages/analysis`: `prompt.test.ts` (the hint sent, without a price; none without a scan;
+  `scanReadHint` on partial and empty reads) and `job.int.test.ts` (a kept scan's read sent with
+  its item's analysis, and no other item's).
+- iPhone: `KeptRunTests.swift` (scan shots and Needs photos after a relaunch; the shoot's photos
+  first and the scan shots gone, or kept; the photo limit; a deleted draft; runs grouped and
+  ordered; only fully uploaded items reviewed; the words; the upload queue replacing the scan
+  shot on the server); `ScanTests.swift` (Keep records the run and the read's name);
+  `ThriftScanUITests.testAKeptScanIsShotWithRealPhotosThenReviewed` end to end on the local stack.
+
+**The phone needs a new app build** for M6. Live test: the captain lists a run's draft on
+`tonioreign`.
+
+**Follow-ups.** Start each draft's analysis in the background as soon as its real photos are on
+the server (today the review starts it, with the next page loaded ahead), and keep a run's
+drafts grouped by the server's run on a second device.
+
 ## The seller's own sales (M1)
 
 ### The sales that count
@@ -471,7 +535,8 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   above on cellular, then `thrift_scan` into `VERIFIED_APP_FEATURES` with its evidence.
 - **Later milestones:** comparisons on the phone (M3, gated on the captain's call), the run's
   place and checkout into a haul (M4), scanning with no signal and a run that survives a
-  relaunch (M5), and upgrading a run's drafts with real photos (M6).
+  relaunch (M5). Upgrading a run's drafts (M6) is built; its live test is the captain listing a
+  run's draft on `tonioreign`.
 
 ## Data
 

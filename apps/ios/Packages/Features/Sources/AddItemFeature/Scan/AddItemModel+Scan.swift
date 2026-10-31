@@ -12,7 +12,7 @@ extension AddItemModel {
             service: environment.scanService,
             tagReader: environment.tagReader,
             directory: environment.scanDirectory,
-            saveDraft: { [weak self] photos, scanID in await self?.saveScanDraft(photos, scanID: scanID) },
+            saveDraft: { [weak self] photos, scan in await self?.saveScanDraft(photos, scan: scan) },
         )
         meter.begin(run.meterSession)
         scanRun = run
@@ -21,10 +21,10 @@ extension AddItemModel {
 
     /// A kept scan's draft: saved on this iPhone at once, its server item created from the scan by
     /// the upload queue.
-    func saveScanDraft(_ photos: [(PreparedPhoto, PhotoRole)], scanID: String) async -> String? {
+    func saveScanDraft(_ photos: [(PreparedPhoto, PhotoRole)], scan: DraftScanOrigin) async -> String? {
         let store = store
         let result = await Task.detached(priority: .userInitiated) {
-            Result { try store.createDraft(photos: photos, scanID: scanID).id }
+            Result { try store.createDraft(photos: photos, scan: scan).id }
         }.value
         switch result {
         case let .success(id):

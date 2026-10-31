@@ -9,6 +9,12 @@ struct Draft: Equatable, Identifiable, Sendable {
     var id: String {
         record.id
     }
+
+    /// A draft kept from a thrift scan whose only photos are the scan's shots: it needs its real
+    /// photos (front, back, tag) before it can be listed.
+    var needsPhotos: Bool {
+        record.scanID != nil && !photos.isEmpty && photos.allSatisfy(\.isScanShot)
+    }
 }
 
 enum DraftStoreError: Error, Equatable {
@@ -88,13 +94,21 @@ final class DraftStore: Sendable {
     // MARK: Creating
 
     /// Saves a new draft with `photos` in order.
-    /// `scanID` is the thrift scan the draft is kept from: its server item is the scan's.
+    /// `scan` is the thrift scan the draft is kept from: its server item is the scan's, and its
+    /// photos are the scan's shots.
     @discardableResult
-    func createDraft(photos: [(PreparedPhoto, PhotoRole)], scanID: String? = nil) throws -> DraftRecord {
+    func createDraft(photos: [(PreparedPhoto, PhotoRole)], scan: DraftScanOrigin? = nil) throws -> DraftRecord {
         guard photos.count <= Self.maxPhotosPerDraft else { throw DraftStoreError.tooManyPhotos }
         var draft = DraftRecord.new(now: now())
-        draft.scanID = scanID
-        let records = try writeFiles(photos, draftID: draft.id, firstPosition: 0)
+        draft.scanID = scan?.scanID
+        draft.scanRunID = scan?.runID
+        draft.scanTitle = scan?.title
+        var records = try writeFiles(photos, draftID: draft.id, firstPosition: 0)
+        if scan != nil {
+            for index in records.indices {
+                records[index].isScanShot = true
+            }
+        }
         do {
             try writer.write { db in
                 try draft.insert(db)
@@ -216,7 +230,7 @@ final class DraftStore: Sendable {
 
     // MARK: Helpers
 
-    private func writeFiles(
+    func writeFiles(
         _ photos: [(PreparedPhoto, PhotoRole)],
         draftID: String,
         firstPosition: Int,
@@ -272,14 +286,14 @@ final class DraftStore: Sendable {
         try ServerDeletionRecord.photo(photo, serverItemID: itemID, now: now()).insert(db)
     }
 
-    private static func photos(of draftID: String, in db: Database) throws -> [DraftPhotoRecord] {
+    static func photos(of draftID: String, in db: Database) throws -> [DraftPhotoRecord] {
         try DraftPhotoRecord
             .filter(DraftPhotoRecord.Columns.draftID == draftID)
             .order(DraftPhotoRecord.Columns.position)
             .fetchAll(db)
     }
 
-    private static func renumber(_ photos: [DraftPhotoRecord], in db: Database) throws {
+    static func renumber(_ photos: [DraftPhotoRecord], in db: Database) throws {
         for (position, var photo) in photos.enumerated() where photo.position != position {
             photo.position = position
             try photo.update(db)

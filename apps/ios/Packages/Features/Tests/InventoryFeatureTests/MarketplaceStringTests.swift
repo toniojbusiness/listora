@@ -8,6 +8,7 @@ import Testing
 /// tied when the marketplace confirms the listing, and the string is cut when it confirms the
 /// listing ended, so the screen never shows a marketplace action as done before it is.
 @Suite("The item's marketplace string")
+@MainActor
 struct MarketplaceStringTests {
     private func row(_ status: Schemas.KnownListingStatus?) -> MarketplaceRowState {
         MarketplaceRowState(

@@ -9,6 +9,8 @@ import UIKit
 struct CameraCaptureView: View {
     /// Called with the kept shots and their roles; an empty list means the seller cancelled.
     let onFinish: @MainActor ([(PreparedPhoto, PhotoRole)]) async -> Void
+    /// What is being shot, above the step prompt: a kept scan's draft in a run's guided shoot.
+    private let header: AnyView?
 
     @State private var camera: any CameraSource
     @State private var guide: CaptureGuide
@@ -26,9 +28,11 @@ struct CameraCaptureView: View {
     init(
         camera: any CameraSource,
         capacity: Int = DraftStore.maxPhotosPerDraft,
+        header: AnyView? = nil,
         onFinish: @escaping @MainActor ([(PreparedPhoto, PhotoRole)]) async -> Void,
     ) {
         self.onFinish = onFinish
+        self.header = header
         _camera = State(initialValue: camera)
         _guide = State(initialValue: CaptureGuide(capacity: capacity))
     }
@@ -128,6 +132,9 @@ struct CameraCaptureView: View {
                 }
                 .disabled(guide.shots.isEmpty)
                 .accessibilityIdentifier("camera.done")
+            }
+            if let header {
+                header
             }
             CapturePrompt(step: guide.step, message: notice ?? instruction)
                 .accessibilityElement(children: .combine)

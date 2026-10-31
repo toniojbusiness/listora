@@ -9,6 +9,7 @@ import { AnalysisFailedError } from './analyze.ts';
 import { loadDescriptionStyle } from './description-style.ts';
 import {
   MAX_TAG_CROPS,
+  scanReadHint,
   selectAnalysisPhotos,
   type AnalysisInput,
   type AnalysisPhoto,
@@ -18,7 +19,8 @@ import type { AnalysisRow } from './repository.ts';
 /**
  * Loads what an analysis sends from the database and storage: the selected photos' `ai`
  * derivatives, a crop of the first `MAX_TAG_CROPS` tag photos from their `original`, the reads
- * the phone uploaded with each photo, and the seller's own description style. The item's photos
+ * the phone uploaded with each photo, the seller's own description style, and the read of the
+ * thrift scan the item was kept from, if it was (a hint to check). The item's photos
  * must still be the analyzed photo set; anything else fails the analysis with a reason the user
  * can act on.
  */
@@ -87,6 +89,7 @@ export async function loadAnalysisInput(
     }),
   );
   const style = await loadDescriptionStyle(db, analysis.account_id);
+  const scanRead = await loadScanRead(db, analysis);
   return {
     accountId: analysis.account_id,
     userId: analysis.requested_by_user_id,
@@ -94,7 +97,20 @@ export async function loadAnalysisInput(
     photoSetHash: analysis.photo_set_hash,
     photos,
     ...(style.depop === null ? {} : { depopStyle: style.depop }),
+    ...(scanRead === undefined ? {} : { scanRead }),
   };
+}
+
+/** The read of the scan the item was kept from (`item_scan.item_id`), if it was. */
+async function loadScanRead(db: DbExecutor, analysis: AnalysisRow) {
+  const scan = await db
+    .selectFrom('item_scan')
+    .select('read')
+    .where('account_id', '=', analysis.account_id)
+    .where('item_id', '=', analysis.item_id)
+    .where('decision', '=', 'kept')
+    .executeTakeFirst();
+  return scan === undefined ? undefined : scanReadHint(scan.read);
 }
 
 async function loadImage(storage: ObjectStorage, derivative: StoredDerivative): Promise<AiImage> {
