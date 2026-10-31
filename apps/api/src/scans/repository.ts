@@ -15,6 +15,7 @@ import type { ScanResearch, ThriftScan } from '@listora/analysis';
 import type { Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
+import type { StoredComparison } from './comparisons.ts';
 
 export type ItemScanRow = Selectable<ItemScanTable>;
 
@@ -24,6 +25,10 @@ export interface ScanCallDetail {
   readonly ownSales: readonly ScanOwnSales[];
   readonly trend?: ScanTrend;
   readonly retail?: ScanRetail;
+  /** Each marketplace's comparisons (comparisons.ts); absent where none are on. */
+  readonly comparisons?: readonly StoredComparison[];
+  /** The household's own sales like it in the last 90 days, which the demand weighs. */
+  readonly recentOwnSales?: number;
 }
 
 /** What `item_scan.research` holds: the web research the app asked for, and where it came from. */
@@ -205,4 +210,26 @@ export async function cacheResearch(
     .values({ account_id: tenant.accountId, kind: entry.kind, key: entry.key, ...values })
     .onConflict((conflict) => conflict.columns(['account_id', 'kind', 'key']).doUpdateSet(values))
     .execute();
+}
+
+/** The scan's call made again (with its comparisons), as the app shows it from now on. */
+export async function saveDetail(
+  db: DbExecutor,
+  tenant: Tenant,
+  scanId: string,
+  detail: ScanCallDetail,
+): Promise<ItemScanRow> {
+  const { call } = detail;
+  return db
+    .updateTable('item_scan')
+    .set({
+      call: call.call,
+      confidence: call.confidence,
+      basis: call.basis,
+      call_detail: jsonb(detail as unknown as JsonObject),
+    })
+    .where('account_id', '=', tenant.accountId)
+    .where('id', '=', scanId)
+    .returningAll()
+    .executeTakeFirstOrThrow();
 }

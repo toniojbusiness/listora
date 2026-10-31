@@ -339,6 +339,8 @@ paths:
     $ref: './paths/scans.yaml#/~1v1~1scans~1{scanId}~1keep'
   /v1/scans/{scanId}/research:
     $ref: './paths/scans.yaml#/~1v1~1scans~1{scanId}~1research'
+  /v1/scans/{scanId}/comparisons/{comparisonId}:
+    $ref: './paths/scans.yaml#/~1v1~1scans~1{scanId}~1comparisons~1{comparisonId}'
 
 components:
   securitySchemes:
@@ -398,6 +400,8 @@ components:
       $ref: './components/parameters.yaml#/QuestionId'
     ScanId:
       $ref: './components/parameters.yaml#/ScanId'
+    ComparisonId:
+      $ref: './components/parameters.yaml#/ComparisonId'
 
   responses:
     DefaultError:
@@ -1302,6 +1306,30 @@ components:
       $ref: './components/schemas/sourcing.yaml#/ItemScan'
     ScanIdentity:
       $ref: './components/schemas/sourcing.yaml#/ScanIdentity'
+    ScanComparison:
+      $ref: './components/schemas/sourcing.yaml#/ScanComparison'
+    ScanComparisonStatus:
+      $ref: './components/schemas/sourcing.yaml#/ScanComparisonStatus'
+    KnownScanComparisonStatus:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanComparisonStatus'
+    ScanComparisonRead:
+      $ref: './components/schemas/sourcing.yaml#/ScanComparisonRead'
+    ScanAskingPrices:
+      $ref: './components/schemas/sourcing.yaml#/ScanAskingPrices'
+    ScanDemand:
+      $ref: './components/schemas/sourcing.yaml#/ScanDemand'
+    ScanDemandKind:
+      $ref: './components/schemas/sourcing.yaml#/ScanDemandKind'
+    KnownScanDemandKind:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanDemandKind'
+    ScanComparisonAnswer:
+      $ref: './components/schemas/sourcing.yaml#/ScanComparisonAnswer'
+    KnownScanComparisonOutcome:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanComparisonOutcome'
+    ScanComparisonStats:
+      $ref: './components/schemas/sourcing.yaml#/ScanComparisonStats'
+    ScanPriceQuartiles:
+      $ref: './components/schemas/sourcing.yaml#/ScanPriceQuartiles'
     ScanAiEstimate:
       $ref: './components/schemas/sourcing.yaml#/ScanAiEstimate'
     ScanFlags:

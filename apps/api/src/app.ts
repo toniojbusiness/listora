@@ -78,6 +78,11 @@ export interface AppDependencies extends HealthDependencies {
   itemChanges?: KeyedSignals;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
+  /**
+   * Whether scans hand the iPhone marketplace comparison reads (`MARKET_COMPARISONS`); on by
+   * default, off for stacks whose app must never read a real marketplace (the UI tests).
+   */
+  marketComparisons?: boolean;
   /** The clock upload sessions expire by. */
   now?: () => Date;
   /**
@@ -171,6 +176,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     saleEmails: deps.saleEmails ?? { ingest: { driver: 'off' } },
     phone: deps.phone,
     itemChanges: deps.itemChanges,
+    marketComparisons: deps.marketComparisons ?? true,
     now,
   };
   // Each feature folder's routes (features.ts), so a new feature never edits this file.

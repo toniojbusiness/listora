@@ -11,6 +11,7 @@ import type { ScanCall as RuleCall, ScanOwnHistory } from '@listora/sourcing';
 import { assertNever } from '@listora/shared';
 
 import { ownHistoryLabel } from '../sourcing/own-history.ts';
+import { comparisonView } from './comparisons.ts';
 import type { ItemScanRow, ScanCallDetail, StoredResearch } from './repository.ts';
 
 const usd = (amountCents: number) => ({ amountCents, currency: 'USD' as const });
@@ -106,6 +107,13 @@ export function scanView(row: ItemScanRow): ItemScan {
     ...(detail.trend === undefined ? {} : { trend: detail.trend }),
     ...(research === undefined ? {} : { research }),
     ownSales: [...detail.ownSales],
+    ...(detail.comparisons === undefined || detail.comparisons.length === 0
+      ? {}
+      : {
+          comparisons: detail.comparisons.map((comparison) =>
+            comparisonView(comparison, detail.recentOwnSales ?? 0),
+          ),
+        }),
     call: detail.call,
     searchWords: read.searchWords,
     researchLinks: scanResearchLinks(read.searchWords === '' ? read.item : read.searchWords),

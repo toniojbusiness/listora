@@ -26,6 +26,11 @@ export const MARKETPLACE_FEATURES = [
   'listing_refresh',
   /** Editing a live listing's details (title, description, aspects) from Listora. */
   'revise',
+  /**
+   * The thrift scan's comparisons from the marketplace's public search, read on the iPhone
+   * logged out (docs/features/thrift-scan.md, "Marketplace comparisons").
+   */
+  'market_comps',
 ] as const;
 export type MarketplaceFeature = (typeof MARKETPLACE_FEATURES)[number];
 

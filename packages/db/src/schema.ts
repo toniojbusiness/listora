@@ -53,6 +53,7 @@ import type {
   ItemScanConfidence,
   ItemScanDecision,
   ScanResearchKind,
+  MarketComparisonStatus,
   LabelOrderState,
   LabelReadStatus,
   ListingImportMatch,
@@ -1291,6 +1292,26 @@ export interface ItemScanTable {
   updated_at: UpdatedAt;
 }
 
+/**
+ * One read of a marketplace's public search handed to the seller's iPhone for a scan, and what
+ * it answered: numbers only (docs/features/thrift-scan.md, "Marketplace comparisons").
+ */
+export interface MarketComparisonTable {
+  id: Id;
+  account_id: string;
+  scan_id: Nullable<string>;
+  marketplace: Marketplace;
+  query_key: string;
+  query: Jsonb<JsonObject>;
+  status: Generated<MarketComparisonStatus>;
+  stats: NullableJsonb<JsonObject>;
+  for_sale_total: Nullable<number>;
+  read_ms: Nullable<number>;
+  answered_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 /** What the web said about a brand and item, kept so a repeat scan needs no search. */
 export interface ScanResearchTable {
   account_id: string;
@@ -1578,4 +1599,5 @@ export interface Database {
   sourcing_run: SourcingRunTable;
   item_scan: ItemScanTable;
   scan_research: ScanResearchTable;
+  market_comparison: MarketComparisonTable;
 }

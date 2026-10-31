@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Thrift-scan rules with no I/O: price quartiles, own-history comparisons (the scan's and the price screen's), the sourcing kit's groups, and the Buy / Your call / Skip call.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./market": "./src/market.ts"
   },
   "dependencies": {
     "@listora/api-contract": "*",

@@ -1,4 +1,4 @@
-import { AI_ESTIMATE_LABEL, claimsSoldData } from '@listora/pricing';
+import { AI_ESTIMATE_LABEL, ASKING_PRICES_LABEL, claimsSoldData } from '@listora/pricing';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -30,6 +30,75 @@ function history(
 function input(overrides: Partial<ScanCallInput>): ScanCallInput {
   return { identityConfidence: 0.9, flags: NO_FLAGS, fees: tenPercent, ...overrides };
 }
+
+describe('scanCall with marketplace comparisons', () => {
+  const asking = { count: 6, lowCents: 1_500, highCents: 2_500 };
+
+  it("holds the AI's guess to what close matches ask, saying so under the asking label", () => {
+    const call = scanCall(
+      input({
+        aiEstimate: { lowCents: 2_000, midCents: 3_000, highCents: 4_000 },
+        market: { marketplace: 'Depop', asking },
+      }),
+      settings,
+    );
+    expect(call.basis).toBe('ai_estimate');
+    expect(call.range).toEqual({ lowCents: 2_000, highCents: 2_500 });
+    expect(call.signals).toContainEqual({
+      kind: 'asking',
+      label: 'Asking $15-$25 on Depop',
+      basedOn: `${ASKING_PRICES_LABEL}: 6 like it for sale on Depop; the range is held to them`,
+    });
+  });
+
+  it("never moves a range from the household's own sales, and needs enough matches", () => {
+    const own = scanCall(
+      input({ ownHistory: history(3_000, 5_000), market: { marketplace: 'Depop', asking } }),
+      settings,
+    );
+    expect(own.range).toEqual({ lowCents: 3_000, highCents: 5_000 });
+    expect(own.signals[0]?.basedOn).toBe(`${ASKING_PRICES_LABEL}: 6 like it for sale on Depop`);
+    const thin = scanCall(
+      input({
+        aiEstimate: { lowCents: 2_000, midCents: 3_000, highCents: 4_000 },
+        market: { marketplace: 'Depop', asking: { ...asking, count: 4 } },
+      }),
+      settings,
+    );
+    expect(thin.range).toEqual({ lowCents: 2_000, highCents: 4_000 });
+    expect(thin.signals).toEqual([]);
+  });
+
+  it('shows the demand as a signal that moves no call', () => {
+    const call = scanCall(
+      input({
+        ownHistory: history(1_200, 2_000),
+        market: {
+          marketplace: 'Depop',
+          demand: { demand: 'crowded', label: 'Crowded on Depop', basedOn: 'Your 0 sales...' },
+        },
+      }),
+      settings,
+    );
+    expect(call).toMatchObject({ call: 'buy', confidence: 'high' });
+    expect(call.signals).toContainEqual({
+      kind: 'demand',
+      label: 'Crowded on Depop',
+      basedOn: 'Your 0 sales...',
+    });
+    const strong = scanCall(
+      input({
+        ownHistory: history(1_200, 2_000),
+        market: {
+          marketplace: 'Depop',
+          demand: { demand: 'strong', label: 'Sells for you, little competition', basedOn: 'x' },
+        },
+      }),
+      settings,
+    );
+    expect(strong).toMatchObject({ call: 'buy', confidence: 'high' });
+  });
+});
 
 describe('scanCall', () => {
   it('buys when even the low quartile pays out the worth-listing amount', () => {

@@ -230,6 +230,11 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         scripts.running?.source
     }
 
+    /// The script the comparison lane runs too (`WebMarketComparisons`).
+    func currentSource() -> String? {
+        source()
+    }
+
     /// The runtime the app was built with, which runs until the server hands out its own.
     private static func bundledSource() -> String? {
         guard let url = Bundle.module.url(forResource: "phone-runtime", withExtension: "js") else { return nil }
