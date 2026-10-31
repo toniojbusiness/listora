@@ -1,7 +1,7 @@
 import type { ItemScan } from '@listora/api-contract';
 import { describe, expect, it } from 'vitest';
 
-import { AI_ESTIMATE_LABEL, scanLabelViolations } from './labels.ts';
+import { AI_ESTIMATE_LABEL, ASKING_PRICES_LABEL, scanLabelViolations } from './labels.ts';
 import { scanResearchLinks } from './research-links.ts';
 
 const usd = (amountCents: number) => ({ amountCents, currency: 'USD' as const });
@@ -84,6 +84,32 @@ describe('scanLabelViolations', () => {
     ).toEqual([
       'research.label is "Web"',
       'research.summary mentions sold data: "It sold for $9."',
+    ]);
+  });
+
+  it("holds a comparison's asking prices to their label, and its row to no sold claim", () => {
+    const asking = { count: 6, low: usd(2500), median: usd(3000), high: usd(4000) };
+    const row = {
+      marketplace: 'depop' as const,
+      status: 'read' as const,
+      label: 'Depop: asking $25-$40, 6 like it for sale',
+    };
+    expect(
+      scanLabelViolations(
+        scan({ comparisons: [{ ...row, asking: { ...asking, label: ASKING_PRICES_LABEL } }] }),
+      ),
+    ).toEqual([]);
+    expect(
+      scanLabelViolations(
+        scan({
+          comparisons: [
+            { ...row, label: 'Depop: 6 sold', asking: { ...asking, label: 'Depop prices' } },
+          ],
+        }),
+      ),
+    ).toEqual([
+      'comparisons[0].asking.label is "Depop prices"',
+      'comparisons[0].label mentions sold data: "Depop: 6 sold"',
     ]);
   });
 });

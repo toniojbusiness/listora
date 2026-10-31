@@ -71,5 +71,7 @@ extension Components {
         public typealias QuestionId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/ScanId`.
         public typealias ScanId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/ComparisonId`.
+        public typealias ComparisonId = Components.Schemas.Id
     }
 }

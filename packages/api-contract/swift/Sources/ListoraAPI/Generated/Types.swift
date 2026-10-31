@@ -1549,6 +1549,22 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/scans/{scanId}/research`.
     /// - Remark: Generated from `#/paths//v1/scans/{scanId}/research/post(researchScan)`.
     func researchScan(_ input: Operations.ResearchScan.Input) async throws -> Operations.ResearchScan.Output
+    /// Answer a marketplace comparison read
+    ///
+    /// The phone's answer to a scan's comparison it was asked to read (a `checking` entry of
+    /// `comparisons`, docs/features/thrift-scan.md, "Marketplace comparisons"): the counts and
+    /// quartiles of the listings like the item in the marketplace's public search, read logged
+    /// out, or why there are none. Answers the scan with the comparison in it and the call made
+    /// again. A check (`check`) pauses the marketplace's comparisons for the account for 24 hours,
+    /// and a request to slow down (`rate_limited`) for an hour; Listora never passes a check. An
+    /// answer to a comparison already answered changes nothing and answers the scan as it is.
+    /// `404` where the thrift scan or the marketplace's comparisons are not on for the account,
+    /// or for another account's scan.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/scans/{scanId}/comparisons/{comparisonId}`.
+    /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)`.
+    func saveScanComparison(_ input: Operations.SaveScanComparison.Input) async throws -> Operations.SaveScanComparison.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -4163,6 +4179,32 @@ extension APIProtocol {
         try await researchScan(Operations.ResearchScan.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Answer a marketplace comparison read
+    ///
+    /// The phone's answer to a scan's comparison it was asked to read (a `checking` entry of
+    /// `comparisons`, docs/features/thrift-scan.md, "Marketplace comparisons"): the counts and
+    /// quartiles of the listings like the item in the marketplace's public search, read logged
+    /// out, or why there are none. Answers the scan with the comparison in it and the call made
+    /// again. A check (`check`) pauses the marketplace's comparisons for the account for 24 hours,
+    /// and a request to slow down (`rate_limited`) for an hour; Listora never passes a check. An
+    /// answer to a comparison already answered changes nothing and answers the scan as it is.
+    /// `404` where the thrift scan or the marketplace's comparisons are not on for the account,
+    /// or for another account's scan.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/scans/{scanId}/comparisons/{comparisonId}`.
+    /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)`.
+    public func saveScanComparison(
+        path: Operations.SaveScanComparison.Input.Path,
+        headers: Operations.SaveScanComparison.Input.Headers = .init(),
+        body: Operations.SaveScanComparison.Input.Body
+    ) async throws -> Operations.SaveScanComparison.Output {
+        try await saveScanComparison(Operations.SaveScanComparison.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
 }

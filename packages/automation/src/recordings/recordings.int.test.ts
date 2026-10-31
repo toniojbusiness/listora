@@ -13,6 +13,7 @@ import type { ListingsPage } from '@listora/marketplaces';
 import { createMercariScripts } from '../mercari/scripts.ts';
 import { MERCARI_SITE_URL } from '../mercari/site.ts';
 import { loadChromium } from '../runner/playwright.ts';
+import { entryProfile } from './plan.ts';
 import { recordingPlan } from './plans.ts';
 import { expandRecording, loadRecordings, RECORDED_MARKETPLACES } from './recording.ts';
 import { replayRecording } from './replay.ts';
@@ -63,7 +64,11 @@ for (const marketplace of RECORDED_MARKETPLACES) {
         const replayed = await replayRecording(
           browser,
           expandRecording(recorded),
-          { profile: plan.profile, stepTimeoutMs: plan.stepTimeoutMs, read: entry.mode === 'read' },
+          {
+            profile: entryProfile(plan, entry),
+            stepTimeoutMs: plan.stepTimeoutMs,
+            read: entry.mode === 'read',
+          },
           entry.script(recorded.input),
         );
         expect(replayed.divergences).toEqual([]);

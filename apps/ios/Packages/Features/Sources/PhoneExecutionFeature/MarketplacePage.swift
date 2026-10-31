@@ -38,11 +38,16 @@ final class MarketplacePage: NSObject {
     private var loads: [ObjectIdentifier: (navigation: WKNavigation, load: OneShot<Void>)] = [:]
     private var newest: OneShot<Void>?
 
-    init(origins: [String], logger: Logger) {
+    /// `contentRules` block what the page may load besides its documents (the comparison lane's
+    /// images, fonts, and media).
+    init(origins: [String], logger: Logger, contentRules: WKContentRuleList? = nil) {
         self.origins = Set(origins)
         self.logger = logger
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        if let contentRules {
+            configuration.userContentController.add(contentRules)
+        }
         configuration.defaultWebpagePreferences.preferredContentMode = .desktop
         configuration.mediaTypesRequiringUserActionForPlayback = .all
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1280, height: 900), configuration: configuration)

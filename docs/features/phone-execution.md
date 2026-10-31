@@ -23,6 +23,10 @@ Code:
 - `packages/push`: the APNs driver and background pushes ([push.md](push.md)).
 - The app's `PhoneExecutionFeature` (the runner, the runtime host, the check hand-off, the
   background tasks) and `Core/Phone` (the installation id and the sessions the phone keeps).
+- The same bundle carries the thrift scan's comparison lane (`listoraPhone.compare` and
+  `warmUp`, `packages/automation/src/comps/`), which the app runs in web views of its own that
+  hold no session, never the seller's lanes below ([thrift-scan.md](thrift-scan.md),
+  "Marketplace comparisons").
 
 ## Where a marketplace runs
 

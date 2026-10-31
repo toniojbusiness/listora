@@ -154,3 +154,9 @@ ScanId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+ComparisonId:
+  name: comparisonId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'

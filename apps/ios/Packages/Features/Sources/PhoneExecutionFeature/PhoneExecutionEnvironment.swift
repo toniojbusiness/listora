@@ -11,6 +11,9 @@ public final class PhoneExecutionEnvironment {
     public let runner: PhoneRunner
     public let handOff: ChallengeHandOffModel
     public let sessions: any MarketplaceSessionStore
+    /// The thrift scan's comparison lane: logged-out reads of marketplaces' public searches,
+    /// in web views that hold no account (docs/features/thrift-scan.md).
+    public let comparisons: WebMarketComparisons
     private let runtime: WebPhoneRuntime
 
     /// `configuration` names the keychain group the sessions are kept in and Listora's photo
@@ -61,6 +64,7 @@ public final class PhoneExecutionEnvironment {
             try? await service.runtime(have: have)
         }
         self.runtime = runtime
+        comparisons = WebMarketComparisons { [weak runtime] in runtime?.currentSource() }
         runner = PhoneRunner(
             service: service,
             runtime: runtime,

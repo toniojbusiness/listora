@@ -3,16 +3,25 @@ import Foundation
 
 /// Scan mode (docs/features/thrift-scan.md): the run at the store, and the drafts it keeps.
 extension AddItemModel {
+    /// The marketplaces with a comparison reader on this iPhone.
+    static let comparedMarketplaces = ["depop"]
+
     /// The run going on, or a new one.
     func scanRun(in environment: AddItemEnvironment) -> ScanRunModel {
         if let scanRun, !scanRun.isEnded {
             return scanRun
+        }
+        // Comparisons only where they passed live (or the owner's Test mode), Depop first.
+        let comparing = Self.comparedMarketplaces.filter {
+            environment.features?.shows(.marketComps, on: $0) == true
         }
         let run = ScanRunModel(
             service: environment.scanService,
             tagReader: environment.tagReader,
             directory: environment.scanDirectory,
             saveDraft: { [weak self] photos, scan in await self?.saveScanDraft(photos, scan: scan) },
+            comparisons: environment.comparisons,
+            comparing: comparing,
         )
         meter.begin(run.meterSession)
         scanRun = run

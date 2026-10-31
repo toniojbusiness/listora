@@ -25,6 +25,17 @@ export interface RecordingPlanEntry {
    * entry needs nothing (`null`).
    */
   input?: (earlier: ReadonlyMap<string, unknown>) => unknown;
+  /**
+   * `logged_out`: the entry reads a page any visitor sees (a marketplace's public search), so
+   * the recorder runs it in a fresh browser context that holds no cookies and never signed in,
+   * never in the seller's own session. Every other entry runs in the seller's session.
+   */
+  session?: 'seller' | 'logged_out';
+  /**
+   * The profile the entry runs with, when it is not the plan's: a comparison read's, whose only
+   * API is the site's own origin and which holds no cookie (comps/run.ts).
+   */
+  profile?: AutomationProfile;
   /** The listing a form entry fills in (`form` only). */
   content?: ListingContent;
   script: (input: unknown) => Script<unknown>;
@@ -48,6 +59,11 @@ export interface RecordingPlan {
   privateSelectors: readonly string[];
   /** Words that identify the seller in what was recorded (Depop's usernames in its slugs). */
   identity: (recordings: readonly ExpandedRecording[]) => string[];
+}
+
+/** The profile an entry runs and replays with. */
+export function entryProfile(plan: RecordingPlan, entry: RecordingPlanEntry): AutomationProfile {
+  return entry.profile ?? plan.profile;
 }
 
 /** The SKU a form entry's listing carries. */

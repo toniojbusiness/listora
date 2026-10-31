@@ -56,6 +56,8 @@ export interface ApiRouteContext extends RouteDependencies {
   phone: PhoneWorkDependencies | undefined;
   /** Signals keyed by item id, that end the item screen's wait for a change at once. */
   itemChanges: KeyedSignals | undefined;
+  /** Whether scans hand the iPhone marketplace comparison reads (`MARKET_COMPARISONS`). */
+  marketComparisons: boolean;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

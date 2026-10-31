@@ -107,6 +107,9 @@ struct ScanCardView: View {
                 .font(Typography.footnote)
                 .accessibilityLabel(line.label + ", " + line.summary)
         }
+        ForEach(card.comparisons, id: \.marketplace) { comparison in
+            ComparisonLine(comparison: comparison)
+        }
         // Shown under its label whenever it is there, even when own sales lead the call.
         if let estimate = card.aiEstimate, let label = card.aiEstimateLabel, card.range != estimate {
             Text("\(estimate) · \(label)")
@@ -150,7 +153,7 @@ struct ScanCardView: View {
         case .none, .failed:
             EmptyView()
         }
-        ForEach(card.signals, id: \.label) { signal in
+        ForEach(card.listedSignals, id: \.label) { signal in
             Text("\(Text(signal.label).font(Typography.smallEmphasis)) · \(signal.shortBasedOn)")
                 .font(Typography.caption)
                 .foregroundStyle(Palette.textSecondary)
@@ -211,6 +214,36 @@ struct ScanCardView: View {
                 .frame(minHeight: Layout.compactButtonHeight)
                 .accessibilityIdentifier("scan.kept")
         }
+    }
+}
+
+/// One marketplace's comparisons on the card: what close matches ask there, always under the
+/// asking-prices label (never sold prices), and the demand; or why there are none, in words.
+private struct ComparisonLine: View {
+    let comparison: ScanComparisonLine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: Spacing.xxs) {
+                if comparison.status == .checking {
+                    BrandSpinner().controlSize(.mini)
+                }
+                Text(comparison.label)
+                    .font(Typography.footnote)
+                    .foregroundStyle(comparison.status == .read ? Palette.textPrimary : Palette.textSecondary)
+            }
+            if let asking = comparison.askingLabel {
+                Text(asking).font(Typography.caption).foregroundStyle(Palette.textSecondary)
+            }
+            if let demand = comparison.demand {
+                Text("\(Text(demand).font(Typography.smallEmphasis)) · \(comparison.demandBasedOn ?? "")")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("scan.comparison.\(comparison.marketplace.lowercased())")
     }
 }
 

@@ -24,7 +24,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import type { BrowserContext, Page } from 'playwright-core';
+import type { Browser, BrowserContext, Page } from 'playwright-core';
 
 import { createLogger, type Logger } from '@listora/shared';
 import type { SessionCookie } from '@listora/connections';
@@ -40,7 +40,12 @@ import type { Script, ScriptFailure, ScriptResult } from '../runner/types.ts';
 import { Pacing } from '../safety/pacing.ts';
 import { recordingChanges } from './diff.ts';
 import { guardTab } from './guard.ts';
-import { RECORDING_SKU, type RecordingPlan, type RecordingPlanEntry } from './plan.ts';
+import {
+  entryProfile,
+  RECORDING_SKU,
+  type RecordingPlan,
+  type RecordingPlanEntry,
+} from './plan.ts';
 import { recordingPlan } from './plans.ts';
 import {
   expandRecording,
@@ -62,6 +67,8 @@ const USAGE = `usage: npm run recordings:record -- <${RECORDED_MARKETPLACES.join
   --check          write nothing; exit 1 when a recorded page changed
   --cdp <url>      the signed-in Chrome's remote debugging address (default http://127.0.0.1:9333)
   --redact <word>  also redact this word wherever it appears (repeatable)
+  --logged-out     record only the plan's logged-out entries (public pages), each in a fresh
+                   browser context that holds no cookies; the seller's session is never used
 `;
 
 /** When each marketplace was last recorded, so the next session keeps its distance. */
@@ -76,6 +83,7 @@ interface Options {
   check: boolean;
   cdp: string;
   redact: string[];
+  loggedOut: boolean;
 }
 
 function parseOptions(argv: string[]): Options | null {
@@ -87,6 +95,7 @@ function parseOptions(argv: string[]): Options | null {
       check: { type: 'boolean', default: false },
       cdp: { type: 'string', default: 'http://127.0.0.1:9333' },
       redact: { type: 'string', multiple: true, default: [] },
+      'logged-out': { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
   });
@@ -100,11 +109,36 @@ function parseOptions(argv: string[]): Options | null {
     check: values.check,
     cdp: values.cdp,
     redact: values.redact,
+    loggedOut: values['logged-out'],
   };
 }
 
-/** The entries to run, in plan order; an entry that reads a listing needs `listings` first. */
-function selected(plan: RecordingPlan, only: readonly string[]): RecordingPlanEntry[] {
+/** Whether the entry reads a public page, in a fresh browser context with no session. */
+function loggedOut(entry: RecordingPlanEntry): boolean {
+  return entry.session === 'logged_out';
+}
+
+/**
+ * The entries to run, in plan order; an entry that reads a listing needs `listings` first. With
+ * `--logged-out`, only the logged-out ones, and naming another is refused.
+ */
+function selected(
+  plan: RecordingPlan,
+  only: readonly string[],
+  onlyLoggedOut: boolean,
+): RecordingPlanEntry[] {
+  if (onlyLoggedOut) {
+    const entries = plan.entries.filter(
+      (entry) => loggedOut(entry) && (only.length === 0 || only.includes(entry.name)),
+    );
+    const refused = only.filter((name) => !entries.some((entry) => entry.name === name));
+    if (refused.length > 0) {
+      throw new Error(`--logged-out records only logged-out entries, not ${refused.join(', ')}`);
+    }
+    if (entries.length === 0)
+      throw new Error(`the ${plan.marketplace} plan has no logged-out entry`);
+    return entries;
+  }
   if (only.length === 0) return [...plan.entries];
   const names = new Set(only);
   for (const name of only) {
@@ -131,7 +165,7 @@ async function keepDistance(plan: RecordingPlan): Promise<void> {
 
 async function record(options: Options): Promise<number> {
   const plan = recordingPlan(options.marketplace);
-  const entries = selected(plan, options.only);
+  const entries = selected(plan, options.only, options.loggedOut);
   const committed = await loadRecordings(plan.marketplace);
   await keepDistance(plan);
   const logger = createLogger({ service: 'recordings', level: 'warn' });
@@ -142,9 +176,6 @@ async function record(options: Options): Promise<number> {
   const blocked = new Map<string, number>();
   let stopped: string | null = null;
   try {
-    const context = browser.contexts()[0];
-    if (context === undefined) throw new Error('the Chrome has no browser window open');
-    const cdp = await browser.newBrowserCDPSession();
     const earlier = new Map<string, unknown>();
     for (const entry of entries) {
       const input = entry.input === undefined ? null : entry.input(earlier);
@@ -152,16 +183,9 @@ async function record(options: Options): Promise<number> {
         process.stdout.write(`${entry.name}: skipped (the seller has nothing for it)\n`);
         continue;
       }
-      // A tab of its own for each entry, as each run gets a fresh page: nothing one page left
-      // (an unsaved form's leave prompt) holds up the next. In the background: the seller's own
-      // tabs stay in front.
-      const { targetId } = await cdp.send('Target.createTarget', {
-        url: 'about:blank',
-        background: true,
-      });
-      // The tab this session made, by its target id: other sessions (other workers) open tabs
-      // in the same Chrome at the same time, so the next new page may be theirs.
-      const page = await ownTab(context, targetId);
+      const { context, page, close } = loggedOut(entry)
+        ? await freshTab(browser)
+        : await sellerTab(browser);
       try {
         const tabBlocked = await guardTab(page);
         const { result, backend } = await recordEntry(plan, entry, input, context, page, logger);
@@ -190,7 +214,7 @@ async function record(options: Options): Promise<number> {
           `${entry.name}: recorded (${result.ok ? 'ok' : `failed: ${JSON.stringify(failureSummary(result.failure))}`})\n`,
         );
       } finally {
-        await cdp.send('Target.closeTarget', { targetId }).catch(() => undefined);
+        await close();
       }
     }
   } finally {
@@ -207,6 +231,53 @@ async function record(options: Options): Promise<number> {
   );
 }
 
+interface EntryTab {
+  context: BrowserContext;
+  page: Page;
+  close: () => Promise<void>;
+}
+
+/**
+ * A tab of its own in the seller's session, as each run gets a fresh page: nothing one page left
+ * (an unsaved form's leave prompt) holds up the next. In the background: the seller's own tabs
+ * stay in front.
+ */
+async function sellerTab(browser: Browser): Promise<EntryTab> {
+  const context = browser.contexts()[0];
+  if (context === undefined) throw new Error('the Chrome has no browser window open');
+  const cdp = await browser.newBrowserCDPSession();
+  const { targetId } = await cdp.send('Target.createTarget', {
+    url: 'about:blank',
+    background: true,
+  });
+  // The tab this session made, by its target id: other sessions (other workers) open tabs in
+  // the same Chrome at the same time, so the next new page may be theirs.
+  const page = await ownTab(context, targetId);
+  return {
+    context,
+    page,
+    close: async () => {
+      await cdp.send('Target.closeTarget', { targetId }).catch(() => undefined);
+      await cdp.detach().catch(() => undefined);
+    },
+  };
+}
+
+/**
+ * A tab in a fresh browser context of its own, for a logged-out entry: it starts with no
+ * cookies and no storage, so the page is what any visitor sees and no seller's session is ever
+ * part of it. Refused if the context somehow holds a cookie.
+ */
+async function freshTab(browser: Browser): Promise<EntryTab> {
+  const context = await browser.newContext();
+  if ((await context.cookies()).length > 0) {
+    await context.close();
+    throw new Error('a fresh browser context held cookies; nothing was recorded');
+  }
+  const page = await context.newPage();
+  return { context, page, close: () => context.close().catch(() => undefined) };
+}
+
 /** Runs one entry in its tab, through the recording backend. */
 async function recordEntry(
   plan: RecordingPlan,
@@ -216,6 +287,7 @@ async function recordEntry(
   page: Page,
   logger: Logger,
 ): Promise<{ result: ScriptResult<unknown>; backend: RecordingBackend }> {
+  const profile = entryProfile(plan, entry);
   // Through the backend of the host the marketplace runs on, so its selectors are read the way
   // they are in production (the phone's page functions, or the runner's Playwright).
   const inner =
@@ -225,8 +297,8 @@ async function recordEntry(
           context,
           page,
           {
-            profile: plan.profile,
-            pacing: new Pacing(plan.profile.pacing),
+            profile,
+            pacing: new Pacing(profile.pacing),
             screenshots: new MemoryScreenshotStore(),
             logger,
             stepTimeoutMs: plan.stepTimeoutMs,
@@ -238,12 +310,12 @@ async function recordEntry(
           logger,
         );
   const backend = new RecordingBackend(inner, [
-    ...plan.profile.privateSelectors,
+    ...profile.privateSelectors,
     ...plan.privateSelectors,
   ]);
   const session = new ScriptSession(backend, {
-    profile: plan.profile,
-    pacing: new Pacing(plan.profile.pacing),
+    profile,
+    pacing: new Pacing(profile.pacing),
     logger,
     stepTimeoutMs: plan.stepTimeoutMs,
     close: () => Promise.resolve<SessionCookie[]>([]),
