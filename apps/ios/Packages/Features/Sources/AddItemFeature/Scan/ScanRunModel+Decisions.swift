@@ -44,7 +44,7 @@ extension ScanRunModel {
     func cardClosed(_ entryID: String) {
         guard let decided = decidedAt, decided.entryID == entryID else { return }
         decidedAt = nil
-        let after = now().timeIntervalSince(decided.at)
+        let after = dependencies.now().timeIntervalSince(decided.at)
         readyTimes.append(after)
         log.notice("scan camera ready \(Int(after * 1000), privacy: .public) ms after the decision")
     }
@@ -62,7 +62,7 @@ extension ScanRunModel {
         if currentID == entryID {
             tagShotFor = nil
             currentID = nil
-            decidedAt = (entryID, now())
+            decidedAt = (entryID, dependencies.now())
         }
     }
 }
@@ -102,6 +102,12 @@ struct ScanConfirmation: Equatable, Identifiable {
             case .kept:
                 let count = keptCount == 1 ? "1 in this run" : "\(keptCount) in this run"
                 return ScanConfirmationLine(text: "Kept · \(count)", tone: .done, systemImage: "checkmark.circle.fill")
+            case .keepWhenRead:
+                return ScanConfirmationLine(
+                    text: "Kept · saved once it's read",
+                    tone: .done,
+                    systemImage: "checkmark.circle.fill",
+                )
             case .keepFailed:
                 return ScanConfirmationLine(
                     text: "Couldn't keep item \(entry.number). Tap it below to try again.",
@@ -127,12 +133,13 @@ struct ScanConfirmationLine: Equatable {
 }
 
 extension ScanEntry {
-    /// Keep can be tapped: the item was read and is not kept or being kept.
+    /// Keep can be tapped: the item was read, or its read is still to come (it is saved once it
+    /// is), and it is not kept or being kept.
     var canKeep: Bool {
-        guard scanID != nil, card != nil else { return false }
         switch decision {
-        case .open, .keepFailed: return true
-        case .keeping, .kept: return false
+        case .open: (scanID != nil && card != nil) || isWaiting || state == .reading
+        case .keepFailed: true
+        case .keeping, .kept, .keepWhenRead: false
         }
     }
 }

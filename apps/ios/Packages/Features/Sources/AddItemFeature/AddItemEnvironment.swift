@@ -74,9 +74,11 @@ public final class AddItemEnvironment {
     let tagReader: any TagReader
     /// Turns the scan camera's held mic into a note; nil offers no mic (previews).
     let transcriber: (any VoiceTranscriber)?
-    /// Where a scan run keeps its shots' photos until they are kept or the run ends. A run lives
-    /// only while the app does, so the folder is emptied at launch.
+    /// Where a scan run keeps its shots' photos until they are kept or the run ends; the run and
+    /// its scans are kept in the drafts database, so a run survives a relaunch.
     let scanDirectory: URL
+    /// The scan runs, kept on this iPhone and read when there is signal; nil with no database.
+    let scanRuns: ScanRuns?
     /// Whether this iPhone holds any draft: the Add Item tab lists only these, so the Today card
     /// for drafts on the server opens it only then.
     public var hasDrafts: Bool {
@@ -100,6 +102,7 @@ public final class AddItemEnvironment {
         fixturePhotosDirectory: URL? = nil,
         fakeCameraDirectory: URL? = nil,
         transcriber: (any VoiceTranscriber)? = nil,
+        scanHasNoSignal: Bool = false,
     ) {
         self.init(
             dataDirectory: dataDirectory,
@@ -115,6 +118,7 @@ public final class AddItemEnvironment {
             meter: meter,
             reviewDestination: reviewDestination,
             batchReviewDestination: batchReviewDestination,
+            connectivity: scanHasNoSignal ? NoSignal() : nil,
             transcriber: transcriber,
         )
     }
@@ -135,15 +139,17 @@ public final class AddItemEnvironment {
         batchReviewDestination: BatchReviewDestination? = nil,
         batchProgress: (any BatchProgressSource)? = nil,
         scanService: (any ScanService)? = nil,
+        connectivity: (any ScanConnectivity)? = nil,
         transcriber: (any VoiceTranscriber)? = nil,
         policy: RetryPolicy = .standard,
     ) {
         let activity = UploadActivity()
-        self.scanService = scanService ?? api
+        let scanService = scanService ?? api
+        self.scanService = scanService
         self.tagReader = tagReader
         self.transcriber = transcriber
-        scanDirectory = dataDirectory.appending(path: "ScanRuns", directoryHint: .isDirectory)
-        try? FileManager.default.removeItem(at: scanDirectory)
+        let scanDirectory = dataDirectory.appending(path: "ScanRuns", directoryHint: .isDirectory)
+        self.scanDirectory = scanDirectory
         self.activity = activity
         self.meter = meter
         self.reviewDestination = reviewDestination
@@ -166,11 +172,43 @@ public final class AddItemEnvironment {
                 policy: policy,
             )
             state = .ready(store, uploader)
+            scanRuns = ScanRuns(
+                dependencies: ScanRunDependencies(
+                    service: scanService,
+                    tagReader: tagReader,
+                    signalReader: signalReader,
+                    connectivity: connectivity ?? PathConnectivity(),
+                    queue: ScanQueueStore(writer: store.writer),
+                    saveDraft: Self.scanDraftSaver(store: store, uploader: uploader),
+                ),
+                directory: scanDirectory,
+                kit: SourcingKitCache(file: dataDirectory.appending(path: "sourcing-kit.json")),
+            )
         } catch {
             Logger(subsystem: "com.listora.app", category: "drafts")
                 .error("Opening the draft database failed: \(String(describing: error), privacy: .public)")
             state =
                 .unavailable("Drafts can't be saved on this iPhone right now. Free up some storage and reopen Listora.")
+            scanRuns = nil
+        }
+    }
+
+    /// A kept scan's draft: saved on this iPhone at once, its server item created from the scan by
+    /// the upload queue (an ordinary draft's, for a kept scan that could never be read).
+    private static func scanDraftSaver(store: DraftStore, uploader: PhotoUploader) -> ScanDraftSaver {
+        { photos, scan in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try store.createDraft(photos: photos, scan: scan).id }
+            }.value
+            switch result {
+            case let .success(id):
+                await uploader.wake()
+                return id
+            case let .failure(error):
+                Logger(subsystem: "com.listora.app", category: "drafts")
+                    .error("Saving a kept scan failed: \(String(describing: error), privacy: .public)")
+                return nil
+            }
         }
     }
 
@@ -199,6 +237,7 @@ public final class AddItemEnvironment {
     public func start() {
         guard case let .ready(_, uploader) = state else { return }
         Task { await uploader.start() }
+        scanRuns?.start()
         guard tokenObservation == nil, let tokenChanges else { return }
         tokenObservation = Task {
             for await _ in tokenChanges {

@@ -161,6 +161,9 @@ final class FakeScanService: ScanService {
         var places: [String?] = []
         var ended: [String] = []
         var scans: [ScanRequest] = []
+        /// Each read's `Idempotency-Key`, in order.
+        var scanKeys: [String] = []
+        var kits = 0
         var checkouts: [Checkout] = []
     }
 
@@ -222,10 +225,11 @@ final class FakeScanService: ScanService {
         }
     }
 
-    func createScan(_ request: ScanRequest, idempotencyKey _: String) async throws(APIFailure) -> ItemScan {
+    func createScan(_ request: ScanRequest, idempotencyKey: String) async throws(APIFailure) -> ItemScan {
         await gate.wait()
         let next = state.withLock { state -> Result<Data, APIFailure>? in
             state.calls.scans.append(request)
+            state.calls.scanKeys.append(idempotencyKey)
             return state.answers.isEmpty ? nil : state.answers.removeFirst()
         }
         switch next ?? .success(Self.defaultAnswer()) {
@@ -279,6 +283,19 @@ final class FakeScanService: ScanService {
 
     func endSourcingRun(runID: String, idempotencyKey _: String) async throws(APIFailure) {
         state.withLock { $0.calls.ended.append(runID) }
+    }
+
+    /// The kit `sourcingKit()` answers; nil answers as with no signal.
+    private let kit = Mutex<SourcingKit?>(nil)
+
+    func answer(kit: SourcingKit?) {
+        self.kit.withLock { $0 = kit }
+    }
+
+    func sourcingKit() async throws(APIFailure) -> SourcingKit {
+        state.withLock { $0.calls.kits += 1 }
+        guard let kit = kit.withLock({ $0 }) else { throw APIFailure.networkUnavailable }
+        return kit
     }
 
     /// One comparison answer the phone sent.

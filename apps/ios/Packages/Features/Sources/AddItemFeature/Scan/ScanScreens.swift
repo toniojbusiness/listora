@@ -62,17 +62,16 @@ struct ScanRunRow: View {
     let run: ScanRunModel
 
     var body: some View {
-        ListRow(
-            "This run",
-            subtitle: [
-                run.place,
-                run.keptCount == 1
-                    ? "\(run.entries.count) scanned, 1 kept"
-                    : "\(run.entries.count) scanned, \(run.keptCount) kept",
-            ].compactMap(\.self).joined(separator: " · "),
-            systemImage: "cart",
-        )
-        .accessibilityIdentifier("addItem.scanRun")
+        ListRow("This run", subtitle: Self.summary(run), systemImage: "cart")
+            .accessibilityIdentifier("addItem.scanRun")
+    }
+
+    /// "Goodwill on 5th · 12 scanned, 3 kept, 4 waiting for signal".
+    static func summary(_ run: ScanRunModel) -> String {
+        let kept = run.keptCount + run.keptWaitingCount
+        let counts = "\(run.entries.count) scanned, \(kept) kept"
+        let waiting = run.waitingCount == 0 ? counts : "\(counts), \(run.waitingCount) waiting for signal"
+        return [run.place, waiting].compactMap(\.self).joined(separator: " · ")
     }
 }
 
@@ -145,7 +144,7 @@ struct ScanSheets: ViewModifier {
             ScanStartView(
                 recentPlaces: model.recentPlaces.sources,
                 onStart: { place in
-                    cameraAfterSheet = .scan(model.scanRun(in: environment, place: place))
+                    cameraAfterSheet = model.startScanRun(in: environment, place: place).map { .scan($0) }
                     self.sheet = nil
                 },
                 onCancel: { self.sheet = nil },

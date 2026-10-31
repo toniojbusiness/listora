@@ -146,6 +146,7 @@ public struct AppDependencies {
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
             transcriber: transcriber(for: launchOptions),
+            scanHasNoSignal: launchOptions.scanHasNoSignal,
         )
     }
 

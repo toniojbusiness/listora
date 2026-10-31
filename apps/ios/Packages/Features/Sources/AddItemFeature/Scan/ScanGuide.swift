@@ -39,6 +39,11 @@ struct ScanGuide: View {
             detail: "Enter what you paid once; see the haul's estimated profit",
             systemImage: "cart",
         ),
+        Step(
+            title: "No signal? Keep scanning",
+            detail: "Your own sales call it at once; the full read comes when you have signal",
+            systemImage: "wifi.slash",
+        ),
     ]
 
     var body: some View {

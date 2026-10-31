@@ -78,14 +78,7 @@ struct ScanCaptureView: View {
                     ScanConfirmationView(line: line)
                         .transition(.opacity)
                         .id(confirmation.id)
-                        .task(id: line) {
-                            AccessibilityNotification.Announcement(line.text).post()
-                            guard line.tone != .working else { return }
-                            let shown = line.tone == .failed
-                                ? ScanConfirmation.failureShownFor : ScanConfirmation.shownFor
-                            try? await Task.sleep(for: shown)
-                            withAnimation(Motion.snappy) { run.clearConfirmation(confirmation.id) }
-                        }
+                        .goesAway(line) { run.clearConfirmation(confirmation.id) }
                 }
                 if !run.entries.isEmpty {
                     ScanTray(entries: run.entries, currentID: run.currentID) { run.select($0) }
@@ -135,8 +128,11 @@ struct ScanCaptureView: View {
 
     private var endMessage: String {
         let kept = run.keptCount == 1 ? "the 1 item you kept" : "the \(run.keptCount) items you kept"
+        let waiting = run.keptWaitingCount == 0 ? ""
+            : run.keptWaitingCount == 1 ? " The 1 kept item waiting for signal is saved once it's read."
+            : " The \(run.keptWaitingCount) kept items waiting for signal are saved once they're read."
         return "Check out to enter what you paid for \(kept) and see the haul's estimated profit. "
-            + "Either way the items not kept are skipped and can't be kept after this."
+            + "Either way the items not kept are skipped and can't be kept after this.\(waiting)"
     }
 
     // MARK: Top
@@ -156,6 +152,8 @@ struct ScanCaptureView: View {
                 Spacer()
                 Text(runSummary)
                     .font(Typography.emphasis)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .padding(.horizontal, Spacing.sm)
                     .frame(minHeight: Layout.minimumTapTarget)
                     .background(Palette.scrim.color.opacity(0.45), in: Capsule())
@@ -185,7 +183,9 @@ struct ScanCaptureView: View {
 
     private var runSummary: String {
         let scanned = run.entries.count == 1 ? "1 scanned" : "\(run.entries.count) scanned"
-        return run.keptCount == 0 ? scanned : "\(scanned) · \(run.keptCount) kept"
+        let kept = run.keptCount + run.keptWaitingCount
+        let summary = kept == 0 ? scanned : "\(scanned) · \(kept) kept"
+        return run.waitingCount == 0 ? summary : "\(summary) · \(run.waitingCount) waiting"
     }
 
     @ViewBuilder

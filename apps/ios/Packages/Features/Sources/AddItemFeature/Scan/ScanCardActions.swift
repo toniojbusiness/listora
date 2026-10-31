@@ -8,7 +8,10 @@ import SwiftUI
 /// from the tray once its item was kept says so, with **Close**.
 struct ScanCardActions: View {
     let entry: ScanEntry
-    let card: ScanCard
+    /// The read was unsure of the brand, or there is no read yet: the tag close-up helps most.
+    let wantsTag: Bool
+    /// The marketplace's own search, once the item is read.
+    let link: ScanCard.Link?
     let onKeep: () -> Void
     let onPutBack: () -> Void
     let onClose: () -> Void
@@ -34,7 +37,7 @@ struct ScanCardActions: View {
     private var isDeciding: Bool {
         switch entry.decision {
         case .open, .keepFailed: true
-        case .keeping, .kept: false
+        case .keeping, .kept, .keepWhenRead: false
         }
     }
 
@@ -42,16 +45,16 @@ struct ScanCardActions: View {
     private var tools: some View {
         HStack(spacing: Spacing.xs) {
             Button(action: onTag) {
-                Label(card.wantsTag ? "Shoot the tag?" : "Shoot the tag", systemImage: "tag")
+                Label(wantsTag ? "Shoot the tag?" : "Shoot the tag", systemImage: "tag")
             }
             .font(Typography.footnote)
             .buttonStyle(.plain)
-            .foregroundStyle(card.wantsTag ? Palette.brand : Palette.textSecondary)
+            .foregroundStyle(wantsTag ? Palette.brand : Palette.textSecondary)
             .frame(minHeight: Layout.minimumTapTarget)
             .accessibilityHint("The next shot is a close-up of this item's tag, read with it.")
             .accessibilityIdentifier("scan.tag")
             Spacer(minLength: 0)
-            if let link = card.links.first {
+            if let link {
                 Button {
                     openURL(link.url)
                 } label: {
@@ -86,25 +89,39 @@ struct ScanCardActions: View {
                 .accessibilityHint("Saves it as a draft and goes back to the camera.")
                 .accessibilityIdentifier("scan.keep")
             }
-        case .keeping, .kept:
+        case .keeping, .kept, .keepWhenRead:
             HStack(spacing: Spacing.xs) {
-                Group {
-                    if entry.isKept {
-                        Label("Kept as a draft", systemImage: "checkmark")
-                            .foregroundStyle(Palette.success)
-                    } else {
-                        Label("Keeping", systemImage: "arrow.down.circle")
-                            .foregroundStyle(Palette.textSecondary)
-                    }
-                }
-                .font(Typography.emphasis)
-                .frame(maxWidth: .infinity, minHeight: Layout.buttonHeight, alignment: .leading)
-                .accessibilityIdentifier(entry.isKept ? "scan.kept" : "scan.keeping")
+                keptLabel
+                    .font(Typography.emphasis)
+                    .frame(maxWidth: .infinity, minHeight: Layout.buttonHeight, alignment: .leading)
                 Button("Close", action: onClose)
                     .buttonStyle(.listora(.secondary, size: .large))
                     .accessibilityHint("Goes back to the camera.")
                     .accessibilityIdentifier("scan.close")
             }
+        }
+    }
+}
+
+extension ScanCardActions {
+    /// What a card opened again from the tray says once its item was kept.
+    @ViewBuilder
+    private var keptLabel: some View {
+        switch entry.decision {
+        case .kept:
+            Label("Kept as a draft", systemImage: "checkmark")
+                .foregroundStyle(Palette.success)
+                .accessibilityIdentifier("scan.kept")
+        case .keepWhenRead:
+            Label("Kept: saved once it's read", systemImage: "checkmark")
+                .foregroundStyle(Palette.success)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Kept: saved once it's read")
+                .accessibilityIdentifier("scan.keptWaiting")
+        case .open, .keeping, .keepFailed:
+            Label("Keeping", systemImage: "arrow.down.circle")
+                .foregroundStyle(Palette.textSecondary)
+                .accessibilityIdentifier("scan.keeping")
         }
     }
 }

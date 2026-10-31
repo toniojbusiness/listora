@@ -139,8 +139,8 @@ struct ScanDecisionTests {
         let shot = Task { await run.shoot(capture()) }
         #expect(try await eventually { run.current?.state == .reading })
         let entryID = try #require(run.currentID)
-        // Keep needs the read; Put back does not.
-        #expect(run.current?.canKeep == false)
+        // Neither answer waits for the read.
+        #expect(run.current?.canKeep == true)
         run.putBack(entryID)
         #expect(run.current == nil)
         await service.gate.open()

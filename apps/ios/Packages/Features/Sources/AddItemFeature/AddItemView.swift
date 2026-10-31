@@ -17,6 +17,7 @@ public struct AddItemView: View {
                 uploader: uploader,
                 activity: environment.activity,
                 meter: environment.meter,
+                scanRuns: environment.scanRuns,
             ))
         }
     }
