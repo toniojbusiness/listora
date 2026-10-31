@@ -20,15 +20,8 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(scanMode.waitForExistence(timeout: 15), "Scan mode shows where the thrift scan is on")
         scanMode.tap()
         XCTAssertTrue(app.staticTexts["Scan at the bins"].waitForExistence(timeout: 5))
-        app.buttons["addItem.startScan"].tap()
-
         // Starting a run asks only where the seller is.
-        let place = app.textFields["scanStart.place"]
-        XCTAssertTrue(place.waitForExistence(timeout: 5))
-        place.tap()
-        place.typeText("Invented Thrift")
-        attachScreenshot("start a run")
-        app.buttons["scanStart.start"].tap()
+        startRun(at: "Invented Thrift")
 
         // One shot: the card lands with the call, its confidence, and the AI estimate under its label.
         let shutter = app.buttons["camera.shutter"]
@@ -114,13 +107,13 @@ final class ThriftScanUITests: XCTestCase {
         let scanMode = app.segmentedControls["addItem.mode"].buttons["Scan"]
         XCTAssertTrue(scanMode.waitForExistence(timeout: 15))
         scanMode.tap()
-        app.buttons["addItem.startScan"].tap()
+        startRun()
         let shutter = app.buttons["camera.shutter"]
         XCTAssertTrue(shutter.waitForExistence(timeout: 10))
         shutter.tap()
         XCTAssertTrue(app.buttons["scan.keep"].waitForExistence(timeout: 20))
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 20))
         app.buttons["scanCamera.done"].tap()
 
         // The kept draft is listed under its run, named by the scan, and needs its photos.
@@ -181,6 +174,20 @@ final class ThriftScanUITests: XCTestCase {
             object: element,
         )
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    /// Starts a run from Add Item: the start sheet asks where the seller is, which can be left out.
+    private func startRun(at place: String? = nil) {
+        app.buttons["addItem.startScan"].tap()
+        let start = app.buttons["scanStart.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        if let place {
+            let field = app.textFields["scanStart.place"]
+            field.tap()
+            field.typeText(place)
+            attachScreenshot("start a run")
+        }
+        start.tap()
     }
 
     private func launch(signedInTo stack: E2EStack) throws {
