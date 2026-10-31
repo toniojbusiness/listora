@@ -85,7 +85,10 @@ export function operationView(
     attempt: op.attempts,
     maxAttempts: maxAttemptsFor(DEFAULT_RETRY_POLICY, op.kind),
     ...(op.next_attempt_at === null ? {} : { nextAttemptAt: op.next_attempt_at.toISOString() }),
-    origin: { type: op.origin },
+    origin: {
+      type: op.origin,
+      ...(op.price_drop_rule_id === null ? {} : { repriceRuleId: op.price_drop_rule_id }),
+    },
     ...(error === undefined ? {} : { error }),
     ...(verification === undefined ? {} : { verification }),
     createdAt: op.created_at.toISOString(),

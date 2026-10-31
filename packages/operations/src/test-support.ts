@@ -79,6 +79,7 @@ export interface EngineHarness {
       idempotencyKey?: string;
       origin?: OperationOrigin;
       delistRunId?: string;
+      priceDropRuleId?: string;
       content?: ListingContent;
     },
   ): Promise<OperationRow>;
@@ -200,6 +201,7 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
         idempotencyKey: options.idempotencyKey ?? `test-${prefix}-${String(sequence)}`,
         origin: options.origin ?? 'user',
         delistRunId: options.delistRunId ?? null,
+        priceDropRuleId: options.priceDropRuleId ?? null,
       };
       const { operation: created } = await enqueueOperation(
         db,

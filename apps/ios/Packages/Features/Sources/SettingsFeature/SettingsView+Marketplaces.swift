@@ -6,7 +6,7 @@ extension SettingsView {
     @ViewBuilder
     var marketplacesSection: some View {
         if screens.linkAccounts != nil || screens.marketplaces != nil || screens.imports != nil
-            || screens.listingRefresh != nil
+            || screens.listingRefresh != nil || screens.priceDrops != nil
         {
             Section {
                 if screens.linkAccounts != nil {
@@ -57,6 +57,20 @@ extension SettingsView {
                         }
                     }
                     .accessibilityIdentifier("settings.listingRefresh")
+                }
+                if screens.priceDrops != nil {
+                    NavigationLink(value: SettingsDestination.priceDrops) {
+                        ListRow(
+                            "Price drops",
+                            subtitle: "Lower the price of listings that haven't sold, step by step",
+                            systemImage: "tag",
+                        ) {
+                            if features?.isTestingEverywhere(.priceDrops) == true {
+                                TestingTag()
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("settings.priceDrops")
                 }
             } header: {
                 SectionHeader("Marketplaces")

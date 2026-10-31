@@ -58,6 +58,8 @@ interface NewOperationBase {
   origin: OperationOrigin;
   /** Required for `auto_delist` operations. */
   delistRunId?: string | null;
+  /** Required for `reprice_rule` operations: the price drop rule (docs/features/price-drops.md). */
+  priceDropRuleId?: string | null;
 }
 
 /**
@@ -95,6 +97,13 @@ export async function enqueueOperation(
   if ((input.origin === 'auto_delist') !== (delistRunId !== null)) {
     throw new InvalidOperationError('Auto-delist operations, and only those, need a delist run');
   }
+  const priceDropRuleId = input.priceDropRuleId ?? null;
+  if ((input.origin === 'reprice_rule') !== (priceDropRuleId !== null)) {
+    throw new InvalidOperationError('Price drops, and only those, need a price drop rule');
+  }
+  if (input.origin === 'reprice_rule' && input.kind !== 'price') {
+    throw new InvalidOperationError('A price drop is a price change');
+  }
 
   return inTransaction(executor, async (trx) => {
     await assertWritableListing(trx, {
@@ -113,6 +122,7 @@ export async function enqueueOperation(
         content: content === null ? null : jsonb(content),
         origin: input.origin,
         delist_run_id: delistRunId,
+        price_drop_rule_id: priceDropRuleId,
         next_attempt_at: sql<Date>`now()`,
       })
       .onConflict((conflict) => conflict.columns(['account_id', 'idempotency_key']).doNothing())

@@ -105,6 +105,8 @@ task, and no word about it in a notification.
   but with no answers: `requestOfferAnswer` refuses one (`409 marketplace_action_unavailable`),
   the phone's claim fails one asked for before the account became read only without sending
   anything, and the phone dispatch would refuse its write script anyway.
+- **Price drops** ([price-drops.md](price-drops.md)): the schedule takes no read-only
+  connection, and a listing under one shows as `unavailable`, never planned to drop.
 - **Features to come** (the automatic listing refresh): they queue through
   `enqueueOperation`, so a write they forget to filter is refused there, which would fail their
   transaction. Each must leave out read-only listings itself: select with `listingIsReadOnly` and

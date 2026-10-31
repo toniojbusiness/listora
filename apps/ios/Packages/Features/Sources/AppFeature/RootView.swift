@@ -257,6 +257,12 @@ extension RootView {
         return { screen }
     }
 
+    /// Settings > Price drops, only while price drops passed live somewhere (price-drops.md).
+    private var priceDropsScreen: (@MainActor () -> AnyView)? {
+        guard let screen = dependencies.inventory.priceDropsScreen() else { return nil }
+        return { screen }
+    }
+
     private var settings: some View {
         SettingsView(
             content: SettingsContent(
@@ -276,6 +282,7 @@ extension RootView {
                 marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },
                 imports: { dependencies.importsScreen() },
                 listingRefresh: listingRefreshScreen,
+                priceDrops: priceDropsScreen,
                 notifications: {
                     AnyView(NotificationSettingsView(
                         today: dependencies.today,
