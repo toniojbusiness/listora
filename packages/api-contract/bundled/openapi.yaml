@@ -89,6 +89,8 @@ tags:
     description: Syncing the linked marketplaces now, read-only, and what each sync found (docs/features/sync.md).
   - name: marketplace-features
     description: Each marketplace's features that passed a live end-to-end test, the only ones the app shows (docs/features/verified-features.md).
+  - name: sourcing
+    description: The household's own sales, grouped for sourcing at the store (docs/features/thrift-scan.md).
 paths:
   /health/live:
     get:
@@ -4085,6 +4087,30 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sourcing/kit:
+    get:
+      tags:
+        - sourcing
+      operationId: getSourcingKit
+      summary: Get the sourcing kit
+      description: |
+        The household's own sales, grouped for sourcing: by brand, then brand and category, then
+        brand, category, and size. Each group has its sales per marketplace (count, the price
+        range, the median payout after the marketplace's fees) and how many such items sit
+        unsold. A few KB, read once while online so the app can look a brand up at the store with
+        no signal. Only real sales count: sales that stand (not canceled or returned), from the
+        last `windowDays`, on marketplaces whose sales history is on for the account (it passed
+        live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
+        never calls a marketplace or AI.
+      responses:
+        '200':
+          description: The sourcing kit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingKit'
         default:
           $ref: '#/components/responses/DefaultError'
 components:
@@ -11425,3 +11451,121 @@ components:
       properties:
         'on':
           type: boolean
+    SourcingKit:
+      type: object
+      description: |
+        The household's own sales for sourcing (docs/features/thrift-scan.md). Every number is
+        the seller's own sales; none is another seller's or the AI's.
+      required:
+        - version
+        - generatedAt
+        - windowDays
+        - buckets
+      properties:
+        version:
+          type: integer
+          format: int32
+          minimum: 1
+          description: The kit's format. A client that does not know it ignores the kit.
+        generatedAt:
+          $ref: '#/components/schemas/Timestamp'
+        windowDays:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Only sales from this many days back count.
+        buckets:
+          type: array
+          description: |
+            Every brand group, then its category groups, then their size groups, each with at
+            least one sale; ordered by brand key, then category, then size, the group without one
+            first. A group missing here has no sales. Past `maxItems`, size groups go first, then
+            category groups, the ones with the fewest sales first.
+          maxItems: 2000
+          items:
+            $ref: '#/components/schemas/OwnSalesBucket'
+    OwnSalesBucket:
+      type: object
+      description: |
+        One group of the household's sold items: a brand, or a brand and category, or a brand,
+        category, and size.
+      required:
+        - brand
+        - brandKey
+        - unsoldCount
+        - marketplaces
+      properties:
+        brand:
+          type: string
+          maxLength: 120
+          description: The brand as the seller's sold items spell it most often.
+        brandKey:
+          type: string
+          maxLength: 120
+          description: |
+            The brand compared without case, accents, spaces, or punctuation ("levis" for
+            "Levi's"); the app matches a tag's brand by it.
+        category:
+          type: string
+          maxLength: 120
+          description: The canonical category path (`ItemDetails.category`). Absent for the brand's group.
+        sizeBucket:
+          type: string
+          maxLength: 32
+          description: |
+            The size compared without case or spaces, letter sizes spelled short ("m" for
+            "Medium"). Present only in a category's size groups.
+        unsoldCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The account's items of the group in inventory and not sold (ready or listed).
+        marketplaces:
+          type: array
+          description: The marketplaces the group sold on, in `KnownMarketplace` order, never ranked.
+          minItems: 1
+          maxItems: 16
+          items:
+            $ref: '#/components/schemas/OwnSalesOnMarketplace'
+    OwnSalesOnMarketplace:
+      type: object
+      description: The group's sales on one marketplace.
+      required:
+        - marketplace
+        - soldCount
+        - low
+        - median
+        - high
+        - medianPayout
+        - feeTableVersion
+        - displayOnly
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        soldCount:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Items sold (a bundle's items each count).
+        low:
+          $ref: '#/components/schemas/Money'
+          description: The lower quartile of what buyers paid per item, an actual sale price.
+        median:
+          $ref: '#/components/schemas/Money'
+        high:
+          $ref: '#/components/schemas/Money'
+          description: The upper quartile of what buyers paid per item, an actual sale price.
+        medianPayout:
+          $ref: '#/components/schemas/Money'
+          description: |
+            The median of each sale price less the marketplace's fees from its current fee table:
+            what such a sale would pay out today. An estimate.
+        feeTableVersion:
+          type: string
+          maxLength: 64
+          description: The fee table `medianPayout` comes from.
+        displayOnly:
+          type: boolean
+          description: |
+            True when these sales may be shown to the seller as their own but never feed a
+            suggested price or a sourcing call (eBay's, until the eBay licence review).

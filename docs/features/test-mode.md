@@ -58,8 +58,8 @@ Tasks) show a test feature's rows without a tag.
 
 - **Read-only connections stay read-only.** The read-only gates are separate
   ([read-only.md](read-only.md)). Test mode never offers or queues a write on a read-only
-  connection: no revise, price change, refresh, or offer answer. Tristin's Depop shop is
-  read-only, so Test mode can't change it.
+  connection: no revise, price change, refresh, or offer answer. Test mode is only ever the
+  owner's own account, so it changes no other seller's shop.
 - **Nothing is reported done before it is.** A test feature runs through the same operation
   engine, read-back, and Retry as every other ([operations.md](operations.md)).
 - **The verified list.** Test mode never marks a feature verified. That still takes a reviewed

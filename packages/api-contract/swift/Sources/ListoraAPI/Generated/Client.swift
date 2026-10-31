@@ -17174,4 +17174,91 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// Get the sourcing kit
+    ///
+    /// The household's own sales, grouped for sourcing: by brand, then brand and category, then
+    /// brand, category, and size. Each group has its sales per marketplace (count, the price
+    /// range, the median payout after the marketplace's fees) and how many such items sit
+    /// unsold. A few KB, read once while online so the app can look a brand up at the store with
+    /// no signal. Only real sales count: sales that stand (not canceled or returned), from the
+    /// last `windowDays`, on marketplaces whose sales history is on for the account (it passed
+    /// live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
+    /// never calls a marketplace or AI.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing/kit`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)`.
+    public func getSourcingKit(_ input: Operations.GetSourcingKit.Input) async throws -> Operations.GetSourcingKit.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetSourcingKit.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/sourcing/kit",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetSourcingKit.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.SourcingKit.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
 }

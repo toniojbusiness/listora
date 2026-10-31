@@ -2922,6 +2922,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sourcing/kit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the sourcing kit
+         * @description The household's own sales, grouped for sourcing: by brand, then brand and category, then
+         *     brand, category, and size. Each group has its sales per marketplace (count, the price
+         *     range, the median payout after the marketplace's fees) and how many such items sit
+         *     unsold. A few KB, read once while online so the app can look a brand up at the store with
+         *     no signal. Only real sales count: sales that stand (not canceled or returned), from the
+         *     last `windowDays`, on marketplaces whose sales history is on for the account (it passed
+         *     live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
+         *     never calls a marketplace or AI.
+         */
+        get: operations["getSourcingKit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6642,6 +6669,83 @@ export interface components {
         TestModeReplace: {
             on: boolean;
         };
+        /**
+         * @description The household's own sales for sourcing (docs/features/thrift-scan.md). Every number is
+         *     the seller's own sales; none is another seller's or the AI's.
+         */
+        SourcingKit: {
+            /**
+             * Format: int32
+             * @description The kit's format. A client that does not know it ignores the kit.
+             */
+            version: number;
+            generatedAt: components["schemas"]["Timestamp"];
+            /**
+             * Format: int32
+             * @description Only sales from this many days back count.
+             */
+            windowDays: number;
+            /**
+             * @description Every brand group, then its category groups, then their size groups, each with at
+             *     least one sale; ordered by brand key, then category, then size, the group without one
+             *     first. A group missing here has no sales. Past `maxItems`, size groups go first, then
+             *     category groups, the ones with the fewest sales first.
+             */
+            buckets: components["schemas"]["OwnSalesBucket"][];
+        };
+        /**
+         * @description One group of the household's sold items: a brand, or a brand and category, or a brand,
+         *     category, and size.
+         */
+        OwnSalesBucket: {
+            /** @description The brand as the seller's sold items spell it most often. */
+            brand: string;
+            /**
+             * @description The brand compared without case, accents, spaces, or punctuation ("levis" for
+             *     "Levi's"); the app matches a tag's brand by it.
+             */
+            brandKey: string;
+            /** @description The canonical category path (`ItemDetails.category`). Absent for the brand's group. */
+            category?: string;
+            /**
+             * @description The size compared without case or spaces, letter sizes spelled short ("m" for
+             *     "Medium"). Present only in a category's size groups.
+             */
+            sizeBucket?: string;
+            /**
+             * Format: int32
+             * @description The account's items of the group in inventory and not sold (ready or listed).
+             */
+            unsoldCount: number;
+            /** @description The marketplaces the group sold on, in `KnownMarketplace` order, never ranked. */
+            marketplaces: components["schemas"]["OwnSalesOnMarketplace"][];
+        };
+        /** @description The group's sales on one marketplace. */
+        OwnSalesOnMarketplace: {
+            marketplace: components["schemas"]["Marketplace"];
+            /**
+             * Format: int32
+             * @description Items sold (a bundle's items each count).
+             */
+            soldCount: number;
+            /** @description The lower quartile of what buyers paid per item, an actual sale price. */
+            low: components["schemas"]["Money"];
+            median: components["schemas"]["Money"];
+            /** @description The upper quartile of what buyers paid per item, an actual sale price. */
+            high: components["schemas"]["Money"];
+            /**
+             * @description The median of each sale price less the marketplace's fees from its current fee table:
+             *     what such a sale would pay out today. An estimate.
+             */
+            medianPayout: components["schemas"]["Money"];
+            /** @description The fee table `medianPayout` comes from. */
+            feeTableVersion: string;
+            /**
+             * @description True when these sales may be shown to the seller as their own but never feed a
+             *     suggested price or a sourcing call (eBay's, until the eBay licence review).
+             */
+            displayOnly: boolean;
+        };
     };
     responses: {
         /** @description Any error. See `KnownErrorCode` for the codes and their HTTP statuses. */
@@ -7189,6 +7293,9 @@ export type MarketplaceFeatures = components['schemas']['MarketplaceFeatures'];
 export type MarketplaceFeatureList = components['schemas']['MarketplaceFeatureList'];
 export type TestMode = components['schemas']['TestMode'];
 export type TestModeReplace = components['schemas']['TestModeReplace'];
+export type SourcingKit = components['schemas']['SourcingKit'];
+export type OwnSalesBucket = components['schemas']['OwnSalesBucket'];
+export type OwnSalesOnMarketplace = components['schemas']['OwnSalesOnMarketplace'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -11361,6 +11468,27 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getSourcingKit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sourcing kit. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcingKit"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };

@@ -11,6 +11,7 @@
     { "path": "packages/photos" },
     { "path": "packages/ai" },
     { "path": "packages/pricing" },
+    { "path": "packages/sourcing" },
     { "path": "packages/marketplaces" },
     { "path": "packages/connections" },
     { "path": "packages/operations" },

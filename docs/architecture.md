@@ -116,6 +116,8 @@ packages/
                 of the seller's sales history (@listora/imports)
   pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
                 links, sold-data label guard; pure, no I/O (@listora/pricing)
+  sourcing/     Sourcing: the household's own sales as an item's similar sales and as the
+                sourcing kit, by brand, category, and size; pure, no I/O (@listora/sourcing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator, deletion
                 completion records, Postgres notifications (LISTEN) and keyed signals for
@@ -247,6 +249,8 @@ src/
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
+  sourcing/      The household's own sales that count, the sourcing kit (getSourcingKit), and
+                 the price screen's own history (docs/features/thrift-scan.md)
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
@@ -537,6 +541,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site            |
 | [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                     |
 | [features/pricing.md](features/pricing.md)                         | Pricing data rules, floors, fee tables, tiers, the label guard                 |
+| [features/thrift-scan.md](features/thrift-scan.md)                 | The thrift scan so far: own sales as comparisons, the sourcing kit             |
 | [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                     |
 | [features/items.md](features/items.md)                             | Inventory items, item status, the audit log                                    |
 | [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                       |

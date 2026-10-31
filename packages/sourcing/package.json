@@ -1,0 +1,14 @@
+{
+  "name": "@listora/sourcing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sourcing rules: the household's own sales as comparisons for an item and as the sourcing kit, grouped by brand, category, and size. Pure, no I/O.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/api-contract": "*",
+    "@listora/pricing": "*"
+  }
+}
