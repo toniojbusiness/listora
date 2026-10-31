@@ -27,14 +27,15 @@ struct ScanRunRow: View {
     let run: ScanRunModel
 
     var body: some View {
-        ListRow(
-            "This run",
-            subtitle: run.keptCount == 1
-                ? "\(run.entries.count) scanned, 1 kept"
-                : "\(run.entries.count) scanned, \(run.keptCount) kept",
-            systemImage: "cart",
-        )
-        .accessibilityIdentifier("addItem.scanRun")
+        ListRow("This run", subtitle: Self.summary(run), systemImage: "cart")
+            .accessibilityIdentifier("addItem.scanRun")
+    }
+
+    /// "12 scanned, 3 kept, 4 waiting for signal".
+    static func summary(_ run: ScanRunModel) -> String {
+        let kept = run.keptCount + run.keptWaitingCount
+        let counts = "\(run.entries.count) scanned, \(kept) kept"
+        return run.waitingCount == 0 ? counts : "\(counts), \(run.waitingCount) waiting for signal"
     }
 }
 

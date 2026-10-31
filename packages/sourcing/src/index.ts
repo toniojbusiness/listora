@@ -3,6 +3,7 @@ export {
   CALL_BASES,
   CALL_CONFIDENCES,
   DEFAULT_SCAN_CALL_SETTINGS,
+  decideCall,
   SCAN_CALLS,
   SCAN_SIGNAL_KINDS,
   scanCall,
@@ -19,7 +20,11 @@ export type {
   ScanSignalKind,
 } from './call.ts';
 export { buildSourcingKit, MAX_KIT_BUCKETS, SOURCING_KIT_VERSION } from './kit.ts';
-export type { SourcingKitInput, UnsoldItem } from './kit.ts';
+export type { SourcingKitInput } from './kit.ts';
+export { OFFLINE_CALL_LABEL, offlineScanCall, tagBrandBucket } from './offline-call.ts';
+export type { OfflineScanRead } from './offline-call.ts';
+export { unsoldLikeIt } from './unsold.ts';
+export type { UnsoldItem, UnsoldLikeIt } from './unsold.ts';
 export {
   MATCH_LEVELS,
   MIN_COMPARISONS,
@@ -27,6 +32,7 @@ export {
   OWN_HISTORY_WINDOW_DAYS,
   ownHistoryByMarketplace,
   ownHistoryComparisons,
+  payoutMarketplaceOf,
   brandResearchKey,
   itemResearchKey,
   scanOwnHistory,

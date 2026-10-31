@@ -5,10 +5,12 @@ to resell: one shot of the item (and an optional tag close-up), a short AI read,
 from the seller's own sales or the AI, and a call of **Buy**, **Your call**, or **Skip** with a
 confidence word. Built so far: the rules, the AI read, and a backtest on real sold items (plan
 milestone M0); the seller's own sales as real sold data (`own_history`, M1) on the item's
-price screen and in the sourcing kit (`GET /v1/sourcing/kit`); and the scan itself online
-(M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray; and
-upgrading a run's kept drafts with real photos (M6): "Needs photos", Shoot this run, the full
-analysis with the scan's read as a hint, and the run's rapid review. Scan mode is
+price screen and in the sourcing kit (`GET /v1/sourcing/kit`); the scan itself online
+(M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray; the scan
+with no signal (M5): the instant read and call from the household's own sales, the queue that
+reads the waiting scans once there is signal, and duplicate warnings; and upgrading a run's
+kept drafts with real photos (M6): "Needs photos", Shoot this run, the full analysis with the
+scan's read as a hint, and the run's rapid review. Scan mode is
 hidden from sellers until it passes live (`thrift_scan`, [verified-features.md](verified-features.md)):
 only the owner's Test mode has it. Nothing in it reads or writes a marketplace.
 
@@ -16,8 +18,10 @@ Code:
 
 - `packages/sourcing` (`@listora/sourcing`): the pure rules, with no I/O. `quartiles`, `brandKey`
   (how two brands compare), `ownHistoryComparisons` (the seller's own sales like the item),
-  `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS`, `ownHistoryByMarketplace` (the price screen's),
-  `sizeBucket`, and `buildSourcingKit`.
+  `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS` and `decideCall` (the rule both calls share),
+  `ownHistoryByMarketplace` (the price screen's), `sizeBucket`, `buildSourcingKit`,
+  `offlineScanCall` (the call with no signal) with its golden cases (`offline-call.cases.ts`),
+  and `unsoldLikeIt`.
 - `apps/api/src/sourcing`: the sales that count, the kit's route, and the price screen's own
   history, which `getItemPricing` shows ([pricing.md](pricing.md)). Nothing there calls a
   marketplace or AI: every number comes from the sales Listora already recorded
@@ -29,8 +33,10 @@ Code:
   (below); `scanOwnHistory` in `@listora/sourcing` and `scanResearchLinks` and
   `scanLabelViolations` in `@listora/pricing`.
 - iPhone: `AddItemFeature/Scan` (the camera, the card, the tray, the run, the note, the
-  measurements, and the kept run's section, guided shoot, and review); a kept scan is an
-  ordinary draft whose server item `keepScan` creates.
+  measurements, the kept run's section, guided shoot, and review, and with no signal
+  `ScanRuns`, the queue `ScanQueueStore`, `SourcingKitCache`, and `ScanConnectivity`);
+  `Core/Sourcing` (the kit, `BrandKey`, and `OfflineScanCall`, the app's copy of the offline
+  call). A kept scan is an ordinary draft whose server item `keepScan` creates.
 - `packages/analysis/src/load-input.ts`: the full analysis of a kept item carries its scan's
   read as a hint (`scanRead`, `scanReadHint`).
 
@@ -215,9 +221,10 @@ first scan).
 - **Failures**: a read that fails says why ("Couldn't read this one. Try again.", "Can't reach
   Listora. Check your connection.") with **Retry**; nothing is shown as read until it was.
 
-A run lives only while the app does: a relaunch starts a new one (the kept drafts stay). The
-shots' photos wait in the drafts folder's `ScanRuns/` until they are kept or the run ends, and
-the folder is emptied at launch. Reading with no signal is M5.
+The run and its scans are kept on the iPhone (the queue, below), so a relaunch goes on with the
+same run. The shots' photos wait in the drafts folder's `ScanRuns/` until they are kept or the
+run ends; a folder no kept run names is left over and goes at launch. With no signal, see
+[Offline at the bins](#offline-at-the-bins-m5).
 
 ### The server
 
@@ -297,6 +304,10 @@ The call's other signals (`call.signals`), each with what it rests on:
   arrive with the comparisons (M3) as another `trend.source`.
 - **Style.** The AI's read of a style or era buyers search by ("Y2K", "gorpcore"), labeled
   "The AI's read of the style, not sales data". It never moves the call.
+- **Unsold like it.** The household's items in inventory, not sold (ready or listed), of the
+  same brand and category (of the brand alone when the read has no category): "You have 2 like
+  it unsold" (`unsoldLikeIt`, signal `unsold`). A warning that the seller may already have
+  enough of it; it never moves the call.
 
 ### Speed
 
@@ -365,13 +376,26 @@ no-thinking setting for this one call), then streaming the identity first.
 - `@listora/sourcing` (`scanOwnHistory`, the signals, `salesTrend`, the research keys),
   `@listora/pricing` (`scanResearchLinks`, `scanLabelViolations`), the retention rules, and the
   app feature gate.
-- iPhone: `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
+- The offline call: `offline-call.test.ts` runs the golden cases, checks that the server's
+  `scanCall` makes the same call on the same sales, and keeps the iPhone's copy of the cases
+  equal; `unsold.test.ts`; the kit's `forCall` and thresholds (`kit.test.ts`,
+  `sourcing.int.test.ts`); the online read's unsold warning (`scans.int.test.ts`).
+- iPhone: `OfflineScanCallTests` (Core: every golden case and brand key, as the server's);
+  `ScanOfflineTests.swift` (the instant read with no signal and no request; the waiting reads
+  newest first once there is signal, read late; a read cut off by the network tried again under
+  the same key; a scan kept with no signal saved once read, or as an ordinary draft when it can
+  never be read; a run ended with kept scans waiting finishing after they are saved; a note with
+  no signal; the duplicate warning; the run and its scans across a relaunch, and an ended run
+  finished after one; the kit kept in its file, an unknown format never read);
+  `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
   run, the small JPEG with tag text, implicit skip and Keep from the tray, notes before and after
   a read, the tag close-up, Retry, End run; the upload queue's `keepScan`, a deleted draft's item
   found by keeping again, a skipped scan's draft failing visibly; the research asked for after
   the read and the card taking it in, nothing asked without a brand); `ThriftScanUITests` end
   to end on the local stack with the fake camera and the fake AI's scan and web research
-  (`FakeAI/default.json`).
+  (`FakeAI/default.json`), and with no signal (`LISTORA_SCAN_NO_SIGNAL=1`, debug builds): a
+  shot waits unread, Keep marks it, and the next launch with signal reads it and saves its
+  draft.
 
 **The phone needs a new app build** for Scan mode.
 
@@ -434,6 +458,84 @@ store: a hint to check, where the photos always win, as an escalation checks `fi
 the server (today the review starts it, with the next page loaded ahead), and keep a run's
 drafts grouped by the server's run on a second device.
 
+## Offline at the bins (M5)
+
+Thrift stores often have no signal at the bins. The scan works without it: each shot gets an
+instant read from the household's own sales, and its full read waits on the iPhone until there
+is signal.
+
+### The instant read
+
+- **The kit.** The iPhone keeps the sourcing kit (below) in a file (`SourcingKitCache`), fetched
+  when a run starts and whenever signal returns, at most every 15 minutes; a failed fetch keeps
+  the one it has, and a kit of a format the app does not read is never used.
+- **The brand off the tag.** The tag text the phone reads (Vision, as for every shot) is looked
+  up in the kit's brand groups: each line in reading order, each word of it in order, the first
+  whose `brandKey` (of that word and the next three) is one of the household's brands
+  (`tagBrandBucket`). A category or size group is never used: the tag cannot give a category.
+- **The call** (`offlineScanCall`; the iPhone's copy is `OfflineScanCall` in Core). The printed
+  brand counts as a sure read, but with no category the household's sales match on the brand
+  alone, which the server's call never makes high confidence. At least 3 of the brand's sales
+  (not eBay's) give the range from their low to high quartile at medium confidence, and the
+  call is the server's rule (`decideCall`) on the kit's payouts, with no flags, since nothing saw
+  the item. Fewer give Your call at low confidence, "Not enough of your Levi's sales to go on".
+  A tag naming none of the household's brands has no instant read.
+- **The card** says "From your sales only" over the call and its confidence, the brand, the
+  range with what it rests on ("Your 5 Lululemon sales"), the payout after the main
+  marketplace's fees, and "You have 2 Lululemon unsold" when the kit counts some; "No signal:
+  read when you have it" below. The haptics are the online card's. With signal, the instant
+  read shows as one line under "Reading item 3" until the full card lands.
+- **Kept equal to the server's.** The golden cases (`offline-call.cases.ts`: one invented kit,
+  tag texts, and the read each must give, by hand) run in both test suites: `offline-call.test.ts`
+  writes them to `apps/ios/Packages/Core/Tests/CoreTests/Fixtures/offline-scan-call.json`
+  (`UPDATE_IOS_OFFLINE_CALL=1`) and fails when the file differs, and `OfflineScanCallTests` runs
+  the app's copy of the rule and of `brandKey` over the same file. The server's test also checks
+  that `scanCall` makes the same call on the same sales.
+
+### The queue
+
+- **What waits.** Every run and its scans are kept in the drafts database (`scanRun`,
+  `scanEntry`, migration v5), with each shot's small JPEG, tag close-up, and upload-sized photos
+  in the run's folder, so nothing waiting is lost when the app closes. A read cut off with the
+  app is due again at the next launch.
+- **When a read waits.** With no network path (`NWPathMonitor`) the read is not tried; one that
+  fails for no signal (no connection, or its answer still on its way) waits too, rather than
+  failing. Any other failure shows with Retry, as with signal.
+- **When it runs.** Whenever the path comes back, and every 30 seconds while scans wait and the
+  path is up (a store's signal can drop requests on an open path), whichever tab is open: the
+  waiting reads run one at a time, newest first (the item in hand matters most), until one still
+  finds no signal. Each read keeps its `Idempotency-Key` until it lands, so a read retried after
+  a lost answer is replayed by the server, never read and charged twice; a note or tag shot
+  changes the request, so it gets a new key. The server's limits (300 scans a day, the AI
+  budget) apply to each read as with signal.
+- **Read late.** A card read from the queue says "Read when you had signal", plays no haptic,
+  and never counts toward the card's seconds from the shutter.
+- **Notes and the tag with no signal.** A note said over a waiting card rides along with its
+  read; a tag close-up adds its text to the instant read at once and to the read due.
+
+### Keeping and ending with no signal
+
+- **Keep** on a waiting card marks it kept at once ("Kept: saved once it's read"): its draft
+  needs the scan, so it is saved the moment the item is read. A kept scan that can never be read
+  (the server refuses it) is saved as an ordinary draft with its photos, which the full analysis
+  then reads like any draft's: a kept item is never lost.
+- **End run** skips the items not kept, as with signal. Kept scans still waiting stay queued:
+  the run finishes (ended on the server, its files and records removed) once each is read and
+  saved, after a relaunch too. The confirmation says how many are waiting; Add Item's row and
+  the camera say "4 waiting for signal".
+
+### Duplicates
+
+- **In the run.** Each shot's Vision feature print (the batch camera's reader) is compared with
+  the run's earlier shots; at the batch camera's "same item" distance or closer
+  (`BatchGrouper.sameItemBelow`) the card says "Looks like item 3, already scanned", with or
+  without signal. The simulator computes no feature prints, so there it never shows.
+- **In the household's inventory.** With signal, the read's `unsold` signal ("You have 2 like it
+  unsold"); without it, the kit's count of the brand's unsold items ("You have 2 Lululemon
+  unsold"). Neither moves the call.
+
+**The phone needs a new app build** for the offline scan.
+
 ## The seller's own sales (M1)
 
 ### The sales that count
@@ -482,8 +584,11 @@ with their label.
 ### The sourcing kit
 
 `getSourcingKit` (`GET /v1/sourcing/kit`) is the same sales, grouped for looking a brand up at
-the store with no signal (the offline read comes in M5; the app does not read the kit yet).
+the store with no signal ([Offline at the bins](#offline-at-the-bins-m5)).
 
+- **Format** 2: the call's thresholds (`call`: worth listing and the fewest sales) and each
+  group's sales for the call (`forCall`, below) were added for the offline call. A client that
+  does not know a kit's `version` ignores the kit.
 - **Groups** (`buildSourcingKit`): every brand (by `brandKey`), then each of its categories, then
   each size in a category (`sizeBucket`: without case or spaces, letter sizes spelled short, so
   "Medium" is `m`). Each group with a sale is listed, so a group missing from the kit has none.
@@ -492,9 +597,12 @@ the store with no signal (the offline read comes in M5; the app does not read th
   marketplace's fees from its current fee table, an estimate, with the table's version), whether
   they are display only (eBay), and how many of the account's items of the group sit unsold
   (ready or listed).
+- **For the call** (`forCall`): the group's sales that may model a price (not eBay's), their low
+  and high quartile, the marketplace with most of them (Depop on a tie), and what each end pays
+  out after its fees, calibrated by the account's actual fees as the scan's call is
+  (`payoutFees`). Absent when the group has none.
 - **Size:** at most 2,000 groups (`MAX_KIT_BUCKETS`); past that, size groups go first, then
-  category groups, the ones with the fewest sales first. The kit has a format `version` (1); a
-  client that does not know it ignores the kit.
+  category groups, the ones with the fewest sales first.
 
 ### Tests
 
@@ -526,17 +634,22 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   filled, for example from the title or the photos, they show little of the household's history.
 - **Days to sell.** Not shown yet: an imported listing's `listed_at` is when Listora read it, not
   when the seller listed it, so a day count from it would understate.
-- **The call's thresholds** belong in the kit for the offline call (M5).
 - **Scale the AI estimate** by the seller's own sale-to-estimate ratio once Listora has enough
   of both for an account.
 - **Re-run the backtest** as sales accumulate, and on shots taken at a store (M2), before showing
   the call to sellers.
 - **M2 live test** (the captain, Test mode, a real store, 30 or more scans): the speed targets
   above on cellular, then `thrift_scan` into `VERIFIED_APP_FEATURES` with its evidence.
+- **M5 live test** (the captain, Test mode, airplane mode at a store): scans with no signal get
+  the instant read, keep and end the run, then turn signal on and see the cards read late and
+  the kept ones saved as drafts.
+- **Duplicates against the household's own photos.** The offline warning of unsold items rests
+  on the kit's brand counts, which count only brands that sold; comparing a shot's feature print
+  with the unsold items' photos (the plan's fuller check) needs their prints on the iPhone and
+  is not built. No "unsold for N days": an imported listing's date is when Listora read it.
 - **Later milestones:** comparisons on the phone (M3, gated on the captain's call), the run's
-  place and checkout into a haul (M4), scanning with no signal and a run that survives a
-  relaunch (M5). Upgrading a run's drafts (M6) is built; its live test is the captain listing a
-  run's draft on `tonioreign`.
+  place and checkout into a haul (M4). Upgrading a run's drafts (M6) is built; its live test is
+  the captain listing a run's draft on `tonioreign`.
 
 ## Data
 

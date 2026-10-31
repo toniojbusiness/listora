@@ -32,6 +32,11 @@ struct ScanGuide: View {
             detail: "Keep saves a draft; shooting the next item skips this one",
             systemImage: "plus.square.on.square",
         ),
+        Step(
+            title: "No signal? Keep scanning",
+            detail: "Your own sales call it at once; the full read comes when you have signal",
+            systemImage: "wifi.slash",
+        ),
     ]
 
     var body: some View {

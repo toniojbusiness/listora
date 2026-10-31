@@ -8,34 +8,41 @@ import {
   knownMarketplaceValues,
   type KnownMarketplace,
   type OwnSalesBucket,
+  type OwnSalesForCall,
   type OwnSalesOnMarketplace,
   type SourcingKit,
 } from '@listora/api-contract';
 import { estimateFeesCents, feeTableFor, OWN_SALES_MAY_MODEL_PRICES } from '@listora/pricing';
 
 import { brandKey } from './brand.ts';
-import { OWN_HISTORY_WINDOW_DAYS, type OwnSale } from './own-history.ts';
+import { DEFAULT_SCAN_CALL_SETTINGS, type ScanCallSettings } from './call.ts';
+import { OWN_HISTORY_WINDOW_DAYS, payoutMarketplaceOf, type OwnSale } from './own-history.ts';
 import { sizeBucket } from './size.ts';
 import { medianCents, quartiles } from './stats.ts';
+import type { UnsoldItem } from './unsold.ts';
 
-/** The kit's format (`SourcingKit.version`). Bump it when a client must read it differently. */
-export const SOURCING_KIT_VERSION = 1;
+/**
+ * The kit's format (`SourcingKit.version`). Bump it when a client must read it differently: 2
+ * added the call's thresholds and each group's sales for the call (`forCall`), which the
+ * iPhone's offline call reads.
+ */
+export const SOURCING_KIT_VERSION = 2;
 /** The most groups a kit holds (`SourcingKit.buckets` `maxItems`). */
 export const MAX_KIT_BUCKETS = 2000;
 const MAX_BRAND_LENGTH = 120;
-
-/** An item of the account in inventory and not sold. */
-export interface UnsoldItem {
-  readonly brand: string | null;
-  readonly category: string | null;
-  readonly sizeLabel: string | null;
-}
+const usd = (amountCents: number) => ({ amountCents, currency: 'USD' as const });
 
 export interface SourcingKitInput {
   /** The sales that count: standing, from the window, on marketplaces whose history is on. */
   readonly sales: readonly OwnSale[];
   readonly unsold: readonly UnsoldItem[];
   readonly now: Date;
+  /**
+   * A marketplace's estimated fees for one item at a price, as the scan's call works payouts
+   * out (calibrated by the account's actual fees); by default its current fee table's.
+   */
+  readonly fees?: ((marketplace: KnownMarketplace) => (priceCents: number) => number) | undefined;
+  readonly settings?: ScanCallSettings | undefined;
 }
 
 type Level = 'brand' | 'category' | 'size';
@@ -83,6 +90,11 @@ export function buildSourcingKit(input: SourcingKitInput): SourcingKit {
     }
   }
 
+  const settings = input.settings ?? DEFAULT_SCAN_CALL_SETTINGS;
+  const fees =
+    input.fees ??
+    ((marketplace: KnownMarketplace) => (priceCents: number) =>
+      estimateFeesCents(feeTableFor(marketplace, input.now), priceCents));
   const kept = [...groups.values()]
     .sort(
       (a, b) =>
@@ -102,7 +114,11 @@ export function buildSourcingKit(input: SourcingKitInput): SourcingKit {
     version: SOURCING_KIT_VERSION,
     generatedAt: input.now.toISOString(),
     windowDays: OWN_HISTORY_WINDOW_DAYS,
-    buckets: kept.map((group) => bucketView(group, spellings.get(group.brandKey), input.now)),
+    call: {
+      worthListing: usd(settings.worthListingCents),
+      minComparisons: settings.minComparisons,
+    },
+    buckets: kept.map((group) => bucketView(group, spellings.get(group.brandKey), input.now, fees)),
   };
 }
 
@@ -142,7 +158,9 @@ function bucketView(
   group: Group,
   spellings: ReadonlyMap<string, number> | undefined,
   now: Date,
+  fees: (marketplace: KnownMarketplace) => (priceCents: number) => number,
 ): OwnSalesBucket {
+  const forCall = forCallView(group, fees);
   return {
     brand: mostCommon(spellings) ?? group.brandKey,
     brandKey: group.brandKey,
@@ -153,6 +171,38 @@ function bucketView(
       const prices = group.sales.get(marketplace);
       return prices === undefined ? [] : [marketplaceView(marketplace, prices, now)];
     }),
+    ...(forCall === undefined ? {} : { forCall }),
+  };
+}
+
+/**
+ * The group's sales the scan's call may rest on (`OWN_SALES_MAY_MODEL_PRICES`: not eBay's), as
+ * `scanOwnHistory` and `scanCall` take them: their quartiles, and the payouts at each end after
+ * the fees of the marketplace with most of them.
+ */
+function forCallView(
+  group: Group,
+  fees: (marketplace: KnownMarketplace) => (priceCents: number) => number,
+): OwnSalesForCall | undefined {
+  const counts = new Map<KnownMarketplace, number>();
+  const prices: number[] = [];
+  for (const [marketplace, sold] of group.sales) {
+    if (!OWN_SALES_MAY_MODEL_PRICES[marketplace]) continue;
+    counts.set(marketplace, sold.length);
+    prices.push(...sold);
+  }
+  const stats = quartiles(prices);
+  if (stats === undefined) return undefined;
+  const payoutMarketplace = payoutMarketplaceOf(counts);
+  const fee = fees(payoutMarketplace);
+  const payout = (priceCents: number) => Math.max(0, priceCents - fee(priceCents));
+  return {
+    soldCount: stats.count,
+    low: usd(stats.lowCents),
+    high: usd(stats.highCents),
+    payoutMarketplace,
+    conservativePayout: usd(payout(stats.lowCents)),
+    optimisticPayout: usd(payout(stats.highCents)),
   };
 }
 
@@ -165,7 +215,6 @@ function marketplaceView(
   if (stats === undefined) throw new Error('a group lists only marketplaces it sold on');
   const table = feeTableFor(marketplace, now);
   const payouts = prices.map((price) => Math.max(0, price - estimateFeesCents(table, price)));
-  const usd = (amountCents: number) => ({ amountCents, currency: 'USD' as const });
   return {
     marketplace,
     soldCount: stats.count,

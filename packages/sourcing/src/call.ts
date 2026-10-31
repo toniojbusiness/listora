@@ -1,6 +1,7 @@
 import { AI_ESTIMATE_LABEL, WEB_INFO_LABEL } from '@listora/pricing';
 
 import type { OwnHistoryComparisons } from './own-history.ts';
+import type { UnsoldLikeIt } from './unsold.ts';
 import type { SalesTrend } from './trend.ts';
 
 /** The scan's answer to "is it worth listing?" (docs/features/thrift-scan.md, "The call"). */
@@ -59,6 +60,7 @@ export const SCAN_SIGNAL_KINDS = [
   'web_resale',
   'trend',
   'style',
+  'unsold',
 ] as const;
 export type ScanSignalKind = (typeof SCAN_SIGNAL_KINDS)[number];
 
@@ -114,6 +116,8 @@ export interface ScanCallInput {
   readonly trend?: SalesTrend | undefined;
   /** A style or era buyers search by, the AI's read. */
   readonly style?: string | undefined;
+  /** The household's items like it in inventory, not sold (`unsoldLikeIt`); never moves the call. */
+  readonly unsold?: UnsoldLikeIt | undefined;
 }
 
 export interface ScanCall {
@@ -234,6 +238,9 @@ export function scanCall(
       basedOn: "The AI's read of the style, not sales data",
     });
   }
+  if (input.unsold !== undefined && input.unsold.count > 0) {
+    signals.push(unsoldSignal(input.unsold));
+  }
   if (range === undefined) {
     return {
       call: 'your_call',
@@ -255,12 +262,10 @@ export function scanCall(
   const optimisticPayoutCents = payout(range.highCents, input.fees);
   const flagged =
     input.flags.visibleDamage || input.flags.lotOrBundle || input.flags.counterfeitProne;
-  const call: ScanCallKind =
-    optimisticPayoutCents < settings.worthListingCents
-      ? 'skip'
-      : conservativePayoutCents >= settings.worthListingCents && confidence !== 'low' && !flagged
-        ? 'buy'
-        : 'your_call';
+  const call = decideCall(
+    { conservativePayoutCents, optimisticPayoutCents, confidence, flagged },
+    settings,
+  );
   return {
     call,
     confidence,
@@ -275,6 +280,40 @@ export function scanCall(
           ? `${WEB_INFO_LABEL}: ${web.sites.join(', ')}`
           : AI_ESTIMATE_LABEL,
     signals,
+  };
+}
+
+/**
+ * The call from a range's payouts, the one rule the server's call and the iPhone's offline call
+ * share (`offlineScanCall`, kept equal by golden cases): **Skip** when even the optimistic payout
+ * is under the worth-listing amount; **Buy** when the conservative one reaches it at medium or
+ * high confidence with no flag; **Your call** otherwise.
+ */
+export function decideCall(
+  range: {
+    readonly conservativePayoutCents: number;
+    readonly optimisticPayoutCents: number;
+    readonly confidence: CallConfidence;
+    readonly flagged: boolean;
+  },
+  settings: Pick<ScanCallSettings, 'worthListingCents'>,
+): ScanCallKind {
+  if (range.optimisticPayoutCents < settings.worthListingCents) return 'skip';
+  return range.conservativePayoutCents >= settings.worthListingCents &&
+    range.confidence !== 'low' &&
+    !range.flagged
+    ? 'buy'
+    : 'your_call';
+}
+
+function unsoldSignal(unsold: UnsoldLikeIt): ScanSignal {
+  return {
+    kind: 'unsold',
+    label: `You have ${String(unsold.count)} like it unsold`,
+    basedOn:
+      unsold.level === 'brand_and_category'
+        ? 'Your items of the same brand and kind in inventory, ready or listed'
+        : 'Your items of the same brand in inventory, ready or listed',
   };
 }
 

@@ -63,9 +63,9 @@ struct ScanCardTests {
 struct ScanRunModelTests {
     private struct Kept {
         var photos: [(PreparedPhoto, PhotoRole)]
-        var scan: DraftScanOrigin
-        var scanID: String {
-            scan.scanID
+        var scan: DraftScanOrigin?
+        var scanID: String? {
+            scan?.scanID
         }
     }
 
@@ -249,8 +249,11 @@ struct ScanRunModelTests {
         await run.end()
         #expect(service.calls.ended == ["run-1"])
         #expect(run.isEnded)
+        #expect(run.isFinished)
+        // Its item was not kept: skipped, and gone with the run.
+        #expect(run.entries.isEmpty)
         await run.shoot(capture(2))
-        #expect(run.entries.count == 1)
+        #expect(run.entries.isEmpty)
     }
 }
 

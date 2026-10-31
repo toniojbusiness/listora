@@ -5,6 +5,7 @@ import { OWN_HISTORY_WINDOW_DAYS, SOURCING_KIT_VERSION } from '@listora/sourcing
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
+import { payoutFees } from './fees.ts';
 import type { Tenant } from '../tenancy.ts';
 
 // Invented sellers and sales; no real shop's data.
@@ -218,6 +219,7 @@ describe('own sales for sourcing (real Postgres)', () => {
         version: SOURCING_KIT_VERSION,
         generatedAt: empty.body.generatedAt,
         windowDays: OWN_HISTORY_WINDOW_DAYS,
+        call: { worthListing: usd(800), minComparisons: 3 },
         buckets: [],
       });
     });
@@ -261,6 +263,20 @@ describe('own sales for sourcing (real Postgres)', () => {
         displayOnly: false,
       });
       expect(size6?.unsoldCount).toBe(1);
+
+      // The offline call's thresholds and sales: Depop's and Mercari's together ($20, $22, $26,
+      // $28), after Depop's fees on the tie, worked out as the scan works them.
+      expect(kit.version).toBe(2);
+      expect(kit.call).toEqual({ worthListing: usd(800), minComparisons: 3 });
+      const fee = await payoutFees(api.db, tenant, 'depop', new Date(kit.generatedAt));
+      expect(size6?.forCall).toEqual({
+        soldCount: 4,
+        low: usd(2150),
+        high: usd(2650),
+        payoutMarketplace: 'depop',
+        conservativePayout: usd(2150 - fee(2150)),
+        optimisticPayout: usd(2650 - fee(2650)),
+      });
     });
 
     it("shows eBay's sales display only in the owner's Test mode", async () => {

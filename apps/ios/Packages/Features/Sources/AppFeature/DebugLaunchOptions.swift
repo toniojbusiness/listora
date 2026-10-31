@@ -33,6 +33,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     /// `LISTORA_SCRIPTED_PRINTING=1`: Pack check's label printing gets a test label instead of the
     /// marketplace's, and every print "prints" at once, with no print sheet.
     public var scriptedPrinting = false
+    /// `LISTORA_SCAN_NO_SIGNAL=1`: the thrift scan finds no signal, as at the bins of a store,
+    /// so its reads wait in the queue until a launch without it.
+    public var scanHasNoSignal = false
 
     public static let none = DebugLaunchOptions()
 
@@ -47,6 +50,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         showsGettingStarted: Bool = false,
         scannedCodes: [String]? = nil,
         scriptedPrinting: Bool = false,
+        scanHasNoSignal: Bool = false,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
@@ -58,6 +62,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         self.showsGettingStarted = showsGettingStarted
         self.scannedCodes = scannedCodes
         self.scriptedPrinting = scriptedPrinting
+        self.scanHasNoSignal = scanHasNoSignal
     }
 
     /// The options in this process's environment (debug builds), otherwise ``none``.
@@ -94,6 +99,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
             showsGettingStarted: environment["LISTORA_SHOW_GETTING_STARTED"] == "1",
             scannedCodes: environment["LISTORA_SCANNED_CODES"].map { $0.split(separator: "|").map(String.init) },
             scriptedPrinting: environment["LISTORA_SCRIPTED_PRINTING"] == "1",
+            scanHasNoSignal: environment["LISTORA_SCAN_NO_SIGNAL"] == "1",
         )
     }
 

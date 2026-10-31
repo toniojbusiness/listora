@@ -112,7 +112,10 @@ struct ScanCaptureView: View {
 
     private var endMessage: String {
         let kept = run.keptCount == 1 ? "The 1 item you kept stays" : "The \(run.keptCount) items you kept stay"
-        return "\(kept) in your drafts. The others are skipped and can't be kept after this."
+        let waiting = run.keptWaitingCount == 0 ? ""
+            : run.keptWaitingCount == 1 ? " The 1 kept item waiting for signal is saved once it's read."
+            : " The \(run.keptWaitingCount) kept items waiting for signal are saved once they're read."
+        return "\(kept) in your drafts.\(waiting) The others are skipped and can't be kept after this."
     }
 
     // MARK: Top
@@ -132,6 +135,8 @@ struct ScanCaptureView: View {
                 Spacer()
                 Text(runSummary)
                     .font(Typography.emphasis)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .padding(.horizontal, Spacing.sm)
                     .frame(minHeight: Layout.minimumTapTarget)
                     .background(Palette.scrim.color.opacity(0.45), in: Capsule())
@@ -161,7 +166,9 @@ struct ScanCaptureView: View {
 
     private var runSummary: String {
         let scanned = run.entries.count == 1 ? "1 scanned" : "\(run.entries.count) scanned"
-        return run.keptCount == 0 ? scanned : "\(scanned) · \(run.keptCount) kept"
+        let kept = run.keptCount + run.keptWaitingCount
+        let summary = kept == 0 ? scanned : "\(scanned) · \(kept) kept"
+        return run.waitingCount == 0 ? summary : "\(summary) · \(run.waitingCount) waiting"
     }
 
     @ViewBuilder

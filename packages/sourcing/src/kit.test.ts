@@ -1,6 +1,7 @@
 import { estimateFeesCents, feeTableFor } from '@listora/pricing';
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_SCAN_CALL_SETTINGS } from './call.ts';
 import { buildSourcingKit, MAX_KIT_BUCKETS, SOURCING_KIT_VERSION } from './kit.ts';
 import { OWN_HISTORY_WINDOW_DAYS, type OwnSale } from './own-history.ts';
 
@@ -134,5 +135,44 @@ describe('buildSourcingKit', () => {
     expect(kit.buckets[0]?.category).toBeUndefined();
     expect(kit.buckets[1]?.sizeBucket).toBeUndefined();
     expect(kit.buckets.some((bucket) => bucket.sizeBucket === '1w')).toBe(true);
+  });
+
+  it("gives each group the call's sales, payouts, and thresholds for the offline call", () => {
+    const kit = buildSourcingKit({
+      sales: [
+        sale({ salePriceCents: 2000 }),
+        sale({ salePriceCents: 3000 }),
+        sale({ marketplace: 'mercari', salePriceCents: 2600 }),
+        sale({ marketplace: 'mercari', salePriceCents: 2400 }),
+        sale({ marketplace: 'mercari', salePriceCents: 2500 }),
+        // eBay's sales show, but never feed the call.
+        sale({ marketplace: 'ebay', salePriceCents: 9000 }),
+        sale({ brand: 'Coach', marketplace: 'ebay', category: null, salePriceCents: 5000 }),
+      ],
+      unsold: [],
+      now: NOW,
+      // A flat $1 fee, as an account's calibrated estimate would be passed in.
+      fees: (marketplace) => (price) => (marketplace === 'mercari' ? 100 : price),
+      settings: { ...DEFAULT_SCAN_CALL_SETTINGS, worthListingCents: 900, minComparisons: 4 },
+    });
+
+    expect(kit.call).toEqual({ worthListing: usd(900), minComparisons: 4 });
+    const brand = kit.buckets.find((bucket) => bucket.brandKey === 'lululemon' && !bucket.category);
+    // Five sales (not eBay's): quartiles $24-$26, after Mercari's fees, which has most of them.
+    expect(brand?.forCall).toEqual({
+      soldCount: 5,
+      low: usd(2400),
+      high: usd(2600),
+      payoutMarketplace: 'mercari',
+      conservativePayout: usd(2300),
+      optimisticPayout: usd(2500),
+    });
+    expect(kit.buckets.find((bucket) => bucket.brandKey === 'coach')?.forCall).toBeUndefined();
+  });
+
+  it("works payouts out by each marketplace's current fee table by default", () => {
+    const kit = buildSourcingKit({ sales: [sale({ salePriceCents: 2800 })], unsold: [], now: NOW });
+    expect(kit.buckets[0]?.forCall?.conservativePayout).toEqual(usd(payout('depop', 2800)));
+    expect(kit.call).toEqual({ worthListing: usd(800), minComparisons: 3 });
   });
 });

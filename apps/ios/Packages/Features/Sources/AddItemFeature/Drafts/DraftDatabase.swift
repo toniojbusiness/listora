@@ -112,6 +112,7 @@ final class DraftDatabase: Sendable {
                 table.add(column: "isScanShot", .boolean).notNull().defaults(to: false)
             }
         }
+        registerScanQueueMigration(in: &migrator)
         return migrator
     }
 }

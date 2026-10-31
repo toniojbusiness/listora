@@ -11698,13 +11698,16 @@ components:
         - version
         - generatedAt
         - windowDays
+        - call
         - buckets
       properties:
         version:
           type: integer
           format: int32
           minimum: 1
-          description: The kit's format. A client that does not know it ignores the kit.
+          description: |
+            The kit's format (2 since the offline call). A client that does not know it ignores
+            the kit.
         generatedAt:
           $ref: '#/components/schemas/Timestamp'
         windowDays:
@@ -11712,6 +11715,8 @@ components:
           format: int32
           minimum: 1
           description: Only sales from this many days back count.
+        call:
+          $ref: '#/components/schemas/SourcingKitCall'
         buckets:
           type: array
           description: |
@@ -11722,6 +11727,23 @@ components:
           maxItems: 2000
           items:
             $ref: '#/components/schemas/OwnSalesBucket'
+    SourcingKitCall:
+      type: object
+      description: |
+        The call's thresholds, so the app makes the scan's history-only call with no signal by
+        the same rule as the server (`offlineScanCall` in @listora/sourcing).
+      required:
+        - worthListing
+        - minComparisons
+      properties:
+        worthListing:
+          $ref: '#/components/schemas/Money'
+          description: The least payout, after fees, worth buying for.
+        minComparisons:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Fewest of the household's own sales like it a range rests on.
     OwnSalesBucket:
       type: object
       description: |
@@ -11766,6 +11788,8 @@ components:
           maxItems: 16
           items:
             $ref: '#/components/schemas/OwnSalesOnMarketplace'
+        forCall:
+          $ref: '#/components/schemas/OwnSalesForCall'
     OwnSalesOnMarketplace:
       type: object
       description: The group's sales on one marketplace.
@@ -11808,6 +11832,43 @@ components:
           description: |
             True when these sales may be shown to the seller as their own but never feed a
             suggested price or a sourcing call (eBay's, until the eBay licence review).
+    OwnSalesForCall:
+      type: object
+      description: |
+        The group's sales the scan's call may rest on (every marketplace's but eBay's, which are
+        display only), with their payouts as the server's call works them out. Absent when the
+        group has none.
+      required:
+        - soldCount
+        - low
+        - high
+        - payoutMarketplace
+        - conservativePayout
+        - optimisticPayout
+      properties:
+        soldCount:
+          type: integer
+          format: int32
+          minimum: 1
+        low:
+          $ref: '#/components/schemas/Money'
+          description: The low quartile of what buyers paid per item.
+        high:
+          $ref: '#/components/schemas/Money'
+          description: The high quartile of what buyers paid per item.
+        payoutMarketplace:
+          $ref: '#/components/schemas/Marketplace'
+          description: |
+            The marketplace with the most of these sales (Depop on a tie), whose fees the payouts
+            are after.
+        conservativePayout:
+          $ref: '#/components/schemas/Money'
+          description: |
+            What `low` pays out after that marketplace's estimated fees, calibrated by the
+            account's actual fees there when there are enough. An estimate.
+        optimisticPayout:
+          $ref: '#/components/schemas/Money'
+          description: What `high` pays out after those fees. An estimate.
     SourcingRunCreate:
       type: object
       additionalProperties: false
@@ -12221,12 +12282,15 @@ components:
         `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
         are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
         own sales of items like it coming faster or slower. `style`: the AI's read of the style.
+        `unsold`: the household already has items like it in inventory, not sold (it never moves
+        the call).
       enum:
         - retail
         - new_with_tags
         - web_resale
         - trend
         - style
+        - unsold
     ScanRetail:
       type: object
       description: |

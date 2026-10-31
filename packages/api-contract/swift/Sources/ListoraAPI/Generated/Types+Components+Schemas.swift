@@ -15699,7 +15699,9 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/SourcingKit`.
         public struct SourcingKit: Codable, Hashable, Sendable {
-            /// The kit's format. A client that does not know it ignores the kit.
+            /// The kit's format (2 since the offline call). A client that does not know it ignores
+            /// the kit.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/SourcingKit/version`.
             public var version: Swift.Int32
@@ -15709,6 +15711,8 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SourcingKit/windowDays`.
             public var windowDays: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/SourcingKit/call`.
+            public var call: Components.Schemas.SourcingKitCall
             /// Every brand group, then its category groups, then their size groups, each with at
             /// least one sale; ordered by brand key, then category, then size, the group without one
             /// first. A group missing here has no sales. Past `maxItems`, size groups go first, then
@@ -15720,26 +15724,61 @@ extension Components {
             /// Creates a new `SourcingKit`.
             ///
             /// - Parameters:
-            ///   - version: The kit's format. A client that does not know it ignores the kit.
+            ///   - version: The kit's format (2 since the offline call). A client that does not know it ignores
             ///   - generatedAt:
             ///   - windowDays: Only sales from this many days back count.
+            ///   - call:
             ///   - buckets: Every brand group, then its category groups, then their size groups, each with at
             public init(
                 version: Swift.Int32,
                 generatedAt: Components.Schemas.Timestamp,
                 windowDays: Swift.Int32,
+                call: Components.Schemas.SourcingKitCall,
                 buckets: [Components.Schemas.OwnSalesBucket]
             ) {
                 self.version = version
                 self.generatedAt = generatedAt
                 self.windowDays = windowDays
+                self.call = call
                 self.buckets = buckets
             }
             public enum CodingKeys: String, CodingKey {
                 case version
                 case generatedAt
                 case windowDays
+                case call
                 case buckets
+            }
+        }
+        /// The call's thresholds, so the app makes the scan's history-only call with no signal by
+        /// the same rule as the server (`offlineScanCall` in @listora/sourcing).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingKitCall`.
+        public struct SourcingKitCall: Codable, Hashable, Sendable {
+            /// The least payout, after fees, worth buying for.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingKitCall/worthListing`.
+            public var worthListing: Components.Schemas.Money
+            /// Fewest of the household's own sales like it a range rests on.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingKitCall/minComparisons`.
+            public var minComparisons: Swift.Int32
+            /// Creates a new `SourcingKitCall`.
+            ///
+            /// - Parameters:
+            ///   - worthListing: The least payout, after fees, worth buying for.
+            ///   - minComparisons: Fewest of the household's own sales like it a range rests on.
+            public init(
+                worthListing: Components.Schemas.Money,
+                minComparisons: Swift.Int32
+            ) {
+                self.worthListing = worthListing
+                self.minComparisons = minComparisons
+            }
+            public enum CodingKeys: String, CodingKey {
+                case worthListing
+                case minComparisons
             }
         }
         /// One group of the household's sold items: a brand, or a brand and category, or a brand,
@@ -15777,6 +15816,8 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/marketplaces`.
             public var marketplaces: [Components.Schemas.OwnSalesOnMarketplace]
+            /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/forCall`.
+            public var forCall: Components.Schemas.OwnSalesForCall?
             /// Creates a new `OwnSalesBucket`.
             ///
             /// - Parameters:
@@ -15786,13 +15827,15 @@ extension Components {
             ///   - sizeBucket: The size compared without case or spaces, letter sizes spelled short ("m" for
             ///   - unsoldCount: The account's items of the group in inventory and not sold (ready or listed).
             ///   - marketplaces: The marketplaces the group sold on, in `KnownMarketplace` order, never ranked.
+            ///   - forCall:
             public init(
                 brand: Swift.String,
                 brandKey: Swift.String,
                 category: Swift.String? = nil,
                 sizeBucket: Swift.String? = nil,
                 unsoldCount: Swift.Int32,
-                marketplaces: [Components.Schemas.OwnSalesOnMarketplace]
+                marketplaces: [Components.Schemas.OwnSalesOnMarketplace],
+                forCall: Components.Schemas.OwnSalesForCall? = nil
             ) {
                 self.brand = brand
                 self.brandKey = brandKey
@@ -15800,6 +15843,7 @@ extension Components {
                 self.sizeBucket = sizeBucket
                 self.unsoldCount = unsoldCount
                 self.marketplaces = marketplaces
+                self.forCall = forCall
             }
             public enum CodingKeys: String, CodingKey {
                 case brand
@@ -15808,6 +15852,7 @@ extension Components {
                 case sizeBucket
                 case unsoldCount
                 case marketplaces
+                case forCall
             }
         }
         /// The group's sales on one marketplace.
@@ -15885,6 +15930,72 @@ extension Components {
                 case medianPayout
                 case feeTableVersion
                 case displayOnly
+            }
+        }
+        /// The group's sales the scan's call may rest on (every marketplace's but eBay's, which are
+        /// display only), with their payouts as the server's call works them out. Absent when the
+        /// group has none.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/OwnSalesForCall`.
+        public struct OwnSalesForCall: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OwnSalesForCall/soldCount`.
+            public var soldCount: Swift.Int32
+            /// The low quartile of what buyers paid per item.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesForCall/low`.
+            public var low: Components.Schemas.Money
+            /// The high quartile of what buyers paid per item.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesForCall/high`.
+            public var high: Components.Schemas.Money
+            /// The marketplace with the most of these sales (Depop on a tie), whose fees the payouts
+            /// are after.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesForCall/payoutMarketplace`.
+            public var payoutMarketplace: Components.Schemas.Marketplace
+            /// What `low` pays out after that marketplace's estimated fees, calibrated by the
+            /// account's actual fees there when there are enough. An estimate.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesForCall/conservativePayout`.
+            public var conservativePayout: Components.Schemas.Money
+            /// What `high` pays out after those fees. An estimate.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesForCall/optimisticPayout`.
+            public var optimisticPayout: Components.Schemas.Money
+            /// Creates a new `OwnSalesForCall`.
+            ///
+            /// - Parameters:
+            ///   - soldCount:
+            ///   - low: The low quartile of what buyers paid per item.
+            ///   - high: The high quartile of what buyers paid per item.
+            ///   - payoutMarketplace: The marketplace with the most of these sales (Depop on a tie), whose fees the payouts
+            ///   - conservativePayout: What `low` pays out after that marketplace's estimated fees, calibrated by the
+            ///   - optimisticPayout: What `high` pays out after those fees. An estimate.
+            public init(
+                soldCount: Swift.Int32,
+                low: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                payoutMarketplace: Components.Schemas.Marketplace,
+                conservativePayout: Components.Schemas.Money,
+                optimisticPayout: Components.Schemas.Money
+            ) {
+                self.soldCount = soldCount
+                self.low = low
+                self.high = high
+                self.payoutMarketplace = payoutMarketplace
+                self.conservativePayout = conservativePayout
+                self.optimisticPayout = optimisticPayout
+            }
+            public enum CodingKeys: String, CodingKey {
+                case soldCount
+                case low
+                case high
+                case payoutMarketplace
+                case conservativePayout
+                case optimisticPayout
             }
         }
         /// - Remark: Generated from `#/components/schemas/SourcingRunCreate`.
@@ -16917,6 +17028,8 @@ extension Components {
         /// `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
         /// are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
         /// own sales of items like it coming faster or slower. `style`: the AI's read of the style.
+        /// `unsold`: the household already has items like it in inventory, not sold (it never moves
+        /// the call).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
@@ -16926,6 +17039,7 @@ extension Components {
             case webResale = "web_resale"
             case trend = "trend"
             case style = "style"
+            case unsold = "unsold"
         }
         /// The item's original retail price, with where it came from: one model's price (`low` equals
         /// `high`), or, when the scan could not pin the exact model, the range across the likely

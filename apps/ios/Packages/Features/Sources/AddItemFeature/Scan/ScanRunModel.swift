@@ -5,56 +5,108 @@ import Foundation
 import Observation
 import os
 
+/// What a scan run works with: the API, the device's readers, and the queue that keeps it.
+struct ScanRunDependencies {
+    let service: any ScanService
+    let tagReader: any TagReader
+    /// Reads each shot's feature print for the duplicate warning; nil reads none.
+    var signalReader: (any PhotoSignalReader)?
+    /// Nil counts as always online: every read is tried at once.
+    var connectivity: (any ScanConnectivity)?
+    /// Keeps the run and its scans on this iPhone; nil keeps them in memory only.
+    var queue: ScanQueueStore?
+    /// The sourcing kit for the instant read, when this iPhone has one.
+    var kit: @MainActor () -> SourcingKit? = { nil }
+    let saveDraft: ScanDraftSaver
+    var now: () -> Date = Date.init
+}
+
 /// One sourcing run at the store (docs/features/thrift-scan.md): every shot is read at once and
 /// lands as a card, while the seller can already shoot the next item. Shooting the next item
 /// skips the last one; Keep saves it as a draft on this iPhone, uploaded in the background; the
 /// tray keeps every card of the run so a skipped item can still be kept until the run ends.
+///
+/// With no signal (docs/features/thrift-scan.md, "Offline at the bins") each shot gets the
+/// instant read from the household's own sales and its read waits in the queue, which keeps the
+/// run and its scans across a relaunch; ``drain()`` reads them, newest first, once there is
+/// signal again.
 @MainActor
 @Observable
 final class ScanRunModel {
-    /// The run on this iPhone; its server run is created with the first scan.
+    /// The run on this iPhone; its server run is created with the first read.
     let id: String
-    private(set) var entries: [ScanEntry] = []
+    var entries: [ScanEntry] = []
     /// The card on screen: the last shot, or the one picked in the tray.
-    private(set) var currentID: String?
+    var currentID: String?
     /// The next shot is a close-up of this entry's tag, not a new item.
-    private(set) var tagShotFor: String?
+    var tagShotFor: String?
     /// A note said before the next shot, which rides along with its read.
-    private(set) var pendingNote: String?
-    private(set) var isEnded = false
+    var pendingNote: String?
+    /// The seller ended the run; kept scans still waiting for signal finish it later.
+    var isEnded = false
+    /// Ended, every kept scan saved, and its files gone.
+    var isFinished = false
+    /// Called once the run is finished.
+    var onFinished: (@MainActor (ScanRunModel) -> Void)?
 
-    private let service: any ScanService
-    private let tagReader: any TagReader
-    private let saveDraft: ScanDraftSaver
-    private let directory: URL
-    private let now: () -> Date
-    private let log = Logger(subsystem: "com.listora.app", category: "scan")
-    private var serverRun: Task<String, any Error>?
-    private let createRunKey = UUID().uuidString.lowercased()
-    /// Each entry's upload-sized photo (and tag photo) as it is prepared.
-    private var photos: [String: Task<StoredScanPhoto, any Error>] = [:]
-    private var tagPhotos: [String: Task<StoredScanPhoto, any Error>] = [:]
+    let dependencies: ScanRunDependencies
+    /// The run's folder: each shot's small JPEG, tag close-up, and upload-sized photos.
+    let directory: URL
+    let log = Logger(subsystem: "com.listora.app", category: "scan")
+    var record: ScanRunRecord
+    var serverRun: Task<String, any Error>?
+    /// Each entry's upload-sized photo (and tag photo) as it is prepared, and once it is.
+    var photos: [String: Task<StoredScanPhoto, any Error>] = [:]
+    var tagPhotos: [String: Task<StoredScanPhoto, any Error>] = [:]
+    var storedPhotos: [String: StoredScanPhoto] = [:]
+    var storedTagPhotos: [String: StoredScanPhoto] = [:]
     /// A note said while the entry's first read was still running: read again once it lands.
-    private var notesAfterRead: [String: String] = [:]
+    var notesAfterRead: [String: String] = [:]
+    var isDraining = false
 
     /// The longest the tag text reading may hold up a read; past it the read goes without.
     static let tagReadDeadline: Duration = .milliseconds(400)
     static let tagCloseUpReadDeadline: Duration = .milliseconds(900)
 
-    init(
+    /// A new run.
+    init(dependencies: ScanRunDependencies, directory: URL) {
+        let id = UUID().uuidString.lowercased()
+        self.id = id
+        self.dependencies = dependencies
+        self.directory = directory.appending(path: id, directoryHint: .isDirectory)
+        record = ScanRunRecord(
+            id: id,
+            startedAt: dependencies.now(),
+            createRunKey: UUID().uuidString.lowercased(),
+        )
+        saveRun()
+    }
+
+    /// A run kept on this iPhone, as it was when the app last closed.
+    init(dependencies: ScanRunDependencies, directory: URL, restoring run: ScanRunRecord, entries: [ScanEntryRecord]) {
+        id = run.id
+        self.dependencies = dependencies
+        self.directory = directory.appending(path: run.id, directoryHint: .isDirectory)
+        record = run
+        isEnded = run.endRequested
+        restore(entries)
+    }
+
+    convenience init(
         service: any ScanService,
         tagReader: any TagReader,
         directory: URL,
         saveDraft: @escaping ScanDraftSaver,
         now: @escaping () -> Date = Date.init,
     ) {
-        let id = UUID().uuidString.lowercased()
-        self.id = id
-        self.service = service
-        self.tagReader = tagReader
-        self.directory = directory.appending(path: id, directoryHint: .isDirectory)
-        self.saveDraft = saveDraft
-        self.now = now
+        self.init(
+            dependencies: ScanRunDependencies(service: service, tagReader: tagReader, saveDraft: saveDraft, now: now),
+            directory: directory,
+        )
+    }
+
+    var service: any ScanService {
+        dependencies.service
     }
 
     /// The ``InteractionMeter`` session of the run's camera.
@@ -70,6 +122,16 @@ final class ScanRunModel {
         entries.count(where: \.isKept)
     }
 
+    /// Scans whose read waits for signal.
+    var waitingCount: Int {
+        entries.count(where: \.isWaiting)
+    }
+
+    /// Kept scans whose draft is saved once they are read.
+    var keptWaitingCount: Int {
+        entries.count { $0.decision == .keepWhenRead }
+    }
+
     // MARK: Shooting
 
     /// A shot from the camera: a new item (skipping the last one), or the tag close-up the seller
@@ -81,7 +143,7 @@ final class ScanRunModel {
             await addTag(capture, to: target)
             return
         }
-        let shotAt = now()
+        let shotAt = dependencies.now()
         let small: Data
         do {
             small = try await Task.detached(priority: .userInitiated) { try ScanPhotos.small(capture) }.value
@@ -92,18 +154,24 @@ final class ScanRunModel {
         }
         let entry = ScanEntry(
             id: UUID().uuidString.lowercased(),
-            number: entries.count + 1,
+            number: (entries.map(\.number).max() ?? 0) + 1,
             shotAt: shotAt,
             itemJPEG: small,
             note: pendingNote,
         )
         pendingNote = nil
+        writeShot(small, to: Self.itemFile(entry.id))
         entries.append(entry)
         currentID = entry.id
+        persist(entry.id)
         storePhoto(capture, for: entry.id, into: \.photos)
-        let lines = await ScanTagText.read(small, with: tagReader, within: Self.tagReadDeadline)
-        update(entry.id) { $0.tagText = lines }
-        await read(entry.id)
+        readFeaturePrint(of: entry.id, small)
+        let lines = await ScanTagText.read(small, with: dependencies.tagReader, within: Self.tagReadDeadline)
+        update(entry.id) { entry in
+            entry.tagText = lines
+            entry.instant = self.instantRead(lines)
+        }
+        await attemptRead(entry.id, announce: true)
     }
 
     /// The next shot is a close-up of the card's tag.
@@ -117,7 +185,7 @@ final class ScanRunModel {
     }
 
     /// What the seller said: before a shot it rides along with the shot's read; after it, the
-    /// card's item is read again once with it.
+    /// card's item is read again once with it (when there is signal).
     func addNote(_ text: String) async {
         let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !note.isEmpty, !isEnded else { return }
@@ -127,10 +195,14 @@ final class ScanRunModel {
         }
         let combined = [current.note, note].compactMap(\.self).joined(separator: ". ")
         update(current.id) { $0.note = combined }
-        if current.state == .reading {
+        switch current.state {
+        case .reading:
             notesAfterRead[current.id] = combined
-        } else {
-            await read(current.id, replacing: current.scanID)
+        case .waiting, .failed:
+            // Nothing was read yet: the read due carries the note, as a new request.
+            update(current.id) { $0.readKey = UUID().uuidString.lowercased() }
+        case .read:
+            await beginRead(current.id, replacing: current.scanID)
         }
     }
 
@@ -143,32 +215,7 @@ final class ScanRunModel {
 
     func retry(_ entryID: String) async {
         guard let entry = entries.first(where: { $0.id == entryID }), case .failed = entry.state else { return }
-        await read(entryID, replacing: entry.scanID)
-    }
-
-    // MARK: The run
-
-    /// Ends the run: the items not kept count as skipped, and the shots' files go. The kept
-    /// drafts stay, uploading in the background.
-    func end() async {
-        guard !isEnded else { return }
-        isEnded = true
-        tagShotFor = nil
-        for task in photos.values {
-            task.cancel()
-        }
-        for task in tagPhotos.values {
-            task.cancel()
-        }
-        if let serverRun, let runID = try? await serverRun.value {
-            do {
-                try await service.endSourcingRun(runID: runID, idempotencyKey: UUID().uuidString.lowercased())
-            } catch {
-                // The run stays open on the server; its scans were never kept either way.
-                log.error("Ending a sourcing run failed: \(error.message, privacy: .public)")
-            }
-        }
-        try? FileManager.default.removeItem(at: directory)
+        await attemptRead(entryID)
     }
 
     /// The owner's measurements of the run (Test mode only): how long each card took from the
@@ -177,100 +224,9 @@ final class ScanRunModel {
         entries.compactMap(\.cardAfter)
     }
 
-    // MARK: Reading
-
-    private func read(_ entryID: String, replacing scanID: String? = nil) async {
-        guard let entry = entries.first(where: { $0.id == entryID }) else { return }
-        update(entryID) { $0.state = .reading }
-        do {
-            let runID = try await ensureServerRun()
-            let request = ScanRequest(
-                runID: runID,
-                itemJPEG: entry.itemJPEG,
-                tagJPEG: entry.tagJPEG,
-                tagText: entry.tagText,
-                note: entry.note,
-                replacesScanID: scanID,
-            )
-            let scan = try await service.createScan(request, idempotencyKey: UUID().uuidString.lowercased())
-            let card = ScanCard(scan)
-            let first = entry.cardAfter == nil
-            update(entryID) { entry in
-                entry.scanID = scan.id
-                entry.state = .read(card)
-                if first {
-                    entry.cardAfter = now().timeIntervalSince(entry.shotAt)
-                }
-            }
-            if currentID == entryID, let haptic = card.haptic {
-                Haptics.play(haptic)
-            }
-            startResearch(entryID, scanID: scan.id)
-            if first, let cardAfter = entries.first(where: { $0.id == entryID })?.cardAfter {
-                log.info("scan card after \(Int(cardAfter * 1000), privacy: .public) ms")
-            }
-        } catch let failure as APIFailure {
-            update(entryID) { $0.state = .failed(message: failure.message, retryable: failure.retryable) }
-        } catch {
-            update(entryID) {
-                $0.state = .failed(message: APIFailure.networkUnavailable.message, retryable: true)
-            }
-        }
-        if let note = notesAfterRead.removeValue(forKey: entryID),
-           let read = entries.first(where: { $0.id == entryID }), read.card != nil
-        {
-            update(entryID) { $0.note = note }
-            await self.read(entryID, replacing: read.scanID)
-        }
-    }
-
-    /// Looks the read item up on the web in the background: the card shows the read at once and
-    /// takes in the research, and the call made again with it, when it comes.
-    private func startResearch(_ entryID: String, scanID: String) {
-        guard let entry = entries.first(where: { $0.id == entryID }), entry.card?.hasBrand == true else { return }
-        update(entryID) { $0.research = .checking }
-        let service = service
-        Task { [weak self] in
-            let result: Result<ItemScan, APIFailure>
-            do {
-                result = try await .success(service.researchScan(
-                    scanID: scanID,
-                    idempotencyKey: UUID().uuidString.lowercased(),
-                ))
-            } catch let failure as APIFailure {
-                result = .failure(failure)
-            } catch {
-                result = .failure(.networkUnavailable)
-            }
-            self?.finishResearch(entryID, scanID: scanID, result)
-        }
-    }
-
-    private func finishResearch(_ entryID: String, scanID: String, _ result: Result<ItemScan, APIFailure>) {
-        // A later read of the item (a note, the tag) replaced this scan: its research is stale.
-        guard entries.first(where: { $0.id == entryID })?.scanID == scanID else { return }
-        switch result {
-        case let .success(scan):
-            update(entryID) { entry in
-                entry.state = .read(ScanCard(scan))
-                entry.research = .done
-            }
-        case let .failure(failure):
-            log.error("Scan research failed: \(failure.message, privacy: .public)")
-            update(entryID) { $0.research = .failed }
-        }
-    }
-
-    /// The server run, created once; a failed creation is tried again by the next read.
-    private func ensureServerRun() async throws -> String {
-        if let serverRun, let runID = try? await serverRun.value {
-            return runID
-        }
-        let service = service
-        let key = createRunKey
-        let task = Task { () async throws -> String in try await service.createSourcingRun(idempotencyKey: key) }
-        serverRun = task
-        return try await task.value
+    /// The instant read of a tag's text from the household's own sales, when this iPhone has a kit.
+    func instantRead(_ tagText: [String]) -> OfflineScanRead? {
+        dependencies.kit().flatMap { OfflineScanCall.read(kit: $0, tagText: tagText) }
     }
 
     private func addTag(_ capture: Data, to entryID: String) async {
@@ -283,68 +239,46 @@ final class ScanRunModel {
             return
         }
         currentID = entryID
+        writeShot(small, to: Self.tagFile(entryID))
         storePhoto(capture, for: entryID, into: \.tagPhotos)
-        let lines = await ScanTagText.read(small, with: tagReader, within: Self.tagCloseUpReadDeadline)
+        let lines = await ScanTagText.read(small, with: dependencies.tagReader, within: Self.tagCloseUpReadDeadline)
         update(entryID) { entry in
             entry.tagJPEG = small
             entry.tagText = Array((entry.tagText + lines).prefix(40))
+            entry.instant = self.instantRead(entry.tagText)
         }
-        await read(entryID, replacing: entry.scanID)
+        await beginRead(entryID, replacing: entry.scanID)
     }
 
-    private func storePhoto(
+    func storePhoto(
         _ capture: Data,
         for entryID: String,
         into tasks: ReferenceWritableKeyPath<ScanRunModel, [String: Task<StoredScanPhoto, any Error>]>,
     ) {
         let directory = directory
-        self[keyPath: tasks][entryID] = Task.detached(priority: .utility) {
+        let task = Task.detached(priority: .utility) {
             try ScanPhotos.store(capture, in: directory)
         }
+        self[keyPath: tasks][entryID] = task
+        let isTag = tasks == \ScanRunModel.tagPhotos
+        Task { [weak self] in
+            guard let photo = try? await task.value else { return }
+            self?.photoStored(photo, for: entryID, isTag: isTag)
+        }
     }
 
-    private func update(_ entryID: String, _ change: (inout ScanEntry) -> Void) {
+    private func photoStored(_ photo: StoredScanPhoto, for entryID: String, isTag: Bool) {
+        if isTag {
+            storedTagPhotos[entryID] = photo
+        } else {
+            storedPhotos[entryID] = photo
+        }
+        persist(entryID)
+    }
+
+    func update(_ entryID: String, _ change: (inout ScanEntry) -> Void) {
         guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         change(&entries[index])
+        persist(entryID)
     }
-}
-
-/// Keeping: the run's other half.
-extension ScanRunModel {
-    /// Saves the item as a draft on this iPhone at once; the upload queue creates its server item
-    /// from the scan in the background. The camera stays open.
-    func keep(_ entryID: String) async {
-        guard let entry = entries.first(where: { $0.id == entryID }), let scanID = entry.scanID,
-              let card = entry.card, entry.decision == .open || isKeepFailed(entry)
-        else { return }
-        update(entryID) { $0.decision = .keeping }
-        do {
-            guard let photo = try await photos[entryID]?.value else { throw ScanKeepError.noPhoto }
-            var shots = try [(photo.preparedPhoto(), PhotoRole.front)]
-            if let tag = try await tagPhotos[entryID]?.value {
-                try shots.append((tag.preparedPhoto(), .tag))
-            }
-            let origin = DraftScanOrigin(scanID: scanID, runID: id, title: card.title)
-            guard let draftID = await saveDraft(shots, origin) else { throw ScanKeepError.notSaved }
-            update(entryID) { $0.decision = .kept(draftID: draftID) }
-            Haptics.play(.success)
-        } catch {
-            log.error("Keeping a scan failed: \(String(describing: error), privacy: .public)")
-            update(entryID) { $0.decision = .keepFailed("Couldn't save it on this iPhone. Try again.") }
-            Haptics.play(.failure)
-        }
-    }
-
-    private func isKeepFailed(_ entry: ScanEntry) -> Bool {
-        if case .keepFailed = entry.decision {
-            true
-        } else {
-            false
-        }
-    }
-}
-
-private enum ScanKeepError: Error {
-    case noPhoto
-    case notSaved
 }
