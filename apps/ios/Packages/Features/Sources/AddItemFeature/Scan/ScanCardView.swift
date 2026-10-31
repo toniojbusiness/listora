@@ -217,8 +217,8 @@ struct ScanCardView: View {
     }
 }
 
-/// One marketplace's comparisons on the card: what close matches ask there, always under the
-/// asking-prices label (never sold prices), and the demand; or why there are none, in words.
+/// One marketplace's comparisons on the card: what close matches sold for (eBay) or ask there,
+/// always under their label, and the demand; or why there are none, in words.
 private struct ComparisonLine: View {
     let comparison: ScanComparisonLine
 
@@ -232,8 +232,9 @@ private struct ComparisonLine: View {
                     .font(Typography.footnote)
                     .foregroundStyle(comparison.status == .read ? Palette.textPrimary : Palette.textSecondary)
             }
-            if let asking = comparison.askingLabel {
-                Text(asking).font(Typography.caption).foregroundStyle(Palette.textSecondary)
+            // The label of the numbers the row shows: sold listings where it has them, else asking.
+            if let source = comparison.soldLabel ?? comparison.askingLabel {
+                Text(source).font(Typography.caption).foregroundStyle(Palette.textSecondary)
             }
             if let demand = comparison.demand {
                 Text("\(Text(demand).font(Typography.smallEmphasis)) · \(comparison.demandBasedOn ?? "")")

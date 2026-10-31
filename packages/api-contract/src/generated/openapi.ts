@@ -7054,21 +7054,24 @@ export interface components {
          *     "Marketplace comparisons"): listings of the same brand and item type (and the model and size
          *     where the scan read them) in the marketplace's public search, read on the seller's iPhone in
          *     a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
-         *     asking prices (`asking`), always labeled so; the household's own sales (`ownSales`) are the
-         *     sold side. While `status` is `checking`, the phone reads `read` and answers it with
+         *     asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
+         *     the sold side; eBay shows its sold listings, so its row has what close matches sold for
+         *     (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
          *     `saveScanComparison`.
          */
         ScanComparison: {
             marketplace: components["schemas"]["Marketplace"];
             status: components["schemas"]["ScanComparisonStatus"];
             /**
-             * @description The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+             * @description The row in words: "Depop: asking $25-$40, 12 like it for sale", "eBay: sold $18-$30, 9
+             *     like it in the last 14 days", "Checking Depop...",
              *     "Not enough similar listings on Depop", "Depop prices paused today", "Not checked: Depop
              *     limit for this hour", "Couldn't check Depop".
              */
             label: string;
             read?: components["schemas"]["ScanComparisonRead"];
             asking?: components["schemas"]["ScanAskingPrices"];
+            sold?: components["schemas"]["ScanSoldPrices"];
             /**
              * Format: int32
              * @description Listings for sale in the marketplace's search for the item, by its own count.
@@ -7108,8 +7111,29 @@ export interface components {
             label: string;
         };
         /**
-         * @description How the item sells against the competition: the household's own recent sales like it
-         *     against what the marketplace has for sale now. `label` only when the numbers say so.
+         * @description What similar listings sold for in a marketplace's public search (eBay's): other sellers'
+         *     real sales, never the household's own.
+         */
+        ScanSoldPrices: {
+            /** Format: int32 */
+            count: number;
+            /** @description The low quartile of the sold prices. */
+            low: components["schemas"]["Money"];
+            median: components["schemas"]["Money"];
+            high: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description How many days back the oldest of them sold.
+             */
+            windowDays?: number;
+            /** @description Shown with them, always ("Sold listings on eBay"). */
+            label: string;
+        };
+        /**
+         * @description How the item sells against the competition: on a marketplace that shows sold listings
+         *     (eBay), how many its search sold lately against how many it has for sale now; elsewhere the
+         *     household's own recent sales like it against what the marketplace has for sale now. `label`
+         *     only when the numbers say so.
          */
         ScanDemand: {
             demand: components["schemas"]["ScanDemandKind"];
@@ -7133,6 +7157,12 @@ export interface components {
              * @description Listings for sale in the whole search, as the marketplace counts them.
              */
             forSaleTotal?: number;
+            /**
+             * Format: int32
+             * @description Sold listings in the whole sold search, as the marketplace counts them, where it shows a
+             *     visitor sold listings (eBay's last 90 days).
+             */
+            soldTotal?: number;
             /** Format: int32 */
             ms: number;
             /** @description Why a read did not go through, for the server's log; never page text. */
@@ -7247,12 +7277,14 @@ export interface components {
         /** @description A `KnownScanBasis`, or one added after this client was built (shown by `basedOn`). */
         ScanBasis: components["schemas"]["KnownScanBasis"];
         /**
-         * @description `own_history`: the household's own sales like it. `web_info`: what web pages say such items
-         *     resell for (the research, with its sites), never a high-confidence call. `ai_estimate`: the
-         *     AI's estimate alone, never a high-confidence Buy. `none`: nothing to go on.
+         * @description `own_history`: the household's own sales like it. `market_sold`: what close matches sold for
+         *     in a marketplace's public search (eBay's sold listings, `comparisons`), when the household's
+         *     own sales are too few. `web_info`: what web pages say such items resell for (the research,
+         *     with its sites), never a high-confidence call. `ai_estimate`: the AI's estimate alone, never
+         *     a high-confidence Buy. `none`: nothing to go on.
          * @enum {string}
          */
-        KnownScanBasis: "own_history" | "web_info" | "ai_estimate" | "none";
+        KnownScanBasis: "own_history" | "market_sold" | "web_info" | "ai_estimate" | "none";
         /** @description A `KnownScanDecision`, or one added after this client was built. */
         ScanDecision: components["schemas"]["KnownScanDecision"];
         /**
@@ -7946,6 +7978,7 @@ export type ScanComparisonStatus = components['schemas']['ScanComparisonStatus']
 export type KnownScanComparisonStatus = components['schemas']['KnownScanComparisonStatus'];
 export type ScanComparisonRead = components['schemas']['ScanComparisonRead'];
 export type ScanAskingPrices = components['schemas']['ScanAskingPrices'];
+export type ScanSoldPrices = components['schemas']['ScanSoldPrices'];
 export type ScanDemand = components['schemas']['ScanDemand'];
 export type ScanDemandKind = components['schemas']['ScanDemandKind'];
 export type KnownScanDemandKind = components['schemas']['KnownScanDemandKind'];
@@ -12539,7 +12572,7 @@ export const knownScanComparisonOutcomeValues: ReadonlyArray<FlattenedDeepRequir
 export const scanComparisonStatsLevelValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ScanComparisonStats"]["level"]> = ["model_and_size", "model", "type_and_size", "type"];
 export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanCallKind"]> = ["buy", "your_call", "skip"];
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
-export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "web_info", "ai_estimate", "none"];
+export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "market_sold", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
 export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "asking", "demand"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];

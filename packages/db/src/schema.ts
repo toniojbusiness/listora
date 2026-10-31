@@ -1306,6 +1306,8 @@ export interface MarketComparisonTable {
   status: Generated<MarketComparisonStatus>;
   stats: NullableJsonb<JsonObject>;
   for_sale_total: Nullable<number>;
+  /** Sold listings in the whole sold search, where the marketplace shows them (eBay). */
+  sold_total: Nullable<number>;
   read_ms: Nullable<number>;
   answered_at: NullableTimestamp;
   created_at: CreatedAt;

@@ -16373,8 +16373,9 @@ extension Components {
         /// "Marketplace comparisons"): listings of the same brand and item type (and the model and size
         /// where the scan read them) in the marketplace's public search, read on the seller's iPhone in
         /// a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
-        /// asking prices (`asking`), always labeled so; the household's own sales (`ownSales`) are the
-        /// sold side. While `status` is `checking`, the phone reads `read` and answers it with
+        /// asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
+        /// the sold side; eBay shows its sold listings, so its row has what close matches sold for
+        /// (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
         /// `saveScanComparison`.
         ///
         ///
@@ -16384,7 +16385,8 @@ extension Components {
             public var marketplace: Components.Schemas.Marketplace
             /// - Remark: Generated from `#/components/schemas/ScanComparison/status`.
             public var status: Components.Schemas.ScanComparisonStatus
-            /// The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+            /// The row in words: "Depop: asking $25-$40, 12 like it for sale", "eBay: sold $18-$30, 9
+            /// like it in the last 14 days", "Checking Depop...",
             /// "Not enough similar listings on Depop", "Depop prices paused today", "Not checked: Depop
             /// limit for this hour", "Couldn't check Depop".
             ///
@@ -16395,6 +16397,8 @@ extension Components {
             public var read: Components.Schemas.ScanComparisonRead?
             /// - Remark: Generated from `#/components/schemas/ScanComparison/asking`.
             public var asking: Components.Schemas.ScanAskingPrices?
+            /// - Remark: Generated from `#/components/schemas/ScanComparison/sold`.
+            public var sold: Components.Schemas.ScanSoldPrices?
             /// Listings for sale in the marketplace's search for the item, by its own count.
             ///
             /// - Remark: Generated from `#/components/schemas/ScanComparison/supply`.
@@ -16410,9 +16414,10 @@ extension Components {
             /// - Parameters:
             ///   - marketplace:
             ///   - status:
-            ///   - label: The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+            ///   - label: The row in words: "Depop: asking $25-$40, 12 like it for sale", "eBay: sold $18-$30, 9
             ///   - read:
             ///   - asking:
+            ///   - sold:
             ///   - supply: Listings for sale in the marketplace's search for the item, by its own count.
             ///   - demand:
             ///   - cached: The numbers are a read of the same search from the last 24 hours.
@@ -16422,6 +16427,7 @@ extension Components {
                 label: Swift.String,
                 read: Components.Schemas.ScanComparisonRead? = nil,
                 asking: Components.Schemas.ScanAskingPrices? = nil,
+                sold: Components.Schemas.ScanSoldPrices? = nil,
                 supply: Swift.Int32? = nil,
                 demand: Components.Schemas.ScanDemand? = nil,
                 cached: Swift.Bool? = nil
@@ -16431,6 +16437,7 @@ extension Components {
                 self.label = label
                 self.read = read
                 self.asking = asking
+                self.sold = sold
                 self.supply = supply
                 self.demand = demand
                 self.cached = cached
@@ -16441,6 +16448,7 @@ extension Components {
                 case label
                 case read
                 case asking
+                case sold
                 case supply
                 case demand
                 case cached
@@ -16601,8 +16609,67 @@ extension Components {
                 case label
             }
         }
-        /// How the item sells against the competition: the household's own recent sales like it
-        /// against what the marketplace has for sale now. `label` only when the numbers say so.
+        /// What similar listings sold for in a marketplace's public search (eBay's): other sellers'
+        /// real sales, never the household's own.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanSoldPrices`.
+        public struct ScanSoldPrices: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/count`.
+            public var count: Swift.Int32
+            /// The low quartile of the sold prices.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/median`.
+            public var median: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/high`.
+            public var high: Components.Schemas.Money
+            /// How many days back the oldest of them sold.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/windowDays`.
+            public var windowDays: Swift.Int32?
+            /// Shown with them, always ("Sold listings on eBay").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/label`.
+            public var label: Swift.String
+            /// Creates a new `ScanSoldPrices`.
+            ///
+            /// - Parameters:
+            ///   - count:
+            ///   - low: The low quartile of the sold prices.
+            ///   - median:
+            ///   - high:
+            ///   - windowDays: How many days back the oldest of them sold.
+            ///   - label: Shown with them, always ("Sold listings on eBay").
+            public init(
+                count: Swift.Int32,
+                low: Components.Schemas.Money,
+                median: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                windowDays: Swift.Int32? = nil,
+                label: Swift.String
+            ) {
+                self.count = count
+                self.low = low
+                self.median = median
+                self.high = high
+                self.windowDays = windowDays
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case count
+                case low
+                case median
+                case high
+                case windowDays
+                case label
+            }
+        }
+        /// How the item sells against the competition: on a marketplace that shows sold listings
+        /// (eBay), how many its search sold lately against how many it has for sale now; elsewhere the
+        /// household's own recent sales like it against what the marketplace has for sale now. `label`
+        /// only when the numbers say so.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ScanDemand`.
@@ -16705,6 +16772,12 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/forSaleTotal`.
             public var forSaleTotal: Swift.Int32?
+            /// Sold listings in the whole sold search, as the marketplace counts them, where it shows a
+            /// visitor sold listings (eBay's last 90 days).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/soldTotal`.
+            public var soldTotal: Swift.Int32?
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/ms`.
             public var ms: Swift.Int32
             /// Why a read did not go through, for the server's log; never page text.
@@ -16717,18 +16790,21 @@ extension Components {
             ///   - outcome:
             ///   - stats:
             ///   - forSaleTotal: Listings for sale in the whole search, as the marketplace counts them.
+            ///   - soldTotal: Sold listings in the whole sold search, as the marketplace counts them, where it shows a
             ///   - ms:
             ///   - message: Why a read did not go through, for the server's log; never page text.
             public init(
                 outcome: Components.Schemas.ScanComparisonOutcome,
                 stats: Components.Schemas.ScanComparisonStats? = nil,
                 forSaleTotal: Swift.Int32? = nil,
+                soldTotal: Swift.Int32? = nil,
                 ms: Swift.Int32,
                 message: Swift.String? = nil
             ) {
                 self.outcome = outcome
                 self.stats = stats
                 self.forSaleTotal = forSaleTotal
+                self.soldTotal = soldTotal
                 self.ms = ms
                 self.message = message
             }
@@ -16736,6 +16812,7 @@ extension Components {
                 case outcome
                 case stats
                 case forSaleTotal
+                case soldTotal
                 case ms
                 case message
             }
@@ -16753,6 +16830,10 @@ extension Components {
                     Swift.Int32.self,
                     forKey: .forSaleTotal
                 )
+                self.soldTotal = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .soldTotal
+                )
                 self.ms = try container.decode(
                     Swift.Int32.self,
                     forKey: .ms
@@ -16765,6 +16846,7 @@ extension Components {
                     "outcome",
                     "stats",
                     "forSaleTotal",
+                    "soldTotal",
                     "ms",
                     "message"
                 ])
@@ -17412,14 +17494,17 @@ extension Components {
                 ])
             }
         }
-        /// `own_history`: the household's own sales like it. `web_info`: what web pages say such items
-        /// resell for (the research, with its sites), never a high-confidence call. `ai_estimate`: the
-        /// AI's estimate alone, never a high-confidence Buy. `none`: nothing to go on.
+        /// `own_history`: the household's own sales like it. `market_sold`: what close matches sold for
+        /// in a marketplace's public search (eBay's sold listings, `comparisons`), when the household's
+        /// own sales are too few. `web_info`: what web pages say such items resell for (the research,
+        /// with its sites), never a high-confidence call. `ai_estimate`: the AI's estimate alone, never
+        /// a high-confidence Buy. `none`: nothing to go on.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanBasis`.
         @frozen public enum KnownScanBasis: String, Codable, Hashable, Sendable, CaseIterable {
             case ownHistory = "own_history"
+            case marketSold = "market_sold"
             case webInfo = "web_info"
             case aiEstimate = "ai_estimate"
             case none = "none"

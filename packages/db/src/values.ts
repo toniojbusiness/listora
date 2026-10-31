@@ -439,7 +439,13 @@ export const ITEM_SCAN_CONFIDENCES = ['high', 'medium', 'low'] as const;
 export type ItemScanConfidence = (typeof ITEM_SCAN_CONFIDENCES)[number];
 
 /** `item_scan.basis`: where the range the call rests on came from. */
-export const ITEM_SCAN_BASES = ['own_history', 'web_info', 'ai_estimate', 'none'] as const;
+export const ITEM_SCAN_BASES = [
+  'own_history',
+  'market_sold',
+  'web_info',
+  'ai_estimate',
+  'none',
+] as const;
 export type ItemScanBasis = (typeof ITEM_SCAN_BASES)[number];
 
 /**

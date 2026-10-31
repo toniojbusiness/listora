@@ -3,8 +3,8 @@ import Foundation
 
 /// Scan mode (docs/features/thrift-scan.md): the run at the store, and the drafts it keeps.
 extension AddItemModel {
-    /// The marketplaces with a comparison reader on this iPhone.
-    static let comparedMarketplaces = ["depop"]
+    /// The marketplaces with a comparison reader on this iPhone, in the card's order.
+    static let comparedMarketplaces = ["depop", "ebay"]
 
     /// The run going on, or a new one.
     func scanRun(in environment: AddItemEnvironment) -> ScanRunModel {

@@ -1,6 +1,11 @@
-import { AI_ESTIMATE_LABEL, ASKING_PRICES_LABEL, WEB_INFO_LABEL } from '@listora/pricing';
+import {
+  AI_ESTIMATE_LABEL,
+  ASKING_PRICES_LABEL,
+  marketSoldLabel,
+  WEB_INFO_LABEL,
+} from '@listora/pricing';
 
-import type { MarketDemand } from './market.ts';
+import type { MarketDemand, MarketMatchLevel } from './market.ts';
 
 import type { OwnHistoryComparisons } from './own-history.ts';
 import type { SalesTrend } from './trend.ts';
@@ -13,8 +18,17 @@ export type ScanCallKind = (typeof SCAN_CALLS)[number];
 export const CALL_CONFIDENCES = ['high', 'medium', 'low'] as const;
 export type CallConfidence = (typeof CALL_CONFIDENCES)[number];
 
-/** Where the range the call rests on came from. */
-export const CALL_BASES = ['own_history', 'web_info', 'ai_estimate', 'none'] as const;
+/**
+ * Where the range the call rests on came from: the household's own sales, a marketplace's sold
+ * listings (its public search, eBay's), the web, or the AI estimate.
+ */
+export const CALL_BASES = [
+  'own_history',
+  'market_sold',
+  'web_info',
+  'ai_estimate',
+  'none',
+] as const;
 export type CallBasis = (typeof CALL_BASES)[number];
 
 export interface ScanCallSettings {
@@ -37,6 +51,10 @@ export interface ScanCallSettings {
   readonly newWithTagsBump: number;
   /** Close matches for sale a marketplace's asking prices need before they hold a range. */
   readonly minAskingMatches: number;
+  /** Close matches a marketplace's sold listings need before the call rests on them. */
+  readonly minMarketSold: number;
+  /** Sold close matches of the exact model a high-confidence call on them needs. */
+  readonly highMarketSold: number;
 }
 
 /**
@@ -55,6 +73,8 @@ export const DEFAULT_SCAN_CALL_SETTINGS: ScanCallSettings = {
   highIdentityConfidence: 0.8,
   newWithTagsBump: 0.15,
   minAskingMatches: 5,
+  minMarketSold: 5,
+  highMarketSold: 10,
 };
 
 /** What else the call weighed, each said with what it rests on. */
@@ -122,27 +142,39 @@ export interface ScanCallInput {
   /** A style or era buyers search by, the AI's read. */
   readonly style?: string | undefined;
   /**
-   * A marketplace's comparisons (the public search, read logged out): what close matches for
-   * sale ask, and the demand (the household's recent sales against the marketplace's supply).
-   * The demand is a signal only: supply alone says little about how fast an item sells, so it
-   * moves no call until a marketplace's own sold pace comes with its comparisons.
+   * Each marketplace's comparisons (its public search, read logged out), Depop first: what close
+   * matches for sale ask, what they sold for where the marketplace shows sold listings (eBay),
+   * and the demand. A marketplace's sold listings are the range when the household's own sales
+   * are too few; a demand from a marketplace's sold pace that reads slow keeps a call from high
+   * confidence, and any other demand is a signal only.
    */
-  readonly market?:
-    | {
-        /** As the seller reads it: "Depop". */
-        readonly marketplace: string;
-        readonly asking?: {
-          readonly count: number;
-          readonly lowCents: number;
-          readonly highCents: number;
-        };
-        readonly demand?: {
-          readonly demand: MarketDemand;
-          readonly label?: string | undefined;
-          readonly basedOn: string;
-        };
-      }
-    | undefined;
+  readonly markets?: readonly MarketCallInput[] | undefined;
+}
+
+/** One marketplace's comparisons, as the call weighs them. */
+export interface MarketCallInput {
+  /** As the seller reads it: "Depop". */
+  readonly marketplace: string;
+  readonly asking?: {
+    readonly count: number;
+    readonly lowCents: number;
+    readonly highCents: number;
+  };
+  /** Close matches' sold prices (low to high quartile), and how far back they go. */
+  readonly sold?: {
+    readonly count: number;
+    readonly lowCents: number;
+    readonly highCents: number;
+    readonly windowDays: number | null;
+    readonly level: MarketMatchLevel;
+  };
+  readonly demand?: {
+    readonly demand: MarketDemand;
+    readonly label?: string | undefined;
+    readonly basedOn: string;
+    /** The demand is the marketplace's own sold pace, not the household's sales. */
+    readonly fromSoldPace?: boolean;
+  };
 }
 
 export interface ScanCall {
@@ -179,23 +211,32 @@ export function scanCall(
     input.web !== undefined && input.web.highCents > 0 && input.web.sites.length > 0
       ? input.web
       : undefined;
+  const markets = input.markets ?? [];
+  const soldMarket = markets.find(
+    (market) => market.sold !== undefined && market.sold.count >= settings.minMarketSold,
+  );
+  const sold = soldMarket?.sold;
   const basis: CallBasis = useHistory
     ? 'own_history'
-    : web
-      ? 'web_info'
-      : input.aiEstimate
-        ? 'ai_estimate'
-        : 'none';
+    : sold
+      ? 'market_sold'
+      : web
+        ? 'web_info'
+        : input.aiEstimate
+          ? 'ai_estimate'
+          : 'none';
   const signals: ScanSignal[] = [];
   let range =
     basis === 'own_history' && history
       ? { lowCents: history.prices.lowCents, highCents: history.prices.highCents }
-      : basis === 'web_info' && web
-        ? { lowCents: web.lowCents, highCents: web.highCents }
-        : input.aiEstimate && {
-            lowCents: input.aiEstimate.lowCents,
-            highCents: input.aiEstimate.highCents,
-          };
+      : basis === 'market_sold' && sold
+        ? { lowCents: sold.lowCents, highCents: sold.highCents }
+        : basis === 'web_info' && web
+          ? { lowCents: web.lowCents, highCents: web.highCents }
+          : input.aiEstimate && {
+              lowCents: input.aiEstimate.lowCents,
+              highCents: input.aiEstimate.highCents,
+            };
   if (
     range !== undefined &&
     useHistory &&
@@ -245,12 +286,12 @@ export function scanCall(
           : `${source}; the range is ${percentOf(range.lowCents, retail.highCents)}-${percentOf(range.highCents, retail.highCents)} of ${dollars(retail.highCents)}`,
     });
   }
-  const market = input.market;
-  const asking =
-    market?.asking !== undefined && market.asking.count >= settings.minAskingMatches
-      ? market.asking
-      : undefined;
-  if (market !== undefined && asking !== undefined) {
+  // Depop first: the first marketplace with enough close matches for sale holds the range.
+  const askingMarket = markets.find(
+    (market) => market.asking !== undefined && market.asking.count >= settings.minAskingMatches,
+  );
+  const asking = askingMarket?.asking;
+  if (askingMarket !== undefined && asking !== undefined) {
     // Sellers ask more than buyers pay, so a guess above what close matches ask is not taken.
     const held =
       (basis === 'ai_estimate' || basis === 'web_info') &&
@@ -261,15 +302,17 @@ export function scanCall(
     }
     signals.push({
       kind: 'asking',
-      label: `Asking ${dollars(asking.lowCents)}-${dollars(asking.highCents)} on ${market.marketplace}`,
-      basedOn: `${ASKING_PRICES_LABEL}: ${String(asking.count)} like it for sale on ${market.marketplace}${
+      label: `Asking ${dollars(asking.lowCents)}-${dollars(asking.highCents)} on ${askingMarket.marketplace}`,
+      basedOn: `${ASKING_PRICES_LABEL}: ${String(asking.count)} like it for sale on ${askingMarket.marketplace}${
         held ? '; the range is held to them' : ''
       }`,
     });
   }
-  const demand = market?.demand;
-  if (demand?.label !== undefined) {
-    signals.push({ kind: 'demand', label: demand.label, basedOn: demand.basedOn });
+  for (const market of markets) {
+    const demand = market.demand;
+    if (demand?.label !== undefined) {
+      signals.push({ kind: 'demand', label: demand.label, basedOn: demand.basedOn });
+    }
   }
   if (web !== undefined && web.reputation !== 'unknown' && web.reputation !== 'average') {
     signals.push({
@@ -301,11 +344,17 @@ export function scanCall(
   let confidence: CallConfidence =
     basis === 'own_history' && history
       ? historyConfidence(input, history, settings)
-      : basis === 'web_info' && web
-        ? webConfidence(input, web.sites.length, settings)
-        : 'low';
-  // Slowing sales of the seller's own never back a high-confidence call; a rise never raises one.
-  if (trend?.direction === 'down' && confidence === 'high') confidence = 'medium';
+      : basis === 'market_sold' && sold
+        ? marketSoldConfidence(input, sold, settings)
+        : basis === 'web_info' && web
+          ? webConfidence(input, web.sites.length, settings)
+          : 'low';
+  // Slowing sales of the seller's own, or a marketplace where items like it sell slowly, never
+  // back a high-confidence call; a rise or a fast pace never raises one.
+  const slow = markets.some(
+    (market) => market.demand?.fromSoldPace === true && market.demand.demand === 'crowded',
+  );
+  if ((trend?.direction === 'down' || slow) && confidence === 'high') confidence = 'medium';
 
   const conservativePayoutCents = payout(range.lowCents, input.fees);
   const optimisticPayoutCents = payout(range.highCents, input.fees);
@@ -327,11 +376,42 @@ export function scanCall(
     basedOn:
       basis === 'own_history' && history
         ? yourSales(history.prices.count)
-        : basis === 'web_info' && web
-          ? `${WEB_INFO_LABEL}: ${web.sites.join(', ')}`
-          : AI_ESTIMATE_LABEL,
+        : basis === 'market_sold' && soldMarket && sold
+          ? `${marketSoldLabel(soldMarket.marketplace)}: ${soldPace(sold.count, sold.windowDays)}`
+          : basis === 'web_info' && web
+            ? `${WEB_INFO_LABEL}: ${web.sites.join(', ')}`
+            : AI_ESTIMATE_LABEL,
     signals,
   };
+}
+
+/**
+ * A marketplace's sold listings: high only with many sold of the exact model and a sure read;
+ * medium with a usable read; low otherwise.
+ */
+function marketSoldConfidence(
+  input: ScanCallInput,
+  sold: NonNullable<MarketCallInput['sold']>,
+  settings: ScanCallSettings,
+): CallConfidence {
+  if (input.identityConfidence < settings.minIdentityConfidence) return 'low';
+  if (
+    (sold.level === 'model_and_size' || sold.level === 'model') &&
+    sold.count >= settings.highMarketSold &&
+    input.identityConfidence >= settings.highIdentityConfidence
+  ) {
+    return 'high';
+  }
+  return 'medium';
+}
+
+/** "9 like it in the last 14 days", or "9 like it" where the marketplace dates none. */
+export function soldPace(count: number, windowDays: number | null): string {
+  const like = `${String(count)} like it`;
+  if (windowDays === null) return like;
+  return windowDays <= 1
+    ? `${like} in the last day`
+    : `${like} in the last ${String(windowDays)} days`;
 }
 
 /** Web info never makes a high-confidence call; medium only with a sure read and two sites. */

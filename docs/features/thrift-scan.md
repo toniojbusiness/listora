@@ -8,7 +8,8 @@ milestone M0); the seller's own sales as real sold data (`own_history`, M1) on t
 price screen and in the sourcing kit (`GET /v1/sourcing/kit`); and the scan itself online
 (M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray; Depop's
 comparisons from its public search, read on the seller's iPhone logged out (M3, "Marketplace
-comparisons" below); and upgrading a run's kept drafts with real photos (M6): "Needs photos",
+comparisons" below), then eBay's, the card's first sold prices from a marketplace ("eBay"
+below); and upgrading a run's kept drafts with real photos (M6): "Needs photos",
 Shoot this run, the full analysis with the scan's read as a hint, and the run's rapid review.
 Scan mode is hidden from sellers until it passes live (`thrift_scan`,
 [verified-features.md](verified-features.md)), and each marketplace's comparisons until they do
@@ -50,8 +51,9 @@ The call judges resale value only: no cost or margin, since a haul's price is kn
 checkout ([hauls.md](hauls.md)).
 
 1. **The range.** The seller's own matching sales, from the low to the high quartile, when at
-   least 3 match (`minComparisons`); otherwise the AI estimate's low to high, labeled "AI
-   estimate - not based on sold listings". Own sales match at the tightest level that has 3:
+   least 3 match (`minComparisons`); otherwise what at least 5 close matches sold for on eBay
+   (`market_sold`, "eBay" below); otherwise what the web says it resells for; otherwise the AI
+   estimate's low to high, labeled "AI estimate - not based on sold listings". Own sales match at the tightest level that has 3:
    the same brand and category, then the same brand, then the same category (`MATCH_LEVELS`).
    Brands compare by `brandKey` ("Abercrombie & Fitch" and "Abercrombie", "Levi's" and "LEVI"
    are one brand; "American Eagle" and "American Apparel" are two).
@@ -61,14 +63,17 @@ checkout ([hauls.md](hauls.md)).
 3. **The confidence.** High: at least 5 sales of the same brand and category and an
    identification at least 0.8 sure. Medium: a match on the brand and an identification at
    least 0.6 sure. Low: a match on the category only, an unsure identification, or the AI
-   estimate alone (which therefore never makes a Buy).
+   estimate alone (which therefore never makes a Buy). On eBay's sold listings: high with at
+   least 10 sold of the exact model (`highMarketSold`) and an identification at least 0.8 sure,
+   medium with one at least 0.6 sure, low otherwise. Slowing own sales, or an eBay search that
+   sells slowly, keep a call from high.
 4. **The call.** **Skip** when even the high end pays out less than the worth-listing amount.
    **Buy** when the low end pays out at least that, the confidence is medium or high, and the AI
    raised no flag (visible damage, a lot or bundle, a counterfeit-prone brand). **Your call**
    otherwise.
 
 **Wording.** The call always shows its confidence and what it rests on ("Your 5 sales like it",
-or the AI estimate's label). Ranges are quartiles, never one price, and "sold" appears only next
+"Sold listings on eBay: 9 like it in the last 14 days", or the AI estimate's label). Ranges are quartiles, never one price, and "sold" appears only next
 to real sold data (a unit test checks the call's wording with `claimsSoldData`).
 
 ## The backtest (`npm run eval -- scan`)
@@ -411,7 +416,7 @@ firstmate (2026-10-31), the reader never sends a request Depop's own pages do no
 - **the trend read is the household's recent sold pace against Depop's live supply**
   (`marketDemand`).
 
-Marketplace sold prices arrive with the eBay reader.
+Marketplace sold prices arrive with the eBay reader ("eBay" below).
 
 ### The read
 
@@ -511,6 +516,109 @@ Marketplace sold prices arrive with the eBay reader.
   read the lane can't make, comparisons off, a paused row), `ComparisonPausesTests.swift`.
 
 **The phone needs a new app build** for the comparisons.
+
+## eBay (M3)
+
+eBay's row is the card's first market sold prices: what close matches sold for on eBay, and
+eBay's own sold pace. Its comparisons are behind their own gate (`market_comps` on eBay,
+[verified-features.md](verified-features.md)), hidden from sellers until the captain's live test.
+
+### What eBay shows a visitor
+
+eBay shows a logged-out visitor its sold listings: the results page's own "Sold items" filter
+(`/sch/i.html?_nkw=<words>&LH_Sold=1&LH_Complete=1`), here sorted by its "Time: ended recently"
+(`_sop=13`), lists each sold result with its title, the price it sold for, and the day it sold
+("Sold Oct 28, 2026"), and the search's own count of results (about the last 90 days,
+`COMPARISON_SOLD_WINDOW_DAYS`). The plain results page (`/sch/i.html?_nkw=<words>`, "Best
+Match") lists what is for sale now, with its count. Both are server-rendered pages: a read loads
+the two URLs the page's own filter and sort make, and nothing else (never a signed-in session, a
+watch, a bid, or any account).
+
+### The read
+
+1. **The query.** As for Depop (`comparisonQuery`): never the brand alone, so a read needs the
+   brand and an item type; the words are the brand, the model or line, and the type. eBay's
+   results name no brand or category, so a match is held to the title's words.
+2. **The phone reads it** (`listoraPhone.compare`, `comps/ebay.ts`): the sold page, then the
+   for-sale page, each one page load (60 results, eBay's default), through the same session
+   rules as every automated read. Of each result only the title, the price, and the sold day
+   are read (`ebay/pages/search-page.ts`); never the seller, the photo, the item number, or
+   where it ships.
+3. **What is never counted.** Results after eBay's "Results matching fewer words" line (they
+   are not the search's), lots and bundles ("lot", "bundle", "bulk"), price ranges (a listing of
+   many sizes), eBay's placeholder results, and sold listings whose best offer was accepted
+   (eBay shows their asking price struck through, not what they sold for).
+4. **Matching** (`marketStats`): the title must name the item's brand (by `brandKey`: "Levi's",
+   "LEVIS", and "Levi" are one) **and** its type ("jeans", "denim"); the levels add the model and
+   the size the title names ("32x30", "W32 L30", "Size M"). Sold listings choose the level (the
+   tightest with 5), and outliers are left out, as for Depop.
+5. **Only numbers leave the phone**: the level, the sold and asking quartiles (the sold ones
+   with how many days back the oldest sold), the counts read, and both searches' totals
+   (`forSaleTotal`, `soldTotal`).
+
+### On the card
+
+- **The row**: "eBay: sold $18-$30, 9 like it in the last 14 days" under "Sold listings on eBay"
+  (`marketSoldLabel`), from 3 sold close matches (`MIN_SOLD_SHOWN`); without them, eBay's asking
+  prices as Depop's ("eBay: asking $25-$35, 4 like it for sale"). The words "sold" appear only
+  under that label or the household's own sales: the label guard (`scanLabelViolations`) lets a
+  comparison with sold listings, and words that start with "Sold listings on", speak of sold
+  data, and holds a call resting on eBay's sold listings to having them.
+- **The trend read** (`marketSoldPace`, apart from the phone's `market.ts`): eBay's search sold
+  count over its 90 days against its count for sale now. "Sells fast on eBay" from as many sold
+  as are for sale (`SELL_THROUGH_FAST`), "Slow on eBay" at a quarter or less
+  (`SELL_THROUGH_SLOW`), with what it rests on ("Sold listings on eBay: 410 in the last 90 days;
+  320 for sale now"). Starting thresholds, to tune in the live test.
+- **In the call**: with fewer than 3 of the household's own sales like it, at least 5 sold close
+  matches (`minMarketSold`) are the range (`market_sold`, "The call" above). A slow eBay search
+  keeps a call from high confidence; a fast one never raises it.
+
+### Account risk
+
+As for Depop ("Account risk" above): no account in the read (the app's own non-persistent web
+view, never the seller's), phone only, stop at the first check (eBay's security check at
+`/splashui/challenge`, "Pardon Our Interruption", a sign-in page; `signin.ebay.com` is one of the
+page's origins only so a sign-in wall loads and ends the read as a check), the 24-hour cache,
+the pauses, images and media blocked, and the warm-up (eBay's home page). **Budgets**: 30 reads
+an hour and 150 a day per account (each read loads two pages); once 20 of the hour's are used,
+the rest go only to items the AI prices at $25 or more at the high end
+(`COMPARISON_LIMITS.ebay.saveForPricier`), where a comparison can change the call most.
+
+### Data
+
+- `market_comparison.sold_total`: the sold search's own count (eBay's), beside `for_sale_total`
+  (migration `20261031111625_ebay_comparisons`, which also allows `item_scan.basis`
+  `market_sold`).
+- `ScanComparison.sold` (`ScanSoldPrices`) and `ScanComparisonAnswer.soldTotal` in the API.
+
+### Tests
+
+- `@listora/sourcing`: `market.test.ts` (brand and type read from a title, never a Depop
+  listing's words), `pace.test.ts` (the sold pace), `call.test.ts` (the sold range before the
+  web and the AI, its confidence, a slow search, Depop's asking prices first);
+  `@listora/pricing` `labels.test.ts` (eBay's sold listings under their label only).
+- `packages/automation`: `ebay/pages/search-page.test.ts` (the URLs, counts, sold days, title
+  sizes, the fewer-words line), `comps/ebay.int.test.ts` (the lane on the phone's page backend
+  against a stand-in results page: the match and count, what is never counted, no results, the
+  warm-up, the security check). **No recorded real page yet**: recording eBay's public search
+  logged out from the Mac's Chrome (2026-10-31) met a bot check on its first page load, and it
+  was not tried again. The results page's selectors (`EBAY_SEARCH_PAGE`, eBay's current `s-card`
+  layout and its earlier `s-item` one) are Listora's model of the page until the captain's live
+  test reads the real one; a page that differs fails the read ("Couldn't check eBay"), never
+  counts anything wrong.
+- `apps/api/src/scans/comparisons.int.test.ts`: eBay's read handed out, the call on its sold
+  listings with the pace and the cache, asking prices alone, no match, the hour saved for
+  pricier items.
+- iPhone: `ScanTests.swift` (eBay's row under its sold label).
+
+**The phone needs a new app build** for eBay's comparisons. Live test: the captain on his phone at
+a store, logged out, eBay only, in Test mode (the gate stays off for sellers). It decides whether
+eBay lets a logged-out iPhone read its search at all: the Mac's recorder met eBay's bot check, and
+a check on the phone pauses eBay's comparisons for the day ("eBay prices paused today").
+
+**Fixed with it.** A read in which nothing matched used to send `level: null`, which the API
+refused, so the card said "Couldn't check Depop"; the phone now leaves the level out, and the row
+says "Not enough similar listings".
 
 ## Upgrading drafts (M6)
 

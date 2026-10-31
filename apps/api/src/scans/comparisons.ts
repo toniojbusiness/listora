@@ -9,34 +9,56 @@
  *
  * Depop shows a visitor no sold listings, so its numbers are what close matches ask, labeled as
  * asking prices; the household's own sales are the sold side, and the demand is their recent
- * pace against Depop's live supply.
+ * pace against Depop's live supply. eBay shows its sold listings, so its numbers are also what
+ * close matches sold for (the call's range when the household's own sales are too few), and its
+ * demand is its search's sold pace against its supply.
  */
 import type { ScanComparison, ScanComparisonAnswer } from '@listora/api-contract';
 import {
   automationProfile,
   COMPARISON_MARKETPLACES,
+  COMPARISON_SOLD_WINDOW_DAYS,
   COMPARISON_VERSION,
   comparisonQuery,
   comparisonQueryKey,
   type ComparisonInput,
   type ComparisonMarketplace,
+  type ComparisonStats,
 } from '@listora/automation';
 import type { ThriftScan } from '@listora/analysis';
 import { jsonb, type DbExecutor, type JsonObject } from '@listora/db';
 import { isFeatureOn, MARKETPLACE_NAMES, type FeatureGate } from '@listora/marketplaces';
-import { ASKING_PRICES_LABEL } from '@listora/pricing';
-import { marketDemand, type MarketStats } from '@listora/sourcing';
+import { ASKING_PRICES_LABEL, marketSoldLabel } from '@listora/pricing';
+import {
+  marketDemand,
+  marketSoldPace,
+  soldPace,
+  type MarketCallInput,
+  type MarketDemandRead,
+} from '@listora/sourcing';
 
 import type { Tenant } from '../tenancy.ts';
 
+/** How many reads a marketplace's comparisons may make for an account. */
+export interface ComparisonLimits {
+  readonly perHour: number;
+  readonly perDay: number;
+  /**
+   * Once this many of the hour's reads are used, the rest go only to items the AI puts at
+   * `minEstimateCents` or more at the high end (or could not price): where a comparison can
+   * change the call most. Absent: every item is read until the hour's limit.
+   */
+  readonly saveForPricier?: { readonly after: number; readonly minEstimateCents: number };
+}
+
 /**
  * Reads each marketplace's comparisons may make for an account, per hour and per day: starting
- * points to tune in the live test, not proven safe limits (the plan's section 3.3).
+ * points to tune in the live test, not proven safe limits (the plan's section 3.3). An eBay read
+ * loads two results pages (its sold and its for-sale search).
  */
-export const COMPARISON_LIMITS: Readonly<
-  Record<ComparisonMarketplace, { readonly perHour: number; readonly perDay: number }>
-> = {
+export const COMPARISON_LIMITS: Readonly<Record<ComparisonMarketplace, ComparisonLimits>> = {
   depop: { perHour: 60, perDay: 300 },
+  ebay: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
 };
 
 /** A read of the same search answers for this long. */
@@ -47,6 +69,8 @@ export const CHECK_PAUSE_MS = 24 * 60 * 60 * 1000;
 export const RATE_LIMIT_PAUSE_MS = 60 * 60 * 1000;
 /** Close matches for sale a row needs before it shows their asking prices. */
 export const MIN_ASKING_SHOWN = 3;
+/** Sold close matches a row needs before it shows what they sold for. */
+export const MIN_SOLD_SHOWN = 3;
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -63,8 +87,10 @@ export interface StoredComparison {
   readonly comparisonId?: string;
   /** What the phone reads, only while it is `checking`. */
   readonly input?: ComparisonInput;
-  readonly stats?: MarketStats;
+  readonly stats?: ComparisonStats;
   readonly forSaleTotal?: number | null;
+  /** The whole sold search's count, where the marketplace shows sold listings (eBay). */
+  readonly soldTotal?: number | null;
   readonly cached?: boolean;
   /** Why there are no numbers. */
   readonly reason?: 'check' | 'rate_limited' | 'hour' | 'day' | 'no_query' | 'no_match';
@@ -92,7 +118,16 @@ export async function planComparisons(
     const key = comparisonQueryKey(marketplace, query);
     const recent = await db
       .selectFrom('market_comparison')
-      .select(['id', 'status', 'query_key', 'stats', 'for_sale_total', 'created_at', 'answered_at'])
+      .select([
+        'id',
+        'status',
+        'query_key',
+        'stats',
+        'for_sale_total',
+        'sold_total',
+        'created_at',
+        'answered_at',
+      ])
       .where('account_id', '=', tenant.accountId)
       .where('marketplace', '=', marketplace)
       .where('created_at', '>=', new Date(now.getTime() - DAY_MS))
@@ -121,23 +156,26 @@ export async function planComparisons(
     );
     if (cached?.stats) {
       planned.push(
-        settled(
-          marketplace,
-          cached.id,
-          cached.stats as unknown as MarketStats,
-          cached.for_sale_total,
-          true,
-        ),
+        settled(marketplace, cached.id, cached.stats as unknown as ComparisonStats, true, {
+          forSaleTotal: cached.for_sale_total,
+          soldTotal: cached.sold_total,
+        }),
       );
       continue;
     }
     const limits = COMPARISON_LIMITS[marketplace];
     const lastHour = recent.filter((row) => row.created_at.getTime() > now.getTime() - HOUR_MS);
-    if (recent.length >= limits.perDay || lastHour.length >= limits.perHour) {
+    const saved = limits.saveForPricier;
+    const saving =
+      saved !== undefined &&
+      lastHour.length >= saved.after &&
+      read.aiEstimate !== null &&
+      read.aiEstimate.highCents < saved.minEstimateCents;
+    if (recent.length >= limits.perDay || lastHour.length >= limits.perHour || saving) {
       planned.push({
         marketplace,
         status: 'limit',
-        reason: lastHour.length >= limits.perHour ? 'hour' : 'day',
+        reason: recent.length >= limits.perDay ? 'day' : 'hour',
       });
       continue;
     }
@@ -193,16 +231,19 @@ export async function startComparisons(
 function settled(
   marketplace: ComparisonMarketplace,
   comparisonId: string,
-  stats: MarketStats,
-  forSaleTotal: number | null,
+  stats: ComparisonStats,
   cached: boolean,
+  totals: { readonly forSaleTotal: number | null; readonly soldTotal: number | null },
 ): StoredComparison {
-  const enough = (stats.forSale?.count ?? 0) >= MIN_ASKING_SHOWN;
+  const enough =
+    (stats.forSale?.count ?? 0) >= MIN_ASKING_SHOWN || (stats.sold?.count ?? 0) >= MIN_SOLD_SHOWN;
+  const showsSold = COMPARISON_SOLD_WINDOW_DAYS[marketplace] !== undefined;
   return {
     marketplace,
     comparisonId,
     stats,
-    forSaleTotal,
+    forSaleTotal: totals.forSaleTotal,
+    ...(showsSold ? { soldTotal: totals.soldTotal } : {}),
     cached,
     status: enough ? 'read' : 'not_enough',
     ...(enough ? {} : { reason: 'no_match' as const }),
@@ -241,6 +282,7 @@ export async function answerComparison(
       status: outcome,
       stats: stats === undefined ? null : jsonb(stats as unknown as JsonObject),
       for_sale_total: answer.forSaleTotal ?? null,
+      sold_total: answer.soldTotal ?? null,
       read_ms: answer.ms,
       answered_at: now,
     })
@@ -250,7 +292,10 @@ export async function answerComparison(
   const marketplace = row.marketplace as ComparisonMarketplace;
   const next: StoredComparison =
     stats !== undefined
-      ? settled(marketplace, comparisonId, stats as MarketStats, answer.forSaleTotal ?? null, false)
+      ? settled(marketplace, comparisonId, stats as ComparisonStats, false, {
+          forSaleTotal: answer.forSaleTotal ?? null,
+          soldTotal: answer.soldTotal ?? null,
+        })
       : outcome === 'check' || outcome === 'rate_limited'
         ? { marketplace, comparisonId, status: 'paused', reason: outcome }
         : { marketplace, comparisonId, status: 'failed' };
@@ -290,33 +335,62 @@ function dollars(cents: number): string {
   return `$${String(Math.round(cents / 100))}`;
 }
 
-/** What the call weighs of a comparison: close matches' asking prices and the demand. */
-export function marketInput(
-  comparison: StoredComparison | undefined,
+/**
+ * What the call weighs of each marketplace's comparisons, Depop first: close matches' asking
+ * prices, what they sold for where the marketplace shows it (eBay), and the demand.
+ */
+export function marketInputs(
+  comparisons: readonly StoredComparison[],
   recentOwnSales: number,
-):
-  | {
-      marketplace: string;
-      asking?: { count: number; lowCents: number; highCents: number };
-      demand: ReturnType<typeof marketDemand>;
-    }
-  | undefined {
-  if (comparison?.stats === undefined) return undefined;
+): MarketCallInput[] {
+  return comparisons.flatMap((comparison) => {
+    const stats = comparison.stats;
+    if (stats === undefined) return [];
+    const name = MARKETPLACE_NAMES[comparison.marketplace];
+    const { forSale, sold } = stats;
+    const demand = demandOf(comparison, recentOwnSales);
+    return [
+      {
+        marketplace: name,
+        ...(forSale === undefined
+          ? {}
+          : {
+              asking: {
+                count: forSale.count,
+                lowCents: forSale.lowCents,
+                highCents: forSale.highCents,
+              },
+            }),
+        ...(sold === undefined || stats.level === undefined
+          ? {}
+          : {
+              sold: {
+                count: sold.count,
+                lowCents: sold.lowCents,
+                highCents: sold.highCents,
+                windowDays: sold.windowDays,
+                level: stats.level,
+              },
+            }),
+        demand: {
+          ...demand,
+          fromSoldPace: COMPARISON_SOLD_WINDOW_DAYS[comparison.marketplace] !== undefined,
+        },
+      },
+    ];
+  });
+}
+
+/**
+ * The trend read: a marketplace's own sold pace against its supply where it shows sold listings
+ * (eBay), else the household's recent sales like it against the marketplace's supply.
+ */
+function demandOf(comparison: StoredComparison, recentOwnSales: number): MarketDemandRead {
   const name = MARKETPLACE_NAMES[comparison.marketplace];
-  const forSale = comparison.stats.forSale;
-  return {
-    marketplace: name,
-    ...(forSale === undefined
-      ? {}
-      : {
-          asking: {
-            count: forSale.count,
-            lowCents: forSale.lowCents,
-            highCents: forSale.highCents,
-          },
-        }),
-    demand: marketDemand(recentOwnSales, comparison.forSaleTotal ?? null, name),
-  };
+  const window = COMPARISON_SOLD_WINDOW_DAYS[comparison.marketplace];
+  return window === undefined
+    ? marketDemand(recentOwnSales, comparison.forSaleTotal ?? null, name)
+    : marketSoldPace(comparison.soldTotal ?? null, comparison.forSaleTotal ?? null, window, name);
 }
 
 /** The comparison as the card shows it. */
@@ -369,13 +443,25 @@ function readView(
   recentOwnSales: number,
   name: string,
 ): ScanComparison {
-  const forSale = comparison.stats?.forSale;
+  const stats = comparison.stats;
+  const forSale =
+    stats?.forSale !== undefined && stats.forSale.count >= MIN_ASKING_SHOWN
+      ? stats.forSale
+      : undefined;
+  const sold =
+    stats?.sold !== undefined && stats.sold.count >= MIN_SOLD_SHOWN ? stats.sold : undefined;
   const supply = comparison.forSaleTotal ?? undefined;
   const extras = {
     ...(supply === undefined ? {} : { supply }),
     ...(comparison.cached === undefined ? {} : { cached: comparison.cached }),
   };
-  if (comparison.status === 'not_enough' || forSale === undefined) {
+  const label =
+    sold !== undefined
+      ? `${name}: sold ${dollars(sold.lowCents)}-${dollars(sold.highCents)}, ${soldPace(sold.count, sold.windowDays)}`
+      : forSale !== undefined
+        ? `${name}: asking ${dollars(forSale.lowCents)}-${dollars(forSale.highCents)}, ${String(forSale.count)} like it for sale`
+        : undefined;
+  if (comparison.status === 'not_enough' || label === undefined) {
     return {
       marketplace: comparison.marketplace,
       status: 'not_enough',
@@ -386,19 +472,34 @@ function readView(
       ...extras,
     };
   }
-  const demand = marketDemand(recentOwnSales, comparison.forSaleTotal ?? null, name);
-  const like = forSale.count === 1 ? '1 like it' : `${String(forSale.count)} like it`;
+  const demand = demandOf(comparison, recentOwnSales);
   return {
     marketplace: comparison.marketplace,
     status: 'read',
-    label: `${name}: asking ${dollars(forSale.lowCents)}-${dollars(forSale.highCents)}, ${like} for sale`,
-    asking: {
-      count: forSale.count,
-      low: usd(forSale.lowCents),
-      median: usd(forSale.medianCents),
-      high: usd(forSale.highCents),
-      label: ASKING_PRICES_LABEL,
-    },
+    label,
+    ...(forSale === undefined
+      ? {}
+      : {
+          asking: {
+            count: forSale.count,
+            low: usd(forSale.lowCents),
+            median: usd(forSale.medianCents),
+            high: usd(forSale.highCents),
+            label: ASKING_PRICES_LABEL,
+          },
+        }),
+    ...(sold === undefined
+      ? {}
+      : {
+          sold: {
+            count: sold.count,
+            low: usd(sold.lowCents),
+            median: usd(sold.medianCents),
+            high: usd(sold.highCents),
+            ...(sold.windowDays === null ? {} : { windowDays: sold.windowDays }),
+            label: marketSoldLabel(name),
+          },
+        }),
     ...extras,
     demand: {
       demand: demand.demand,

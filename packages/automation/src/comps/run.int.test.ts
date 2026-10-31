@@ -130,6 +130,21 @@ describe('the comparison lane', () => {
     });
   });
 
+  it('sends no level when nothing matched, as the API takes the answer', async () => {
+    api = {
+      status: 200,
+      type: 'application/json',
+      body: JSON.stringify({ meta: { total_count: 3 }, objects: [PRODUCTS[6], PRODUCTS[7]] }),
+    };
+    try {
+      const output = await compare();
+      expect(output).toMatchObject({ outcome: 'read', stats: { read: { sold: 0, forSale: 2 } } });
+      expect(output.outcome === 'read' && 'level' in output.stats).toBe(false);
+    } finally {
+      api = ok();
+    }
+  });
+
   it('warms up by opening the search page', async () => {
     const host = new PlaywrightPhoneHost(await context.newPage());
     try {

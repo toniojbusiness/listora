@@ -325,11 +325,17 @@ export type { OfferCheckTarget } from './offers/schedule.ts';
 export { comparisonQuery, comparisonQueryKey } from './comps/query.ts';
 export type { ComparisonItem } from './comps/query.ts';
 export { comparisonProfile } from './comps/run.ts';
-export { COMPARISON_MARKETPLACES, COMPARISON_OUTCOMES, COMPARISON_VERSION } from './comps/types.ts';
+export {
+  COMPARISON_MARKETPLACES,
+  COMPARISON_OUTCOMES,
+  COMPARISON_SOLD_WINDOW_DAYS,
+  COMPARISON_VERSION,
+} from './comps/types.ts';
 export type {
   ComparisonInput,
   ComparisonMarketplace,
   ComparisonOutcome,
   ComparisonOutput,
   ComparisonQuery,
+  ComparisonStats,
 } from './comps/types.ts';
