@@ -389,7 +389,7 @@ no-thinking setting for this one call), then streaming the identity first.
 - `sourcing_run`: account, who started it, the place, started and ended, its scan and kept
   counts, which stay after skipped scans are deleted, and from checkout the haul it became
   (`haul_id`, one run per haul), `checked_out_at`, and the miles (migration
-  `20261031084853_sourcing_run_checkout`).
+  `20261031113754_sourcing_run_checkout`).
 - `item_scan`: the run, the item shot's SHA-256 and the image count (never the images), the
   AI's read (`read`), the web research once asked for (`research`, `research_ms`), the call, its confidence and basis, the call as the app showed it with the
   own-sales lines (`call_detail`: counts and quartiles of the household's own sales only), the
