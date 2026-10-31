@@ -81,9 +81,16 @@ export type {
   TopAccountsReport,
   UsagePeriod,
 } from './reports.ts';
-export { AI_EFFORTS, AI_IMAGE_MEDIA_TYPES, SCHEMA_ENFORCEMENTS, ZERO_USAGE } from './types.ts';
+export {
+  AI_EFFORTS,
+  AI_IMAGE_MEDIA_TYPES,
+  AI_THINKING,
+  SCHEMA_ENFORCEMENTS,
+  ZERO_USAGE,
+} from './types.ts';
 export type {
   AiEffort,
+  AiThinking,
   AiImage,
   AiImageMediaType,
   AiProviderId,

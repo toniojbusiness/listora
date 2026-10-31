@@ -2,6 +2,7 @@ import type {
   AiEffort,
   AiImage,
   AiProviderId,
+  AiThinking,
   OutputSchema,
   TokenUsage,
   WebSearchOptions,
@@ -28,6 +29,8 @@ export interface ProviderRequest<T> {
   readonly images: readonly AiImage[];
   readonly output: OutputSchema<T>;
   readonly maxOutputTokens: number;
+  /** Absent: `adaptive`. */
+  readonly thinking?: AiThinking;
   /** Lets the model search the web before it answers; absent, it never does. */
   readonly webSearch?: WebSearchOptions;
   readonly signal?: AbortSignal;

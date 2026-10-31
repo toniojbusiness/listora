@@ -16,6 +16,7 @@ import type { AiProvider, ProviderRequest, ProviderResponse } from './provider.t
 import type {
   AiImage,
   AiProviderId,
+  AiThinking,
   AiTier,
   OutputSchema,
   TokenUsage,
@@ -48,6 +49,8 @@ export interface AiCall<T> {
   readonly quota?: QuotaCharge;
   /** Lets the model search the web; each search is billed and metered. */
   readonly webSearch?: WebSearchOptions;
+  /** Absent: `adaptive`, thinking within the tier's effort. */
+  readonly thinking?: AiThinking;
   readonly signal?: AbortSignal;
 }
 
@@ -158,6 +161,7 @@ export class AiClient {
       output: call.output,
       maxOutputTokens: settings.maxOutputTokens,
       ...(call.webSearch === undefined ? {} : { webSearch: call.webSearch }),
+      ...(call.thinking === undefined ? {} : { thinking: call.thinking }),
       ...(call.signal === undefined ? {} : { signal: call.signal }),
     });
     const latencyMs = Math.round(performance.now() - started);

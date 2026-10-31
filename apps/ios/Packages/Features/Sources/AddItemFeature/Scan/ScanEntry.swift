@@ -1,6 +1,7 @@
 import APIClient
 import Core
 import Foundation
+import Synchronization
 
 /// What a scan run sends to Listora: the API, or a fake in tests.
 protocol ScanService: Sendable {
@@ -77,21 +78,64 @@ struct ScanEntry: Equatable, Identifiable {
 }
 
 /// The tag text a scan shot carries to the read, read on this iPhone within a deadline, so a slow
-/// read never holds the scan up.
+/// read never holds the scan up. The deadline holds even though Vision only stops at its next
+/// pass: the read runs on its own, and the scan goes on without it at the deadline.
 enum ScanTagText {
     static func read(_ jpeg: Data, with reader: any TagReader, within deadline: Duration) async -> [String] {
-        await withTaskGroup(of: [String]?.self) { group in
-            group.addTask {
-                guard let reading = try? await reader.read(imageData: jpeg) else { return [] }
-                return Array(reading.lines.map(\.text).filter { !$0.isEmpty }.prefix(40))
-            }
-            group.addTask {
-                try? await Task.sleep(for: deadline)
+        let first = FirstAnswer<[String]>()
+        let work = Task.detached(priority: .userInitiated) {
+            let reading = try? await reader.read(imageData: jpeg)
+            first.answer(reading.map { Array($0.lines.map(\.text).filter { !$0.isEmpty }.prefix(40)) } ?? [])
+        }
+        let timer = Task.detached {
+            try? await Task.sleep(for: deadline)
+            first.answer([])
+        }
+        let lines = await first.value
+        work.cancel()
+        timer.cancel()
+        return lines
+    }
+}
+
+/// The first of several answers; later ones are dropped.
+private final class FirstAnswer<Value: Sendable>: Sendable {
+    private struct State {
+        var answered = false
+        var value: Value?
+        var waiter: CheckedContinuation<Value, Never>?
+    }
+
+    private let state = Mutex(State())
+
+    func answer(_ value: Value) {
+        let waiter = state.withLock { state -> CheckedContinuation<Value, Never>? in
+            guard !state.answered else { return nil }
+            state.answered = true
+            guard let waiter = state.waiter else {
+                state.value = value
                 return nil
             }
-            let first = await group.next()
-            group.cancelAll()
-            return first.flatMap(\.self) ?? []
+            state.waiter = nil
+            return waiter
+        }
+        waiter?.resume(returning: value)
+    }
+
+    var value: Value {
+        get async {
+            await withCheckedContinuation { continuation in
+                let ready = state.withLock { state -> Value? in
+                    if let value = state.value {
+                        return value
+                    }
+                    state.waiter = continuation
+                    return nil
+                }
+                if let ready {
+                    continuation.resume(returning: ready)
+                }
+            }
         }
     }
 }

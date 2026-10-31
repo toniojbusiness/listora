@@ -29,16 +29,20 @@ const CATEGORY_PATHS = Object.entries(CATEGORY_TREE).flatMap(([category, subcate
 ) as [string, ...string[]];
 
 const NOT_FOUND = '';
+
+/** The read's item when the model named none. */
+export const UNIDENTIFIED_ITEM = 'Unidentified item';
 const cents = z.int().min(0).max(100_000_000);
 
 /** The answer as the model sends it: flat, every property present, `""` when not found. */
 const scanAnswerSchema = z
   .object({
     brand: z.string().trim().max(120).describe('The maker as printed; empty when unsure'),
+    // Constrained decoding cannot hold a minimum length, so an empty name (a shot of only a
+    // care label) is allowed here and decoded as `UNIDENTIFIED_ITEM` rather than failing.
     item: z
       .string()
       .trim()
-      .min(1)
       .max(120)
       .describe('A short name of the item, for example "black high-rise straight jeans"'),
     line: z
@@ -115,9 +119,15 @@ const scanAnswerSchema = z
   });
 export type ScanAnswer = z.infer<typeof scanAnswerSchema>;
 
+/**
+ * Held to its enums (`strictEnums`), so the category, department, and condition are always
+ * one of the lists: without it, about one read in twenty named a category outside the list and
+ * was sent again (docs/features/thrift-scan.md, "Speed").
+ */
 export const SCAN_OUTPUT: OutputSchema<ScanAnswer> = {
   name: SCAN_OUTPUT_NAME,
   schema: scanAnswerSchema,
+  strictEnums: true,
 };
 
 /** Stable instructions of every scan call: no per-request values, so they cache. */
@@ -132,15 +142,16 @@ Evidence
 
 Identity
 - brand: the maker as printed or as the item clearly shows it. item: a short name a buyer would
-  recognize (color, style, item type).
+  recognize (color, style, item type); never empty, so when only a tag shows, the item type the
+  tag suggests ("cotton tee") or "garment".
 - line: the exact model or line ("501", "550", "Align", "Synchilla", "Air Force 1") only when
   printed or unmistakable: one brand makes many models, so never guess one. styleNumber: a
   style or model number printed on a tag or label. era: "current", or "vintage" with its decade,
   when that changes what the item is. material: the main material ("wool", "cotton",
   "leather"). "" for any of them when unsure.
-- category, as <category>/<subcategory>, from: ${CATEGORY_PATHS.join(', ')}.
-- department: ${DEPARTMENTS.join(', ')}. sizeLabel: the size as on the tag, short ("M", "28").
-- condition: ${CONDITIONS.join(', ')}; judge only what the images show. new_with_tags only
+- category: <category>/<subcategory>, one of the schema's values. department: one of the
+  schema's values. sizeLabel: the size as on the tag, short ("M", "28").
+- condition: one of the schema's values; judge only what the images show. new_with_tags only
   when the store's or the maker's price tag is still attached.
 - style: a style or era buyers search by ("Y2K", "gorpcore", "90s vintage", "coquette") only
   when the item clearly is one; otherwise "".
@@ -149,8 +160,9 @@ Identity
 
 Price
 - priceEstimate: what a buyer would pay for this item on Depop (the item price, without
-  shipping), as low, mid, and high in US cents, from the brand, item, era, and condition. It
-  is shown as "${AI_ESTIMATE_LABEL}", so never claim it rests on sales.
+  shipping), as low, mid, and high in US cents, from the brand, item, era, and condition: what
+  a used one like it really goes for, which is usually well under what sellers ask and far
+  under retail. It is shown as "${AI_ESTIMATE_LABEL}", so never claim it rests on sales.
   Use all zeros when you cannot tell.
 - retailPriceCents: the original retail price printed on a price tag you can read in an image
   (the maker's or a store's original tag, not a thrift store's own sticker), in US cents; 0 when
@@ -231,6 +243,8 @@ export class ScanFailedError extends Error {
 /**
  * Reads one scan with a standard-tier call through `AiClient`, so the kill switch, account
  * blocks, daily budget, and metering apply. It uses no item quota: a scan is not an AI item.
+ * Thinking is off: the read is a glance, and with it on, about one read in four spent 1.5 s
+ * to 3.5 s more on thinking for no better identification (docs/features/thrift-scan.md).
  * An answer that breaks the schema is sent once more; any other failure, or a second bad
  * answer, throws `ScanFailedError` with the cost of every attempt.
  */
@@ -251,6 +265,7 @@ export async function scanItem(client: AiClient, input: ScanInput): Promise<Scan
         photoSetHash: input.photoSetHash,
         images: input.images,
         output: SCAN_OUTPUT,
+        thinking: 'off',
         ...(input.signal === undefined ? {} : { signal: input.signal }),
       });
       costMicros += answer.costMicros;
@@ -284,7 +299,7 @@ export function decodeScanAnswer(answer: ScanAnswer): ThriftScan {
   const price = answer.priceEstimate;
   return {
     brand: orNull(answer.brand),
-    item: answer.item,
+    item: answer.item === '' ? UNIDENTIFIED_ITEM : answer.item,
     line: answer.line === '' ? null : answer.line,
     styleNumber: answer.styleNumber === '' ? null : answer.styleNumber,
     era: answer.era === '' ? null : answer.era,
