@@ -68,7 +68,7 @@ final class ThriftScanUITests: XCTestCase {
         let said = confirmation.label
         XCTAssertTrue(said.contains("Kept · 1 in this run") || said.contains("Keeping item 1"), said)
         attachScreenshot("kept")
-        record("Keep to the camera clear, measured by the test (tap and its polling included): \(Int(cameraReady * 1000)) ms")
+        record("Keep to the camera clear, by the test (tap and polling included): \(Int(cameraReady * 1000)) ms")
         XCTAssertTrue(waitForLabel(of: element("scanCamera.summary"), prefix: "1 scanned · 1 kept", timeout: 20))
 
         // The next shot shows its own card; Put back passes on it, back to the camera.
