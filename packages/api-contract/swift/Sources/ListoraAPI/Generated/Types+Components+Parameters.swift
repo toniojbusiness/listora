@@ -73,5 +73,11 @@ extension Components {
         public typealias ScanId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/ComparisonId`.
         public typealias ComparisonId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/ExpenseId`.
+        public typealias ExpenseId = Components.Schemas.Id
+        /// The calendar year.
+        ///
+        /// - Remark: Generated from `#/components/parameters/ReportYear`.
+        public typealias ReportYear = Swift.Int32
     }
 }

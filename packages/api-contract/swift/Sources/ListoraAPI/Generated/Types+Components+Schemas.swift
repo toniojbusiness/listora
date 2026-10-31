@@ -10055,6 +10055,13 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/YearReport/marketplaces`.
             public var marketplaces: [Components.Schemas.MarketplaceReport]
+            /// - Remark: Generated from `#/components/schemas/YearReport/expenses`.
+            public var expenses: Components.Schemas.YearExpenses
+            /// `total.netProfit` less `expenses.total`. Absent while either is absent.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/YearReport/netAfterExpenses`.
+            public var netAfterExpenses: Components.Schemas.Money?
             /// Creates a new `YearReport`.
             ///
             /// - Parameters:
@@ -10063,18 +10070,24 @@ extension Components {
             ///   - total:
             ///   - months: All twelve months, January first; a month without sales has zero totals.
             ///   - marketplaces: Each marketplace with a sale in the year, in the fixed `Marketplace` order.
+            ///   - expenses:
+            ///   - netAfterExpenses: `total.netProfit` less `expenses.total`. Absent while either is absent.
             public init(
                 year: Swift.Int32,
                 timeZone: Swift.String,
                 total: Components.Schemas.ReportTotals,
                 months: [Components.Schemas.MonthReport],
-                marketplaces: [Components.Schemas.MarketplaceReport]
+                marketplaces: [Components.Schemas.MarketplaceReport],
+                expenses: Components.Schemas.YearExpenses,
+                netAfterExpenses: Components.Schemas.Money? = nil
             ) {
                 self.year = year
                 self.timeZone = timeZone
                 self.total = total
                 self.months = months
                 self.marketplaces = marketplaces
+                self.expenses = expenses
+                self.netAfterExpenses = netAfterExpenses
             }
             public enum CodingKeys: String, CodingKey {
                 case year
@@ -10082,6 +10095,8 @@ extension Components {
                 case total
                 case months
                 case marketplaces
+                case expenses
+                case netAfterExpenses
             }
         }
         /// A CSV file (RFC 4180: comma-separated, double-quoted where needed, CRLF line ends, UTF-8
@@ -10123,6 +10138,425 @@ extension Components {
                 case fileName
                 case rowCount
                 case content
+            }
+        }
+        /// The year's business expenses (docs/features/expenses.md) by the day each was incurred:
+        /// miles driven, priced at the year's mileage rate, and money spent, by category. `total` is
+        /// absent while the miles have no rate.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/YearExpenses`.
+        public struct YearExpenses: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/YearExpenses/mileage`.
+            public var mileage: Components.Schemas.MileageTotals
+            /// All money spent.
+            ///
+            /// - Remark: Generated from `#/components/schemas/YearExpenses/spent`.
+            public var spent: Components.Schemas.Money
+            /// Money spent per category, the largest first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/YearExpenses/categories`.
+            public var categories: [Components.Schemas.SpendCategory]
+            /// The mileage deduction plus `spent`; absent while the deduction is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/YearExpenses/total`.
+            public var total: Components.Schemas.Money?
+            /// Creates a new `YearExpenses`.
+            ///
+            /// - Parameters:
+            ///   - mileage:
+            ///   - spent: All money spent.
+            ///   - categories: Money spent per category, the largest first.
+            ///   - total: The mileage deduction plus `spent`; absent while the deduction is.
+            public init(
+                mileage: Components.Schemas.MileageTotals,
+                spent: Components.Schemas.Money,
+                categories: [Components.Schemas.SpendCategory],
+                total: Components.Schemas.Money? = nil
+            ) {
+                self.mileage = mileage
+                self.spent = spent
+                self.categories = categories
+                self.total = total
+            }
+            public enum CodingKeys: String, CodingKey {
+                case mileage
+                case spent
+                case categories
+                case total
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MileageTotals`.
+        public struct MileageTotals: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MileageTotals/miles`.
+            public var miles: Swift.Int32
+            /// Mileage entries.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MileageTotals/trips`.
+            public var trips: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/MileageTotals/rate`.
+            public var rate: Components.Schemas.MileageRate
+            /// The miles at the rate, rounded to the cent; absent while the year has no rate.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MileageTotals/deduction`.
+            public var deduction: Components.Schemas.Money?
+            /// Creates a new `MileageTotals`.
+            ///
+            /// - Parameters:
+            ///   - miles:
+            ///   - trips: Mileage entries.
+            ///   - rate:
+            ///   - deduction: The miles at the rate, rounded to the cent; absent while the year has no rate.
+            public init(
+                miles: Swift.Int32,
+                trips: Swift.Int32,
+                rate: Components.Schemas.MileageRate,
+                deduction: Components.Schemas.Money? = nil
+            ) {
+                self.miles = miles
+                self.trips = trips
+                self.rate = rate
+                self.deduction = deduction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case miles
+                case trips
+                case rate
+                case deduction
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SpendCategory`.
+        public struct SpendCategory: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SpendCategory/category`.
+            public var category: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SpendCategory/spent`.
+            public var spent: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/SpendCategory/count`.
+            public var count: Swift.Int32
+            /// Creates a new `SpendCategory`.
+            ///
+            /// - Parameters:
+            ///   - category:
+            ///   - spent:
+            ///   - count:
+            public init(
+                category: Swift.String,
+                spent: Components.Schemas.Money,
+                count: Swift.Int32
+            ) {
+                self.category = category
+                self.spent = spent
+                self.count = count
+            }
+            public enum CodingKeys: String, CodingKey {
+                case category
+                case spent
+                case count
+            }
+        }
+        /// A business expense for the seller's taxes (docs/features/expenses.md): money spent
+        /// (`amount`), or miles driven (`miles`), which Reports prices at the year's mileage rate.
+        /// Exactly one of `amount` and `miles` is present.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/Expense`.
+        public struct Expense: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Expense/id`.
+            public var id: Components.Schemas.Id
+            /// The seller's day of the expense.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Expense/incurredOn`.
+            public var incurredOn: Swift.String
+            /// What it was for, as the seller named it (`Mileage` for miles), for example `Parking`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Expense/category`.
+            public var category: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Expense/description`.
+            public var description: Swift.String?
+            /// The money spent; absent for miles.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Expense/amount`.
+            public var amount: Components.Schemas.Money?
+            /// The miles driven; absent for money spent.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Expense/miles`.
+            public var miles: Swift.Int32?
+            /// The sourcing run it was entered at checkout for, while the run is kept.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Expense/sourcingRunId`.
+            public var sourcingRunId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/Expense/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// Creates a new `Expense`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - incurredOn: The seller's day of the expense.
+            ///   - category: What it was for, as the seller named it (`Mileage` for miles), for example `Parking`.
+            ///   - description:
+            ///   - amount: The money spent; absent for miles.
+            ///   - miles: The miles driven; absent for money spent.
+            ///   - sourcingRunId: The sourcing run it was entered at checkout for, while the run is kept.
+            ///   - createdAt:
+            public init(
+                id: Components.Schemas.Id,
+                incurredOn: Swift.String,
+                category: Swift.String,
+                description: Swift.String? = nil,
+                amount: Components.Schemas.Money? = nil,
+                miles: Swift.Int32? = nil,
+                sourcingRunId: Components.Schemas.Id? = nil,
+                createdAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.incurredOn = incurredOn
+                self.category = category
+                self.description = description
+                self.amount = amount
+                self.miles = miles
+                self.sourcingRunId = sourcingRunId
+                self.createdAt = createdAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case incurredOn
+                case category
+                case description
+                case amount
+                case miles
+                case sourcingRunId
+                case createdAt
+            }
+        }
+        /// An expense as the seller enters it: exactly one of `amount` (money spent) and `miles`
+        /// (miles driven); both or neither is `422`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ExpenseWrite`.
+        public struct ExpenseWrite: Codable, Hashable, Sendable {
+            /// The seller's day of the expense.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseWrite/incurredOn`.
+            public var incurredOn: Swift.String
+            /// What it was for, for example `Parking`, `Supplies`, or `Mileage`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseWrite/category`.
+            public var category: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ExpenseWrite/description`.
+            public var description: Swift.String?
+            /// The money spent, at least 1 cent.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseWrite/amount`.
+            public var amount: Components.Schemas.Money?
+            /// The miles driven, in whole miles.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ExpenseWrite/miles`.
+            public var miles: Swift.Int32?
+            /// Creates a new `ExpenseWrite`.
+            ///
+            /// - Parameters:
+            ///   - incurredOn: The seller's day of the expense.
+            ///   - category: What it was for, for example `Parking`, `Supplies`, or `Mileage`.
+            ///   - description:
+            ///   - amount: The money spent, at least 1 cent.
+            ///   - miles: The miles driven, in whole miles.
+            public init(
+                incurredOn: Swift.String,
+                category: Swift.String,
+                description: Swift.String? = nil,
+                amount: Components.Schemas.Money? = nil,
+                miles: Swift.Int32? = nil
+            ) {
+                self.incurredOn = incurredOn
+                self.category = category
+                self.description = description
+                self.amount = amount
+                self.miles = miles
+            }
+            public enum CodingKeys: String, CodingKey {
+                case incurredOn
+                case category
+                case description
+                case amount
+                case miles
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.incurredOn = try container.decode(
+                    Swift.String.self,
+                    forKey: .incurredOn
+                )
+                self.category = try container.decode(
+                    Swift.String.self,
+                    forKey: .category
+                )
+                self.description = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .description
+                )
+                self.amount = try container.decodeIfPresent(
+                    Components.Schemas.Money.self,
+                    forKey: .amount
+                )
+                self.miles = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .miles
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "incurredOn",
+                    "category",
+                    "description",
+                    "amount",
+                    "miles"
+                ])
+            }
+        }
+        /// A year's expenses, oldest day first.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ExpenseList`.
+        public struct ExpenseList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExpenseList/year`.
+            public var year: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ExpenseList/expenses`.
+            public var expenses: [Components.Schemas.Expense]
+            /// Creates a new `ExpenseList`.
+            ///
+            /// - Parameters:
+            ///   - year:
+            ///   - expenses:
+            public init(
+                year: Swift.Int32,
+                expenses: [Components.Schemas.Expense]
+            ) {
+                self.year = year
+                self.expenses = expenses
+            }
+            public enum CodingKeys: String, CodingKey {
+                case year
+                case expenses
+            }
+        }
+        /// The standard mileage rate for a year, in tenths of a cent per mile (`725` is 72.5 cents).
+        /// The seller's own when they set one (`setBySeller`), otherwise the IRS business rate Listora
+        /// knows for the year. Absent `tenthCentsPerMile` means Listora knows no rate for the year and
+        /// the seller has set none, so the year's miles are not priced.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MileageRate`.
+        public struct MileageRate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MileageRate/year`.
+            public var year: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/MileageRate/tenthCentsPerMile`.
+            public var tenthCentsPerMile: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/MileageRate/setBySeller`.
+            public var setBySeller: Swift.Bool
+            /// The IRS business rate Listora knows for the year, when it knows one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MileageRate/irsTenthCentsPerMile`.
+            public var irsTenthCentsPerMile: Swift.Int32?
+            /// Creates a new `MileageRate`.
+            ///
+            /// - Parameters:
+            ///   - year:
+            ///   - tenthCentsPerMile:
+            ///   - setBySeller:
+            ///   - irsTenthCentsPerMile: The IRS business rate Listora knows for the year, when it knows one.
+            public init(
+                year: Swift.Int32,
+                tenthCentsPerMile: Swift.Int32? = nil,
+                setBySeller: Swift.Bool,
+                irsTenthCentsPerMile: Swift.Int32? = nil
+            ) {
+                self.year = year
+                self.tenthCentsPerMile = tenthCentsPerMile
+                self.setBySeller = setBySeller
+                self.irsTenthCentsPerMile = irsTenthCentsPerMile
+            }
+            public enum CodingKeys: String, CodingKey {
+                case year
+                case tenthCentsPerMile
+                case setBySeller
+                case irsTenthCentsPerMile
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MileageRateWrite`.
+        public struct MileageRateWrite: Codable, Hashable, Sendable {
+            /// The rate in tenths of a cent per mile, for example `725` for 72.5 cents.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MileageRateWrite/tenthCentsPerMile`.
+            public var tenthCentsPerMile: Swift.Int32
+            /// Creates a new `MileageRateWrite`.
+            ///
+            /// - Parameters:
+            ///   - tenthCentsPerMile: The rate in tenths of a cent per mile, for example `725` for 72.5 cents.
+            public init(tenthCentsPerMile: Swift.Int32) {
+                self.tenthCentsPerMile = tenthCentsPerMile
+            }
+            public enum CodingKeys: String, CodingKey {
+                case tenthCentsPerMile
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.tenthCentsPerMile = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .tenthCentsPerMile
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "tenthCentsPerMile"
+                ])
+            }
+        }
+        /// Money spent on a sourcing trip other than the haul, for example parking or an entry fee.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingSpend`.
+        public struct SourcingSpend: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SourcingSpend/category`.
+            public var category: Swift.String
+            /// At least 1 cent.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingSpend/amount`.
+            public var amount: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/SourcingSpend/description`.
+            public var description: Swift.String?
+            /// Creates a new `SourcingSpend`.
+            ///
+            /// - Parameters:
+            ///   - category:
+            ///   - amount: At least 1 cent.
+            ///   - description:
+            public init(
+                category: Swift.String,
+                amount: Components.Schemas.Money,
+                description: Swift.String? = nil
+            ) {
+                self.category = category
+                self.amount = amount
+                self.description = description
+            }
+            public enum CodingKeys: String, CodingKey {
+                case category
+                case amount
+                case description
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.category = try container.decode(
+                    Swift.String.self,
+                    forKey: .category
+                )
+                self.amount = try container.decode(
+                    Components.Schemas.Money.self,
+                    forKey: .amount
+                )
+                self.description = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .description
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "category",
+                    "amount",
+                    "description"
+                ])
             }
         }
         /// A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
@@ -16138,10 +16572,16 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/purchaseDate`.
             public var purchaseDate: Swift.String?
-            /// The miles driven for the trip, if the seller logs them.
+            /// The miles driven for the trip, if the seller logs them. More than 0 is also recorded as
+            /// the trip's mileage expense (docs/features/expenses.md).
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/miles`.
             public var miles: Swift.Int32?
+            /// Other money spent on the trip (parking, an entry fee), each recorded as an expense of the trip's day.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/otherSpend`.
+            public var otherSpend: [Components.Schemas.SourcingSpend]?
             /// Creates a new `SourcingRunCheckout`.
             ///
             /// - Parameters:
@@ -16150,14 +16590,16 @@ extension Components {
             ///   - keptScanIds: The scans the seller kept on the phone, in the order kept. One whose item the app has
             ///   - place: Where the haul was bought, when the run has no place yet or it changed.
             ///   - purchaseDate: The seller's date of the trip; the run's start date (UTC) when absent.
-            ///   - miles: The miles driven for the trip, if the seller logs them.
+            ///   - miles: The miles driven for the trip, if the seller logs them. More than 0 is also recorded as
+            ///   - otherSpend: Other money spent on the trip (parking, an entry fee), each recorded as an expense of the trip's day.
             public init(
                 total: Components.Schemas.Money,
                 itemCount: Swift.Int32,
                 keptScanIds: [Components.Schemas.Id],
                 place: Swift.String? = nil,
                 purchaseDate: Swift.String? = nil,
-                miles: Swift.Int32? = nil
+                miles: Swift.Int32? = nil,
+                otherSpend: [Components.Schemas.SourcingSpend]? = nil
             ) {
                 self.total = total
                 self.itemCount = itemCount
@@ -16165,6 +16607,7 @@ extension Components {
                 self.place = place
                 self.purchaseDate = purchaseDate
                 self.miles = miles
+                self.otherSpend = otherSpend
             }
             public enum CodingKeys: String, CodingKey {
                 case total
@@ -16173,6 +16616,7 @@ extension Components {
                 case place
                 case purchaseDate
                 case miles
+                case otherSpend
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -16200,13 +16644,18 @@ extension Components {
                     Swift.Int32.self,
                     forKey: .miles
                 )
+                self.otherSpend = try container.decodeIfPresent(
+                    [Components.Schemas.SourcingSpend].self,
+                    forKey: .otherSpend
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "total",
                     "itemCount",
                     "keptScanIds",
                     "place",
                     "purchaseDate",
-                    "miles"
+                    "miles",
+                    "otherSpend"
                 ])
             }
         }

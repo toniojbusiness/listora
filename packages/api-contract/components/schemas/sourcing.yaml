@@ -243,7 +243,15 @@ SourcingRunCheckout:
       format: int32
       minimum: 0
       maximum: 2000
-      description: The miles driven for the trip, if the seller logs them.
+      description: |
+        The miles driven for the trip, if the seller logs them. More than 0 is also recorded as
+        the trip's mileage expense (docs/features/expenses.md).
+    otherSpend:
+      type: array
+      description: Other money spent on the trip (parking, an entry fee), each recorded as an expense of the trip's day.
+      maxItems: 10
+      items:
+        $ref: './expenses.yaml#/SourcingSpend'
 SourcingRunSummary:
   type: object
   description: |

@@ -68,10 +68,16 @@ struct ScanStartView: View {
 
 /// Checkout at the register (docs/features/thrift-scan.md, "Checkout"): what the seller paid
 /// for the haul, how many items it had (the kept ones unless they say otherwise), and the miles,
-/// if they log them. Once Listora recorded the haul, the run's summary replaces the form.
+/// if they log them, and any other spend on the trip (parking, an entry fee), which Reports counts
+/// as expenses. Once Listora recorded the haul, the run's summary replaces the form.
 struct ScanCheckoutView: View {
-    typealias Submit = (_ checkout: ScanCheckoutModel, _ totalCents: Int64, _ itemCount: Int, _ miles: Int?) async
-        -> Void
+    typealias Submit = (
+        _ checkout: ScanCheckoutModel,
+        _ totalCents: Int64,
+        _ itemCount: Int,
+        _ miles: Int?,
+        _ otherSpend: [RunSpend],
+    ) async -> Void
 
     let checkout: ScanCheckoutModel
     let onCheckout: Submit
@@ -79,6 +85,8 @@ struct ScanCheckoutView: View {
     @State private var totalCents: Int?
     @State private var itemCount: String
     @State private var miles = ""
+    @State private var otherSpendCents: Int?
+    @State private var otherSpendFor = ""
 
     init(checkout: ScanCheckoutModel, onCheckout: @escaping Submit, onDone: @escaping () -> Void) {
         self.checkout = checkout
@@ -96,6 +104,7 @@ struct ScanCheckoutView: View {
         let totalCents: Int64
         let itemCount: Int
         let miles: Int?
+        let otherSpend: [RunSpend]
     }
 
     var body: some View {
@@ -158,6 +167,22 @@ struct ScanCheckoutView: View {
                 .keyboardType(.numberPad)
                 .accessibilityIdentifier("scanCheckout.miles")
             }
+            PriceField(
+                "Other trip spend (optional)",
+                minorUnits: $otherSpendCents,
+                hint: "Parking, tolls, or an entry fee. Reports counts it with your miles.",
+            )
+            .accessibilityIdentifier("scanCheckout.otherSpend")
+            if (otherSpendCents ?? 0) > 0 {
+                ListoraTextField("What it was for") {
+                    TextField(
+                        "What it was for",
+                        text: $otherSpendFor,
+                        prompt: Text("Parking").foregroundStyle(Palette.textSecondary),
+                    )
+                    .accessibilityIdentifier("scanCheckout.otherSpendFor")
+                }
+            }
             if run.isKeeping {
                 Label("Saving the items you kept...", systemImage: "arrow.down.circle")
                     .font(Typography.footnote)
@@ -184,7 +209,7 @@ struct ScanCheckoutView: View {
         } else {
             Button {
                 guard let entry else { return }
-                Task { await onCheckout(checkout, entry.totalCents, entry.itemCount, entry.miles) }
+                Task { await onCheckout(checkout, entry.totalCents, entry.itemCount, entry.miles, entry.otherSpend) }
             } label: {
                 if checkout.isCheckingOut {
                     HStack(spacing: Spacing.xs) {
@@ -240,7 +265,22 @@ struct ScanCheckoutView: View {
 
     private var entry: Entry? {
         guard let totalCents, totalCents >= 0, let parsedItems, let parsedMiles else { return nil }
-        return Entry(totalCents: Int64(totalCents), itemCount: max(parsedItems, run.keptCount), miles: parsedMiles)
+        return Entry(
+            totalCents: Int64(totalCents),
+            itemCount: max(parsedItems, run.keptCount),
+            miles: parsedMiles,
+            otherSpend: otherSpend,
+        )
+    }
+
+    /// The trip's other spend, "Trip spend" when the seller named nothing; none for $0.
+    private var otherSpend: [RunSpend] {
+        guard let otherSpendCents, otherSpendCents > 0 else { return [] }
+        let label = otherSpendFor.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [RunSpend(
+            category: label.isEmpty ? "Trip spend" : String(label.prefix(100)),
+            amountCents: Int64(otherSpendCents),
+        )]
     }
 }
 

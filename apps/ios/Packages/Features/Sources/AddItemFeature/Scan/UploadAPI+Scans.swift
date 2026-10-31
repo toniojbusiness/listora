@@ -57,6 +57,12 @@ extension UploadAPI {
             place: checkout.place,
             purchaseDate: checkout.purchaseDate,
             miles: checkout.miles.map { Int32(clamping: $0) },
+            otherSpend: checkout.otherSpend.isEmpty ? nil : checkout.otherSpend.map { spend in
+                .init(
+                    category: spend.category,
+                    amount: .init(amountCents: spend.amountCents, currency: .usd),
+                )
+            },
         )
         let output = try await call {
             try await client.checkoutSourcingRun(
@@ -221,6 +227,14 @@ struct RunCheckout: Equatable, Sendable {
     /// The trip's date on this iPhone ("2026-10-31").
     var purchaseDate: String
     var miles: Int?
+    /// Other money spent on the trip (parking, an entry fee), each recorded as an expense.
+    var otherSpend: [RunSpend] = []
+}
+
+/// Money spent on a sourcing trip other than the haul (docs/features/expenses.md).
+struct RunSpend: Equatable, Sendable {
+    var category: String
+    var amountCents: Int64
 }
 
 /// One scan as the app sends it: the item shot (and a tag close-up) as small JPEGs, what the

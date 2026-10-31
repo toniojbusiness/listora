@@ -57,6 +57,8 @@ tags:
     description: Sales and the automatic delist run each sale starts.
   - name: profit
     description: The profit dashboard over the seller's sales and inventory.
+  - name: expenses
+    description: Business expenses for taxes, miles driven and money spent, and the standard mileage rate (docs/features/expenses.md).
   - name: reports
     description: The year's reports and the CSV exports of sales and inventory, for taxes and bookkeeping.
   - name: tasks
@@ -245,6 +247,14 @@ paths:
     $ref: './paths/reports.yaml#/~1v1~1reports~1sales-export'
   /v1/reports/inventory-export:
     $ref: './paths/reports.yaml#/~1v1~1reports~1inventory-export'
+  /v1/reports/expenses-export:
+    $ref: './paths/reports.yaml#/~1v1~1reports~1expenses-export'
+  /v1/expenses:
+    $ref: './paths/expenses.yaml#/~1v1~1expenses'
+  /v1/expenses/{expenseId}:
+    $ref: './paths/expenses.yaml#/~1v1~1expenses~1{expenseId}'
+  /v1/expenses/mileage-rate:
+    $ref: './paths/expenses.yaml#/~1v1~1expenses~1mileage-rate'
   /v1/tasks:
     $ref: './paths/tasks.yaml#/~1v1~1tasks'
   /v1/tasks/{taskId}:
@@ -406,6 +416,10 @@ components:
       $ref: './components/parameters.yaml#/ScanId'
     ComparisonId:
       $ref: './components/parameters.yaml#/ComparisonId'
+    ExpenseId:
+      $ref: './components/parameters.yaml#/ExpenseId'
+    ReportYear:
+      $ref: './components/parameters.yaml#/ReportYear'
 
   responses:
     DefaultError:
@@ -988,6 +1002,25 @@ components:
       $ref: './components/schemas/reports.yaml#/YearReport'
     CsvExport:
       $ref: './components/schemas/reports.yaml#/CsvExport'
+    YearExpenses:
+      $ref: './components/schemas/reports.yaml#/YearExpenses'
+    MileageTotals:
+      $ref: './components/schemas/reports.yaml#/MileageTotals'
+    SpendCategory:
+      $ref: './components/schemas/reports.yaml#/SpendCategory'
+    # ---------------------------------------------------------------- expenses
+    Expense:
+      $ref: './components/schemas/expenses.yaml#/Expense'
+    ExpenseWrite:
+      $ref: './components/schemas/expenses.yaml#/ExpenseWrite'
+    ExpenseList:
+      $ref: './components/schemas/expenses.yaml#/ExpenseList'
+    MileageRate:
+      $ref: './components/schemas/expenses.yaml#/MileageRate'
+    MileageRateWrite:
+      $ref: './components/schemas/expenses.yaml#/MileageRateWrite'
+    SourcingSpend:
+      $ref: './components/schemas/expenses.yaml#/SourcingSpend'
     # ---------------------------------------------------------------- tasks
     UserTaskKind:
       $ref: './components/schemas/tasks.yaml#/UserTaskKind'

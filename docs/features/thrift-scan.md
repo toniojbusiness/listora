@@ -291,7 +291,8 @@ that is when the cost is known. The scan itself never shows a cost, margin, or p
 - **Checkout** (Finish > **Check out** on the camera, or **Check out** on Add Item): "Paid for the
   haul" ($), "Items in the haul" (the kept items by default; more when some were bought without a
   scan, never fewer), and "Miles driven (optional)" for the seller's mileage log (whole miles, up
-  to 2,000; only recorded, never priced). A Keep still being saved on the iPhone holds the button
+  to 2,000; recorded as the trip's mileage expense, [expenses.md](expenses.md)), and "Other trip
+  spend (optional)" with what it was for (parking, an entry fee), an expense of the trip's day. A Keep still being saved on the iPhone holds the button
   until it is.
 - **`POST /v1/sourcing-runs/{runId}/checkout`** (`checkoutSourcingRun`) does it in one
   transaction: the app sends the scans it kept (`keptScanIds`), and one whose item the upload
@@ -1021,8 +1022,8 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   follow, each its own PR and gate.
 - **M4 live test** (the captain's own trip, Test mode): check a run out at the register and
   compare the haul's shares and the summary with the receipt.
-- **Mileage** is only recorded on the run; turning it into a deductible expense belongs to the
-  plan's mileage and expenses item.
+- **Mileage** from checkout is also the trip's mileage expense, priced in Reports at the year's
+  rate ([expenses.md](expenses.md)).
 - **M5 live test** (the captain, Test mode, airplane mode at a store): scans with no signal get
   the instant read, keep and end the run, then turn signal on and see the cards read late and
   the kept ones saved as drafts.

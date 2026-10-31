@@ -108,7 +108,9 @@ struct ScanCamera: View {
             content: { checkout in
                 ScanCheckoutView(
                     checkout: checkout,
-                    onCheckout: { await model.checkOut($0, totalCents: $1, itemCount: $2, miles: $3) },
+                    onCheckout: {
+                        await model.checkOut($0, totalCents: $1, itemCount: $2, miles: $3, otherSpend: $4)
+                    },
                     onDone: { self.checkout = nil },
                 )
             },
@@ -152,7 +154,9 @@ struct ScanSheets: ViewModifier {
         case let .checkout(checkout):
             ScanCheckoutView(
                 checkout: checkout,
-                onCheckout: { await model.checkOut($0, totalCents: $1, itemCount: $2, miles: $3) },
+                onCheckout: {
+                    await model.checkOut($0, totalCents: $1, itemCount: $2, miles: $3, otherSpend: $4)
+                },
                 onDone: { self.sheet = nil },
             )
         }

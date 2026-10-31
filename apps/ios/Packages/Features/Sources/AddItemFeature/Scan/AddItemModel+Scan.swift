@@ -45,8 +45,14 @@ extension AddItemModel {
 
     /// Checks the run out at the register; once it went through, the run is over, its place is
     /// remembered, and its summary stays on Add Item until the next run starts.
-    func checkOut(_ checkout: ScanCheckoutModel, totalCents: Int64, itemCount: Int, miles: Int?) async {
-        await checkout.checkout(totalCents: totalCents, itemCount: itemCount, miles: miles)
+    func checkOut(
+        _ checkout: ScanCheckoutModel,
+        totalCents: Int64,
+        itemCount: Int,
+        miles: Int?,
+        otherSpend: [RunSpend],
+    ) async {
+        await checkout.checkout(totalCents: totalCents, itemCount: itemCount, miles: miles, otherSpend: otherSpend)
         guard let summary = checkout.summary else { return }
         if let place = summary.run.place {
             recentPlaces.remember(place)

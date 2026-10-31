@@ -1897,6 +1897,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reports/expenses-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a year's expenses as CSV
+         * @description One CSV row per expense of the year, oldest first: the day, the category, the
+         *     description, the miles and their deduction at the year's rate (empty while the year has
+         *     no rate), the money spent, and the sourcing run's place when it was entered at checkout.
+         *     The app saves `content` as `fileName` and shares it. `422 validation_failed` for a year
+         *     outside 2000 to 2100.
+         */
+        get: operations["exportExpenses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a year's expenses
+         * @description The year's expenses (miles and money spent), oldest day first, then in the order entered.
+         *     `422 validation_failed` for a year outside 2000 to 2100.
+         */
+        get: operations["listExpenses"];
+        put?: never;
+        /**
+         * Record an expense
+         * @description Miles driven or money spent. Both `amount` and `miles`, neither, an amount of 0 or not in
+         *     dollars, or a day outside 2000 to 2100 is `422`.
+         */
+        post: operations["createExpense"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/expenses/{expenseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                expenseId: components["parameters"]["ExpenseId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change an expense
+         * @description Replaces the expense's day, category, description, and amount or miles; `422` as for `createExpense`.
+         */
+        put: operations["replaceExpense"];
+        post?: never;
+        /** Delete an expense */
+        delete: operations["deleteExpense"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/expenses/mileage-rate": {
+        parameters: {
+            query: {
+                /** @description The calendar year. */
+                year: components["parameters"]["ReportYear"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a year's standard mileage rate */
+        get: operations["getMileageRate"];
+        /**
+         * Set a year's standard mileage rate
+         * @description The seller's rate for the year, used for every mile of the year in Reports.
+         */
+        put: operations["setMileageRate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tasks": {
         parameters: {
             query?: never;
@@ -5640,6 +5737,9 @@ export interface components {
             months: components["schemas"]["MonthReport"][];
             /** @description Each marketplace with a sale in the year, in the fixed `Marketplace` order. */
             marketplaces: components["schemas"]["MarketplaceReport"][];
+            expenses: components["schemas"]["YearExpenses"];
+            /** @description `total.netProfit` less `expenses.total`. Absent while either is absent. */
+            netAfterExpenses?: components["schemas"]["Money"];
         };
         /**
          * @description A CSV file (RFC 4180: comma-separated, double-quoted where needed, CRLF line ends, UTF-8
@@ -5657,6 +5757,123 @@ export interface components {
             rowCount: number;
             /** @description The file's text. */
             content: string;
+        };
+        /**
+         * @description The year's business expenses (docs/features/expenses.md) by the day each was incurred:
+         *     miles driven, priced at the year's mileage rate, and money spent, by category. `total` is
+         *     absent while the miles have no rate.
+         */
+        YearExpenses: {
+            mileage: components["schemas"]["MileageTotals"];
+            /** @description All money spent. */
+            spent: components["schemas"]["Money"];
+            /** @description Money spent per category, the largest first. */
+            categories: components["schemas"]["SpendCategory"][];
+            /** @description The mileage deduction plus `spent`; absent while the deduction is. */
+            total?: components["schemas"]["Money"];
+        };
+        MileageTotals: {
+            /** Format: int32 */
+            miles: number;
+            /**
+             * Format: int32
+             * @description Mileage entries.
+             */
+            trips: number;
+            rate: components["schemas"]["MileageRate"];
+            /** @description The miles at the rate, rounded to the cent; absent while the year has no rate. */
+            deduction?: components["schemas"]["Money"];
+        };
+        SpendCategory: {
+            category: string;
+            spent: components["schemas"]["Money"];
+            /** Format: int32 */
+            count: number;
+        };
+        /**
+         * @description A business expense for the seller's taxes (docs/features/expenses.md): money spent
+         *     (`amount`), or miles driven (`miles`), which Reports prices at the year's mileage rate.
+         *     Exactly one of `amount` and `miles` is present.
+         */
+        Expense: {
+            id: components["schemas"]["Id"];
+            /**
+             * Format: date
+             * @description The seller's day of the expense.
+             */
+            incurredOn: string;
+            /** @description What it was for, as the seller named it (`Mileage` for miles), for example `Parking`. */
+            category: string;
+            description?: string;
+            /** @description The money spent; absent for miles. */
+            amount?: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description The miles driven; absent for money spent.
+             */
+            miles?: number;
+            /** @description The sourcing run it was entered at checkout for, while the run is kept. */
+            sourcingRunId?: components["schemas"]["Id"];
+            createdAt: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description An expense as the seller enters it: exactly one of `amount` (money spent) and `miles`
+         *     (miles driven); both or neither is `422`.
+         */
+        ExpenseWrite: {
+            /**
+             * Format: date
+             * @description The seller's day of the expense.
+             */
+            incurredOn: string;
+            /** @description What it was for, for example `Parking`, `Supplies`, or `Mileage`. */
+            category: string;
+            description?: string;
+            /** @description The money spent, at least 1 cent. */
+            amount?: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description The miles driven, in whole miles.
+             */
+            miles?: number;
+        };
+        /** @description A year's expenses, oldest day first. */
+        ExpenseList: {
+            /** Format: int32 */
+            year: number;
+            expenses: components["schemas"]["Expense"][];
+        };
+        /**
+         * @description The standard mileage rate for a year, in tenths of a cent per mile (`725` is 72.5 cents).
+         *     The seller's own when they set one (`setBySeller`), otherwise the IRS business rate Listora
+         *     knows for the year. Absent `tenthCentsPerMile` means Listora knows no rate for the year and
+         *     the seller has set none, so the year's miles are not priced.
+         */
+        MileageRate: {
+            /** Format: int32 */
+            year: number;
+            /** Format: int32 */
+            tenthCentsPerMile?: number;
+            setBySeller: boolean;
+            /**
+             * Format: int32
+             * @description The IRS business rate Listora knows for the year, when it knows one.
+             */
+            irsTenthCentsPerMile?: number;
+        };
+        MileageRateWrite: {
+            /**
+             * Format: int32
+             * @description The rate in tenths of a cent per mile, for example `725` for 72.5 cents.
+             */
+            tenthCentsPerMile: number;
+        };
+        /** @description Money spent on a sourcing trip other than the haul, for example parking or an entry fee. */
+        SourcingSpend: {
+            category: string;
+            /** @description At least 1 cent. */
+            amount: components["schemas"]["Money"];
+            description?: string;
         };
         /**
          * @description A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
@@ -7092,9 +7309,12 @@ export interface components {
             purchaseDate?: string;
             /**
              * Format: int32
-             * @description The miles driven for the trip, if the seller logs them.
+             * @description The miles driven for the trip, if the seller logs them. More than 0 is also recorded as
+             *     the trip's mileage expense (docs/features/expenses.md).
              */
             miles?: number;
+            /** @description Other money spent on the trip (parking, an entry fee), each recorded as an expense of the trip's day. */
+            otherSpend?: components["schemas"]["SourcingSpend"][];
         };
         /**
          * @description The run at a glance: what was scanned and kept, what the kept items might resell for, and
@@ -7727,6 +7947,9 @@ export interface components {
         QuestionId: components["schemas"]["Id"];
         ScanId: components["schemas"]["Id"];
         ComparisonId: components["schemas"]["Id"];
+        ExpenseId: components["schemas"]["Id"];
+        /** @description The calendar year. */
+        ReportYear: number;
     };
     requestBodies: never;
     headers: never;
@@ -8001,6 +8224,15 @@ export type MonthReport = components['schemas']['MonthReport'];
 export type MarketplaceReport = components['schemas']['MarketplaceReport'];
 export type YearReport = components['schemas']['YearReport'];
 export type CsvExport = components['schemas']['CsvExport'];
+export type YearExpenses = components['schemas']['YearExpenses'];
+export type MileageTotals = components['schemas']['MileageTotals'];
+export type SpendCategory = components['schemas']['SpendCategory'];
+export type Expense = components['schemas']['Expense'];
+export type ExpenseWrite = components['schemas']['ExpenseWrite'];
+export type ExpenseList = components['schemas']['ExpenseList'];
+export type MileageRate = components['schemas']['MileageRate'];
+export type MileageRateWrite = components['schemas']['MileageRateWrite'];
+export type SourcingSpend = components['schemas']['SourcingSpend'];
 export type UserTaskKind = components['schemas']['UserTaskKind'];
 export type KnownUserTaskKind = components['schemas']['KnownUserTaskKind'];
 export type UserTaskStatus = components['schemas']['UserTaskStatus'];
@@ -8241,6 +8473,8 @@ export type ParameterImportId = components['parameters']['ImportId'];
 export type ParameterQuestionId = components['parameters']['QuestionId'];
 export type ParameterScanId = components['parameters']['ScanId'];
 export type ParameterComparisonId = components['parameters']['ComparisonId'];
+export type ParameterExpenseId = components['parameters']['ExpenseId'];
+export type ParameterReportYear = components['parameters']['ReportYear'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -10909,6 +11143,197 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CsvExport"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    exportExpenses: {
+        parameters: {
+            query: {
+                /** @description The calendar year. */
+                year: components["parameters"]["ReportYear"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year's expenses as a CSV file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvExport"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listExpenses: {
+        parameters: {
+            query: {
+                /** @description The calendar year. */
+                year: components["parameters"]["ReportYear"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year's expenses. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseList"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createExpense: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseWrite"];
+            };
+        };
+        responses: {
+            /** @description Recorded. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceExpense: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                expenseId: components["parameters"]["ExpenseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpenseWrite"];
+            };
+        };
+        responses: {
+            /** @description The changed expense. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    deleteExpense: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                expenseId: components["parameters"]["ExpenseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getMileageRate: {
+        parameters: {
+            query: {
+                /** @description The calendar year. */
+                year: components["parameters"]["ReportYear"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year's rate. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MileageRate"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    setMileageRate: {
+        parameters: {
+            query: {
+                /** @description The calendar year. */
+                year: components["parameters"]["ReportYear"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MileageRateWrite"];
+            };
+        };
+        responses: {
+            /** @description The year's rate. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MileageRate"];
                 };
             };
             422: components["responses"]["ValidationFailed"];

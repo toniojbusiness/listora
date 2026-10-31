@@ -11,6 +11,10 @@ private final class FakeReportsService: ReportsService, @unchecked Sendable {
     enum Call: Equatable {
         case year(Int, String)
         case export(ReportExport, Int, String)
+        case expenses(Int)
+        case addExpense(String, String)
+        case deleteExpense(String)
+        case setRate(Int, Int)
     }
 
     private let lock = NSLock()
@@ -57,6 +61,46 @@ private final class FakeReportsService: ReportsService, @unchecked Sendable {
         }
         return .init(fileName: fileName, rowCount: 2, content: "\u{FEFF}SKU,Title\r\nAB-000001,Shirt\r\n")
     }
+
+    func expenses(year: Int) async throws(APIFailure) -> [Expense] {
+        locked { _calls.append(.expenses(year)) }
+        if let failure = failure() {
+            throw failure
+        }
+        return [
+            .init(id: "e1", incurredOn: "\(year)-03-14", category: "Mileage", miles: 31, createdAt: .distantPast),
+        ]
+    }
+
+    func addExpense(_ expense: ExpenseWrite, idempotencyKey: String) async throws(APIFailure) -> Expense {
+        locked { _calls.append(.addExpense(expense.category, idempotencyKey)) }
+        if let failure = failure() {
+            throw failure
+        }
+        return .init(
+            id: "e2",
+            incurredOn: expense.incurredOn,
+            category: expense.category,
+            amount: expense.amount,
+            miles: expense.miles,
+            createdAt: .distantPast,
+        )
+    }
+
+    func deleteExpense(id: String) async throws(APIFailure) {
+        locked { _calls.append(.deleteExpense(id)) }
+        if let failure = failure() {
+            throw failure
+        }
+    }
+
+    func setMileageRate(year: Int, tenthCentsPerMile: Int) async throws(APIFailure) -> MileageRate {
+        locked { _calls.append(.setRate(year, tenthCentsPerMile)) }
+        if let failure = failure() {
+            throw failure
+        }
+        return .init(year: Int32(year), tenthCentsPerMile: Int32(tenthCentsPerMile), setBySeller: true)
+    }
 }
 
 private func usd(_ cents: Int64) -> Schemas.Money {
@@ -102,6 +146,17 @@ private func report(year: Int) -> YearReport {
             .init(marketplace: .init(value1: .ebay), totals: known),
             .init(marketplace: .init(value1: .poshmark), totals: estimated),
         ],
+        expenses: .init(
+            mileage: .init(
+                miles: 31,
+                trips: 1,
+                rate: .init(year: Int32(year), tenthCentsPerMile: 725, setBySeller: false, irsTenthCentsPerMile: 725),
+                deduction: usd(2248),
+            ),
+            spent: usd(0),
+            categories: [],
+            total: usd(2248),
+        ),
     )
 }
 
@@ -242,5 +297,72 @@ struct ReportsModelTests {
         #expect(ReportNotes.fees(totals) == "1 sale's fees aren't final from the marketplace")
         #expect(ReportNotes.rowProfit(totals) == "Profit waits for final fees")
         #expect(ReportNotes.rowProfit(report(year: 2026).months[0].totals) == "Profit $65.00")
+    }
+
+    @Test
+    func `records an expense, then reads the year's report and expenses again`() async {
+        let service = FakeReportsService()
+        let model = model(service)
+        await model.load()
+        let write = ExpenseWrite(
+            incurredOn: "2026-04-01",
+            category: "Parking",
+            amount: usd(350),
+        )
+        let failure = await model.addExpense(write, idempotencyKey: "key-1")
+        #expect(failure == nil)
+        #expect(service.calls == [
+            .year(2026, "America/New_York"),
+            .addExpense("Parking", "key-1"),
+            .year(2026, "America/New_York"),
+            .expenses(2026),
+        ])
+        #expect(model.expenses?.count == 1)
+    }
+
+    @Test
+    func `a failed expense change says why and reads nothing again`() async {
+        let service = FakeReportsService()
+        let model = model(service)
+        await model.load()
+        service.failures = [.networkUnavailable]
+        let failure = await model.deleteExpense(id: "e1")
+        #expect(failure == APIFailure.networkUnavailable.message)
+        #expect(service.calls == [.year(2026, "America/New_York"), .deleteExpense("e1")])
+        #expect(!model.isSavingExpense)
+    }
+
+    @Test
+    func `sets the year's mileage rate for the year shown`() async {
+        let service = FakeReportsService()
+        let model = model(service)
+        await model.step(-1)
+        #expect(await model.setMileageRate(tenthCentsPerMile: 700) == nil)
+        #expect(service.calls.contains(.setRate(2025, 700)))
+    }
+
+    @Test
+    func `stepping to another year drops its expenses and their export`() async {
+        let service = FakeReportsService()
+        let model = model(service)
+        await model.loadExpenses()
+        #expect(model.expenses != nil)
+        await model.prepare(.expenses)
+        await model.step(-1)
+        #expect(model.expenses == nil)
+        #expect(model.exportState(.expenses) == .idle)
+    }
+
+    @Test
+    func `reads and writes mileage rates in tenths of a cent`() {
+        #expect(MileageFormatting.rate(725) == "72.5¢ a mile")
+        #expect(MileageFormatting.cents(700) == "70")
+        #expect(MileageFormatting.tenthCents("72.5") == 725)
+        #expect(MileageFormatting.tenthCents("70") == 700)
+        #expect(MileageFormatting.tenthCents("72,5") == 725)
+        #expect(MileageFormatting.tenthCents("72.55") == nil)
+        #expect(MileageFormatting.tenthCents("-1") == nil)
+        #expect(MileageFormatting.tenthCents("1001") == nil)
+        #expect(MileageFormatting.tenthCents("") == nil)
     }
 }

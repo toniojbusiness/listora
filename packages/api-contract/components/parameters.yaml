@@ -160,3 +160,19 @@ ComparisonId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+ExpenseId:
+  name: expenseId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+ReportYear:
+  name: year
+  in: query
+  required: true
+  description: The calendar year.
+  schema:
+    type: integer
+    format: int32
+    minimum: 2000
+    maximum: 2100
