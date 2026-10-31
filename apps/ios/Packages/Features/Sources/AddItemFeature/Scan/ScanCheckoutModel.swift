@@ -9,7 +9,9 @@ import Observation
 /// Listora answered; a failure says why and is tried again as the same checkout.
 @MainActor
 @Observable
-final class ScanCheckoutModel {
+final class ScanCheckoutModel: Identifiable {
+    /// Its sheet's identity: the sheet keeps this model, summary and all, until it is dismissed.
+    let id = UUID().uuidString.lowercased()
     let run: ScanRunModel
     private(set) var isCheckingOut = false
     /// Why the last attempt failed; nil once one went through.

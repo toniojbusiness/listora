@@ -48,7 +48,9 @@ final class ThriftScanUITests: XCTestCase {
 
         // Keep saves the draft without leaving the camera.
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 10))
+        // Keep waits for the upload-sized photo, prepared in the background at utility priority:
+        // on a loaded test machine that has taken over 10 seconds.
+        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 20))
         XCTAssertEqual(element("scanCamera.summary").label, "1 scanned · 1 kept")
         XCTAssertTrue(shutter.exists)
         attachScreenshot("kept")
@@ -92,7 +94,8 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertEqual(element("runSummary.counts").label, "2 scanned · 1 kept · 7 miles")
         XCTAssertTrue(element("runSummary.resale").exists)
         XCTAssertTrue(element("runSummary.profit").exists)
-        XCTAssertTrue(element("runSummary.label").label.contains("not based on sold listings"))
+        // Every resale number says it is an estimate (the fixture's call rests on web info).
+        XCTAssertTrue(element("runSummary.label").label.hasPrefix("Estimated"), element("runSummary.label").label)
         attachScreenshot("run summary")
         app.buttons["scanCheckout.done"].tap()
 

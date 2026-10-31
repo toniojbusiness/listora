@@ -5,6 +5,7 @@ import SwiftUI
 /// the register, or end it without buying.
 struct ScanActions: View {
     let model: AddItemModel
+    let environment: AddItemEnvironment
     @Binding var camera: OpenCamera?
     @Binding var sheet: ScanSheet?
 
@@ -22,7 +23,7 @@ struct ScanActions: View {
         .accessibilityIdentifier("addItem.startScan")
         if let run = model.scanRun {
             if !run.entries.isEmpty {
-                Button("Check out") { sheet = .checkout(run) }
+                Button("Check out") { sheet = .checkout(model.scanCheckout(for: run, in: environment)) }
                     .buttonStyle(.listora(.secondary, size: .large))
                     .accessibilityIdentifier("addItem.checkoutScan")
             }
@@ -82,7 +83,7 @@ struct ScanCamera: View {
     let environment: AddItemEnvironment
     let onClose: @MainActor () -> Void
     /// The register's checkout, over the camera; the camera closes once it went through.
-    @State private var isCheckingOut = false
+    @State private var checkout: ScanCheckoutModel?
 
     var body: some View {
         ScanCaptureView(
@@ -92,24 +93,24 @@ struct ScanCamera: View {
             showsMeasurements: environment.features?.isTesting(.thriftScan) == true,
             meter: model.meter,
             onDone: onClose,
-            onCheckout: { isCheckingOut = true },
+            onCheckout: { checkout = model.scanCheckout(for: run, in: environment) },
             onEnd: {
                 onClose()
                 await model.endScanRun()
             },
         )
         .sheet(
-            isPresented: $isCheckingOut,
+            item: $checkout,
             onDismiss: {
                 if run.isEnded {
                     onClose()
                 }
             },
-            content: {
+            content: { checkout in
                 ScanCheckoutView(
-                    checkout: model.scanCheckout(for: run, in: environment),
+                    checkout: checkout,
                     onCheckout: { await model.checkOut($0, totalCents: $1, itemCount: $2, miles: $3) },
-                    onDone: { isCheckingOut = false },
+                    onDone: { self.checkout = nil },
                 )
             },
         )
@@ -149,9 +150,9 @@ struct ScanSheets: ViewModifier {
                 },
                 onCancel: { self.sheet = nil },
             )
-        case let .checkout(run):
+        case let .checkout(checkout):
             ScanCheckoutView(
-                checkout: model.scanCheckout(for: run, in: environment),
+                checkout: checkout,
                 onCheckout: { await model.checkOut($0, totalCents: $1, itemCount: $2, miles: $3) },
                 onDone: { self.sheet = nil },
             )
@@ -162,12 +163,13 @@ struct ScanSheets: ViewModifier {
 /// A sheet of Scan mode: starting a run, or its checkout.
 enum ScanSheet: Identifiable {
     case start
-    case checkout(ScanRunModel)
+    /// The sheet keeps the checkout it opened with, so its summary stays once the run is over.
+    case checkout(ScanCheckoutModel)
 
     var id: String {
         switch self {
         case .start: "start"
-        case let .checkout(run): "checkout-\(run.id)"
+        case let .checkout(checkout): "checkout-\(checkout.id)"
         }
     }
 }
