@@ -1,4 +1,9 @@
-import { AI_ESTIMATE_LABEL, ASKING_PRICES_LABEL, claimsSoldData } from '@listora/pricing';
+import {
+  AI_ESTIMATE_LABEL,
+  ASKING_PRICES_LABEL,
+  claimsSoldData,
+  MARKET_SOLD_LABEL_PREFIX,
+} from '@listora/pricing';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -38,7 +43,7 @@ describe('scanCall with marketplace comparisons', () => {
     const call = scanCall(
       input({
         aiEstimate: { lowCents: 2_000, midCents: 3_000, highCents: 4_000 },
-        market: { marketplace: 'Depop', asking },
+        markets: [{ marketplace: 'Depop', asking }],
       }),
       settings,
     );
@@ -53,7 +58,7 @@ describe('scanCall with marketplace comparisons', () => {
 
   it("never moves a range from the household's own sales, and needs enough matches", () => {
     const own = scanCall(
-      input({ ownHistory: history(3_000, 5_000), market: { marketplace: 'Depop', asking } }),
+      input({ ownHistory: history(3_000, 5_000), markets: [{ marketplace: 'Depop', asking }] }),
       settings,
     );
     expect(own.range).toEqual({ lowCents: 3_000, highCents: 5_000 });
@@ -61,7 +66,7 @@ describe('scanCall with marketplace comparisons', () => {
     const thin = scanCall(
       input({
         aiEstimate: { lowCents: 2_000, midCents: 3_000, highCents: 4_000 },
-        market: { marketplace: 'Depop', asking: { ...asking, count: 4 } },
+        markets: [{ marketplace: 'Depop', asking: { ...asking, count: 4 } }],
       }),
       settings,
     );
@@ -73,10 +78,12 @@ describe('scanCall with marketplace comparisons', () => {
     const call = scanCall(
       input({
         ownHistory: history(1_200, 2_000),
-        market: {
-          marketplace: 'Depop',
-          demand: { demand: 'crowded', label: 'Crowded on Depop', basedOn: 'Your 0 sales...' },
-        },
+        markets: [
+          {
+            marketplace: 'Depop',
+            demand: { demand: 'crowded', label: 'Crowded on Depop', basedOn: 'Your 0 sales...' },
+          },
+        ],
       }),
       settings,
     );
@@ -89,14 +96,94 @@ describe('scanCall with marketplace comparisons', () => {
     const strong = scanCall(
       input({
         ownHistory: history(1_200, 2_000),
-        market: {
-          marketplace: 'Depop',
-          demand: { demand: 'strong', label: 'Sells for you, little competition', basedOn: 'x' },
-        },
+        markets: [
+          {
+            marketplace: 'Depop',
+            demand: { demand: 'strong', label: 'Sells for you, little competition', basedOn: 'x' },
+          },
+        ],
       }),
       settings,
     );
     expect(strong).toMatchObject({ call: 'buy', confidence: 'high' });
+  });
+});
+
+describe("scanCall with a marketplace's sold listings", () => {
+  const ebaySold = (count: number, level: 'model' | 'type' = 'model') => ({
+    marketplace: 'eBay',
+    sold: { count, lowCents: 1_800, highCents: 3_000, windowDays: 14, level },
+  });
+  const ai = { lowCents: 4_000, midCents: 5_000, highCents: 6_000 };
+
+  it("rests on close matches' sold prices before the web or the AI, saying so", () => {
+    const call = scanCall(input({ aiEstimate: ai, markets: [ebaySold(6)] }), settings);
+    expect(call).toMatchObject({
+      call: 'buy',
+      confidence: 'medium',
+      basis: 'market_sold',
+      range: { lowCents: 1_800, highCents: 3_000 },
+      basedOn: 'Sold listings on eBay: 6 like it in the last 14 days',
+    });
+    expect(call.basedOn.startsWith(MARKET_SOLD_LABEL_PREFIX)).toBe(true);
+  });
+
+  it("yields to the household's own sales, and needs enough sold matches", () => {
+    const own = scanCall(
+      input({ ownHistory: history(1_200, 2_000), markets: [ebaySold(12)] }),
+      settings,
+    );
+    expect(own).toMatchObject({ basis: 'own_history', range: { lowCents: 1_200 } });
+    const thin = scanCall(input({ aiEstimate: ai, markets: [ebaySold(4)] }), settings);
+    expect(thin).toMatchObject({ basis: 'ai_estimate', confidence: 'low' });
+  });
+
+  it('is high confidence only with many sold of the exact model and a sure read', () => {
+    expect(scanCall(input({ markets: [ebaySold(10)] }), settings).confidence).toBe('high');
+    expect(scanCall(input({ markets: [ebaySold(10, 'type')] }), settings).confidence).toBe(
+      'medium',
+    );
+    expect(
+      scanCall(input({ identityConfidence: 0.7, markets: [ebaySold(10)] }), settings).confidence,
+    ).toBe('medium');
+    expect(
+      scanCall(input({ identityConfidence: 0.5, markets: [ebaySold(10)] }), settings),
+    ).toMatchObject({ call: 'your_call', confidence: 'low' });
+  });
+
+  it("keeps a call from high confidence where the marketplace's sold pace reads slow", () => {
+    const slow = {
+      ...ebaySold(10),
+      demand: {
+        demand: 'crowded' as const,
+        label: 'Slow on eBay',
+        basedOn: 'Sold listings on eBay: 20 in the last 90 days; 400 for sale now',
+        fromSoldPace: true,
+      },
+    };
+    const call = scanCall(input({ markets: [slow] }), settings);
+    expect(call).toMatchObject({ call: 'buy', confidence: 'medium' });
+    expect(call.signals).toContainEqual({
+      kind: 'demand',
+      label: 'Slow on eBay',
+      basedOn: 'Sold listings on eBay: 20 in the last 90 days; 400 for sale now',
+    });
+    const fast = { ...slow, demand: { ...slow.demand, demand: 'strong' as const } };
+    expect(scanCall(input({ markets: [fast] }), settings).confidence).toBe('high');
+  });
+
+  it("holds the AI's guess to the first marketplace with enough asking prices, Depop first", () => {
+    const call = scanCall(
+      input({
+        aiEstimate: ai,
+        markets: [
+          { marketplace: 'Depop', asking: { count: 6, lowCents: 1_500, highCents: 2_500 } },
+          { marketplace: 'eBay', asking: { count: 9, lowCents: 2_000, highCents: 3_500 } },
+        ],
+      }),
+      settings,
+    );
+    expect(call.range).toEqual({ lowCents: 2_500, highCents: 2_500 });
   });
 });
 

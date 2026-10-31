@@ -201,7 +201,7 @@ async function record(options: Options): Promise<number> {
           marketplace: plan.marketplace,
           name: entry.name,
           page: entry.page,
-          host: recordingHost(plan),
+          host: recordingHost(plan, entry),
           recordedOn: new Date().toISOString().slice(0, 10),
           input,
           result: recordedResult(result),
@@ -291,7 +291,7 @@ async function recordEntry(
   // Through the backend of the host the marketplace runs on, so its selectors are read the way
   // they are in production (the phone's page functions, or the runner's Playwright).
   const inner =
-    recordingHost(plan) === 'phone'
+    recordingHost(plan, entry) === 'phone'
       ? new BridgeBackend(new PlaywrightPhoneHost(page))
       : new PlaywrightBackend(
           context,
@@ -330,9 +330,12 @@ async function recordEntry(
   return { result, backend };
 }
 
-/** The host a marketplace's steps run on in production, whose page backend records it. */
-function recordingHost(plan: RecordingPlan): RecordingHost {
-  return plan.profile.runsOn === 'phone' ? 'phone' : 'runner';
+/**
+ * The host an entry's steps run on in production, whose page backend records it: the
+ * marketplace's, or the phone for a comparison read (which never runs in the cloud).
+ */
+function recordingHost(plan: RecordingPlan, entry: RecordingPlanEntry): RecordingHost {
+  return entryProfile(plan, entry).runsOn === 'phone' ? 'phone' : 'runner';
 }
 
 /** Where a run stopped, for the seller to open: the page's path, and an API read it ended on. */

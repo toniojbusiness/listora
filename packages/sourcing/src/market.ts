@@ -19,6 +19,11 @@ export interface MarketListing {
   /** What a buyer pays for it now (for sale) or paid (sold), in US cents. */
   readonly priceCents: number;
   readonly sold: boolean;
+  /**
+   * The brand the marketplace names for it (empty for a listing without one, which matches no
+   * brand); `null` where the marketplace's results have no brand at all (eBay's), and then the
+   * listing's own words must name the item's brand.
+   */
   readonly brand: string | null;
   /** The marketplace's own product type (Depop's `jeans`), when it names one. */
   readonly productType: string | null;
@@ -94,6 +99,12 @@ function stem(word: string): string {
   return word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word;
 }
 
+/** Whether the words name the brand whose key is `key` ("Levi's 501" names Levi's). */
+function namesBrand(text: readonly string[], key: string): boolean {
+  // A brand's key is its first word, or its first two after a shared leading word.
+  return text.some((_, start) => brandKey(text.slice(start, start + 2).join(' ')) === key);
+}
+
 interface Matched {
   readonly listing: MarketListing;
   readonly model: boolean;
@@ -111,8 +122,10 @@ function matched(listings: readonly MarketListing[], target: MarketTarget): Matc
   const out: Matched[] = [];
   for (const listing of listings) {
     if (!Number.isSafeInteger(listing.priceCents) || listing.priceCents <= 0) continue;
-    if (brandKey(listing.brand) !== brand) continue;
     const text = words(listing.text);
+    if (listing.brand === null ? !namesBrand(text, brand) : brandKey(listing.brand) !== brand) {
+      continue;
+    }
     const sameType =
       listing.productType !== null && types.size > 0
         ? types.has(listing.productType)

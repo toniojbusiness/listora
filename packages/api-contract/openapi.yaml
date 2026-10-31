@@ -1332,6 +1332,8 @@ components:
       $ref: './components/schemas/sourcing.yaml#/ScanComparisonRead'
     ScanAskingPrices:
       $ref: './components/schemas/sourcing.yaml#/ScanAskingPrices'
+    ScanSoldPrices:
+      $ref: './components/schemas/sourcing.yaml#/ScanSoldPrices'
     ScanDemand:
       $ref: './components/schemas/sourcing.yaml#/ScanDemand'
     ScanDemandKind:

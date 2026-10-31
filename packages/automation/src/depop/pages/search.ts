@@ -117,7 +117,8 @@ function listingOf(product: z.infer<typeof searchProductSchema>): MarketListing 
   return {
     priceCents,
     sold,
-    brand: product.brand_name ?? null,
+    // A product without a brand matches none: Depop has the field, so its words are not asked.
+    brand: product.brand_name ?? '',
     productType: product.attributes?.product_type ?? null,
     sizes: (product.sizes ?? []).map((size) => size.name),
     text: product.description,

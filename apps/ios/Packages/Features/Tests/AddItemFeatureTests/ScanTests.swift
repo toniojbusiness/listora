@@ -284,6 +284,21 @@ struct ScanRunModelTests {
     }
 
     @Test
+    func `shows eBay's sold listings under their label, with eBay's sold pace`() throws {
+        let card = try ScanCard(decodeScan(ebaySoldScanJSON(id: "scan-1")))
+        let ebay = try #require(card.comparisons.first)
+        #expect(ebay.marketplace == "eBay")
+        #expect(ebay.status == .read)
+        #expect(ebay.label == "eBay: sold $18-$30, 9 like it in the last 14 days")
+        #expect(ebay.soldLabel == "Sold listings on eBay")
+        #expect(ebay.demand == "Sells fast on eBay")
+        #expect(ebay.demandBasedOn == "Sold listings on eBay: 410 in the last 90 days; 320 for sale now")
+        // The demand shows with its row, not again among the signals.
+        #expect(card.listedSignals.isEmpty)
+        #expect(card.basedOn == "Sold listings on eBay: 9 like it in the last 14 days")
+    }
+
+    @Test
     func `reads nothing where comparisons are off, and shows a paused marketplace in words`() async throws {
         let service = FakeScanService()
         let run = makeRun(service)

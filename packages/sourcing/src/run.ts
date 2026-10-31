@@ -34,6 +34,7 @@ export const RUN_PROFIT_LABEL = 'Estimated, after fees';
 
 const BASIS_WORDS: Readonly<Record<Exclude<CallBasis, 'none'>, string>> = {
   own_history: 'from your own sales',
+  market_sold: "from a marketplace's sold listings",
   web_info: 'from web info',
   ai_estimate: 'from the AI estimate',
 };
@@ -42,10 +43,11 @@ const BASIS_WORDS: Readonly<Record<Exclude<CallBasis, 'none'>, string>> = {
  * Adds up the kept scans' calls: the sums of their price ranges and of their payouts after fees.
  * A scan with nothing to go on (no range or no payout) is left out, so the estimate covers
  * `itemCount` of the kept items; undefined when none had a range. The order of the sources in
- * `basedOn` is the call's trust order: own sales, then web info, then the AI estimate.
+ * `basedOn` is the call's trust order: own sales, then a marketplace's sold listings (eBay's), then
+ * web info, then the AI estimate.
  */
 export function runEstimate(calls: readonly KeptScanCall[]): RunEstimate | undefined {
-  const byBasis = { own_history: 0, web_info: 0, ai_estimate: 0 };
+  const byBasis = { own_history: 0, market_sold: 0, web_info: 0, ai_estimate: 0 };
   let resaleLowCents = 0;
   let resaleHighCents = 0;
   let payoutLowCents = 0;
