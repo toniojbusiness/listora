@@ -605,7 +605,8 @@ is signal.
 ### The instant read
 
 - **The kit.** The iPhone keeps the sourcing kit (below) in a file (`SourcingKitCache`), fetched
-  when a run starts and whenever signal returns, at most every 15 minutes; a failed fetch keeps
+  when a run starts and whenever signal returns during one, at most every 15 minutes (with no
+  run, the app asks for nothing); a failed fetch keeps
   the one it has, and a kit of a format the app does not read is never used.
 - **The brand off the tag.** The tag text the phone reads (Vision, as for every shot) is looked
   up in the kit's brand groups: each line in reading order, each word of it in order, the first

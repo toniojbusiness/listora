@@ -60,11 +60,16 @@ final class ScanRuns {
         }
     }
 
-    /// Reads every waiting scan of every run, and refreshes the kit, when there is signal.
+    /// Reads every waiting scan of every run, and refreshes the kit for the run going on, when
+    /// there is signal. With no run it asks Listora nothing: the seller may not be signed in, or
+    /// scan at all.
     func refresh() async {
-        guard dependencies.connectivity?.isOnline != false else { return }
-        await kit.refresh(from: dependencies.service)
-        for run in [current].compactMap(\.self) + finishing {
+        let runs = [current].compactMap(\.self) + finishing
+        guard !runs.isEmpty, dependencies.connectivity?.isOnline != false else { return }
+        if current != nil {
+            await kit.refresh(from: dependencies.service)
+        }
+        for run in runs {
             await run.drain()
         }
     }
