@@ -2994,6 +2994,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sourcing-runs/{runId}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check out a sourcing run into a haul
+         * @description At the register: the run's kept items become one haul (`createHaul`) of what the seller
+         *     paid, each item costing its share, and the run ends (its scans not kept are skipped). A
+         *     kept scan whose item the app had not sent yet is kept now. Answers the run's summary,
+         *     with the estimated profit. A run already checked out or ended is `409`; a listed scan
+         *     that is not a kept or open scan of this run is a `422` field error.
+         */
+        post: operations["checkoutSourcingRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sourcing-runs/{runId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a sourcing run's summary
+         * @description The run's counts, its kept items' estimated resale, and once checked out its haul and
+         *     estimated profit. Only for an account the thrift scan is on for; otherwise `404`.
+         */
+        get: operations["getSourcingRunSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/scans": {
         parameters: {
             query?: never;
@@ -6963,6 +7012,98 @@ export interface components {
              * @description Scanned items the seller kept.
              */
             keptCount: number;
+            /** @description When the seller checked the run out (`checkoutSourcingRun`); absent until then. */
+            checkedOutAt?: components["schemas"]["Timestamp"];
+            /** @description The haul the run's kept items became at checkout (docs/features/hauls.md). */
+            haulId?: components["schemas"]["Id"];
+            /**
+             * Format: int32
+             * @description The miles driven for the trip, when the seller gave them at checkout.
+             */
+            miles?: number;
+        };
+        /**
+         * @description What the seller paid at the register for the items they kept. The run's kept items become
+         *     one haul of `total` for `itemCount` items, each costing its share.
+         */
+        SourcingRunCheckout: {
+            /** @description What the whole haul cost. */
+            total: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description How many items the haul had: the kept items by default, more when an item was bought
+             *     without a scan. Never fewer than the kept items, which the haul grows to.
+             */
+            itemCount: number;
+            /**
+             * @description The scans the seller kept on the phone, in the order kept. One whose item the app has
+             *     not sent yet (`keepScan`) is kept now, so a slow upload never leaves an item out of the
+             *     haul; the app's later `keepScan` answers that item. Scans the server already kept join
+             *     the haul too, whether listed or not.
+             */
+            keptScanIds: components["schemas"]["Id"][];
+            /** @description Where the haul was bought, when the run has no place yet or it changed. */
+            place?: string;
+            /**
+             * Format: date
+             * @description The seller's date of the trip; the run's start date (UTC) when absent.
+             */
+            purchaseDate?: string;
+            /**
+             * Format: int32
+             * @description The miles driven for the trip, if the seller logs them.
+             */
+            miles?: number;
+        };
+        /**
+         * @description The run at a glance: what was scanned and kept, what the kept items might resell for, and
+         *     once checked out, what the haul cost and the estimated profit. Every resale number is an
+         *     estimate from each kept scan's call (its range and its payout after fees), never a sale.
+         */
+        SourcingRunSummary: {
+            run: components["schemas"]["SourcingRun"];
+            /**
+             * Format: int32
+             * @description The run's kept items that are still in Listora.
+             */
+            keptItems: number;
+            estimate?: components["schemas"]["SourcingRunEstimate"];
+            /** @description The haul the run became; absent until checkout. */
+            haul?: components["schemas"]["Haul"];
+            profitEstimate?: components["schemas"]["SourcingRunProfit"];
+        };
+        /**
+         * @description The kept items' estimated resale: the sums of their scans' price ranges and of what those
+         *     pay out after the marketplace's fees. Absent when no kept item had a range.
+         */
+        SourcingRunEstimate: {
+            /**
+             * Format: int32
+             * @description The kept items with a range, which the sums cover.
+             */
+            itemCount: number;
+            resaleLow: components["schemas"]["Money"];
+            resaleHigh: components["schemas"]["Money"];
+            /** @description What `resaleLow` pays out after each item's marketplace fees, an estimate. */
+            payoutLow: components["schemas"]["Money"];
+            payoutHigh: components["schemas"]["Money"];
+            /** @description What the ranges rest on ("2 from your own sales, 5 from the AI estimate"). */
+            basedOn: string;
+            /**
+             * @description Shown with the numbers, always: "Estimated", and when any range is the AI's, "Estimated
+             *     - includes the AI estimate, not based on sold listings".
+             */
+            label: string;
+        };
+        /**
+         * @description The haul's estimated profit: the kept items' estimated payout less what the whole haul
+         *     cost. Only once the haul's total is known (checkout); an estimate, never a sale.
+         */
+        SourcingRunProfit: {
+            low: components["schemas"]["Money"];
+            high: components["schemas"]["Money"];
+            /** @description Shown with it ("Estimated, after fees"). */
+            label: string;
         };
         ScanCreate: {
             runId: components["schemas"]["Id"];
@@ -7967,6 +8108,10 @@ export type OwnSalesBucket = components['schemas']['OwnSalesBucket'];
 export type OwnSalesOnMarketplace = components['schemas']['OwnSalesOnMarketplace'];
 export type SourcingRunCreate = components['schemas']['SourcingRunCreate'];
 export type SourcingRun = components['schemas']['SourcingRun'];
+export type SourcingRunCheckout = components['schemas']['SourcingRunCheckout'];
+export type SourcingRunSummary = components['schemas']['SourcingRunSummary'];
+export type SourcingRunEstimate = components['schemas']['SourcingRunEstimate'];
+export type SourcingRunProfit = components['schemas']['SourcingRunProfit'];
 export type ScanCreate = components['schemas']['ScanCreate'];
 export type ScanImage = components['schemas']['ScanImage'];
 export type ScanImageRole = components['schemas']['ScanImageRole'];
@@ -12283,6 +12428,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourcingRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    checkoutSourcingRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourcingRunCheckout"];
+            };
+        };
+        responses: {
+            /** @description Checked out. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcingRunSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getSourcingRunSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcingRunSummary"];
                 };
             };
             404: components["responses"]["NotFound"];

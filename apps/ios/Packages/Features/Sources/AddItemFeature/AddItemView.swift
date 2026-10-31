@@ -46,6 +46,7 @@ struct DraftListView: View {
     @State private var path: [AddItemRoute] = []
     @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
     @State private var camera: OpenCamera?
+    @State private var scanSheet: ScanSheet?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -64,6 +65,7 @@ struct DraftListView: View {
                                 ScanGuide(
                                     isCameraAvailable: environment.isCameraAvailable,
                                     run: model.scanRun,
+                                    lastRun: model.lastRunSummary,
                                     isTesting: environment.features?.isTesting(.thriftScan) == true,
                                 )
                             }
@@ -142,6 +144,7 @@ struct DraftListView: View {
                     RunShootView(draftIDs: draftIDs, model: model, environment: environment) { camera = nil }
                 }
             }
+            .modifier(ScanSheets(sheet: $scanSheet, camera: $camera, model: model, environment: environment))
             .alert("Couldn't save", isPresented: errorBinding) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -152,11 +155,8 @@ struct DraftListView: View {
 
     private var draftList: some View {
         List {
-            if mode == .scan, let run = model.scanRun, !run.entries.isEmpty {
-                Section {
-                    ScanRunRow(run: run)
-                }
-                .listRowBackground(Palette.surface.color)
+            if mode == .scan {
+                ScanRunSection(model: model)
             }
             if !model.batches.isEmpty {
                 Section {
@@ -251,7 +251,7 @@ struct DraftListView: View {
     @ViewBuilder
     private var scanActions: some View {
         if environment.isCameraAvailable {
-            ScanActions(model: model) { camera = .scan(model.scanRun(in: environment)) }
+            ScanActions(model: model, environment: environment, camera: $camera, sheet: $scanSheet)
         }
     }
 

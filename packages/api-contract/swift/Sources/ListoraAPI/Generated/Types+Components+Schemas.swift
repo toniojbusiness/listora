@@ -15938,6 +15938,18 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SourcingRun/keptCount`.
             public var keptCount: Swift.Int32
+            /// When the seller checked the run out (`checkoutSourcingRun`); absent until then.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/checkedOutAt`.
+            public var checkedOutAt: Components.Schemas.Timestamp?
+            /// The haul the run's kept items became at checkout (docs/features/hauls.md).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/haulId`.
+            public var haulId: Components.Schemas.Id?
+            /// The miles driven for the trip, when the seller gave them at checkout.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/miles`.
+            public var miles: Swift.Int32?
             /// Creates a new `SourcingRun`.
             ///
             /// - Parameters:
@@ -15947,13 +15959,19 @@ extension Components {
             ///   - endedAt: When the run ended; absent while it goes on.
             ///   - scanCount: Items scanned in the run.
             ///   - keptCount: Scanned items the seller kept.
+            ///   - checkedOutAt: When the seller checked the run out (`checkoutSourcingRun`); absent until then.
+            ///   - haulId: The haul the run's kept items became at checkout (docs/features/hauls.md).
+            ///   - miles: The miles driven for the trip, when the seller gave them at checkout.
             public init(
                 id: Components.Schemas.Id,
                 place: Swift.String? = nil,
                 startedAt: Components.Schemas.Timestamp,
                 endedAt: Components.Schemas.Timestamp? = nil,
                 scanCount: Swift.Int32,
-                keptCount: Swift.Int32
+                keptCount: Swift.Int32,
+                checkedOutAt: Components.Schemas.Timestamp? = nil,
+                haulId: Components.Schemas.Id? = nil,
+                miles: Swift.Int32? = nil
             ) {
                 self.id = id
                 self.place = place
@@ -15961,6 +15979,9 @@ extension Components {
                 self.endedAt = endedAt
                 self.scanCount = scanCount
                 self.keptCount = keptCount
+                self.checkedOutAt = checkedOutAt
+                self.haulId = haulId
+                self.miles = miles
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -15969,6 +15990,265 @@ extension Components {
                 case endedAt
                 case scanCount
                 case keptCount
+                case checkedOutAt
+                case haulId
+                case miles
+            }
+        }
+        /// What the seller paid at the register for the items they kept. The run's kept items become
+        /// one haul of `total` for `itemCount` items, each costing its share.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout`.
+        public struct SourcingRunCheckout: Codable, Hashable, Sendable {
+            /// What the whole haul cost.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/total`.
+            public var total: Components.Schemas.Money
+            /// How many items the haul had: the kept items by default, more when an item was bought
+            /// without a scan. Never fewer than the kept items, which the haul grows to.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/itemCount`.
+            public var itemCount: Swift.Int32
+            /// The scans the seller kept on the phone, in the order kept. One whose item the app has
+            /// not sent yet (`keepScan`) is kept now, so a slow upload never leaves an item out of the
+            /// haul; the app's later `keepScan` answers that item. Scans the server already kept join
+            /// the haul too, whether listed or not.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/keptScanIds`.
+            public var keptScanIds: [Components.Schemas.Id]
+            /// Where the haul was bought, when the run has no place yet or it changed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/place`.
+            public var place: Swift.String?
+            /// The seller's date of the trip; the run's start date (UTC) when absent.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/purchaseDate`.
+            public var purchaseDate: Swift.String?
+            /// The miles driven for the trip, if the seller logs them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCheckout/miles`.
+            public var miles: Swift.Int32?
+            /// Creates a new `SourcingRunCheckout`.
+            ///
+            /// - Parameters:
+            ///   - total: What the whole haul cost.
+            ///   - itemCount: How many items the haul had: the kept items by default, more when an item was bought
+            ///   - keptScanIds: The scans the seller kept on the phone, in the order kept. One whose item the app has
+            ///   - place: Where the haul was bought, when the run has no place yet or it changed.
+            ///   - purchaseDate: The seller's date of the trip; the run's start date (UTC) when absent.
+            ///   - miles: The miles driven for the trip, if the seller logs them.
+            public init(
+                total: Components.Schemas.Money,
+                itemCount: Swift.Int32,
+                keptScanIds: [Components.Schemas.Id],
+                place: Swift.String? = nil,
+                purchaseDate: Swift.String? = nil,
+                miles: Swift.Int32? = nil
+            ) {
+                self.total = total
+                self.itemCount = itemCount
+                self.keptScanIds = keptScanIds
+                self.place = place
+                self.purchaseDate = purchaseDate
+                self.miles = miles
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case itemCount
+                case keptScanIds
+                case place
+                case purchaseDate
+                case miles
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.total = try container.decode(
+                    Components.Schemas.Money.self,
+                    forKey: .total
+                )
+                self.itemCount = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .itemCount
+                )
+                self.keptScanIds = try container.decode(
+                    [Components.Schemas.Id].self,
+                    forKey: .keptScanIds
+                )
+                self.place = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .place
+                )
+                self.purchaseDate = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .purchaseDate
+                )
+                self.miles = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .miles
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "total",
+                    "itemCount",
+                    "keptScanIds",
+                    "place",
+                    "purchaseDate",
+                    "miles"
+                ])
+            }
+        }
+        /// The run at a glance: what was scanned and kept, what the kept items might resell for, and
+        /// once checked out, what the haul cost and the estimated profit. Every resale number is an
+        /// estimate from each kept scan's call (its range and its payout after fees), never a sale.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingRunSummary`.
+        public struct SourcingRunSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SourcingRunSummary/run`.
+            public var run: Components.Schemas.SourcingRun
+            /// The run's kept items that are still in Listora.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunSummary/keptItems`.
+            public var keptItems: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/SourcingRunSummary/estimate`.
+            public var estimate: Components.Schemas.SourcingRunEstimate?
+            /// The haul the run became; absent until checkout.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunSummary/haul`.
+            public var haul: Components.Schemas.Haul?
+            /// - Remark: Generated from `#/components/schemas/SourcingRunSummary/profitEstimate`.
+            public var profitEstimate: Components.Schemas.SourcingRunProfit?
+            /// Creates a new `SourcingRunSummary`.
+            ///
+            /// - Parameters:
+            ///   - run:
+            ///   - keptItems: The run's kept items that are still in Listora.
+            ///   - estimate:
+            ///   - haul: The haul the run became; absent until checkout.
+            ///   - profitEstimate:
+            public init(
+                run: Components.Schemas.SourcingRun,
+                keptItems: Swift.Int32,
+                estimate: Components.Schemas.SourcingRunEstimate? = nil,
+                haul: Components.Schemas.Haul? = nil,
+                profitEstimate: Components.Schemas.SourcingRunProfit? = nil
+            ) {
+                self.run = run
+                self.keptItems = keptItems
+                self.estimate = estimate
+                self.haul = haul
+                self.profitEstimate = profitEstimate
+            }
+            public enum CodingKeys: String, CodingKey {
+                case run
+                case keptItems
+                case estimate
+                case haul
+                case profitEstimate
+            }
+        }
+        /// The kept items' estimated resale: the sums of their scans' price ranges and of what those
+        /// pay out after the marketplace's fees. Absent when no kept item had a range.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate`.
+        public struct SourcingRunEstimate: Codable, Hashable, Sendable {
+            /// The kept items with a range, which the sums cover.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate/itemCount`.
+            public var itemCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate/resaleLow`.
+            public var resaleLow: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate/resaleHigh`.
+            public var resaleHigh: Components.Schemas.Money
+            /// What `resaleLow` pays out after each item's marketplace fees, an estimate.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate/payoutLow`.
+            public var payoutLow: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate/payoutHigh`.
+            public var payoutHigh: Components.Schemas.Money
+            /// What the ranges rest on ("2 from your own sales, 5 from the AI estimate").
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate/basedOn`.
+            public var basedOn: Swift.String
+            /// Shown with the numbers, always: "Estimated", and when any range is the AI's, "Estimated
+            /// - includes the AI estimate, not based on sold listings".
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunEstimate/label`.
+            public var label: Swift.String
+            /// Creates a new `SourcingRunEstimate`.
+            ///
+            /// - Parameters:
+            ///   - itemCount: The kept items with a range, which the sums cover.
+            ///   - resaleLow:
+            ///   - resaleHigh:
+            ///   - payoutLow: What `resaleLow` pays out after each item's marketplace fees, an estimate.
+            ///   - payoutHigh:
+            ///   - basedOn: What the ranges rest on ("2 from your own sales, 5 from the AI estimate").
+            ///   - label: Shown with the numbers, always: "Estimated", and when any range is the AI's, "Estimated
+            public init(
+                itemCount: Swift.Int32,
+                resaleLow: Components.Schemas.Money,
+                resaleHigh: Components.Schemas.Money,
+                payoutLow: Components.Schemas.Money,
+                payoutHigh: Components.Schemas.Money,
+                basedOn: Swift.String,
+                label: Swift.String
+            ) {
+                self.itemCount = itemCount
+                self.resaleLow = resaleLow
+                self.resaleHigh = resaleHigh
+                self.payoutLow = payoutLow
+                self.payoutHigh = payoutHigh
+                self.basedOn = basedOn
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemCount
+                case resaleLow
+                case resaleHigh
+                case payoutLow
+                case payoutHigh
+                case basedOn
+                case label
+            }
+        }
+        /// The haul's estimated profit: the kept items' estimated payout less what the whole haul
+        /// cost. Only once the haul's total is known (checkout); an estimate, never a sale.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingRunProfit`.
+        public struct SourcingRunProfit: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SourcingRunProfit/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/SourcingRunProfit/high`.
+            public var high: Components.Schemas.Money
+            /// Shown with it ("Estimated, after fees").
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunProfit/label`.
+            public var label: Swift.String
+            /// Creates a new `SourcingRunProfit`.
+            ///
+            /// - Parameters:
+            ///   - low:
+            ///   - high:
+            ///   - label: Shown with it ("Estimated, after fees").
+            public init(
+                low: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                label: Swift.String
+            ) {
+                self.low = low
+                self.high = high
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case low
+                case high
+                case label
             }
         }
         /// - Remark: Generated from `#/components/schemas/ScanCreate`.
