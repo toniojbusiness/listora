@@ -4,14 +4,15 @@ import UIKit
 
 /// The scan's card over the bottom of the live camera (Hang Tag): a tag lying on its side with
 /// the call stamped on it, what the item is, the price range in the tag's print, what the call
-/// rests on, the household's own sales, and the AI estimate under its label. Keep is the one
-/// action; shooting the next item skips this one.
+/// rests on, the household's own sales, and the AI estimate under its label. Its answers are
+/// Keep and Put back (`ScanCardActions`); shooting the next item puts this one back too.
 struct ScanCardView: View {
     let entry: ScanEntry
     let onKeep: () -> Void
+    let onPutBack: () -> Void
+    let onClose: () -> Void
     let onTag: () -> Void
     let onRetry: () -> Void
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Group {
@@ -21,7 +22,13 @@ struct ScanCardView: View {
             case let .read(card):
                 read(card)
             case let .failed(message, retryable):
-                ScanReadFailed(number: entry.number, message: message, retryable: retryable, onRetry: onRetry)
+                ScanReadFailed(
+                    number: entry.number,
+                    message: message,
+                    retryable: retryable,
+                    onRetry: onRetry,
+                    onPutBack: onPutBack,
+                )
             case .waiting:
                 waiting
             }
@@ -42,8 +49,10 @@ struct ScanCardView: View {
                         .font(Typography.footnote)
                         .foregroundStyle(Palette.textSecondary)
                 }
+                .accessibilityElement(children: .combine)
+                Spacer(minLength: Spacing.xs)
+                ScanPutBackButton(action: onPutBack)
             }
-            .accessibilityElement(children: .combine)
             // The instant read from the household's own sales, while the full read runs.
             if let instant = entry.instant.map(OfflineScanCard.init) {
                 Text("\(instant.label): \(instant.callLabel) · \(instant.range ?? instant.basedOn)")
@@ -74,7 +83,15 @@ struct ScanCardView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("No signal: read when you have it")
                 .accessibilityIdentifier("scan.waiting")
-            actions(wantsTag: entry.instant == nil)
+            ScanCardActions(
+                entry: entry,
+                wantsTag: entry.instant == nil,
+                link: nil,
+                onKeep: onKeep,
+                onPutBack: onPutBack,
+                onClose: onClose,
+                onTag: onTag,
+            )
         }
         .padding(.leading, Spacing.md)
     }
@@ -121,7 +138,15 @@ struct ScanCardView: View {
                     .accessibilityLabel("Read when you had signal")
                     .accessibilityIdentifier("scan.readLate")
             }
-            actions(wantsTag: card.wantsTag, link: card.links.first)
+            ScanCardActions(
+                entry: entry,
+                wantsTag: card.wantsTag,
+                link: card.links.first,
+                onKeep: onKeep,
+                onPutBack: onPutBack,
+                onClose: onClose,
+                onTag: onTag,
+            )
         }
         .padding(.leading, Spacing.md)
     }
@@ -197,67 +222,6 @@ struct ScanCardView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel("\(signal.label), \(signal.basedOn)")
                 .accessibilityIdentifier("scan.signal")
-        }
-    }
-
-    private func actions(wantsTag: Bool, link: ScanCard.Link? = nil) -> some View {
-        HStack(spacing: Spacing.xs) {
-            keepButton
-            if entry.decision == .open {
-                Button(action: onTag) {
-                    Label(wantsTag ? "Tag?" : "Tag", systemImage: "tag")
-                }
-                .buttonStyle(.listora(wantsTag ? .secondary : .tertiary, size: .compact))
-                .accessibilityLabel("Shoot the tag")
-                .accessibilityIdentifier("scan.tag")
-            }
-            Spacer(minLength: 0)
-            if let link {
-                Button {
-                    openURL(link.url)
-                } label: {
-                    Label(link.label, systemImage: "arrow.up.right.square")
-                        .labelStyle(.titleAndIcon)
-                }
-                .font(Typography.footnote)
-                .buttonStyle(.plain)
-                .foregroundStyle(Palette.brand)
-                .frame(minHeight: Layout.minimumTapTarget)
-                .accessibilityHint("Opens the marketplace's search to look at prices yourself.")
-                .accessibilityIdentifier("scan.search")
-            }
-        }
-        .padding(.top, Spacing.xxs)
-    }
-
-    @ViewBuilder
-    private var keepButton: some View {
-        switch entry.decision {
-        case .open, .keepFailed:
-            Button(action: onKeep) {
-                Label("Keep", systemImage: "plus")
-            }
-            .buttonStyle(.listora(.primary, size: .compact))
-            .accessibilityIdentifier("scan.keep")
-        case .keeping:
-            Button("Keep", action: {})
-                .buttonStyle(.listora(.primary, size: .compact))
-                .loading(true)
-                .disabled(true)
-        case .kept:
-            Label("Kept as a draft", systemImage: "checkmark")
-                .font(Typography.emphasis)
-                .foregroundStyle(Palette.success)
-                .frame(minHeight: Layout.compactButtonHeight)
-                .accessibilityIdentifier("scan.kept")
-        case .keepWhenRead:
-            Label("Kept: saved once it's read", systemImage: "checkmark")
-                .font(Typography.emphasis)
-                .foregroundStyle(Palette.success)
-                .frame(minHeight: Layout.compactButtonHeight)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Kept: saved once it's read")
-                .accessibilityIdentifier("scan.keptWaiting")
         }
     }
 }
@@ -355,6 +319,7 @@ private struct ScanReadFailed: View {
     let message: String
     let retryable: Bool
     let onRetry: () -> Void
+    let onPutBack: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -362,10 +327,13 @@ private struct ScanReadFailed: View {
                 .font(Typography.headline)
                 .foregroundStyle(Palette.danger)
             Text(message).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
-            if retryable {
-                Button("Retry", action: onRetry)
-                    .buttonStyle(.listora(.secondary, size: .compact))
-                    .accessibilityIdentifier("scan.retry")
+            HStack(spacing: Spacing.xs) {
+                if retryable {
+                    Button("Retry", action: onRetry)
+                        .buttonStyle(.listora(.primary, size: .compact))
+                        .accessibilityIdentifier("scan.retry")
+                }
+                ScanPutBackButton(action: onPutBack)
             }
         }
         .padding(.leading, Spacing.md)

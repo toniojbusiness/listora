@@ -220,18 +220,26 @@ connection to Listora.
   what the item is, the price range the call rests on in the tag's print with what it rests on
   ("Your 3 sales like it", or "AI estimate - not based on sold listings"), the payout after the
   marketplace's fees, the household's own sales per marketplace, the AI estimate under its
-  label, any flag, **Keep**, **Tag**, and **Search Depop** (the marketplace's own search, opened
-  in the browser for the seller to look; Listora never loads it). No cost, margin, or profit.
+  label, any flag, **Shoot the tag** and **Search Depop** (the marketplace's own search, opened
+  in the browser for the seller to look; Listora never loads it) on a small line, and the
+  seller's two answers at the bottom, big and side by side: **Put back** and **Keep**. No cost,
+  margin, or profit. The pass action is **Put back**, what the seller does with the item, so it
+  is never confused with the **Skip** call stamped on the card.
 - **Haptics**, so the seller can keep their eyes on the bin: two short taps for Buy, one long
   buzz for Skip, none for Your call (`Haptics.doubleTap`, `Haptics.longBuzz`).
-- **Keep** saves the item as a draft on this iPhone at once, with the scan's photo (the upload
-  size, prepared while the card was read) and the tag close-up if there is one. The upload queue
-  creates its server item with `keepScan` and attaches the photos in the background. The camera
-  stays open.
-- **Skip is no tap**: shooting the next item skips the last one. The **tray** along the bottom
-  holds every card of the run; tapping one shows it again, so a skipped item can still be kept
-  until the run ends.
-- **Tag** (or **Tag?**, when the AI could not read the brand or was unsure): the next shot is a
+- **Keep** and **Put back** each close the card at once, back to the live camera for the next
+  shot, and a brief line where the card was says what happened: "Keeping item 3" while the draft
+  is saved, then "Kept · 3 in this run", or "Put back · 3 kept this run" (2 s; a Keep that
+  failed says so for 5 s, above the next card if one is up, and its tray tile is marked). The
+  shutter takes a shot the whole time; nothing waits for the draft. **Put back** is there while
+  the item is still reading or could not be read, too.
+- **Keep** saves the item as a draft on this iPhone, with the scan's photo (the upload size,
+  prepared while the card was read) and the tag close-up if there is one. The upload queue
+  creates its server item with `keepScan` and attaches the photos in the background.
+- **Shooting the next item without choosing puts the last one back.** The **tray** along the
+  bottom holds every card of the run; tapping one shows it again, so an item put back can still
+  be kept until the run ends, and a kept one shows "Kept as a draft" with **Close**.
+- **Shoot the tag** (or **Shoot the tag?**, when the AI could not read the brand or was unsure): the next shot is a
   close-up of the tag; the item is read again with both images (`replacesScanId`).
 - **Hold the mic** to add a note ("medium, small stain"), turned into text on the iPhone. Said
   before a shot, it rides along with that shot's read; said after, the item is read again once
@@ -322,7 +330,7 @@ background, so the card never waits on it.
 /v1/scans/{scanId}/research` (`researchScan`); the card says "Checking the web for its retail
   price" and takes in the answer when it comes. At the bins most items are skipped within a
   second or two of their card by shooting the next one, and a lookup costs about $0.02, so a
-  card the seller moved on from (the next shot, Tag, or a note that reads it again) is never
+  card the seller moved on from (Keep, Put back, the next shot, Tag, or a note that reads it again) is never
   looked up unless they come back to it. Each scan is looked up once. A read without a brand
   asks nothing (`no_brand`). A scan already researched answers as it is.
 - **What.** One standard-tier call (Haiku) with the Claude API's web search, at most two
@@ -392,7 +400,9 @@ measured three ways:
   card after N ms"), so the camera's own capture time counts, and the run's active time
   (`InteractionMeter`, session `scan-<run>`), logged when the run ends.
 - **The owner** sees them on the scan camera in Test mode, tagged "Testing": "Card 2.1 s · 95%
-  3.4 s · active 2.8 s an item". Sellers never see timings.
+  3.4 s · active 2.8 s an item · next shot 0.3 s", the last from Keep or Put back to the card
+  off the screen (`ScanRunModel.readyTimes`, logged as "scan camera ready N ms after the
+  decision"). Sellers never see timings.
 
 **Measured 2026-10-31, before and after the speed work.** The live path: `POST /v1/scans` on the
 local API with the real read (`claude-haiku-5-5`), 30 scans in a row of 1,024-pixel JPEGs at the
@@ -506,7 +516,9 @@ build; the server's applies with a deploy.
   (the run's place, the checkout's kept scans, the iPhone's date, the miles, the run ended after,
   a failure retried as the same checkout, the summary's words); `ThriftScanUITests` starts a run
   at a place and checks it out on the local stack.
-- iPhone: `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
+- iPhone: `ScanDecisionTests.swift` (Keep and Put back closing the card at once, the line's
+  words while the draft is saved and after, a failed Keep tried again from the tray, Put back
+  while reading, Close on a kept card, the camera-ready measurement); `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
   run, the small JPEG with tag text, implicit skip and Keep from the tray, notes before and after
   a read, the tag close-up, Retry, End run; the upload queue's `keepScan`, a deleted draft's item
   found by keeping again, a skipped scan's draft failing visibly; the research asked for after
@@ -767,12 +779,15 @@ needs its real photos; this is how a whole run gets them.
 - **Shoot this run** opens the guided camera (`CameraCaptureView`, front, back, tag, details) on
   the run's drafts that need photos, one after another (`RunShootView`), with each one's scan
   shot and name on screen ("3 of 23: Acme Outfitters blue button-up shirt"). Each item's
-  boundary is known, so there is no grouping step. **Done** saves the item's photos and moves to
-  the next; **Skip item** leaves it for later; closing the camera ends the shoot and keeps the
+  boundary is known, so there is no grouping step. **Next item** (**Done** on the last) saves the
+  item's photos and moves on; **Shoot later** leaves it for later (not "Skip", which leaves out
+  one photo of the guide); closing the camera ends the shoot and keeps the
   items already shot. Background cleanup is in the draft's editor, as for any draft.
 - **The scan shot goes** once the real photos are taken (`replaceScanShots`): the new photos come
   first, and the scan's shots are deleted, on the server too by the upload queue, unless the
   seller taps **Keep scan photo**, which keeps them after the new ones.
+- **Shoot this run** and **Review N items** sit at the top of the run's drafts, under its header,
+  so a run of 23 never hides them below its last draft.
 - **Review N items** opens the batch's rapid review (`BatchReviewView`, [batch.md](batch.md)) on
   the run's drafts whose real photos are all on the server, in the order kept; a draft still
   uploading waits ("1 item uploading its photos, then ready to review"), so an analysis never
@@ -870,7 +885,9 @@ is signal.
 
 ### Keeping and ending with no signal
 
-- **Keep** on a waiting card marks it kept at once ("Kept: saved once it's read"): its draft
+- **Keep** on a waiting card marks it kept at once and goes back to the camera like any Keep
+  (the line says "Kept · saved once it's read"; the card from the tray, "Kept: saved once it's
+  read"): its draft
   needs the scan, so it is saved the moment the item is read. A kept scan that can never be read
   (the server refuses it) is saved as an ordinary draft with its photos, which the full analysis
   then reads like any draft's; one whose upload-sized photo the app closed before preparing gets

@@ -2,7 +2,7 @@ import DesignSystem
 import SwiftUI
 import UIKit
 
-/// The run's tray: every card of the run along the bottom, newest last, so a skipped item can
+/// The run's tray: every card of the run along the bottom, newest last, so an item put back can
 /// still be opened and kept until the run ends.
 struct ScanTray: View {
     let entries: [ScanEntry]
@@ -44,7 +44,13 @@ struct ScanTray: View {
         case .waiting: entry.instant.map { "\(OfflineScanCard($0).callLabel), waiting for signal" }
             ?? "waiting for signal"
         }
-        return "Item \(entry.number), \(state)\(entry.isKeptOrPending ? ", kept" : "")"
+        let decision = switch entry.decision {
+        case .kept, .keepWhenRead: ", kept"
+        case .keeping: ", keeping"
+        case .keepFailed: ", couldn't keep"
+        case .open: ""
+        }
+        return "Item \(entry.number), \(state)\(decision)"
     }
 }
 
@@ -73,7 +79,12 @@ private struct ScanTrayTile: View {
 
     @ViewBuilder
     private var badge: some View {
-        if entry.isKeptOrPending {
+        if case .keepFailed = entry.decision {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(Typography.caption)
+                .foregroundStyle(Palette.danger)
+                .background(Palette.surface, in: Circle())
+        } else if entry.isKeptOrPending {
             Image(systemName: "checkmark.circle.fill")
                 .font(Typography.caption)
                 .foregroundStyle(Palette.success)

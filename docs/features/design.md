@@ -111,7 +111,9 @@ same on every screen. The table with each style's use is in `Typography.swift`.
 - `Elevation`: `low` for cards, `medium` for floating bars, `high` for toasts. Cards have no
   border in light mode: their lighter surface and a soft shadow separate them. In dark mode the
   lighter surfaces and a faint hairline carry the separation.
-- `Motion`: `standard`, `snappy`, and `gentle` springs that settle without bouncing. The
+- `Motion`: `standard`, `snappy`, and `gentle` springs that settle without bouncing, and `clear`,
+  a 0.12 s fade for what must get out of the way at once (`riseThenClear`: the scan card the
+  seller answered, so the camera is clear for the next shot). The
   `motion(_:value:)` modifier and `Motion.perform` turn them into a short fade when Reduce Motion
   is on. A screen's loading, empty, and loaded states cross-fade; a tapped draft photo zooms into
   its detail sheet (`matchedTransitionSource`); the photo grid animates reordering; banners rise

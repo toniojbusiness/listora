@@ -9,6 +9,9 @@ public enum Motion {
     public static let snappy = Animation.spring(response: 0.25, dampingFraction: 0.9)
     /// Larger moves: a photo changing place, a card expanding.
     public static let gentle = Animation.spring(response: 0.5, dampingFraction: 0.85)
+    /// Getting out of the way at once: a card the seller just answered, so the camera behind it is
+    /// clear for the next shot.
+    public static let clear = Animation.easeOut(duration: 0.12)
     /// What every animation becomes with Reduce Motion on.
     public static let reduced = Animation.easeInOut(duration: 0.15)
 
@@ -49,6 +52,17 @@ extension AnyTransition {
         .asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .opacity,
+        )
+    }
+}
+
+extension AnyTransition {
+    /// Like ``rise`` coming in, but gone in ``Motion/clear`` when answered: a card over the
+    /// camera that must not hold up the next shot.
+    public static var riseThenClear: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity.animation(Motion.clear),
         )
     }
 }

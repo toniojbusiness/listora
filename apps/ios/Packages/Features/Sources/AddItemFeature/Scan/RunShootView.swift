@@ -4,8 +4,9 @@ import SwiftUI
 /// Shoot this run (docs/features/thrift-scan.md, "Upgrading drafts"): the guided camera walks
 /// through the run's kept drafts that need photos, in the order they were kept, with each one's
 /// scan shot and name on screen ("3 of 23: Patagonia green fleece"). It is the guided capture of
-/// one item, item after item: each item's boundary is known, so there is no grouping step. Done
-/// saves the item's photos and moves to the next; the scan shot goes unless the seller keeps it.
+/// one item, item after item: each item's boundary is known, so there is no grouping step. Next
+/// item (Done on the last) saves the item's photos and moves on; Shoot later leaves it for
+/// later; the scan shot goes unless the seller keeps it.
 struct RunShootView: View {
     /// The drafts to shoot, by id, fixed when the shoot opened.
     let draftIDs: [String]
@@ -22,6 +23,7 @@ struct RunShootView: View {
                 camera: environment.makeCamera(),
                 capacity: DraftStore.maxPhotosPerDraft - (keepsScanShot ? draft.photos.count : 0),
                 header: AnyView(header(for: draft)),
+                doneTitle: hasNext(after: draft) ? "Next item" : "Done",
             ) { shots in
                 await finish(draft, shots)
             }
@@ -40,6 +42,12 @@ struct RunShootView: View {
         draftIDs.indices.dropFirst(index).lazy
             .compactMap { position in model.drafts.first { $0.id == draftIDs[position] } }
             .first
+    }
+
+    /// Another draft of the shoot comes after this one, so its button says Next item.
+    private func hasNext(after draft: Draft) -> Bool {
+        guard let position = draftIDs.firstIndex(of: draft.id) else { return false }
+        return draftIDs.dropFirst(position + 1).contains { id in model.drafts.contains { $0.id == id } }
     }
 
     private var currentNumber: Int {
@@ -65,7 +73,8 @@ struct RunShootView: View {
                         keepsScanShot.toggle()
                     }
                     .accessibilityIdentifier("runShoot.keepScanShot")
-                    Button("Skip item") { next() }
+                    // Not "Skip": the guide's Skip leaves out one photo, this the whole item.
+                    Button("Shoot later") { next() }
                         .font(Typography.emphasis)
                         .frame(minHeight: Layout.minimumTapTarget)
                         .accessibilityIdentifier("runShoot.skip")

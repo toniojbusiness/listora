@@ -50,6 +50,13 @@ final class ScanRunModel {
     var isFinished = false
     /// Called once the run is finished.
     var onFinished: (@MainActor (ScanRunModel) -> Void)?
+    /// The brief line over the camera after the seller kept or put back an item.
+    var confirmation: ScanConfirmation?
+    /// When the seller last chose Keep or Put back on a card, until the camera was clear again:
+    /// the owner's measurement of how soon the next shot can be taken.
+    var decidedAt: (entryID: String, at: Date)?
+    /// From Keep or Put back to the camera clear for the next shot, for the owner's measurements.
+    var readyTimes: [TimeInterval] = []
     /// Where the seller is, as they named it when the run started; nil when they named none.
     var place: String? {
         record.place

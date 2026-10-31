@@ -2,8 +2,8 @@ import XCTest
 
 /// The thrift scan end to end against the local stack (`make ios-test`, packages/e2e), with the
 /// fake camera and the fake AI's scan of the fixture shirt (`FakeAI/default.json`): Add Item's
-/// Scan mode, one shot read into a card with the call and the labeled AI estimate, Keep saving a
-/// draft without leaving the camera, the next shot skipping the last one, the run's tray, and the
+/// Scan mode, one shot read into a card with the call and the labeled AI estimate, Keep and Put
+/// back each closing the card straight back to the camera for the next shot, the run's tray, and the
 /// checkout at the register into a haul with the run's summary and estimated profit. The stack
 /// shows every built feature, so Scan mode is on.
 @MainActor
@@ -14,7 +14,7 @@ final class ThriftScanUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func testAScanIsReadKeptAsADraftAndTheNextShotSkipsTheLast() throws {
+    func testAScanIsKeptOrPutBackStraightBackToTheCamera() throws {
         try launch(signedInTo: E2EStack.fromEnvironment())
         let scanMode = app.segmentedControls["addItem.mode"].buttons["Scan"]
         XCTAssertTrue(scanMode.waitForExistence(timeout: 15), "Scan mode shows where the thrift scan is on")
@@ -39,24 +39,7 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["scan.range"].label, "$15-$25")
         XCTAssertTrue(app.buttons["scan.search"].label.contains("Search Depop"))
 
-        // Keep saves the draft without leaving the camera.
-        app.buttons["scan.keep"].tap()
-        // Keep waits for the upload-sized photo, prepared in the background at utility priority:
-        // on a loaded test machine that has taken over 10 seconds.
-        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 20))
-        XCTAssertEqual(element("scanCamera.summary").label, "1 scanned · 1 kept")
-        XCTAssertTrue(shutter.exists)
-        attachScreenshot("kept")
-
-        // The next shot skips nothing kept and shows its own card; the tray holds both.
-        shutter.tap()
-        XCTAssertTrue(app.staticTexts["Item 2"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.buttons["scan.keep"].waitForExistence(timeout: 10))
-        XCTAssertEqual(element("scanCamera.summary").label, "2 scanned · 1 kept")
-        XCTAssertTrue(app.buttons["scan.tray.1"].label.hasSuffix("kept"), app.buttons["scan.tray.1"].label)
-        attachScreenshot("second item")
-        app.buttons["scan.tray.1"].tap()
-        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 5))
+        try keepThenPutBack(shutter)
 
         // Done keeps the run going; the kept draft uploads in the background.
         app.buttons["scanCamera.done"].tap()
@@ -65,6 +48,48 @@ final class ThriftScanUITests: XCTestCase {
         attachScreenshot("add item with the run")
         XCTAssertTrue(app.buttons["addItem.startScan"].label.contains("Keep scanning"))
         try checkOutTheRun()
+    }
+
+    /// Keep closes the card at once, back to the live camera, with a brief line; the next item's
+    /// Put back does the same; the tray opens the kept one with Close.
+    private func keepThenPutBack(_ shutter: XCUIElement) throws {
+        // Keep closes the card at once, back to the live camera for the next shot, and a brief
+        // line says it was kept. The draft is saved in the background: Keep waits for the
+        // upload-sized photo, prepared at utility priority (over 10 s on a loaded test machine).
+        let card = element("scan.card")
+        let keepTapped = Date()
+        app.buttons["scan.keep"].tap()
+        // The line stands where the card was for 2 s once the draft is saved: looked for first.
+        let confirmation = element("scan.confirmation")
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2), "a line says the item is kept")
+        let cameraReady = Date().timeIntervalSince(keepTapped)
+        XCTAssertFalse(card.exists, "Keep closes the card")
+        XCTAssertTrue(shutter.isHittable)
+        let said = confirmation.label
+        XCTAssertTrue(said.contains("Kept · 1 in this run") || said.contains("Keeping item 1"), said)
+        attachScreenshot("kept")
+        record("Keep to the camera clear, by the test (tap and polling included): \(Int(cameraReady * 1000)) ms")
+        XCTAssertTrue(waitForLabel(of: element("scanCamera.summary"), prefix: "1 scanned · 1 kept", timeout: 20))
+
+        // The next shot shows its own card; Put back passes on it, back to the camera.
+        shutter.tap()
+        XCTAssertTrue(app.staticTexts["Item 2"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["scan.keep"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["scan.putBack"].exists)
+        XCTAssertEqual(element("scanCamera.summary").label, "2 scanned · 1 kept")
+        attachScreenshot("second item")
+        app.buttons["scan.putBack"].tap()
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2), "a line says the item was put back")
+        XCTAssertTrue(confirmation.label.contains("Put back · 1 kept this run"), confirmation.label)
+        XCTAssertFalse(card.exists, "Put back closes the card")
+        attachScreenshot("put back")
+
+        // The tray holds both; the kept one opens with Close, back to the camera.
+        XCTAssertTrue(app.buttons["scan.tray.1"].label.hasSuffix("kept"), app.buttons["scan.tray.1"].label)
+        app.buttons["scan.tray.1"].tap()
+        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 5))
+        app.buttons["scan.close"].tap()
+        XCTAssertTrue(card.waitForNonExistence(timeout: 5))
     }
 
     /// Checkout at the register, from Add Item's bottom bar, into the run's summary.
@@ -113,7 +138,7 @@ final class ThriftScanUITests: XCTestCase {
         shutter.tap()
         XCTAssertTrue(app.buttons["scan.keep"].waitForExistence(timeout: 20))
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(element("scan.kept").waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForLabel(of: element("scanCamera.summary"), prefix: "1 scanned · 1 kept", timeout: 20))
         app.buttons["scanCamera.done"].tap()
 
         // The kept draft is listed under its run, named by the scan, and needs its photos.
@@ -177,7 +202,7 @@ final class ThriftScanUITests: XCTestCase {
     }
 
     /// No signal at the bins (`LISTORA_SCAN_NO_SIGNAL`): the shot waits with no read, Keep marks it
-    /// to be saved once read, and the next launch with signal reads it and saves its draft.
+    /// to be saved once read and goes back to the camera, and the next launch with signal reads it and saves its draft.
     func testWithNoSignalAKeptScanWaitsAndIsSavedOnceThereIsSignal() throws {
         let stack = try E2EStack.fromEnvironment()
         try launch(signedInTo: stack, noSignal: true)
@@ -193,8 +218,11 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(waiting.waitForExistence(timeout: 20))
         attachScreenshot("no signal")
         XCTAssertTrue(waiting.label.contains("No signal"), "the card says: \(waiting.label)")
+        // Keep closes the card back to the camera; the line says it is saved once it's read.
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(element("scan.keptWaiting").waitForExistence(timeout: 5))
+        let confirmation = element("scan.confirmation")
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
+        XCTAssertTrue(confirmation.label.contains("Kept · saved once it's read"), confirmation.label)
         XCTAssertEqual(element("scanCamera.summary").label, "1 scanned · 1 kept · 1 waiting")
         attachScreenshot("waiting for signal")
         app.buttons["scanCamera.done"].tap()
@@ -254,6 +282,15 @@ final class ThriftScanUITests: XCTestCase {
     /// Any element by its identifier: a stamp or label reads as text or as a group.
     private func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier].firstMatch
+    }
+
+    /// A measurement, kept in the result bundle and printed to the test log.
+    private func record(_ line: String) {
+        print(line)
+        let attachment = XCTAttachment(string: line)
+        attachment.name = "measurement"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     private func attachScreenshot(_ name: String) {

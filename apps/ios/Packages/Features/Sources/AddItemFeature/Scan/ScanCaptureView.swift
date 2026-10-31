@@ -4,7 +4,9 @@ import SwiftUI
 
 /// Scan mode's camera at the bins (docs/features/thrift-scan.md): one shot of the item in hand,
 /// read at once, its card over the bottom while the viewfinder stays live. Keep saves the item
-/// as a draft without leaving the camera; shooting the next item skips the last one. Hold the
+/// as a draft and Put back passes on it; either one closes the card, back to the camera for the
+/// next shot, with a brief line saying what happened. Shooting the next item without choosing
+/// puts the last one back. Hold the
 /// mic to add a note, tap Tag to shoot the tag close-up. Done closes the camera and keeps the
 /// run; Finish offers the register's checkout, or ending the run without buying.
 struct ScanCaptureView: View {
@@ -61,14 +63,22 @@ struct ScanCaptureView: View {
                 if let entry = run.current {
                     ScanCardView(
                         entry: entry,
-                        onKeep: { Task { await run.keep(entry.id) } },
+                        onKeep: { Task { await run.keepAndContinue(entry.id) } },
+                        onPutBack: { run.putBack(entry.id) },
+                        onClose: { run.closeCard(entry.id) },
                         onTag: { run.startTagShot() },
                         onRetry: { Task { await run.retry(entry.id) } },
                     )
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.horizontal, Spacing.md)
-                    .transition(.rise)
+                    .transition(.riseThenClear)
                     .id(entry.id)
+                    .onDisappear { run.cardClosed(entry.id) }
+                } else if let confirmation = run.confirmation, let line = run.confirmationLine {
+                    ScanConfirmationView(line: line)
+                        .transition(.opacity)
+                        .id(confirmation.id)
+                        .goesAway(line) { run.clearConfirmation(confirmation.id) }
                 }
                 if !run.entries.isEmpty {
                     ScanTray(entries: run.entries, currentID: run.currentID) { run.select($0) }
@@ -89,6 +99,7 @@ struct ScanCaptureView: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .foregroundStyle(Palette.onMedia)
         .motion(Motion.snappy, value: run.currentID)
+        .motion(Motion.snappy, value: run.confirmation)
         .measuresInteraction(meter, session: run.meterSession)
         .task {
             run.prepare()
@@ -190,6 +201,9 @@ struct ScanCaptureView: View {
             .cardStyle(padding: Spacing.sm)
             .padding(.horizontal, Spacing.md)
             .transition(.rise)
+        } else if run.current != nil, let line = run.confirmationLine, line.tone == .failed {
+            // A Keep that failed after the next card came up: said above it until it goes.
+            ScanConfirmationView(line: line)
         } else if voice.isListening {
             Label(voice.heard.isEmpty ? "Listening..." : voice.heard, systemImage: "waveform")
                 .font(Typography.emphasis)
