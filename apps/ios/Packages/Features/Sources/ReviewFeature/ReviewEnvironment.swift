@@ -13,6 +13,9 @@ public final class ReviewEnvironment {
     let timing: ReviewTiming
     /// Speech to text for spoken corrections on the review.
     let transcriber: any VoiceTranscriber
+    /// Putting a saved item, or a batch's saved items, in a storage bin
+    /// (docs/features/storage-bins.md); without it the saved screens offer no bin.
+    public var binPicker: BinPicking?
 
     public convenience init(
         apiClient: APIClient,
@@ -58,6 +61,7 @@ public final class ReviewEnvironment {
         -> some View
     {
         ReviewFlowView(environment: self, request: request, onFinished: onFinished)
+            .environment(\.binPicking, binPicker)
     }
 
     /// The rapid review of a batch's items (docs/features/batch.md): `onEvent` hears of each saved
@@ -67,6 +71,7 @@ public final class ReviewEnvironment {
         onEvent: @escaping @MainActor (BatchReviewEvent) -> Void,
     ) -> some View {
         BatchReviewView(environment: self, request: request, onEvent: onEvent)
+            .environment(\.binPicking, binPicker)
     }
 
     func makeModel(for request: ItemReviewRequest) -> ReviewFlowModel {
@@ -79,4 +84,21 @@ public final class ReviewEnvironment {
             timing: timing,
         )
     }
+}
+
+/// The bin picker another feature provides (Pack check's, from `AppDependencies`): the items, and
+/// what to do with the bin they went in (nil when taken out of one).
+public struct BinPicking: Sendable {
+    let screen: @MainActor @Sendable (BinRequest, @escaping @MainActor @Sendable (BinChoice?) -> Void) -> AnyView
+
+    public init(
+        screen: @escaping @MainActor @Sendable (BinRequest, @escaping @MainActor @Sendable (BinChoice?) -> Void)
+            -> AnyView,
+    ) {
+        self.screen = screen
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var binPicking: BinPicking?
 }

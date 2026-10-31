@@ -4,11 +4,12 @@ import Foundation
 import InventoryFeature
 import PackCheckFeature
 import PhoneExecutionFeature
+import ReviewFeature
 import SalesFeature
 import SwiftUI
 
 /// The Sales tab, and Pack check's place in the app (docs/features/pack-check.md): Sales > Pack
-/// orders, a sale's "Pack this order", and the item screen's sticker.
+/// orders, a sale's "Pack this order", the item screen's sticker, and storage bins.
 extension AppDependencies {
     static func makePackCheck(
         _ apiClient: APIClient,
@@ -73,5 +74,12 @@ extension PackCheckEnvironment {
     func attach(to inventory: InventoryEnvironment) {
         inventory.stickerScreen = { [self] request in AnyView(stickerScreen(request)) }
         inventory.isPackCheckOn = { [settings] in settings.isEnabled }
+        inventory.binPicker = { [self] request, onDone in AnyView(binPicker(request, onDone: onDone)) }
+    }
+
+    /// Storage bins (docs/features/storage-bins.md) for a saved item and a batch's or run's saved
+    /// items.
+    func attach(to review: ReviewEnvironment) {
+        review.binPicker = BinPicking { [self] request, onDone in AnyView(binPicker(request, onDone: onDone)) }
     }
 }

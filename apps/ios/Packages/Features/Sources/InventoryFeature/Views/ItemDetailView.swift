@@ -20,6 +20,7 @@ struct ItemDetailView: View {
     @State private var showsActivity = false
     @State private var listEverywhere: BulkActionModel?
     @State private var printingSticker: StickerRequest?
+    @State private var choosingBin: BinRequest?
     /// Just listed with Pack check on: the screen offers the item's sticker.
     @State private var offersSticker = false
     /// The item sold while this screen was open, so the sold stamp is pressed onto its tag.
@@ -74,6 +75,12 @@ struct ItemDetailView: View {
             )
             .sheet(item: $printingSticker) { request in
                 environment.stickerScreen?(request)
+            }
+            .sheet(item: $choosingBin) { request in
+                environment.binPicker?(request) { _ in
+                    choosingBin = nil
+                    Task { await model.refresh() }
+                }
             }
             .sheet(
                 item: $markingSold,
@@ -218,7 +225,10 @@ struct ItemDetailView: View {
                 marketplaces(of: item)
                 MoneySection(item: item)
                 itemActions(for: item)
-                DetailsSection(item: item) { editingSize = true }
+                DetailsSection(
+                    item: item,
+                    chooseBin: environment.binPicker == nil ? nil : { choosingBin = BinRequest(item) },
+                ) { editingSize = true }
                 ActivityLink { showsActivity = true }
             }
             .padding(Spacing.md)

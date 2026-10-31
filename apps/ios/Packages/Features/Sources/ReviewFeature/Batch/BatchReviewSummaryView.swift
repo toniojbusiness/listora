@@ -38,6 +38,7 @@ struct BatchReviewSummaryView: View {
                 }
                 if !summary.saved.isEmpty {
                     metric
+                    BinPutAwayView(itemIDs: summary.saved.map(\.itemID), bin: nil)
                     VStack(spacing: 0) {
                         ForEach(Array(summary.saved.enumerated()), id: \.element.sku) { index, item in
                             if index > 0 {

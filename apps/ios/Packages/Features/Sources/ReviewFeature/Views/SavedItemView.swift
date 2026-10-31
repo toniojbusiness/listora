@@ -43,6 +43,7 @@ struct SavedItemView: View {
             }
             .multilineTextAlignment(.center)
             itemCard
+            BinPutAwayView(itemIDs: [saved.itemID], bin: saved.bin)
             if let summary = saved.summary {
                 metric(summary)
             }

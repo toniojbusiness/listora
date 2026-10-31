@@ -191,10 +191,12 @@ extension ReviewFlowModel {
             }
             let summary = meter.finish(request.sessionID, itemID: updated.id, sku: updated.sku)
             saved = SavedItem(
+                itemID: updated.id,
                 sku: updated.sku,
                 title: updated.details.title,
                 price: updated.details.listPrice.map(Formatting.money),
                 summary: summary,
+                bin: updated.storageLocation.map { BinChoice(id: $0.id, code: $0.code) },
             )
             showsSaved = true
         }

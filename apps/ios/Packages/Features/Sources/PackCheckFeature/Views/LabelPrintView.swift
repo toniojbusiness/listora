@@ -158,7 +158,7 @@ struct LabelPrintView: View {
     }
 
     private func stickerLine(_ sticker: StickerRequest) -> String {
-        [sticker.sku, sticker.locationCode.map { "Shelf \($0)" }].compactMap(\.self).joined(separator: " · ")
+        [sticker.sku, sticker.locationCode.map { "Bin \($0)" }].compactMap(\.self).joined(separator: " · ")
     }
 
     private var reprintBinding: Binding<Bool> {

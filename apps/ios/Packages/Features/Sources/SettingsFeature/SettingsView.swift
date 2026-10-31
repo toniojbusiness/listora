@@ -231,6 +231,16 @@ public struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings.packCheck")
                 }
+                if screens.storageBins != nil {
+                    NavigationLink(value: SettingsDestination.storageBins) {
+                        ListRow(
+                            "Storage bins",
+                            subtitle: "Where each item is kept, and the bins' stickers",
+                            systemImage: "archivebox",
+                        )
+                    }
+                    .accessibilityIdentifier("settings.storageBins")
+                }
                 descriptionStyleRow
             } header: {
                 SectionHeader("Selling")
@@ -311,7 +321,8 @@ extension SettingsView {
             if let profile {
                 EditProfileView(model: profile)
             }
-        case .linkAccounts, .marketplaces, .imports, .listingRefresh, .notifications, .saleEmails, .packCheck:
+        case .linkAccounts, .marketplaces, .imports, .listingRefresh, .notifications, .saleEmails, .packCheck,
+             .storageBins:
             screens.screen(for: destination)
         case .people, .descriptionStyle:
             accountScreen(for: destination)

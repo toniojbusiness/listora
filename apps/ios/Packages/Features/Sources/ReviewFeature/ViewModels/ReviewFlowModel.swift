@@ -61,11 +61,14 @@ final class ReviewFlowModel {
     }
 
     struct SavedItem: Equatable {
+        let itemID: String
         let sku: String
         let title: String?
         let price: String?
         /// The interaction metric, when this flow measured the item.
         let summary: InteractionSummary?
+        /// The bin it is in, when it is in one.
+        var bin: BinChoice?
     }
 
     let request: ItemReviewRequest
@@ -172,10 +175,12 @@ final class ReviewFlowModel {
             self.item = item
             if !Self.isDraft(item) {
                 saved = SavedItem(
+                    itemID: item.id,
                     sku: item.sku,
                     title: item.details.title,
                     price: item.details.listPrice.map(Formatting.money),
                     summary: nil,
+                    bin: item.storageLocation.map { BinChoice(id: $0.id, code: $0.code) },
                 )
                 phase = .alreadySaved
                 return

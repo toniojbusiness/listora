@@ -7,15 +7,13 @@ import SwiftUI
 /// clothing or shoe listing without one, so a seller who skipped it can still list the item.
 struct DetailsSection: View {
     let item: Item
+    /// Puts the item in a bin; nil shows the bin without a way to change it.
+    var chooseBin: (() -> Void)?
     let editSize: () -> Void
 
     var body: some View {
         DetailSection(title: "Details") {
-            LabeledRow(
-                "Storage location",
-                value: item.storageLocation.map { "\($0.label) (\($0.code))" } ?? "Not set",
-            )
-            .accessibilityIdentifier("item.storage")
+            binRow
             if let brand = item.details.brand {
                 LabeledRow("Brand", value: brand)
             }
@@ -50,5 +48,44 @@ struct DetailsSection: View {
                     .padding(.top, Spacing.xxs)
             }
         }
+    }
+}
+
+extension DetailsSection {
+    /// "Bin  B-12 · Garage shelf 3", which opens the bin picker; "Put in a bin" when it is in none.
+    @ViewBuilder
+    private var binRow: some View {
+        let value = item.storageLocation.map { bin in
+            bin.label == bin.code ? bin.code : "\(bin.code) · \(bin.label)"
+        }
+        if let chooseBin {
+            Button(action: chooseBin) {
+                HStack(spacing: Spacing.xs) {
+                    LabeledRow("Bin", value: value ?? "Put in a bin")
+                    Image(systemName: "chevron.forward")
+                        .font(Typography.smallEmphasis)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Bin, \(value ?? "none")")
+            .accessibilityHint("Scan a bin sticker or pick a bin")
+            .accessibilityIdentifier("item.storage")
+        } else {
+            LabeledRow("Bin", value: value ?? "None")
+                .accessibilityIdentifier("item.storage")
+        }
+    }
+}
+
+extension BinRequest {
+    /// Putting this item in a bin, from the bin it is in.
+    init(_ item: Item) {
+        self.init(
+            itemIDs: [item.id],
+            current: item.storageLocation.map { BinChoice(id: $0.id, code: $0.code) },
+        )
     }
 }
