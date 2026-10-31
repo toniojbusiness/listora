@@ -37,6 +37,8 @@ final class ScanRunModel {
     private let saveDraft: ScanDraftSaver
     private let directory: URL
     let now: () -> Date
+    /// How long a card is on screen before its web research is asked for.
+    let researchDwell: Duration
     let log = Logger(subsystem: "com.listora.app", category: "scan")
     private var serverRun: Task<String, any Error>?
     private let createRunKey = UUID().uuidString.lowercased()
@@ -53,6 +55,11 @@ final class ScanRunModel {
     /// The longest the tag text reading may hold up a read; past it the read goes without.
     static let tagReadDeadline: Duration = .milliseconds(400)
     static let tagCloseUpReadDeadline: Duration = .milliseconds(900)
+    /// How long a card is on screen before its item is looked up on the web. At the bins most
+    /// items are skipped within a second or two of their card, by shooting the next one; a
+    /// lookup costs about $0.02, so only a card the seller is still looking at gets one. A card
+    /// picked again in the tray is looked up at once.
+    static let defaultResearchDwell: Duration = .seconds(2)
 
     init(
         service: any ScanService,
@@ -63,6 +70,7 @@ final class ScanRunModel {
         comparisons: (any MarketComparisons)? = nil,
         comparing marketplaces: [String] = [],
         now: @escaping () -> Date = Date.init,
+        researchDwell: Duration = ScanRunModel.defaultResearchDwell,
     ) {
         let id = UUID().uuidString.lowercased()
         self.id = id
@@ -76,6 +84,7 @@ final class ScanRunModel {
         self.directory = directory.appending(path: id, directoryHint: .isDirectory)
         self.saveDraft = saveDraft
         self.now = now
+        self.researchDwell = researchDwell
     }
 
     /// The ``InteractionMeter`` session of the run's camera.
@@ -93,16 +102,23 @@ final class ScanRunModel {
 
     // MARK: Shooting
 
+    /// Starts the server run as the camera opens, so the first shot's read does not wait for it
+    /// and finds the connection to Listora already open.
+    func prepare() {
+        guard !isEnded, serverRun == nil else { return }
+        serverRun = makeServerRun()
+    }
+
     /// A shot from the camera: a new item (skipping the last one), or the tag close-up the seller
-    /// asked for.
-    func shoot(_ capture: Data) async {
+    /// asked for. `shotAt` is when the shutter was pressed, which the card's time counts from.
+    func shoot(_ capture: Data, shotAt: Date? = nil) async {
         guard !isEnded else { return }
         if let target = tagShotFor {
             tagShotFor = nil
             await addTag(capture, to: target)
             return
         }
-        let shotAt = now()
+        let shotAt = shotAt ?? now()
         let small: Data
         do {
             small = try await Task.detached(priority: .userInitiated) { try ScanPhotos.small(capture) }.value
@@ -155,11 +171,14 @@ final class ScanRunModel {
         }
     }
 
-    /// Shows the entry's card (a tap in the tray).
+    /// Shows the entry's card (a tap in the tray), looked up on the web now if it was not yet.
     func select(_ entryID: String) {
-        guard entries.contains(where: { $0.id == entryID }) else { return }
+        guard let entry = entries.first(where: { $0.id == entryID }) else { return }
         tagShotFor = nil
         currentID = entryID
+        if let scanID = entry.scanID {
+            startResearch(entryID, scanID: scanID)
+        }
     }
 
     func retry(_ entryID: String) async {
@@ -196,6 +215,8 @@ final class ScanRunModel {
             update(entryID) { entry in
                 entry.scanID = scan.id
                 entry.state = .read(card)
+                // A new scan of the item: the last one's research, if any, was for that one.
+                entry.research = .none
                 if first {
                     entry.cardAfter = now().timeIntervalSince(entry.shotAt)
                 }
@@ -203,7 +224,7 @@ final class ScanRunModel {
             if currentID == entryID, let haptic = card.haptic {
                 Haptics.play(haptic)
             }
-            startResearch(entryID, scanID: scan.id)
+            scheduleResearch(entryID, scanID: scan.id)
             startComparisons(entryID, scan)
             if first, let cardAfter = entries.first(where: { $0.id == entryID })?.cardAfter {
                 log.info("scan card after \(Int(cardAfter * 1000), privacy: .public) ms")
@@ -228,14 +249,18 @@ final class ScanRunModel {
         if let serverRun, let runID = try? await serverRun.value {
             return runID
         }
+        let task = makeServerRun()
+        serverRun = task
+        return try await task.value
+    }
+
+    private func makeServerRun() -> Task<String, any Error> {
         let service = service
         let key = createRunKey
         let place = place
-        let task = Task { () async throws -> String in
+        return Task { () async throws -> String in
             try await service.createSourcingRun(place: place, idempotencyKey: key)
         }
-        serverRun = task
-        return try await task.value
     }
 
     private func addTag(_ capture: Data, to entryID: String) async {

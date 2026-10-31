@@ -169,6 +169,19 @@ final class FakeTagReader: TagReader {
     }
 }
 
+/// A tag reader that takes its time and, like Vision mid-pass, does not stop when cancelled.
+struct StubbornTagReader: TagReader {
+    let takes: Duration
+
+    func read(imageData _: Data) async throws -> TagReading {
+        let seconds = Double(takes.components.seconds) + Double(takes.components.attoseconds) / 1e18
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().asyncAfter(deadline: .now() + seconds) { continuation.resume() }
+        }
+        return FakeTagReader.reading
+    }
+}
+
 /// Retries fast enough for tests, with the same shape as production.
 extension RetryPolicy {
     static let test = RetryPolicy(

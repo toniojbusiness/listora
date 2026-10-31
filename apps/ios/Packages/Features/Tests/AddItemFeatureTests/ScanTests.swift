@@ -76,11 +76,13 @@ struct ScanRunModelTests {
     private func makeRun(
         _ service: FakeScanService,
         saver: Saver = Saver(),
+        tagReader: any TagReader = FakeTagReader(),
+        researchDwell: Duration = .zero,
         comparisons: FakeComparisons? = nil,
     ) -> ScanRunModel {
         ScanRunModel(
             service: service,
-            tagReader: FakeTagReader(),
+            tagReader: tagReader,
             directory: FileManager.default.temporaryDirectory.appending(path: "scan-tests-\(UUID().uuidString)"),
             saveDraft: { photos, scan in
                 saver.kept.append(Kept(photos: photos, scan: scan))
@@ -88,6 +90,7 @@ struct ScanRunModelTests {
             },
             comparisons: comparisons,
             comparing: comparisons == nil ? [] : ["depop"],
+            researchDwell: researchDwell,
         )
     }
 

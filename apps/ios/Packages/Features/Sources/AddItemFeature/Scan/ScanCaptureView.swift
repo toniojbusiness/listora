@@ -109,6 +109,7 @@ struct ScanCaptureView: View {
         .motion(Motion.snappy, value: run.confirmation)
         .measuresInteraction(meter, session: run.meterSession)
         .task {
+            run.prepare()
             do {
                 try await camera.start()
             } catch CameraError.accessDenied {
@@ -256,6 +257,7 @@ struct ScanCaptureView: View {
     /// next item at once.
     private func takePhoto() async {
         isTakingPhoto = true
+        let pressedAt = Date()
         let data: Data
         do {
             data = try await camera.capture()
@@ -267,7 +269,7 @@ struct ScanCaptureView: View {
         isTakingPhoto = false
         flash()
         Haptics.play(.tap)
-        await run.shoot(data)
+        await run.shoot(data, shotAt: pressedAt)
     }
 
     private func flash() {

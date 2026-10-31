@@ -1,10 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { describe, expect, it, vi } from 'vitest';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import {
   AnthropicProvider,
   buildParams,
+  outputJsonSchema,
   toProviderError,
   type AnthropicMessagesApi,
 } from './anthropic-provider.ts';
@@ -130,6 +132,12 @@ describe('AnthropicProvider request', () => {
     expect(Object.keys(params).sort()).toEqual(
       ['max_tokens', 'messages', 'model', 'output_config', 'system'].sort(),
     );
+  });
+
+  it('turns thinking off only for a call that asks for it', () => {
+    expect(buildParams(REQUEST)).not.toHaveProperty('thinking');
+    expect(buildParams({ ...REQUEST, thinking: 'adaptive' })).not.toHaveProperty('thinking');
+    expect(buildParams({ ...REQUEST, thinking: 'off' }).thinking).toEqual({ type: 'disabled' });
   });
 
   it('passes the caller abort signal to the SDK', async () => {
@@ -368,4 +376,75 @@ describe.skipIf(apiKey === '')('AnthropicProvider live smoke test', () => {
     expect(result.costMicros).toBeGreaterThan(0);
     expect(store.events).toHaveLength(1);
   }, 90_000);
+});
+
+/** A schema with its enums gone, whether kept as `enum` or relaxed into the description. */
+function withoutEnums(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withoutEnums);
+  if (typeof node !== 'object' || node === null) return node;
+  const copy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'enum') continue;
+    if (key === 'description' && typeof value === 'string') {
+      const text = value.replace(/(\n\n)?\{enum: \[[^\]]*\]\}$/, '');
+      if (text !== '') copy[key] = text;
+      continue;
+    }
+    copy[key] = withoutEnums(value);
+  }
+  return copy;
+}
+
+describe('outputJsonSchema', () => {
+  const sizes = z
+    .object({
+      size: z.enum(['', 's', 'm', 'l']).describe('The size'),
+      fit: z.enum(['slim', 'loose']),
+      nested: z.object({ tone: z.enum(['warm', 'cool']) }).strict(),
+      label: z.string().max(20),
+      tags: z.array(z.enum(['new', 'used'])),
+    })
+    .strict();
+
+  it("matches the SDK helper's schema for an output that does not ask for strict enums", () => {
+    for (const schema of [sizes, COLOR_OUTPUT.schema]) {
+      expect(outputJsonSchema({ name: 'x', schema })).toEqual(zodOutputFormat(schema).schema);
+    }
+  });
+
+  it('keeps every string enum, and only the enums, with strictEnums', () => {
+    const helper = zodOutputFormat(sizes).schema as Record<string, unknown>;
+    const strict = outputJsonSchema({ name: 'x', schema: sizes, strictEnums: true });
+    const enums: unknown[] = [];
+    const descriptions: unknown[] = [];
+    JSON.stringify(strict, (key, value: unknown) => {
+      if (key === 'enum') enums.push(value);
+      if (key === 'description') descriptions.push(value);
+      return value;
+    });
+    expect(enums).toEqual(
+      expect.arrayContaining([
+        ['', 's', 'm', 'l'],
+        ['slim', 'loose'],
+        ['warm', 'cool'],
+        ['new', 'used'],
+      ]),
+    );
+    expect(enums).toHaveLength(4);
+    // The enums left the descriptions; the other relaxed keywords stay there, as the helper puts them.
+    expect(descriptions).toContain('The size');
+    expect(descriptions.some((text) => String(text).includes('{maxLength: 20}'))).toBe(true);
+    expect(descriptions.some((text) => String(text).includes('enum'))).toBe(false);
+    // Apart from the enums, the schema is the helper's.
+    expect(withoutEnums(strict)).toEqual(withoutEnums(helper));
+  });
+
+  it('sends the strict schema on the wire', () => {
+    const output = { name: 'sizes', schema: sizes, strictEnums: true };
+    const params = buildParams({ ...REQUEST, output });
+    expect(params.output_config?.format).toEqual({
+      type: 'json_schema',
+      schema: outputJsonSchema(output),
+    });
+  });
 });
