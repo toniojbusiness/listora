@@ -2333,6 +2333,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/pack-check/orders/{saleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get one sale's package
+         * @description One sale's order as Pack check sees it, for the sale's own screen: its items, label, and
+         *     whether it is packed (when, and how it matched). Any of the account's sales, packed or
+         *     not, also once it is off the to-ship list; whether it still needs shipping is the sale's
+         *     own status. A sale that isn't the account's, or whose package is past buyer data
+         *     retention, is `404`. Only reads; no marketplace call.
+         */
+        get: operations["getPackOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pack-check/orders/{saleId}/pack": {
         parameters: {
             query?: never;
@@ -10511,6 +10537,30 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getPackOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackOrder"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
     };

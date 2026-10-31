@@ -8,7 +8,7 @@ import SalesFeature
 import SwiftUI
 
 /// The Sales tab, and Pack check's place in the app (docs/features/pack-check.md): Sales > Pack
-/// orders, and the item screen's sticker.
+/// orders, a sale's "Pack this order", and the item screen's sticker.
 extension AppDependencies {
     static func makePackCheck(
         _ apiClient: APIClient,
@@ -41,7 +41,7 @@ extension AppDependencies {
     ) -> SalesEnvironment {
         let sales = SalesEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
-            packOrders: packCheck.ordersEntry,
+            packOrders: packCheck.ordersEntry, salePacking: packCheck.salePackEntry,
         )
         sales.phoneProgress = phone.runner
         return sales
@@ -56,6 +56,15 @@ extension PackCheckEnvironment {
             isShown: { [settings] in settings.isEnabled },
             screen: { [self] in AnyView(ordersScreen()) },
             refresh: { [self] in await refreshSetting() },
+        )
+    }
+
+    /// A sale's screen: "Pack this order" while Pack check is on, and its package once packed.
+    var salePackEntry: SalePackEntry {
+        SalePackEntry(
+            isOn: { [settings] in settings.isEnabled },
+            order: { [self] saleID async throws(APIFailure) in try await saleOrder(saleID: saleID) },
+            packScreen: { [self] order, onClose in AnyView(salePackScreen(order, onClose: onClose)) },
         )
     }
 

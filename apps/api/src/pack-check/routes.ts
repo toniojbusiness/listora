@@ -76,6 +76,12 @@ export function registerPackCheckRoutes(
     };
   });
 
+  // One sale's package, for the sale's own screen: packed or not, also once off the list.
+  contractRoute(app, deps, 'getPackOrder', async ({ tenant, db, params }) => ({
+    status: 200,
+    body: await oneView(db, tenant, deps, params.saleId, deps.now()),
+  }));
+
   contractRoute(app, deps, 'refreshPackLabels', async ({ tenant, db }) => {
     const queued = await queueLabelReads(db, { accountId: tenant.accountId, now: deps.now() });
     const reading = queued.filter((read) => read.where === 'phone');

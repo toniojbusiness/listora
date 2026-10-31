@@ -1161,6 +1161,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/pack-check/scan`.
     /// - Remark: Generated from `#/paths//v1/pack-check/scan/get(checkPackScan)`.
     func checkPackScan(_ input: Operations.CheckPackScan.Input) async throws -> Operations.CheckPackScan.Output
+    /// Get one sale's package
+    ///
+    /// One sale's order as Pack check sees it, for the sale's own screen: its items, label, and
+    /// whether it is packed (when, and how it matched). Any of the account's sales, packed or
+    /// not, also once it is off the to-ship list; whether it still needs shipping is the sale's
+    /// own status. A sale that isn't the account's, or whose package is past buyer data
+    /// retention, is `404`. Only reads; no marketplace call.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/orders/{saleId}`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/get(getPackOrder)`.
+    func getPackOrder(_ input: Operations.GetPackOrder.Input) async throws -> Operations.GetPackOrder.Output
     /// Pack an order
     ///
     /// Records that the scanned label went on this order's package. The scan is checked again:
@@ -3420,6 +3432,26 @@ extension APIProtocol {
     ) async throws -> Operations.CheckPackScan.Output {
         try await checkPackScan(Operations.CheckPackScan.Input(
             query: query,
+            headers: headers
+        ))
+    }
+    /// Get one sale's package
+    ///
+    /// One sale's order as Pack check sees it, for the sale's own screen: its items, label, and
+    /// whether it is packed (when, and how it matched). Any of the account's sales, packed or
+    /// not, also once it is off the to-ship list; whether it still needs shipping is the sale's
+    /// own status. A sale that isn't the account's, or whose package is past buyer data
+    /// retention, is `404`. Only reads; no marketplace call.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/pack-check/orders/{saleId}`.
+    /// - Remark: Generated from `#/paths//v1/pack-check/orders/{saleId}/get(getPackOrder)`.
+    public func getPackOrder(
+        path: Operations.GetPackOrder.Input.Path,
+        headers: Operations.GetPackOrder.Input.Headers = .init()
+    ) async throws -> Operations.GetPackOrder.Output {
+        try await getPackOrder(Operations.GetPackOrder.Input(
+            path: path,
             headers: headers
         ))
     }

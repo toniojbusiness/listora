@@ -3316,6 +3316,31 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/pack-check/orders/{saleId}:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    get:
+      tags:
+        - pack-check
+      operationId: getPackOrder
+      summary: Get one sale's package
+      description: |
+        One sale's order as Pack check sees it, for the sale's own screen: its items, label, and
+        whether it is packed (when, and how it matched). Any of the account's sales, packed or
+        not, also once it is off the to-ship list; whether it still needs shipping is the sale's
+        own status. A sale that isn't the account's, or whose package is past buyer data
+        retention, is `404`. Only reads; no marketplace call.
+      responses:
+        '200':
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/pack-check/orders/{saleId}/pack:
     parameters:
       - $ref: '#/components/parameters/SaleId'

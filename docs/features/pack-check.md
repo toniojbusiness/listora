@@ -10,8 +10,8 @@ Code: `packages/pack-check` (the scan rules, the to-ship list, packing, label re
 label prints, the setting), `packages/automation/src/label-reads` and each marketplace's
 `labels` script (the reads themselves), `apps/api/src/pack-check`, the activity timeline's
 `package` entries (`packages/activity`), and the iPhone's `PackCheckFeature` (with the "Print
-sticker" button in `InventoryFeature`, "Pack orders" in `SalesFeature`, and the package photo in
-the sale's "How Listora found it").
+sticker" button in `InventoryFeature`, "Pack orders" and the sale screen's "Pack this order" in
+`SalesFeature`, and the package photo in the sale's "How Listora found it").
 
 ## How it works, for the seller
 
@@ -45,6 +45,28 @@ stays on the list for a day, so a packing session shows what it packed. `labelSt
 `packStatus` are the server's words ("USPS •••• 8490 (from Depop)", "Packed 12 minutes ago
 (label and sticker matched)"); the app shows them as given. The app opens it from Sales >
 Pack orders (shown while Pack check is on) and from Settings > Pack check.
+
+## On the sale's screen
+
+While Pack check is on, a sale's own screen (from Sales or from the item) packs its order:
+
+- **Still to ship** (the sale offers Mark shipped): "Pack this order" is the main step, and Mark
+  shipped is one of the steps below it. It opens the same packing flow as Pack orders, for this
+  order alone: scan the label (and the item's sticker), with the order's "Print label and
+  stickers" (or Print sticker, or Open label) above the scan, as in every packing session.
+- **Packed**: a Package section says when and how, in the server's words ("Packed 12 minutes
+  ago (label and sticker matched)", or "Check this package" when the marketplace shows another
+  label), with its label and whether a package photo is kept; Mark shipped is the main step
+  again. "Open package" opens the flow on its package (the photo, the packing slip, unpack).
+- **No package** (Pack check has none for the sale: past buyer data retention), or a sale already
+  shipped, canceled, or returned: the screen's steps are as with Pack check off.
+
+With Pack check off, the screen is as before: Mark shipped is the main step. The order comes
+from `getPackOrder`, any of the account's sales, packed or not, also after its day on the
+to-ship list. While it loads, or when it couldn't, the screen still offers Pack this order, which
+reads it again first and says why when it still can't (`SaleSteps`, `SalePackModel`). The app
+reaches the flow through `SalePackEntry` in `SalesFeature`, which `AppDependencies` builds from
+`PackCheckEnvironment`.
 
 ## Reading labels
 
@@ -139,8 +161,10 @@ only with `photoCheck` (the seller compared the item with the order's photo): th
 the order's label (`source` `scan`), and a later marketplace read that shows another label
 marks the package to check again (`labelMismatch`). `unpackOrder` takes it off to pack again.
 
-The app packs one order (a card) or a batch (Pack all) in turn; ending a session names the
-orders still not packed, so none is forgotten.
+The app packs one order (a card, or the sale's "Pack this order") or a batch (Pack all) in turn;
+ending a session names the orders still not packed, so none is forgotten. A session of an order
+already packed opens on its package. Before each scan, the order's stickers and label print from
+the session too ([Printing the label](#printing-the-label)).
 
 ## Item stickers
 
@@ -151,12 +175,13 @@ an import makes one like any new item), so every item has a sticker. It prints f
 
 - **The item's screen**: "Print sticker", right under the item's name while Pack check is on
   (below Money while it is off), and offered once just after listing while Pack check is on.
-- **Pack orders**: "Print sticker" (or "Print 3 stickers") under each order, for its items.
+- **Pack orders**: "Print sticker" (or "Print 3 stickers") under each order, for its items, and
+  in its packing session.
 - **With the order's label** ([Printing the label](#printing-the-label)).
 
 ## Printing the label
 
-Under each order in Pack orders, "Print label and stickers" prints the order's shipping label
+Under each order in Pack orders, and in its packing session, "Print label and stickers" prints the order's shipping label
 and a sticker for each of its items in one AirPrint job: the label's own pages, then the
 stickers (2.25 × 1.25 in, up to four, with cut lines) on pages of the label's size, so a label
 printer prints both on the same roll (`LabelPrintJob`). The label and the stickers that come out
@@ -263,15 +288,20 @@ scanned-label fixtures are in `@listora/pack-check/testing`.
   (`depop/adapter.int.test.ts`); and the pages' parsers, Depop's from invented receipts in the
   real shape: a bundle, a refunded order whose parcel waits, several parcels, no label yet
   (`label-reads/parsers.test.ts`).
-- `apps/api/src/pack-check/pack-check.int.test.ts` also: a history order listed only once its
+- `apps/api/src/pack-check/pack-check.int.test.ts` also: one sale's order (`getPackOrder`) not
+  packed, packed, and still after its day on the list, and another account's `404`; a history order listed only once its
   page says it waits to ship, refunded and shipped orders never listed, and a bundle packed once.
-- iPhone: `PackCheckFeatureTests` (sessions, the double print, the end-of-session summary, retries,
+- iPhone: `SalePackTests` (the sale screen's steps with Pack check off, an order to pack, packed,
+  loading or failed, none, and shipped; the package loading and keeping what it shows on a failed
+  refresh) and `SalePackingTests` (one sale's order, a packed order opening on its package, a
+  print in the session), `PackCheckFeatureTests` (sessions, the double print, the end-of-session summary, retries,
   settings, stickers, slips, the photo's metadata; and `LabelPrintTests`: the label and the
   order's stickers in one job, asking before a second print, a failed download, a canceled
   print, a print recorded once on a retry, the download's session, hosts, and answers) and
   `PackCheckUITests` (the whole flow on the local stack with scanned-label fixtures; how it works,
-  each order's print actions, the label printed then asked about again, and the item screen's
-  sticker on its first screen).
+  each order's print actions, the label printed then asked about again, the item screen's
+  sticker on its first screen, and a sale packed from its own screen: Pack this order over Mark
+  shipped, then its packed state).
 - Label printing on the server: `pack-check.int.test.ts` (the label's file and the order's page,
   prints counted, a new label starting over, a stale or closed order refused, tenancy),
   `label-reads/parsers.test.ts` (which parcel fields name the file, only on Depop's site), and
