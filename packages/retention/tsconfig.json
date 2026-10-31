@@ -11,6 +11,7 @@
     { "path": "../db" },
     { "path": "../connections" },
     { "path": "../operations" },
+    { "path": "../sales" },
     { "path": "../testing" }
   ]
 }

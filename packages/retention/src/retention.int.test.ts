@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import { createInventoryItem, jsonb, type Db } from '@listora/db';
+import { createInventoryItem, inTransaction, jsonb, type Db } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
+import { changeSale } from '@listora/sales';
 import { createLogger } from '@listora/shared';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -565,6 +566,93 @@ describe('data retention job (real Postgres)', () => {
       packageTracking: 0,
       offerBuyers: 0,
     });
+  });
+
+  it("counts an imported sale's 60 days from the marketplace's dates, not from the import", async () => {
+    const { accountId } = await account();
+    const days = RETENTION_DAYS.saleLabelBuyers;
+    /** Imports a sale from the sales history: recorded, and in the same transaction, done. */
+    const imported = async (
+      soldAt: Date,
+      options: { shipBy?: Date; done?: 'mark_shipped' | 'cancel' | null } = {},
+    ) => {
+      const id = await inTransaction(db, async (trx) => {
+        const { id } = await trx
+          .insertInto('sale')
+          .values({
+            account_id: accountId,
+            marketplace: 'depop',
+            external_order_id: randomUUID(),
+            sold_at: soldAt,
+            ship_by: options.shipBy ?? null,
+            detection_source: 'history',
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        const done = options.done === undefined ? 'mark_shipped' : options.done;
+        if (done !== null) {
+          await changeSale(trx, { accountId, saleId: id, action: done, userId: null });
+        }
+        return id;
+      });
+      await db
+        .insertInto('sale_label')
+        .values({
+          account_id: accountId,
+          sale_id: id,
+          tracking_number: `9400${randomUUID().replaceAll('-', '').slice(0, 18).toUpperCase()}`,
+          carrier: 'usps',
+          source: 'marketplace',
+          buyer_first_name: 'Jordan',
+        })
+        .execute();
+      return id;
+    };
+    // Shipped or canceled on the marketplace long before the import: the count started then.
+    const soldLongAgo = await imported(ago(days + 5));
+    const canceledLongAgo = await imported(ago(days + 5), { done: 'cancel' });
+    // Sold within the 60 days: kept, though the import is today.
+    const soldRecently = await imported(ago(days - 5));
+    // Sold long ago but due to ship only within the 60 days: counted from its ship-by date.
+    const shipByRecently = await imported(ago(days + 30), { shipBy: ago(days - 1) });
+    // Found waiting to ship, and shipped since: Listora saw it ship, so the count starts then.
+    const shippedSince = await imported(ago(days + 5), { done: null });
+    await changeSale(db, { accountId, saleId: shippedSince, action: 'mark_shipped', userId: null });
+    // Shipped before the import and returned since: the count starts again at the return.
+    const returnedSince = await imported(ago(days + 5));
+    await changeSale(db, {
+      accountId,
+      saleId: returnedSince,
+      action: 'record_return',
+      userId: null,
+    });
+
+    const off = await runDataRetention({ db, logger });
+    expect(off.buyerDataWouldClear).toMatchObject({ saleLabelBuyers: 2 });
+    await runDataRetention({ db, logger, buyerData: 'on' });
+    const labels = await db
+      .selectFrom('sale_label')
+      .select(['sale_id', 'buyer_first_name', 'tracking_number'])
+      .where('account_id', '=', accountId)
+      .execute();
+    const kept = Object.fromEntries(
+      labels.map((label) => [label.sale_id, label.buyer_first_name !== null]),
+    );
+    expect(kept).toEqual({
+      [soldLongAgo]: false,
+      [canceledLongAgo]: false,
+      [soldRecently]: true,
+      [shipByRecently]: true,
+      [shippedSince]: true,
+      [returnedSince]: true,
+    });
+    // What the seller sees of the sale is unchanged: shipped when Listora recorded it shipped.
+    const sale = await db
+      .selectFrom('sale')
+      .select(['shipped_at', 'created_at'])
+      .where('id', '=', soldLongAgo)
+      .executeTakeFirstOrThrow();
+    expect(sale.shipped_at).toEqual(sale.created_at);
   });
 
   it('works off a backlog in batches, a bounded amount per run', async () => {
