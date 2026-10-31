@@ -103,8 +103,8 @@ struct ScanOfflineTests {
             connectivity: connectivity,
             queue: queue,
             kit: { testKit() },
-            saveDraft: { _, scanID in
-                saver.kept.append(scanID)
+            saveDraft: { _, scan in
+                saver.kept.append(scan?.scanID)
                 return "draft-\(saver.kept.count)"
             },
         )

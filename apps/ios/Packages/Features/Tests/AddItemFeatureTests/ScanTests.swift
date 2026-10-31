@@ -127,8 +127,8 @@ struct ScanRunModelTests {
         let kept = try #require(saver.kept.first)
         #expect(kept.scanID == first.scanID)
         // The draft knows its run and what the scan read, for Shoot this run.
-        #expect(kept.scan.runID == run.id)
-        #expect(kept.scan.title == first.card?.title)
+        #expect(kept.scan?.runID == run.id)
+        #expect(kept.scan?.title == first.card?.title)
         // The draft gets the upload-sized photo of the shot.
         #expect(kept.photos.map(\.1) == [.front])
         #expect(kept.photos.first.map { max($0.0.width, $0.0.height) } == 1600)
