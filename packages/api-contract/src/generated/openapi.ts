@@ -2937,8 +2937,9 @@ export interface paths {
          *     unsold. A few KB, read once while online so the app can look a brand up at the store with
          *     no signal. Only real sales count: sales that stand (not canceled or returned), from the
          *     last `windowDays`, on marketplaces whose sales history is on for the account (it passed
-         *     live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
-         *     never calls a marketplace or AI.
+         *     live, or the account is in Test mode). Without such sales `buckets` is empty. `insights`
+         *     is the same sales and the stock read as advice: the brand and item type pairs that sell
+         *     best and worst, and what to look for. Computing it never calls a marketplace or AI.
          */
         get: operations["getSourcingKit"];
         put?: never;
@@ -6938,6 +6939,86 @@ export interface components {
              *     category groups, the ones with the fewest sales first.
              */
             buckets: components["schemas"]["OwnSalesBucket"][];
+            insights: components["schemas"]["SourcingInsights"];
+        };
+        /**
+         * @description "What sells for you" (docs/features/thrift-scan.md, "Sourcing insights"): the household's
+         *     brand and item type pairs that sell best and worst, by sell-through and days to sell, and
+         *     the short "Look for" list for the bins. Always a brand with a category, never a brand alone:
+         *     a brand's leggings and its jackets sell differently. Every number is the seller's own sales
+         *     and stock; each list is empty without enough of them.
+         */
+        SourcingInsights: {
+            /**
+             * Format: int32
+             * @description The sales with a brand and category the insights rest on.
+             */
+            soldCount: number;
+            /**
+             * Format: int32
+             * @description Those of them with a known day count: the item was listed through Listora. An imported
+             *     listing's date is when Listora read it, so it never counts.
+             */
+            daysToSellCount: number;
+            /**
+             * @description The best sellers whose median payout is worth buying for (`call.worthListing`), best
+             *     first: the short list to look for at the bins.
+             */
+            lookFor: components["schemas"]["SourcingInsightGroup"][];
+            /**
+             * @description The pairs that sell best: at least half of them sold and a median under 90 days to
+             *     sell where known; the highest sell-through first, then the fastest, then the most sold.
+             */
+            best: components["schemas"]["SourcingInsightGroup"][];
+            /**
+             * @description The pairs that sell worst: under half of them sold, or a median of 90 days or more to
+             *     sell; the lowest sell-through first, then the slowest, then the most left unsold.
+             */
+            worst: components["schemas"]["SourcingInsightGroup"][];
+        };
+        /**
+         * @description One brand and item type pair, from at least 3 of the household's items: sold in the
+         *     window, or still in stock and added at least 30 days ago.
+         */
+        SourcingInsightGroup: {
+            /** @description The brand as the household's items spell it most often. */
+            brand: string;
+            /** @description The brand's match key (`OwnSalesBucket.brandKey`). */
+            brandKey: string;
+            /** @description The canonical category path (`ItemDetails.category`), the item type. */
+            category: string;
+            /**
+             * Format: int32
+             * @description Items sold in the window (a bundle's items each count).
+             */
+            soldCount: number;
+            /**
+             * Format: int32
+             * @description Items in stock (ready or listed) added at least 30 days ago, so given time to sell.
+             */
+            unsoldCount: number;
+            /**
+             * Format: int32
+             * @description Every item of the pair in stock now (ready or listed), however new.
+             */
+            inStockCount: number;
+            /**
+             * Format: int32
+             * @description `soldCount` over `soldCount` plus `unsoldCount`, in basis points.
+             */
+            sellThroughBasisPoints: number;
+            /**
+             * Format: int32
+             * @description Whole days from the item's first listing through Listora to its sale, the median over
+             *     the sales that have one. Absent with fewer than 2 such sales.
+             */
+            medianDaysToSell?: number;
+            /**
+             * @description The median of what the sales paid out after each marketplace's estimated fees, as the
+             *     scan's call works payouts out; not eBay's, which are display only. An estimate. Absent
+             *     without such sales.
+             */
+            medianPayout?: components["schemas"]["Money"];
         };
         /**
          * @description The call's thresholds, so the app makes the scan's history-only call with no signal by
@@ -8146,6 +8227,8 @@ export type KnownAppFeature = components['schemas']['KnownAppFeature'];
 export type TestMode = components['schemas']['TestMode'];
 export type TestModeReplace = components['schemas']['TestModeReplace'];
 export type SourcingKit = components['schemas']['SourcingKit'];
+export type SourcingInsights = components['schemas']['SourcingInsights'];
+export type SourcingInsightGroup = components['schemas']['SourcingInsightGroup'];
 export type SourcingKitCall = components['schemas']['SourcingKitCall'];
 export type OwnSalesBucket = components['schemas']['OwnSalesBucket'];
 export type OwnSalesOnMarketplace = components['schemas']['OwnSalesOnMarketplace'];

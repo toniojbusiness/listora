@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import SwiftUI
 
@@ -36,12 +37,18 @@ struct ScanActions: View {
     }
 }
 
-/// Scan mode's section above the drafts: the run going on, or the last run's summary once it
-/// was checked out.
+/// Scan mode's sections above the drafts: "What sells for you", then the run going on, or the
+/// last run's summary once it was checked out.
 struct ScanRunSection: View {
     let model: AddItemModel
 
     var body: some View {
+        if let scanRuns = model.scanRuns {
+            Section {
+                SourcingInsightsLink(kit: scanRuns.kit)
+            }
+            .listRowBackground(Palette.surface.color)
+        }
         if let run = model.scanRun, !run.entries.isEmpty {
             Section {
                 ScanRunRow(run: run)
@@ -143,6 +150,8 @@ struct ScanSheets: ViewModifier {
         case .start:
             ScanStartView(
                 recentPlaces: model.recentPlaces.sources,
+                kit: model.scanRuns?.kit,
+                refreshKit: { await model.scanRuns?.refreshKit() },
                 onStart: { place in
                     cameraAfterSheet = model.startScanRun(in: environment, place: place).map { .scan($0) }
                     self.sheet = nil

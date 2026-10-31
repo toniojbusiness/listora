@@ -115,6 +115,48 @@ export const GOLDEN_KIT: SourcingKit = {
       forCall: forCall(3, 900, 4000, 700, 3500),
     },
   ],
+  // The offline call never reads the insights; the app shows them as they are.
+  insights: {
+    soldCount: 12,
+    daysToSellCount: 4,
+    lookFor: [
+      {
+        brand: 'Lululemon',
+        brandKey: 'lululemon',
+        category: 'clothing/bottoms/leggings',
+        soldCount: 5,
+        unsoldCount: 1,
+        inStockCount: 2,
+        sellThroughBasisPoints: 8333,
+        medianDaysToSell: 9,
+        medianPayout: usd(2100),
+      },
+    ],
+    best: [
+      {
+        brand: 'Lululemon',
+        brandKey: 'lululemon',
+        category: 'clothing/bottoms/leggings',
+        soldCount: 5,
+        unsoldCount: 1,
+        inStockCount: 2,
+        sellThroughBasisPoints: 8333,
+        medianDaysToSell: 9,
+        medianPayout: usd(2100),
+      },
+    ],
+    worst: [
+      {
+        brand: 'Coach',
+        brandKey: 'coach',
+        category: 'bags/handbags',
+        soldCount: 0,
+        unsoldCount: 3,
+        inStockCount: 3,
+        sellThroughBasisPoints: 0,
+      },
+    ],
+  },
 };
 
 export interface OfflineCallCase {

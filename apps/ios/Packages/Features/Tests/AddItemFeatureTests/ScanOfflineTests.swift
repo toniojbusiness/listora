@@ -73,6 +73,28 @@ func testKit() -> SourcingKit {
                 ),
             ),
         ],
+        insights: .init(
+            soldCount: 5,
+            daysToSellCount: 3,
+            lookFor: [testInsightGroup()],
+            best: [testInsightGroup()],
+            worst: [],
+        ),
+    )
+}
+
+/// Acme's jeans: 5 of 6 sold, in about 9 days, paying out about $22.
+func testInsightGroup() -> SourcingKit.InsightGroup {
+    SourcingKit.InsightGroup(
+        brand: "Acme",
+        brandKey: "acme",
+        category: "clothing/bottoms/jeans",
+        soldCount: 5,
+        unsoldCount: 1,
+        inStockCount: 2,
+        sellThroughBasisPoints: 8333,
+        medianDaysToSell: 9,
+        medianPayout: SourcingKit.Money(amountCents: 2210),
     )
 }
 

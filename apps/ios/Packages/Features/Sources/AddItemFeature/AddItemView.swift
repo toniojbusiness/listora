@@ -68,6 +68,7 @@ struct DraftListView: View {
                                     run: model.scanRun,
                                     lastRun: model.lastRunSummary,
                                     isTesting: environment.features?.isTesting(.thriftScan) == true,
+                                    kit: model.scanRuns?.kit,
                                 )
                             }
                         }
@@ -116,6 +117,10 @@ struct DraftListView: View {
                 case let .runReview(request):
                     environment.batchReviewDestination?(request) { event in
                         finishRunReview(event)
+                    }
+                case .sourcingInsights:
+                    if let scanRuns = model.scanRuns {
+                        SourcingInsightsView(kit: scanRuns.kit) { await scanRuns.refreshKit() }
                     }
                 }
             }

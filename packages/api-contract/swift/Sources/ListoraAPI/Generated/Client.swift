@@ -17182,8 +17182,9 @@ public struct Client: APIProtocol {
     /// unsold. A few KB, read once while online so the app can look a brand up at the store with
     /// no signal. Only real sales count: sales that stand (not canceled or returned), from the
     /// last `windowDays`, on marketplaces whose sales history is on for the account (it passed
-    /// live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
-    /// never calls a marketplace or AI.
+    /// live, or the account is in Test mode). Without such sales `buckets` is empty. `insights`
+    /// is the same sales and the stock read as advice: the brand and item type pairs that sell
+    /// best and worst, and what to look for. Computing it never calls a marketplace or AI.
     ///
     ///
     /// - Remark: HTTP `GET /v1/sourcing/kit`.

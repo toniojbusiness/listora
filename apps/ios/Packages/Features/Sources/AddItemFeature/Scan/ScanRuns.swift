@@ -68,6 +68,13 @@ final class ScanRuns {
         }
     }
 
+    /// Refreshes the sourcing kit when there is signal, for "What sells for you" before a run
+    /// starts: the seller asked for it, so they are signed in.
+    func refreshKit() async {
+        guard dependencies.connectivity?.isOnline != false else { return }
+        await kit.refresh(from: dependencies.service)
+    }
+
     /// Reads every waiting scan of every run, and refreshes the kit for the run going on, when
     /// there is signal. With no run it asks Listora nothing: the seller may not be signed in, or
     /// scan at all.

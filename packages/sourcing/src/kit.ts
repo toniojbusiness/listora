@@ -1,8 +1,8 @@
 /**
  * The sourcing kit (`GET /v1/sourcing/kit`): the household's own sales grouped by brand, then
  * brand and category, then brand, category, and size, so the iPhone can look a tag's brand up at
- * the store with no signal (docs/features/thrift-scan.md). Pure: the API loads the sales that
- * count and the unsold items.
+ * the store with no signal, and the same sales read as advice (`insights`, "What sells for you")
+ * (docs/features/thrift-scan.md). Pure: the API loads the sales that count and the unsold items.
  */
 import {
   knownMarketplaceValues,
@@ -16,6 +16,7 @@ import { estimateFeesCents, feeTableFor, OWN_SALES_MAY_MODEL_PRICES } from '@lis
 
 import { brandKey } from './brand.ts';
 import { DEFAULT_SCAN_CALL_SETTINGS, type ScanCallSettings } from './call.ts';
+import { buildSourcingInsights } from './insights.ts';
 import { OWN_HISTORY_WINDOW_DAYS, payoutMarketplaceOf, type OwnSale } from './own-history.ts';
 import { sizeBucket } from './size.ts';
 import { medianCents, quartiles } from './stats.ts';
@@ -119,6 +120,7 @@ export function buildSourcingKit(input: SourcingKitInput): SourcingKit {
       minComparisons: settings.minComparisons,
     },
     buckets: kept.map((group) => bucketView(group, spellings.get(group.brandKey), input.now, fees)),
+    insights: buildSourcingInsights({ ...input, fees, settings }),
   };
 }
 

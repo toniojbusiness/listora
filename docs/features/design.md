@@ -206,6 +206,8 @@ are in [design/hangtag-screens/](design/hangtag-screens/).
   - **The scan card** ([thrift-scan.md](thrift-scan.md)): a tag lying on its side over the
     live camera, the call stamped on it in its tone (Buy green, Your call amber, Skip red), the
     price range in Fraunces, and the run's tray of shots along the bottom, each with its call.
+    "What sells for you" puts the "Look for" list on a tag stamped "Look for", the pairs in
+    Fraunces, and the best and slowest sellers ruled under it.
   - **Sales**: all the seller's sales on a price tag lying on its side, the total in Fraunces,
     and each marketplace on the tag's string, a bead each with its own sales (filled where it
     sold, a dashed bead on a loose string where it hasn't yet), never ranked
