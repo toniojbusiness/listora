@@ -151,6 +151,7 @@ struct ScanCard: Equatable, Sendable {
             status: status,
             label: row.label,
             askingLabel: row.asking?.label,
+            soldLabel: row.sold?.label,
             demand: row.demand?.label,
             demandBasedOn: row.demand?.basedOn,
         )
@@ -171,7 +172,7 @@ struct ScanCard: Equatable, Sendable {
             guard row.marketplace == name, row.status == .checking else { return row }
             return ScanComparisonLine(
                 marketplace: row.marketplace, status: .unavailable, label: "Couldn't check \(name)",
-                askingLabel: nil, demand: nil, demandBasedOn: nil,
+                askingLabel: nil, soldLabel: nil, demand: nil, demandBasedOn: nil,
             )
         }
         return card
@@ -263,7 +264,8 @@ struct ScanCard: Equatable, Sendable {
 }
 
 /// One marketplace's comparisons: listings like it in its public search, read logged out.
-/// Depop's are asking prices, always shown under their label; never sold prices.
+/// Depop's are asking prices, always shown under their label; never sold prices. eBay's are
+/// what close matches sold for, under theirs ("Sold listings on eBay").
 struct ScanComparisonLine: Equatable, Sendable {
     enum Status: Equatable, Sendable {
         case checking
@@ -274,10 +276,13 @@ struct ScanComparisonLine: Equatable, Sendable {
 
     let marketplace: String
     let status: Status
-    /// "Depop: asking $15-$25, 6 like it for sale", "Checking Depop...".
+    /// "Depop: asking $15-$25, 6 like it for sale", "eBay: sold $18-$30, 9 like it in the last
+    /// 14 days", "Checking Depop...".
     let label: String
     /// "Asking prices - not sold listings", with numbers only.
     let askingLabel: String?
+    /// "Sold listings on eBay", where the row's numbers are what close matches sold for.
+    let soldLabel: String?
     /// "Sells for you, little competition", and what it rests on.
     let demand: String?
     let demandBasedOn: String?

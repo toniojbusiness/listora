@@ -21,6 +21,7 @@ const COLUMNS = {
     'business_name',
     'invited_at',
     'test_mode',
+    'test_mode_granted_at',
   ],
   app_user: [
     'id',
@@ -802,6 +803,7 @@ const COLUMNS = {
     'answered_at',
     'created_at',
     'updated_at',
+    'sold_total',
   ],
   item_batch: [
     'id',

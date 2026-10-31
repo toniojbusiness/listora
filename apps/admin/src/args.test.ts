@@ -138,6 +138,26 @@ describe('parseCommand', () => {
       blocked: true,
       change: { actor: 'alice', reason: 'abuse' },
     });
+    expect(parse('test-mode-access', 'list')).toEqual({
+      name: 'test-mode-access-list',
+      json: false,
+    });
+    expect(
+      parse('test-mode-access', 'grant', '--account', ACCOUNT, '--actor', 'a', '--reason', 'r'),
+    ).toEqual({
+      name: 'test-mode-access-set',
+      accountId: ACCOUNT,
+      granted: true,
+      change: { actor: 'a', reason: 'r' },
+    });
+    expect(
+      parse('test-mode-access', 'revoke', '--account', ACCOUNT, '--actor', 'a', '--reason', 'r'),
+    ).toMatchObject({ granted: false });
+    expect(parse('account-find', '--shop', '@Some_Shop', '--json')).toEqual({
+      name: 'account-find',
+      shop: 'Some_Shop',
+      json: true,
+    });
     expect(parse('ai-audit')).toEqual({
       name: 'audit',
       accountId: undefined,
@@ -219,6 +239,12 @@ describe('parseCommand', () => {
     [['ai-block', 'on', '--actor', 'a', '--reason', 'r'], 'ai-block on needs an account id'],
     [['ai-block', 'pause', ACCOUNT], 'ai-block pause needs list, on, or off'],
     [['ai-audit', 'all'], 'ai-audit takes no arguments, got all'],
+    [['test-mode-access'], 'test-mode-access needs list, grant, or revoke'],
+    [['test-mode-access', 'grant', '--actor', 'a', '--reason', 'r'], '--account is required'],
+    [['test-mode-access', 'grant', '--account', ACCOUNT], '--actor is required'],
+    [['test-mode-access', 'grant', ACCOUNT], 'test-mode-access grant takes no arguments'],
+    [['test-mode-access', 'list', '--account', ACCOUNT], 'does not take --account'],
+    [['account-find'], '--shop is required'],
     [['ai-cost', 'accounts', '--verbose'], "Unknown option '--verbose'"],
     [['marketplace-purge'], 'marketplace-purge needs a marketplace'],
     [['marketplace-purge', 'etsy', '--mode', 'api'], 'marketplace must be one of ebay, depop'],

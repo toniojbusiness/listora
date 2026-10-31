@@ -1,6 +1,6 @@
 import { SCAN_OUTPUT_NAME, SCAN_RESEARCH_OUTPUT_NAME } from '@listora/analysis';
 import { useMarketplaceFeatures } from '@listora/marketplaces';
-import { ASKING_PRICES_LABEL, claimsSoldData } from '@listora/pricing';
+import { ASKING_PRICES_LABEL, claimsSoldData, marketSoldLabel } from '@listora/pricing';
 import { itemResearchKey } from '@listora/sourcing';
 import { photoSetHash, sha256Hex } from '@listora/shared';
 import sharp from 'sharp';
@@ -48,6 +48,23 @@ const READ = {
   },
   forSaleTotal: 40,
   ms: 900,
+};
+
+/**
+ * What the phone answers for an eBay read: nine close matches sold for $18 to $30 in the last 14
+ * days, four for sale at $25 to $35, and the searches' own counts.
+ */
+const EBAY_READ = {
+  outcome: 'read' as const,
+  stats: {
+    level: 'model_and_size' as const,
+    sold: { count: 9, lowCents: 1800, medianCents: 2400, highCents: 3000, windowDays: 14 },
+    forSale: { count: 4, lowCents: 2500, medianCents: 2900, highCents: 3500 },
+    read: { sold: 58, forSale: 60 },
+  },
+  forSaleTotal: 320,
+  soldTotal: 410,
+  ms: 2400,
 };
 
 describe('the thrift scan marketplace comparisons (real Postgres)', () => {
@@ -108,6 +125,12 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     return row;
   }
 
+  function ebayOf(scan: Awaited<ReturnType<typeof scanOf>>) {
+    const row = scan.comparisons?.find((one) => one.marketplace === 'ebay');
+    if (row === undefined) throw new Error('the scan has no eBay comparison');
+    return row;
+  }
+
   async function answerRead(scanId: string, comparisonId: string, body: unknown, as = token) {
     return api.call('saveScanComparison', {
       token: as,
@@ -116,11 +139,12 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     });
   }
 
-  async function reads() {
+  async function reads(marketplace: 'depop' | 'ebay' = 'depop') {
     return api.db
       .selectFrom('market_comparison')
       .selectAll()
       .where('account_id', '=', tenant.accountId)
+      .where('marketplace', '=', marketplace)
       .orderBy('created_at')
       .execute();
   }
@@ -141,8 +165,8 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
         typeWords: ['jeans'],
       },
     });
-    // Only Depop has a reader: no other marketplace gets a row.
-    expect(scan.comparisons?.map((one) => one.marketplace)).toEqual(['depop']);
+    // Only Depop and eBay have a reader: no other marketplace gets a row.
+    expect(scan.comparisons?.map((one) => one.marketplace)).toEqual(['depop', 'ebay']);
     const [row] = await reads();
     expect(row).toMatchObject({ status: 'pending', scan_id: scan.id, marketplace: 'depop' });
   });
@@ -237,6 +261,139 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     );
     api.clock.now += 61 * 60 * 1000;
     expect(depopOf(await scanOf(answer({ line: '517' }))).status).toBe('checking');
+  });
+
+  it('hands the phone a read of eBay by brand and type words, the model, and the size', async () => {
+    const scan = await scanOf(answer());
+    const ebay = ebayOf(scan);
+    expect(ebay).toMatchObject({ status: 'checking', label: 'Checking eBay...' });
+    expect(ebay.read?.input).toMatchObject({
+      version: 1,
+      marketplace: 'ebay',
+      query: {
+        words: 'levis 501 jeans',
+        brand: "Levi's",
+        model: '501',
+        sizeLabel: '28',
+        // eBay's results name no category: a listing's title must name the type.
+        productTypes: [],
+        typeWords: ['jeans'],
+      },
+    });
+  });
+
+  it("rests the call on eBay's sold listings, under their label, with eBay's sold pace", async () => {
+    const scan = await scanOf(answer({ line: '501', sizeLabel: '32x30' }));
+    const read = ebayOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    const answered = await answerRead(scan.id, read.id, EBAY_READ);
+    expect(answered.status).toBe(200);
+    const ebay = ebayOf(answered.body);
+    expect(ebay).toEqual({
+      marketplace: 'ebay',
+      status: 'read',
+      label: 'eBay: sold $18-$30, 9 like it in the last 14 days',
+      asking: {
+        count: 4,
+        low: { amountCents: 2500, currency: 'USD' },
+        median: { amountCents: 2900, currency: 'USD' },
+        high: { amountCents: 3500, currency: 'USD' },
+        label: ASKING_PRICES_LABEL,
+      },
+      sold: {
+        count: 9,
+        low: { amountCents: 1800, currency: 'USD' },
+        median: { amountCents: 2400, currency: 'USD' },
+        high: { amountCents: 3000, currency: 'USD' },
+        windowDays: 14,
+        label: marketSoldLabel('eBay'),
+      },
+      supply: 320,
+      cached: false,
+      demand: {
+        demand: 'strong',
+        label: 'Sells fast on eBay',
+        basedOn: 'Sold listings on eBay: 410 in the last 90 days; 320 for sale now',
+      },
+    });
+    // No sales of the household's own like it: the call rests on eBay's sold listings.
+    expect(answered.body.call).toMatchObject({
+      call: 'buy',
+      confidence: 'medium',
+      basis: 'market_sold',
+      basedOn: 'Sold listings on eBay: 9 like it in the last 14 days',
+      low: { amountCents: 1800 },
+      high: { amountCents: 3000 },
+    });
+    expect(answered.body.call.signals).toContainEqual({
+      kind: 'demand',
+      label: 'Sells fast on eBay',
+      basedOn: 'Sold listings on eBay: 410 in the last 90 days; 320 for sale now',
+    });
+    const [row] = await reads('ebay');
+    expect(row).toMatchObject({ status: 'read', for_sale_total: 320, sold_total: 410 });
+    // The same search again is answered from the read, sold listings and pace included.
+    const again = await scanOf(
+      answer({ line: '501', sizeLabel: '32x30', condition: 'new_without_tags' }),
+    );
+    expect(ebayOf(again)).toMatchObject({ status: 'read', cached: true, sold: { count: 9 } });
+    expect(again.call).toMatchObject({ basis: 'market_sold' });
+  });
+
+  it('shows eBay asking prices alone when no close match sold, and says when none match', async () => {
+    const scan = await scanOf(answer({ line: '505' }));
+    const read = ebayOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    const { level, forSale } = EBAY_READ.stats;
+    const answered = await answerRead(scan.id, read.id, {
+      ...EBAY_READ,
+      stats: { level, forSale, read: { sold: 12, forSale: 40 } },
+    });
+    expect(ebayOf(answered.body)).toMatchObject({
+      status: 'read',
+      label: 'eBay: asking $25-$35, 4 like it for sale',
+    });
+    expect(ebayOf(answered.body).sold).toBeUndefined();
+    expect(answered.body.call.basis).toBe('ai_estimate');
+
+    const none = await scanOf(answer({ line: '569' }));
+    const noneRead = ebayOf(none).read;
+    if (noneRead === undefined) throw new Error('no read');
+    const empty = await answerRead(none.id, noneRead.id, {
+      outcome: 'read',
+      // Nothing matched: the phone sends no level.
+      stats: { read: { sold: 50, forSale: 50 } },
+      forSaleTotal: 900,
+      soldTotal: 700,
+      ms: 2100,
+    });
+    expect(ebayOf(empty.body)).toMatchObject({
+      status: 'not_enough',
+      label: 'Not enough similar listings on eBay',
+    });
+  });
+
+  it("saves the last of eBay's hour for items the AI prices at $25 or more", async () => {
+    const { after } = COMPARISON_LIMITS.ebay.saveForPricier ?? { after: 0 };
+    await api.db
+      .insertInto('market_comparison')
+      .values(
+        Array.from({ length: after }, (_, index) => ({
+          account_id: tenant.accountId,
+          marketplace: 'ebay' as const,
+          query_key: index.toString(16).padStart(64, '0'),
+          query: { words: 'x' } as never,
+          created_at: new Date(api.clock.now - 60_000),
+        })),
+      )
+      .execute();
+    const cheap = answer({ priceEstimate: { lowCents: 800, midCents: 1200, highCents: 1800 } });
+    expect(ebayOf(await scanOf(cheap))).toEqual({
+      marketplace: 'ebay',
+      status: 'limit',
+      label: 'Not checked: eBay limit for this hour',
+    });
+    expect(ebayOf(await scanOf(answer())).status).toBe('checking');
   });
 
   it("stops at the hour's budget", async () => {

@@ -1,7 +1,12 @@
 import type { ItemScan } from '@listora/api-contract';
 import { describe, expect, it } from 'vitest';
 
-import { AI_ESTIMATE_LABEL, ASKING_PRICES_LABEL, scanLabelViolations } from './labels.ts';
+import {
+  AI_ESTIMATE_LABEL,
+  ASKING_PRICES_LABEL,
+  marketSoldLabel,
+  scanLabelViolations,
+} from './labels.ts';
 import { scanResearchLinks } from './research-links.ts';
 
 const usd = (amountCents: number) => ({ amountCents, currency: 'USD' as const });
@@ -111,5 +116,46 @@ describe('scanLabelViolations', () => {
       'comparisons[0].asking.label is "Depop prices"',
       'comparisons[0].label mentions sold data: "Depop: 6 sold"',
     ]);
+  });
+
+  it("lets a marketplace's sold listings speak of sold data, under their label only", () => {
+    const sold = { count: 9, low: usd(1800), median: usd(2400), high: usd(3000), windowDays: 14 };
+    const row = {
+      marketplace: 'ebay' as const,
+      status: 'read' as const,
+      label: 'eBay: sold $18-$30, 9 like it in the last 14 days',
+      demand: {
+        demand: 'strong' as const,
+        label: 'Sells fast on eBay',
+        basedOn: 'Sold listings on eBay: 410 in the last 90 days; 320 for sale now',
+      },
+    };
+    const onEbay = {
+      call: 'buy' as const,
+      label: 'Buy',
+      confidence: 'medium' as const,
+      basis: 'market_sold' as const,
+      basedOn: 'Sold listings on eBay: 9 like it in the last 14 days',
+      worthListing: usd(800),
+      signals: [{ kind: 'demand' as const, ...row.demand, label: 'Sells fast on eBay' }],
+    };
+    expect(
+      scanLabelViolations(
+        scan({
+          call: onEbay,
+          comparisons: [{ ...row, sold: { ...sold, label: marketSoldLabel('eBay') } }],
+        }),
+      ),
+    ).toEqual([]);
+    // Without a comparison's sold listings, nothing may rest on them or call itself sold.
+    expect(scanLabelViolations(scan({ call: onEbay, comparisons: [row] }))).toEqual([
+      'call.basedOn is "Sold listings on eBay: 9 like it in the last 14 days" for a marketplace\'s sold listings',
+      'comparisons[0].label mentions sold data: "eBay: sold $18-$30, 9 like it in the last 14 days"',
+    ]);
+    expect(
+      scanLabelViolations(
+        scan({ comparisons: [{ ...row, sold: { ...sold, label: 'eBay prices' } }] }),
+      ),
+    ).toEqual(['comparisons[0].sold.label is "eBay prices"']);
   });
 });

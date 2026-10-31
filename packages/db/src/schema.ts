@@ -138,10 +138,15 @@ export interface AccountTable {
   invited_at: NullableTimestamp;
   /**
    * Test mode (docs/features/test-mode.md): the account sees and runs every marketplace feature
-   * that is built, not only those that passed live. Only the deployment owner's account turns
-   * it on.
+   * that is built, not only those that passed live. Only the deployment owner's account, or an
+   * account granted Test mode, turns it on.
    */
   test_mode: Generated<boolean>;
+  /**
+   * When the owner granted the account Test mode with the operator CLI
+   * (`admin test-mode-access grant`); null: no grant.
+   */
+  test_mode_granted_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -1311,6 +1316,8 @@ export interface MarketComparisonTable {
   status: Generated<MarketComparisonStatus>;
   stats: NullableJsonb<JsonObject>;
   for_sale_total: Nullable<number>;
+  /** Sold listings in the whole sold search, where the marketplace shows them (eBay). */
+  sold_total: Nullable<number>;
   read_ms: Nullable<number>;
   answered_at: NullableTimestamp;
   created_at: CreatedAt;

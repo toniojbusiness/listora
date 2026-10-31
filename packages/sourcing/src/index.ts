@@ -6,10 +6,12 @@ export {
   SCAN_CALLS,
   SCAN_SIGNAL_KINDS,
   scanCall,
+  soldPace,
 } from './call.ts';
 export type {
   CallBasis,
   CallConfidence,
+  MarketCallInput,
   ScanCall,
   ScanCallInput,
   ScanCallKind,
@@ -75,6 +77,7 @@ export {
   marketStats,
   withoutOutliers,
 } from './market.ts';
+export { marketSoldPace, SELL_THROUGH_FAST, SELL_THROUGH_SLOW } from './pace.ts';
 export type {
   MarketDemand,
   MarketDemandRead,

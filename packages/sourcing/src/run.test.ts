@@ -27,7 +27,7 @@ describe('runEstimate', () => {
       resaleHighCents: 7800,
       payoutLowCents: 4200,
       payoutHighCents: 6700,
-      byBasis: { own_history: 2, web_info: 0, ai_estimate: 1 },
+      byBasis: { own_history: 2, market_sold: 0, web_info: 0, ai_estimate: 1 },
       basedOn: '2 from your own sales, 1 from the AI estimate',
       label: RUN_ESTIMATE_AI_LABEL,
     });
@@ -48,8 +48,9 @@ describe('runEstimate', () => {
 
   it('names its sources in the call’s trust order', () => {
     const web = { ...ai, basis: 'web_info' as const };
-    expect(runEstimate([ai, web, own])?.basedOn).toBe(
-      '1 from your own sales, 1 from web info, 1 from the AI estimate',
+    const ebay = { ...ai, basis: 'market_sold' as const };
+    expect(runEstimate([ai, web, ebay, own])?.basedOn).toBe(
+      "1 from your own sales, 1 from a marketplace's sold listings, 1 from web info, 1 from the AI estimate",
     );
   });
 

@@ -369,6 +369,7 @@ function callScores(
   const byConfidence: Record<CallConfidence, number> = { high: 0, medium: 0, low: 0 };
   const byBasis: Record<CallBasis, number> = {
     own_history: 0,
+    market_sold: 0,
     web_info: 0,
     ai_estimate: 0,
     none: 0,

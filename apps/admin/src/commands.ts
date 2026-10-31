@@ -19,6 +19,7 @@ import { runActivityCommand } from './activity.ts';
 import { USAGE, type Command } from './args.ts';
 import { runFeatureTestsCommand } from './feature-tests.ts';
 import { runReadHealthCommand } from './read-health.ts';
+import { runTestModeAccessCommand } from './test-mode-access.ts';
 import {
   describePeriod,
   formatCount,
@@ -416,6 +417,12 @@ export async function runCommand(command: Command, context: CommandContext): Pro
 
     case 'feature-tests':
       await runFeatureTestsCommand(command, context);
+      return;
+
+    case 'test-mode-access-list':
+    case 'test-mode-access-set':
+    case 'account-find':
+      await runTestModeAccessCommand(command, context);
       return;
 
     default:

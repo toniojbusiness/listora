@@ -160,9 +160,11 @@ final class ComparisonLane {
         self.logger = logger
     }
 
-    /// The marketplace's own origins, the only ones its comparison page loads.
+    /// The marketplace's own origins, the only ones its comparison page loads. eBay's sign-in
+    /// origin is one so a sign-in wall loads and ends the read as a check, never passed.
     static let origins: [String: [String]] = [
         "depop": ["https://www.depop.com", "https://depop.com"],
+        "ebay": ["https://www.ebay.com", "https://ebay.com", "https://signin.ebay.com"],
     ]
 
     /// A warm-up names only the marketplace: the runtime paces it as the marketplace's reads.

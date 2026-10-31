@@ -15,6 +15,8 @@ export {
   ASKING_PRICES_LABEL,
   claimsSoldData,
   labelGuardViolations,
+  MARKET_SOLD_LABEL_PREFIX,
+  marketSoldLabel,
   NO_SOLD_DATA_MESSAGE,
   scanLabelViolations,
   WEB_INFO_LABEL,

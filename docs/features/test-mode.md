@@ -2,33 +2,61 @@
 
 Sellers see only the marketplace features that passed a live end-to-end test
 ([verified-features.md](verified-features.md)). A feature gets that test through Test mode. It
-is a switch in Settings that only the deployment owner's account has. With it on, that account
-sees and runs every built feature, each one not yet verified tagged "Testing", and each run's
-result goes in the owner's log. Customers never see Test mode or any unverified feature.
+is a switch in Settings that only the deployment owner's account, and each account the owner
+grants it to, has. With it on, that account sees and runs every built feature, each one not yet
+verified tagged "Testing", and each run's result goes in the owner's log. Other customers never
+see Test mode or any unverified feature.
 
 | Where                                                   | What                                                                           |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `account.test_mode`, `feature_test_run` (migration)     | The account's switch (off by default), and the owner's log of runs             |
+| `account.test_mode_granted_at` (migration)              | The owner's grant of Test mode to another account (null: none)                 |
 | `packages/marketplaces/src/features.ts`, `test-mode.ts` | `FeatureGate`, `isFeatureOn`, `isFeatureInTesting`, `loadFeatureGate`, the log |
 | `apps/api/src/marketplace-features/`                    | `listMarketplaceFeatures` (`testMode`, `testing`), `setTestMode`, who may      |
 | `apps/admin/src/feature-tests.ts`                       | `npm run admin -- feature-tests`: the owner's log                              |
+| `apps/admin/src/test-mode-access.ts`                    | `test-mode-access list\|grant\|revoke`, and `account-find --shop`              |
 | `Core/MarketplaceFeatures`, `SettingsView+TestMode`     | The app's switch and the `TestingTag`                                          |
 
 ## Who has it
 
-Only the owner or an admin of the deployment owner's account has Test mode. That is the account
-whose owner signs in with `SIGN_UP_OWNER_EMAIL` (`SIGN_UP=invite`; [invites.md](invites.md)).
+Only the owner or an admin of an account with Test mode has it. Two kinds of account do:
+
+- **The deployment owner's account:** the one whose owner signs in with `SIGN_UP_OWNER_EMAIL`
+  (`SIGN_UP=invite`; [invites.md](invites.md)).
+- **An account the owner granted Test mode to** (`account.test_mode_granted_at`), for a tester
+  who live-tests on their own account. A grant needs no redeploy and no new app build.
+
 Every other account has no Test mode:
 
 - `listMarketplaceFeatures` has no `testMode` and no `testing` for it.
 - `setTestMode` answers `404`.
 - The app shows no switch.
 
-A deployment with open sign-up (local development) has no owner, so no account has Test mode.
-Local stacks run every feature anyway (`MARKETPLACE_FEATURES=all`).
+A deployment with open sign-up (local development) has no owner, so only a granted account has
+Test mode. Local stacks run every feature anyway (`MARKETPLACE_FEATURES=all`).
 
 A flag left on for an account that may no longer use Test mode (`SIGN_UP_OWNER_EMAIL` changed)
 is turned off the next time its app reads the list.
+
+### Granting Test mode
+
+The owner grants and revokes it with the operator CLI. Each change is recorded in the account's
+audit log (`account.test_mode_granted`, `account.test_mode_revoked`, with the actor and reason)
+and logged as a JSON line. A granted account's switch starts off; its owner turns it on in
+Settings. Revoking clears the grant and turns the switch off at once, so every gate and
+scheduler is back to the verified features.
+
+```sh
+npm run admin -- account-find --shop <handle>        # the account connected to a shop
+npm run admin -- test-mode-access grant --account <account-id> --actor <name> --reason <text>
+npm run admin -- test-mode-access revoke --account <account-id> --actor <name> --reason <text>
+npm run admin -- test-mode-access list               # every granted account and its switch
+# in AWS
+scripts/admin-remote.sh <env> -- test-mode-access grant --account <account-id> --actor <name> --reason <text>
+```
+
+`account-find` matches a connection's shop handle (`external_user_id` or `display_name`, any
+case, a leading `@` dropped) and only reads.
 
 ## What it turns on
 
@@ -63,7 +91,7 @@ Tasks) show a test feature's rows without a tag.
 - **Read-only connections stay read-only.** The read-only gates are separate
   ([read-only.md](read-only.md)). Test mode never offers or queues a write on a read-only
   connection: no revise, price change, refresh, or offer answer. Test mode is only ever the
-  owner's own account, so it changes no other seller's shop.
+  owner's own account or one the owner granted it to, so it changes no other seller's shop.
 - **Nothing is reported done before it is.** A test feature runs through the same operation
   engine, read-back, and Retry as every other ([operations.md](operations.md)).
 - **The verified list.** Test mode never marks a feature verified. That still takes a reviewed
@@ -104,13 +132,17 @@ phone needs a new app build** for the switch, the tags, and Edit listing.
 
 - `marketplace-features/test-mode.int.test.ts` (API, real Postgres, verified features):
   - A customer sees no Test mode, gets `404` turning it on, and gets nothing of a flag left on.
+  - A granted account gets exactly the owner's list in Test mode and its revise, and once
+    revoked sees no Test mode and gets `404`.
   - The owner's switch is off by default. On, it lists every feature with the untested ones
     tagged, revise is offered and queued for the owner, and Poshmark's checks are synced for the
     owner but not for a customer.
   - A read-only connection gets no revise or price change and refuses an offer answer.
   - The owner's log records hidden reads only, and never a customer's.
 - `operations/refresh.int.test.ts`: a refresh in Test mode is logged with its outcome.
-- `admin/commands.int.test.ts`: `feature-tests`, newest first, with `--marketplace` and `--json`.
+- `admin/commands.int.test.ts`: `feature-tests`, newest first, with `--marketplace` and `--json`;
+  `test-mode-access` grant, list, and revoke (switch off, audited, idempotent), and
+  `account-find --shop`.
 - `listings/views.test.ts`: a read-only listing offers no change in Test mode.
 - `features.test.ts`: the gate in and out of Test mode.
 - `MarketplaceFeaturesTests` (iOS): no Test mode for a customer, the tags, and a failed change.

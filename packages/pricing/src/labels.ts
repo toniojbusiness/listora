@@ -18,6 +18,16 @@ export const WEB_INFO_LABEL = 'Web info - not sold listings';
  */
 export const ASKING_PRICES_LABEL = 'Asking prices - not sold listings';
 export const NO_SOLD_DATA_MESSAGE = 'No sold data available for this item';
+/**
+ * What starts every text about sold listings in a marketplace's public search (the thrift scan's
+ * eBay comparisons): real sold listings, but other sellers', never the household's own sales.
+ */
+export const MARKET_SOLD_LABEL_PREFIX = 'Sold listings on ';
+
+/** Shown with what similar listings sold for on a marketplace: "Sold listings on eBay". */
+export function marketSoldLabel(marketplace: string): string {
+  return `${MARKET_SOLD_LABEL_PREFIX}${marketplace}`;
+}
 
 /** Words that claim sold data, anywhere in a label. */
 const SOLD_DATA_WORDS = /\b(sold|comps?|comparables?)\b/i;
@@ -101,9 +111,11 @@ export function labelGuardViolations(suggestion: PricingSuggestion): string[] {
 /**
  * Every way a thrift scan's answer breaks the label rules (docs/features/thrift-scan.md), like
  * `labelGuardViolations`: the AI estimate is always labeled `AI_ESTIMATE_LABEL`, research
- * links carry only the builder's labels, and nothing but the seller's own sales mentions sold
- * data, the call's wording included. What the AI read the item as (its identity and search
- * words) names the item, not a price source, so it is exempt.
+ * links carry only the builder's labels, and nothing but real sold data mentions sold data, the
+ * call's wording included: the seller's own sales, and a marketplace's sold listings (a
+ * comparison with `sold`, always under `marketSoldLabel`, and every other word about them,
+ * which starts with it; a call resting on them needs such a comparison). What the AI read the item as (its identity and search words) names the
+ * item, not a price source, so it is exempt.
  */
 export function scanLabelViolations(scan: ItemScan): string[] {
   const violations: string[] = [];
@@ -124,10 +136,23 @@ export function scanLabelViolations(scan: ItemScan): string[] {
   if (scan.research && scan.research.label !== WEB_INFO_LABEL) {
     violations.push(`research.label is "${scan.research.label}"`);
   }
+  const soldComparisons = (scan.comparisons ?? []).filter(
+    (comparison) => comparison.sold !== undefined,
+  );
   for (const [index, comparison] of (scan.comparisons ?? []).entries()) {
     if (comparison.asking && comparison.asking.label !== ASKING_PRICES_LABEL) {
       violations.push(`comparisons[${String(index)}].asking.label is "${comparison.asking.label}"`);
     }
+    if (comparison.sold && !comparison.sold.label.startsWith(MARKET_SOLD_LABEL_PREFIX)) {
+      violations.push(`comparisons[${String(index)}].sold.label is "${comparison.sold.label}"`);
+    }
+  }
+  // A call on a marketplace's sold listings says so, and only a comparison's sold ones back it.
+  if (
+    scan.call.basis === 'market_sold' &&
+    (soldComparisons.length === 0 || !scan.call.basedOn.startsWith(MARKET_SOLD_LABEL_PREFIX))
+  ) {
+    violations.push(`call.basedOn is "${scan.call.basedOn}" for a marketplace's sold listings`);
   }
   if (scan.research?.summary !== undefined && claimsSoldData(scan.research.summary)) {
     violations.push(`research.summary mentions sold data: "${scan.research.summary}"`);
@@ -138,6 +163,7 @@ export function scanLabelViolations(scan: ItemScan): string[] {
     scan.research,
     ...scan.ownSales,
     ...scan.researchLinks,
+    ...soldComparisons,
   ]);
   for (const { path, text } of strings(scan, '', exempt)) {
     if (path === 'searchWords') continue;
@@ -145,7 +171,8 @@ export function scanLabelViolations(scan: ItemScan): string[] {
     if (
       text.startsWith(AI_ESTIMATE_LABEL) ||
       text.startsWith(WEB_INFO_LABEL) ||
-      text.startsWith(ASKING_PRICES_LABEL)
+      text.startsWith(ASKING_PRICES_LABEL) ||
+      text.startsWith(MARKET_SOLD_LABEL_PREFIX)
     ) {
       continue;
     }
