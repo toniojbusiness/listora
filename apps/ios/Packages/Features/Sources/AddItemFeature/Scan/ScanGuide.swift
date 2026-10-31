@@ -7,6 +7,8 @@ struct ScanGuide: View {
     let isCameraAvailable: Bool
     /// The run going on, if any.
     let run: ScanRunModel?
+    /// The last run's summary once it was checked out, until the next run starts.
+    let lastRun: SourcingRunSummary?
     /// The thrift scan is on only for the owner's Test mode.
     let isTesting: Bool
 
@@ -31,6 +33,11 @@ struct ScanGuide: View {
             title: "Keep what you buy",
             detail: "Keep saves a draft; shooting the next item skips this one",
             systemImage: "plus.square.on.square",
+        ),
+        Step(
+            title: "Check out at the register",
+            detail: "Enter what you paid once; see the haul's estimated profit",
+            systemImage: "cart",
         ),
         Step(
             title: "No signal? Keep scanning",
@@ -61,6 +68,8 @@ struct ScanGuide: View {
             }
             if let run, !run.entries.isEmpty {
                 ScanRunRow(run: run).cardStyle()
+            } else if run == nil, let lastRun {
+                ScanRunSummaryView(card: RunSummaryCard(lastRun))
             }
             VStack(spacing: 0) {
                 ForEach(Array(Self.steps.enumerated()), id: \.offset) { index, step in

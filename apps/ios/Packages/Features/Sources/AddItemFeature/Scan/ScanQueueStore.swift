@@ -11,6 +11,8 @@ struct ScanRunRecord: Codable, Equatable, Sendable, FetchableRecord, Persistable
     /// The `Idempotency-Key` of the run's `createSourcingRun`, reused until it is made.
     var createRunKey: String
     var serverRunID: String?
+    /// Where the seller is, as they named it when the run started.
+    var place: String?
     /// The seller ended the run while kept scans still waited for signal: it finishes once they
     /// are read and saved.
     var endRequested = false
@@ -124,6 +126,7 @@ extension DraftDatabase {
                 table.column("startedAt", .datetime).notNull()
                 table.column("createRunKey", .text).notNull()
                 table.column("serverRunID", .text)
+                table.column("place", .text)
                 table.column("endRequested", .boolean).notNull()
             }
             try db.create(table: ScanEntryRecord.databaseTableName) { table in

@@ -141,7 +141,10 @@ extension ScanRunModel {
         }
         let service = service
         let key = record.createRunKey
-        let task = Task { () async throws -> String in try await service.createSourcingRun(idempotencyKey: key) }
+        let place = record.place
+        let task = Task { () async throws -> String in
+            try await service.createSourcingRun(place: place, idempotencyKey: key)
+        }
         serverRun = task
         let runID = try await task.value
         record.serverRunID = runID

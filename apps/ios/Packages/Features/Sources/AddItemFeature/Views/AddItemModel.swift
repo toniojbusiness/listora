@@ -31,12 +31,16 @@ final class AddItemModel {
 
     /// The thrift scan's runs (docs/features/thrift-scan.md); nil offers no Scan mode's run.
     let scanRuns: ScanRuns?
+    /// The run's checkout at the register, while the seller is at it.
+    var scanCheckout: ScanCheckoutModel?
+    /// The last run's summary once it was checked out, shown until the next run starts.
+    var lastRunSummary: SourcingRunSummary?
 
     let log = Logger(subsystem: "com.listora.app", category: "drafts")
     /// The measurement of a new item whose draft does not exist yet (the camera is open, or the
     /// photos are being prepared).
     private var pendingSession: String?
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
 
     init(
         store: DraftStore,

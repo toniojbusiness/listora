@@ -48,6 +48,10 @@ final class ScanRunModel {
     var isFinished = false
     /// Called once the run is finished.
     var onFinished: (@MainActor (ScanRunModel) -> Void)?
+    /// Where the seller is, as they named it when the run started; nil when they named none.
+    var place: String? {
+        record.place
+    }
 
     let dependencies: ScanRunDependencies
     /// The run's folder: each shot's small JPEG, tag close-up, and upload-sized photos.
@@ -72,8 +76,8 @@ final class ScanRunModel {
     static let tagReadDeadline: Duration = .milliseconds(400)
     static let tagCloseUpReadDeadline: Duration = .milliseconds(900)
 
-    /// A new run.
-    init(dependencies: ScanRunDependencies, directory: URL) {
+    /// A new run, at the place the seller named (nil: none).
+    init(dependencies: ScanRunDependencies, directory: URL, place: String? = nil) {
         let id = UUID().uuidString.lowercased()
         self.id = id
         self.dependencies = dependencies
@@ -82,6 +86,7 @@ final class ScanRunModel {
             id: id,
             startedAt: dependencies.now(),
             createRunKey: UUID().uuidString.lowercased(),
+            place: place.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 },
         )
         saveRun()
     }
@@ -100,6 +105,7 @@ final class ScanRunModel {
         service: any ScanService,
         tagReader: any TagReader,
         directory: URL,
+        place: String? = nil,
         saveDraft: @escaping ScanDraftSaver,
         comparisons: (any MarketComparisons)? = nil,
         comparing marketplaces: [String] = [],
@@ -108,6 +114,7 @@ final class ScanRunModel {
         self.init(
             dependencies: ScanRunDependencies(service: service, tagReader: tagReader, saveDraft: saveDraft, now: now),
             directory: directory,
+            place: place,
         )
         compare(with: comparisons, on: marketplaces)
     }
@@ -294,5 +301,42 @@ final class ScanRunModel {
         guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         change(&entries[index])
         persist(entryID)
+    }
+}
+
+/// The run's checkout (`ScanCheckoutModel`): what it sends, and how the run ends with it.
+extension ScanRunModel {
+    /// A Keep still being saved on this iPhone: checkout waits for it.
+    var isKeeping: Bool {
+        entries.contains { $0.decision == .keeping }
+    }
+
+    /// The run can be checked out once anything was scanned, no Keep is still being saved, and no
+    /// kept scan still waits to be read (its draft, and so the haul's item, comes with the read).
+    var canCheckOut: Bool {
+        !isEnded && !entries.isEmpty && !isKeeping && keptWaitingCount == 0
+    }
+
+    /// The scans kept on this iPhone, in the order shot.
+    var keptScanIDs: [String] {
+        entries.filter(\.isKept).compactMap(\.scanID)
+    }
+
+    /// The run's server id, creating the run if no read did yet.
+    func serverRunID() async throws -> String {
+        try await ensureServerRun()
+    }
+
+    /// Ends the run once it was checked out (the server ended it): no more shots, and the run's
+    /// files and records go. The kept drafts stay.
+    func close() {
+        guard !isFinished else { return }
+        isEnded = true
+        tagShotFor = nil
+        record.endRequested = true
+        // Checked out on the server: nothing is left to end there.
+        record.serverRunID = nil
+        serverRun = nil
+        Task { await finishIfDone() }
     }
 }

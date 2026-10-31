@@ -35,6 +35,7 @@ final class ScanRuns {
     /// The run going on, or a new one, comparing on `marketplaces` through `comparisons` from now
     /// on (where `market_comps` is on).
     func startOrResume(
+        place: String? = nil,
         comparisons: (any MarketComparisons)? = nil,
         comparing marketplaces: [String] = [],
     ) -> ScanRunModel {
@@ -42,7 +43,7 @@ final class ScanRuns {
             current.compare(with: comparisons, on: marketplaces)
             return current
         }
-        let run = ScanRunModel(dependencies: dependencies, directory: directory)
+        let run = ScanRunModel(dependencies: dependencies, directory: directory, place: place)
         run.compare(with: comparisons, on: marketplaces)
         current = run
         Task { await refresh() }
@@ -57,6 +58,13 @@ final class ScanRuns {
         await run.end()
         if !run.isFinished {
             follow(run)
+        }
+    }
+
+    /// The run was checked out: it is over at once, whatever its files still need.
+    func closed(_ run: ScanRunModel) {
+        if current === run {
+            current = nil
         }
     }
 

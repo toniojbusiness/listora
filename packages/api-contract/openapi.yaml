@@ -333,6 +333,10 @@ paths:
     $ref: './paths/sourcing-runs.yaml#/~1v1~1sourcing-runs'
   /v1/sourcing-runs/{runId}/end:
     $ref: './paths/sourcing-runs.yaml#/~1v1~1sourcing-runs~1{runId}~1end'
+  /v1/sourcing-runs/{runId}/checkout:
+    $ref: './paths/sourcing-runs.yaml#/~1v1~1sourcing-runs~1{runId}~1checkout'
+  /v1/sourcing-runs/{runId}/summary:
+    $ref: './paths/sourcing-runs.yaml#/~1v1~1sourcing-runs~1{runId}~1summary'
   /v1/scans:
     $ref: './paths/scans.yaml#/~1v1~1scans'
   /v1/scans/{scanId}/keep:
@@ -1298,6 +1302,14 @@ components:
       $ref: './components/schemas/sourcing.yaml#/SourcingRunCreate'
     SourcingRun:
       $ref: './components/schemas/sourcing.yaml#/SourcingRun'
+    SourcingRunCheckout:
+      $ref: './components/schemas/sourcing.yaml#/SourcingRunCheckout'
+    SourcingRunSummary:
+      $ref: './components/schemas/sourcing.yaml#/SourcingRunSummary'
+    SourcingRunEstimate:
+      $ref: './components/schemas/sourcing.yaml#/SourcingRunEstimate'
+    SourcingRunProfit:
+      $ref: './components/schemas/sourcing.yaml#/SourcingRunProfit'
     ScanCreate:
       $ref: './components/schemas/sourcing.yaml#/ScanCreate'
     ScanImage:

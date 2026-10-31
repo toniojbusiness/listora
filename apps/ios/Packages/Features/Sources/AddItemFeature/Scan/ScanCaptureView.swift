@@ -6,7 +6,7 @@ import SwiftUI
 /// read at once, its card over the bottom while the viewfinder stays live. Keep saves the item
 /// as a draft without leaving the camera; shooting the next item skips the last one. Hold the
 /// mic to add a note, tap Tag to shoot the tag close-up. Done closes the camera and keeps the
-/// run; End run finishes it.
+/// run; Finish offers the register's checkout, or ending the run without buying.
 struct ScanCaptureView: View {
     let run: ScanRunModel
     let voice: ScanVoice
@@ -14,6 +14,7 @@ struct ScanCaptureView: View {
     let showsMeasurements: Bool
     let meter: InteractionMeter
     let onDone: @MainActor () -> Void
+    let onCheckout: @MainActor () -> Void
     let onEnd: @MainActor () async -> Void
 
     @State private var camera: any CameraSource
@@ -30,6 +31,7 @@ struct ScanCaptureView: View {
         showsMeasurements: Bool,
         meter: InteractionMeter,
         onDone: @escaping @MainActor () -> Void,
+        onCheckout: @escaping @MainActor () -> Void,
         onEnd: @escaping @MainActor () async -> Void,
     ) {
         _camera = State(initialValue: camera)
@@ -38,6 +40,7 @@ struct ScanCaptureView: View {
         self.showsMeasurements = showsMeasurements
         self.meter = meter
         self.onDone = onDone
+        self.onCheckout = onCheckout
         self.onEnd = onEnd
     }
 
@@ -100,8 +103,9 @@ struct ScanCaptureView: View {
             camera.stop()
             voice.cancel()
         }
-        .confirmationDialog("End this run?", isPresented: $isConfirmingEnd, titleVisibility: .visible) {
-            Button("End run") {
+        .confirmationDialog("Finish this run?", isPresented: $isConfirmingEnd, titleVisibility: .visible) {
+            Button("Check out") { onCheckout() }
+            Button("End without checking out", role: .destructive) {
                 Task { await onEnd() }
             }
             Button("Keep scanning", role: .cancel) {}
@@ -111,11 +115,12 @@ struct ScanCaptureView: View {
     }
 
     private var endMessage: String {
-        let kept = run.keptCount == 1 ? "The 1 item you kept stays" : "The \(run.keptCount) items you kept stay"
+        let kept = run.keptCount == 1 ? "the 1 item you kept" : "the \(run.keptCount) items you kept"
         let waiting = run.keptWaitingCount == 0 ? ""
             : run.keptWaitingCount == 1 ? " The 1 kept item waiting for signal is saved once it's read."
             : " The \(run.keptWaitingCount) kept items waiting for signal are saved once they're read."
-        return "\(kept) in your drafts.\(waiting) The others are skipped and can't be kept after this."
+        return "Check out to enter what you paid for \(kept) and see the haul's estimated profit. "
+            + "Either way the items not kept are skipped and can't be kept after this.\(waiting)"
     }
 
     // MARK: Top
@@ -142,7 +147,7 @@ struct ScanCaptureView: View {
                     .background(Palette.scrim.color.opacity(0.45), in: Capsule())
                     .accessibilityIdentifier("scanCamera.summary")
                 Spacer()
-                Button("End run") { isConfirmingEnd = true }
+                Button("Finish") { isConfirmingEnd = true }
                     .font(Typography.headline)
                     .padding(.horizontal, Spacing.md)
                     .frame(minHeight: Layout.minimumTapTarget)
