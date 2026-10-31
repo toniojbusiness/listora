@@ -27,6 +27,7 @@ struct KeptRunSection: View {
                 }
                 .buttonStyle(.listoraPrimary)
                 .accessibilityIdentifier("keptRun.shoot")
+                .listRowSeparator(.hidden)
             }
             if let review {
                 Button {
@@ -39,6 +40,7 @@ struct KeptRunSection: View {
                 }
                 .buttonStyle(.listoraSecondary)
                 .accessibilityIdentifier("keptRun.review")
+                .listRowSeparator(.hidden)
             }
             if uploading > 0 {
                 Label(
@@ -50,6 +52,7 @@ struct KeptRunSection: View {
                 .font(Typography.footnote)
                 .foregroundStyle(Palette.textSecondary)
                 .accessibilityIdentifier("keptRun.uploading")
+                .listRowSeparator(.hidden)
             }
             ForEach(run.drafts) { draft in
                 NavigationLink(value: AddItemRoute.draft(draft.id)) {
