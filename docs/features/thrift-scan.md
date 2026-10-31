@@ -384,7 +384,8 @@ no-thinking setting for this one call), then streaming the identity first.
   `ScanOfflineTests.swift` (the instant read with no signal and no request; the waiting reads
   newest first once there is signal, read late; a read cut off by the network tried again under
   the same key; a scan kept with no signal saved once read, or as an ordinary draft when it can
-  never be read; a run ended with kept scans waiting finishing after they are saved; a note with
+  never be read, or whose photo the app closed before preparing; a run ended with kept scans
+  waiting finishing after they are saved; a note with
   no signal; the duplicate warning; the run and its scans across a relaunch, and an ended run
   finished after one; the kit kept in its file, an unknown format never read);
   `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
@@ -518,7 +519,8 @@ is signal.
 - **Keep** on a waiting card marks it kept at once ("Kept: saved once it's read"): its draft
   needs the scan, so it is saved the moment the item is read. A kept scan that can never be read
   (the server refuses it) is saved as an ordinary draft with its photos, which the full analysis
-  then reads like any draft's: a kept item is never lost.
+  then reads like any draft's; one whose upload-sized photo the app closed before preparing gets
+  one made from its shot instead. A kept item is never lost.
 - **End run** skips the items not kept, as with signal. Kept scans still waiting stay queued:
   the run finishes (ended on the server, its files and records removed) once each is read and
   saved, after a relaunch too. The confirmation says how many are waiting; Add Item's row and

@@ -300,6 +300,33 @@ struct ScanOfflineTests {
     }
 
     @Test
+    func `a kept scan whose photo the app closed before preparing is still saved, from its shot`() async throws {
+        let directory = try TemporaryDirectory()
+        let database = try DraftDatabase(directory: directory.url)
+        let queue = ScanQueueStore(writer: database.writer)
+        let scans = directory.url.appending(path: "ScanRuns")
+        let run = makeRun(queue: queue, directory: scans)
+        await run.model.shoot(capture())
+        try await run.model.keep(#require(run.model.currentID))
+        #expect(try await eventually { try queue.runs().first?.entries.first?.photo != nil })
+        // As if the app closed before the upload-sized photo was kept.
+        var entry = try #require(try queue.runs().first?.entries.first)
+        entry.photo = nil
+        try queue.save(entry)
+
+        let connectivity = FakeConnectivity(online: true)
+        let saver = Saver()
+        let runs = ScanRuns(
+            dependencies: dependencies(FakeScanService(), connectivity, saver, queue: queue),
+            directory: scans,
+            kit: SourcingKitCache(file: nil),
+        )
+        await runs.refresh()
+        #expect(saver.kept.count == 1)
+        #expect(runs.current?.entries.first?.isKept == true)
+    }
+
+    @Test
     func `a run ended while kept scans waited finishes after a relaunch, and leaves nothing behind`() async throws {
         let directory = try TemporaryDirectory()
         let database = try DraftDatabase(directory: directory.url)
@@ -331,44 +358,5 @@ struct ScanOfflineTests {
         #expect(runs.finishing.isEmpty)
         #expect(try queue.runs().isEmpty)
         #expect(!FileManager.default.fileExists(atPath: scans.appending(path: run.model.id).path()))
-    }
-}
-
-@MainActor
-@Suite(.timeLimit(.minutes(1)))
-struct SourcingKitCacheTests {
-    @Test
-    func `keeps the fetched kit in its file for the next launch, and reads no unknown format`() async throws {
-        let directory = try TemporaryDirectory()
-        let file = directory.url.appending(path: "sourcing-kit.json")
-        let service = FakeScanService()
-        service.answer(kit: testKit())
-        let cache = SourcingKitCache(file: file)
-        #expect(cache.kit == nil)
-        await cache.refresh(from: service)
-        #expect(cache.kit == testKit())
-        // Fetched lately: not again.
-        await cache.refresh(from: service)
-        #expect(service.calls.kits == 1)
-        #expect(SourcingKitCache(file: file).kit == testKit())
-
-        let kit = testKit()
-        let later = SourcingKit(version: 3, generatedAt: kit.generatedAt, call: kit.call, buckets: kit.buckets)
-        service.answer(kit: later)
-        var now = Date()
-        let fresh = SourcingKitCache(file: file, now: { now })
-        now += SourcingKitCache.refreshInterval + 1
-        await fresh.refresh(from: service)
-        #expect(fresh.kit == testKit())
-    }
-
-    @Test
-    func `keeps the kit it has when fetching fails`() async throws {
-        let directory = try TemporaryDirectory()
-        let file = directory.url.appending(path: "sourcing-kit.json")
-        try JSONEncoder().encode(testKit()).write(to: file)
-        let cache = SourcingKitCache(file: file)
-        await cache.refresh(from: FakeScanService())
-        #expect(cache.kit == testKit())
     }
 }

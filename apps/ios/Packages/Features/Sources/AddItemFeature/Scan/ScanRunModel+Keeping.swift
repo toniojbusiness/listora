@@ -40,12 +40,12 @@ extension ScanRunModel {
     }
 
     private func saveDraft(of entryID: String, scanID: String?) async -> String? {
+        guard let entry = entries.first(where: { $0.id == entryID }) else { return nil }
         do {
-            guard let item = try await storedPhoto(entryID, tasks: photos, stored: storedPhotos) else {
-                throw ScanKeepError.noPhoto
-            }
+            let item = try await storedPhoto(entryID, tasks: photos, stored: storedPhotos, else: entry.itemJPEG)
             var shots = try [(item.preparedPhoto(), PhotoRole.front)]
-            if let tag = try await storedPhoto(entryID, tasks: tagPhotos, stored: storedTagPhotos) {
+            if let tagJPEG = entry.tagJPEG {
+                let tag = try await storedPhoto(entryID, tasks: tagPhotos, stored: storedTagPhotos, else: tagJPEG)
                 try shots.append((tag.preparedPhoto(), .tag))
             }
             let origin = scanID.map { DraftScanOrigin(scanID: $0, runID: id, title: entry.card?.title ?? "") }
@@ -57,15 +57,22 @@ extension ScanRunModel {
         }
     }
 
+    /// The shot's upload-sized photo; when the app closed before it was prepared, one made from
+    /// the shot's small JPEG instead, so a kept item always has its photo.
     private func storedPhoto(
         _ entryID: String,
         tasks: [String: Task<StoredScanPhoto, any Error>],
         stored: [String: StoredScanPhoto],
-    ) async throws -> StoredScanPhoto? {
-        if let task = tasks[entryID] {
-            return try await task.value
+        else small: Data,
+    ) async throws -> StoredScanPhoto {
+        if let task = tasks[entryID], let photo = try? await task.value {
+            return photo
         }
-        return stored[entryID]
+        if let photo = stored[entryID] {
+            return photo
+        }
+        let directory = directory
+        return try await Task.detached(priority: .userInitiated) { try ScanPhotos.store(small, in: directory) }.value
     }
 
     private func isKeepFailed(_ entry: ScanEntry) -> Bool {
@@ -140,6 +147,5 @@ extension ScanRunModel {
 }
 
 private enum ScanKeepError: Error {
-    case noPhoto
     case notSaved
 }
