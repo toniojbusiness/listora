@@ -251,7 +251,7 @@ struct DraftListView: View {
     @ViewBuilder
     private var scanActions: some View {
         if environment.isCameraAvailable {
-            ScanActions(model: model, camera: $camera, sheet: $scanSheet)
+            ScanActions(model: model, environment: environment, camera: $camera, sheet: $scanSheet)
         }
     }
 
