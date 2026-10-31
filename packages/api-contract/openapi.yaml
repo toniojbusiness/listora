@@ -95,6 +95,8 @@ tags:
     description: Trips to a store scanning items to buy (docs/features/thrift-scan.md).
   - name: scans
     description: Items scanned at the store, with the AI's read and the Buy / Your call / Skip call (docs/features/thrift-scan.md).
+  - name: storage-locations
+    description: Bins where items are kept, such as B-12, and the items in each (docs/features/storage-bins.md).
 
 paths:
   /health/live:
@@ -345,6 +347,14 @@ paths:
     $ref: './paths/scans.yaml#/~1v1~1scans~1{scanId}~1research'
   /v1/scans/{scanId}/comparisons/{comparisonId}:
     $ref: './paths/scans.yaml#/~1v1~1scans~1{scanId}~1comparisons~1{comparisonId}'
+  /v1/storage-locations:
+    $ref: './paths/storage-locations.yaml#/~1v1~1storage-locations'
+  /v1/storage-locations/{storageLocationId}:
+    $ref: './paths/storage-locations.yaml#/~1v1~1storage-locations~1{storageLocationId}'
+  /v1/storage-locations/{storageLocationId}/items:
+    $ref: './paths/storage-locations.yaml#/~1v1~1storage-locations~1{storageLocationId}~1items'
+  /v1/storage-locations/{storageLocationId}/items/{itemId}:
+    $ref: './paths/storage-locations.yaml#/~1v1~1storage-locations~1{storageLocationId}~1items~1{itemId}'
 
 components:
   securitySchemes:
@@ -406,6 +416,8 @@ components:
       $ref: './components/parameters.yaml#/ScanId'
     ComparisonId:
       $ref: './components/parameters.yaml#/ComparisonId'
+    StorageLocationId:
+      $ref: './components/parameters.yaml#/StorageLocationId'
 
   responses:
     DefaultError:
@@ -1412,3 +1424,18 @@ components:
       $ref: './components/schemas/sourcing.yaml#/ScanResearchResale'
     ScanWebSource:
       $ref: './components/schemas/sourcing.yaml#/ScanWebSource'
+    # ---------------------------------------------------------------- storage-locations
+    StorageLocation:
+      $ref: './components/schemas/storage-locations.yaml#/StorageLocation'
+    StorageLocationPage:
+      $ref: './components/schemas/storage-locations.yaml#/StorageLocationPage'
+    StorageLocationCreate:
+      $ref: './components/schemas/storage-locations.yaml#/StorageLocationCreate'
+    StorageLocationReplace:
+      $ref: './components/schemas/storage-locations.yaml#/StorageLocationReplace'
+    StorageLocationItem:
+      $ref: './components/schemas/storage-locations.yaml#/StorageLocationItem'
+    StorageLocationDetail:
+      $ref: './components/schemas/storage-locations.yaml#/StorageLocationDetail'
+    StorageLocationItemsAdd:
+      $ref: './components/schemas/storage-locations.yaml#/StorageLocationItemsAdd'

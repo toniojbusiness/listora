@@ -1,0 +1,121 @@
+StorageLocation:
+  type: object
+  description: |
+    A bin, shelf, or box where items are kept, named by the short code on its sticker, such
+    as `B-12` (docs/features/storage-bins.md).
+  required: [id, code, itemCount, createdAt, updatedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    code:
+      type: string
+      minLength: 1
+      maxLength: 32
+      description: |
+        The code on the bin's sticker, `B-12`: letters, digits, spaces, and `- . /`, stored in
+        capitals. Unique in the account, whatever its case.
+    label:
+      type: string
+      minLength: 1
+      maxLength: 120
+      description: Where the bin is, in the seller's words, such as "Garage shelf 3".
+    itemCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: The items in the bin that have not sold.
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+StorageLocationPage:
+  type: object
+  description: Every bin of the account, at most 1000.
+  required: [data, nextCode]
+  properties:
+    data:
+      type: array
+      description: By code, with numbers in number order (`B-2` before `B-12`).
+      maxItems: 1000
+      items:
+        $ref: '#/StorageLocation'
+    nextCode:
+      type: string
+      minLength: 1
+      maxLength: 32
+      description: |
+        A code for the next bin, to offer when the seller makes one: the number after the
+        highest of the newest bin's series (`B-13` after `B-12`), or `B-1` for the first.
+StorageLocationCreate:
+  type: object
+  required: [code]
+  properties:
+    code:
+      type: string
+      minLength: 1
+      maxLength: 32
+      description: |
+        Letters, digits, spaces, and `- . /`; stored trimmed and in capitals. A code another
+        bin of the account has is `409 already_exists`.
+    label:
+      type: string
+      maxLength: 120
+      description: Blank or left out means none.
+StorageLocationReplace:
+  type: object
+  description: The bin's new code and label; a label left out is cleared.
+  required: [code]
+  properties:
+    code:
+      type: string
+      minLength: 1
+      maxLength: 32
+    label:
+      type: string
+      maxLength: 120
+StorageLocationItem:
+  type: object
+  description: An item in the bin.
+  required: [itemId, sku, status]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    sku:
+      $ref: './common.yaml#/Sku'
+    title:
+      type: string
+      maxLength: 200
+    status:
+      $ref: './items.yaml#/ItemStatus'
+    thumbnailUrl:
+      type: string
+      format: uri
+      description: The item's cover photo, small; absent until a photo is processed.
+StorageLocationDetail:
+  type: object
+  description: A bin and the items in it that have not sold.
+  required: [location, items]
+  properties:
+    location:
+      $ref: '#/StorageLocation'
+    items:
+      type: array
+      description: The newest items first, at most 500 (`location.itemCount` counts them all).
+      maxItems: 500
+      items:
+        $ref: '#/StorageLocationItem'
+StorageLocationItemsAdd:
+  type: object
+  required: [itemIds]
+  properties:
+    itemIds:
+      type: array
+      description: |
+        The items to put in the bin; each leaves the bin it was in. An item already in this
+        bin stays. An id that is not an item of this account is `422` with a `fieldErrors`
+        entry.
+      minItems: 1
+      maxItems: 200
+      uniqueItems: true
+      items:
+        $ref: './common.yaml#/Id'
