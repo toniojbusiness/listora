@@ -29,7 +29,8 @@ Code:
   marketplace or AI: every number comes from the sales Listora already recorded
   ([sales.md](sales.md#sales-history)).
 - `packages/analysis/src/scan.ts`: the AI read, `scanItem` (purpose `thrift_scan`, standard tier,
-  no item quota), with its own small output schema `thrift_scan` and a cached system prompt.
+  no item quota, thinking off), with its own small output schema `thrift_scan`, held to its enums
+  (`strictEnums`), and a cached system prompt.
 - `packages/eval/src/scan/`: the backtest, `npm run eval -- scan`.
 - `apps/api/src/scans` and `apps/api/src/sourcing-runs`: the scan's read and Keep, and the run
   with its checkout and summary (below); `scanOwnHistory` and `runEstimate` in
@@ -187,7 +188,7 @@ What it set and found:
 - **The AI read is fast and cheap enough** (p50 1.4 s against the plan's 2.5 s; $0.0003 a
   scan). A tag close-up makes the brand right 66% of the time instead of 50% for 1.7 s more.
 - **The AI estimate runs high** for this household: its middle was 1.6 times the real sale
-  price. Scaled by the household's own ratio (leave-one-out), its low-to-high range held the sale
+  price (1.3 times since the read's price sentence, [Speed](#speed)). Scaled by the household's own ratio (leave-one-out), its low-to-high range held the sale
   price 55% to 60% of the time and its median error fell to 35% to 40%.
 - **Own sales are the better price source** (unbiased), but only once the identity is right and
   the sales are enough: most items matched on the brand or the category, never both.
@@ -202,7 +203,9 @@ What it set and found:
 
 Add Item has a third mode, **Scan**, next to One item and Batch, shown only where `thrift_scan`
 is on. **Start scanning** asks where the seller is (checkout below), then opens the scan camera
-and starts a run (the server's is made with the first scan).
+and starts a run; the server's is made, with the place, as the camera opens
+(`ScanRunModel.prepare`), so the first shot's read neither waits for it nor opens the
+connection to Listora.
 
 - **One shot** of the item in hand. The shutter is at the bottom center; the read starts at
   once and the camera is ready for the next item while it runs.
@@ -243,9 +246,10 @@ the folder is emptied at launch. Reading with no signal is M5.
 /v1/sourcing-runs/{runId}/end` ends it, marking its undecided scans `skipped`.
 - `POST /v1/scans` (`createScan`): the item shot (and a tag close-up) inline as base64 JPEGs of
   at most 1,600 pixels and 350 KB (the app sends 1,024 pixels, about 150 KB), the tag text the
-  phone read (Vision, within 0.4 s, so a slow read never holds the scan up), and the note. The
-  server checks each image's JPEG header and size, reads it with `scanItem` (Haiku, the AI
-  guards and metering), drops the images, and answers synchronously with the identity, the AI
+  phone read (Vision, within 0.4 s, so a slow read never holds the scan up: at the deadline the
+  scan goes without it, even though Vision only stops at its next pass), and the note. The
+  server checks each image's JPEG header and size, reads it with `scanItem` (Haiku with thinking
+  off, the AI guards and metering), drops the images, and answers synchronously with the identity, the AI
   estimate (labeled), the flags, the household's own sales like the item per marketplace, the
   call, the search words, and the research links. The call: `scanOwnHistory` over the sales that
   count (eBay's shown but never feeding it), payouts after the fees of the marketplace with most
@@ -306,15 +310,24 @@ Many resellers decide at the bins by asking a chatbot that searches the web whet
 and item are worth it. The scan does the same, in the
 background, so the card never waits on it.
 
-- **When.** As soon as the read lands, the app calls `POST /v1/scans/{scanId}/research`
-  (`researchScan`); the card says "Checking the web for its retail price" and takes in the
-  answer when it comes. A read without a brand asks nothing (`no_brand`). A scan already
-  researched answers as it is.
+- **When.** Once a card has been on screen for 2 seconds (`ScanRunModel.defaultResearchDwell`),
+  or at once when it is picked again in the tray, the app calls `POST
+/v1/scans/{scanId}/research` (`researchScan`); the card says "Checking the web for its retail
+  price" and takes in the answer when it comes. At the bins most items are skipped within a
+  second or two of their card by shooting the next one, and a lookup costs about $0.02, so a
+  card the seller moved on from (the next shot, Tag, or a note that reads it again) is never
+  looked up unless they come back to it. Each scan is looked up once. A read without a brand
+  asks nothing (`no_brand`). A scan already researched answers as it is.
 - **What.** One standard-tier call (Haiku) with the Claude API's web search, at most two
   searches (`researchScanItem` in `@listora/analysis`, purpose `thrift_scan_research`), for the
   item's **original retail price** on the brand's or a retailer's site or another reputable
   source, and **what such items resell for** on the resale marketplaces themselves, with how
   well the brand resells.
+- **Never failed for its length.** The answer's schema allows four times the card's limits
+  (model names of 60 characters, 6 models, 4 pages per number, a 240-character summary), and the
+  verification cuts it to them (a name or summary at a word, with an ellipsis). An answer that
+  broke a length used to be sent again with its searches, and then fail: in a live sample, 2 of
+  10 lookups cost $0.045 each and showed nothing.
 - **Never without its page.** Every number names the pages it came from, and only pages the
   searches really returned count (`verifiedResearch`): a price whose page is not among them is
   dropped, a resale range keeps only pages of the resale marketplaces (`RESALE_SITES`; resale
@@ -364,31 +377,62 @@ measured three ways:
 - **The server** logs every scan's `readMs` (receipt to answer, the AI call included) with its
   call, and stores it in `item_scan.read_ms`; the AI call's own latency is in
   `ai_usage_event.latency_ms`.
-- **The iPhone** times each card from the shutter (`ScanEntry.cardAfter`, logged as "scan card
-  after N ms") and the run's active time (`InteractionMeter`, session `scan-<run>`), logged when
-  the run ends.
+- **The iPhone** times each card from the shutter press (`ScanEntry.cardAfter`, logged as "scan
+  card after N ms"), so the camera's own capture time counts, and the run's active time
+  (`InteractionMeter`, session `scan-<run>`), logged when the run ends.
 - **The owner** sees them on the scan camera in Test mode, tagged "Testing": "Card 2.1 s · 95%
   3.4 s · active 2.8 s an item". Sellers never see timings.
 
-**Measured 2026-10-31** on the local API with the real read (`claude-haiku-5-5`), 10 scans of
-invented 1,024-pixel tag images (about 12 KB each): the server's read took 2.4 s at p50 (2.0 s
-to 3.1 s once warm; the first, which writes the prompt cache, 6.2 s), of which all but about
-10 ms is the AI call, for about $0.00037 a scan. The answer is about 440 output tokens, which
-is what the time is spent on; the backtest's 1.4 s (on listing photos) answered shorter. So the
-identification target of 2.5 s holds at the server, with little room for cellular: the live
-test measures the card from the shutter on the phone, and if it runs over, the next step is a
-shorter answer or streaming the identity first (the plan's "identity fields come first"). The
-phone's own part (the 1,024-pixel JPEG and the tag text, capped at 0.4 s) runs before the
-request, and the upload-sized photo is prepared while the read runs.
+**Measured 2026-10-31, before and after the speed work.** The live path: `POST /v1/scans` on the
+local API with the real read (`claude-haiku-5-5`), 30 scans in a row of 1,024-pixel JPEGs at the
+app's quality (6 invented tag and label shots, 24 of the household's listing photos), timed at
+the client; and the backtest's 64 sold items (`npm run eval -- scan`).
 
-**Measured again 2026-10-31**, after the read gained the model, style number, era, material,
-style, and a tag's retail price, 5 scans of invented tag images: the read took 3.4 s to 4.7 s
-once warm (p50 3.6 s, about 650 output tokens), now over the 2.5 s target, for about $0.0005 a
-scan. The web research that follows it took 6.6 s to 12.6 s uncached (two searches, about
-$0.023 each, nearly all of it the $0.01 searches) and 10 ms from the cache. The card shows the
-read without waiting for it, so the research adds no time before the call, only after. The
-levers for the read, in order: the low-effort thinking that makes up most of its output (a
-no-thinking setting for this one call), then streaming the identity first.
+|                                   | Before                     | After                      |
+| --------------------------------- | -------------------------- | -------------------------- |
+| Live read, p50 / p95              | 2.66 s / 3.94 s            | 1.41 s / 2.18 s            |
+| Live reads failed                 | 1 of 30                    | 0 of 30                    |
+| Output tokens, p50                | 448                        | about 210                  |
+| Cost per scan                     | $0.00039                   | $0.00028                   |
+| Backtest read, p50 / p95          | 1.79 s / 4.02 s            | 1.50 s / 2.09 s            |
+| Backtest reads failed             | 3 of 64                    | 0 of 64                    |
+| Brand agreed (of the labeled)     | 26                         | 29 to 31                   |
+| AI estimate's bias, same 58 items | +50% (27 inside its range) | +28% (30 inside its range) |
+
+What made the difference, measured one at a time on the backtest's photos:
+
+- **Thinking off** (`thinking: 'off'`). With thinking on, a quarter of the listing photos and
+  every tag shot thought first, 300 to 570 tokens, adding 1.5 s to 3.5 s: that was the slow
+  tail and most of the tag shots' time. Off, every read answers in about 210 tokens, and the
+  identification held or improved. Off alone, the AI estimate ran higher (+65% against the
+  sales), so the prompt now says what a used one really goes for is usually well under what
+  sellers ask and far under retail, which brought it to +28%. (That sentence was checked on the
+  same 64 sales it was tuned on.)
+- **Enums held** (`strictEnums`). One read in twenty had named a category outside the list,
+  so it was sent again (1.5 s more) and sometimes failed twice (a "Couldn't read this one"). A
+  shot of only a care label could also answer an empty item name, which the grammar cannot
+  forbid: it now reads as "Unidentified item" instead of failing. The prompt no longer repeats
+  the category list, which the schema carries.
+- **Measured and not taken:** a 768-pixel image (no faster at the server, since the time is in
+  the answer, and fewer brands named), a JPEG quality of 50 (no faster, and the tag's print is
+  what matters), pre-warming the prompt cache (a cold cache cost $0.0004 more but no time), and
+  keeping the connection to the AI open between scans (about 90 ms a scan once 12 s apart; Node's
+  fetch closes idle connections after 4 s, and changing that needs another HTTP client).
+- **On the iPhone:** the server run is made as the camera opens instead of before the first
+  read, which saves the first shot a round trip and finds the connection to Listora open; the
+  tag text's 0.4 s deadline now holds (before, the scan waited for Vision's current pass,
+  which can run past it); and the card's time counts from the shutter press.
+
+The web research is about $0.023 a lookup (two searches at $0.01 and the pages' tokens) and
+6 s to 12 s, in the background. One search instead of two found the retail price for 4 of 10
+items instead of 9, so it stays at two. The cost is cut instead by never paying for a lookup
+that fails on a length (above) and by looking up only cards the seller is still looking at
+(two seconds on screen), which at the bins skips most items' lookups.
+
+The streaming the plan names ("identity fields come first") is not needed for the target: the
+whole answer is now 1.4 s at the server. The live test on the captain's iPhone measures the rest:
+the camera's capture, the upload on cellular, and the card. The iPhone's part needs a new app
+build; the server's applies with a deploy.
 
 ### Data
 
@@ -420,7 +464,12 @@ no-thinking setting for this one call), then streaming the identity first.
   era of the brand; an unknown model looked up afresh with a retail range across models; a
   price whose page was never returned dropped; nothing looked up without a brand; a tag's
   retail price ahead of the web), `scan-research.test.ts` (pages verified, resale only from
-  the marketplaces, metered searches), and the provider's web search.
+  the marketplaces, metered searches, an overlong answer cut instead of failed), and the
+  provider's web search.
+- The read's speed settings: `scan.test.ts` (thinking off and the enums held on the request; an
+  empty item name read as "Unidentified item"), and in `@listora/ai`, `anthropic-provider.test.ts`
+  (thinking off only when asked; `outputJsonSchema` the SDK helper's schema without
+  `strictEnums` and with every enum kept with it) and `client.test.ts`.
 - `@listora/sourcing` (`scanOwnHistory`, the signals, `salesTrend`, the research keys),
   `@listora/pricing` (`scanResearchLinks`, `scanLabelViolations`), the retention rules, and the
   app feature gate.
@@ -438,7 +487,10 @@ no-thinking setting for this one call), then streaming the identity first.
   run, the small JPEG with tag text, implicit skip and Keep from the tray, notes before and after
   a read, the tag close-up, Retry, End run; the upload queue's `keepScan`, a deleted draft's item
   found by keeping again, a skipped scan's draft failing visibly; the research asked for after
-  the read and the card taking it in, nothing asked without a brand); `ThriftScanUITests` end
+  the read and the card taking it in, nothing asked without a brand; only a card still on screen
+  after the dwell, or picked again in the tray, looked up, once; the server run made as the
+  camera opens; the card timed from the shutter press; the tag text's deadline holding against
+  a reader that does not stop at once); `ThriftScanUITests` end
   to end on the local stack with the fake camera and the fake AI's scan and web research
   (`FakeAI/default.json`).
 

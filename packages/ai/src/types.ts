@@ -12,6 +12,14 @@ export type AiTier = AnalysisTier;
 export const AI_EFFORTS = ['low', 'medium', 'high'] as const;
 export type AiEffort = (typeof AI_EFFORTS)[number];
 
+/**
+ * Whether the model may think before it answers. `adaptive` (the default): it decides, within
+ * the tier's effort. `off`: it answers at once, for a short, latency-bound call whose answer
+ * does not gain from reasoning (the thrift scan's read).
+ */
+export const AI_THINKING = ['adaptive', 'off'] as const;
+export type AiThinking = (typeof AI_THINKING)[number];
+
 export const AI_IMAGE_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 export type AiImageMediaType = (typeof AI_IMAGE_MEDIA_TYPES)[number];
 
@@ -39,6 +47,13 @@ export interface OutputSchema<T> {
    * fails is an `invalid_output` call.
    */
   readonly enforcement?: SchemaEnforcement;
+  /**
+   * With `grammar`, also hold the answer to the schema's string enums. The SDK's schema helper
+   * relaxes every `enum` into a description, so by default the model can still answer a value
+   * outside the list (an `invalid_output` call). Turn it on per schema once its grammar is
+   * proven to compile live, since a stricter grammar is a larger one.
+   */
+  readonly strictEnums?: boolean;
 }
 
 export const SCHEMA_ENFORCEMENTS = ['grammar', 'prompt'] as const;

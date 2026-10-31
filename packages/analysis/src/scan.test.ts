@@ -1,4 +1,11 @@
-import { AiCallError, AiGuardError } from '@listora/ai';
+import {
+  AiCallError,
+  AiGuardError,
+  FakeAiProvider,
+  inMemoryFixtures,
+  type AiProvider,
+  type ProviderRequest,
+} from '@listora/ai';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -11,6 +18,7 @@ import {
   ScanFailedError,
   scanItem,
   scanPrompt,
+  UNIDENTIFIED_ITEM,
   type ScanAnswer,
   type ScanInput,
 } from './scan.ts';
@@ -87,6 +95,30 @@ describe('scanItem', () => {
     expect(usageStore.events).toMatchObject([
       { purpose: SCAN_PURPOSE, tier: 'standard', outcome: 'succeeded', images: 1 },
     ]);
+  });
+
+  it('reads at once, without thinking, held to its category, department, and condition lists', async () => {
+    const sent: ProviderRequest<unknown>[] = [];
+    const fake = new FakeAiProvider({
+      fixtures: inMemoryFixtures({ [HASH]: fixture(answer()) }),
+    });
+    const provider: AiProvider = {
+      id: 'fake',
+      generate: (request) => {
+        sent.push(request);
+        return fake.generate(request);
+      },
+    };
+    const { ai } = client({ provider });
+    await scanItem(ai, input());
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ thinking: 'off', output: { strictEnums: true } });
+  });
+
+  it('names an item it could not name, rather than failing the read', () => {
+    expect(SCAN_OUTPUT.schema.safeParse(answer({ item: '' })).success).toBe(true);
+    expect(decodeScanAnswer(answer({ item: '' })).item).toBe(UNIDENTIFIED_ITEM);
+    expect(decodeScanAnswer(answer()).item).toBe('green Synchilla fleece pullover');
   });
 
   it('turns what the AI could not tell into nulls, and an all-zero price into none', () => {
