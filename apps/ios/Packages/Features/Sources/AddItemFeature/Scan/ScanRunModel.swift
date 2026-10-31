@@ -23,13 +23,14 @@ final class ScanRunModel {
     private(set) var pendingNote: String?
     private(set) var isEnded = false
 
-    private let service: any ScanService
+    let service: any ScanService
     private let tagReader: any TagReader
     private let saveDraft: ScanDraftSaver
     private let directory: URL
     private let now: () -> Date
-    private let researchDwell: Duration
-    private let log = Logger(subsystem: "com.listora.app", category: "scan")
+    /// How long a card is on screen before its web research is asked for.
+    let researchDwell: Duration
+    let log = Logger(subsystem: "com.listora.app", category: "scan")
     private var serverRun: Task<String, any Error>?
     private let createRunKey = UUID().uuidString.lowercased()
     /// Each entry's upload-sized photo (and tag photo) as it is prepared.
@@ -37,6 +38,10 @@ final class ScanRunModel {
     private var tagPhotos: [String: Task<StoredScanPhoto, any Error>] = [:]
     /// A note said while the entry's first read was still running: read again once it lands.
     private var notesAfterRead: [String: String] = [:]
+    /// The marketplace comparison lane, where `market_comps` is on (docs/features/thrift-scan.md).
+    let comparisons: (any MarketComparisons)?
+    /// The comparison reads this run started, by id: each is read once.
+    var startedReads: Set<String> = []
 
     /// The longest the tag text reading may hold up a read; past it the read goes without.
     static let tagReadDeadline: Duration = .milliseconds(400)
@@ -52,12 +57,17 @@ final class ScanRunModel {
         tagReader: any TagReader,
         directory: URL,
         saveDraft: @escaping ScanDraftSaver,
+        comparisons: (any MarketComparisons)? = nil,
+        comparing marketplaces: [String] = [],
         now: @escaping () -> Date = Date.init,
         researchDwell: Duration = ScanRunModel.defaultResearchDwell,
     ) {
         let id = UUID().uuidString.lowercased()
         self.id = id
         self.service = service
+        self.comparisons = marketplaces.isEmpty ? nil : comparisons
+        // The comparison pages load while the seller walks to the bins.
+        self.comparisons?.warmUp(marketplaces)
         self.tagReader = tagReader
         self.directory = directory.appending(path: id, directoryHint: .isDirectory)
         self.saveDraft = saveDraft
@@ -67,7 +77,7 @@ final class ScanRunModel {
 
     /// The ``InteractionMeter`` session of the run's camera.
     var meterSession: String {
-        "scan-\(id)"
+        KeptScanRun.meterSession(id)
     }
 
     var current: ScanEntry? {
@@ -187,6 +197,7 @@ final class ScanRunModel {
             }
         }
         try? FileManager.default.removeItem(at: directory)
+        comparisons?.coolDown()
     }
 
     /// The owner's measurements of the run (Test mode only): how long each card took from the
@@ -226,6 +237,7 @@ final class ScanRunModel {
                 Haptics.play(haptic)
             }
             scheduleResearch(entryID, scanID: scan.id)
+            startComparisons(entryID, scan)
             if first, let cardAfter = entries.first(where: { $0.id == entryID })?.cardAfter {
                 log.info("scan card after \(Int(cardAfter * 1000), privacy: .public) ms")
             }
@@ -290,66 +302,9 @@ final class ScanRunModel {
         }
     }
 
-    private func update(_ entryID: String, _ change: (inout ScanEntry) -> Void) {
+    func update(_ entryID: String, _ change: (inout ScanEntry) -> Void) {
         guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         change(&entries[index])
-    }
-}
-
-/// The web research: the card's background lookup.
-extension ScanRunModel {
-    /// Looks the read up on the web once its card has been on screen for ``researchDwell``, unless
-    /// the seller moved on by then (shot the next item, asked for the tag, or added a note).
-    private func scheduleResearch(_ entryID: String, scanID: String) {
-        guard researchDwell > .zero else {
-            startResearch(entryID, scanID: scanID)
-            return
-        }
-        let dwell = researchDwell
-        Task { [weak self] in
-            try? await Task.sleep(for: dwell)
-            guard let self, !isEnded, currentID == entryID, tagShotFor == nil else { return }
-            startResearch(entryID, scanID: scanID)
-        }
-    }
-
-    /// Looks the read item up on the web in the background: the card shows the read at once and
-    /// takes in the research, and the call made again with it, when it comes. Once per scan.
-    private func startResearch(_ entryID: String, scanID: String) {
-        guard let entry = entries.first(where: { $0.id == entryID }), entry.scanID == scanID,
-              entry.research == .none, entry.card?.hasBrand == true
-        else { return }
-        update(entryID) { $0.research = .checking }
-        let service = service
-        Task { [weak self] in
-            let result: Result<ItemScan, APIFailure>
-            do {
-                result = try await .success(service.researchScan(
-                    scanID: scanID,
-                    idempotencyKey: UUID().uuidString.lowercased(),
-                ))
-            } catch let failure as APIFailure {
-                result = .failure(failure)
-            } catch {
-                result = .failure(.networkUnavailable)
-            }
-            self?.finishResearch(entryID, scanID: scanID, result)
-        }
-    }
-
-    private func finishResearch(_ entryID: String, scanID: String, _ result: Result<ItemScan, APIFailure>) {
-        // A later read of the item (a note, the tag) replaced this scan: its research is stale.
-        guard entries.first(where: { $0.id == entryID })?.scanID == scanID else { return }
-        switch result {
-        case let .success(scan):
-            update(entryID) { entry in
-                entry.state = .read(ScanCard(scan))
-                entry.research = .done
-            }
-        case let .failure(failure):
-            log.error("Scan research failed: \(failure.message, privacy: .public)")
-            update(entryID) { $0.research = .failed }
-        }
     }
 }
 
@@ -359,7 +314,7 @@ extension ScanRunModel {
     /// from the scan in the background. The camera stays open.
     func keep(_ entryID: String) async {
         guard let entry = entries.first(where: { $0.id == entryID }), let scanID = entry.scanID,
-              entry.card != nil, entry.decision == .open || isKeepFailed(entry)
+              let card = entry.card, entry.decision == .open || isKeepFailed(entry)
         else { return }
         update(entryID) { $0.decision = .keeping }
         do {
@@ -368,7 +323,8 @@ extension ScanRunModel {
             if let tag = try await tagPhotos[entryID]?.value {
                 try shots.append((tag.preparedPhoto(), .tag))
             }
-            guard let draftID = await saveDraft(shots, scanID) else { throw ScanKeepError.notSaved }
+            let origin = DraftScanOrigin(scanID: scanID, runID: id, title: card.title)
+            guard let draftID = await saveDraft(shots, origin) else { throw ScanKeepError.notSaved }
             update(entryID) { $0.decision = .kept(draftID: draftID) }
             Haptics.play(.success)
         } catch {

@@ -6,9 +6,15 @@ from the seller's own sales or the AI, and a call of **Buy**, **Your call**, or 
 confidence word. Built so far: the rules, the AI read, and a backtest on real sold items (plan
 milestone M0); the seller's own sales as real sold data (`own_history`, M1) on the item's
 price screen and in the sourcing kit (`GET /v1/sourcing/kit`); and the scan itself online
-(M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray. Scan mode is
-hidden from sellers until it passes live (`thrift_scan`, [verified-features.md](verified-features.md)):
-only the owner's Test mode has it. Nothing in it reads or writes a marketplace.
+(M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray; Depop's
+comparisons from its public search, read on the seller's iPhone logged out (M3, "Marketplace
+comparisons" below); and upgrading a run's kept drafts with real photos (M6): "Needs photos",
+Shoot this run, the full analysis with the scan's read as a hint, and the run's rapid review.
+Scan mode is hidden from sellers until it passes live (`thrift_scan`,
+[verified-features.md](verified-features.md)), and each marketplace's comparisons until they do
+(`market_comps`): only the owner's Test mode has them. The server never reads or writes a
+marketplace; nothing in the scan ever writes one, and the comparisons read only what any
+logged-out visitor's browser reads.
 
 Code:
 
@@ -28,7 +34,16 @@ Code:
   (below); `scanOwnHistory` in `@listora/sourcing` and `scanResearchLinks` and
   `scanLabelViolations` in `@listora/pricing`.
 - iPhone: `AddItemFeature/Scan` (the camera, the card, the tray, the run, the note, the
-  measurements); a kept scan is an ordinary draft whose server item `keepScan` creates.
+  measurements, and the kept run's section, guided shoot, and review); a kept scan is an
+  ordinary draft whose server item `keepScan` creates.
+- `packages/analysis/src/load-input.ts`: the full analysis of a kept item carries its scan's
+  read as a hint (`scanRead`, `scanReadHint`).
+- Comparisons: `marketStats` and `marketDemand` in `@listora/sourcing` (`market.ts`, also the
+  phone bundle's, as `@listora/sourcing/market`); the reader in `packages/automation/src/comps/`
+  (`query.ts` on the server, `depop.ts` and `run.ts` on the phone, through `listoraPhone.compare`)
+  and Depop's search in `depop/pages/search.ts`; the server's half in
+  `apps/api/src/scans/comparisons.ts`; the iPhone's lane in
+  `PhoneExecutionFeature/Comparisons` (`WebMarketComparisons`).
 
 ## The call
 
@@ -300,8 +315,8 @@ The call's other signals (`call.signals`), each with what it rests on:
   of the last 90 days against the 9 months before. "Trending up" only with at least 3 recent and
   2 earlier sales and recent ones coming at least 1.5 times as fast; "Slowing" with at least 3
   earlier and recent ones at most two-thirds as fast. A slowing trend caps a call at medium
-  confidence; a rise never raises one. With too few sales it says nothing. Marketplace trends
-  arrive with the comparisons (M3) as another `trend.source`.
+  confidence; a rise never raises one. With too few sales it says nothing. The marketplaces'
+  side of it is the comparisons' demand (below).
 - **Style.** The AI's read of a style or era buyers search by ("Y2K", "gorpcore"), labeled
   "The AI's read of the style, not sales data". It never moves the call.
 
@@ -421,6 +436,192 @@ build; the server's applies with a deploy.
 
 **The phone needs a new app build** for Scan mode.
 
+## Marketplace comparisons (M3, Depop)
+
+The card gains a row per marketplace whose comparisons are on (`market_comps`, per marketplace,
+[verified-features.md](verified-features.md)): what listings like the item ask in the
+marketplace's public search, read on the seller's iPhone within seconds of the read. The captain
+approved reading the public, logged-out search results from the seller's iPhone within budgets,
+stopping at any check (2026-10-31); eBay, Poshmark, and Mercari follow as their own readers.
+
+### What Depop shows a visitor
+
+Read live on 2026-10-31 in a fresh browser context with no cookies (through `market-pace.sh`):
+the search page (`/search/?q=<words>`) loads its results from Depop's same-origin API, 24 at a
+time, the most relevant first: `GET /presentation/api/v1/search/products/?what=<words>&limit=24
+&country=us&currency=USD&from=in_country_search`, answering each product's brand, Depop product
+type (`attributes.product_type`), sizes, description, status, and price, and the search's
+`total_count`. **Depop shows a visitor no sold listings**: its search has no sold filter, and its
+pages ask for similar items with `hide_sold_products=true`. So, by the captain's call through
+firstmate (2026-10-31), the reader never sends a request Depop's own pages do not send, and:
+
+- **Depop's numbers are asking prices** of close matches for sale, always shown under
+  "Asking prices - not sold listings" (`ASKING_PRICES_LABEL`, held by the label guard), never
+  as sold prices;
+- **the sold side is the household's own Depop sales** (`ownSales`, as before);
+- **the trend read is the household's recent sold pace against Depop's live supply**
+  (`marketDemand`).
+
+Marketplace sold prices arrive with the eBay reader.
+
+### The read
+
+1. **The query** (`comparisonQuery`, on the server). Never the brand alone: a query needs the
+   brand and an item type, so a read without a brand or a category searches nothing ("Not
+   enough to search Depop for"). The words are the brand, the exact model or line, and the type
+   as a buyer types them ("levis 501 jeans"); the match is held to Depop's product types for the
+   item's category (from `mapDepopCategory`, every department when the read could not tell),
+   with the type's own words for a listing without one.
+2. **The phone reads it** (`listoraPhone.compare`): from the warm search page, the one GET the
+   search page itself makes, through the same session rules as every automated read (pacing,
+   the read-only page driver, the page inspection after every action).
+3. **Matching** (`marketStats`): only listings of the brand (by `brandKey`) **and** the type;
+   then the tightest level with at least 5 (`MIN_MARKET_MATCHES`): the model and the size, the
+   model, the type and the size, the type. Outliers past 1.5 interquartile ranges are left out
+   (a "$1 to trade" or a "$500 rare" listing must not move a range).
+4. **Only numbers leave the phone**: the level, the asking quartiles, the counts read, and the
+   search's total (`saveScanComparison`). Never a listing, a seller, a slug, or a photo.
+
+### On the card
+
+- **The row**: "Depop: asking $15-$25, 6 like it for sale" under the asking label, with the
+  demand ("Sells for you, little competition" or "Crowded on Depop", with what it rests on:
+  "Your 4 sales like it in the last 90 days; 40 for sale on Depop now"). While the phone reads it:
+  "Checking Depop..." with a spinner. Without numbers it says why: "Not enough similar listings
+  on Depop", "Depop prices paused today", "Not checked: Depop limit for this hour", "Couldn't
+  check Depop". A read the app could not make is answered as failed, so a card never waits on
+  one that will not come.
+- **In the call**: close matches' asking prices hold the AI estimate's or the web's range to
+  their high quartile (sellers ask more than buyers pay; "the range is held to them"), from 5 of
+  them (`minAskingMatches`); they never move a range from the household's own sales. The demand
+  is a signal only: supply alone says little about how fast an item sells, so it moves no call
+  until a marketplace's sold pace comes with its comparisons.
+
+### Account risk
+
+- **No account in the read.** The comparison page is the app's own web view with a
+  non-persistent data store, never given the seller's cookies and never the page their
+  automation runs in. The phone runtime's lane (`RuntimeLane`) and its sessions are not used.
+- **Phone only.** The server never reads a marketplace for a comparison; it hands out each read
+  and takes the numbers.
+- **Stop at the first check.** A CAPTCHA, a bot check, a sign-in page, or a 403 that is not JSON
+  ends the read as `check`, and is never passed or handed to the seller (no session of theirs is
+  involved). The server then hands out no Depop read for the account for 24 hours, and the
+  iPhone reads none either (`ComparisonPauses`): "Depop prices paused today". A rate limit
+  pauses for an hour.
+- **Budgets** (`COMPARISON_LIMITS`, starting points to tune in the live test): Depop 60 reads an
+  hour and 300 a day per account; past them, "Not checked: Depop limit for this hour".
+- **Cache.** A read of the same search (`comparisonQueryKey`: the words, brand, model, size, and
+  types) from the last 24 hours answers the next scan without a read, so a rack of one brand and
+  model costs one.
+- **Honest browser.** WebKit as it says, no disguised user agent, no proxy; the page loads only
+  the marketplace's own origins. Images, fonts, and media are blocked
+  (`WebMarketComparisons.blockedMedia`), so a read moves only its data.
+- **Warm-up.** Starting a run opens Depop's search page in its comparison web view
+  (`listoraPhone.warmUp`), so the first read starts warm; ending it lets the pages go.
+- **Off locally.** `MARKET_COMPARISONS=off` (`.env.example`, and the e2e stack) hands out no
+  read, so a simulator never reads a real marketplace; deployments default to `on`.
+
+### The API
+
+- `ItemScan.comparisons`: each marketplace's row (`ScanComparison`: `status` `checking`,
+  `read`, `not_enough`, `paused`, `limit`, or `failed`; its `label`; `asking`, `supply`,
+  `demand`, `cached`; and while `checking`, the `read` the phone runs).
+- `PUT /v1/scans/{scanId}/comparisons/{comparisonId}` (`saveScanComparison`): the phone's answer
+  (`ScanComparisonAnswer`: `read` with its `stats`, `check`, `rate_limited`, or `failed`), which
+  answers the scan with the call made again. An answer again changes nothing. `404` where the
+  scan or the marketplace's comparisons are not on for the account. The web research makes its
+  call again under the scan's lock, with the comparisons as they are then, so neither answer
+  loses the other.
+
+### Data
+
+- `market_comparison`: one row per read handed to the phone: the account, the scan, the
+  marketplace, the search and its key, the status (`pending`, then `read`, `check`,
+  `rate_limited`, or `failed`), the numbers (`stats`, `for_sale_total`), and the read's time.
+  The rows are the budget, the cache, and the pause. Deleted after 7 days (`marketComparisons`,
+  [privacy.md](privacy.md#retention)).
+- The scan's comparisons as the card shows them are in `item_scan.call_detail`.
+
+### Tests
+
+- `@listora/sourcing` (`market.test.ts`: brand and type both required, the levels, outliers,
+  the demand; `call.test.ts`: the asking cap and the demand signal), `@listora/pricing` (the
+  asking label in the guard).
+- `packages/automation/src/comps`: the query (`query.test.ts`) and the lane on the phone's page
+  backend against a stand-in search (`run.int.test.ts`: the match and count, the warm-up, and a
+  bot check, a 403 that is not JSON, a CAPTCHA page, and a rate limit each stopping the read);
+  the recorded real search (`depop/recordings/search.json`, recorded logged out with
+  `npm run recordings:record -- depop --logged-out`, [recorded-pages.md](recorded-pages.md)).
+- `apps/api/src/scans/comparisons.int.test.ts`: the read handed out by brand, type, model, and
+  size; the asking prices under their label and the AI estimate held to them; the cache; the
+  pauses after a check and a rate limit; the hour's budget; no query without a brand; too few
+  matches; the web research after a comparison keeping it; a failed read; another account's scan
+  and malformed answers (a listing, quartiles out of order, more counted than read) refused.
+- iPhone: `ScanTests.swift` (the warm-up, one read per comparison and the card taking it in, a
+  read the lane can't make, comparisons off, a paused row), `ComparisonPausesTests.swift`.
+
+**The phone needs a new app build** for the comparisons.
+
+## Upgrading drafts (M6)
+
+A kept scan's draft has only the scan's shot (and its tag close-up). Before it can be listed it
+needs its real photos; this is how a whole run gets them.
+
+### On the iPhone
+
+- **The list.** Add Item lists each run's kept drafts together under **Kept at the store** ("5
+  kept · 4 need photos"), in the order they were kept, newest run first. A draft is named by the
+  scan's read ("Acme Outfitters blue button-up shirt", its SKU underneath once the server has
+  one), and a draft whose only photos are the scan's shots is marked **Needs photos**
+  (`Draft.needsPhotos`). Today's `review_drafts` card opens this list, as before.
+- **Shoot this run** opens the guided camera (`CameraCaptureView`, front, back, tag, details) on
+  the run's drafts that need photos, one after another (`RunShootView`), with each one's scan
+  shot and name on screen ("3 of 23: Acme Outfitters blue button-up shirt"). Each item's
+  boundary is known, so there is no grouping step. **Done** saves the item's photos and moves to
+  the next; **Skip item** leaves it for later; closing the camera ends the shoot and keeps the
+  items already shot. Background cleanup is in the draft's editor, as for any draft.
+- **The scan shot goes** once the real photos are taken (`replaceScanShots`): the new photos come
+  first, and the scan's shots are deleted, on the server too by the upload queue, unless the
+  seller taps **Keep scan photo**, which keeps them after the new ones.
+- **Review N items** opens the batch's rapid review (`BatchReviewView`, [batch.md](batch.md)) on
+  the run's drafts whose real photos are all on the server, in the order kept; a draft still
+  uploading waits ("1 item uploading its photos, then ready to review"), so an analysis never
+  runs on half of an item's photos. Each page starts the item's analysis as the single-item
+  review does; approving saves the item and its draft on this iPhone is done. The summary says
+  "Run reviewed".
+- **Data** (GRDB migration "v5: scan drafts' runs and shots"): `draft.scanRunID` (the run on this
+  iPhone) and `draft.scanTitle` (the read's name), and `draftPhoto.isScanShot`. A scan kept
+  before this version has no run: it shows with the other drafts, still marked Needs photos.
+
+### The analysis
+
+The item's full analysis (the ordinary `item_analysis`, `ai_items` quota, about $0.0015) runs once
+on the real photos, with the read of the scan it was kept from sent as `scanRead` in the request
+(`loadAnalysisInput` reads `item_scan.read` of the kept scan). It is the identity only (brand,
+item, model or line, style number, era, material, category, department, size, condition, the
+read's confidence, and visible damage), never the scan's price guess, so the analysis prices from
+its own photos. The cached system prompt tells the model it is a quick read of one shot at the
+store: a hint to check, where the photos always win, as an escalation checks `firstAnalysis`.
+
+### Tests
+
+- `packages/analysis`: `prompt.test.ts` (the hint sent, without a price; none without a scan;
+  `scanReadHint` on partial and empty reads) and `job.int.test.ts` (a kept scan's read sent with
+  its item's analysis, and no other item's).
+- iPhone: `KeptRunTests.swift` (scan shots and Needs photos after a relaunch; the shoot's photos
+  first and the scan shots gone, or kept; the photo limit; a deleted draft; runs grouped and
+  ordered; only fully uploaded items reviewed; the words; the upload queue replacing the scan
+  shot on the server); `ScanTests.swift` (Keep records the run and the read's name);
+  `ThriftScanUITests.testAKeptScanIsShotWithRealPhotosThenReviewed` end to end on the local stack.
+
+**The phone needs a new app build** for M6. Live test: the captain lists a run's draft on
+`tonioreign`.
+
+**Follow-ups.** Start each draft's analysis in the background as soon as its real photos are on
+the server (today the review starts it, with the next page loaded ahead), and keep a run's
+drafts grouped by the server's run on a second device.
+
 ## The seller's own sales (M1)
 
 ### The sales that count
@@ -520,9 +721,13 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   the call to sellers.
 - **M2 live test** (the captain, Test mode, a real store, 30 or more scans): the speed targets
   above on cellular, then `thrift_scan` into `VERIFIED_APP_FEATURES` with its evidence.
-- **Later milestones:** comparisons on the phone (M3, gated on the captain's call), the run's
-  place and checkout into a haul (M4), scanning with no signal and a run that survives a
-  relaunch (M5), and upgrading a run's drafts with real photos (M6).
+- **M3 live test** (the captain, Test mode, the captain's iPhone at a store): Depop's comparison
+  row within 4 s of the shutter, the budgets and the pause tuned on evidence, then
+  `market_comps` on Depop into `VERIFIED_FEATURES`. eBay sold, Poshmark, and Mercari readers
+  follow, each its own PR and gate.
+- **Later milestones:** the run's place and checkout into a haul (M4), and scanning with no
+  signal and a run that survives a relaunch (M5). Upgrading a run's drafts (M6) is built; its
+  live test is the captain listing a run's draft on `tonioreign`.
 
 ## Data
 

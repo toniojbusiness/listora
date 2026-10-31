@@ -15,7 +15,14 @@ import {
   type FakeFixture,
   type ProviderRequest,
 } from '@listora/ai';
-import { createDatabase, createInventoryItem, jsonb, SchemaMigrator, type Db } from '@listora/db';
+import {
+  createDatabase,
+  createInventoryItem,
+  jsonb,
+  SchemaMigrator,
+  type Db,
+  type JsonObject,
+} from '@listora/db';
 import { parsePhotoDerivatives, processPhoto, storageKeys } from '@listora/photos';
 import { createLogger, photoSetHash, sha256Hex } from '@listora/shared';
 import { LocalDiskStorage } from '@listora/storage';
@@ -213,6 +220,68 @@ describe('runItemAnalysis (real Postgres and local storage)', () => {
     );
     const unstyled = JSON.parse(provider.requests[1]?.prompt ?? '{}') as Record<string, unknown>;
     expect(unstyled).not.toHaveProperty('depopStyle');
+  });
+
+  /** A sourcing run and a scan of it, kept as `itemId` when given. */
+  async function scanOf(account: string, itemId: string | null, read: JsonObject) {
+    const run = await db
+      .insertInto('sourcing_run')
+      .values({ account_id: account })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('item_scan')
+      .values({
+        account_id: account,
+        run_id: run.id,
+        image_sha256: sha256Hex(crypto.randomUUID()),
+        image_count: 1,
+        read: jsonb(read),
+        call: 'your_call',
+        confidence: 'low',
+        basis: 'ai_estimate',
+        call_detail: jsonb({}),
+        decision: itemId === null ? 'undecided' : 'kept',
+        item_id: itemId,
+        model: 'claude-haiku-5-5',
+        ai_attempts: 1,
+        cost_micros: 400,
+        read_ms: 1500,
+      })
+      .execute();
+  }
+
+  it('sends the read of the thrift scan the item was kept from as a hint, and none otherwise', async () => {
+    const kept = await queuedAnalysis(['front']);
+    await scanOf(accountId, kept.itemId, {
+      brand: 'Patagonia',
+      item: 'green fleece pullover',
+      sizeLabel: 'M',
+      identityConfidence: 0.7,
+      aiEstimate: { lowCents: 2000, midCents: 3000, highCents: 4000 },
+      flags: { visibleDamage: false, lotOrBundle: false, counterfeitProne: false },
+    });
+    // A scan never kept, of the same account, gives no item a hint.
+    await scanOf(accountId, null, { brand: 'Levi', item: 'jeans' });
+    expect(await runItemAnalysis(deps(), { accountId, analysisId: kept.analysisId })).toBe(
+      'succeeded',
+    );
+    const sent = JSON.parse(provider.requests[0]?.prompt ?? '{}') as Record<string, unknown>;
+    expect(sent['scanRead']).toMatchObject({
+      brand: 'Patagonia',
+      item: 'green fleece pullover',
+      sizeLabel: 'M',
+      identityConfidence: 0.7,
+      visibleDamage: false,
+    });
+    expect(JSON.stringify(sent['scanRead'])).not.toContain('Cents');
+
+    const plain = await queuedAnalysis(['front']);
+    expect(await runItemAnalysis(deps(), { accountId, analysisId: plain.analysisId })).toBe(
+      'succeeded',
+    );
+    const unhinted = JSON.parse(provider.requests[1]?.prompt ?? '{}') as Record<string, unknown>;
+    expect(unhinted).not.toHaveProperty('scanRead');
   });
 
   it('takes over an analysis left running by a crashed run', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_DEPOP_DESCRIPTION_STYLE } from './description-style.ts';
-import { MAX_ANALYSIS_PHOTOS, selectAnalysisPhotos } from './input.ts';
+import { MAX_ANALYSIS_PHOTOS, scanReadHint, selectAnalysisPhotos } from './input.ts';
 import { buildAnalysisRequest, ITEM_ANALYSIS_SYSTEM } from './prompt.ts';
 import { image, photo, tagInput } from './test-support.ts';
 
@@ -38,6 +38,7 @@ describe('buildAnalysisRequest', () => {
       digits: '036000291452',
     });
     expect(prompt).not.toHaveProperty('firstAnalysis');
+    expect(prompt).not.toHaveProperty('scanRead');
   });
 
   it('keeps the system prompt identical for every item, so providers can cache it', () => {
@@ -70,6 +71,78 @@ describe('buildAnalysisRequest', () => {
       unknown
     >;
     expect(prompt['firstAnalysis']).toEqual(firstAnalysis);
+  });
+
+  it("sends the thrift scan's read of a kept item as a hint, with the cached system prompt", () => {
+    const scanRead = scanReadHint({
+      brand: 'Patagonia',
+      item: 'green fleece pullover',
+      line: 'Synchilla',
+      styleNumber: '',
+      era: 'vintage 1990s',
+      material: 'fleece',
+      category: 'clothing/tops',
+      department: 'men',
+      sizeLabel: 'M',
+      condition: 'good',
+      identityConfidence: 0.7,
+      flags: { visibleDamage: true, lotOrBundle: false, counterfeitProne: false },
+    });
+    expect(scanRead).toBeDefined();
+    if (scanRead === undefined) return;
+    const request = buildAnalysisRequest(tagInput({ scanRead }));
+    expect(request.system).toBe(ITEM_ANALYSIS_SYSTEM);
+    expect(ITEM_ANALYSIS_SYSTEM).toContain('these photos always win');
+    const prompt = JSON.parse(request.prompt) as Record<string, unknown>;
+    expect(prompt['scanRead']).toEqual({
+      brand: 'Patagonia',
+      item: 'green fleece pullover',
+      line: 'Synchilla',
+      styleNumber: null,
+      era: 'vintage 1990s',
+      material: 'fleece',
+      category: 'clothing/tops',
+      department: 'men',
+      sizeLabel: 'M',
+      condition: 'good',
+      identityConfidence: 0.7,
+      visibleDamage: true,
+    });
+    // The scan's price guess never rides along: the analysis prices from its own photos.
+    expect(JSON.stringify(prompt['scanRead'])).not.toContain('Cents');
+  });
+});
+
+describe('scanReadHint', () => {
+  it('keeps only the identity fields, and leaves out any it cannot trust', () => {
+    expect(
+      scanReadHint({
+        brand: '  ',
+        item: 'tee',
+        identityConfidence: 3,
+        flags: 'none',
+        aiEstimate: { lowCents: 1000, midCents: 2000, highCents: 3000 },
+      }),
+    ).toEqual({
+      brand: null,
+      item: 'tee',
+      line: null,
+      styleNumber: null,
+      era: null,
+      material: null,
+      category: null,
+      department: null,
+      sizeLabel: null,
+      condition: null,
+      identityConfidence: null,
+      visibleDamage: null,
+    });
+  });
+
+  it('gives nothing for a read that names nothing', () => {
+    expect(scanReadHint(null)).toBeUndefined();
+    expect(scanReadHint('read')).toBeUndefined();
+    expect(scanReadHint({ brand: '', item: '' })).toBeUndefined();
   });
 });
 

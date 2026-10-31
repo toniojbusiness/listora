@@ -16,8 +16,8 @@ export {
 } from './description-style.ts';
 export type { DescriptionStyle } from './description-style.ts';
 export type { AnalysisConfig } from './config.ts';
-export { MAX_ANALYSIS_PHOTOS, MAX_TAG_CROPS, selectAnalysisPhotos } from './input.ts';
-export type { AnalysisInput, AnalysisPhoto } from './input.ts';
+export { MAX_ANALYSIS_PHOTOS, MAX_TAG_CROPS, scanReadHint, selectAnalysisPhotos } from './input.ts';
+export type { AnalysisInput, AnalysisPhoto, ScanReadHint } from './input.ts';
 export { runItemAnalysis } from './job.ts';
 export type { AnalysisJobDependencies, AnalysisJobOutcome } from './job.ts';
 export { loadAnalysisInput } from './load-input.ts';

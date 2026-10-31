@@ -24,6 +24,7 @@ import {
 
 import { recentObservedSales } from '../pricing/repository.ts';
 import { ownSales, ownSalesMarketplaces } from '../sourcing/repository.ts';
+import { marketInput, type StoredComparison } from './comparisons.ts';
 import type { Tenant } from '../tenancy.ts';
 import type { ScanCallDetail } from './repository.ts';
 import { callDetail } from './views.ts';
@@ -36,6 +37,7 @@ export async function assessScan(
   read: ThriftScan,
   research: ScanResearch | undefined,
   now: Date,
+  comparisons: readonly StoredComparison[] = [],
 ): Promise<ScanCallDetail> {
   const gate = await loadFeatureGate(db, tenant.accountId);
   const sales = await ownSales(db, tenant, ownSalesMarketplaces(gate), now);
@@ -48,6 +50,12 @@ export async function assessScan(
           sales.filter((sale) => matched.has(sale.id)),
           now,
         );
+  const recentOwnSales = trend?.recentSales ?? 0;
+  // Depop first: the marketplace whose comparisons the call weighs.
+  const market = marketInput(
+    comparisons.find((comparison) => comparison.stats !== undefined),
+    recentOwnSales,
+  );
   const retail = retailOf(read, research);
   const fees = await payoutFees(db, tenant, history.payoutMarketplace, now);
   const settings = DEFAULT_SCAN_CALL_SETTINGS;
@@ -79,6 +87,7 @@ export async function assessScan(
     newWithTags: read.condition === 'new_with_tags',
     trend,
     style: read.style ?? undefined,
+    market,
   };
   const rule = scanCall(input, settings);
   return {
@@ -91,6 +100,7 @@ export async function assessScan(
     }),
     ...(trend === undefined || trend.direction === 'unknown' ? {} : { trend: trendView(trend) }),
     ...(retail === undefined ? {} : { retail }),
+    ...(comparisons.length === 0 ? {} : { comparisons: [...comparisons], recentOwnSales }),
   };
 }
 

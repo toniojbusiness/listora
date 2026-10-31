@@ -31,6 +31,67 @@ export interface AnalysisInput {
    * Listora's default, which the system prompt holds.
    */
   readonly depopStyle?: string;
+  /**
+   * What the thrift scan read from its one shot at the store, when the item was kept from a scan
+   * (docs/features/thrift-scan.md, "Upgrading drafts"): a hint the analysis checks against the
+   * real photos, as an escalation checks `firstAnalysis`.
+   */
+  readonly scanRead?: ScanReadHint;
+}
+
+/**
+ * The identity a thrift scan read, sent with the item's full analysis. Only what the scan saw;
+ * never its price guess, so the analysis prices the item from its own photos.
+ */
+export interface ScanReadHint {
+  readonly brand: string | null;
+  readonly item: string | null;
+  readonly line: string | null;
+  readonly styleNumber: string | null;
+  readonly era: string | null;
+  readonly material: string | null;
+  readonly category: string | null;
+  readonly department: string | null;
+  readonly sizeLabel: string | null;
+  readonly condition: string | null;
+  readonly identityConfidence: number | null;
+  readonly visibleDamage: boolean | null;
+}
+
+/**
+ * The hint of a stored scan read (`item_scan.read`), field by field: a read stored by an older
+ * version, or a field it lacks, gives null rather than failing the analysis. Undefined when
+ * the read names nothing at all.
+ */
+export function scanReadHint(read: unknown): ScanReadHint | undefined {
+  if (typeof read !== 'object' || read === null) return undefined;
+  const value = read as Record<string, unknown>;
+  const text = (key: string): string | null => {
+    const field = value[key];
+    return typeof field === 'string' && field.trim() !== '' ? field.trim() : null;
+  };
+  const flags = value['flags'];
+  const damage =
+    typeof flags === 'object' && flags !== null
+      ? (flags as Record<string, unknown>)['visibleDamage']
+      : undefined;
+  const confidence = value['identityConfidence'];
+  const hint: ScanReadHint = {
+    brand: text('brand'),
+    item: text('item'),
+    line: text('line'),
+    styleNumber: text('styleNumber'),
+    era: text('era'),
+    material: text('material'),
+    category: text('category'),
+    department: text('department'),
+    sizeLabel: text('sizeLabel'),
+    condition: text('condition'),
+    identityConfidence:
+      typeof confidence === 'number' && confidence >= 0 && confidence <= 1 ? confidence : null,
+    visibleDamage: typeof damage === 'boolean' ? damage : null,
+  };
+  return Object.values(hint).some((field) => field !== null) ? hint : undefined;
 }
 
 /**

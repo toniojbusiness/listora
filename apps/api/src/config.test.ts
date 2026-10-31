@@ -10,6 +10,14 @@ const DATABASE_URL = 'postgres://listora:hunter2@127.0.0.1:55432/listora';
 const REQUIRED = { DATABASE_URL, AUTH_DRIVER: 'dev' };
 
 describe('loadApiConfig', () => {
+  it('hands out marketplace comparison reads unless MARKET_COMPARISONS is off', () => {
+    expect(loadApiConfig({ ...REQUIRED, MARKET_COMPARISONS: 'off' }).marketComparisons).toBe(false);
+    expect(loadApiConfig({ ...REQUIRED, MARKET_COMPARISONS: 'on' }).marketComparisons).toBe(true);
+    expect(() => loadApiConfig({ ...REQUIRED, MARKET_COMPARISONS: 'yes' })).toThrow(
+      'MARKET_COMPARISONS must be on or off',
+    );
+  });
+
   it('applies defaults when only the required keys are set', () => {
     expect(loadApiConfig(REQUIRED)).toEqual({
       host: '127.0.0.1',
@@ -37,6 +45,7 @@ describe('loadApiConfig', () => {
       automation: loadAutomationSettings({}),
       emailIngest: loadEmailIngestConfig({}),
       operationRetryDelayScale: 1,
+      marketComparisons: true,
       rateLimits: { perAddress: 1200, publicPerAddress: 60, perAccount: 600 },
     });
   });

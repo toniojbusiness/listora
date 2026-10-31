@@ -69,6 +69,11 @@ export const RETENTION_DAYS = {
    * 30 days; a brand's, 7).
    */
   scanResearch: 30,
+  /**
+   * The thrift scan's marketplace comparison reads (numbers only), past the longest they count:
+   * a day's budget, a day's pause after a check, and the 24-hour cache.
+   */
+  marketComparisons: 7,
 } as const;
 
 export type RetentionRule = keyof typeof RETENTION_DAYS;
@@ -220,6 +225,17 @@ export async function runDataRetention(
         delete from scan_research where (account_id, kind, key) in (
           select account_id, kind, key from scan_research
           where created_at < ${cutoff('scanResearch')}
+          order by created_at
+          limit ${batchSize}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    }),
+    marketComparisons: await repeat(async () => {
+      const result = await sql`
+        delete from market_comparison where id in (
+          select id from market_comparison
+          where created_at < ${cutoff('marketComparisons')}
           order by created_at
           limit ${batchSize}
         )

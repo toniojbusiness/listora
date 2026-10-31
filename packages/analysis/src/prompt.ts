@@ -92,7 +92,13 @@ Escalation
   brand. needsEscalation: true when a closer look by a stronger model would likely change the
   brand, product, or price; say why in escalationReason.
 - When the request includes a "firstAnalysis", it is a faster model's answer for the same
-  photos. Check it, keep what is right, and correct what is wrong.`;
+  photos. Check it, keep what is right, and correct what is wrong.
+
+Scan read
+- When the request includes a "scanRead", the seller scanned the item at the store first: it
+  is a quick model's read of one shot of the item in hand, before these photos were taken.
+  Use it as a hint only. Keep what these photos confirm, correct what they contradict, and
+  never copy a detail from it that these photos do not show; these photos always win.`;
 
 /** One image of the request and what it shows. */
 interface ImageEntry {
@@ -167,6 +173,7 @@ export function buildAnalysisRequest(
     })),
     parsedTagFacts: parsedFactsForPrompt(tagFacts),
     ...(input.depopStyle === undefined ? {} : { depopStyle: input.depopStyle }),
+    ...(input.scanRead === undefined ? {} : { scanRead: input.scanRead }),
     ...(options.firstAnalysis === undefined ? {} : { firstAnalysis: options.firstAnalysis }),
   };
   return {

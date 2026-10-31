@@ -9,13 +9,14 @@ protocol ScanService: Sendable {
     func createScan(_ request: ScanRequest, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func researchScan(scanID: String, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func endSourcingRun(runID: String, idempotencyKey: String) async throws(APIFailure)
+    func saveScanComparison(scanID: String, comparisonID: String, answer: Data) async throws(APIFailure) -> ItemScan
 }
 
 extension UploadAPI: ScanService {}
 
 /// Saves a kept scan's photos as a draft whose server item is the scan's; answers the draft's
 /// id, or nil when it could not be saved.
-typealias ScanDraftSaver = @MainActor (_ photos: [(PreparedPhoto, PhotoRole)], _ scanID: String) async -> String?
+typealias ScanDraftSaver = @MainActor (_ photos: [(PreparedPhoto, PhotoRole)], _ scan: DraftScanOrigin) async -> String?
 
 /// One item scanned in the run, from its shot to the seller's decision.
 struct ScanEntry: Equatable, Identifiable {

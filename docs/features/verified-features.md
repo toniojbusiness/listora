@@ -28,6 +28,7 @@ Poshmark offer reads failed and showed the seller an error. Now Poshmark offers 
 | `listing_import`  | Importing existing listings as items                                  | `importsFrom` (Import listings, starting one, Sync's listing reads)                                                |
 | `listing_refresh` | Refreshing live listings on a schedule                                | `canRefresh` and the refresh schedule; the app hides Settings > Listing refresh and the item's Refresh this item   |
 | `revise`          | Editing a live listing's details (title, description, aspects)        | `availableActions` (a live listing offers no `revise`), so `reviseListing` is refused before anything is queued    |
+| `market_comps`    | The thrift scan's comparisons from the marketplace's public search    | `createScan` hands the iPhone no read, `saveScanComparison` answers `404`; the card shows no row                   |
 
 **Listora's own features** follow the same rule (`APP_FEATURES`, `VERIFIED_APP_FEATURES`,
 `isAppFeatureOn`), listed in the answer's `app` rather than under a marketplace:
@@ -128,6 +129,7 @@ write ran only on the captain's own accounts. Tristin's Depop shop was only ever
 | Mercari     | `offers`, answers              | Hidden: not built; Mercari's website shows no offers page ([offers.md](offers.md))                                                                    |
 | Mercari     | `listing_refresh`              | Hidden: no live refresh yet                                                                                                                           |
 | Every one   | `revise`                       | Hidden: no revise has run live on any marketplace (see below)                                                                                         |
+| Depop       | `market_comps`                 | Hidden: the logged-out reader is tested on a recorded public search; its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))    |
 | Poshmark    | `offers`                       | Hidden: the live read failed (`element_missing`, 2026-10-28) on an account with no offers                                                             |
 | Poshmark    | `sales_history`, `sale_checks` | Hidden: the checks run and read 0, but the account has never sold, so finding a sale was never proven                                                 |
 | Poshmark    | `listing_import`               | Hidden: the only live run was on an empty closet                                                                                                      |

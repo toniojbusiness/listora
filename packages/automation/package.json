@@ -28,6 +28,7 @@
     "@listora/push": "*",
     "@listora/sales": "*",
     "@listora/shared": "*",
+    "@listora/sourcing": "*",
     "@listora/storage": "*",
     "kysely": "^0.29.7",
     "pg": "^8.23.1",

@@ -91,16 +91,26 @@ struct DraftRow: View {
             .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(draft.record.sku ?? "New draft")
+                Text(draft.record.scanTitle ?? draft.record.sku ?? "New draft")
                     .font(Typography.headline)
                     .foregroundStyle(Palette.textPrimary)
+                    .lineLimit(2)
                 Text(
-                    "\(photoCount) · \(draft.record.createdAt, format: .relative(presentation: .named))",
+                    "\(details) · \(draft.record.createdAt, format: .relative(presentation: .named))",
                 )
                 .font(Typography.subheadline)
                 .foregroundStyle(Palette.textSecondary)
-                StatusBadge(summary.badge, tone: summary.tone.statusTone)
-                    .padding(.top, 2)
+                FlowLayout {
+                    if draft.needsPhotos {
+                        // A kept scan has only its scan shot: its real photos come first.
+                        StatusBadge("Needs photos", tone: .actionNeeded)
+                            .accessibilityIdentifier("draft.needsPhotos")
+                    }
+                    if !draft.needsPhotos || summary.tone == .danger {
+                        StatusBadge(summary.badge, tone: summary.tone.statusTone)
+                    }
+                }
+                .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -108,8 +118,11 @@ struct DraftRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var photoCount: String {
-        draft.photos.count == 1 ? "1 photo" : "\(draft.photos.count) photos"
+    /// The SKU under a kept scan's name, then the photo count.
+    private var details: String {
+        let photos = draft.photos.count == 1 ? "1 photo" : "\(draft.photos.count) photos"
+        guard draft.record.scanTitle != nil, let sku = draft.record.sku else { return photos }
+        return "\(sku) · \(photos)"
     }
 }
 
@@ -122,5 +135,32 @@ extension DraftUploadSummary.Tone {
         case .warning: .actionNeeded
         case .danger: .failed
         }
+    }
+}
+
+/// The drafts not kept in a scan run, below the runs.
+extension DraftListView {
+    func draftSection(_ drafts: [Draft]) -> some View {
+        Section {
+            ForEach(drafts) { draft in
+                NavigationLink(value: AddItemRoute.draft(draft.id)) {
+                    DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
+                }
+                .accessibilityIdentifier("draft.row")
+            }
+            .onDelete { offsets in
+                for index in offsets {
+                    model.deleteDraft(drafts[index].id)
+                }
+            }
+        } header: {
+            SectionHeader(
+                drafts.count == 1 ? "1 draft" : "\(drafts.count) drafts",
+                subtitle: "Saved on this iPhone. Uploads keep going in the background.",
+            )
+            .padding(.bottom, Spacing.xxs)
+        }
+        .listRowBackground(Palette.surface.color)
+        .listSectionSeparatorTint(Palette.separator.color)
     }
 }

@@ -13,6 +13,9 @@ enum AddItemRoute: Hashable {
     /// The rapid review of a batch's analyzed items (the review feature's), by the batch's id on
     /// this iPhone.
     case batchReview(String, BatchReviewRequest)
+    /// The rapid review of a thrift run's kept drafts once their real photos are on the server
+    /// (docs/features/thrift-scan.md, "Upgrading drafts").
+    case runReview(BatchReviewRequest)
 }
 
 /// Whether Add Item starts one item, a whole haul, or scans items at the store.
@@ -45,12 +48,15 @@ enum OpenCamera: Identifiable {
     case single
     case batch(String)
     case scan(ScanRunModel)
+    /// Shoot this run: the guided camera over a run's kept drafts that need photos, by id.
+    case runShoot(runID: String, draftIDs: [String])
 
     var id: String {
         switch self {
         case .single: "single"
         case let .batch(batchID): "batch-\(batchID)"
         case let .scan(run): "scan-\(run.id)"
+        case let .runShoot(runID, _): "run-shoot-\(runID)"
         }
     }
 }

@@ -97,6 +97,11 @@ export interface ApiConfig {
    * worker's, for the steps phones run (the API records their results).
    */
   operationRetryDelayScale: number;
+  /**
+   * MARKET_COMPARISONS: whether scans hand the iPhone reads of marketplaces' public searches
+   * (docs/features/thrift-scan.md, "Marketplace comparisons"); `off` hands out none.
+   */
+  marketComparisons: boolean;
   /** API_RATE_LIMIT_*: requests per minute per source address and per account. */
   rateLimits: RateLimits;
 }
@@ -150,6 +155,9 @@ const envSchema = z.object({
       error: 'COGNITO_CLIENT_IDS must be a comma-separated list of app client ids',
     })
     .optional(),
+  MARKET_COMPARISONS: z
+    .enum(['on', 'off'], { error: 'MARKET_COMPARISONS must be on or off' })
+    .default('on'),
   SIGN_UP: z
     .enum(SIGN_UP_MODES, { error: `SIGN_UP must be one of ${SIGN_UP_MODES.join(', ')}` })
     .default('open'),
@@ -303,6 +311,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     automation,
     emailIngest,
     operationRetryDelayScale: values.OPERATION_RETRY_DELAY_SCALE,
+    marketComparisons: values.MARKET_COMPARISONS === 'on',
     rateLimits: {
       perAddress: values.API_RATE_LIMIT_PER_ADDRESS ?? DEFAULT_RATE_LIMITS.perAddress,
       publicPerAddress:

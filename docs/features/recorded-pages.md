@@ -15,15 +15,16 @@ The code is in `packages/automation/src/recordings/`; each marketplace's plan is
 
 Each marketplace's plan lists its entries (`plans.ts`); each is one recording:
 
-| Entry      | Page                                        | Script                                                             |
-| ---------- | ------------------------------------------- | ------------------------------------------------------------------ |
-| `hub`      | A page only the signed-in seller sees       | The adapter's health check                                         |
-| `listings` | The seller's shop, closet, or listings      | The adapter's `listings` read (imports and drift checks)           |
-| `listing`  | One of the seller's listings for sale       | The adapter's read-back of it                                      |
-| `edit`     | That listing's edit page                    | Opening the editor (Poshmark's also reads its private SKU)         |
-| `sold`     | The seller's sold items                     | The adapter's sale check (`orders`)                                |
-| `offers`   | The buyers' offers on the seller's listings | The adapter's offers read ([offers.md](offers.md)); where recorded |
-| `form-*`   | The sell form, one per form shape           | The create's own form filling, without photos, never sent          |
+| Entry      | Page                                        | Script                                                                    |
+| ---------- | ------------------------------------------- | ------------------------------------------------------------------------- |
+| `hub`      | A page only the signed-in seller sees       | The adapter's health check                                                |
+| `listings` | The seller's shop, closet, or listings      | The adapter's `listings` read (imports and drift checks)                  |
+| `listing`  | One of the seller's listings for sale       | The adapter's read-back of it                                             |
+| `edit`     | That listing's edit page                    | Opening the editor (Poshmark's also reads its private SKU)                |
+| `sold`     | The seller's sold items                     | The adapter's sale check (`orders`)                                       |
+| `offers`   | The buyers' offers on the seller's listings | The adapter's offers read ([offers.md](offers.md)); where recorded        |
+| `form-*`   | The sell form, one per form shape           | The create's own form filling, without photos, never sent                 |
+| `search`   | The public search, as a logged-out visitor  | A thrift scan comparison read ([thrift-scan.md](thrift-scan.md)); Depop's |
 
 The form shapes are each marketplace's distinct forms: on Depop the 17 department and size-list
 shapes ([depop-automation.md](depop-automation.md#live-verification)), on Mercari each size group
@@ -44,6 +45,14 @@ production (the phone runtime's for all three, phone/backend.ts; the runner's fo
 that runs in the cloud), on a recording backend (`recording-backend.ts`) that writes down each
 action, the page after it, the data globals and web API answers the script read, and what the
 script returned.
+
+**Logged-out entries** (`session: 'logged_out'`, the public search) never use the seller's
+session: each runs in a fresh browser context of that Chrome, which holds no cookies and never
+signed in (the recorder refuses one that holds any). `npm run recordings:record -- depop
+--logged-out` records only those, and refuses to name any other, so a worker can record a public
+page without touching a seller's shop (through `market-pace.sh`, like every session). A search
+names other sellers in its slugs and their towns, which the plan's `identity` adds to the words
+redacted; the entry runs with its own profile (`profile`, the comparison read's).
 
 **It changes nothing on the marketplace.** Read entries run as reads, which refuse form input and
 any step that changes something. Form entries fill a form exactly as a create does, but without

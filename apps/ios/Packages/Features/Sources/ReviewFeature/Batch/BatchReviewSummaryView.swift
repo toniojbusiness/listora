@@ -6,7 +6,16 @@ import SwiftUI
 struct BatchReviewSummaryView: View {
     let summary: BatchReviewModel.Summary
     let total: Int
+    let source: BatchReviewRequest.Source
     let onDone: () -> Void
+
+    /// Where the items not approved wait.
+    nonisolated static func restNote(_ source: BatchReviewRequest.Source) -> String {
+        switch source {
+        case .batch: "The rest stay in the batch to review later."
+        case .scanRun: "The rest stay in your drafts to review later."
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -22,7 +31,7 @@ struct BatchReviewSummaryView: View {
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityIdentifier("batchSummary.saved")
                     Text(summary.saved.count < total
-                        ? "The rest stay in the batch to review later."
+                        ? Self.restNote(source)
                         : "Every item is in your inventory, ready to list.")
                         .font(Typography.callout)
                         .foregroundStyle(Palette.textSecondary)

@@ -449,6 +449,19 @@ export type ItemScanBasis = (typeof ITEM_SCAN_BASES)[number];
 export const ITEM_SCAN_DECISIONS = ['undecided', 'kept', 'skipped', 'replaced'] as const;
 export type ItemScanDecision = (typeof ITEM_SCAN_DECISIONS)[number];
 
+/**
+ * `market_comparison.status`: `pending` until the phone answers the read, then `read`, `check`
+ * (a bot check or CAPTCHA it stopped at), `rate_limited`, or `failed`.
+ */
+export const MARKET_COMPARISON_STATUSES = [
+  'pending',
+  'read',
+  'check',
+  'rate_limited',
+  'failed',
+] as const;
+export type MarketComparisonStatus = (typeof MARKET_COMPARISON_STATUSES)[number];
+
 /** `scan_research.kind`: an item's web facts, or a brand's (kept shorter). */
 export const SCAN_RESEARCH_KINDS = ['item', 'brand'] as const;
 export type ScanResearchKind = (typeof SCAN_RESEARCH_KINDS)[number];

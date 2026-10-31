@@ -18,7 +18,11 @@ struct BatchReviewView: View {
     var body: some View {
         Group {
             if model.showsSummary {
-                BatchReviewSummaryView(summary: model.summary, total: model.pages.count) { model.finish() }
+                BatchReviewSummaryView(
+                    summary: model.summary,
+                    total: model.pages.count,
+                    source: model.request.source,
+                ) { model.finish() }
             } else {
                 TabView(selection: $model.index) {
                     ForEach(Array(model.pages.enumerated()), id: \.offset) { index, page in
@@ -33,7 +37,7 @@ struct BatchReviewView: View {
         .onAppear { model.setVisible(true) }
         .onDisappear { model.setVisible(false) }
         .background(Palette.background)
-        .navigationTitle(model.showsSummary ? "Batch reviewed" : title)
+        .navigationTitle(model.showsSummary ? reviewedTitle : title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(model.showsSummary)
         .toolbar {
@@ -48,6 +52,13 @@ struct BatchReviewView: View {
 
     private var title: String {
         "Item \(model.index + 1) of \(model.pages.count)"
+    }
+
+    private var reviewedTitle: String {
+        switch model.request.source {
+        case .batch: "Batch reviewed"
+        case .scanRun: "Run reviewed"
+        }
     }
 }
 
