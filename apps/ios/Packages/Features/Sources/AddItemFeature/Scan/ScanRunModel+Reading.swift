@@ -82,6 +82,8 @@ extension ScanRunModel {
             entry.scanID = scan.id
             entry.scan = scan
             entry.state = .read(card)
+            // A new scan of the item: the last one's research, if any, was for that one.
+            entry.research = .none
             entry.replaces = nil
             entry.readKey = UUID().uuidString.lowercased()
             if late {
@@ -94,7 +96,17 @@ extension ScanRunModel {
         if !late, currentID == entryID, let haptic = card.haptic {
             Haptics.play(haptic)
         }
-        startResearch(entryID, scanID: scan.id)
+        if late {
+            // Read from the queue, with no card on screen for it: only a kept item, or the card
+            // in view, is looked up on the web (a lookup costs about $0.02); the tray asks for
+            // the others when one is opened.
+            let entry = entries.first { $0.id == entryID }
+            if entry?.isKeptOrPending == true || currentID == entryID {
+                startResearch(entryID, scanID: scan.id)
+            }
+        } else {
+            scheduleResearch(entryID, scanID: scan.id)
+        }
         startComparisons(entryID, scan)
         if !late, first, let cardAfter = entries.first(where: { $0.id == entryID })?.cardAfter {
             log.info("scan card after \(Int(cardAfter * 1000), privacy: .public) ms")

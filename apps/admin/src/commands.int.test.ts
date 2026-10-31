@@ -551,3 +551,109 @@ describe('activity and sale detection (real Postgres)', () => {
     );
   });
 });
+
+describe('test-mode-access and account-find (real Postgres)', () => {
+  const operator = ['--actor', 'ops-alice', '--reason', 'a tester'];
+
+  async function access(accountId: string) {
+    return db
+      .selectFrom('account')
+      .select(['test_mode', 'test_mode_granted_at'])
+      .where('id', '=', accountId)
+      .executeTakeFirstOrThrow();
+  }
+
+  it('grants an account Test mode, lists it, and revokes it with its switch off', async () => {
+    const tester = await insertAccount(db, 'Tester Closet');
+    output = '';
+    expect(await run(['test-mode-access', 'list'])).toContain('No account is granted Test mode.');
+
+    output = '';
+    expect(await run(['test-mode-access', 'grant', '--account', tester, ...operator])).toContain(
+      'now has Test mode',
+    );
+    expect((await access(tester)).test_mode_granted_at).toBeInstanceOf(Date);
+    expect((await access(tester)).test_mode).toBe(false);
+    output = '';
+    expect(await run(['test-mode-access', 'grant', '--account', tester, ...operator])).toContain(
+      'already had Test mode; nothing changed',
+    );
+    output = '';
+    const listed = JSON.parse(await run(['test-mode-access', 'list', '--json'])) as {
+      accountId: string;
+      on: boolean;
+    }[];
+    expect(listed).toEqual([expect.objectContaining({ accountId: tester, on: false })]);
+
+    // Its owner turned the switch on; revoking turns it off.
+    await db.updateTable('account').set({ test_mode: true }).where('id', '=', tester).execute();
+    output = '';
+    expect(await run(['test-mode-access', 'revoke', '--account', tester, ...operator])).toContain(
+      'no longer has Test mode, and its switch is off',
+    );
+    expect(await access(tester)).toEqual({ test_mode: false, test_mode_granted_at: null });
+    output = '';
+    expect(await run(['test-mode-access', 'revoke', '--account', tester, ...operator])).toContain(
+      'had no Test mode grant; nothing changed',
+    );
+
+    const audit = await db
+      .selectFrom('audit_log')
+      .select(['action', 'actor_kind', 'changes'])
+      .where('account_id', '=', tester)
+      .orderBy('created_at')
+      .execute();
+    expect(audit).toEqual([
+      {
+        action: 'account.test_mode_granted',
+        actor_kind: 'system',
+        changes: { actor: 'ops-alice', reason: 'a tester' },
+      },
+      {
+        action: 'account.test_mode_revoked',
+        actor_kind: 'system',
+        changes: { actor: 'ops-alice', reason: 'a tester' },
+      },
+    ]);
+    expect(logLines().map((line) => line['event'])).toEqual([
+      'test_mode_granted',
+      'test_mode_granted',
+      'test_mode_revoked',
+      'test_mode_revoked',
+    ]);
+    expect(logLines().map((line) => line['changed'])).toEqual([true, false, true, false]);
+  });
+
+  it('refuses an account that does not exist', async () => {
+    await expect(
+      run(['test-mode-access', 'grant', '--account', MISSING_ACCOUNT, ...operator]),
+    ).rejects.toThrow(CommandError);
+  });
+
+  it('finds the accounts connected to a shop, by handle in any case', async () => {
+    const shopper = await insertAccount(db, 'Shop Finder');
+    await db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: shopper,
+        marketplace: 'depop',
+        mode: 'automation',
+        external_user_id: 'Finder_Shop',
+        token_ciphertext: Buffer.from('sealed'),
+      })
+      .execute();
+    output = '';
+    const found = JSON.parse(await run(['account-find', '--shop', 'finder_shop', '--json'])) as {
+      accountId: string;
+      marketplace: string;
+      shop: string;
+    }[];
+    expect(found).toEqual([
+      expect.objectContaining({ accountId: shopper, marketplace: 'depop', shop: 'Finder_Shop' }),
+    ]);
+    output = '';
+    expect(await run(['account-find', '--shop', 'nobody_here'])).toContain(
+      'No account has a connection to the shop nobody_here.',
+    );
+  });
+});

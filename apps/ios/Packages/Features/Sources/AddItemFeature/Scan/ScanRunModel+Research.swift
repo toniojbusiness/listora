@@ -1,13 +1,30 @@
 import APIClient
 import Foundation
 
-/// The run's web research (docs/features/thrift-scan.md, "Web info"): asked for once each read
-/// lands, without holding the card up.
+/// The run's web research (docs/features/thrift-scan.md, "Web info"): asked for once a read's
+/// card has been on screen a moment, without holding the card up.
 extension ScanRunModel {
+    /// Looks the read up on the web once its card has been on screen for ``researchDwell``, unless
+    /// the seller moved on by then (shot the next item, asked for the tag, or added a note).
+    func scheduleResearch(_ entryID: String, scanID: String) {
+        guard researchDwell > .zero else {
+            startResearch(entryID, scanID: scanID)
+            return
+        }
+        let dwell = researchDwell
+        Task { [weak self] in
+            try? await Task.sleep(for: dwell)
+            guard let self, !isEnded, currentID == entryID, tagShotFor == nil else { return }
+            startResearch(entryID, scanID: scanID)
+        }
+    }
+
     /// Looks the read item up on the web in the background: the card shows the read at once and
-    /// takes in the research, and the call made again with it, when it comes.
+    /// takes in the research, and the call made again with it, when it comes. Once per scan.
     func startResearch(_ entryID: String, scanID: String) {
-        guard let entry = entries.first(where: { $0.id == entryID }), entry.card?.hasBrand == true else { return }
+        guard let entry = entries.first(where: { $0.id == entryID }), entry.scanID == scanID,
+              entry.research == .none, entry.card?.hasBrand == true
+        else { return }
         update(entryID) { $0.research = .checking }
         let service = service
         Task { [weak self] in

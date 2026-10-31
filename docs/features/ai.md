@@ -166,6 +166,18 @@ guards, cost reports, and spend check (the AI cost alarm is in
   with `enforcement: 'prompt'` sends the JSON schema as system instructions instead), base64
   images, the tier's effort, and a prompt-cache breakpoint on the system prompt. Its live smoke
   test runs only when `ANTHROPIC_API_KEY` is set.
+- **Enums in the grammar (`strictEnums`).** The SDK's schema helper relaxes every keyword the
+  grammar does not take into the description, and that includes `enum`, so by default a strict
+  output can still answer a value outside a list (an `invalid_output` call and a retry). An
+  output with `strictEnums: true` keeps its string enums in the grammar (`outputJsonSchema`).
+  It is opt-in per output because a stricter grammar is a larger one: only the thrift scan's
+  read uses it so far, where one read in twenty had named a category outside the list. Lengths
+  and minimums are never in the grammar either, so an answer schema that must not fail on them
+  allows the empty or long value and the decoder or the verification handles it.
+- **Thinking off (`thinking: 'off'`).** A call may turn the model's thinking off; by default it
+  thinks adaptively within the tier's effort. Only the thrift scan's read does, where thinking
+  added 1.5 s to 3.5 s to a quarter of the reads and most tag shots
+  ([thrift-scan.md](thrift-scan.md#speed)).
 - **Web search.** A call may let the model search the web first (`webSearch: { maxUses }`, the
   API's `web_search` server tool): each search is billed and metered (`webSearches`,
   `webSearchMicros`), the answer is read from the text after the last search result, and the

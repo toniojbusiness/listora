@@ -19,9 +19,9 @@ import { mayUseTestMode } from './test-mode.ts';
 /**
  * Each marketplace's features that passed a live end-to-end test
  * (docs/features/verified-features.md): the app shows only these, and the server runs only
- * their checks. The same for every account but the deployment owner's in Test mode
- * (docs/features/test-mode.md), which gets every built feature, the untested ones named in
- * `testing`.
+ * their checks. The same for every account but one in Test mode (docs/features/test-mode.md):
+ * the deployment owner's, or an account granted Test mode, which gets every built feature, the
+ * untested ones named in `testing`.
  */
 export function registerMarketplaceFeatureRoutes(
   app: FastifyInstance,
