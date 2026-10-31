@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_RESEARCH_SEARCHES,
   researchScanItem,
+  SCAN_RESEARCH_OUTPUT,
   SCAN_RESEARCH_OUTPUT_NAME,
   SCAN_RESEARCH_PURPOSE,
   ScanResearchFailedError,
@@ -139,5 +140,58 @@ describe('verifiedResearch', () => {
     );
     expect(research.resale).toBeNull();
     expect(research.retail).not.toBeNull();
+  });
+
+  it('cuts an answer too long for the card instead of failing it, which would search again', () => {
+    const longName =
+      "Women's Better Sweater Quarter-Zip Fleece Pullover in Recycled Polyester Knit";
+    const pages = [
+      'depop.com',
+      'poshmark.com',
+      'poshmark.com',
+      'mercari.com',
+      'ebay.com',
+      'grailed.com',
+    ].map((site, index) => ({
+      url: `https://www.${site}/listing/patagonia-${String(index)}`,
+      title: site,
+    }));
+    const long = answer({
+      retail: {
+        lowCents: 13_900,
+        highCents: 15_900,
+        sourceUrls: [RETAIL_PAGE.url],
+        models: [
+          longName,
+          'Synchilla',
+          'Retro-X',
+          'Re-Tool',
+          'Micro D',
+          'Better Sweater',
+          'R1',
+          'R2',
+        ],
+      },
+      resale: { lowCents: 4_000, highCents: 7_000, sourceUrls: pages.map((page) => page.url) },
+      summary: `Patagonia lists them at $139 to $159, and ${'used ones ask $40 to $70 on Poshmark '.repeat(8)}`,
+    });
+    // The answer is valid: the limits are the card's, kept by the verification.
+    expect(SCAN_RESEARCH_OUTPUT.schema.safeParse(long).success).toBe(true);
+    const research = verifiedResearch(long, [RETAIL_PAGE, ...pages]);
+    expect(research.retail?.models).toHaveLength(6);
+    expect(research.retail?.models[0]).toBe(
+      "Women's Better Sweater Quarter-Zip Fleece Pullover in…",
+    );
+    expect(research.retail?.models.every((model) => model.length <= 60)).toBe(true);
+    // Each site counts once, and at most four are kept.
+    expect(research.resale?.sources.map((source) => source.site)).toEqual([
+      'depop.com',
+      'poshmark.com',
+      'mercari.com',
+      'ebay.com',
+    ]);
+    expect(research.summary?.length).toBeLessThanOrEqual(240);
+    expect(research.summary?.endsWith('…')).toBe(true);
+    expect(research.summary).not.toMatch(/\s…$/);
   });
 });

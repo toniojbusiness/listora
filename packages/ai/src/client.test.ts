@@ -137,6 +137,14 @@ describe('AiClient metering', () => {
     expect(store.events[0]).toMatchObject({ tier: 'premium', model: 'claude-sonnet-5-5' });
   });
 
+  it("passes a call's thinking setting to the provider, and none when it sets none", async () => {
+    const { client, generate } = setup();
+    await client.generate(call({ thinking: 'off' }));
+    await client.generate(call());
+    expect(generate).toHaveBeenNthCalledWith(1, expect.objectContaining({ thinking: 'off' }));
+    expect(generate.mock.calls[1]?.[0]).not.toHaveProperty('thinking');
+  });
+
   it('records a failed call with its real usage and cost, then throws AiCallError', async () => {
     const { client, store } = setup({
       fixture: {

@@ -27,6 +27,18 @@ export const MAX_RESEARCH_ATTEMPTS = 2;
 const cents = z.int().min(0).max(100_000_000);
 const url = z.string().trim().max(500);
 
+/**
+ * What the card shows at most: a model name, the models and pages per number, and the summary.
+ * The answer's schema allows more (`ANSWER_SLACK`) and `verifiedResearch` cuts it to these,
+ * because a research that breaks a length is sent again with its searches, so a model name a
+ * few characters long would cost a second lookup and then fail.
+ */
+const MAX_MODEL_LENGTH = 60;
+const MAX_MODELS = 6;
+const MAX_SOURCES = 4;
+const MAX_SUMMARY_LENGTH = 240;
+const ANSWER_SLACK = 4;
+
 const researchAnswerSchema = z
   .object({
     retail: z
@@ -35,12 +47,20 @@ const researchAnswerSchema = z
           'The original retail price in US cents, low end across the models considered; 0 when not found',
         ),
         highCents: cents.describe('The high end; the same as lowCents for one exact model'),
-        sourceUrls: z.array(url).max(4).describe('The exact URLs of the pages that state them'),
+        sourceUrls: z
+          .array(url)
+          .max(MAX_SOURCES * ANSWER_SLACK)
+          .describe(`The exact URLs of the pages that state them, at most ${String(MAX_SOURCES)}`),
         models: z
-          .array(z.string().trim().max(60))
-          .max(6)
+          .array(
+            z
+              .string()
+              .trim()
+              .max(MAX_MODEL_LENGTH * ANSWER_SLACK),
+          )
+          .max(MAX_MODELS * ANSWER_SLACK)
           .describe(
-            'The models the price is for: the exact one, or each likely one when the model is not known',
+            `The models the price is for: the exact one, or each likely one when the model is not known; at most ${String(MAX_MODELS)}, each a short name under ${String(MAX_MODEL_LENGTH)} characters`,
           ),
       })
       .strict(),
@@ -50,7 +70,10 @@ const researchAnswerSchema = z
           'What such items typically resell for, low end, US cents; 0 when not found',
         ),
         highCents: cents,
-        sourceUrls: z.array(url).max(4).describe('The exact URLs of the pages it comes from'),
+        sourceUrls: z
+          .array(url)
+          .max(MAX_SOURCES * ANSWER_SLACK)
+          .describe(`The exact URLs of the pages it comes from, at most ${String(MAX_SOURCES)}`),
       })
       .strict(),
     reputation: z
@@ -59,8 +82,10 @@ const researchAnswerSchema = z
     summary: z
       .string()
       .trim()
-      .max(240)
-      .describe('One sentence of what the pages said, naming them; "" when nothing was found'),
+      .max(MAX_SUMMARY_LENGTH * ANSWER_SLACK)
+      .describe(
+        `One sentence of what the pages said, naming them, under ${String(MAX_SUMMARY_LENGTH)} characters; "" when nothing was found`,
+      ),
   })
   .strict()
   .superRefine((answer, ctx) => {
@@ -266,7 +291,8 @@ export function verifiedResearch(
     const site = siteOf(address);
     return site === undefined ? undefined : { url: address, site };
   };
-  const retailSources = answer.retail.highCents > 0 ? verified(answer.retail.sourceUrls) : [];
+  const retailSources =
+    answer.retail.highCents > 0 ? verified(answer.retail.sourceUrls).slice(0, MAX_SOURCES) : [];
   function verified(addresses: readonly string[]): ResearchSource[] {
     return dedupeSites(
       addresses.flatMap((address) => {
@@ -275,9 +301,9 @@ export function verifiedResearch(
       }),
     );
   }
-  const resaleSources = verified(answer.resale.sourceUrls).filter((source) =>
-    isResaleSite(source.site),
-  );
+  const resaleSources = verified(answer.resale.sourceUrls)
+    .filter((source) => isResaleSite(source.site))
+    .slice(0, MAX_SOURCES);
   const hasResale = answer.resale.highCents > 0 && resaleSources.length > 0;
   const hasRetail = retailSources.length > 0;
   const anything = hasRetail || hasResale;
@@ -288,7 +314,10 @@ export function verifiedResearch(
           lowCents: Math.max(1, answer.retail.lowCents),
           highCents: answer.retail.highCents,
           sources: retailSources,
-          models: answer.retail.models.filter((model) => model !== ''),
+          models: answer.retail.models
+            .map((model) => clipped(model, MAX_MODEL_LENGTH))
+            .filter((model) => model !== '')
+            .slice(0, MAX_MODELS),
         }
       : null,
     resale: hasResale
@@ -299,8 +328,20 @@ export function verifiedResearch(
         }
       : null,
     reputation: anything ? answer.reputation : 'unknown',
-    summary: anything && summary !== '' && !SOLD_WORDS.test(summary) ? summary : null,
+    summary:
+      anything && summary !== '' && !SOLD_WORDS.test(summary)
+        ? clipped(summary, MAX_SUMMARY_LENGTH)
+        : null,
   };
+}
+
+/** The text cut to at most `max` characters, at a word, with an ellipsis when cut. */
+function clipped(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const room = trimmed.slice(0, max - 1);
+  const atWord = room.lastIndexOf(' ');
+  return `${(atWord > max / 2 ? room.slice(0, atWord) : room).trimEnd()}…`;
 }
 
 function normalizeUrl(address: string): string {

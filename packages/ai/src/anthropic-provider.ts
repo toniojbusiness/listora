@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { transformJSONSchema } from '@anthropic-ai/sdk/lib/transform-json-schema';
 import { z } from 'zod';
 
 import { AiProviderError, type AiErrorCode } from './errors.ts';
@@ -25,8 +25,10 @@ export interface AnthropicProviderOptions {
 /**
  * Claude through the official SDK. Each call is one Messages API request with:
  * - strict structured output (`output_config.format`, a JSON schema derived from the Zod
- *   schema; constrained decoding guarantees it parses) and the tier's `effort`, or, for an
- *   output with `enforcement: 'prompt'`, the JSON schema as system-prompt instructions;
+ *   schema; constrained decoding guarantees it parses, and with `strictEnums` that every
+ *   string enum holds) and the tier's `effort`, or, for an output with `enforcement:
+ *   'prompt'`, the JSON schema as system-prompt instructions;
+ * - thinking turned off for a call that asks for `thinking: 'off'`;
  * - the photos as base64 image blocks, then the per-request text;
  * - a cache breakpoint on the system prompt, so the stable prefix (system prompt and the
  *   structured-output instructions) is billed at the cache-read price on repeat calls.
@@ -103,6 +105,7 @@ export function buildParams(
         ],
       },
     ],
+    ...(request.thinking === 'off' ? { thinking: { type: 'disabled' } } : {}),
     ...(request.webSearch === undefined
       ? {}
       : {
@@ -120,12 +123,61 @@ export function buildParams(
       ? { effort: request.effort }
       : {
           effort: request.effort,
-          format: {
-            type: 'json_schema',
-            schema: zodOutputFormat(request.output.schema).schema,
-          },
+          format: { type: 'json_schema', schema: outputJsonSchema(request.output) },
         },
   };
+}
+
+type JsonSchemaNode = Record<string, unknown>;
+
+/**
+ * The strict JSON schema of an output, as the SDK's Zod helper (`zodOutputFormat`) derives it:
+ * every keyword constrained decoding does not support moves into a description. That includes
+ * `enum`, so unless the output asks for `strictEnums`, a string enum is only a hint. With it,
+ * each enum is set aside before the transform and put back on the same node after.
+ */
+export function outputJsonSchema(output: ProviderRequest<unknown>['output']): JsonSchemaNode {
+  const json = z.toJSONSchema(output.schema, { reused: 'ref' }) as JsonSchemaNode;
+  if (output.strictEnums !== true) return transformJSONSchema(json);
+  const enums = new Map<string, unknown[]>();
+  walk(json, '', (node, path) => {
+    if (Array.isArray(node['enum'])) {
+      enums.set(path, node['enum']);
+      delete node['enum'];
+    }
+  });
+  const strict = transformJSONSchema(json);
+  walk(strict, '', (node, path) => {
+    const values = enums.get(path);
+    if (values !== undefined) node['enum'] = values;
+  });
+  return strict;
+}
+
+/**
+ * Visits every schema node with a path of its keys. `oneOf` reads as `anyOf`, which is what the
+ * transform turns it into, so a node keeps its path across the transform.
+ */
+function walk(
+  node: JsonSchemaNode,
+  path: string,
+  visit: (node: JsonSchemaNode, path: string) => void,
+): void {
+  visit(node, path);
+  for (const [key, value] of Object.entries(node)) {
+    const segment = key === 'oneOf' ? 'anyOf' : key;
+    if (Array.isArray(value)) {
+      value.forEach((entry, index) => {
+        if (isNode(entry)) walk(entry, `${path}/${segment}/${String(index)}`, visit);
+      });
+    } else if (isNode(value)) {
+      walk(value, `${path}/${segment}`, visit);
+    }
+  }
+}
+
+function isNode(value: unknown): value is JsonSchemaNode {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**

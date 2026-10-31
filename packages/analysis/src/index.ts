@@ -78,6 +78,7 @@ export {
   ScanFailedError,
   scanItem,
   scanPrompt,
+  UNIDENTIFIED_ITEM,
 } from './scan.ts';
 export type { ScanAnswer, ScanInput, ScanOutcome, ThriftScan } from './scan.ts';
 export {
