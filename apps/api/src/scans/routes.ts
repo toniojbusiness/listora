@@ -1,4 +1,4 @@
-import type { ItemDetails, ItemScan } from '@listora/api-contract';
+import type { ItemScan } from '@listora/api-contract';
 import { AiGuardError, type AiClient } from '@listora/ai';
 import {
   ScanFailedError,
@@ -6,36 +6,27 @@ import {
   ScanResearchFailedError,
   type ThriftScan,
 } from '@listora/analysis';
-import { inTransaction, type InventoryItem } from '@listora/db';
+import { inTransaction } from '@listora/db';
 import { scanLabelViolations } from '@listora/pricing';
 import { assertNever, photoSetHash } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
 import { aiGuardApiError } from '../analyses/guards.ts';
-import { writeAudit } from '../audit.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
-import {
-  changedDetails,
-  columnsFromDetails,
-  detailsFromRow,
-  normalizeDetails,
-  type FieldProvenance,
-} from '../items/details.ts';
-import { findItem, insertItem } from '../items/repository.ts';
-import { assertValidDetails, translateWriteError } from '../items/routes.ts';
+import { findItem } from '../items/repository.ts';
 import { itemView } from '../items/views.ts';
 import type { ListingViewContext } from '../listings/views.ts';
 import { assertThriftScanOn, countScan, findRun, lockRun } from '../sourcing-runs/repository.ts';
 
 import { assessScan } from './assess.ts';
 import { decodeScanImages } from './images.ts';
+import { keepAsItem } from './keep.ts';
 import {
   findScan,
   insertScan,
   lockScan,
-  markKept,
   markReplaced,
   saveResearch,
   scansSince,
@@ -202,30 +193,7 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         );
       }
 
-      const details = normalizeDetails(keptDetails(scan.read as unknown as ThriftScan));
-      await assertValidDetails(trx, tenant, undefined, details);
-      let item: InventoryItem;
-      try {
-        // Every detail is the scan's read until the seller changes it.
-        const provenance: FieldProvenance = Object.fromEntries(
-          Object.keys(details).map((key) => [key, 'ai' as const]),
-        );
-        item = await insertItem(trx, tenant, columnsFromDetails(details), provenance);
-      } catch (error) {
-        throw translateWriteError(error);
-      }
-      await writeAudit(trx, tenant, {
-        itemId: item.id,
-        action: 'item.created',
-        changes: {
-          sku: item.sku,
-          scanId: scan.id,
-          runId: run.id,
-          ...changedDetails({}, detailsFromRow(item)),
-        },
-      });
-      await markKept(trx, tenant, scan.id, item.id);
-      await countScan(trx, tenant, run.id, 'kept');
+      const item = await keepAsItem(trx, tenant, scan);
       return { status: 201, body: await itemView(trx, tenant, item, deps) };
     }),
   );
@@ -238,22 +206,6 @@ function checked(view: ItemScan): ItemScan {
     throw new Error(`the scan's answer breaks the label rules: ${violations.join('; ')}`);
   }
   return view;
-}
-
-/** A kept scan's details: what the AI read, nothing it could not tell. */
-export function keptDetails(read: ThriftScan): Partial<ItemDetails> {
-  const item = read.item.trim();
-  const brand = read.brand?.trim() ?? '';
-  const named = item.toLowerCase().startsWith(brand.toLowerCase()) ? item : `${brand} ${item}`;
-  const title = (named.charAt(0).toUpperCase() + named.slice(1)).slice(0, 200).trim();
-  return {
-    title,
-    ...(read.brand === null ? {} : { brand: read.brand }),
-    ...(read.category === null ? {} : { category: read.category }),
-    ...(read.department === null ? {} : { department: read.department }),
-    ...(read.sizeLabel === null ? {} : { sizeLabel: read.sizeLabel }),
-    ...(read.condition === null ? {} : { condition: read.condition }),
-  };
 }
 
 function scanFailure(failure: unknown, now: Date): unknown {

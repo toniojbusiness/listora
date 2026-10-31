@@ -24,14 +24,14 @@ export async function assertThriftScanOn(db: DbExecutor, tenant: Tenant): Promis
 export async function insertRun(
   db: DbExecutor,
   tenant: Tenant,
-  place: string | undefined,
+  place: string | null,
 ): Promise<SourcingRunRow> {
   return db
     .insertInto('sourcing_run')
     .values({
       account_id: tenant.accountId,
       created_by_user_id: tenant.userId,
-      place: place ?? null,
+      place,
     })
     .returningAll()
     .executeTakeFirstOrThrow();
@@ -108,6 +108,27 @@ export async function countScan(
     .execute();
 }
 
+/** Records the run's checkout: the haul it became, and the place and miles of the trip. */
+export async function markCheckedOut(
+  db: DbExecutor,
+  tenant: Tenant,
+  runId: string,
+  checkout: { haulId: string; place: string | null; miles: number | null; at: Date },
+): Promise<SourcingRunRow> {
+  return db
+    .updateTable('sourcing_run')
+    .set({
+      haul_id: checkout.haulId,
+      place: checkout.place,
+      miles: checkout.miles,
+      checked_out_at: checkout.at,
+    })
+    .where('account_id', '=', tenant.accountId)
+    .where('id', '=', runId)
+    .returningAll()
+    .executeTakeFirstOrThrow();
+}
+
 export function runView(row: SourcingRunRow): SourcingRun {
   return {
     id: row.id,
@@ -116,5 +137,8 @@ export function runView(row: SourcingRunRow): SourcingRun {
     ...(row.ended_at === null ? {} : { endedAt: row.ended_at.toISOString() }),
     scanCount: row.scan_count,
     keptCount: row.kept_count,
+    ...(row.checked_out_at === null ? {} : { checkedOutAt: row.checked_out_at.toISOString() }),
+    ...(row.haul_id === null ? {} : { haulId: row.haul_id }),
+    ...(row.miles === null ? {} : { miles: row.miles }),
   };
 }
