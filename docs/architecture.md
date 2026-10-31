@@ -173,7 +173,10 @@ packages/
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
-  eval/         Synthetic tag corpus (corpus/) and the eval harness CLI (@listora/eval)
+  sourcing/     Thrift-scan rules with no I/O: price quartiles, own-sales comparisons, the
+                Buy / Your call / Skip call and its defaults (@listora/sourcing)
+  eval/         Synthetic tag corpus (corpus/), the eval harness CLI, and the thrift-scan
+                backtest (scan/) (@listora/eval)
   e2e/          Local end-to-end stack: the API and worker with fakes on a scratch database and
                 a signed-in user, which the iOS UI tests run against; with every marketplace, also
                 the fake Depop, the fake sites, and the browser runner (@listora/e2e)
@@ -578,6 +581,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/sync.md](features/sync.md)                               | Sync now, the sync on opening the app, its indicator, and "Last synced"        |
 | [features/verified-features.md](features/verified-features.md)     | Sellers see only features that passed live: the list, its evidence, the gate   |
 | [features/test-mode.md](features/test-mode.md)                     | The owner's Test mode: live-testing hidden features, and the owner's log       |
+| [features/thrift-scan.md](features/thrift-scan.md)                 | The thrift scan's Buy / Your call / Skip call, its AI read, and its backtest   |
 
 ### Former section numbers
 

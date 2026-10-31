@@ -30,6 +30,8 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    The parsers must stay at or above 95% on every field (a unit test enforces this). Providers,
    the corpus license manifest, and how to change the corpus are described in
    [packages/eval/corpus/README.md](../../packages/eval/corpus/README.md).
+   `npm run eval -- scan` backtests the thrift scan's read (`scanItem`, purpose `thrift_scan`)
+   and its call on a private set of sold items ([thrift-scan.md](thrift-scan.md)).
 7. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
    `cost_micros` from a versioned price table). The system also keeps daily and monthly
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit

@@ -98,6 +98,7 @@ has the steps.
 | `npm run admin -- --help`      | Operator CLI: AI costs, the spend check, the AI kill switch and blocks, data purges, the activity search, sale-check health and history reads    |
 | `npm run perf:api`             | Benchmark the API's screens on a synthetic 2,000-item seller (scratch database); see [performance.md](docs/features/performance.md)              |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
+| `npm run eval -- scan`         | Backtest the thrift scan's call on a private set of sold items; see [thrift-scan.md](docs/features/thrift-scan.md)                               |
 | `npm run corpus:render`        | Regenerate the synthetic tag corpus and its fake AI fixtures after changing the corpus generator                                                 |
 | `scripts/dev-db.sh start`      | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command)                              |
 | `scripts/dev-db.sh stop`       | Stop the cluster                                                                                                                                 |
@@ -149,7 +150,8 @@ packages/activity/      The activity timeline and the sale explanation, from the
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)
-packages/eval/          Synthetic tag corpus and eval harness CLI (@listora/eval)
+packages/sourcing/      Thrift-scan rules: comparisons and the Buy / Your call / Skip call (@listora/sourcing)
+packages/eval/          Synthetic tag corpus, eval harness CLI, thrift-scan backtest (@listora/eval)
 packages/e2e/           Local end-to-end stack for the iOS UI tests: API, worker, and runner with fakes (@listora/e2e)
 infra/                  AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)
 scripts/                dev-db.sh (local PostgreSQL 18 cluster), dev-browser.sh (headless Chromium),
