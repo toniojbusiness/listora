@@ -74,9 +74,11 @@ final class StorageBinsUITests: XCTestCase {
     }
 
     private func waitForLabel(of element: XCUIElement, _ text: String, timeout: TimeInterval) -> Bool {
-        let predicate = NSPredicate(format: "label CONTAINS %@", text)
-        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: element)], timeout: timeout)
-            == .completed
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", text),
+            object: element,
+        )
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
     /// Keeps a screenshot in the result bundle, passing or not, for reviewing the screens.
