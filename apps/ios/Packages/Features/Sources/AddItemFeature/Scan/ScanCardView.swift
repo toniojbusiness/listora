@@ -21,7 +21,9 @@ struct ScanCardView: View {
             case let .read(card):
                 read(card)
             case let .failed(message, retryable):
-                failed(message, retryable: retryable)
+                ScanReadFailed(number: entry.number, message: message, retryable: retryable, onRetry: onRetry)
+            case .waiting:
+                waiting
             }
         }
         .frame(maxWidth: Layout.readableWidth, alignment: .leading)
@@ -31,32 +33,58 @@ struct ScanCardView: View {
     }
 
     private var reading: some View {
-        HStack(spacing: Spacing.sm) {
-            BrandSpinner()
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Reading item \(entry.number)").font(Typography.headline)
-                Text("Shoot the next one any time.")
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.sm) {
+                BrandSpinner()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Reading item \(entry.number)").font(Typography.headline)
+                    Text("Shoot the next one any time.")
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.textSecondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            // The instant read from the household's own sales, while the full read runs.
+            if let instant = entry.instant.map(OfflineScanCard.init) {
+                Text("\(instant.label): \(instant.callLabel) · \(instant.range ?? instant.basedOn)")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("scan.instant")
+            }
+            warnings
+        }
+        .padding(.leading, Spacing.md)
+    }
+
+    /// No signal: the instant read from the household's own sales, while the read waits.
+    private var waiting: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            if let instant = entry.instant.map(OfflineScanCard.init) {
+                ScanInstantRead(instant: instant, number: entry.number)
+            } else {
+                Text("Item \(entry.number)").font(Typography.headline)
+                Text("No brand you've sold is on the tag.")
                     .font(Typography.footnote)
                     .foregroundStyle(Palette.textSecondary)
             }
+            warnings
+            Label("No signal: read when you have it", systemImage: "wifi.slash")
+                .font(Typography.caption)
+                .foregroundStyle(Palette.textSecondary)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("No signal: read when you have it")
+                .accessibilityIdentifier("scan.waiting")
+            actions(wantsTag: entry.instant == nil)
         }
         .padding(.leading, Spacing.md)
-        .accessibilityElement(children: .combine)
     }
 
-    private func failed(_ message: String, retryable: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Label("Couldn't read item \(entry.number)", systemImage: "exclamationmark.triangle.fill")
-                .font(Typography.headline)
-                .foregroundStyle(Palette.danger)
-            Text(message).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
-            if retryable {
-                Button("Retry", action: onRetry)
-                    .buttonStyle(.listora(.secondary, size: .compact))
-                    .accessibilityIdentifier("scan.retry")
-            }
+    /// The run's earlier item it looks like.
+    @ViewBuilder
+    private var warnings: some View {
+        if let earlier = entry.duplicateOf {
+            ScanDuplicateWarning(earlier: earlier)
         }
-        .padding(.leading, Spacing.md)
     }
 
     private func read(_ card: ScanCard) -> some View {
@@ -84,7 +112,16 @@ struct ScanCardView: View {
                     .font(Typography.footnote)
                     .foregroundStyle(Palette.warning)
             }
-            actions(card)
+            warnings
+            if entry.readLate {
+                Label("Read when you had signal", systemImage: "clock.arrow.circlepath")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Read when you had signal")
+                    .accessibilityIdentifier("scan.readLate")
+            }
+            actions(wantsTag: card.wantsTag, link: card.links.first)
         }
         .padding(.leading, Spacing.md)
     }
@@ -163,19 +200,19 @@ struct ScanCardView: View {
         }
     }
 
-    private func actions(_ card: ScanCard) -> some View {
+    private func actions(wantsTag: Bool, link: ScanCard.Link? = nil) -> some View {
         HStack(spacing: Spacing.xs) {
             keepButton
             if entry.decision == .open {
                 Button(action: onTag) {
-                    Label(card.wantsTag ? "Tag?" : "Tag", systemImage: "tag")
+                    Label(wantsTag ? "Tag?" : "Tag", systemImage: "tag")
                 }
-                .buttonStyle(.listora(card.wantsTag ? .secondary : .tertiary, size: .compact))
+                .buttonStyle(.listora(wantsTag ? .secondary : .tertiary, size: .compact))
                 .accessibilityLabel("Shoot the tag")
                 .accessibilityIdentifier("scan.tag")
             }
             Spacer(minLength: 0)
-            if let link = card.links.first {
+            if let link {
                 Button {
                     openURL(link.url)
                 } label: {
@@ -213,7 +250,71 @@ struct ScanCardView: View {
                 .foregroundStyle(Palette.success)
                 .frame(minHeight: Layout.compactButtonHeight)
                 .accessibilityIdentifier("scan.kept")
+        case .keepWhenRead:
+            Label("Kept: saved once it's read", systemImage: "checkmark")
+                .font(Typography.emphasis)
+                .foregroundStyle(Palette.success)
+                .frame(minHeight: Layout.compactButtonHeight)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Kept: saved once it's read")
+                .accessibilityIdentifier("scan.keptWaiting")
         }
+    }
+}
+
+/// The instant read on a card waiting for signal: the call from the household's own sales of the
+/// brand on the tag, under its label.
+private struct ScanInstantRead: View {
+    let instant: OfflineScanCard
+    let number: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            Stamp(instant.callLabel, tone: instant.tone, angle: .degrees(-3))
+                .accessibilityIdentifier("scan.call")
+            Text(instant.confidence)
+                .font(Typography.smallEmphasis)
+                .foregroundStyle(Palette.textSecondary)
+            Spacer(minLength: 0)
+            Text("Item \(number)").font(Typography.metadata).foregroundStyle(Palette.textSecondary)
+        }
+        Text(instant.label)
+            .font(Typography.eyebrow)
+            .textCase(.uppercase)
+            .foregroundStyle(Palette.textSecondary)
+            .accessibilityIdentifier("scan.offlineLabel")
+        Text(instant.brand).font(Typography.headline).accessibilityIdentifier("scan.title")
+        if let range = instant.range {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                Text(range).font(Typography.price).accessibilityIdentifier("scan.range")
+                Text(instant.basedOn).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+            }
+        } else {
+            Text(instant.basedOn).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+        }
+        if let payout = instant.payout {
+            Text(payout).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+        }
+        if let unsold = instant.unsold {
+            Label(unsold, systemImage: "shippingbox")
+                .font(Typography.footnote)
+                .foregroundStyle(Palette.warning)
+                .accessibilityIdentifier("scan.unsold")
+        }
+    }
+}
+
+/// "Looks like item 3, already scanned": the shot's feature print is close to an earlier one's.
+private struct ScanDuplicateWarning: View {
+    let earlier: Int
+
+    var body: some View {
+        Label("Looks like item \(earlier), already scanned", systemImage: "square.on.square")
+            .font(Typography.footnote)
+            .foregroundStyle(Palette.warning)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Looks like item \(earlier), already scanned")
+            .accessibilityIdentifier("scan.duplicate")
     }
 }
 
@@ -247,94 +348,25 @@ private struct ComparisonLine: View {
     }
 }
 
-/// The run's tray: every card of the run along the bottom, newest last, so a skipped item can
-/// still be opened and kept until the run ends.
-struct ScanTray: View {
-    let entries: [ScanEntry]
-    let currentID: String?
-    let onSelect: (String) -> Void
+/// A read that failed, with why and, when it may pass, Retry.
+private struct ScanReadFailed: View {
+    let number: Int
+    let message: String
+    let retryable: Bool
+    let onRetry: () -> Void
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: Spacing.xs) {
-                    ForEach(entries) { entry in
-                        Button {
-                            onSelect(entry.id)
-                        } label: {
-                            ScanTrayTile(entry: entry, isCurrent: entry.id == currentID)
-                        }
-                        .buttonStyle(.plain)
-                        .id(entry.id)
-                        .accessibilityLabel(Self.label(entry))
-                        .accessibilityIdentifier("scan.tray.\(entry.number)")
-                    }
-                }
-                .padding(.horizontal, Spacing.md)
-            }
-            .frame(height: 64)
-            .onChange(of: entries.count) {
-                if let last = entries.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .trailing) }
-                }
-            }
-        }
-    }
-
-    static func label(_ entry: ScanEntry) -> String {
-        let state = switch entry.state {
-        case .reading: "reading"
-        case let .read(card): card.callLabel
-        case .failed: "couldn't read"
-        }
-        return "Item \(entry.number), \(state)\(entry.isKept ? ", kept" : "")"
-    }
-}
-
-private struct ScanTrayTile: View {
-    let entry: ScanEntry
-    let isCurrent: Bool
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            if let image = UIImage(data: entry.itemJPEG) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 52, height: 52)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
-                    .opacity(entry.isKept || isCurrent ? 1 : 0.7)
-            }
-            badge.padding(2)
-        }
-        .frame(width: 56, height: 56)
-        .overlay {
-            RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
-                .strokeBorder(isCurrent ? Palette.onMedia.color : .clear, lineWidth: 2)
-        }
-    }
-
-    @ViewBuilder
-    private var badge: some View {
-        if entry.isKept {
-            Image(systemName: "checkmark.circle.fill")
-                .font(Typography.caption)
-                .foregroundStyle(Palette.success)
-                .background(Palette.surface, in: Circle())
-        } else if let card = entry.card {
-            Text(card.callLabel)
-                .font(Typography.stamp)
-                .textCase(.uppercase)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .padding(.horizontal, 3)
-                .foregroundStyle(card.tone.color)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.tight))
-        } else if case .failed = entry.state {
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(Typography.caption)
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Label("Couldn't read item \(number)", systemImage: "exclamationmark.triangle.fill")
+                .font(Typography.headline)
                 .foregroundStyle(Palette.danger)
-                .background(Palette.surface, in: Circle())
+            Text(message).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+            if retryable {
+                Button("Retry", action: onRetry)
+                    .buttonStyle(.listora(.secondary, size: .compact))
+                    .accessibilityIdentifier("scan.retry")
+            }
         }
+        .padding(.leading, Spacing.md)
     }
 }

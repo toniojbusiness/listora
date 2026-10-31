@@ -29,9 +29,8 @@ final class AddItemModel {
         didSet { defaults.set(mode.rawValue, forKey: AddItemMode.storageKey) }
     }
 
-    /// The thrift scan run going on (docs/features/thrift-scan.md), until the seller ends it; it
-    /// lives only while the app does.
-    var scanRun: ScanRunModel?
+    /// The thrift scan's runs (docs/features/thrift-scan.md); nil offers no Scan mode's run.
+    let scanRuns: ScanRuns?
 
     let log = Logger(subsystem: "com.listora.app", category: "drafts")
     /// The measurement of a new item whose draft does not exist yet (the camera is open, or the
@@ -44,8 +43,10 @@ final class AddItemModel {
         uploader: PhotoUploader,
         activity: UploadActivity,
         meter: InteractionMeter,
+        scanRuns: ScanRuns? = nil,
         defaults: UserDefaults = .standard,
     ) {
+        self.scanRuns = scanRuns
         self.store = store
         self.uploader = uploader
         self.activity = activity

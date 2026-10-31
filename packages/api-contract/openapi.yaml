@@ -1286,10 +1286,14 @@ components:
     # ---------------------------------------------------------------- sourcing
     SourcingKit:
       $ref: './components/schemas/sourcing.yaml#/SourcingKit'
+    SourcingKitCall:
+      $ref: './components/schemas/sourcing.yaml#/SourcingKitCall'
     OwnSalesBucket:
       $ref: './components/schemas/sourcing.yaml#/OwnSalesBucket'
     OwnSalesOnMarketplace:
       $ref: './components/schemas/sourcing.yaml#/OwnSalesOnMarketplace'
+    OwnSalesForCall:
+      $ref: './components/schemas/sourcing.yaml#/OwnSalesForCall'
     SourcingRunCreate:
       $ref: './components/schemas/sourcing.yaml#/SourcingRunCreate'
     SourcingRun:

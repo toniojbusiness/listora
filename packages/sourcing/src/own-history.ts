@@ -145,6 +145,23 @@ const PAYOUT_ORDER: readonly KnownMarketplace[] = [
   ...knownMarketplaceValues.filter((marketplace) => marketplace !== 'depop'),
 ];
 
+/**
+ * Whose fees a call's payouts are after: the marketplace with the most of its sales, ties and no
+ * sales going to Depop (the scan's AI estimate is a Depop price), then the rest in
+ * `KnownMarketplace` order.
+ */
+export function payoutMarketplaceOf(
+  counts: ReadonlyMap<KnownMarketplace, number>,
+): KnownMarketplace {
+  let payoutMarketplace: KnownMarketplace = 'depop';
+  for (const marketplace of PAYOUT_ORDER) {
+    if ((counts.get(marketplace) ?? 0) > (counts.get(payoutMarketplace) ?? 0)) {
+      payoutMarketplace = marketplace;
+    }
+  }
+  return payoutMarketplace;
+}
+
 /** The scanned item's own history (docs/features/thrift-scan.md, "The scan"). */
 export function scanOwnHistory(identity: ScanIdentity, sales: readonly OwnSale[]): ScanOwnHistory {
   const modelable = sales.filter((sale) => OWN_SALES_MAY_MODEL_PRICES[sale.marketplace]);
@@ -154,15 +171,9 @@ export function scanOwnHistory(identity: ScanIdentity, sales: readonly OwnSale[]
   for (const sale of modelable) {
     if (matched.has(sale.id)) counts.set(sale.marketplace, (counts.get(sale.marketplace) ?? 0) + 1);
   }
-  let payoutMarketplace: KnownMarketplace = 'depop';
-  for (const marketplace of PAYOUT_ORDER) {
-    if ((counts.get(marketplace) ?? 0) > (counts.get(payoutMarketplace) ?? 0)) {
-      payoutMarketplace = marketplace;
-    }
-  }
   return {
     forCall,
-    payoutMarketplace,
+    payoutMarketplace: payoutMarketplaceOf(counts),
     byMarketplace: ownHistoryByMarketplace(
       { brand: identity.brand, category: identity.category },
       sales,

@@ -8,6 +8,8 @@ protocol ScanService: Sendable {
     func createScan(_ request: ScanRequest, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func researchScan(scanID: String, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func endSourcingRun(runID: String, idempotencyKey: String) async throws(APIFailure)
+    /// The household's own sales for the offline call (`getSourcingKit`).
+    func sourcingKit() async throws(APIFailure) -> SourcingKit
     func saveScanComparison(scanID: String, comparisonID: String, answer: Data) async throws(APIFailure) -> ItemScan
 }
 
@@ -15,7 +17,9 @@ extension UploadAPI: ScanService {}
 
 /// Saves a kept scan's photos as a draft whose server item is the scan's; answers the draft's
 /// id, or nil when it could not be saved.
-typealias ScanDraftSaver = @MainActor (_ photos: [(PreparedPhoto, PhotoRole)], _ scan: DraftScanOrigin) async -> String?
+/// A nil `scan` saves an ordinary draft: a kept scan that could never be read.
+typealias ScanDraftSaver = @MainActor (_ photos: [(PreparedPhoto, PhotoRole)], _ scan: DraftScanOrigin?) async
+    -> String?
 
 /// One item scanned in the run, from its shot to the seller's decision.
 struct ScanEntry: Equatable, Identifiable {
@@ -24,6 +28,9 @@ struct ScanEntry: Equatable, Identifiable {
         case read(ScanCard)
         /// The read failed; `message` is the server's or the app's, safe to show.
         case failed(message: String, retryable: Bool)
+        /// No signal: the read waits on this iPhone until there is (docs/features/thrift-scan.md,
+        /// "Offline at the bins"); the card shows the instant read from the seller's own sales.
+        case waiting
     }
 
     /// The web research, which comes in after the read without holding the card up.
@@ -41,6 +48,8 @@ struct ScanEntry: Equatable, Identifiable {
         case keeping
         case kept(draftID: String)
         case keepFailed(String)
+        /// Kept while the read waits for signal: the draft is saved once the item is read.
+        case keepWhenRead
     }
 
     let id: String
@@ -53,11 +62,26 @@ struct ScanEntry: Equatable, Identifiable {
     var tagText: [String] = []
     var note: String?
     var scanID: String?
+    /// The server's answer the card shows, kept with the run.
+    var scan: ItemScan?
     var state: State = .reading
     var research: Research = .none
     var decision: Decision = .open
     /// From the shutter to the first card, for the owner's measurements.
     var cardAfter: TimeInterval?
+    /// The instant read from the household's own sales (``OfflineScanCall``), when the tag names
+    /// one of their brands; what the card shows while the read waits for signal.
+    var instant: OfflineScanRead?
+    /// The read came only once there was signal again: the card says so.
+    var readLate = false
+    /// The run's earlier item this one looks like (its number), by the shots' feature prints.
+    var duplicateOf: Int?
+    var featurePrint: [Float]?
+    /// The key of the read due, kept until it lands, so a read retried after a lost answer is
+    /// replayed rather than read twice. A new read (a note, the tag) gets a new key.
+    var readKey = UUID().uuidString.lowercased()
+    /// The scan the read due replaces: a note or the tag after an earlier read.
+    var replaces: String?
 
     var card: ScanCard? {
         if case let .read(card) = state {
@@ -73,6 +97,15 @@ struct ScanEntry: Equatable, Identifiable {
         } else {
             false
         }
+    }
+
+    /// Kept, or to be saved once read.
+    var isKeptOrPending: Bool {
+        isKept || decision == .keepWhenRead
+    }
+
+    var isWaiting: Bool {
+        state == .waiting
     }
 }
 

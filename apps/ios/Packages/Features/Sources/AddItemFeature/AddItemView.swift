@@ -17,6 +17,7 @@ public struct AddItemView: View {
                 uploader: uploader,
                 activity: environment.activity,
                 meter: environment.meter,
+                scanRuns: environment.scanRuns,
             ))
         }
     }
@@ -251,7 +252,11 @@ struct DraftListView: View {
     @ViewBuilder
     private var scanActions: some View {
         if environment.isCameraAvailable {
-            ScanActions(model: model) { camera = .scan(model.scanRun(in: environment)) }
+            ScanActions(model: model) {
+                if let run = model.startScanRun(in: environment) {
+                    camera = .scan(run)
+                }
+            }
         }
     }
 

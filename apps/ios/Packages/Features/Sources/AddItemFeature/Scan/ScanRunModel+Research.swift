@@ -32,6 +32,7 @@ extension ScanRunModel {
         switch result {
         case let .success(scan):
             update(entryID) { entry in
+                entry.scan = scan
                 entry.state = .read(ScanCard(scan))
                 entry.research = .done
             }

@@ -3,13 +3,15 @@ SourcingKit:
   description: |
     The household's own sales for sourcing (docs/features/thrift-scan.md). Every number is
     the seller's own sales; none is another seller's or the AI's.
-  required: [version, generatedAt, windowDays, buckets]
+  required: [version, generatedAt, windowDays, call, buckets]
   properties:
     version:
       type: integer
       format: int32
       minimum: 1
-      description: The kit's format. A client that does not know it ignores the kit.
+      description: |
+        The kit's format (2 since the offline call). A client that does not know it ignores
+        the kit.
     generatedAt:
       $ref: './common.yaml#/Timestamp'
     windowDays:
@@ -17,6 +19,8 @@ SourcingKit:
       format: int32
       minimum: 1
       description: Only sales from this many days back count.
+    call:
+      $ref: '#/SourcingKitCall'
     buckets:
       type: array
       description: |
@@ -27,6 +31,21 @@ SourcingKit:
       maxItems: 2000
       items:
         $ref: '#/OwnSalesBucket'
+SourcingKitCall:
+  type: object
+  description: |
+    The call's thresholds, so the app makes the scan's history-only call with no signal by
+    the same rule as the server (`offlineScanCall` in @listora/sourcing).
+  required: [worthListing, minComparisons]
+  properties:
+    worthListing:
+      $ref: './common.yaml#/Money'
+      description: The least payout, after fees, worth buying for.
+    minComparisons:
+      type: integer
+      format: int32
+      minimum: 1
+      description: Fewest of the household's own sales like it a range rests on.
 OwnSalesBucket:
   type: object
   description: |
@@ -67,6 +86,39 @@ OwnSalesBucket:
       maxItems: 16
       items:
         $ref: '#/OwnSalesOnMarketplace'
+    forCall:
+      $ref: '#/OwnSalesForCall'
+OwnSalesForCall:
+  type: object
+  description: |
+    The group's sales the scan's call may rest on (every marketplace's but eBay's, which are
+    display only), with their payouts as the server's call works them out. Absent when the
+    group has none.
+  required: [soldCount, low, high, payoutMarketplace, conservativePayout, optimisticPayout]
+  properties:
+    soldCount:
+      type: integer
+      format: int32
+      minimum: 1
+    low:
+      $ref: './common.yaml#/Money'
+      description: The low quartile of what buyers paid per item.
+    high:
+      $ref: './common.yaml#/Money'
+      description: The high quartile of what buyers paid per item.
+    payoutMarketplace:
+      $ref: './common.yaml#/Marketplace'
+      description: |
+        The marketplace with the most of these sales (Depop on a tie), whose fees the payouts
+        are after.
+    conservativePayout:
+      $ref: './common.yaml#/Money'
+      description: |
+        What `low` pays out after that marketplace's estimated fees, calibrated by the
+        account's actual fees there when there are enough. An estimate.
+    optimisticPayout:
+      $ref: './common.yaml#/Money'
+      description: What `high` pays out after those fees. An estimate.
 OwnSalesOnMarketplace:
   type: object
   description: The group's sales on one marketplace.
@@ -665,8 +717,9 @@ KnownScanSignalKind:
     are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
     `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
-    household's recent sales against the marketplace's supply.
-  enum: [retail, new_with_tags, web_resale, trend, style, asking, demand]
+    household's recent sales against the marketplace's supply. `unsold`: the household already
+    has items like it in inventory, not sold (it never moves the call).
+  enum: [retail, new_with_tags, web_resale, trend, style, asking, demand, unsold]
 ScanRetail:
   type: object
   description: |

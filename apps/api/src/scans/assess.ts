@@ -9,21 +9,16 @@ import type { ScanResearch, ThriftScan } from '@listora/analysis';
 import type { DbExecutor } from '@listora/db';
 import { loadFeatureGate } from '@listora/marketplaces';
 import {
-  calibrateFees,
-  feeEstimator,
-  feeTableFor,
-  ORDER_DATA_MAY_ADJUST_FEES,
-} from '@listora/pricing';
-import {
   DEFAULT_SCAN_CALL_SETTINGS,
   salesTrend,
   scanCall,
   scanOwnHistory,
+  unsoldLikeIt,
   type ScanCallInput,
 } from '@listora/sourcing';
 
-import { recentObservedSales } from '../pricing/repository.ts';
-import { ownSales, ownSalesMarketplaces } from '../sourcing/repository.ts';
+import { payoutFees } from '../sourcing/fees.ts';
+import { ownSales, ownSalesMarketplaces, unsoldItems } from '../sourcing/repository.ts';
 import { marketInput, type StoredComparison } from './comparisons.ts';
 import type { Tenant } from '../tenancy.ts';
 import type { ScanCallDetail } from './repository.ts';
@@ -40,7 +35,10 @@ export async function assessScan(
   comparisons: readonly StoredComparison[] = [],
 ): Promise<ScanCallDetail> {
   const gate = await loadFeatureGate(db, tenant.accountId);
-  const sales = await ownSales(db, tenant, ownSalesMarketplaces(gate), now);
+  const [sales, unsold] = await Promise.all([
+    ownSales(db, tenant, ownSalesMarketplaces(gate), now),
+    unsoldItems(db, tenant),
+  ]);
   const history = scanOwnHistory(read, sales);
   const matched = new Set(history.forCall?.saleIds ?? []);
   const trend =
@@ -87,6 +85,7 @@ export async function assessScan(
     newWithTags: read.condition === 'new_with_tags',
     trend,
     style: read.style ?? undefined,
+    unsold: unsoldLikeIt(read, unsold),
     market,
   };
   const rule = scanCall(input, settings);
@@ -147,23 +146,4 @@ function trendView(trend: ReturnType<typeof salesTrend>): ScanTrend {
 
 function dollars(cents: number): string {
   return `$${String(Math.round(cents / 100))}`;
-}
-
-/**
- * The marketplace's fee estimate for one item: its current fee table, scaled by the account's
- * actual fees there when there are enough and the marketplace's order data may adjust fees.
- */
-async function payoutFees(
-  db: DbExecutor,
-  tenant: Tenant,
-  marketplace: Parameters<typeof feeTableFor>[0],
-  now: Date,
-): Promise<(priceCents: number) => number> {
-  const calibration = ORDER_DATA_MAY_ADJUST_FEES[marketplace]
-    ? calibrateFees(
-        marketplace,
-        (await recentObservedSales(db, tenant, now)).get(marketplace) ?? [],
-      )
-    : undefined;
-  return feeEstimator(feeTableFor(marketplace, now), calibration);
 }

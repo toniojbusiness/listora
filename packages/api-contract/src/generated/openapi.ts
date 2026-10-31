@@ -6871,7 +6871,8 @@ export interface components {
         SourcingKit: {
             /**
              * Format: int32
-             * @description The kit's format. A client that does not know it ignores the kit.
+             * @description The kit's format (2 since the offline call). A client that does not know it ignores
+             *     the kit.
              */
             version: number;
             generatedAt: components["schemas"]["Timestamp"];
@@ -6880,6 +6881,7 @@ export interface components {
              * @description Only sales from this many days back count.
              */
             windowDays: number;
+            call: components["schemas"]["SourcingKitCall"];
             /**
              * @description Every brand group, then its category groups, then their size groups, each with at
              *     least one sale; ordered by brand key, then category, then size, the group without one
@@ -6887,6 +6889,19 @@ export interface components {
              *     category groups, the ones with the fewest sales first.
              */
             buckets: components["schemas"]["OwnSalesBucket"][];
+        };
+        /**
+         * @description The call's thresholds, so the app makes the scan's history-only call with no signal by
+         *     the same rule as the server (`offlineScanCall` in @listora/sourcing).
+         */
+        SourcingKitCall: {
+            /** @description The least payout, after fees, worth buying for. */
+            worthListing: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description Fewest of the household's own sales like it a range rests on.
+             */
+            minComparisons: number;
         };
         /**
          * @description One group of the household's sold items: a brand, or a brand and category, or a brand,
@@ -6915,6 +6930,7 @@ export interface components {
             unsoldCount: number;
             /** @description The marketplaces the group sold on, in `KnownMarketplace` order, never ranked. */
             marketplaces: components["schemas"]["OwnSalesOnMarketplace"][];
+            forCall?: components["schemas"]["OwnSalesForCall"];
         };
         /** @description The group's sales on one marketplace. */
         OwnSalesOnMarketplace: {
@@ -6941,6 +6957,31 @@ export interface components {
              *     suggested price or a sourcing call (eBay's, until the eBay licence review).
              */
             displayOnly: boolean;
+        };
+        /**
+         * @description The group's sales the scan's call may rest on (every marketplace's but eBay's, which are
+         *     display only), with their payouts as the server's call works them out. Absent when the
+         *     group has none.
+         */
+        OwnSalesForCall: {
+            /** Format: int32 */
+            soldCount: number;
+            /** @description The low quartile of what buyers paid per item. */
+            low: components["schemas"]["Money"];
+            /** @description The high quartile of what buyers paid per item. */
+            high: components["schemas"]["Money"];
+            /**
+             * @description The marketplace with the most of these sales (Depop on a tie), whose fees the payouts
+             *     are after.
+             */
+            payoutMarketplace: components["schemas"]["Marketplace"];
+            /**
+             * @description What `low` pays out after that marketplace's estimated fees, calibrated by the
+             *     account's actual fees there when there are enough. An estimate.
+             */
+            conservativePayout: components["schemas"]["Money"];
+            /** @description What `high` pays out after those fees. An estimate. */
+            optimisticPayout: components["schemas"]["Money"];
         };
         SourcingRunCreate: {
             /** @description Where the seller is, as they name it ("Goodwill Outlet on 5th"). */
@@ -7275,10 +7316,11 @@ export interface components {
          *     are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
          *     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
          *     `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
-         *     household's recent sales against the marketplace's supply.
+         *     household's recent sales against the marketplace's supply. `unsold`: the household already
+         *     has items like it in inventory, not sold (it never moves the call).
          * @enum {string}
          */
-        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style" | "asking" | "demand";
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style" | "asking" | "demand" | "unsold";
         /**
          * @description The item's original retail price, with where it came from: one model's price (`low` equals
          *     `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -7931,8 +7973,10 @@ export type KnownAppFeature = components['schemas']['KnownAppFeature'];
 export type TestMode = components['schemas']['TestMode'];
 export type TestModeReplace = components['schemas']['TestModeReplace'];
 export type SourcingKit = components['schemas']['SourcingKit'];
+export type SourcingKitCall = components['schemas']['SourcingKitCall'];
 export type OwnSalesBucket = components['schemas']['OwnSalesBucket'];
 export type OwnSalesOnMarketplace = components['schemas']['OwnSalesOnMarketplace'];
+export type OwnSalesForCall = components['schemas']['OwnSalesForCall'];
 export type SourcingRunCreate = components['schemas']['SourcingRunCreate'];
 export type SourcingRun = components['schemas']['SourcingRun'];
 export type ScanCreate = components['schemas']['ScanCreate'];
@@ -12541,7 +12585,7 @@ export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
-export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "asking", "demand"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "asking", "demand", "unsold"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
 export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
 export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];

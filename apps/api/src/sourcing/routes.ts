@@ -3,6 +3,7 @@ import { buildSourcingKit } from '@listora/sourcing';
 import type { FastifyInstance } from 'fastify';
 
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
+import { payoutFeesByMarketplace } from './fees.ts';
 import { ownSales, ownSalesMarketplaces, unsoldItems } from './repository.ts';
 
 export interface SourcingRouteDependencies extends RouteDependencies {
@@ -21,10 +22,12 @@ export function registerSourcingRoutes(
   contractRoute(app, deps, 'getSourcingKit', async ({ tenant, db }) => {
     const now = deps.now();
     const gate = await loadFeatureGate(db, tenant.accountId);
-    const [sales, unsold] = await Promise.all([
+    const [sales, unsold, fees] = await Promise.all([
       ownSales(db, tenant, ownSalesMarketplaces(gate), now),
       unsoldItems(db, tenant),
+      payoutFeesByMarketplace(db, tenant, now),
     ]);
-    return { status: 200, body: buildSourcingKit({ sales, unsold, now }) };
+    // The payouts for the offline call are worked out as the scan's call works them out.
+    return { status: 200, body: buildSourcingKit({ sales, unsold, now, fees }) };
   });
 }
