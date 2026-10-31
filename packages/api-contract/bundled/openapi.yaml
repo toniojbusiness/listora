@@ -12207,7 +12207,7 @@ components:
         - ms
       properties:
         outcome:
-          $ref: '#/components/schemas/KnownScanComparisonOutcome'
+          $ref: '#/components/schemas/ScanComparisonOutcome'
         stats:
           $ref: '#/components/schemas/ScanComparisonStats'
         forSaleTotal:
@@ -12224,6 +12224,12 @@ components:
           type: string
           maxLength: 200
           description: Why a read did not go through, for the server's log; never page text.
+    ScanComparisonOutcome:
+      description: A `KnownScanComparisonOutcome`; requests hold to the known values.
+      anyOf:
+        - $ref: '#/components/schemas/KnownScanComparisonOutcome'
+        - type: string
+          maxLength: 64
     KnownScanComparisonOutcome:
       type: string
       enum:

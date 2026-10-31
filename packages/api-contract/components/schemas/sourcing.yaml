@@ -367,7 +367,7 @@ ScanComparisonAnswer:
   required: [outcome, ms]
   properties:
     outcome:
-      $ref: '#/KnownScanComparisonOutcome'
+      $ref: '#/ScanComparisonOutcome'
     stats:
       $ref: '#/ScanComparisonStats'
     forSaleTotal:
@@ -384,6 +384,12 @@ ScanComparisonAnswer:
       type: string
       maxLength: 200
       description: Why a read did not go through, for the server's log; never page text.
+ScanComparisonOutcome:
+  description: A `KnownScanComparisonOutcome`; requests hold to the known values.
+  anyOf:
+    - $ref: '#/KnownScanComparisonOutcome'
+    - type: string
+      maxLength: 64
 KnownScanComparisonOutcome:
   type: string
   enum: [read, check, rate_limited, failed]

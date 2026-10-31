@@ -331,6 +331,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
       stats: { ...READ.stats, listings: [{ seller: 'someone', priceCents: 1500 }] },
     };
     expect((await answerRead(scan.id, read.id, listing)).status).toBe(422);
+    expect((await answerRead(scan.id, read.id, { outcome: 'guessed', ms: 1 })).status).toBe(422);
     const unordered = {
       ...READ,
       stats: {

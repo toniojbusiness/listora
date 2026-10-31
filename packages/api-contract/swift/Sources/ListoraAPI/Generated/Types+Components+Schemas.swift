@@ -16698,7 +16698,7 @@ extension Components {
         /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer`.
         public struct ScanComparisonAnswer: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/outcome`.
-            public var outcome: Components.Schemas.KnownScanComparisonOutcome
+            public var outcome: Components.Schemas.ScanComparisonOutcome
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/stats`.
             public var stats: Components.Schemas.ScanComparisonStats?
             /// Listings for sale in the whole search, as the marketplace counts them.
@@ -16720,7 +16720,7 @@ extension Components {
             ///   - ms:
             ///   - message: Why a read did not go through, for the server's log; never page text.
             public init(
-                outcome: Components.Schemas.KnownScanComparisonOutcome,
+                outcome: Components.Schemas.ScanComparisonOutcome,
                 stats: Components.Schemas.ScanComparisonStats? = nil,
                 forSaleTotal: Swift.Int32? = nil,
                 ms: Swift.Int32,
@@ -16742,7 +16742,7 @@ extension Components {
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 self.outcome = try container.decode(
-                    Components.Schemas.KnownScanComparisonOutcome.self,
+                    Components.Schemas.ScanComparisonOutcome.self,
                     forKey: .outcome
                 )
                 self.stats = try container.decodeIfPresent(
@@ -16767,6 +16767,55 @@ extension Components {
                     "forSaleTotal",
                     "ms",
                     "message"
+                ])
+            }
+        }
+        /// A `KnownScanComparisonOutcome`; requests hold to the known values.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanComparisonOutcome`.
+        public struct ScanComparisonOutcome: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonOutcome/value1`.
+            public var value1: Components.Schemas.KnownScanComparisonOutcome?
+            /// - Remark: Generated from `#/components/schemas/ScanComparisonOutcome/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanComparisonOutcome`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanComparisonOutcome? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
                 ])
             }
         }

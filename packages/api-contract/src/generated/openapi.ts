@@ -7126,7 +7126,7 @@ export interface components {
          *     asked to slow down; `failed`: the read did not go through.
          */
         ScanComparisonAnswer: {
-            outcome: components["schemas"]["KnownScanComparisonOutcome"];
+            outcome: components["schemas"]["ScanComparisonOutcome"];
             stats?: components["schemas"]["ScanComparisonStats"];
             /**
              * Format: int32
@@ -7138,6 +7138,8 @@ export interface components {
             /** @description Why a read did not go through, for the server's log; never page text. */
             message?: string;
         };
+        /** @description A `KnownScanComparisonOutcome`; requests hold to the known values. */
+        ScanComparisonOutcome: components["schemas"]["KnownScanComparisonOutcome"];
         /** @enum {string} */
         KnownScanComparisonOutcome: "read" | "check" | "rate_limited" | "failed";
         ScanComparisonStats: {
@@ -7948,6 +7950,7 @@ export type ScanDemand = components['schemas']['ScanDemand'];
 export type ScanDemandKind = components['schemas']['ScanDemandKind'];
 export type KnownScanDemandKind = components['schemas']['KnownScanDemandKind'];
 export type ScanComparisonAnswer = components['schemas']['ScanComparisonAnswer'];
+export type ScanComparisonOutcome = components['schemas']['ScanComparisonOutcome'];
 export type KnownScanComparisonOutcome = components['schemas']['KnownScanComparisonOutcome'];
 export type ScanComparisonStats = components['schemas']['ScanComparisonStats'];
 export type ScanPriceQuartiles = components['schemas']['ScanPriceQuartiles'];

@@ -1324,6 +1324,8 @@ components:
       $ref: './components/schemas/sourcing.yaml#/KnownScanDemandKind'
     ScanComparisonAnswer:
       $ref: './components/schemas/sourcing.yaml#/ScanComparisonAnswer'
+    ScanComparisonOutcome:
+      $ref: './components/schemas/sourcing.yaml#/ScanComparisonOutcome'
     KnownScanComparisonOutcome:
       $ref: './components/schemas/sourcing.yaml#/KnownScanComparisonOutcome'
     ScanComparisonStats:
