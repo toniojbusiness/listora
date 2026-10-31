@@ -223,7 +223,7 @@ connection to Listora.
   buzz for Skip, none for Your call (`Haptics.doubleTap`, `Haptics.longBuzz`).
 - **Keep** and **Put back** each close the card at once, back to the live camera for the next
   shot, and a brief line where the card was says what happened: "Keeping item 3" while the draft
-  is saved, then "Kept · 3 in this run", or "Put back · 3 kept this run" (1.6 s; a Keep that
+  is saved, then "Kept · 3 in this run", or "Put back · 3 kept this run" (2 s; a Keep that
   failed says so for 5 s, above the next card if one is up, and its tray tile is marked). The
   shutter takes a shot the whole time; nothing waits for the draft. **Put back** is there while
   the item is still reading or could not be read, too.

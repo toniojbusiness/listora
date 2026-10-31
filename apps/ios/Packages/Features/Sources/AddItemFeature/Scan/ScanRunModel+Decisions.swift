@@ -79,7 +79,7 @@ struct ScanConfirmation: Equatable, Identifiable {
     let kind: Kind
 
     /// How long a settled line stays; a failure stays longer, so it is read.
-    static let shownFor: Duration = .milliseconds(1600)
+    static let shownFor: Duration = .seconds(2)
     static let failureShownFor: Duration = .seconds(5)
 
     func line(for entry: ScanEntry, keptCount: Int) -> ScanConfirmationLine {

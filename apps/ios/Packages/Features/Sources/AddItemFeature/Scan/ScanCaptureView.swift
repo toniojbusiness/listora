@@ -71,7 +71,7 @@ struct ScanCaptureView: View {
                     )
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.horizontal, Spacing.md)
-                    .transition(.rise)
+                    .transition(.riseThenClear)
                     .id(entry.id)
                     .onDisappear { run.cardClosed(entry.id) }
                 } else if let confirmation = run.confirmation, let line = run.confirmationLine {

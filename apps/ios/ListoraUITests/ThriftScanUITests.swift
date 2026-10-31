@@ -59,15 +59,16 @@ final class ThriftScanUITests: XCTestCase {
         let card = element("scan.card")
         let keepTapped = Date()
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(card.waitForNonExistence(timeout: 5), "Keep closes the card")
-        let cameraReady = Date().timeIntervalSince(keepTapped)
-        XCTAssertTrue(shutter.isHittable)
+        // The line stands where the card was for 2 s once the draft is saved: looked for first.
         let confirmation = element("scan.confirmation")
-        XCTAssertTrue(confirmation.waitForExistence(timeout: 5), "a line says the item is kept")
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2), "a line says the item is kept")
+        let cameraReady = Date().timeIntervalSince(keepTapped)
+        XCTAssertFalse(card.exists, "Keep closes the card")
+        XCTAssertTrue(shutter.isHittable)
         let said = confirmation.label
         XCTAssertTrue(said.contains("Kept · 1 in this run") || said.contains("Keeping item 1"), said)
         attachScreenshot("kept")
-        record("Keep to camera ready, measured by the test (tap included): \(Int(cameraReady * 1000)) ms")
+        record("Keep to the camera clear, measured by the test (tap and its polling included): \(Int(cameraReady * 1000)) ms")
         XCTAssertTrue(waitForLabel(of: element("scanCamera.summary"), prefix: "1 scanned · 1 kept", timeout: 20))
 
         // The next shot shows its own card; Put back passes on it, back to the camera.
@@ -78,9 +79,9 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertEqual(element("scanCamera.summary").label, "2 scanned · 1 kept")
         attachScreenshot("second item")
         app.buttons["scan.putBack"].tap()
-        XCTAssertTrue(card.waitForNonExistence(timeout: 5), "Put back closes the card")
-        let putBack = waitForLabel(of: confirmation, prefix: "Put back · 1 kept this run", timeout: 5)
-        XCTAssertTrue(putBack, confirmation.label)
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 2), "a line says the item was put back")
+        XCTAssertTrue(confirmation.label.contains("Put back · 1 kept this run"), confirmation.label)
+        XCTAssertFalse(card.exists, "Put back closes the card")
         attachScreenshot("put back")
 
         // The tray holds both; the kept one opens with Close, back to the camera.
