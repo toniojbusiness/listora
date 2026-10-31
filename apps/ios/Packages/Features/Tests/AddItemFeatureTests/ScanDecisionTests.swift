@@ -60,10 +60,10 @@ struct ScanDecisionTests {
         #expect(run.confirmationLine?.text == "Kept · 1 in this run")
         #expect(run.confirmationLine?.tone == .done)
 
-        // The card left the screen 0.2 s after Keep: measured for the owner.
-        clock.now += 0.2
+        // The card left the screen 0.25 s after Keep: measured for the owner.
+        clock.now += 0.25
         run.cardClosed(first.id)
-        #expect(run.readyTimes == [0.2])
+        #expect(run.readyTimes == [0.25])
         // Only once.
         run.cardClosed(first.id)
         #expect(run.readyTimes.count == 1)

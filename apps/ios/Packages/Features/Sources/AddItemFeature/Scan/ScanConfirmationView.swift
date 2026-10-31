@@ -9,7 +9,7 @@ struct ScanConfirmationView: View {
     var body: some View {
         HStack(spacing: Spacing.xs) {
             if line.tone == .working {
-                BrandSpinner(color: Palette.onMedia).controlSize(.small)
+                BrandSpinner(color: Palette.onMedia).controlSize(.small).accessibilityHidden(true)
             } else {
                 Image(systemName: line.systemImage)
                     .foregroundStyle(iconColor)

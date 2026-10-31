@@ -376,7 +376,9 @@ measured three ways:
   after N ms") and the run's active time (`InteractionMeter`, session `scan-<run>`), logged when
   the run ends.
 - **The owner** sees them on the scan camera in Test mode, tagged "Testing": "Card 2.1 s · 95%
-  3.4 s · active 2.8 s an item". Sellers never see timings.
+  3.4 s · active 2.8 s an item · next shot 0.3 s", the last from Keep or Put back to the card
+  off the screen (`ScanRunModel.readyTimes`, logged as "scan camera ready N ms after the
+  decision"). Sellers never see timings.
 
 **Measured 2026-10-31** on the local API with the real read (`claude-haiku-5-5`), 10 scans of
 invented 1,024-pixel tag images (about 12 KB each): the server's read took 2.4 s at p50 (2.0 s
@@ -442,7 +444,9 @@ no-thinking setting for this one call), then streaming the identity first.
   (the run's place, the checkout's kept scans, the iPhone's date, the miles, the run ended after,
   a failure retried as the same checkout, the summary's words); `ThriftScanUITests` starts a run
   at a place and checks it out on the local stack.
-- iPhone: `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
+- iPhone: `ScanDecisionTests.swift` (Keep and Put back closing the card at once, the line's
+  words while the draft is saved and after, a failed Keep tried again from the tray, Put back
+  while reading, Close on a kept card, the camera-ready measurement); `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
   run, the small JPEG with tag text, implicit skip and Keep from the tray, notes before and after
   a read, the tag close-up, Retry, End run; the upload queue's `keepScan`, a deleted draft's item
   found by keeping again, a skipped scan's draft failing visibly; the research asked for after

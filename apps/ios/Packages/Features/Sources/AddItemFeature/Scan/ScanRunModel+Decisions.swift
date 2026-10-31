@@ -46,7 +46,7 @@ extension ScanRunModel {
         decidedAt = nil
         let after = now().timeIntervalSince(decided.at)
         readyTimes.append(after)
-        log.info("scan camera ready \(Int(after * 1000), privacy: .public) ms after the decision")
+        log.notice("scan camera ready \(Int(after * 1000), privacy: .public) ms after the decision")
     }
 
     /// What the line over the camera says, from the entry as it is now: "Keeping item 3" while

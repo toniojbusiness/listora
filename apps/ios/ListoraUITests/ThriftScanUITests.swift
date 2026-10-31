@@ -65,7 +65,7 @@ final class ThriftScanUITests: XCTestCase {
         let confirmation = element("scan.confirmation")
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5), "a line says the item is kept")
         let said = confirmation.label
-        XCTAssertTrue(said.hasPrefix("Kept") || said.hasPrefix("Keeping"), said)
+        XCTAssertTrue(said.contains("Kept · 1 in this run") || said.contains("Keeping item 1"), said)
         attachScreenshot("kept")
         record("Keep to camera ready, measured by the test (tap included): \(Int(cameraReady * 1000)) ms")
         XCTAssertTrue(waitForLabel(of: element("scanCamera.summary"), prefix: "1 scanned · 1 kept", timeout: 20))
