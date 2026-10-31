@@ -131,8 +131,17 @@ func decodeScan(_ data: Data) throws -> ItemScan {
 final class FakeScanService: ScanService {
     struct Calls {
         var runs = 0
+        /// The place each run was started at.
+        var places: [String?] = []
         var ended: [String] = []
         var scans: [ScanRequest] = []
+        var checkouts: [Checkout] = []
+    }
+
+    struct Checkout {
+        var runID: String
+        var checkout: RunCheckout
+        var key: String
     }
 
     /// Scripted answers, as the JSON the server would send.
@@ -153,9 +162,38 @@ final class FakeScanService: ScanService {
         state.withLock { $0.answers.append(.failure(failure)) }
     }
 
-    func createSourcingRun(idempotencyKey _: String) async throws(APIFailure) -> String {
-        state.withLock { $0.calls.runs += 1 }
+    func createSourcingRun(place: String?, idempotencyKey _: String) async throws(APIFailure) -> String {
+        state.withLock { state in
+            state.calls.runs += 1
+            state.calls.places.append(place)
+        }
         return "run-1"
+    }
+
+    /// Scripted checkout answers; by default a checked-out summary.
+    private let checkoutAnswers = Mutex<[Result<Data, APIFailure>]>([])
+
+    func answerCheckout(failure: APIFailure) {
+        checkoutAnswers.withLock { $0.append(.failure(failure)) }
+    }
+
+    func checkoutSourcingRun(
+        runID: String,
+        _ checkout: RunCheckout,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> SourcingRunSummary {
+        state.withLock { $0.calls.checkouts.append(Checkout(runID: runID, checkout: checkout, key: idempotencyKey)) }
+        let next = checkoutAnswers.withLock { $0.isEmpty ? nil : $0.removeFirst() }
+        switch next ?? .success((try? JSONSerialization.data(withJSONObject: runSummaryJSON())) ?? Data()) {
+        case let .success(data):
+            do {
+                return try decodeRunSummary(data)
+            } catch {
+                throw APIFailure(error)
+            }
+        case let .failure(failure):
+            throw failure
+        }
     }
 
     func createScan(_ request: ScanRequest, idempotencyKey _: String) async throws(APIFailure) -> ItemScan {

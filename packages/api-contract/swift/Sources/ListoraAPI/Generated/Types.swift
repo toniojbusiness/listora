@@ -1491,6 +1491,27 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/sourcing-runs/{runId}/end`.
     /// - Remark: Generated from `#/paths//v1/sourcing-runs/{runId}/end/post(endSourcingRun)`.
     func endSourcingRun(_ input: Operations.EndSourcingRun.Input) async throws -> Operations.EndSourcingRun.Output
+    /// Check out a sourcing run into a haul
+    ///
+    /// At the register: the run's kept items become one haul (`createHaul`) of what the seller
+    /// paid, each item costing its share, and the run ends (its scans not kept are skipped). A
+    /// kept scan whose item the app had not sent yet is kept now. Answers the run's summary,
+    /// with the estimated profit. A run already checked out or ended is `409`; a listed scan
+    /// that is not a kept or open scan of this run is a `422` field error.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sourcing-runs/{runId}/checkout`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/{runId}/checkout/post(checkoutSourcingRun)`.
+    func checkoutSourcingRun(_ input: Operations.CheckoutSourcingRun.Input) async throws -> Operations.CheckoutSourcingRun.Output
+    /// Get a sourcing run's summary
+    ///
+    /// The run's counts, its kept items' estimated resale, and once checked out its haul and
+    /// estimated profit. Only for an account the thrift scan is on for; otherwise `404`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing-runs/{runId}/summary`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/{runId}/summary/get(getSourcingRunSummary)`.
+    func getSourcingRunSummary(_ input: Operations.GetSourcingRunSummary.Input) async throws -> Operations.GetSourcingRunSummary.Output
     /// Scan an item at the store
     ///
     /// The thrift scan's read (docs/features/thrift-scan.md): one shot of the item and an
@@ -4095,6 +4116,45 @@ extension APIProtocol {
         headers: Operations.EndSourcingRun.Input.Headers
     ) async throws -> Operations.EndSourcingRun.Output {
         try await endSourcingRun(Operations.EndSourcingRun.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Check out a sourcing run into a haul
+    ///
+    /// At the register: the run's kept items become one haul (`createHaul`) of what the seller
+    /// paid, each item costing its share, and the run ends (its scans not kept are skipped). A
+    /// kept scan whose item the app had not sent yet is kept now. Answers the run's summary,
+    /// with the estimated profit. A run already checked out or ended is `409`; a listed scan
+    /// that is not a kept or open scan of this run is a `422` field error.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sourcing-runs/{runId}/checkout`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/{runId}/checkout/post(checkoutSourcingRun)`.
+    public func checkoutSourcingRun(
+        path: Operations.CheckoutSourcingRun.Input.Path,
+        headers: Operations.CheckoutSourcingRun.Input.Headers,
+        body: Operations.CheckoutSourcingRun.Input.Body
+    ) async throws -> Operations.CheckoutSourcingRun.Output {
+        try await checkoutSourcingRun(Operations.CheckoutSourcingRun.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get a sourcing run's summary
+    ///
+    /// The run's counts, its kept items' estimated resale, and once checked out its haul and
+    /// estimated profit. Only for an account the thrift scan is on for; otherwise `404`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing-runs/{runId}/summary`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/{runId}/summary/get(getSourcingRunSummary)`.
+    public func getSourcingRunSummary(
+        path: Operations.GetSourcingRunSummary.Input.Path,
+        headers: Operations.GetSourcingRunSummary.Input.Headers = .init()
+    ) async throws -> Operations.GetSourcingRunSummary.Output {
+        try await getSourcingRunSummary(Operations.GetSourcingRunSummary.Input(
             path: path,
             headers: headers
         ))
