@@ -89,6 +89,8 @@ tags:
     description: Syncing the linked marketplaces now, read-only, and what each sync found (docs/features/sync.md).
   - name: marketplace-features
     description: Each marketplace's features that passed a live end-to-end test, the only ones the app shows (docs/features/verified-features.md).
+  - name: sourcing
+    description: The household's own sales, grouped for sourcing at the store (docs/features/thrift-scan.md).
 
 paths:
   /health/live:
@@ -321,6 +323,8 @@ paths:
     $ref: './paths/marketplace-features.yaml#/~1v1~1marketplace-features'
   /v1/marketplace-features/test-mode:
     $ref: './paths/marketplace-features.yaml#/~1v1~1marketplace-features~1test-mode'
+  /v1/sourcing/kit:
+    $ref: './paths/sourcing.yaml#/~1v1~1sourcing~1kit'
 
 components:
   securitySchemes:
@@ -1253,3 +1257,10 @@ components:
       $ref: './components/schemas/marketplace-features.yaml#/TestMode'
     TestModeReplace:
       $ref: './components/schemas/marketplace-features.yaml#/TestModeReplace'
+    # ---------------------------------------------------------------- sourcing
+    SourcingKit:
+      $ref: './components/schemas/sourcing.yaml#/SourcingKit'
+    OwnSalesBucket:
+      $ref: './components/schemas/sourcing.yaml#/OwnSalesBucket'
+    OwnSalesOnMarketplace:
+      $ref: './components/schemas/sourcing.yaml#/OwnSalesOnMarketplace'

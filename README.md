@@ -150,7 +150,7 @@ packages/activity/      The activity timeline and the sale explanation, from the
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)
-packages/sourcing/      Thrift-scan rules: comparisons and the Buy / Your call / Skip call (@listora/sourcing)
+packages/sourcing/      Thrift-scan rules: comparisons, the sourcing kit, and the Buy / Your call / Skip call (@listora/sourcing)
 packages/eval/          Synthetic tag corpus, eval harness CLI, thrift-scan backtest (@listora/eval)
 packages/e2e/           Local end-to-end stack for the iOS UI tests: API, worker, and runner with fakes (@listora/e2e)
 infra/                  AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)

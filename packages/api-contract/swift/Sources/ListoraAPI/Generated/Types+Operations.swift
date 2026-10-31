@@ -26771,4 +26771,143 @@ public enum Operations {
             }
         }
     }
+    /// Get the sourcing kit
+    ///
+    /// The household's own sales, grouped for sourcing: by brand, then brand and category, then
+    /// brand, category, and size. Each group has its sales per marketplace (count, the price
+    /// range, the median payout after the marketplace's fees) and how many such items sit
+    /// unsold. A few KB, read once while online so the app can look a brand up at the store with
+    /// no signal. Only real sales count: sales that stand (not canceled or returned), from the
+    /// last `windowDays`, on marketplaces whose sales history is on for the account (it passed
+    /// live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
+    /// never calls a marketplace or AI.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing/kit`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)`.
+    public enum GetSourcingKit {
+        public static let id: Swift.String = "getSourcingKit"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/sourcing/kit/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetSourcingKit.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetSourcingKit.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetSourcingKit.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.GetSourcingKit.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/sourcing/kit/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/sourcing/kit/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SourcingKit)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.SourcingKit {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetSourcingKit.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetSourcingKit.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The sourcing kit.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetSourcingKit.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetSourcingKit.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
 }

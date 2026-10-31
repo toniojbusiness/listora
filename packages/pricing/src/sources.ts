@@ -48,3 +48,17 @@ export const ORDER_DATA_MAY_ADJUST_FEES: Readonly<Record<KnownMarketplace, boole
   poshmark: true,
   mercari: true,
 };
+
+/**
+ * Whether the seller's own sales on a marketplace may feed a computed price or a sourcing
+ * call, beyond being shown to the seller as their own sales. eBay-sourced sales stay display
+ * only, for the same eBay API License reason as `ORDER_DATA_MAY_ADJUST_FEES` (red flag RF3):
+ * they are shown in the seller's own history, but nothing models a price from them. When that
+ * review clears it, set `ebay` to true.
+ */
+export const OWN_SALES_MAY_MODEL_PRICES: Readonly<Record<KnownMarketplace, boolean>> = {
+  ebay: false,
+  depop: true,
+  poshmark: true,
+  mercari: true,
+};

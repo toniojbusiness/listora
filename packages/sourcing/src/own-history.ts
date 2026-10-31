@@ -1,3 +1,5 @@
+import { knownMarketplaceValues, type KnownMarketplace } from '@listora/api-contract';
+
 import { brandKey } from './brand.ts';
 import { quartiles, type PriceQuartiles } from './stats.ts';
 
@@ -64,4 +66,56 @@ export function ownHistoryComparisons(
   const prices = quartiles(sales.map((sale) => sale.salePriceCents));
   if (prices === undefined) return undefined;
   return { level, saleIds: sales.map((sale) => sale.id), prices };
+}
+
+/** Only sales from this many days back count: older prices say little about today's. */
+export const OWN_HISTORY_WINDOW_DAYS = 365;
+/**
+ * A marketplace's own sales show on an item's price screen only from this many matching ones:
+ * one sale is a price, not a range.
+ */
+export const MIN_OWN_HISTORY_SALES = 2;
+
+/** One item the household sold, as the price screen and the sourcing kit read it. */
+export interface OwnSale extends HistorySale {
+  /** The sold item; its own sale is never compared with it. */
+  readonly itemId: string;
+  readonly marketplace: KnownMarketplace;
+  readonly sizeLabel: string | null;
+}
+
+/** The item whose own sales the price screen shows. */
+export interface OwnHistoryItem extends ScanIdentity {
+  readonly itemId: string;
+}
+
+/** The matching own sales on one marketplace. */
+export interface MarketplaceOwnHistory {
+  readonly marketplace: KnownMarketplace;
+  /** `brand_and_category` or `brand`: the price screen names the brand, so never `category`. */
+  readonly level: Exclude<MatchLevel, 'category'>;
+  readonly prices: PriceQuartiles;
+}
+
+/**
+ * The item price screen's own history (docs/features/thrift-scan.md, "On the item's price
+ * screen"): per marketplace, in `KnownMarketplace` order (never ranked), the seller's own sales
+ * like the item as `ownHistoryComparisons` matches them, at the tightest level with at least
+ * `MIN_OWN_HISTORY_SALES`. Only a match on the item's brand shows, since the label names it, so
+ * an item without a brand has none. The item's own sale never counts.
+ */
+export function ownHistoryByMarketplace(
+  item: OwnHistoryItem,
+  sales: readonly OwnSale[],
+): MarketplaceOwnHistory[] {
+  return knownMarketplaceValues.flatMap((marketplace) => {
+    const found = ownHistoryComparisons(
+      item,
+      sales.filter((sale) => sale.marketplace === marketplace && sale.itemId !== item.itemId),
+      { minComparisons: MIN_OWN_HISTORY_SALES },
+    );
+    if (found === undefined || found.level === 'category') return [];
+    if (found.prices.count < MIN_OWN_HISTORY_SALES) return [];
+    return [{ marketplace, level: found.level, prices: found.prices }];
+  });
 }

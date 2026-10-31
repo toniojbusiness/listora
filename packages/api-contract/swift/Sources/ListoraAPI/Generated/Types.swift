@@ -1457,6 +1457,21 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/marketplace-features/test-mode`.
     /// - Remark: Generated from `#/paths//v1/marketplace-features/test-mode/put(setTestMode)`.
     func setTestMode(_ input: Operations.SetTestMode.Input) async throws -> Operations.SetTestMode.Output
+    /// Get the sourcing kit
+    ///
+    /// The household's own sales, grouped for sourcing: by brand, then brand and category, then
+    /// brand, category, and size. Each group has its sales per marketplace (count, the price
+    /// range, the median payout after the marketplace's fees) and how many such items sit
+    /// unsold. A few KB, read once while online so the app can look a brand up at the store with
+    /// no signal. Only real sales count: sales that stand (not canceled or returned), from the
+    /// last `windowDays`, on marketplaces whose sales history is on for the account (it passed
+    /// live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
+    /// never calls a marketplace or AI.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing/kit`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)`.
+    func getSourcingKit(_ input: Operations.GetSourcingKit.Input) async throws -> Operations.GetSourcingKit.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -3938,6 +3953,23 @@ extension APIProtocol {
             headers: headers,
             body: body
         ))
+    }
+    /// Get the sourcing kit
+    ///
+    /// The household's own sales, grouped for sourcing: by brand, then brand and category, then
+    /// brand, category, and size. Each group has its sales per marketplace (count, the price
+    /// range, the median payout after the marketplace's fees) and how many such items sit
+    /// unsold. A few KB, read once while online so the app can look a brand up at the store with
+    /// no signal. Only real sales count: sales that stand (not canceled or returned), from the
+    /// last `windowDays`, on marketplaces whose sales history is on for the account (it passed
+    /// live, or the account is in Test mode). Without such sales `buckets` is empty. Computing it
+    /// never calls a marketplace or AI.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing/kit`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)`.
+    public func getSourcingKit(headers: Operations.GetSourcingKit.Input.Headers = .init()) async throws -> Operations.GetSourcingKit.Output {
+        try await getSourcingKit(Operations.GetSourcingKit.Input(headers: headers))
     }
 }
 

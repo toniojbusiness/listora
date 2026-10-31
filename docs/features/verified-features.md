@@ -105,8 +105,7 @@ The tests run like this:
 ## The verified list and its evidence
 
 Only live runs on real accounts count here. A run on a fake site or a recorded page doesn't. A
-write ran only on the captain's own accounts. Tristin's Depop shop is read-only and was only
-ever read.
+write ran only on the captain's own accounts. Tristin's Depop shop was only ever read.
 
 | Marketplace | Feature                        | Verdict                                                                                                                                               |
 | ----------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -114,7 +113,7 @@ ever read.
 | Depop       | `sale_checks`                  | **Verified** 2026-10-28: a check on the iPhone found a new sale on a real shop (found by the check itself, not by reading the history)                |
 | Depop       | `offers`                       | **Verified** 2026-10-28: an offer read on the iPhone succeeded on a real shop, and its one waiting buyer offer became a task                          |
 | Depop       | `listing_import`               | **Verified** 2026-10-28: an import read and imported all 118 listings of a real shop, with none failed (the import detail fix after it is not re-run) |
-| Depop       | `offer_answers`                | Hidden: tested only on the fakes; the real shop is read-only                                                                                          |
+| Depop       | `offer_answers`                | Hidden: tested only on the fakes; no answer has run on a real shop                                                                                    |
 | Depop       | `listing_refresh`              | Hidden: no live refresh (an unchanged save) yet                                                                                                       |
 | Mercari     | `sales_history`                | **Verified** 2026-10-27: the captain's one real sale read correctly, with its listing                                                                 |
 | Mercari     | `sale_checks`                  | **Verified** 2026-10-28: checks on the iPhone's mobile layout read the real sold page and succeed since that day's fix; no new sale has happened yet  |

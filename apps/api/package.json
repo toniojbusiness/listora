@@ -28,6 +28,7 @@
     "@listora/pack-check": "*",
     "@listora/photos": "*",
     "@listora/pricing": "*",
+    "@listora/sourcing": "*",
     "@listora/sales": "*",
     "@listora/shared": "*",
     "@listora/storage": "*",

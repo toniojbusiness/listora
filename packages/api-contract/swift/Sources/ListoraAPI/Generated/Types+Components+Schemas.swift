@@ -15601,5 +15601,199 @@ extension Components {
                 ])
             }
         }
+        /// The household's own sales for sourcing (docs/features/thrift-scan.md). Every number is
+        /// the seller's own sales; none is another seller's or the AI's.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingKit`.
+        public struct SourcingKit: Codable, Hashable, Sendable {
+            /// The kit's format. A client that does not know it ignores the kit.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingKit/version`.
+            public var version: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/SourcingKit/generatedAt`.
+            public var generatedAt: Components.Schemas.Timestamp
+            /// Only sales from this many days back count.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingKit/windowDays`.
+            public var windowDays: Swift.Int32
+            /// Every brand group, then its category groups, then their size groups, each with at
+            /// least one sale; ordered by brand key, then category, then size, the group without one
+            /// first. A group missing here has no sales. Past `maxItems`, size groups go first, then
+            /// category groups, the ones with the fewest sales first.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingKit/buckets`.
+            public var buckets: [Components.Schemas.OwnSalesBucket]
+            /// Creates a new `SourcingKit`.
+            ///
+            /// - Parameters:
+            ///   - version: The kit's format. A client that does not know it ignores the kit.
+            ///   - generatedAt:
+            ///   - windowDays: Only sales from this many days back count.
+            ///   - buckets: Every brand group, then its category groups, then their size groups, each with at
+            public init(
+                version: Swift.Int32,
+                generatedAt: Components.Schemas.Timestamp,
+                windowDays: Swift.Int32,
+                buckets: [Components.Schemas.OwnSalesBucket]
+            ) {
+                self.version = version
+                self.generatedAt = generatedAt
+                self.windowDays = windowDays
+                self.buckets = buckets
+            }
+            public enum CodingKeys: String, CodingKey {
+                case version
+                case generatedAt
+                case windowDays
+                case buckets
+            }
+        }
+        /// One group of the household's sold items: a brand, or a brand and category, or a brand,
+        /// category, and size.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/OwnSalesBucket`.
+        public struct OwnSalesBucket: Codable, Hashable, Sendable {
+            /// The brand as the seller's sold items spell it most often.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/brand`.
+            public var brand: Swift.String
+            /// The brand's match key (`brandKey` in @listora/sourcing): lowercase, without accents,
+            /// punctuation, or company words, its first word (two for a common one such as "old"):
+            /// "levi" for "Levi's", "old navy" for "Old Navy". The app matches a tag's brand by it.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/brandKey`.
+            public var brandKey: Swift.String
+            /// The canonical category path (`ItemDetails.category`). Absent for the brand's group.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/category`.
+            public var category: Swift.String?
+            /// The size compared without case or spaces, letter sizes spelled short ("m" for
+            /// "Medium"). Present only in a category's size groups.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/sizeBucket`.
+            public var sizeBucket: Swift.String?
+            /// The account's items of the group in inventory and not sold (ready or listed).
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/unsoldCount`.
+            public var unsoldCount: Swift.Int32
+            /// The marketplaces the group sold on, in `KnownMarketplace` order, never ranked.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesBucket/marketplaces`.
+            public var marketplaces: [Components.Schemas.OwnSalesOnMarketplace]
+            /// Creates a new `OwnSalesBucket`.
+            ///
+            /// - Parameters:
+            ///   - brand: The brand as the seller's sold items spell it most often.
+            ///   - brandKey: The brand's match key (`brandKey` in @listora/sourcing): lowercase, without accents,
+            ///   - category: The canonical category path (`ItemDetails.category`). Absent for the brand's group.
+            ///   - sizeBucket: The size compared without case or spaces, letter sizes spelled short ("m" for
+            ///   - unsoldCount: The account's items of the group in inventory and not sold (ready or listed).
+            ///   - marketplaces: The marketplaces the group sold on, in `KnownMarketplace` order, never ranked.
+            public init(
+                brand: Swift.String,
+                brandKey: Swift.String,
+                category: Swift.String? = nil,
+                sizeBucket: Swift.String? = nil,
+                unsoldCount: Swift.Int32,
+                marketplaces: [Components.Schemas.OwnSalesOnMarketplace]
+            ) {
+                self.brand = brand
+                self.brandKey = brandKey
+                self.category = category
+                self.sizeBucket = sizeBucket
+                self.unsoldCount = unsoldCount
+                self.marketplaces = marketplaces
+            }
+            public enum CodingKeys: String, CodingKey {
+                case brand
+                case brandKey
+                case category
+                case sizeBucket
+                case unsoldCount
+                case marketplaces
+            }
+        }
+        /// The group's sales on one marketplace.
+        ///
+        /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace`.
+        public struct OwnSalesOnMarketplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// Items sold (a bundle's items each count).
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/soldCount`.
+            public var soldCount: Swift.Int32
+            /// The low quartile of what buyers paid per item.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/median`.
+            public var median: Components.Schemas.Money
+            /// The high quartile of what buyers paid per item.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/high`.
+            public var high: Components.Schemas.Money
+            /// The median of each sale price less the marketplace's fees from its current fee table:
+            /// what such a sale would pay out today. An estimate.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/medianPayout`.
+            public var medianPayout: Components.Schemas.Money
+            /// The fee table `medianPayout` comes from.
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/feeTableVersion`.
+            public var feeTableVersion: Swift.String
+            /// True when these sales may be shown to the seller as their own but never feed a
+            /// suggested price or a sourcing call (eBay's, until the eBay licence review).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/OwnSalesOnMarketplace/displayOnly`.
+            public var displayOnly: Swift.Bool
+            /// Creates a new `OwnSalesOnMarketplace`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - soldCount: Items sold (a bundle's items each count).
+            ///   - low: The low quartile of what buyers paid per item.
+            ///   - median:
+            ///   - high: The high quartile of what buyers paid per item.
+            ///   - medianPayout: The median of each sale price less the marketplace's fees from its current fee table:
+            ///   - feeTableVersion: The fee table `medianPayout` comes from.
+            ///   - displayOnly: True when these sales may be shown to the seller as their own but never feed a
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                soldCount: Swift.Int32,
+                low: Components.Schemas.Money,
+                median: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                medianPayout: Components.Schemas.Money,
+                feeTableVersion: Swift.String,
+                displayOnly: Swift.Bool
+            ) {
+                self.marketplace = marketplace
+                self.soldCount = soldCount
+                self.low = low
+                self.median = median
+                self.high = high
+                self.medianPayout = medianPayout
+                self.feeTableVersion = feeTableVersion
+                self.displayOnly = displayOnly
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case soldCount
+                case low
+                case median
+                case high
+                case medianPayout
+                case feeTableVersion
+                case displayOnly
+            }
+        }
     }
 }
