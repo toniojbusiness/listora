@@ -5,6 +5,7 @@
 //   npm run eval -- --provider none     parsers only
 //   npm run eval -- --provider anthropic --tier premium   real API; needs ANTHROPIC_API_KEY
 //   npm run eval -- --min-accuracy 0.95 --mismatches
+//   npm run eval -- scan --dataset <dir>   the thrift-scan backtest (scan/command.ts)
 import { parseArgs } from 'node:util';
 
 import {
@@ -24,6 +25,7 @@ import { DEFAULT_FAKE_FIXTURES_DIR } from './fake-fixtures.ts';
 import { runEval } from './harness.ts';
 import { EVAL_TASKS, StubProvider, type EvalProvider, type EvalTask } from './provider.ts';
 import { formatReport } from './report.ts';
+import { SCAN_USAGE, scanCommand, ScanUsageError } from './scan/command.ts';
 
 /** The providers of one CLI run per task; a provider without the task cannot run it. */
 type ProviderFactory = (
@@ -80,6 +82,7 @@ const PROVIDERS: Readonly<Record<string, ProviderFactory | null>> = {
 const TASK_CHOICES = [...EVAL_TASKS, 'all'] as const;
 
 const USAGE = `Usage: npm run eval -- [options]
+       npm run eval -- scan --dataset <dir> [options]   (the thrift-scan backtest; scan --help)
 
 Options:
   --provider <name>     ${Object.keys(PROVIDERS).join(' | ')} (default: fake)
@@ -96,6 +99,9 @@ Options:
 class UsageError extends Error {}
 
 async function main(argv: readonly string[]): Promise<number> {
+  if (argv[0] === 'scan') {
+    return scanCommand(argv.slice(1), process.env, (text) => process.stdout.write(text));
+  }
   const { values } = parseArgs({
     args: [...argv],
     options: {
@@ -177,10 +183,12 @@ function parseThreshold(raw: string | undefined): number | undefined {
 try {
   process.exitCode = await main(process.argv.slice(2));
 } catch (error) {
+  const scan = process.argv[2] === 'scan';
   const usage =
     error instanceof UsageError ||
+    error instanceof ScanUsageError ||
     (error as { code?: unknown }).code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION';
   process.stderr.write(`eval: ${error instanceof Error ? error.message : String(error)}\n`);
-  if (usage) process.stderr.write(`\n${USAGE}`);
+  if (usage) process.stderr.write(`\n${scan ? SCAN_USAGE : USAGE}`);
   process.exitCode = usage ? 2 : 1;
 }

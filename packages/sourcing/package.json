@@ -1,0 +1,13 @@
+{
+  "name": "@listora/sourcing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Thrift-scan rules with no I/O: price quartiles, own-history comparisons, and the Buy / Your call / Skip call.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/pricing": "*"
+  }
+}

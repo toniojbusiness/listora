@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Synthetic tag corpus and evaluation harness for tag parsing, AI attribute extraction, and the full item analysis.",
+  "description": "Synthetic tag corpus and evaluation harness for tag parsing, AI attribute extraction, the full item analysis, and the thrift-scan backtest.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -16,6 +16,8 @@
     "@listora/analysis": "*",
     "@listora/api-contract": "*",
     "@listora/photos": "*",
+    "@listora/pricing": "*",
+    "@listora/sourcing": "*",
     "@listora/tag-parse": "*",
     "zod": "^4.6.7"
   }

@@ -68,6 +68,19 @@ export {
 } from './result.ts';
 export type { BuiltAnalysisResult } from './result.ts';
 export {
+  decodeScanAnswer,
+  MAX_SCAN_ATTEMPTS,
+  MAX_SCAN_IMAGES,
+  SCAN_OUTPUT,
+  SCAN_OUTPUT_NAME,
+  SCAN_PURPOSE,
+  SCAN_SYSTEM,
+  ScanFailedError,
+  scanItem,
+  scanPrompt,
+} from './scan.ts';
+export type { ScanAnswer, ScanInput, ScanOutcome, ThriftScan } from './scan.ts';
+export {
   CATEGORIES,
   CATEGORY_TREE,
   categoryPath,

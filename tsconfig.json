@@ -27,6 +27,7 @@
     { "path": "packages/email-sales" },
     { "path": "packages/tag-parse" },
     { "path": "packages/analysis" },
+    { "path": "packages/sourcing" },
     { "path": "packages/batches" },
     { "path": "packages/imports" },
     { "path": "packages/retention" },

@@ -11,6 +11,8 @@
     { "path": "../analysis" },
     { "path": "../api-contract" },
     { "path": "../photos" },
+    { "path": "../pricing" },
+    { "path": "../sourcing" },
     { "path": "../tag-parse" }
   ]
 }
