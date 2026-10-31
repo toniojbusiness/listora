@@ -194,3 +194,21 @@ extension Operations.ReplaceDescriptionStyle.Output.Forbidden: ErrorResponseCarr
         }
     }
 }
+
+/// `createScan`'s `403`: AI is turned off for the account.
+extension Operations.CreateScan.Output.Forbidden: ErrorResponseCarrying {
+    public var errorResponse: Components.Schemas.ErrorResponse {
+        switch body {
+        case let .json(response): response
+        }
+    }
+}
+
+/// `researchScan`'s `403`: AI is turned off for the account.
+extension Operations.ResearchScan.Output.Forbidden: ErrorResponseCarrying {
+    public var errorResponse: Components.Schemas.ErrorResponse {
+        switch body {
+        case let .json(response): response
+        }
+    }
+}

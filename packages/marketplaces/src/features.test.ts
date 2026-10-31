@@ -3,8 +3,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { MARKETPLACES } from '@listora/db';
 
 import {
+  appFeaturesOn,
   FEATURE_REQUIRES,
   featuresOn,
+  isAppFeatureInTesting,
+  isAppFeatureOn,
   isFeatureInTesting,
   isFeatureOn,
   isFeatureVerified,
@@ -14,6 +17,7 @@ import {
   marketplacesWith,
   SELLER_FEATURES,
   useMarketplaceFeatures,
+  VERIFIED_APP_FEATURES,
   VERIFIED_FEATURES,
 } from './features.ts';
 
@@ -79,6 +83,19 @@ describe('marketplace features (docs/features/verified-features.md)', () => {
       'depop',
       'poshmark',
     ]);
+  });
+
+  it("hides Listora's own features until they pass live, except in Test mode", () => {
+    useMarketplaceFeatures('verified');
+    // The thrift scan has not passed live: only the owner's Test mode shows it.
+    expect(VERIFIED_APP_FEATURES).toEqual({});
+    expect(isAppFeatureOn('thrift_scan', SELLER_FEATURES)).toBe(false);
+    expect(appFeaturesOn(SELLER_FEATURES)).toEqual([]);
+    expect(isAppFeatureOn('thrift_scan', { testMode: true })).toBe(true);
+    expect(isAppFeatureInTesting('thrift_scan', { testMode: true })).toBe(true);
+    expect(isAppFeatureInTesting('thrift_scan', SELLER_FEATURES)).toBe(false);
+    useMarketplaceFeatures('all');
+    expect(appFeaturesOn(SELLER_FEATURES)).toEqual(['thrift_scan']);
   });
 
   it('reads MARKETPLACE_FEATURES, verified unless set, and never all beside Cognito', () => {

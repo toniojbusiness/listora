@@ -367,7 +367,12 @@ function callScores(
 ): CallScores {
   const counts: Record<ScanCallKind, number> = { buy: 0, your_call: 0, skip: 0 };
   const byConfidence: Record<CallConfidence, number> = { high: 0, medium: 0, low: 0 };
-  const byBasis: Record<CallBasis, number> = { own_history: 0, ai_estimate: 0, none: 0 };
+  const byBasis: Record<CallBasis, number> = {
+    own_history: 0,
+    web_info: 0,
+    ai_estimate: 0,
+    none: 0,
+  };
   let buyHeld = 0;
   let skipHeld = 0;
   for (const result of results) {

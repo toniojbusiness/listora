@@ -49,6 +49,13 @@ public enum MarketplaceFeaturesService {
         case false?: .off
         case true?: .enabled
         }
-        return MarketplaceFeatures.List(shown: shown, testing: testing, testMode: testMode)
+        let name = { (feature: Components.Schemas.AppFeature) in feature.value1?.rawValue ?? feature.value2 }
+        return MarketplaceFeatures.List(
+            shown: shown,
+            testing: testing,
+            testMode: testMode,
+            app: Set((body.app?.features ?? []).compactMap(name)),
+            appTesting: Set((body.app?.testing ?? []).compactMap(name)),
+        )
     }
 }

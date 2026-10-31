@@ -1472,6 +1472,83 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/sourcing/kit`.
     /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)`.
     func getSourcingKit(_ input: Operations.GetSourcingKit.Input) async throws -> Operations.GetSourcingKit.Output
+    /// Start a sourcing run
+    ///
+    /// Starts one trip to a store (docs/features/thrift-scan.md): every item the seller scans
+    /// there (`createScan`) belongs to it, and the items they keep join it. Only for an account
+    /// the thrift scan is on for (`listMarketplaceFeatures`'s `app`); otherwise `404`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sourcing-runs`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/post(createSourcingRun)`.
+    func createSourcingRun(_ input: Operations.CreateSourcingRun.Input) async throws -> Operations.CreateSourcingRun.Output
+    /// End a sourcing run
+    ///
+    /// Ends the run: its scans that were not kept count as skipped, and none of them can be kept
+    /// any more. Ending a run that already ended answers it as it is.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sourcing-runs/{runId}/end`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/{runId}/end/post(endSourcingRun)`.
+    func endSourcingRun(_ input: Operations.EndSourcingRun.Input) async throws -> Operations.EndSourcingRun.Output
+    /// Scan an item at the store
+    ///
+    /// The thrift scan's read (docs/features/thrift-scan.md): one shot of the item and an
+    /// optional tag close-up, sent inline as small JPEGs, with the text the phone read on the
+    /// tag and the seller's spoken note. Answers at once with what the item is, the household's
+    /// own sales like it, a labeled AI estimate, and the Buy / Your call / Skip call with its
+    /// confidence and what it rests on. The call judges resale value only: no cost or profit,
+    /// which come at the haul's checkout. The images are checked, sent to the AI, and dropped:
+    /// only their hash is kept. Nothing is read from or sent to a marketplace.
+    ///
+    /// The read is metered and counted in the account's daily AI budget, but uses no plan
+    /// quota. Only for an account the thrift scan is on for (`404` otherwise, and for a run of
+    /// another account); `409 invalid_state_transition` when the run ended;
+    /// `429 rate_limited` past the account's daily scan limit and `429 ai_budget_exceeded`
+    /// once the AI budget is used up; `503 service_unavailable` while AI is switched off or
+    /// the model could not answer (retryable); `403 forbidden` when AI is turned off for the
+    /// account. `replacesScanId` names an earlier scan of the same item (a note added after
+    /// its read), which is then no longer offered to keep.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/scans`.
+    /// - Remark: Generated from `#/paths//v1/scans/post(createScan)`.
+    func createScan(_ input: Operations.CreateScan.Input) async throws -> Operations.CreateScan.Output
+    /// Keep a scanned item
+    ///
+    /// The seller is buying the item: creates its `draft` item (with its SKU), its details
+    /// the scan's read (provenance `ai`): the title, brand, category, department, size, and
+    /// condition. Attach its photos as for any item. A scan already kept answers `200` with
+    /// its item instead of creating another, so an app that keeps it again, even after the
+    /// Idempotency-Key has expired, never creates two. `409 invalid_state_transition` when
+    /// the scan's run ended without it, or a later scan replaced it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/scans/{scanId}/keep`.
+    /// - Remark: Generated from `#/paths//v1/scans/{scanId}/keep/post(keepScan)`.
+    func keepScan(_ input: Operations.KeepScan.Input) async throws -> Operations.KeepScan.Output
+    /// Look the scanned item up on the web
+    ///
+    /// After the scan's read, the app asks for this without waiting on it: what the web says
+    /// about the identified brand and item, the way a seller would ask a chatbot that searches.
+    /// The server searches (the Claude API's web search, at most two searches) for the original
+    /// retail price on the brand's or a retailer's site or another reputable source, and how such
+    /// items resell, keeps only the numbers whose page the search returned, and answers the scan
+    /// again with its `research`, `retail`, and the call made again with it (web info ranks after
+    /// the household's own sales and before the AI estimate, and never makes a high-confidence
+    /// call). One brand makes many models in every category, so an item's results are reused only
+    /// for the same exact model (its model or style number, item type, and era) for 30 days; an
+    /// item whose exact model the read could not pin is looked up afresh every time, its retail
+    /// price a range across the likely models it names. A brand's resale reputation is kept for 7
+    /// days. A scan already researched answers as it is; a read without a brand answers
+    /// `no_brand`.
+    /// Metered in the daily AI budget like the read: `429 ai_budget_exceeded`,
+    /// `503 service_unavailable` (retryable), `403 forbidden` as for `createScan`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/scans/{scanId}/research`.
+    /// - Remark: Generated from `#/paths//v1/scans/{scanId}/research/post(researchScan)`.
+    func researchScan(_ input: Operations.ResearchScan.Input) async throws -> Operations.ResearchScan.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -3970,6 +4047,123 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/sourcing/kit/get(getSourcingKit)`.
     public func getSourcingKit(headers: Operations.GetSourcingKit.Input.Headers = .init()) async throws -> Operations.GetSourcingKit.Output {
         try await getSourcingKit(Operations.GetSourcingKit.Input(headers: headers))
+    }
+    /// Start a sourcing run
+    ///
+    /// Starts one trip to a store (docs/features/thrift-scan.md): every item the seller scans
+    /// there (`createScan`) belongs to it, and the items they keep join it. Only for an account
+    /// the thrift scan is on for (`listMarketplaceFeatures`'s `app`); otherwise `404`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sourcing-runs`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/post(createSourcingRun)`.
+    public func createSourcingRun(
+        headers: Operations.CreateSourcingRun.Input.Headers,
+        body: Operations.CreateSourcingRun.Input.Body
+    ) async throws -> Operations.CreateSourcingRun.Output {
+        try await createSourcingRun(Operations.CreateSourcingRun.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// End a sourcing run
+    ///
+    /// Ends the run: its scans that were not kept count as skipped, and none of them can be kept
+    /// any more. Ending a run that already ended answers it as it is.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sourcing-runs/{runId}/end`.
+    /// - Remark: Generated from `#/paths//v1/sourcing-runs/{runId}/end/post(endSourcingRun)`.
+    public func endSourcingRun(
+        path: Operations.EndSourcingRun.Input.Path,
+        headers: Operations.EndSourcingRun.Input.Headers
+    ) async throws -> Operations.EndSourcingRun.Output {
+        try await endSourcingRun(Operations.EndSourcingRun.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Scan an item at the store
+    ///
+    /// The thrift scan's read (docs/features/thrift-scan.md): one shot of the item and an
+    /// optional tag close-up, sent inline as small JPEGs, with the text the phone read on the
+    /// tag and the seller's spoken note. Answers at once with what the item is, the household's
+    /// own sales like it, a labeled AI estimate, and the Buy / Your call / Skip call with its
+    /// confidence and what it rests on. The call judges resale value only: no cost or profit,
+    /// which come at the haul's checkout. The images are checked, sent to the AI, and dropped:
+    /// only their hash is kept. Nothing is read from or sent to a marketplace.
+    ///
+    /// The read is metered and counted in the account's daily AI budget, but uses no plan
+    /// quota. Only for an account the thrift scan is on for (`404` otherwise, and for a run of
+    /// another account); `409 invalid_state_transition` when the run ended;
+    /// `429 rate_limited` past the account's daily scan limit and `429 ai_budget_exceeded`
+    /// once the AI budget is used up; `503 service_unavailable` while AI is switched off or
+    /// the model could not answer (retryable); `403 forbidden` when AI is turned off for the
+    /// account. `replacesScanId` names an earlier scan of the same item (a note added after
+    /// its read), which is then no longer offered to keep.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/scans`.
+    /// - Remark: Generated from `#/paths//v1/scans/post(createScan)`.
+    public func createScan(
+        headers: Operations.CreateScan.Input.Headers,
+        body: Operations.CreateScan.Input.Body
+    ) async throws -> Operations.CreateScan.Output {
+        try await createScan(Operations.CreateScan.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Keep a scanned item
+    ///
+    /// The seller is buying the item: creates its `draft` item (with its SKU), its details
+    /// the scan's read (provenance `ai`): the title, brand, category, department, size, and
+    /// condition. Attach its photos as for any item. A scan already kept answers `200` with
+    /// its item instead of creating another, so an app that keeps it again, even after the
+    /// Idempotency-Key has expired, never creates two. `409 invalid_state_transition` when
+    /// the scan's run ended without it, or a later scan replaced it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/scans/{scanId}/keep`.
+    /// - Remark: Generated from `#/paths//v1/scans/{scanId}/keep/post(keepScan)`.
+    public func keepScan(
+        path: Operations.KeepScan.Input.Path,
+        headers: Operations.KeepScan.Input.Headers
+    ) async throws -> Operations.KeepScan.Output {
+        try await keepScan(Operations.KeepScan.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Look the scanned item up on the web
+    ///
+    /// After the scan's read, the app asks for this without waiting on it: what the web says
+    /// about the identified brand and item, the way a seller would ask a chatbot that searches.
+    /// The server searches (the Claude API's web search, at most two searches) for the original
+    /// retail price on the brand's or a retailer's site or another reputable source, and how such
+    /// items resell, keeps only the numbers whose page the search returned, and answers the scan
+    /// again with its `research`, `retail`, and the call made again with it (web info ranks after
+    /// the household's own sales and before the AI estimate, and never makes a high-confidence
+    /// call). One brand makes many models in every category, so an item's results are reused only
+    /// for the same exact model (its model or style number, item type, and era) for 30 days; an
+    /// item whose exact model the read could not pin is looked up afresh every time, its retail
+    /// price a range across the likely models it names. A brand's resale reputation is kept for 7
+    /// days. A scan already researched answers as it is; a read without a brand answers
+    /// `no_brand`.
+    /// Metered in the daily AI budget like the read: `429 ai_budget_exceeded`,
+    /// `503 service_unavailable` (retryable), `403 forbidden` as for `createScan`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/scans/{scanId}/research`.
+    /// - Remark: Generated from `#/paths//v1/scans/{scanId}/research/post(researchScan)`.
+    public func researchScan(
+        path: Operations.ResearchScan.Input.Path,
+        headers: Operations.ResearchScan.Input.Headers
+    ) async throws -> Operations.ResearchScan.Output {
+        try await researchScan(Operations.ResearchScan.Input(
+            path: path,
+            headers: headers
+        ))
     }
 }
 

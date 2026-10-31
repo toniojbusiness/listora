@@ -103,6 +103,17 @@ export function buildParams(
         ],
       },
     ],
+    ...(request.webSearch === undefined
+      ? {}
+      : {
+          tools: [
+            {
+              type: 'web_search_20250305',
+              name: 'web_search',
+              max_uses: request.webSearch.maxUses,
+            },
+          ],
+        }),
     // Only the JSON schema goes on the wire; parsing happens below so that a response that
     // fails validation is still metered.
     output_config: byPrompt
@@ -169,7 +180,13 @@ function readResponse<T>(
       break;
   }
 
+  // With web search, the model may write before it searches; the answer is the text after the
+  // last search result.
+  const lastResult = message.content.findLastIndex(
+    (block) => block.type === 'web_search_tool_result',
+  );
   const text = message.content
+    .slice(lastResult + 1)
     .filter((block): block is Anthropic.TextBlock => block.type === 'text')
     .map((block) => block.text)
     .join('');
@@ -187,7 +204,12 @@ function readResponse<T>(
       { usage },
     );
   }
-  return { output: parsed.data, usage };
+  const webSources = message.content.flatMap((block) =>
+    block.type === 'web_search_tool_result' && Array.isArray(block.content)
+      ? block.content.map((result) => ({ url: result.url, title: result.title }))
+      : [],
+  );
+  return { output: parsed.data, usage, ...(webSources.length === 0 ? {} : { webSources }) };
 }
 
 function usageOf(usage: Anthropic.Usage): TokenUsage {

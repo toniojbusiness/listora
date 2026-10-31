@@ -148,3 +148,9 @@ QuestionId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+ScanId:
+  name: scanId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'

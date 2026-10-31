@@ -69,5 +69,7 @@ extension Components {
         public typealias ImportId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/QuestionId`.
         public typealias QuestionId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/ScanId`.
+        public typealias ScanId = Components.Schemas.Id
     }
 }

@@ -1,0 +1,53 @@
+/v1/sourcing-runs:
+  post:
+    tags: [sourcing-runs]
+    operationId: createSourcingRun
+    summary: Start a sourcing run
+    description: |
+      Starts one trip to a store (docs/features/thrift-scan.md): every item the seller scans
+      there (`createScan`) belongs to it, and the items they keep join it. Only for an account
+      the thrift scan is on for (`listMarketplaceFeatures`'s `app`); otherwise `404`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/sourcing.yaml#/SourcingRunCreate'
+    responses:
+      '201':
+        description: Started.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sourcing.yaml#/SourcingRun'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sourcing-runs/{runId}/end:
+  parameters:
+    - $ref: '../components/parameters.yaml#/RunId'
+  post:
+    tags: [sourcing-runs]
+    operationId: endSourcingRun
+    summary: End a sourcing run
+    description: |
+      Ends the run: its scans that were not kept count as skipped, and none of them can be kept
+      any more. Ending a run that already ended answers it as it is.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The ended run.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sourcing.yaml#/SourcingRun'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

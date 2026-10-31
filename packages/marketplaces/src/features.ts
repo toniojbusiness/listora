@@ -155,6 +155,39 @@ export function marketplacesWith<M extends Marketplace>(
   return among.filter((marketplace) => isFeatureOn(marketplace, feature, gate));
 }
 
+/**
+ * Customer features of Listora itself rather than of one marketplace, held to the same rule:
+ * hidden until a live end-to-end test passes, except in the owner's Test mode.
+ */
+export const APP_FEATURES = [
+  /** The thrift scan at the store: one shot, the AI's read, and the Buy / Your call / Skip call. */
+  'thrift_scan',
+] as const;
+export type AppFeature = (typeof APP_FEATURES)[number];
+
+/** The app features that passed live, with the run that proved each. */
+export const VERIFIED_APP_FEATURES: Partial<Readonly<Record<AppFeature, FeatureEvidence>>> = {};
+
+/** Whether the app feature passed live (or this process runs `all`). */
+export function isAppFeatureVerified(feature: AppFeature): boolean {
+  return featureSet === 'all' || Object.hasOwn(VERIFIED_APP_FEATURES, feature);
+}
+
+/** Whether the account is shown the app feature: it passed live, or the account is in Test mode. */
+export function isAppFeatureOn(feature: AppFeature, gate: FeatureGate): boolean {
+  return gate.testMode || isAppFeatureVerified(feature);
+}
+
+/** The app features on for the account, in `APP_FEATURES` order. */
+export function appFeaturesOn(gate: FeatureGate): AppFeature[] {
+  return APP_FEATURES.filter((feature) => isAppFeatureOn(feature, gate));
+}
+
+/** Whether the app feature is on only because of Test mode: the app tags it "Testing". */
+export function isAppFeatureInTesting(feature: AppFeature, gate: FeatureGate): boolean {
+  return gate.testMode && !isAppFeatureVerified(feature);
+}
+
 export class MarketplaceFeaturesConfigError extends Error {
   readonly issues: readonly string[];
 

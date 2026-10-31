@@ -15,13 +15,19 @@ export {
   claimsSoldData,
   labelGuardViolations,
   NO_SOLD_DATA_MESSAGE,
+  scanLabelViolations,
+  WEB_INFO_LABEL,
 } from './labels.ts';
 export {
+  DEPOP_SEARCH_LABEL,
   EBAY_SOLD_SEARCH_LABEL,
   MAX_RESEARCH_QUERY_LENGTH,
+  MERCARI_SEARCH_LABEL,
+  POSHMARK_SEARCH_LABEL,
   RESEARCH_LINK_LABELS,
   researchLinks,
   researchQuery,
+  scanResearchLinks,
   TERAPEAK_LABEL,
 } from './research-links.ts';
 export type { ResearchItem } from './research-links.ts';

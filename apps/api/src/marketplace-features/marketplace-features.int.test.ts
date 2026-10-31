@@ -9,9 +9,9 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { knownMarketplaceFeatureValues } from '@listora/api-contract';
+import { knownAppFeatureValues, knownMarketplaceFeatureValues } from '@listora/api-contract';
 import type { Marketplace } from '@listora/db';
-import { MARKETPLACE_FEATURES, useMarketplaceFeatures } from '@listora/marketplaces';
+import { APP_FEATURES, MARKETPLACE_FEATURES, useMarketplaceFeatures } from '@listora/marketplaces';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
 
@@ -113,6 +113,9 @@ describe('marketplace features (real Postgres, verified features)', () => {
       { marketplace: 'poshmark', features: [] },
       { marketplace: 'mercari', features: ['sales_history', 'sale_checks', 'listing_import'] },
     ]);
+    // Listora's own features that have not passed live, the thrift scan among them, are hidden.
+    expect([...knownAppFeatureValues]).toEqual([...APP_FEATURES]);
+    expect(listed.body.app).toEqual({ features: [] });
   });
 
   it('syncs only the verified reads, and leaves a marketplace with none out of the sync', async () => {

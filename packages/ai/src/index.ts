@@ -91,6 +91,8 @@ export type {
   OutputSchema,
   SchemaEnforcement,
   TokenUsage,
+  WebSearchOptions,
+  WebSource,
 } from './types.ts';
 export { PostgresQuotaPolicy, utcMonthPeriod } from './quota.ts';
 export type {

@@ -95,6 +95,14 @@ final class DraftDatabase: Sendable {
                 table.add(column: "originalFileName", .text)
             }
         }
+        migrator.registerMigration("v4: drafts kept from thrift scans") { db in
+            try db.alter(table: DraftRecord.databaseTableName) { table in
+                table.add(column: "scanID", .text)
+            }
+            try db.alter(table: ServerDeletionRecord.databaseTableName) { table in
+                table.add(column: "scanID", .text)
+            }
+        }
         return migrator
     }
 }

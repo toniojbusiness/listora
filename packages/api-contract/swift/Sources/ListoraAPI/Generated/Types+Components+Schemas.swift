@@ -15538,24 +15538,116 @@ extension Components {
         public struct MarketplaceFeatureList: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList/data`.
             public var data: [Components.Schemas.MarketplaceFeatures]
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList/app`.
+            public var app: Components.Schemas.AppFeatures?
             /// - Remark: Generated from `#/components/schemas/MarketplaceFeatureList/testMode`.
             public var testMode: Components.Schemas.TestMode?
             /// Creates a new `MarketplaceFeatureList`.
             ///
             /// - Parameters:
             ///   - data:
+            ///   - app:
             ///   - testMode:
             public init(
                 data: [Components.Schemas.MarketplaceFeatures],
+                app: Components.Schemas.AppFeatures? = nil,
                 testMode: Components.Schemas.TestMode? = nil
             ) {
                 self.data = data
+                self.app = app
                 self.testMode = testMode
             }
             public enum CodingKeys: String, CodingKey {
                 case data
+                case app
                 case testMode
             }
+        }
+        /// Listora's own features the account is shown, held to the same rule as a marketplace's:
+        /// those that passed a live end-to-end test, or in Test mode every built one.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AppFeatures`.
+        public struct AppFeatures: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AppFeatures/features`.
+            public var features: [Components.Schemas.AppFeature]
+            /// In Test mode only, the features of `features` on only for the test.
+            ///
+            /// - Remark: Generated from `#/components/schemas/AppFeatures/testing`.
+            public var testing: [Components.Schemas.AppFeature]?
+            /// Creates a new `AppFeatures`.
+            ///
+            /// - Parameters:
+            ///   - features:
+            ///   - testing: In Test mode only, the features of `features` on only for the test.
+            public init(
+                features: [Components.Schemas.AppFeature],
+                testing: [Components.Schemas.AppFeature]? = nil
+            ) {
+                self.features = features
+                self.testing = testing
+            }
+            public enum CodingKeys: String, CodingKey {
+                case features
+                case testing
+            }
+        }
+        /// A `KnownAppFeature`, or one added after this client was built. Clients ignore a feature
+        /// they do not know.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AppFeature`.
+        public struct AppFeature: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AppFeature/value1`.
+            public var value1: Components.Schemas.KnownAppFeature?
+            /// - Remark: Generated from `#/components/schemas/AppFeature/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `AppFeature`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownAppFeature? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `thrift_scan`: scanning items at the store for the Buy / Your call / Skip call.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownAppFeature`.
+        @frozen public enum KnownAppFeature: String, Codable, Hashable, Sendable, CaseIterable {
+            case thriftScan = "thrift_scan"
         }
         /// Test mode (docs/features/test-mode.md), present only for an account that may turn it on:
         /// the owner or an admin of the deployment owner's account. Off until turned on.
@@ -15793,6 +15885,1603 @@ extension Components {
                 case medianPayout
                 case feeTableVersion
                 case displayOnly
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SourcingRunCreate`.
+        public struct SourcingRunCreate: Codable, Hashable, Sendable {
+            /// Where the seller is, as they name it ("Goodwill Outlet on 5th").
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRunCreate/place`.
+            public var place: Swift.String?
+            /// Creates a new `SourcingRunCreate`.
+            ///
+            /// - Parameters:
+            ///   - place: Where the seller is, as they name it ("Goodwill Outlet on 5th").
+            public init(place: Swift.String? = nil) {
+                self.place = place
+            }
+            public enum CodingKeys: String, CodingKey {
+                case place
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.place = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .place
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "place"
+                ])
+            }
+        }
+        /// One trip to a store, scanning items to buy (docs/features/thrift-scan.md).
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingRun`.
+        public struct SourcingRun: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/place`.
+            public var place: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/startedAt`.
+            public var startedAt: Components.Schemas.Timestamp
+            /// When the run ended; absent while it goes on.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/endedAt`.
+            public var endedAt: Components.Schemas.Timestamp?
+            /// Items scanned in the run.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/scanCount`.
+            public var scanCount: Swift.Int32
+            /// Scanned items the seller kept.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingRun/keptCount`.
+            public var keptCount: Swift.Int32
+            /// Creates a new `SourcingRun`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - place:
+            ///   - startedAt:
+            ///   - endedAt: When the run ended; absent while it goes on.
+            ///   - scanCount: Items scanned in the run.
+            ///   - keptCount: Scanned items the seller kept.
+            public init(
+                id: Components.Schemas.Id,
+                place: Swift.String? = nil,
+                startedAt: Components.Schemas.Timestamp,
+                endedAt: Components.Schemas.Timestamp? = nil,
+                scanCount: Swift.Int32,
+                keptCount: Swift.Int32
+            ) {
+                self.id = id
+                self.place = place
+                self.startedAt = startedAt
+                self.endedAt = endedAt
+                self.scanCount = scanCount
+                self.keptCount = keptCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case place
+                case startedAt
+                case endedAt
+                case scanCount
+                case keptCount
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanCreate`.
+        public struct ScanCreate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanCreate/runId`.
+            public var runId: Components.Schemas.Id
+            /// The item as the seller holds it, then an optional close-up of its tag.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCreate/images`.
+            public var images: [Components.Schemas.ScanImage]
+            /// What the seller said about the item, as text ("medium, small stain").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCreate/note`.
+            public var note: Swift.String?
+            /// The lines of text the phone read on the tag, in reading order.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCreate/tagText`.
+            public var tagText: [Swift.String]?
+            /// An earlier scan of the same item in the run that this one replaces.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCreate/replacesScanId`.
+            public var replacesScanId: Components.Schemas.Id?
+            /// Creates a new `ScanCreate`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - images: The item as the seller holds it, then an optional close-up of its tag.
+            ///   - note: What the seller said about the item, as text ("medium, small stain").
+            ///   - tagText: The lines of text the phone read on the tag, in reading order.
+            ///   - replacesScanId: An earlier scan of the same item in the run that this one replaces.
+            public init(
+                runId: Components.Schemas.Id,
+                images: [Components.Schemas.ScanImage],
+                note: Swift.String? = nil,
+                tagText: [Swift.String]? = nil,
+                replacesScanId: Components.Schemas.Id? = nil
+            ) {
+                self.runId = runId
+                self.images = images
+                self.note = note
+                self.tagText = tagText
+                self.replacesScanId = replacesScanId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case images
+                case note
+                case tagText
+                case replacesScanId
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.runId = try container.decode(
+                    Components.Schemas.Id.self,
+                    forKey: .runId
+                )
+                self.images = try container.decode(
+                    [Components.Schemas.ScanImage].self,
+                    forKey: .images
+                )
+                self.note = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .note
+                )
+                self.tagText = try container.decodeIfPresent(
+                    [Swift.String].self,
+                    forKey: .tagText
+                )
+                self.replacesScanId = try container.decodeIfPresent(
+                    Components.Schemas.Id.self,
+                    forKey: .replacesScanId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "runId",
+                    "images",
+                    "note",
+                    "tagText",
+                    "replacesScanId"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanImage`.
+        public struct ScanImage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanImage/role`.
+            public var role: Components.Schemas.KnownScanImageRole
+            /// The JPEG, base64-encoded: at most 1600 pixels on its long side and 350 KB (the app
+            /// sends 1024 pixels). Never stored; sent to the AI and dropped.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanImage/jpegBase64`.
+            public var jpegBase64: Swift.String
+            /// Creates a new `ScanImage`.
+            ///
+            /// - Parameters:
+            ///   - role:
+            ///   - jpegBase64: The JPEG, base64-encoded: at most 1600 pixels on its long side and 350 KB (the app
+            public init(
+                role: Components.Schemas.KnownScanImageRole,
+                jpegBase64: Swift.String
+            ) {
+                self.role = role
+                self.jpegBase64 = jpegBase64
+            }
+            public enum CodingKeys: String, CodingKey {
+                case role
+                case jpegBase64
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.role = try container.decode(
+                    Components.Schemas.KnownScanImageRole.self,
+                    forKey: .role
+                )
+                self.jpegBase64 = try container.decode(
+                    Swift.String.self,
+                    forKey: .jpegBase64
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "role",
+                    "jpegBase64"
+                ])
+            }
+        }
+        /// A `KnownScanImageRole`; requests hold to the known values.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanImageRole`.
+        public struct ScanImageRole: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanImageRole/value1`.
+            public var value1: Components.Schemas.KnownScanImageRole?
+            /// - Remark: Generated from `#/components/schemas/ScanImageRole/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanImageRole`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanImageRole? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `item`: the item as the seller holds it. `tag`: a close-up of its tag.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanImageRole`.
+        @frozen public enum KnownScanImageRole: String, Codable, Hashable, Sendable, CaseIterable {
+            case item = "item"
+            case tag = "tag"
+        }
+        /// One item scanned at the store: what it is, the household's own sales like it, the AI's
+        /// estimate, and the call. Every price is a range with its source; "sold" appears only next
+        /// to the seller's own sales.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemScan`.
+        public struct ItemScan: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemScan/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemScan/runId`.
+            public var runId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemScan/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ItemScan/identity`.
+            public var identity: Components.Schemas.ScanIdentity
+            /// - Remark: Generated from `#/components/schemas/ItemScan/aiEstimate`.
+            public var aiEstimate: Components.Schemas.ScanAiEstimate?
+            /// - Remark: Generated from `#/components/schemas/ItemScan/flags`.
+            public var flags: Components.Schemas.ScanFlags
+            /// - Remark: Generated from `#/components/schemas/ItemScan/retail`.
+            public var retail: Components.Schemas.ScanRetail?
+            /// - Remark: Generated from `#/components/schemas/ItemScan/trend`.
+            public var trend: Components.Schemas.ScanTrend?
+            /// - Remark: Generated from `#/components/schemas/ItemScan/research`.
+            public var research: Components.Schemas.ScanResearch?
+            /// The household's own sales of items like it, per marketplace in `KnownMarketplace`
+            /// order, never ranked: each marketplace with at least two that match its brand. Empty
+            /// without a brand or such sales.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemScan/ownSales`.
+            public var ownSales: [Components.Schemas.ScanOwnSales]
+            /// - Remark: Generated from `#/components/schemas/ItemScan/call`.
+            public var call: Components.Schemas.ScanCall
+            /// The words a buyer would search to find items like it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemScan/searchWords`.
+            public var searchWords: Swift.String
+            /// Searches the seller opens in their own browser to look at prices themselves, Depop
+            /// first. Listora never fetches or reads these pages.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemScan/researchLinks`.
+            public var researchLinks: [Components.Schemas.ResearchLink]
+            /// - Remark: Generated from `#/components/schemas/ItemScan/decision`.
+            public var decision: Components.Schemas.ScanDecision
+            /// The item the scan was kept as.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemScan/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// Creates a new `ItemScan`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - runId:
+            ///   - createdAt:
+            ///   - identity:
+            ///   - aiEstimate:
+            ///   - flags:
+            ///   - retail:
+            ///   - trend:
+            ///   - research:
+            ///   - ownSales: The household's own sales of items like it, per marketplace in `KnownMarketplace`
+            ///   - call:
+            ///   - searchWords: The words a buyer would search to find items like it.
+            ///   - researchLinks: Searches the seller opens in their own browser to look at prices themselves, Depop
+            ///   - decision:
+            ///   - itemId: The item the scan was kept as.
+            public init(
+                id: Components.Schemas.Id,
+                runId: Components.Schemas.Id,
+                createdAt: Components.Schemas.Timestamp,
+                identity: Components.Schemas.ScanIdentity,
+                aiEstimate: Components.Schemas.ScanAiEstimate? = nil,
+                flags: Components.Schemas.ScanFlags,
+                retail: Components.Schemas.ScanRetail? = nil,
+                trend: Components.Schemas.ScanTrend? = nil,
+                research: Components.Schemas.ScanResearch? = nil,
+                ownSales: [Components.Schemas.ScanOwnSales],
+                call: Components.Schemas.ScanCall,
+                searchWords: Swift.String,
+                researchLinks: [Components.Schemas.ResearchLink],
+                decision: Components.Schemas.ScanDecision,
+                itemId: Components.Schemas.Id? = nil
+            ) {
+                self.id = id
+                self.runId = runId
+                self.createdAt = createdAt
+                self.identity = identity
+                self.aiEstimate = aiEstimate
+                self.flags = flags
+                self.retail = retail
+                self.trend = trend
+                self.research = research
+                self.ownSales = ownSales
+                self.call = call
+                self.searchWords = searchWords
+                self.researchLinks = researchLinks
+                self.decision = decision
+                self.itemId = itemId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case runId
+                case createdAt
+                case identity
+                case aiEstimate
+                case flags
+                case retail
+                case trend
+                case research
+                case ownSales
+                case call
+                case searchWords
+                case researchLinks
+                case decision
+                case itemId
+            }
+        }
+        /// What the AI read the item as; each detail absent when it could not tell.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanIdentity`.
+        public struct ScanIdentity: Codable, Hashable, Sendable {
+            /// A short name of the item ("black high-rise straight jeans").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/item`.
+            public var item: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/brand`.
+            public var brand: Swift.String?
+            /// The canonical category path (`ItemDetails.category`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/category`.
+            public var category: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/department`.
+            public var department: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/sizeLabel`.
+            public var sizeLabel: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/condition`.
+            public var condition: Components.Schemas.ItemCondition?
+            /// The exact model or line ("501"), only when printed or unmistakable.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/model`.
+            public var model: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/styleNumber`.
+            public var styleNumber: Swift.String?
+            /// "current", or "vintage 1990s", where that changes what the item is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/era`.
+            public var era: Swift.String?
+            /// A style or era buyers search by ("Y2K", "gorpcore"), the AI's read.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/style`.
+            public var style: Swift.String?
+            /// How sure the AI is of the brand and item together.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/confidence`.
+            public var confidence: Components.Schemas.Confidence
+            /// Creates a new `ScanIdentity`.
+            ///
+            /// - Parameters:
+            ///   - item: A short name of the item ("black high-rise straight jeans").
+            ///   - brand:
+            ///   - category: The canonical category path (`ItemDetails.category`).
+            ///   - department:
+            ///   - sizeLabel:
+            ///   - condition:
+            ///   - model: The exact model or line ("501"), only when printed or unmistakable.
+            ///   - styleNumber:
+            ///   - era: "current", or "vintage 1990s", where that changes what the item is.
+            ///   - style: A style or era buyers search by ("Y2K", "gorpcore"), the AI's read.
+            ///   - confidence: How sure the AI is of the brand and item together.
+            public init(
+                item: Swift.String,
+                brand: Swift.String? = nil,
+                category: Swift.String? = nil,
+                department: Swift.String? = nil,
+                sizeLabel: Swift.String? = nil,
+                condition: Components.Schemas.ItemCondition? = nil,
+                model: Swift.String? = nil,
+                styleNumber: Swift.String? = nil,
+                era: Swift.String? = nil,
+                style: Swift.String? = nil,
+                confidence: Components.Schemas.Confidence
+            ) {
+                self.item = item
+                self.brand = brand
+                self.category = category
+                self.department = department
+                self.sizeLabel = sizeLabel
+                self.condition = condition
+                self.model = model
+                self.styleNumber = styleNumber
+                self.era = era
+                self.style = style
+                self.confidence = confidence
+            }
+            public enum CodingKeys: String, CodingKey {
+                case item
+                case brand
+                case category
+                case department
+                case sizeLabel
+                case condition
+                case model
+                case styleNumber
+                case era
+                case style
+                case confidence
+            }
+        }
+        /// The AI's guess of what a buyer would pay on Depop; never sold data.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanAiEstimate`.
+        public struct ScanAiEstimate: Codable, Hashable, Sendable {
+            /// Shown with it, always ("AI estimate - not based on sold listings").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanAiEstimate/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ScanAiEstimate/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanAiEstimate/mid`.
+            public var mid: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanAiEstimate/high`.
+            public var high: Components.Schemas.Money
+            /// Creates a new `ScanAiEstimate`.
+            ///
+            /// - Parameters:
+            ///   - label: Shown with it, always ("AI estimate - not based on sold listings").
+            ///   - low:
+            ///   - mid:
+            ///   - high:
+            public init(
+                label: Swift.String,
+                low: Components.Schemas.Money,
+                mid: Components.Schemas.Money,
+                high: Components.Schemas.Money
+            ) {
+                self.label = label
+                self.low = low
+                self.mid = mid
+                self.high = high
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case low
+                case mid
+                case high
+            }
+        }
+        /// What the AI saw that keeps an item from being a Buy whatever its price.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanFlags`.
+        public struct ScanFlags: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanFlags/visibleDamage`.
+            public var visibleDamage: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/ScanFlags/lotOrBundle`.
+            public var lotOrBundle: Swift.Bool
+            /// A brand often faked whose authenticity the images cannot show.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanFlags/counterfeitProne`.
+            public var counterfeitProne: Swift.Bool
+            /// Creates a new `ScanFlags`.
+            ///
+            /// - Parameters:
+            ///   - visibleDamage:
+            ///   - lotOrBundle:
+            ///   - counterfeitProne: A brand often faked whose authenticity the images cannot show.
+            public init(
+                visibleDamage: Swift.Bool,
+                lotOrBundle: Swift.Bool,
+                counterfeitProne: Swift.Bool
+            ) {
+                self.visibleDamage = visibleDamage
+                self.lotOrBundle = lotOrBundle
+                self.counterfeitProne = counterfeitProne
+            }
+            public enum CodingKeys: String, CodingKey {
+                case visibleDamage
+                case lotOrBundle
+                case counterfeitProne
+            }
+        }
+        /// The household's own sales like the item on one marketplace.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanOwnSales`.
+        public struct ScanOwnSales: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanOwnSales/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// "Your Lululemon sales on Depop (last 365 days)".
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanOwnSales/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ScanOwnSales/soldCount`.
+            public var soldCount: Swift.Int32
+            /// The low quartile of what buyers paid.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanOwnSales/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanOwnSales/median`.
+            public var median: Components.Schemas.Money
+            /// The high quartile of what buyers paid.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanOwnSales/high`.
+            public var high: Components.Schemas.Money
+            /// True when shown but never feeding the call (eBay's, until its licence review).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanOwnSales/displayOnly`.
+            public var displayOnly: Swift.Bool
+            /// Creates a new `ScanOwnSales`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - label: "Your Lululemon sales on Depop (last 365 days)".
+            ///   - soldCount:
+            ///   - low: The low quartile of what buyers paid.
+            ///   - median:
+            ///   - high: The high quartile of what buyers paid.
+            ///   - displayOnly: True when shown but never feeding the call (eBay's, until its licence review).
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                label: Swift.String,
+                soldCount: Swift.Int32,
+                low: Components.Schemas.Money,
+                median: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                displayOnly: Swift.Bool
+            ) {
+                self.marketplace = marketplace
+                self.label = label
+                self.soldCount = soldCount
+                self.low = low
+                self.median = median
+                self.high = high
+                self.displayOnly = displayOnly
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case label
+                case soldCount
+                case low
+                case median
+                case high
+                case displayOnly
+            }
+        }
+        /// Buy, Your call, or Skip, from resale value only: whether the item pays out at least the
+        /// worth-listing amount after the marketplace's fees. Always shown with its confidence and
+        /// `basedOn`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanCall`.
+        public struct ScanCall: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanCall/call`.
+            public var call: Components.Schemas.ScanCallKind
+            /// The call as shown ("Buy", "Your call", "Skip").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ScanCall/confidence`.
+            public var confidence: Components.Schemas.ScanConfidence
+            /// - Remark: Generated from `#/components/schemas/ScanCall/basis`.
+            public var basis: Components.Schemas.ScanBasis
+            /// What the call rests on, as the seller reads it ("Your 5 sales like it").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/basedOn`.
+            public var basedOn: Swift.String
+            /// The low end of the price range the call rests on.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/low`.
+            public var low: Components.Schemas.Money?
+            /// The high end of that range.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/high`.
+            public var high: Components.Schemas.Money?
+            /// What the range's low end pays out after fees, an estimate; absent with no range.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/conservativePayout`.
+            public var conservativePayout: Components.Schemas.Money?
+            /// What the range's high end pays out after fees, an estimate.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/optimisticPayout`.
+            public var optimisticPayout: Components.Schemas.Money?
+            /// The marketplace whose fees the payouts are after.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/payoutMarketplace`.
+            public var payoutMarketplace: Components.Schemas.Marketplace?
+            /// The least payout worth buying for.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/worthListing`.
+            public var worthListing: Components.Schemas.Money
+            /// What else the call weighed, each with what it rests on: the retail price, new with
+            /// tags, how the brand resells on the web, the household's own sales trend, the style.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/signals`.
+            public var signals: [Components.Schemas.ScanSignal]
+            /// Creates a new `ScanCall`.
+            ///
+            /// - Parameters:
+            ///   - call:
+            ///   - label: The call as shown ("Buy", "Your call", "Skip").
+            ///   - confidence:
+            ///   - basis:
+            ///   - basedOn: What the call rests on, as the seller reads it ("Your 5 sales like it").
+            ///   - low: The low end of the price range the call rests on.
+            ///   - high: The high end of that range.
+            ///   - conservativePayout: What the range's low end pays out after fees, an estimate; absent with no range.
+            ///   - optimisticPayout: What the range's high end pays out after fees, an estimate.
+            ///   - payoutMarketplace: The marketplace whose fees the payouts are after.
+            ///   - worthListing: The least payout worth buying for.
+            ///   - signals: What else the call weighed, each with what it rests on: the retail price, new with
+            public init(
+                call: Components.Schemas.ScanCallKind,
+                label: Swift.String,
+                confidence: Components.Schemas.ScanConfidence,
+                basis: Components.Schemas.ScanBasis,
+                basedOn: Swift.String,
+                low: Components.Schemas.Money? = nil,
+                high: Components.Schemas.Money? = nil,
+                conservativePayout: Components.Schemas.Money? = nil,
+                optimisticPayout: Components.Schemas.Money? = nil,
+                payoutMarketplace: Components.Schemas.Marketplace? = nil,
+                worthListing: Components.Schemas.Money,
+                signals: [Components.Schemas.ScanSignal]
+            ) {
+                self.call = call
+                self.label = label
+                self.confidence = confidence
+                self.basis = basis
+                self.basedOn = basedOn
+                self.low = low
+                self.high = high
+                self.conservativePayout = conservativePayout
+                self.optimisticPayout = optimisticPayout
+                self.payoutMarketplace = payoutMarketplace
+                self.worthListing = worthListing
+                self.signals = signals
+            }
+            public enum CodingKeys: String, CodingKey {
+                case call
+                case label
+                case confidence
+                case basis
+                case basedOn
+                case low
+                case high
+                case conservativePayout
+                case optimisticPayout
+                case payoutMarketplace
+                case worthListing
+                case signals
+            }
+        }
+        /// A `KnownScanCallKind`, or one added after this client was built (shown by `label`).
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanCallKind`.
+        public struct ScanCallKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanCallKind/value1`.
+            public var value1: Components.Schemas.KnownScanCallKind?
+            /// - Remark: Generated from `#/components/schemas/ScanCallKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanCallKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanCallKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `buy`, `your_call` (the seller decides), or `skip`.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanCallKind`.
+        @frozen public enum KnownScanCallKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case buy = "buy"
+            case yourCall = "your_call"
+            case skip = "skip"
+        }
+        /// A `KnownScanConfidence`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanConfidence`.
+        public struct ScanConfidence: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanConfidence/value1`.
+            public var value1: Components.Schemas.KnownScanConfidence?
+            /// - Remark: Generated from `#/components/schemas/ScanConfidence/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanConfidence`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanConfidence? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownScanConfidence`.
+        @frozen public enum KnownScanConfidence: String, Codable, Hashable, Sendable, CaseIterable {
+            case high = "high"
+            case medium = "medium"
+            case low = "low"
+        }
+        /// A `KnownScanBasis`, or one added after this client was built (shown by `basedOn`).
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanBasis`.
+        public struct ScanBasis: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanBasis/value1`.
+            public var value1: Components.Schemas.KnownScanBasis?
+            /// - Remark: Generated from `#/components/schemas/ScanBasis/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanBasis`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanBasis? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `own_history`: the household's own sales like it. `web_info`: what web pages say such items
+        /// resell for (the research, with its sites), never a high-confidence call. `ai_estimate`: the
+        /// AI's estimate alone, never a high-confidence Buy. `none`: nothing to go on.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanBasis`.
+        @frozen public enum KnownScanBasis: String, Codable, Hashable, Sendable, CaseIterable {
+            case ownHistory = "own_history"
+            case webInfo = "web_info"
+            case aiEstimate = "ai_estimate"
+            case none = "none"
+        }
+        /// A `KnownScanDecision`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanDecision`.
+        public struct ScanDecision: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanDecision/value1`.
+            public var value1: Components.Schemas.KnownScanDecision?
+            /// - Remark: Generated from `#/components/schemas/ScanDecision/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanDecision`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanDecision? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `undecided` until the seller keeps it (`kept`), a later scan of the same item replaces it
+        /// (`replaced`), or its run ends without it (`skipped`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanDecision`.
+        @frozen public enum KnownScanDecision: String, Codable, Hashable, Sendable, CaseIterable {
+            case undecided = "undecided"
+            case kept = "kept"
+            case skipped = "skipped"
+            case replaced = "replaced"
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanSignal`.
+        public struct ScanSignal: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanSignal/kind`.
+            public var kind: Components.Schemas.ScanSignalKind
+            /// As the card shows it ("Retail about $139", "Trending up", "Y2K").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSignal/label`.
+            public var label: Swift.String
+            /// What it rests on, as the seller reads it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSignal/basedOn`.
+            public var basedOn: Swift.String
+            /// Creates a new `ScanSignal`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - label: As the card shows it ("Retail about $139", "Trending up", "Y2K").
+            ///   - basedOn: What it rests on, as the seller reads it.
+            public init(
+                kind: Components.Schemas.ScanSignalKind,
+                label: Swift.String,
+                basedOn: Swift.String
+            ) {
+                self.kind = kind
+                self.label = label
+                self.basedOn = basedOn
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case label
+                case basedOn
+            }
+        }
+        /// A `KnownScanSignalKind`, or one added after this client was built (shown by its label).
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanSignalKind`.
+        public struct ScanSignalKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanSignalKind/value1`.
+            public var value1: Components.Schemas.KnownScanSignalKind?
+            /// - Remark: Generated from `#/components/schemas/ScanSignalKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanSignalKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanSignalKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
+        /// are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
+        /// own sales of items like it coming faster or slower. `style`: the AI's read of the style.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
+        @frozen public enum KnownScanSignalKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case retail = "retail"
+            case newWithTags = "new_with_tags"
+            case webResale = "web_resale"
+            case trend = "trend"
+            case style = "style"
+        }
+        /// The item's original retail price, with where it came from: one model's price (`low` equals
+        /// `high`), or, when the scan could not pin the exact model, the range across the likely
+        /// `models`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanRetail`.
+        public struct ScanRetail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanRetail/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanRetail/high`.
+            public var high: Components.Schemas.Money
+            /// The models the price covers.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanRetail/models`.
+            public var models: [Swift.String]?
+            /// - Remark: Generated from `#/components/schemas/ScanRetail/source`.
+            public var source: Components.Schemas.ScanRetailSource
+            /// The site that states it, for a web price ("levi.com").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanRetail/site`.
+            public var site: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ScanRetail/url`.
+            public var url: Swift.String?
+            /// "Retail $68 on the tag", "Retail about $98", or "Retail $59-$98 across 501, 505, 550".
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanRetail/label`.
+            public var label: Swift.String
+            /// Creates a new `ScanRetail`.
+            ///
+            /// - Parameters:
+            ///   - low:
+            ///   - high:
+            ///   - models: The models the price covers.
+            ///   - source:
+            ///   - site: The site that states it, for a web price ("levi.com").
+            ///   - url:
+            ///   - label: "Retail $68 on the tag", "Retail about $98", or "Retail $59-$98 across 501, 505, 550".
+            public init(
+                low: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                models: [Swift.String]? = nil,
+                source: Components.Schemas.ScanRetailSource,
+                site: Swift.String? = nil,
+                url: Swift.String? = nil,
+                label: Swift.String
+            ) {
+                self.low = low
+                self.high = high
+                self.models = models
+                self.source = source
+                self.site = site
+                self.url = url
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case low
+                case high
+                case models
+                case source
+                case site
+                case url
+                case label
+            }
+        }
+        /// A `KnownScanRetailSource`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanRetailSource`.
+        public struct ScanRetailSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanRetailSource/value1`.
+            public var value1: Components.Schemas.KnownScanRetailSource?
+            /// - Remark: Generated from `#/components/schemas/ScanRetailSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanRetailSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanRetailSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `tag`: printed on a price tag in the shot. `web`: found by the web research.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanRetailSource`.
+        @frozen public enum KnownScanRetailSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case tag = "tag"
+            case web = "web"
+        }
+        /// How the household's own sales of items like it are moving: the last 90 days against the
+        /// 9 months before. `label` only when the numbers support a direction. Marketplace trends
+        /// come with the comparisons (a later `source`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanTrend`.
+        public struct ScanTrend: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanTrend/source`.
+            public var source: Components.Schemas.ScanTrendSource
+            /// - Remark: Generated from `#/components/schemas/ScanTrend/direction`.
+            public var direction: Components.Schemas.ScanTrendDirection
+            /// - Remark: Generated from `#/components/schemas/ScanTrend/recentSales`.
+            public var recentSales: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ScanTrend/earlierSales`.
+            public var earlierSales: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ScanTrend/lastSoldDaysAgo`.
+            public var lastSoldDaysAgo: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/ScanTrend/label`.
+            public var label: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ScanTrend/basedOn`.
+            public var basedOn: Swift.String
+            /// Creates a new `ScanTrend`.
+            ///
+            /// - Parameters:
+            ///   - source:
+            ///   - direction:
+            ///   - recentSales:
+            ///   - earlierSales:
+            ///   - lastSoldDaysAgo:
+            ///   - label:
+            ///   - basedOn:
+            public init(
+                source: Components.Schemas.ScanTrendSource,
+                direction: Components.Schemas.ScanTrendDirection,
+                recentSales: Swift.Int32,
+                earlierSales: Swift.Int32,
+                lastSoldDaysAgo: Swift.Int32? = nil,
+                label: Swift.String? = nil,
+                basedOn: Swift.String
+            ) {
+                self.source = source
+                self.direction = direction
+                self.recentSales = recentSales
+                self.earlierSales = earlierSales
+                self.lastSoldDaysAgo = lastSoldDaysAgo
+                self.label = label
+                self.basedOn = basedOn
+            }
+            public enum CodingKeys: String, CodingKey {
+                case source
+                case direction
+                case recentSales
+                case earlierSales
+                case lastSoldDaysAgo
+                case label
+                case basedOn
+            }
+        }
+        /// A `KnownScanTrendSource`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanTrendSource`.
+        public struct ScanTrendSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanTrendSource/value1`.
+            public var value1: Components.Schemas.KnownScanTrendSource?
+            /// - Remark: Generated from `#/components/schemas/ScanTrendSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanTrendSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanTrendSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `own_history`: the household's own sales.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanTrendSource`.
+        @frozen public enum KnownScanTrendSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case ownHistory = "own_history"
+        }
+        /// A `KnownScanTrendDirection`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanTrendDirection`.
+        public struct ScanTrendDirection: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanTrendDirection/value1`.
+            public var value1: Components.Schemas.KnownScanTrendDirection?
+            /// - Remark: Generated from `#/components/schemas/ScanTrendDirection/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanTrendDirection`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanTrendDirection? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownScanTrendDirection`.
+        @frozen public enum KnownScanTrendDirection: String, Codable, Hashable, Sendable, CaseIterable {
+            case up = "up"
+            case down = "down"
+            case steady = "steady"
+            case unknown = "unknown"
+        }
+        /// What the web said about the brand and item (`researchScan`), always under `label`: its
+        /// retail price and how such items resell, every number with the pages it came from. Web
+        /// info, never sold prices.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanResearch`.
+        public struct ScanResearch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanResearch/status`.
+            public var status: Components.Schemas.ScanResearchStatus
+            /// "Web info - not sold listings".
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanResearch/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ScanResearch/retail`.
+            public var retail: Components.Schemas.ScanResearchRetail?
+            /// - Remark: Generated from `#/components/schemas/ScanResearch/resale`.
+            public var resale: Components.Schemas.ScanResearchResale?
+            /// - Remark: Generated from `#/components/schemas/ScanResearch/reputation`.
+            public var reputation: Components.Schemas.ScanResearchReputation
+            /// What the pages said, in a sentence naming them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanResearch/summary`.
+            public var summary: Swift.String?
+            /// Answered from an earlier research of the same brand and item.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanResearch/cached`.
+            public var cached: Swift.Bool
+            /// Creates a new `ScanResearch`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - label: "Web info - not sold listings".
+            ///   - retail:
+            ///   - resale:
+            ///   - reputation:
+            ///   - summary: What the pages said, in a sentence naming them.
+            ///   - cached: Answered from an earlier research of the same brand and item.
+            public init(
+                status: Components.Schemas.ScanResearchStatus,
+                label: Swift.String,
+                retail: Components.Schemas.ScanResearchRetail? = nil,
+                resale: Components.Schemas.ScanResearchResale? = nil,
+                reputation: Components.Schemas.ScanResearchReputation,
+                summary: Swift.String? = nil,
+                cached: Swift.Bool
+            ) {
+                self.status = status
+                self.label = label
+                self.retail = retail
+                self.resale = resale
+                self.reputation = reputation
+                self.summary = summary
+                self.cached = cached
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case label
+                case retail
+                case resale
+                case reputation
+                case summary
+                case cached
+            }
+        }
+        /// A `KnownScanResearchStatus`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanResearchStatus`.
+        public struct ScanResearchStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanResearchStatus/value1`.
+            public var value1: Components.Schemas.KnownScanResearchStatus?
+            /// - Remark: Generated from `#/components/schemas/ScanResearchStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanResearchStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanResearchStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `found`: a page backs a retail price or a resale range. `not_found`: nothing the search
+        /// returned did. `no_brand`: the read named no brand to look up.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanResearchStatus`.
+        @frozen public enum KnownScanResearchStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case found = "found"
+            case notFound = "not_found"
+            case noBrand = "no_brand"
+        }
+        /// A `KnownScanResearchReputation`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanResearchReputation`.
+        public struct ScanResearchReputation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanResearchReputation/value1`.
+            public var value1: Components.Schemas.KnownScanResearchReputation?
+            /// - Remark: Generated from `#/components/schemas/ScanResearchReputation/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanResearchReputation`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanResearchReputation? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownScanResearchReputation`.
+        @frozen public enum KnownScanResearchReputation: String, Codable, Hashable, Sendable, CaseIterable {
+            case strong = "strong"
+            case average = "average"
+            case weak = "weak"
+            case unknown = "unknown"
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanResearchRetail`.
+        public struct ScanResearchRetail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanResearchRetail/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanResearchRetail/high`.
+            public var high: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanResearchRetail/sources`.
+            public var sources: [Components.Schemas.ScanWebSource]
+            /// The exact model, or each likely model the range covers.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanResearchRetail/models`.
+            public var models: [Swift.String]
+            /// Creates a new `ScanResearchRetail`.
+            ///
+            /// - Parameters:
+            ///   - low:
+            ///   - high:
+            ///   - sources:
+            ///   - models: The exact model, or each likely model the range covers.
+            public init(
+                low: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                sources: [Components.Schemas.ScanWebSource],
+                models: [Swift.String]
+            ) {
+                self.low = low
+                self.high = high
+                self.sources = sources
+                self.models = models
+            }
+            public enum CodingKeys: String, CodingKey {
+                case low
+                case high
+                case sources
+                case models
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanResearchResale`.
+        public struct ScanResearchResale: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanResearchResale/low`.
+            public var low: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanResearchResale/high`.
+            public var high: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanResearchResale/sources`.
+            public var sources: [Components.Schemas.ScanWebSource]
+            /// Creates a new `ScanResearchResale`.
+            ///
+            /// - Parameters:
+            ///   - low:
+            ///   - high:
+            ///   - sources:
+            public init(
+                low: Components.Schemas.Money,
+                high: Components.Schemas.Money,
+                sources: [Components.Schemas.ScanWebSource]
+            ) {
+                self.low = low
+                self.high = high
+                self.sources = sources
+            }
+            public enum CodingKeys: String, CodingKey {
+                case low
+                case high
+                case sources
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanWebSource`.
+        public struct ScanWebSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanWebSource/site`.
+            public var site: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ScanWebSource/url`.
+            public var url: Swift.String
+            /// Creates a new `ScanWebSource`.
+            ///
+            /// - Parameters:
+            ///   - site:
+            ///   - url:
+            public init(
+                site: Swift.String,
+                url: Swift.String
+            ) {
+                self.site = site
+                self.url = url
+            }
+            public enum CodingKeys: String, CodingKey {
+                case site
+                case url
             }
         }
     }

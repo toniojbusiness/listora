@@ -47,8 +47,40 @@ MarketplaceFeatureList:
       maxItems: 20
       items:
         $ref: '#/MarketplaceFeatures'
+    app:
+      $ref: '#/AppFeatures'
     testMode:
       $ref: '#/TestMode'
+AppFeatures:
+  type: object
+  description: |
+    Listora's own features the account is shown, held to the same rule as a marketplace's:
+    those that passed a live end-to-end test, or in Test mode every built one.
+  required: [features]
+  properties:
+    features:
+      type: array
+      maxItems: 20
+      items:
+        $ref: '#/AppFeature'
+    testing:
+      type: array
+      maxItems: 20
+      description: In Test mode only, the features of `features` on only for the test.
+      items:
+        $ref: '#/AppFeature'
+AppFeature:
+  description: |
+    A `KnownAppFeature`, or one added after this client was built. Clients ignore a feature
+    they do not know.
+  anyOf:
+    - $ref: '#/KnownAppFeature'
+    - type: string
+      maxLength: 64
+KnownAppFeature:
+  type: string
+  description: '`thrift_scan`: scanning items at the store for the Buy / Your call / Skip call.'
+  enum: [thrift_scan]
 TestMode:
   type: object
   description: |

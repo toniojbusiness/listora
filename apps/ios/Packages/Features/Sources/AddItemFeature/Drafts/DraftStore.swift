@@ -88,10 +88,12 @@ final class DraftStore: Sendable {
     // MARK: Creating
 
     /// Saves a new draft with `photos` in order.
+    /// `scanID` is the thrift scan the draft is kept from: its server item is the scan's.
     @discardableResult
-    func createDraft(photos: [(PreparedPhoto, PhotoRole)]) throws -> DraftRecord {
+    func createDraft(photos: [(PreparedPhoto, PhotoRole)], scanID: String? = nil) throws -> DraftRecord {
         guard photos.count <= Self.maxPhotosPerDraft else { throw DraftStoreError.tooManyPhotos }
-        let draft = DraftRecord.new(now: now())
+        var draft = DraftRecord.new(now: now())
+        draft.scanID = scanID
         let records = try writeFiles(photos, draftID: draft.id, firstPosition: 0)
         do {
             try writer.write { db in

@@ -205,6 +205,8 @@ describe('Test mode (real Postgres, verified features)', () => {
     expect(depop?.testing).toEqual(['offer_answers', 'listing_refresh', 'revise']);
     const poshmark = turned.body.data.find((entry) => entry.marketplace === 'poshmark');
     expect(poshmark?.testing).toEqual([...MARKETPLACE_FEATURES]);
+    // Listora's own hidden features too, the thrift scan among them.
+    expect(turned.body.app).toEqual({ features: ['thrift_scan'], testing: ['thrift_scan'] });
 
     const listed = await api.call('listMarketplaceFeatures', { token: owner });
     expect(listed.body).toEqual(turned.body);
@@ -212,6 +214,7 @@ describe('Test mode (real Postgres, verified features)', () => {
     const off = await setTestMode(owner, false);
     expect(off.body.testMode).toEqual({ on: false });
     expect(off.body.data.every((entry) => entry.testing === undefined)).toBe(true);
+    expect(off.body.app).toEqual({ features: [] });
   });
 
   it('accepts a hidden feature from the owner in Test mode, and from no one else', async () => {

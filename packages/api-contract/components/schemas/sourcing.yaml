@@ -101,3 +101,544 @@ OwnSalesOnMarketplace:
       description: |
         True when these sales may be shown to the seller as their own but never feed a
         suggested price or a sourcing call (eBay's, until the eBay licence review).
+SourcingRunCreate:
+  type: object
+  additionalProperties: false
+  properties:
+    place:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Where the seller is, as they name it ("Goodwill Outlet on 5th").
+SourcingRun:
+  type: object
+  description: One trip to a store, scanning items to buy (docs/features/thrift-scan.md).
+  required: [id, startedAt, scanCount, keptCount]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    place:
+      type: string
+      maxLength: 200
+    startedAt:
+      $ref: './common.yaml#/Timestamp'
+    endedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the run ended; absent while it goes on.
+    scanCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Items scanned in the run.
+    keptCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Scanned items the seller kept.
+ScanCreate:
+  type: object
+  additionalProperties: false
+  required: [runId, images]
+  properties:
+    runId:
+      $ref: './common.yaml#/Id'
+    images:
+      type: array
+      description: The item as the seller holds it, then an optional close-up of its tag.
+      minItems: 1
+      maxItems: 2
+      items:
+        $ref: '#/ScanImage'
+    note:
+      type: string
+      maxLength: 500
+      description: What the seller said about the item, as text ("medium, small stain").
+    tagText:
+      type: array
+      description: The lines of text the phone read on the tag, in reading order.
+      maxItems: 40
+      items:
+        type: string
+        maxLength: 200
+    replacesScanId:
+      $ref: './common.yaml#/Id'
+      description: An earlier scan of the same item in the run that this one replaces.
+ScanImage:
+  type: object
+  additionalProperties: false
+  required: [role, jpegBase64]
+  properties:
+    role:
+      $ref: '#/KnownScanImageRole'
+    jpegBase64:
+      type: string
+      minLength: 4
+      maxLength: 480000
+      description: |
+        The JPEG, base64-encoded: at most 1600 pixels on its long side and 350 KB (the app
+        sends 1024 pixels). Never stored; sent to the AI and dropped.
+ScanImageRole:
+  description: A `KnownScanImageRole`; requests hold to the known values.
+  anyOf:
+    - $ref: '#/KnownScanImageRole'
+    - type: string
+      maxLength: 64
+KnownScanImageRole:
+  type: string
+  description: '`item`: the item as the seller holds it. `tag`: a close-up of its tag.'
+  enum: [item, tag]
+ItemScan:
+  type: object
+  description: |
+    One item scanned at the store: what it is, the household's own sales like it, the AI's
+    estimate, and the call. Every price is a range with its source; "sold" appears only next
+    to the seller's own sales.
+  required:
+    [id, runId, createdAt, identity, flags, ownSales, call, searchWords, researchLinks, decision]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    runId:
+      $ref: './common.yaml#/Id'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    identity:
+      $ref: '#/ScanIdentity'
+    aiEstimate:
+      $ref: '#/ScanAiEstimate'
+    flags:
+      $ref: '#/ScanFlags'
+    retail:
+      $ref: '#/ScanRetail'
+    trend:
+      $ref: '#/ScanTrend'
+    research:
+      $ref: '#/ScanResearch'
+    ownSales:
+      type: array
+      description: |
+        The household's own sales of items like it, per marketplace in `KnownMarketplace`
+        order, never ranked: each marketplace with at least two that match its brand. Empty
+        without a brand or such sales.
+      maxItems: 16
+      items:
+        $ref: '#/ScanOwnSales'
+    call:
+      $ref: '#/ScanCall'
+    searchWords:
+      type: string
+      maxLength: 100
+      description: The words a buyer would search to find items like it.
+    researchLinks:
+      type: array
+      description: |
+        Searches the seller opens in their own browser to look at prices themselves, Depop
+        first. Listora never fetches or reads these pages.
+      maxItems: 8
+      items:
+        $ref: './pricing.yaml#/ResearchLink'
+    decision:
+      $ref: '#/ScanDecision'
+    itemId:
+      $ref: './common.yaml#/Id'
+      description: The item the scan was kept as.
+ScanIdentity:
+  type: object
+  description: What the AI read the item as; each detail absent when it could not tell.
+  required: [item, confidence]
+  properties:
+    item:
+      type: string
+      maxLength: 120
+      description: A short name of the item ("black high-rise straight jeans").
+    brand:
+      type: string
+      maxLength: 120
+    category:
+      type: string
+      maxLength: 200
+      description: The canonical category path (`ItemDetails.category`).
+    department:
+      type: string
+      maxLength: 64
+    sizeLabel:
+      type: string
+      maxLength: 32
+    condition:
+      $ref: './items.yaml#/ItemCondition'
+    model:
+      type: string
+      maxLength: 60
+      description: The exact model or line ("501"), only when printed or unmistakable.
+    styleNumber:
+      type: string
+      maxLength: 40
+    era:
+      type: string
+      maxLength: 30
+      description: '"current", or "vintage 1990s", where that changes what the item is.'
+    style:
+      type: string
+      maxLength: 40
+      description: A style or era buyers search by ("Y2K", "gorpcore"), the AI's read.
+    confidence:
+      $ref: './analysis.yaml#/Confidence'
+      description: How sure the AI is of the brand and item together.
+ScanAiEstimate:
+  type: object
+  description: The AI's guess of what a buyer would pay on Depop; never sold data.
+  required: [label, low, mid, high]
+  properties:
+    label:
+      type: string
+      maxLength: 120
+      description: Shown with it, always ("AI estimate - not based on sold listings").
+    low:
+      $ref: './common.yaml#/Money'
+    mid:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+ScanFlags:
+  type: object
+  description: What the AI saw that keeps an item from being a Buy whatever its price.
+  required: [visibleDamage, lotOrBundle, counterfeitProne]
+  properties:
+    visibleDamage:
+      type: boolean
+    lotOrBundle:
+      type: boolean
+    counterfeitProne:
+      type: boolean
+      description: A brand often faked whose authenticity the images cannot show.
+ScanOwnSales:
+  type: object
+  description: The household's own sales like the item on one marketplace.
+  required: [marketplace, label, soldCount, low, median, high, displayOnly]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    label:
+      type: string
+      maxLength: 160
+      description: '"Your Lululemon sales on Depop (last 365 days)".'
+    soldCount:
+      type: integer
+      format: int32
+      minimum: 2
+    low:
+      $ref: './common.yaml#/Money'
+      description: The low quartile of what buyers paid.
+    median:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+      description: The high quartile of what buyers paid.
+    displayOnly:
+      type: boolean
+      description: True when shown but never feeding the call (eBay's, until its licence review).
+ScanCall:
+  type: object
+  description: |
+    Buy, Your call, or Skip, from resale value only: whether the item pays out at least the
+    worth-listing amount after the marketplace's fees. Always shown with its confidence and
+    `basedOn`.
+  required: [call, label, confidence, basis, basedOn, worthListing, signals]
+  properties:
+    call:
+      $ref: '#/ScanCallKind'
+    label:
+      type: string
+      maxLength: 20
+      description: The call as shown ("Buy", "Your call", "Skip").
+    confidence:
+      $ref: '#/ScanConfidence'
+    basis:
+      $ref: '#/ScanBasis'
+    basedOn:
+      type: string
+      maxLength: 120
+      description: What the call rests on, as the seller reads it ("Your 5 sales like it").
+    low:
+      $ref: './common.yaml#/Money'
+      description: The low end of the price range the call rests on.
+    high:
+      $ref: './common.yaml#/Money'
+      description: The high end of that range.
+    conservativePayout:
+      $ref: './common.yaml#/Money'
+      description: What the range's low end pays out after fees, an estimate; absent with no range.
+    optimisticPayout:
+      $ref: './common.yaml#/Money'
+      description: What the range's high end pays out after fees, an estimate.
+    payoutMarketplace:
+      $ref: './common.yaml#/Marketplace'
+      description: The marketplace whose fees the payouts are after.
+    worthListing:
+      $ref: './common.yaml#/Money'
+      description: The least payout worth buying for.
+    signals:
+      type: array
+      description: |
+        What else the call weighed, each with what it rests on: the retail price, new with
+        tags, how the brand resells on the web, the household's own sales trend, the style.
+      maxItems: 10
+      items:
+        $ref: '#/ScanSignal'
+ScanCallKind:
+  description: A `KnownScanCallKind`, or one added after this client was built (shown by `label`).
+  anyOf:
+    - $ref: '#/KnownScanCallKind'
+    - type: string
+      maxLength: 64
+KnownScanCallKind:
+  type: string
+  description: '`buy`, `your_call` (the seller decides), or `skip`.'
+  enum: [buy, your_call, skip]
+ScanConfidence:
+  description: A `KnownScanConfidence`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownScanConfidence'
+    - type: string
+      maxLength: 64
+KnownScanConfidence:
+  type: string
+  enum: [high, medium, low]
+ScanBasis:
+  description: A `KnownScanBasis`, or one added after this client was built (shown by `basedOn`).
+  anyOf:
+    - $ref: '#/KnownScanBasis'
+    - type: string
+      maxLength: 64
+KnownScanBasis:
+  type: string
+  description: |
+    `own_history`: the household's own sales like it. `web_info`: what web pages say such items
+    resell for (the research, with its sites), never a high-confidence call. `ai_estimate`: the
+    AI's estimate alone, never a high-confidence Buy. `none`: nothing to go on.
+  enum: [own_history, web_info, ai_estimate, none]
+ScanDecision:
+  description: A `KnownScanDecision`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownScanDecision'
+    - type: string
+      maxLength: 64
+KnownScanDecision:
+  type: string
+  description: |
+    `undecided` until the seller keeps it (`kept`), a later scan of the same item replaces it
+    (`replaced`), or its run ends without it (`skipped`).
+  enum: [undecided, kept, skipped, replaced]
+ScanSignal:
+  type: object
+  required: [kind, label, basedOn]
+  properties:
+    kind:
+      $ref: '#/ScanSignalKind'
+    label:
+      type: string
+      maxLength: 60
+      description: As the card shows it ("Retail about $139", "Trending up", "Y2K").
+    basedOn:
+      type: string
+      maxLength: 200
+      description: What it rests on, as the seller reads it.
+ScanSignalKind:
+  description: A `KnownScanSignalKind`, or one added after this client was built (shown by its label).
+  anyOf:
+    - $ref: '#/KnownScanSignalKind'
+    - type: string
+      maxLength: 64
+KnownScanSignalKind:
+  type: string
+  description: |
+    `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
+    are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
+    own sales of items like it coming faster or slower. `style`: the AI's read of the style.
+  enum: [retail, new_with_tags, web_resale, trend, style]
+ScanRetail:
+  type: object
+  description: |
+    The item's original retail price, with where it came from: one model's price (`low` equals
+    `high`), or, when the scan could not pin the exact model, the range across the likely
+    `models`.
+  required: [low, high, source, label]
+  properties:
+    low:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+    models:
+      type: array
+      description: The models the price covers.
+      maxItems: 6
+      items:
+        type: string
+        maxLength: 60
+    source:
+      $ref: '#/ScanRetailSource'
+    site:
+      type: string
+      maxLength: 200
+      description: The site that states it, for a web price ("levi.com").
+    url:
+      type: string
+      format: uri
+      maxLength: 500
+    label:
+      type: string
+      maxLength: 80
+      description: '"Retail $68 on the tag", "Retail about $98", or "Retail $59-$98 across 501, 505, 550".'
+ScanRetailSource:
+  description: A `KnownScanRetailSource`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownScanRetailSource'
+    - type: string
+      maxLength: 64
+KnownScanRetailSource:
+  type: string
+  description: '`tag`: printed on a price tag in the shot. `web`: found by the web research.'
+  enum: [tag, web]
+ScanTrend:
+  type: object
+  description: |
+    How the household's own sales of items like it are moving: the last 90 days against the
+    9 months before. `label` only when the numbers support a direction. Marketplace trends
+    come with the comparisons (a later `source`).
+  required: [source, direction, recentSales, earlierSales, basedOn]
+  properties:
+    source:
+      $ref: '#/ScanTrendSource'
+    direction:
+      $ref: '#/ScanTrendDirection'
+    recentSales:
+      type: integer
+      format: int32
+      minimum: 0
+    earlierSales:
+      type: integer
+      format: int32
+      minimum: 0
+    lastSoldDaysAgo:
+      type: integer
+      format: int32
+      minimum: 0
+    label:
+      type: string
+      maxLength: 40
+    basedOn:
+      type: string
+      maxLength: 200
+ScanTrendSource:
+  description: A `KnownScanTrendSource`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownScanTrendSource'
+    - type: string
+      maxLength: 64
+KnownScanTrendSource:
+  type: string
+  description: "`own_history`: the household's own sales."
+  enum: [own_history]
+ScanTrendDirection:
+  description: A `KnownScanTrendDirection`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownScanTrendDirection'
+    - type: string
+      maxLength: 64
+KnownScanTrendDirection:
+  type: string
+  enum: [up, down, steady, unknown]
+ScanResearch:
+  type: object
+  description: |
+    What the web said about the brand and item (`researchScan`), always under `label`: its
+    retail price and how such items resell, every number with the pages it came from. Web
+    info, never sold prices.
+  required: [status, label, reputation, cached]
+  properties:
+    status:
+      $ref: '#/ScanResearchStatus'
+    label:
+      type: string
+      maxLength: 60
+      description: '"Web info - not sold listings".'
+    retail:
+      $ref: '#/ScanResearchRetail'
+    resale:
+      $ref: '#/ScanResearchResale'
+    reputation:
+      $ref: '#/ScanResearchReputation'
+    summary:
+      type: string
+      maxLength: 240
+      description: What the pages said, in a sentence naming them.
+    cached:
+      type: boolean
+      description: Answered from an earlier research of the same brand and item.
+ScanResearchStatus:
+  description: A `KnownScanResearchStatus`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownScanResearchStatus'
+    - type: string
+      maxLength: 64
+KnownScanResearchStatus:
+  type: string
+  description: |
+    `found`: a page backs a retail price or a resale range. `not_found`: nothing the search
+    returned did. `no_brand`: the read named no brand to look up.
+  enum: [found, not_found, no_brand]
+ScanResearchReputation:
+  description: A `KnownScanResearchReputation`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownScanResearchReputation'
+    - type: string
+      maxLength: 64
+KnownScanResearchReputation:
+  type: string
+  enum: [strong, average, weak, unknown]
+ScanResearchRetail:
+  type: object
+  required: [low, high, sources, models]
+  properties:
+    low:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+    sources:
+      type: array
+      minItems: 1
+      maxItems: 4
+      items:
+        $ref: '#/ScanWebSource'
+    models:
+      type: array
+      description: The exact model, or each likely model the range covers.
+      maxItems: 6
+      items:
+        type: string
+        maxLength: 60
+ScanResearchResale:
+  type: object
+  required: [low, high, sources]
+  properties:
+    low:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+    sources:
+      type: array
+      minItems: 1
+      maxItems: 4
+      items:
+        $ref: '#/ScanWebSource'
+ScanWebSource:
+  type: object
+  required: [site, url]
+  properties:
+    site:
+      type: string
+      maxLength: 200
+    url:
+      type: string
+      format: uri
+      maxLength: 500

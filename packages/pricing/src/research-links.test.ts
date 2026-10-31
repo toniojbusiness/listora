@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import { claimsSoldData } from './labels.ts';
 import {
+  DEPOP_SEARCH_LABEL,
   EBAY_SOLD_SEARCH_LABEL,
   MAX_RESEARCH_QUERY_LENGTH,
+  MERCARI_SEARCH_LABEL,
+  POSHMARK_SEARCH_LABEL,
+  RESEARCH_LINK_LABELS,
   researchLinks,
   researchQuery,
+  scanResearchLinks,
   TERAPEAK_LABEL,
 } from './research-links.ts';
 
@@ -59,5 +65,34 @@ describe('researchLinks', () => {
 
   it('has no links without a query', () => {
     expect(researchLinks(undefined)).toEqual([]);
+  });
+});
+
+describe('scanResearchLinks', () => {
+  it("opens Depop first, then the others, only eBay's claiming sold listings", () => {
+    const links = scanResearchLinks('  Lululemon   Align leggings ');
+    expect(links.map((link) => link.label)).toEqual([
+      DEPOP_SEARCH_LABEL,
+      EBAY_SOLD_SEARCH_LABEL,
+      POSHMARK_SEARCH_LABEL,
+      MERCARI_SEARCH_LABEL,
+    ]);
+    expect(links.map((link) => new URL(link.url).origin)).toEqual([
+      'https://www.depop.com',
+      'https://www.ebay.com',
+      'https://poshmark.com',
+      'https://www.mercari.com',
+    ]);
+    expect(new URL(links[0]?.url ?? '').searchParams.get('q')).toBe('Lululemon Align leggings');
+    expect(new URL(links[3]?.url ?? '').searchParams.get('keyword')).toBe(
+      'Lululemon Align leggings',
+    );
+    expect(links.every((link) => RESEARCH_LINK_LABELS.has(link.label))).toBe(true);
+    expect(links.filter((link) => claimsSoldData(link.label))).toEqual([links[1]]);
+  });
+
+  it('has none without search words', () => {
+    expect(scanResearchLinks(undefined)).toEqual([]);
+    expect(scanResearchLinks('   ')).toEqual([]);
   });
 });

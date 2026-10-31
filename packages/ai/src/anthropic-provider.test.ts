@@ -296,6 +296,51 @@ describe('AnthropicProvider with the schema in the prompt', () => {
   });
 });
 
+describe('AnthropicProvider web search', () => {
+  it('offers the web search tool only when asked, and reads the answer after the last result', async () => {
+    expect(buildParams(REQUEST).tools).toBeUndefined();
+    const searching = { ...REQUEST, webSearch: { maxUses: 2 } };
+    expect(buildParams(searching).tools).toEqual([
+      { type: 'web_search_20250305', name: 'web_search', max_uses: 2 },
+    ]);
+    const reply = {
+      ...message({
+        usage: { server_tool_use: { web_search_requests: 1 } } as Partial<Anthropic.Usage>,
+      }),
+      content: [
+        { type: 'text', text: 'Let me look that up.', citations: null },
+        { type: 'server_tool_use', id: 'srv_1', name: 'web_search', input: { query: 'red' } },
+        {
+          type: 'web_search_tool_result',
+          tool_use_id: 'srv_1',
+          content: [
+            {
+              type: 'web_search_result',
+              url: 'https://example.com/red',
+              title: 'Red',
+              encrypted_content: 'x',
+              page_age: null,
+            },
+          ],
+        },
+        { type: 'text', text: '{"color":"red","confidence":0.9}', citations: null },
+      ],
+    } as unknown as Anthropic.Message;
+    const { provider } = providerReturning(reply);
+    await expect(
+      provider.generate({
+        ...REQUEST,
+        output: { ...COLOR_OUTPUT, enforcement: 'prompt' },
+        webSearch: { maxUses: 2 },
+      }),
+    ).resolves.toMatchObject({
+      output: { color: 'red', confidence: 0.9 },
+      usage: { webSearches: 1 },
+      webSources: [{ url: 'https://example.com/red', title: 'Red' }],
+    });
+  });
+});
+
 // Live smoke test against the real API. It runs only when ANTHROPIC_API_KEY is set (never in
 // CI) and costs a fraction of a cent: one tiny image on Haiku 5.5.
 const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';

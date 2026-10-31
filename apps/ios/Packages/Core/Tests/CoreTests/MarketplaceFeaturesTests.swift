@@ -29,6 +29,19 @@ struct MarketplaceFeaturesTests {
     }
 
     @Test
+    func `shows Listora's own features only once listed, tagging those on for Test mode`() async {
+        let hidden = MarketplaceFeatures { MarketplaceFeatures.List(shown: [:]) }
+        await hidden.refresh()
+        #expect(!hidden.shows(.thriftScan))
+        let testing = MarketplaceFeatures {
+            MarketplaceFeatures.List(shown: [:], testMode: .enabled, app: ["thrift_scan"], appTesting: ["thrift_scan"])
+        }
+        await testing.refresh()
+        #expect(testing.shows(.thriftScan))
+        #expect(testing.isTesting(.thriftScan))
+    }
+
+    @Test
     func `a list that can't be read keeps what showed before`() async {
         let fails = LockedFlag()
         let features = MarketplaceFeatures {

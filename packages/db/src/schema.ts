@@ -48,6 +48,11 @@ import type {
   InboundEventSource,
   ItemStatus,
   LabelCarrier,
+  ItemScanBasis,
+  ItemScanCall,
+  ItemScanConfidence,
+  ItemScanDecision,
+  ScanResearchKind,
   LabelOrderState,
   LabelReadStatus,
   ListingImportMatch,
@@ -1240,6 +1245,63 @@ export interface HaulTable {
   updated_at: UpdatedAt;
 }
 
+// Thrift scan ---------------------------------------------------------------------------------
+
+/** One trip to a store, scanning items to buy (docs/features/thrift-scan.md). */
+export interface SourcingRunTable {
+  id: Id;
+  account_id: string;
+  created_by_user_id: Nullable<string>;
+  place: Nullable<string>;
+  started_at: Generated<Date>;
+  ended_at: NullableTimestamp;
+  /** Every scan of the run and those kept; kept after skipped scans are deleted. */
+  scan_count: Generated<number>;
+  kept_count: Generated<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** One item scanned at the store: the AI's read and the call. Its images are never stored. */
+export interface ItemScanTable {
+  id: Id;
+  account_id: string;
+  run_id: string;
+  created_by_user_id: Nullable<string>;
+  image_sha256: string;
+  image_count: number;
+  /** The AI's read (`ThriftScan` of @listora/analysis). */
+  read: Jsonb<JsonObject>;
+  call: ItemScanCall;
+  confidence: ItemScanConfidence;
+  basis: ItemScanBasis;
+  /** The call as the app showed it (the API's `ScanCall`). */
+  call_detail: Jsonb<JsonObject>;
+  decision: Generated<ItemScanDecision>;
+  /** The item a kept scan became; null once that item is deleted. */
+  item_id: Nullable<string>;
+  model: string;
+  ai_attempts: number;
+  cost_micros: number;
+  read_ms: number;
+  /** The web research that came in after the read; null until the app asked for it. */
+  research: NullableJsonb<JsonObject>;
+  research_ms: Nullable<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** What the web said about a brand and item, kept so a repeat scan needs no search. */
+export interface ScanResearchTable {
+  account_id: string;
+  kind: ScanResearchKind;
+  key: string;
+  research: Jsonb<JsonObject>;
+  model: string;
+  cost_micros: number;
+  created_at: CreatedAt;
+}
+
 // Batch listing -------------------------------------------------------------------------------
 
 /** A haul photographed in one session (docs/features/batch.md). */
@@ -1513,4 +1575,7 @@ export interface Database {
   background_read_health: BackgroundReadHealthTable;
   feature_test_run: FeatureTestRunTable;
   haul: HaulTable;
+  sourcing_run: SourcingRunTable;
+  item_scan: ItemScanTable;
+  scan_research: ScanResearchTable;
 }

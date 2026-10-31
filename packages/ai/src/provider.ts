@@ -1,4 +1,12 @@
-import type { AiEffort, AiImage, AiProviderId, OutputSchema, TokenUsage } from './types.ts';
+import type {
+  AiEffort,
+  AiImage,
+  AiProviderId,
+  OutputSchema,
+  TokenUsage,
+  WebSearchOptions,
+  WebSource,
+} from './types.ts';
 
 /** One multimodal structured-output request, already resolved to a concrete model. */
 export interface ProviderRequest<T> {
@@ -20,12 +28,16 @@ export interface ProviderRequest<T> {
   readonly images: readonly AiImage[];
   readonly output: OutputSchema<T>;
   readonly maxOutputTokens: number;
+  /** Lets the model search the web before it answers; absent, it never does. */
+  readonly webSearch?: WebSearchOptions;
   readonly signal?: AbortSignal;
 }
 
 export interface ProviderResponse<T> {
   readonly output: T;
   readonly usage: TokenUsage;
+  /** Every page the call's web searches returned, so an answer's sources can be checked. */
+  readonly webSources?: readonly WebSource[];
 }
 
 /**

@@ -1,4 +1,5 @@
 import { knownMarketplaceValues, type KnownMarketplace } from '@listora/api-contract';
+import { OWN_SALES_MAY_MODEL_PRICES } from '@listora/pricing';
 
 import { brandKey } from './brand.ts';
 import { quartiles, type PriceQuartiles } from './stats.ts';
@@ -11,6 +12,8 @@ export interface HistorySale {
   readonly category: string | null;
   /** What the buyer paid for the item. */
   readonly salePriceCents: number;
+  /** When it sold, for the trend; absent where unknown. */
+  readonly soldAt?: Date | undefined;
 }
 
 /** What the scan identified: the brand and the canonical category path, each null when unsure. */
@@ -84,9 +87,9 @@ export interface OwnSale extends HistorySale {
   readonly sizeLabel: string | null;
 }
 
-/** The item whose own sales the price screen shows. */
+/** The item whose own sales the price screen shows; a scanned item has no id yet. */
 export interface OwnHistoryItem extends ScanIdentity {
-  readonly itemId: string;
+  readonly itemId?: string | undefined;
 }
 
 /** The matching own sales on one marketplace. */
@@ -118,4 +121,90 @@ export function ownHistoryByMarketplace(
     if (found.prices.count < MIN_OWN_HISTORY_SALES) return [];
     return [{ marketplace, level: found.level, prices: found.prices }];
   });
+}
+
+/** The thrift scan's own history of the scanned item. */
+export interface ScanOwnHistory {
+  /**
+   * The sales the call rests on: `ownHistoryComparisons` over every marketplace whose own
+   * sales may model a price (`OWN_SALES_MAY_MODEL_PRICES`: not eBay's).
+   */
+  readonly forCall: OwnHistoryComparisons | undefined;
+  /**
+   * Whose fees the payouts are after: the marketplace with the most of `forCall`'s sales, ties
+   * and no sales going to Depop (the scan's AI estimate is a Depop price), then the rest in
+   * `KnownMarketplace` order.
+   */
+  readonly payoutMarketplace: KnownMarketplace;
+  /** The card's lines: `ownHistoryByMarketplace` (eBay's shown, never feeding the call). */
+  readonly byMarketplace: readonly MarketplaceOwnHistory[];
+}
+
+const PAYOUT_ORDER: readonly KnownMarketplace[] = [
+  'depop',
+  ...knownMarketplaceValues.filter((marketplace) => marketplace !== 'depop'),
+];
+
+/** The scanned item's own history (docs/features/thrift-scan.md, "The scan"). */
+export function scanOwnHistory(identity: ScanIdentity, sales: readonly OwnSale[]): ScanOwnHistory {
+  const modelable = sales.filter((sale) => OWN_SALES_MAY_MODEL_PRICES[sale.marketplace]);
+  const forCall = ownHistoryComparisons(identity, modelable);
+  const counts = new Map<KnownMarketplace, number>();
+  const matched = new Set(forCall?.saleIds ?? []);
+  for (const sale of modelable) {
+    if (matched.has(sale.id)) counts.set(sale.marketplace, (counts.get(sale.marketplace) ?? 0) + 1);
+  }
+  let payoutMarketplace: KnownMarketplace = 'depop';
+  for (const marketplace of PAYOUT_ORDER) {
+    if ((counts.get(marketplace) ?? 0) > (counts.get(payoutMarketplace) ?? 0)) {
+      payoutMarketplace = marketplace;
+    }
+  }
+  return {
+    forCall,
+    payoutMarketplace,
+    byMarketplace: ownHistoryByMarketplace(
+      { brand: identity.brand, category: identity.category },
+      sales,
+    ),
+  };
+}
+
+/** What identifies an item's exact model for its web research. */
+export interface ResearchItem {
+  readonly brand: string | null;
+  readonly category: string | null;
+  /** The exact model or line ("501"), its printed style number, and its era ("vintage 1990s"). */
+  readonly line: string | null;
+  readonly styleNumber: string | null;
+  readonly era: string | null;
+}
+
+/**
+ * What an item's web facts (its retail price, what it resells for) are cached by
+ * (docs/features/thrift-scan.md, "Web info"): the brand's match key, the item type (category),
+ * the exact model or line, the style number, and the era, each lowercased without punctuation.
+ * One brand makes many models in every category (a Levi's 501 is not a 505), so without a model
+ * or a style number there is no key: such an item is looked up afresh every time.
+ */
+export function itemResearchKey(item: ResearchItem): string | undefined {
+  const brand = brandKey(item.brand);
+  if (brand === undefined) return undefined;
+  const words = (text: string | null) =>
+    (text ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word !== '')
+      .join(' ');
+  const model = words(item.line);
+  const styleNumber = words(item.styleNumber);
+  if (model === '' && styleNumber === '') return undefined;
+  return [brand, item.category ?? '', model, styleNumber, words(item.era)].join('|').slice(0, 400);
+}
+
+/** What a brand's web facts (how well it resells) are cached by: the brand's match key alone. */
+export function brandResearchKey(brand: string | null): string | undefined {
+  return brandKey(brand);
 }

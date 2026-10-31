@@ -81,6 +81,26 @@ export {
 } from './scan.ts';
 export type { ScanAnswer, ScanInput, ScanOutcome, ThriftScan } from './scan.ts';
 export {
+  MAX_RESEARCH_ATTEMPTS,
+  MAX_RESEARCH_SEARCHES,
+  researchScanItem,
+  RESALE_SITES,
+  SCAN_RESEARCH_OUTPUT,
+  SCAN_RESEARCH_OUTPUT_NAME,
+  SCAN_RESEARCH_PURPOSE,
+  SCAN_RESEARCH_SYSTEM,
+  ScanResearchFailedError,
+  verifiedResearch,
+  WEB_INFO_LABEL,
+} from './scan-research.ts';
+export type {
+  ResearchSource,
+  ScanResearch,
+  ScanResearchAnswer,
+  ScanResearchInput,
+  ScanResearchOutcome,
+} from './scan-research.ts';
+export {
   CATEGORIES,
   CATEGORY_TREE,
   categoryPath,

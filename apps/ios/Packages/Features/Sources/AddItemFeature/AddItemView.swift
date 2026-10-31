@@ -38,50 +38,6 @@ public struct AddItemView: View {
     }
 }
 
-/// A screen of the Add Item tab's navigation stack.
-enum AddItemRoute: Hashable {
-    case draft(String)
-    /// The review of a draft's server item (the review feature's flow).
-    case review(ItemReviewRequest)
-    /// A batch: its items and their progress.
-    case batch(String)
-    /// Checking how a batch's new photos are grouped into items.
-    case batchGrouping(String)
-    /// The rapid review of a batch's analyzed items (the review feature's), by the batch's id on
-    /// this iPhone.
-    case batchReview(String, BatchReviewRequest)
-}
-
-/// Whether Add Item starts one item or a whole haul.
-enum AddItemMode: String, CaseIterable {
-    case single
-    case batch
-
-    /// Where the seller's last choice is kept (`UserDefaults`).
-    static let storageKey = "com.listora.add-item-mode"
-
-    var title: String {
-        switch self {
-        case .single: "One item"
-        case .batch: "Batch"
-        }
-    }
-}
-
-/// The camera that is open: the guided capture of one item, or a batch's. One presentation for
-/// both, because two full-screen covers on one view do not reliably dismiss.
-enum OpenCamera: Identifiable {
-    case single
-    case batch(String)
-
-    var id: String {
-        switch self {
-        case .single: "single"
-        case let .batch(batchID): "batch-\(batchID)"
-        }
-    }
-}
-
 /// The drafts on this iPhone, with the new-item actions pinned at the bottom within thumb reach.
 /// With no drafts yet, the screen explains the guided shots instead.
 struct DraftListView: View {
@@ -97,13 +53,19 @@ struct DraftListView: View {
                 if model.drafts.isEmpty, model.batches.isEmpty {
                     ScrollView {
                         Group {
-                            switch model.mode {
+                            switch mode {
                             case .single:
                                 NewItemGuide(
                                     isCameraAvailable: environment.isCameraAvailable,
                                     isSignedIn: environment.activity.isSignedIn,
                                 )
                             case .batch: BatchGuide(isCameraAvailable: environment.isCameraAvailable)
+                            case .scan:
+                                ScanGuide(
+                                    isCameraAvailable: environment.isCameraAvailable,
+                                    run: model.scanRun,
+                                    isTesting: environment.features?.isTesting(.thriftScan) == true,
+                                )
                             }
                         }
                         .padding(Spacing.md)
@@ -170,6 +132,8 @@ struct DraftListView: View {
                         await finishBatchCapture(batchID, kept: kept)
                     }
                     .measuresInteraction(model.meter, session: BatchRecord.meterSession(batchID))
+                case let .scan(run):
+                    ScanCamera(run: run, model: model, environment: environment) { camera = nil }
                 }
             }
             .alert("Couldn't save", isPresented: errorBinding) {
@@ -182,6 +146,12 @@ struct DraftListView: View {
 
     private var draftList: some View {
         List {
+            if mode == .scan, let run = model.scanRun, !run.entries.isEmpty {
+                Section {
+                    ScanRunRow(run: run)
+                }
+                .listRowBackground(Palette.surface.color)
+            }
             if !model.batches.isEmpty {
                 Section {
                     ForEach(model.batches) { batch in
@@ -238,14 +208,14 @@ struct DraftListView: View {
     @ViewBuilder
     private var actions: some View {
         Picker("Add", selection: Bindable(model).mode) {
-            ForEach(AddItemMode.allCases, id: \.self) { mode in
+            ForEach(AddItemMode.offered(scan: isScanShown), id: \.self) { mode in
                 Text(mode.title).tag(mode)
             }
         }
         .pickerStyle(.segmented)
         .accessibilityIdentifier("addItem.mode")
         UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: importPhotos)
-        switch model.mode {
+        switch mode {
         case .single:
             if environment.isCameraAvailable {
                 Button {
@@ -271,6 +241,25 @@ struct DraftListView: View {
                 .accessibilityIdentifier("addItem.shootBatch")
             }
             batchImportButton
+        case .scan:
+            scanActions
+        }
+    }
+
+    /// Scan mode shows only where the thrift scan is on (docs/features/verified-features.md).
+    private var isScanShown: Bool {
+        environment.features?.shows(.thriftScan) == true
+    }
+
+    /// The mode in effect: a kept choice of Scan falls back to one item where Scan is hidden.
+    private var mode: AddItemMode {
+        model.mode == .scan && !isScanShown ? .single : model.mode
+    }
+
+    @ViewBuilder
+    private var scanActions: some View {
+        if environment.isCameraAvailable {
+            ScanActions(model: model) { camera = .scan(model.scanRun(in: environment)) }
         }
     }
 

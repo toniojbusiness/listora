@@ -50,11 +50,15 @@ final class FakeListoraServer: StubServer {
         var faults: [Fault] = []
         var nextSKU = 184
         var batches: [String: Batch] = [:]
+        /// The item each kept scan became, and the scans that can no longer be kept.
+        var scanItems: [String: String] = [:]
+        var closedScans: Set<String> = []
     }
 
     let apiHost = "api-\(UUID().uuidString.lowercased()).test"
     let storageHost = "storage-\(UUID().uuidString.lowercased()).test"
-    private let state: Mutex<State>
+    /// Internal so each endpoint's extension (batches, scans) can reach it.
+    let state: Mutex<State>
 
     var baseURL: URL {
         guard let url = URL(string: "https://\(apiHost)") else { fatalError("Invalid test host") }
@@ -100,27 +104,6 @@ final class FakeListoraServer: StubServer {
         state.withLock { $0.faults.append(Fault(matches: matches, remaining: times, reply: reply)) }
     }
 
-    /// Marks a file as uploaded without receiving its bytes through a request, as when a
-    /// transfer finished while the app was not running.
-    func markUploaded(fileID: String, bytes: Data) {
-        state.withLock { state in
-            state.files[fileID]?.status = "uploaded"
-            state.files[fileID]?.bytes = bytes
-        }
-    }
-
-    /// Drops every stored `Idempotency-Key` answer, as the server does after 24 hours.
-    func forgetIdempotencyKeys() {
-        state.withLock { $0.replays = [:] }
-    }
-
-    /// Makes a file's upload target expire at `date`, as the server caps it at the session's
-    /// expiry.
-    func expireTarget(ofFile fileID: String, at date: Date) {
-        let expiresAt = date.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
-        state.withLock { $0.files[fileID]?.targetExpiresAt = expiresAt }
-    }
-
     // MARK: Serving
 
     func reply(to request: StubRequest) -> StubReply? {
@@ -159,6 +142,9 @@ extension FakeListoraServer {
         let parts = request.path.split(separator: "/").map(String.init)
         if parts.count >= 2, parts[1] == "item-batches" {
             return batchRoute(request, parts: parts, in: &state)
+        }
+        if parts.count == 4, parts[1] == "scans", parts[3] == "keep", request.method == "POST" {
+            return keepScan(parts[2], in: &state)
         }
         switch (request.method, parts.count) {
         case ("POST", 2) where parts[1] == "items":

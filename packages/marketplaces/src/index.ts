@@ -327,8 +327,13 @@ export type {
 export { AdapterRegistryError, createAdapterRegistry } from './registry.ts';
 export type { AdapterRegistry } from './registry.ts';
 export {
+  APP_FEATURES,
+  appFeaturesOn,
   FEATURE_REQUIRES,
   featuresOn,
+  isAppFeatureInTesting,
+  isAppFeatureOn,
+  isAppFeatureVerified,
   isFeatureInTesting,
   isFeatureOn,
   isFeatureVerified,
@@ -339,9 +344,11 @@ export {
   marketplacesWith,
   SELLER_FEATURES,
   useMarketplaceFeatures,
+  VERIFIED_APP_FEATURES,
   VERIFIED_FEATURES,
 } from './features.ts';
 export type {
+  AppFeature,
   FeatureEvidence,
   FeatureGate,
   MarketplaceFeature,
