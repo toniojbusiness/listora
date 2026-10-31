@@ -26,7 +26,8 @@ These two rules from the product owner override every other design choice.
 Sellers see only what passed a live end-to-end test on a real account: every customer feature
 of a marketplace (offers, sales, imports, refresh) is hidden, and its checks never run, until
 [verified-features.md](features/verified-features.md) lists it as verified. The one exception
-is the deployment owner's account in Test mode ([test-mode.md](features/test-mode.md)), so every
+is an account in Test mode (the deployment owner's, or one the owner granted it to;
+[test-mode.md](features/test-mode.md)), so every
 gate asks the account's `FeatureGate` (`isFeatureOn`), never the list alone.
 
 A seller can also make a linked account read only: then nothing may change it, and every new

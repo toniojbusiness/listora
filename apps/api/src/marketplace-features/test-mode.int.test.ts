@@ -53,7 +53,7 @@ describe('Test mode (real Postgres, verified features)', () => {
     expect(redeemed.status).toBe(200);
     const token = await api.signIn(email);
     const { accountId } = await api.tenantOf(email);
-    return { token, accountId };
+    return { token, accountId, email };
   }
 
   async function setTestMode(token: string, on: boolean) {
@@ -215,6 +215,44 @@ describe('Test mode (real Postgres, verified features)', () => {
     expect(off.body.testMode).toEqual({ on: false });
     expect(off.body.data.every((entry) => entry.testing === undefined)).toBe(true);
     expect(off.body.app).toEqual({ features: [] });
+  });
+
+  it('gives a granted account exactly what the owner gets, until the grant is revoked', async () => {
+    const tester = await customer();
+    const grant = async (at: Date | null) =>
+      api.db
+        .updateTable('account')
+        .set(
+          at === null
+            ? { test_mode_granted_at: null, test_mode: false }
+            : { test_mode_granted_at: at },
+        )
+        .where('id', '=', tester.accountId)
+        .execute();
+    await grant(new Date());
+
+    const before = await api.call('listMarketplaceFeatures', { token: tester.token });
+    expect(before.body.testMode).toEqual({ on: false });
+    const turned = await setTestMode(tester.token, true);
+    expect(turned.status).toBe(200);
+    const ownerOn = await setTestMode(owner, true);
+    try {
+      expect(turned.body).toEqual(ownerOn.body);
+    } finally {
+      await setTestMode(owner, false);
+    }
+    // Its own hidden feature is offered and queued for it.
+    const { itemId, listingId } = await liveListing(tester.token, tester.accountId, 'depop');
+    await addPhoto(tester.token, tester.email, itemId);
+    const listing = await api.call('getListing', { token: tester.token, params: { listingId } });
+    expect(listing.body.availableActions.map((entry) => entry.action)).toContain('revise');
+
+    // Revoked (the admin command clears the grant and the switch): no Test mode again.
+    await grant(null);
+    const after = await api.call('listMarketplaceFeatures', { token: tester.token });
+    expect(after.body.testMode).toBeUndefined();
+    expect(after.body.data.every((entry) => entry.testing === undefined)).toBe(true);
+    expect((await setTestMode(tester.token, true)).status).toBe(404);
   });
 
   it('accepts a hidden feature from the owner in Test mode, and from no one else', async () => {
