@@ -176,6 +176,47 @@ final class ThriftScanUITests: XCTestCase {
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
+    /// No signal at the bins (`LISTORA_SCAN_NO_SIGNAL`): the shot waits with no read, Keep marks it
+    /// to be saved once read, and the next launch with signal reads it and saves its draft.
+    func testWithNoSignalAKeptScanWaitsAndIsSavedOnceThereIsSignal() throws {
+        let stack = try E2EStack.fromEnvironment()
+        try launch(signedInTo: stack, noSignal: true)
+        let scanMode = app.segmentedControls["addItem.mode"].buttons["Scan"]
+        XCTAssertTrue(scanMode.waitForExistence(timeout: 15))
+        scanMode.tap()
+        startRun()
+
+        let shutter = app.buttons["camera.shutter"]
+        XCTAssertTrue(shutter.waitForExistence(timeout: 10))
+        shutter.tap()
+        let waiting = element("scan.waiting")
+        XCTAssertTrue(waiting.waitForExistence(timeout: 20))
+        attachScreenshot("no signal")
+        XCTAssertTrue(waiting.label.contains("No signal"), "the card says: \(waiting.label)")
+        app.buttons["scan.keep"].tap()
+        XCTAssertTrue(element("scan.keptWaiting").waitForExistence(timeout: 5))
+        XCTAssertEqual(element("scanCamera.summary").label, "1 scanned · 1 kept · 1 waiting")
+        attachScreenshot("waiting for signal")
+        app.buttons["scanCamera.done"].tap()
+        XCTAssertTrue(app.staticTexts["This run"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["draft.row"].exists, "no draft before the scan is read")
+        attachScreenshot("add item, waiting")
+
+        // The app closes; the next launch has signal: the queue reads the scan and saves its draft.
+        app.terminate()
+        try launch(signedInTo: stack, resetLocalData: false)
+        let scanTab = app.segmentedControls["addItem.mode"].buttons["Scan"]
+        XCTAssertTrue(scanTab.waitForExistence(timeout: 15))
+        scanTab.tap()
+        XCTAssertTrue(app.buttons["draft.row"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["addItem.startScan"].label.contains("Keep scanning"))
+        attachScreenshot("add item, read and saved")
+        app.buttons["addItem.startScan"].tap()
+        XCTAssertTrue(element("scan.readLate").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("scan.kept").exists)
+        attachScreenshot("read late")
+    }
+
     /// Starts a run from Add Item: the start sheet asks where the seller is, which can be left out.
     private func startRun(at place: String? = nil) {
         app.buttons["addItem.startScan"].tap()
@@ -190,15 +231,20 @@ final class ThriftScanUITests: XCTestCase {
         start.tap()
     }
 
-    private func launch(signedInTo stack: E2EStack) throws {
+    private func launch(signedInTo stack: E2EStack, noSignal: Bool = false, resetLocalData: Bool = true) throws {
         let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
         app.launchEnvironment = [
             "LISTORA_FAKE_CAMERA": fixtures.path(percentEncoded: false),
-            "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
+        if resetLocalData {
+            app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
+        }
+        if noSignal {
+            app.launchEnvironment["LISTORA_SCAN_NO_SIGNAL"] = "1"
+        }
         app.launchQuietly()
         let tab = app.tabRail.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))

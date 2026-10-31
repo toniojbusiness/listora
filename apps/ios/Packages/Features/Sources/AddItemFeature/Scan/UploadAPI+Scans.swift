@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import Foundation
 import ListoraAPI
 
@@ -131,6 +132,26 @@ extension UploadAPI {
             throw APIFailure(statusCode: 503, response: response)
         case let .default(statusCode, response):
             throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    /// The household's own sales for the offline call, decoded into Core's model from the same
+    /// JSON.
+    func sourcingKit() async throws(APIFailure) -> SourcingKit {
+        let output = try await call {
+            try await client.getSourcingKit()
+        }
+        let kit: Components.Schemas.SourcingKit
+        switch output {
+        case let .ok(answer):
+            kit = try body { try answer.body.json }
+        case let .default(statusCode, response):
+            throw APIFailure(statusCode: statusCode, response: response)
+        }
+        return try body {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            return try JSONDecoder().decode(SourcingKit.self, from: encoder.encode(kit))
         }
     }
 

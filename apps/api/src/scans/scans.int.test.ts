@@ -276,6 +276,45 @@ describe('the thrift scan (real Postgres)', () => {
     expect(after).toEqual({ scan_count: 1, kept_count: 0 });
   });
 
+  it("warns of the household's unsold items like it, without moving the call", async () => {
+    const run = await startRun();
+    const image = await scanImage(answer());
+    const before = await scan(run.id, image.base64);
+    expect(before.body.call.signals.map((signal) => signal.kind)).not.toContain('unsold');
+
+    for (const brand of ['Lululemon', 'LULULEMON']) {
+      const item = await api.call('createItem', {
+        token,
+        body: { details: { title: 'Align', brand, category: LEGGINGS } },
+      });
+      await api.db
+        .updateTable('inventory_item')
+        .set({ status: brand === 'Lululemon' ? 'listed' : 'ready' })
+        .where('id', '=', item.body.id)
+        .execute();
+    }
+    // Another kind of the brand, and a sold one, are not like it.
+    const tank = await api.call('createItem', {
+      token,
+      body: { details: { title: 'Tank', brand: 'Lululemon', category: 'clothing/tops/tank_tops' } },
+    });
+    await api.db
+      .updateTable('inventory_item')
+      .set({ status: 'listed' })
+      .where('id', '=', tank.body.id)
+      .execute();
+    await sell('depop', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 2200);
+
+    const again = await scan(run.id, (await scanImage(answer())).base64);
+    expect(again.status).toBe(201);
+    expect(again.body.call.call).toBe(before.body.call.call);
+    expect(again.body.call.signals.find((signal) => signal.kind === 'unsold')).toEqual({
+      kind: 'unsold',
+      label: 'You have 2 like it unsold',
+      basedOn: 'Your items of the same brand and kind in inventory, ready or listed',
+    });
+  });
+
   it('rests on the AI estimate alone at low confidence, and skips what pays out too little', async () => {
     const run = await startRun();
     const unknown = await scanImage(

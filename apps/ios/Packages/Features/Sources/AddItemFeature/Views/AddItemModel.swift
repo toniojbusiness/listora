@@ -29,9 +29,8 @@ final class AddItemModel {
         didSet { defaults.set(mode.rawValue, forKey: AddItemMode.storageKey) }
     }
 
-    /// The thrift scan run going on (docs/features/thrift-scan.md), until the seller ends it; it
-    /// lives only while the app does.
-    var scanRun: ScanRunModel?
+    /// The thrift scan's runs (docs/features/thrift-scan.md); nil offers no Scan mode's run.
+    let scanRuns: ScanRuns?
     /// The run's checkout at the register, while the seller is at it.
     var scanCheckout: ScanCheckoutModel?
     /// The last run's summary once it was checked out, shown until the next run starts.
@@ -48,8 +47,10 @@ final class AddItemModel {
         uploader: PhotoUploader,
         activity: UploadActivity,
         meter: InteractionMeter,
+        scanRuns: ScanRuns? = nil,
         defaults: UserDefaults = .standard,
     ) {
+        self.scanRuns = scanRuns
         self.store = store
         self.uploader = uploader
         self.activity = activity
