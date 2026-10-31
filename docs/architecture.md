@@ -173,7 +173,8 @@ packages/
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
-  sourcing/     Thrift-scan rules with no I/O: price quartiles, own-sales comparisons, the
+  sourcing/     Thrift-scan rules with no I/O: price quartiles, own-sales comparisons (the
+                scan's and the price screen's per marketplace), the sourcing kit's groups, the
                 Buy / Your call / Skip call and its defaults (@listora/sourcing)
   eval/         Synthetic tag corpus (corpus/), the eval harness CLI, and the thrift-scan
                 backtest (scan/) (@listora/eval)
@@ -250,6 +251,8 @@ src/
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
+  sourcing/      The household's own sales that count, the sourcing kit (getSourcingKit), and
+                 the price screen's own history (docs/features/thrift-scan.md)
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
@@ -581,7 +584,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/sync.md](features/sync.md)                               | Sync now, the sync on opening the app, its indicator, and "Last synced"        |
 | [features/verified-features.md](features/verified-features.md)     | Sellers see only features that passed live: the list, its evidence, the gate   |
 | [features/test-mode.md](features/test-mode.md)                     | The owner's Test mode: live-testing hidden features, and the owner's log       |
-| [features/thrift-scan.md](features/thrift-scan.md)                 | The thrift scan's Buy / Your call / Skip call, its AI read, and its backtest   |
+| [features/thrift-scan.md](features/thrift-scan.md)                 | The thrift scan's call, AI read, backtest; own sales on the price screen, kit  |
 
 ### Former section numbers
 

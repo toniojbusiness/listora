@@ -24,6 +24,7 @@
     { "path": "../../packages/pack-check" },
     { "path": "../../packages/photos" },
     { "path": "../../packages/pricing" },
+    { "path": "../../packages/sourcing" },
     { "path": "../../packages/sales" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/storage" },

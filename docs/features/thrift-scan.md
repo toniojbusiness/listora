@@ -1,16 +1,22 @@
-# Thrift scan: the Buy / Your call / Skip call
+# Thrift scan: the Buy / Your call / Skip call, and the seller's own sales
 
 The thrift scan helps a seller decide at the store, in seconds, whether an item is worth buying
 to resell: one shot of the item (and an optional tag close-up), a short AI read, a price range
 from the seller's own sales or the AI, and a call of **Buy**, **Your call**, or **Skip** with a
-confidence word. It is plan milestone M0 so far: the rules, the AI read, and a backtest on real
-sold items. No app screen, endpoint, or table uses them yet.
+confidence word. Built so far: the rules, the AI read, and a backtest on real sold items (plan
+milestone M0), and the seller's own sales as real sold data (`own_history`, M1) on the item's
+price screen and in the sourcing kit (`GET /v1/sourcing/kit`). No app screen uses the call yet.
 
 Code:
 
 - `packages/sourcing` (`@listora/sourcing`): the pure rules, with no I/O. `quartiles`, `brandKey`
-  (how two brands compare), `ownHistoryComparisons` (the seller's own sales like the item), and
-  `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS`.
+  (how two brands compare), `ownHistoryComparisons` (the seller's own sales like the item),
+  `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS`, `ownHistoryByMarketplace` (the price screen's),
+  `sizeBucket`, and `buildSourcingKit`.
+- `apps/api/src/sourcing`: the sales that count, the kit's route, and the price screen's own
+  history, which `getItemPricing` shows ([pricing.md](pricing.md)). Nothing there calls a
+  marketplace or AI: every number comes from the sales Listora already recorded
+  ([sales.md](sales.md#sales-history)).
 - `packages/analysis/src/scan.ts`: the AI read, `scanItem` (purpose `thrift_scan`, standard tier,
   no item quota), with its own small output schema `thrift_scan` and a cached system prompt.
 - `packages/eval/src/scan/`: the backtest, `npm run eval -- scan`.
@@ -160,6 +166,77 @@ What it set and found:
 - The call reached high confidence for no item: 64 sales spread over many brands rarely give 5
   of one brand and category.
 
+## The seller's own sales (M1)
+
+### The sales that count
+
+Only real sales count, and only ones the seller is shown:
+
+- **Standing.** The sale is detected, confirmed, or shipped; canceled and returned sales never
+  count.
+- **Recent.** It sold in the last 365 days (`OWN_HISTORY_WINDOW_DAYS`); older prices say little
+  about today's.
+- **Read by a feature that passed live.** The sale is on a marketplace whose `sales_history` is
+  on for the account (`ownSalesMarketplaces`, [verified-features.md](verified-features.md)): for
+  sellers today Depop and Mercari, and every marketplace in the owner's Test mode. A sale an
+  unproven read recorded is never shown as the seller's history. This also leaves out a
+  marketplace's sales the seller marked sold by hand until its sales history passes live.
+- **Of an item with a brand.** A bundle's items each count, at what the buyer paid for each.
+
+**eBay is display only.** The seller's own eBay sales are shown as their own sales, but nothing
+models a price or a call from them, for the eBay licence reason that keeps eBay fee data out of
+floors (red flag RF3, `OWN_SALES_MAY_MODEL_PRICES` in `@listora/pricing`). Marketplaces are
+always listed in the fixed `KnownMarketplace` order, never ranked
+([profit.md](profit.md#marketplaces-side-by-side-never-ranked)), and no days to sell are shown.
+
+### On the item's price screen
+
+`getItemPricing` computes the item's own history on every read
+(`ownHistoryByMarketplace`): per marketplace, the sales `ownHistoryComparisons` matches at the
+tightest level with at least two (`MIN_OWN_HISTORY_SALES`: one sale is a price, not a range),
+the item's own sale left out. Only a match on the item's brand shows, since the label names it,
+so an item without a brand has none. Each is one `own_history` sold comparable:
+
+- the same brand and category: "Your sales of similar Lululemon items on Depop (last 365 days)";
+- the same brand only (the item has no category, or too few of it sold there): "Your Lululemon
+  sales on Depop (last 365 days)".
+
+The comparable names no `marketplace`: that field means data bound to one listing's context
+(Depop Pricing Inspiration), and the seller's own sales are not, so the price screen shows them
+under "Where the prices come from" ("3 sold, $25.00 to $29.00, median $28.00"). With any, the
+"No sold data available" message is gone. Like all sold data, it never sets a tier. It is never
+stored as a `pricing_snapshot`, so it is current the moment a sale is recorded or canceled; a
+stored `own_history` row is ignored.
+
+**No new app build is needed**: the app already shows sold comparables without a marketplace,
+with their label.
+
+### The sourcing kit
+
+`getSourcingKit` (`GET /v1/sourcing/kit`) is the same sales, grouped for looking a brand up at
+the store with no signal (the offline read comes in M5; the app does not read the kit yet).
+
+- **Groups** (`buildSourcingKit`): every brand (by `brandKey`), then each of its categories, then
+  each size in a category (`sizeBucket`: without case or spaces, letter sizes spelled short, so
+  "Medium" is `m`). Each group with a sale is listed, so a group missing from the kit has none.
+  The brand is spelled as most of its sales spell it.
+- **Per group:** the sales per marketplace (count, the quartiles, the median payout after that
+  marketplace's fees from its current fee table, an estimate, with the table's version), whether
+  they are display only (eBay), and how many of the account's items of the group sit unsold
+  (ready or listed).
+- **Size:** at most 2,000 groups (`MAX_KIT_BUCKETS`); past that, size groups go first, then
+  category groups, the ones with the fewest sales first. The kit has a format `version` (1); a
+  client that does not know it ignores the kit.
+
+### Tests
+
+- `packages/sourcing`: `ownHistoryByMarketplace`, `sizeBucket`, and the kit's groups, order, eBay
+  flag, brand spelling, and limit, on invented sales.
+- `apps/api/src/sourcing/sourcing.int.test.ts`: the price screen's own history per marketplace
+  (canceled, old, other-category, and other accounts' sales left out; the item's own sale left
+  out; two sales needed; no brand, no history), the gate for a seller and in Test mode, and the
+  kit, empty without sales, gated the same way, with eBay display only.
+
 ## Local development
 
 The rules and the read need nothing running: `@listora/sourcing` is pure, and `scanItem` runs on
@@ -169,9 +246,13 @@ own labels and asking prices, so it measures the plumbing, not a model.
 
 ## Open items
 
-- **M1: sold items need their brand and category.** Listora stores them for only 2 of these 64
-  sold items (those it listed); the others came from the sales history with only a title. Own-sales
-  comparisons need them filled, for example from the title or the photos, before they can match.
+- **Sold items need their brand and category.** Listora stores them for only 2 of these 64 sold
+  items (those it listed); the others came from the sales history with only a title. The price
+  screen's own history and the kit (M1) leave out a sale without a brand, so until they are
+  filled, for example from the title or the photos, they show little of the household's history.
+- **Days to sell.** Not shown yet: an imported listing's `listed_at` is when Listora read it, not
+  when the seller listed it, so a day count from it would understate.
+- **The call's thresholds** belong in the kit for the offline call (M5).
 - **Scale the AI estimate** by the seller's own sale-to-estimate ratio once Listora has enough
   of both for an account.
 - **Re-run the backtest** as sales accumulate, and on shots taken at a store (M2), before showing
@@ -179,4 +260,6 @@ own labels and asking prices, so it measures the plumbing, not a model.
 
 ## Data
 
-None yet: the scan's tables (`sourcing_run`, `item_scan`) come with the app's scan (M2).
+None yet: the scan's tables (`sourcing_run`, `item_scan`) come with the app's scan (M2). The own
+sales read `sale`, `sale_item`, and `inventory_item` ([sales.md](sales.md), [items.md](items.md))
+and write nothing.

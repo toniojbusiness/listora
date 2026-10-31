@@ -30,12 +30,16 @@ appear only next to real sold data, and a test enforces this (T-14).
 - **Tiers** (quick sale, recommended, higher profit) are the AI estimate's low, mid, and high,
   each raised to the highest floor when below it, and labeled "(AI estimate)" or "(cost
   floor)". Sold data is shown as `soldComparables` but never sets a tier.
+- **Your own sales.** The seller's own sales of similar items (`own_history`, one comparable per
+  marketplace) are computed from the sales on every read, never stored as a snapshot
+  ([thrift-scan.md](thrift-scan.md)).
 - **Snapshots.** `pricing_snapshot` holds source-labeled price data, validated against its
   source's payload schema on write and on read (a malformed row is skipped and logged). The
   estimate of the item's current analysis (the accepted one, else the latest succeeded) is
   recorded as one `ai_estimate` snapshot per analysis; it is read from the analysis output's
   `priceEstimate` (the contract's `AnalysisResult` shape). Sold data snapshots are shown while
-  unexpired, the latest per source and marketplace context. Sources bound to one listing
+  unexpired, the latest per source and marketplace context (a stored `own_history` row is
+  ignored: own history is computed). Sources bound to one listing
   context must name it (`depop_inspiration` carries `marketplace: depop`, `ebay_mi` carries
   `ebay`), on write, on read, and in the label guard, so clients can show Depop Pricing
   Inspiration on the Depop listing only.

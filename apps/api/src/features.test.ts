@@ -55,6 +55,7 @@ describe('API feature discovery', () => {
       'reports',
       'sale-emails',
       'sales',
+      'sourcing',
       'sync',
       'tasks',
       'today',

@@ -1,5 +1,6 @@
 import { knownMarketplaceValues, type KnownMarketplace } from '@listora/api-contract';
 import { inTransaction } from '@listora/db';
+import { loadFeatureGate } from '@listora/marketplaces';
 import {
   buildPricingSuggestion,
   calibrateFees,
@@ -11,6 +12,7 @@ import type { FastifyInstance } from 'fastify';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { notFound } from '../errors.ts';
 import { findItem } from '../items/repository.ts';
+import { ownHistorySoldData } from '../sourcing/own-history.ts';
 import {
   currentAnalysisEstimate,
   currentSnapshots,
@@ -21,7 +23,8 @@ import {
 /**
  * `getItemPricing`. Computing a suggestion never calls AI and never uses eBay content; the
  * label guard in `buildPricingSuggestion` runs on every response, and a violation fails the
- * request (a 500) rather than showing a misleading label.
+ * request (a 500) rather than showing a misleading label. The seller's own sales of similar
+ * items (`own_history`) are computed from the sales on each read, never read from a snapshot.
  */
 export function registerPricingRoutes(app: FastifyInstance, deps: RouteDependencies): void {
   contractRoute(app, deps, 'getItemPricing', async ({ tenant, db, params, query, request }) =>
@@ -53,6 +56,18 @@ export function registerPricingRoutes(app: FastifyInstance, deps: RouteDependenc
         );
       }
 
+      const ownHistory = await ownHistorySoldData(
+        trx,
+        tenant,
+        item,
+        await loadFeatureGate(trx, tenant.accountId),
+        now,
+      );
+      const soldData = [
+        ...snapshots.soldData.filter((snapshot) => snapshot.source !== 'own_history'),
+        ...ownHistory,
+      ];
+
       const marketplaces: readonly KnownMarketplace[] = knownMarketplaceValues;
       const observed = await recentObservedSales(trx, tenant, now);
       const feeCalibrations: Partial<Record<KnownMarketplace, FeeCalibration>> = {};
@@ -69,7 +84,7 @@ export function registerPricingRoutes(app: FastifyInstance, deps: RouteDependenc
         minimumProfitCents: query.minimumProfitCents ?? 0,
         marketplaces,
         estimate: snapshots.estimate,
-        soldData: snapshots.soldData,
+        soldData,
         feeCalibrations,
         researchQuery: researchQuery({
           title: item.title ?? undefined,
