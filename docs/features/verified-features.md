@@ -52,7 +52,8 @@ The other listing actions (publish, price, end, relist) are not on this list. Th
 - **One list, on the server.** `VERIFIED_FEATURES` records, for each marketplace, the features
   that passed live, each with the date and what the run proved. Every gate asks
   `isFeatureOn(marketplace, feature, gate)` with the account's gate (`loadFeatureGate`): the
-  verified features for every seller, and every built one for the owner's account in Test mode
+  verified features for every seller, and every built one for an account in Test mode (the
+  owner's, or one granted it)
   ([test-mode.md](test-mode.md)), which is how a hidden feature gets its live run. The app gets the same list from `GET /v1/marketplace-features`, so changing what
   shows takes only a server deploy, with no new app build.
 - **Nothing hidden is queued.** Each hidden read stops before it is queued: Sync, Tasks' offer

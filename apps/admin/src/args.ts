@@ -65,6 +65,16 @@ Test mode (docs/features/test-mode.md):
   feature-tests [--account ID] [--marketplace M] [--limit N]
                        the owner's log: each run of a feature not verified live, in an
                        account's Test mode, newest first, with its outcome and error
+  test-mode-access list
+                       every account the owner granted Test mode to, and whether its switch is on
+  test-mode-access grant|revoke --account ID --actor <name> --reason <text>
+                       give an account Test mode (its owner and admins see the switch in
+                       Settings), or take it away and turn its switch off
+
+Accounts:
+  account-find --shop <handle>
+                       the accounts with a marketplace connection to that shop (its handle, any
+                       case), with their Test mode
 
 Options:
   --day YYYY-MM-DD    a UTC day
@@ -163,6 +173,14 @@ export type Command =
       readonly limit: number;
       readonly json: boolean;
     }
+  | { readonly name: 'test-mode-access-list'; readonly json: boolean }
+  | {
+      readonly name: 'test-mode-access-set';
+      readonly accountId: string;
+      readonly granted: boolean;
+      readonly change: { readonly actor: string; readonly reason: string };
+    }
+  | { readonly name: 'account-find'; readonly shop: string; readonly json: boolean }
   | {
       readonly name: 'sale-history-read' | 'sale-history-show';
       readonly accountId: string;
@@ -197,6 +215,7 @@ const OPTIONS = {
   operation: { type: 'string' },
   sale: { type: 'string' },
   marketplace: { type: 'string' },
+  shop: { type: 'string' },
   since: { type: 'string' },
   until: { type: 'string' },
   confirm: { type: 'boolean' },
@@ -379,6 +398,33 @@ export function parseCommand(argv: readonly string[], now: Date = new Date()): C
         limit: parseLimit(values, 50),
         json: values.json === true,
       };
+    }
+    case 'test-mode-access': {
+      if (action === 'list') {
+        expectArgs(command, rest, 0);
+        allowOnly(command, values, ['json']);
+        return { name: 'test-mode-access-list', json: values.json === true };
+      }
+      if (action !== 'grant' && action !== 'revoke') {
+        throw new UsageError('test-mode-access needs list, grant, or revoke');
+      }
+      expectArgs(command, rest, 0);
+      allowOnly(command, values, ['account', 'actor', 'reason']);
+      const account = optionalAccount(values);
+      if (account === undefined) throw new UsageError('--account is required');
+      return {
+        name: 'test-mode-access-set',
+        accountId: account,
+        granted: action === 'grant',
+        change: parseChange(values),
+      };
+    }
+    case 'account-find': {
+      expectArgs('account-find', action === undefined ? rest : [action, ...rest], 0);
+      allowOnly('account-find', values, ['shop', 'json']);
+      const shop = typeof values.shop === 'string' ? values.shop.trim().replace(/^@/, '') : '';
+      if (shop === '') throw new UsageError('--shop is required: the shop handle');
+      return { name: 'account-find', shop, json: values.json === true };
     }
     case 'sale-history': {
       if (action !== 'read' && action !== 'show') {

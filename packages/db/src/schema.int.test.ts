@@ -21,6 +21,7 @@ const COLUMNS = {
     'business_name',
     'invited_at',
     'test_mode',
+    'test_mode_granted_at',
   ],
   app_user: [
     'id',
