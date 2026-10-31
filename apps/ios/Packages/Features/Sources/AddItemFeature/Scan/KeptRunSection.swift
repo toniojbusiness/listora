@@ -3,8 +3,9 @@ import DesignSystem
 import SwiftUI
 
 /// A thrift run's kept drafts in the drafts list (docs/features/thrift-scan.md, "Upgrading
-/// drafts"): each one marked "Needs photos" until its real photos are taken, Shoot this run to
-/// take them item after item, and the rapid review of the items whose photos are on the server.
+/// drafts"): Shoot this run to take the real photos item after item, and the rapid review of the
+/// items whose photos are on the server, above the drafts, each marked "Needs photos" until its
+/// real photos are taken.
 struct KeptRunSection: View {
     let run: KeptScanRun
     let model: AddItemModel
@@ -19,17 +20,7 @@ struct KeptRunSection: View {
         let needing = run.needingPhotos.count
         let uploading = run.drafts.count(where: { !$0.needsPhotos }) - (review?.items.count ?? 0)
         Section {
-            ForEach(run.drafts) { draft in
-                NavigationLink(value: AddItemRoute.draft(draft.id)) {
-                    DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
-                }
-                .accessibilityIdentifier("draft.row")
-            }
-            .onDelete { offsets in
-                for index in offsets {
-                    model.deleteDraft(run.drafts[index].id)
-                }
-            }
+            // The run's next step first, so a run of 23 drafts never hides it under them.
             if needing > 0, canShoot {
                 Button(action: onShoot) {
                     Label("Shoot this run", systemImage: "camera.fill")
@@ -59,6 +50,17 @@ struct KeptRunSection: View {
                 .font(Typography.footnote)
                 .foregroundStyle(Palette.textSecondary)
                 .accessibilityIdentifier("keptRun.uploading")
+            }
+            ForEach(run.drafts) { draft in
+                NavigationLink(value: AddItemRoute.draft(draft.id)) {
+                    DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
+                }
+                .accessibilityIdentifier("draft.row")
+            }
+            .onDelete { offsets in
+                for index in offsets {
+                    model.deleteDraft(run.drafts[index].id)
+                }
             }
         } header: {
             SectionHeader("Kept at the store", subtitle: Self.subtitle(kept: run.drafts.count, needing: needing))

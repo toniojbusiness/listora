@@ -206,18 +206,26 @@ and starts a run (the server's is made with the first scan).
   what the item is, the price range the call rests on in the tag's print with what it rests on
   ("Your 3 sales like it", or "AI estimate - not based on sold listings"), the payout after the
   marketplace's fees, the household's own sales per marketplace, the AI estimate under its
-  label, any flag, **Keep**, **Tag**, and **Search Depop** (the marketplace's own search, opened
-  in the browser for the seller to look; Listora never loads it). No cost, margin, or profit.
+  label, any flag, **Shoot the tag** and **Search Depop** (the marketplace's own search, opened
+  in the browser for the seller to look; Listora never loads it) on a small line, and the
+  seller's two answers at the bottom, big and side by side: **Put back** and **Keep**. No cost,
+  margin, or profit. The pass action is **Put back**, what the seller does with the item, so it
+  is never confused with the **Skip** call stamped on the card.
 - **Haptics**, so the seller can keep their eyes on the bin: two short taps for Buy, one long
   buzz for Skip, none for Your call (`Haptics.doubleTap`, `Haptics.longBuzz`).
-- **Keep** saves the item as a draft on this iPhone at once, with the scan's photo (the upload
-  size, prepared while the card was read) and the tag close-up if there is one. The upload queue
-  creates its server item with `keepScan` and attaches the photos in the background. The camera
-  stays open.
-- **Skip is no tap**: shooting the next item skips the last one. The **tray** along the bottom
-  holds every card of the run; tapping one shows it again, so a skipped item can still be kept
-  until the run ends.
-- **Tag** (or **Tag?**, when the AI could not read the brand or was unsure): the next shot is a
+- **Keep** and **Put back** each close the card at once, back to the live camera for the next
+  shot, and a brief line where the card was says what happened: "Keeping item 3" while the draft
+  is saved, then "Kept · 3 in this run", or "Put back · 3 kept this run" (1.6 s; a Keep that
+  failed says so for 5 s, above the next card if one is up, and its tray tile is marked). The
+  shutter takes a shot the whole time; nothing waits for the draft. **Put back** is there while
+  the item is still reading or could not be read, too.
+- **Keep** saves the item as a draft on this iPhone, with the scan's photo (the upload size,
+  prepared while the card was read) and the tag close-up if there is one. The upload queue
+  creates its server item with `keepScan` and attaches the photos in the background.
+- **Shooting the next item without choosing puts the last one back.** The **tray** along the
+  bottom holds every card of the run; tapping one shows it again, so an item put back can still
+  be kept until the run ends, and a kept one shows "Kept as a draft" with **Close**.
+- **Shoot the tag** (or **Shoot the tag?**, when the AI could not read the brand or was unsure): the next shot is a
   close-up of the tag; the item is read again with both images (`replacesScanId`).
 - **Hold the mic** to add a note ("medium, small stain"), turned into text on the iPhone. Said
   before a shot, it rides along with that shot's read; said after, the item is read again once
@@ -581,12 +589,15 @@ needs its real photos; this is how a whole run gets them.
 - **Shoot this run** opens the guided camera (`CameraCaptureView`, front, back, tag, details) on
   the run's drafts that need photos, one after another (`RunShootView`), with each one's scan
   shot and name on screen ("3 of 23: Acme Outfitters blue button-up shirt"). Each item's
-  boundary is known, so there is no grouping step. **Done** saves the item's photos and moves to
-  the next; **Skip item** leaves it for later; closing the camera ends the shoot and keeps the
+  boundary is known, so there is no grouping step. **Next item** (**Done** on the last) saves the
+  item's photos and moves on; **Shoot later** leaves it for later (not "Skip", which leaves out
+  one photo of the guide); closing the camera ends the shoot and keeps the
   items already shot. Background cleanup is in the draft's editor, as for any draft.
 - **The scan shot goes** once the real photos are taken (`replaceScanShots`): the new photos come
   first, and the scan's shots are deleted, on the server too by the upload queue, unless the
   seller taps **Keep scan photo**, which keeps them after the new ones.
+- **Shoot this run** and **Review N items** sit at the top of the run's drafts, under its header,
+  so a run of 23 never hides them below its last draft.
 - **Review N items** opens the batch's rapid review (`BatchReviewView`, [batch.md](batch.md)) on
   the run's drafts whose real photos are all on the server, in the order kept; a draft still
   uploading waits ("1 item uploading its photos, then ready to review"), so an analysis never

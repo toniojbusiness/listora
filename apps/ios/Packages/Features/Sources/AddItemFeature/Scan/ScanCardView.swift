@@ -4,14 +4,15 @@ import UIKit
 
 /// The scan's card over the bottom of the live camera (Hang Tag): a tag lying on its side with
 /// the call stamped on it, what the item is, the price range in the tag's print, what the call
-/// rests on, the household's own sales, and the AI estimate under its label. Keep is the one
-/// action; shooting the next item skips this one.
+/// rests on, the household's own sales, and the AI estimate under its label. Its answers are
+/// Keep and Put back (`ScanCardActions`); shooting the next item puts this one back too.
 struct ScanCardView: View {
     let entry: ScanEntry
     let onKeep: () -> Void
+    let onPutBack: () -> Void
+    let onClose: () -> Void
     let onTag: () -> Void
     let onRetry: () -> Void
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Group {
@@ -39,9 +40,11 @@ struct ScanCardView: View {
                     .font(Typography.footnote)
                     .foregroundStyle(Palette.textSecondary)
             }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: Spacing.xs)
+            ScanPutBackButton(action: onPutBack)
         }
         .padding(.leading, Spacing.md)
-        .accessibilityElement(children: .combine)
     }
 
     private func failed(_ message: String, retryable: Bool) -> some View {
@@ -50,10 +53,13 @@ struct ScanCardView: View {
                 .font(Typography.headline)
                 .foregroundStyle(Palette.danger)
             Text(message).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
-            if retryable {
-                Button("Retry", action: onRetry)
-                    .buttonStyle(.listora(.secondary, size: .compact))
-                    .accessibilityIdentifier("scan.retry")
+            HStack(spacing: Spacing.xs) {
+                if retryable {
+                    Button("Retry", action: onRetry)
+                        .buttonStyle(.listora(.primary, size: .compact))
+                        .accessibilityIdentifier("scan.retry")
+                }
+                ScanPutBackButton(action: onPutBack)
             }
         }
         .padding(.leading, Spacing.md)
@@ -84,7 +90,14 @@ struct ScanCardView: View {
                     .font(Typography.footnote)
                     .foregroundStyle(Palette.warning)
             }
-            actions(card)
+            ScanCardActions(
+                entry: entry,
+                card: card,
+                onKeep: onKeep,
+                onPutBack: onPutBack,
+                onClose: onClose,
+                onTag: onTag,
+            )
         }
         .padding(.leading, Spacing.md)
     }
@@ -162,59 +175,6 @@ struct ScanCardView: View {
                 .accessibilityIdentifier("scan.signal")
         }
     }
-
-    private func actions(_ card: ScanCard) -> some View {
-        HStack(spacing: Spacing.xs) {
-            keepButton
-            if entry.decision == .open {
-                Button(action: onTag) {
-                    Label(card.wantsTag ? "Tag?" : "Tag", systemImage: "tag")
-                }
-                .buttonStyle(.listora(card.wantsTag ? .secondary : .tertiary, size: .compact))
-                .accessibilityLabel("Shoot the tag")
-                .accessibilityIdentifier("scan.tag")
-            }
-            Spacer(minLength: 0)
-            if let link = card.links.first {
-                Button {
-                    openURL(link.url)
-                } label: {
-                    Label(link.label, systemImage: "arrow.up.right.square")
-                        .labelStyle(.titleAndIcon)
-                }
-                .font(Typography.footnote)
-                .buttonStyle(.plain)
-                .foregroundStyle(Palette.brand)
-                .frame(minHeight: Layout.minimumTapTarget)
-                .accessibilityHint("Opens the marketplace's search to look at prices yourself.")
-                .accessibilityIdentifier("scan.search")
-            }
-        }
-        .padding(.top, Spacing.xxs)
-    }
-
-    @ViewBuilder
-    private var keepButton: some View {
-        switch entry.decision {
-        case .open, .keepFailed:
-            Button(action: onKeep) {
-                Label("Keep", systemImage: "plus")
-            }
-            .buttonStyle(.listora(.primary, size: .compact))
-            .accessibilityIdentifier("scan.keep")
-        case .keeping:
-            Button("Keep", action: {})
-                .buttonStyle(.listora(.primary, size: .compact))
-                .loading(true)
-                .disabled(true)
-        case .kept:
-            Label("Kept as a draft", systemImage: "checkmark")
-                .font(Typography.emphasis)
-                .foregroundStyle(Palette.success)
-                .frame(minHeight: Layout.compactButtonHeight)
-                .accessibilityIdentifier("scan.kept")
-        }
-    }
 }
 
 /// One marketplace's comparisons on the card: what close matches ask there, always under the
@@ -247,7 +207,7 @@ private struct ComparisonLine: View {
     }
 }
 
-/// The run's tray: every card of the run along the bottom, newest last, so a skipped item can
+/// The run's tray: every card of the run along the bottom, newest last, so an item put back can
 /// still be opened and kept until the run ends.
 struct ScanTray: View {
     let entries: [ScanEntry]
@@ -287,7 +247,13 @@ struct ScanTray: View {
         case let .read(card): card.callLabel
         case .failed: "couldn't read"
         }
-        return "Item \(entry.number), \(state)\(entry.isKept ? ", kept" : "")"
+        let decision = switch entry.decision {
+        case .kept: ", kept"
+        case .keeping: ", keeping"
+        case .keepFailed: ", couldn't keep"
+        case .open: ""
+        }
+        return "Item \(entry.number), \(state)\(decision)"
     }
 }
 
@@ -316,7 +282,12 @@ private struct ScanTrayTile: View {
 
     @ViewBuilder
     private var badge: some View {
-        if entry.isKept {
+        if case .keepFailed = entry.decision {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(Typography.caption)
+                .foregroundStyle(Palette.danger)
+                .background(Palette.surface, in: Circle())
+        } else if entry.isKept {
             Image(systemName: "checkmark.circle.fill")
                 .font(Typography.caption)
                 .foregroundStyle(Palette.success)

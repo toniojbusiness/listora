@@ -11,6 +11,7 @@ struct CameraCaptureView: View {
     let onFinish: @MainActor ([(PreparedPhoto, PhotoRole)]) async -> Void
     /// What is being shot, above the step prompt: a kept scan's draft in a run's guided shoot.
     private let header: AnyView?
+    private let doneTitle: String
 
     @State private var camera: any CameraSource
     @State private var guide: CaptureGuide
@@ -24,15 +25,18 @@ struct CameraCaptureView: View {
     @State private var isFlashing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// `capacity`: how many more photos the draft has room for.
+    /// `capacity`: how many more photos the draft has room for. `doneTitle`: what the button
+    /// that saves the photos says ("Next item" while a run's shoot has more to come).
     init(
         camera: any CameraSource,
         capacity: Int = DraftStore.maxPhotosPerDraft,
         header: AnyView? = nil,
+        doneTitle: String = "Done",
         onFinish: @escaping @MainActor ([(PreparedPhoto, PhotoRole)]) async -> Void,
     ) {
         self.onFinish = onFinish
         self.header = header
+        self.doneTitle = doneTitle
         _camera = State(initialValue: camera)
         _guide = State(initialValue: CaptureGuide(capacity: capacity))
     }
@@ -118,17 +122,7 @@ struct CameraCaptureView: View {
                 Button {
                     finish(with: guide.shots.map { ($0.photo, $0.role) })
                 } label: {
-                    Text(guide.shots.isEmpty ? "Done" : "Done (\(guide.shots.count))")
-                        .font(Typography.headline)
-                        .foregroundStyle(guide.shots.isEmpty ? Palette.onMedia : Palette.onBrand)
-                        .padding(.horizontal, Spacing.md)
-                        .frame(minHeight: Layout.minimumTapTarget)
-                        .background(
-                            guide.shots.isEmpty
-                                ? AnyShapeStyle(Palette.scrim.color.opacity(0.45))
-                                : AnyShapeStyle(Palette.brand),
-                            in: Capsule(),
-                        )
+                    CameraDoneLabel(title: doneTitle, photos: guide.shots.count)
                 }
                 .disabled(guide.shots.isEmpty)
                 .accessibilityIdentifier("camera.done")
@@ -159,7 +153,7 @@ struct CameraCaptureView: View {
     }
 
     private var instruction: String {
-        guide.canTakeMore ? guide.step.instruction : "That's all the photos this item can have. Tap Done."
+        guide.canTakeMore ? guide.step.instruction : "That's all the photos this item can have. Tap \(doneTitle)."
     }
 
     // MARK: Bottom: last shot, shutter, skip
@@ -281,5 +275,23 @@ struct CameraCaptureView: View {
             Haptics.play(.success)
         }
         Task { await onFinish(shots) }
+    }
+}
+
+/// The guided camera's Done: "Done (3)" on the brand once there are photos to save.
+private struct CameraDoneLabel: View {
+    let title: String
+    let photos: Int
+
+    var body: some View {
+        Text(photos < 1 ? title : "\(title) (\(photos))")
+            .font(Typography.headline)
+            .foregroundStyle(photos < 1 ? Palette.onMedia : Palette.onBrand)
+            .padding(.horizontal, Spacing.md)
+            .frame(minHeight: Layout.minimumTapTarget)
+            .background(
+                photos < 1 ? AnyShapeStyle(Palette.scrim.color.opacity(0.45)) : AnyShapeStyle(Palette.brand),
+                in: Capsule(),
+            )
     }
 }

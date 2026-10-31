@@ -16,12 +16,19 @@ final class ScanRunModel {
     let id: String
     private(set) var entries: [ScanEntry] = []
     /// The card on screen: the last shot, or the one picked in the tray.
-    private(set) var currentID: String?
+    var currentID: String?
     /// The next shot is a close-up of this entry's tag, not a new item.
-    private(set) var tagShotFor: String?
+    var tagShotFor: String?
     /// A note said before the next shot, which rides along with its read.
     private(set) var pendingNote: String?
     private(set) var isEnded = false
+    /// The brief line over the camera after the seller kept or put back an item.
+    var confirmation: ScanConfirmation?
+    /// When the seller last chose Keep or Put back on a card, until the camera was clear again:
+    /// the owner's measurement of how soon the next shot can be taken.
+    var decidedAt: (entryID: String, at: Date)?
+    /// From Keep or Put back to the camera clear for the next shot, for the owner's measurements.
+    var readyTimes: [TimeInterval] = []
     /// Where the seller is, as they named it when the run started; nil when they named none.
     let place: String?
 
@@ -29,7 +36,7 @@ final class ScanRunModel {
     private let tagReader: any TagReader
     private let saveDraft: ScanDraftSaver
     private let directory: URL
-    private let now: () -> Date
+    let now: () -> Date
     let log = Logger(subsystem: "com.listora.app", category: "scan")
     private var serverRun: Task<String, any Error>?
     private let createRunKey = UUID().uuidString.lowercased()

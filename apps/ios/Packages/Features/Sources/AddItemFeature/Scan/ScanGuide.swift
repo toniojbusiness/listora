@@ -31,7 +31,7 @@ struct ScanGuide: View {
         ),
         Step(
             title: "Keep what you buy",
-            detail: "Keep saves a draft; shooting the next item skips this one",
+            detail: "Keep saves a draft, Put back passes; either goes straight to the next shot",
             systemImage: "plus.square.on.square",
         ),
         Step(
