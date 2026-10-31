@@ -115,20 +115,37 @@ public struct AppDependencies {
         Self.wire(inventory, review, phone, packCheck)
         features = Self.makeFeatures(apiClient, inventory, tasks)
         self.review = review
-        addItem = AddItemEnvironment(
-            dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
-            signalReader: VisionPhotoSignalReader(), meter: interactionMeter,
-            reviewDestination: { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) },
-            batchReviewDestination: { request, onEvent in AnyView(review.batchFlow(for: request, onEvent: onEvent)) },
-            fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
-            fakeCameraDirectory: launchOptions.fakeCameraDirectory,
+        addItem = Self.makeAddItem(
+            dataDirectory, (apiClient, accessTokens), (interactionMeter, review), tagReader, launchOptions,
         )
+        addItem.features = features
         marketplaces = Self.makeMarketplaces(apiClient, accessTokens, phone)
         linkAccounts = Self.makeLinkAccounts(apiClient, phone, configuration)
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
         settings = SettingsModels(apiClient, accessTokens, signIn, phone, profileDirectory, launchOptions)
         sync = Self.makeSync(apiClient, accessTokens, phone, (today, sales), linkAccounts)
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
+    }
+
+    /// Add Item: the drafts on this iPhone, their upload queue, and the review and Scan mode they
+    /// open (Scan only where the thrift scan is on, from the features the init hands it).
+    private static func makeAddItem(
+        _ dataDirectory: URL,
+        _ session: (apiClient: APIClient, accessTokens: AccessTokenStore),
+        _ shared: (meter: InteractionMeter, review: ReviewEnvironment),
+        _ tagReader: any TagReader,
+        _ launchOptions: DebugLaunchOptions,
+    ) -> AddItemEnvironment {
+        let review = shared.review
+        return AddItemEnvironment(
+            dataDirectory: dataDirectory, apiClient: session.apiClient, accessTokens: session.accessTokens,
+            tagReader: tagReader, signalReader: VisionPhotoSignalReader(), meter: shared.meter,
+            reviewDestination: { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) },
+            batchReviewDestination: { request, onEvent in AnyView(review.batchFlow(for: request, onEvent: onEvent)) },
+            fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
+            fakeCameraDirectory: launchOptions.fakeCameraDirectory,
+            transcriber: transcriber(for: launchOptions),
+        )
     }
 
     /// The inventory's screens from other features: the review, Pack check's scans, and the work

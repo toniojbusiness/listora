@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ownHistoryByMarketplace,
   ownHistoryComparisons,
+  brandResearchKey,
+  itemResearchKey,
+  scanOwnHistory,
   type HistorySale,
   type OwnHistoryItem,
   type OwnSale,
@@ -123,5 +126,87 @@ describe('ownHistoryByMarketplace', () => {
     expect(ownHistoryByMarketplace(item, [own()])).toEqual([]);
     expect(ownHistoryByMarketplace(item, [own(), own({ itemId: 'item-1' })])).toEqual([]);
     expect(ownHistoryByMarketplace({ ...item, brand: null }, [own(), own()])).toEqual([]);
+  });
+});
+
+describe('scanOwnHistory', () => {
+  // Invented sales; no real shop's data.
+  const LEGGINGS = 'clothing/bottoms/leggings';
+  const own = (overrides: Partial<OwnSale> = {}): OwnSale => {
+    next += 1;
+    return {
+      id: `s${String(next)}`,
+      itemId: `sold-${String(next)}`,
+      marketplace: 'depop',
+      brand: 'Lululemon',
+      category: LEGGINGS,
+      sizeLabel: '6',
+      salePriceCents: 2800,
+      ...overrides,
+    };
+  };
+  const identity = { brand: 'lululemon', category: LEGGINGS };
+
+  it("rests the call on every marketplace's sales but eBay's, paid out where most sold", () => {
+    const sales = [
+      own({ marketplace: 'mercari', salePriceCents: 2000 }),
+      own({ marketplace: 'mercari', salePriceCents: 2400 }),
+      own({ salePriceCents: 3000 }),
+      own({ marketplace: 'ebay', salePriceCents: 9000 }),
+      own({ marketplace: 'ebay', salePriceCents: 9900 }),
+    ];
+    const history = scanOwnHistory(identity, sales);
+    expect(history.forCall?.level).toBe('brand_and_category');
+    // eBay's sales are display only: the call never sees them.
+    expect(history.forCall?.prices.count).toBe(3);
+    expect(history.forCall?.prices.highCents).toBeLessThan(9000);
+    expect(history.payoutMarketplace).toBe('mercari');
+    // The card still shows eBay's, in the fixed marketplace order.
+    expect(history.byMarketplace.map((line) => line.marketplace)).toEqual(['ebay', 'mercari']);
+  });
+
+  it('pays out on Depop on a tie, and without any sales', () => {
+    const tie = scanOwnHistory(identity, [
+      own({ marketplace: 'poshmark' }),
+      own({ marketplace: 'depop' }),
+      own({ marketplace: 'poshmark' }),
+      own({ marketplace: 'depop' }),
+    ]);
+    expect(tie.payoutMarketplace).toBe('depop');
+    const none = scanOwnHistory({ brand: null, category: null }, [own()]);
+    expect(none).toEqual({ forCall: undefined, payoutMarketplace: 'depop', byMarketplace: [] });
+  });
+});
+
+describe('itemResearchKey', () => {
+  const jeans = {
+    brand: "Levi's",
+    category: 'clothing/bottoms/jeans',
+    line: '501',
+    styleNumber: null,
+    era: 'vintage 1990s',
+  };
+
+  it('is one key for the same exact model, era, and type, however it is written', () => {
+    expect(itemResearchKey(jeans)).toBe('levi|clothing/bottoms/jeans|501||vintage 1990s');
+    expect(itemResearchKey({ ...jeans, brand: 'LEVI STRAUSS & CO.', era: 'Vintage, 1990s' })).toBe(
+      itemResearchKey(jeans),
+    );
+  });
+
+  it("never mixes a brand's models, eras, or item types, and has none without the model", () => {
+    const keys = new Set([
+      itemResearchKey(jeans),
+      itemResearchKey({ ...jeans, line: '505' }),
+      itemResearchKey({ ...jeans, line: '550' }),
+      itemResearchKey({ ...jeans, era: 'current' }),
+      itemResearchKey({ ...jeans, category: 'clothing/bottoms/shorts' }),
+      itemResearchKey({ ...jeans, line: null, styleNumber: '00501-0115' }),
+    ]);
+    expect(keys.size).toBe(6);
+    // Without a model or a style number, there is nothing exact to reuse.
+    expect(itemResearchKey({ ...jeans, line: null })).toBeUndefined();
+    expect(itemResearchKey({ ...jeans, brand: null })).toBeUndefined();
+    expect(brandResearchKey('Lululemon Athletica')).toBe(brandResearchKey('lululemon'));
   });
 });

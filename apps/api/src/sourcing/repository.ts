@@ -59,6 +59,7 @@ export async function ownSales(
       'inventory_item.category',
       'inventory_item.size_label',
       'sale_item.sale_price_cents',
+      'sale.sold_at',
     ])
     .orderBy('sale.sold_at')
     .orderBy('sale_item.id')
@@ -71,6 +72,7 @@ export async function ownSales(
     category: row.category,
     sizeLabel: row.size_label,
     salePriceCents: row.sale_price_cents,
+    soldAt: row.sold_at,
   }));
 }
 

@@ -120,7 +120,8 @@ same on every screen. The table with each style's use is in `Typography.swift`.
 - `Haptics`: tap (shutter, a listing sent, a price change sent), selection (chips, the
   inventory layout, the welcome pages), success (draft saved, item saved, account connected, a
   background cleaned up, an item sold), warning (blurry shot), failure (a change the server
-  refused). Sent is not done: sending a listing or a price change is a light tap, never the
+  refused), and the thrift scan's calls, felt without looking: a double tap for Buy, a long
+  buzz for Skip (Core Haptics; a heavy tap where it is missing), nothing for Your call. Sent is not done: sending a listing or a price change is a light tap, never the
   success feedback, which is kept for what is confirmed. Views use SwiftUI's `sensoryFeedback`
   where they can.
 - **Celebration** (`celebration(trigger:)`): when an item sells, a short burst of confetti in
@@ -200,6 +201,9 @@ are in [design/hangtag-screens/](design/hangtag-screens/).
     taut with a bead where it stops.
   - Pack check's to-ship list is ruled, with SKUs in SF Mono; the import questions print their
     price in Fraunces.
+  - **The scan card** ([thrift-scan.md](thrift-scan.md)): a tag lying on its side over the
+    live camera, the call stamped on it in its tone (Buy green, Your call amber, Skip red), the
+    price range in Fraunces, and the run's tray of shots along the bottom, each with its call.
   - **Sales**: all the seller's sales on a price tag lying on its side, the total in Fraunces,
     and each marketplace on the tag's string, a bead each with its own sales (filled where it
     sold, a dashed bead on a loose string where it hasn't yet), never ranked

@@ -29,6 +29,13 @@ Poshmark offer reads failed and showed the seller an error. Now Poshmark offers 
 | `listing_refresh` | Refreshing live listings on a schedule                                | `canRefresh` and the refresh schedule; the app hides Settings > Listing refresh and the item's Refresh this item   |
 | `revise`          | Editing a live listing's details (title, description, aspects)        | `availableActions` (a live listing offers no `revise`), so `reviseListing` is refused before anything is queued    |
 
+**Listora's own features** follow the same rule (`APP_FEATURES`, `VERIFIED_APP_FEATURES`,
+`isAppFeatureOn`), listed in the answer's `app` rather than under a marketplace:
+
+| Feature       | What the seller gets                                                 | Gated where                                                                                               |
+| ------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `thrift_scan` | Add Item's Scan mode at the store ([thrift-scan.md](thrift-scan.md)) | `createSourcingRun`, `endSourcingRun`, `createScan`, and `keepScan` answer `404`; the app hides Scan mode |
+
 Revise is on the list because it has not run live on any marketplace. Hiding it leaves the
 seller's own edits alone: the Listora item and draft listings still edit, and nothing changes on
 a marketplace until the seller publishes. The item screen's Edit listing (title and description)

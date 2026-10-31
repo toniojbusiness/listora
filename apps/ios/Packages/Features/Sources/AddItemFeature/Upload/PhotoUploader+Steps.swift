@@ -99,12 +99,35 @@ extension PhotoUploader {
 
     func createItem(for draft: DraftRecord?) async throws {
         guard let draft else { return }
+        if draft.scanID != nil {
+            try await keepScan(for: draft)
+            return
+        }
         // Recorded before sending: if the answer is lost and the user deletes the draft, the
         // deletion replays this request to find the item.
         guard try store.updateDraft(draft.id, { $0.createItemSent = true }) != nil else { return }
         let item: (id: String, sku: String)
         do {
             item = try await api.createItem(idempotencyKey: draft.createItemKey)
+        } catch {
+            recordDraftFailure(draft.id, error)
+            return
+        }
+        try store.updateDraft(draft.id) { record in
+            record.serverItemID = item.id
+            record.sku = item.sku
+            record.retry = RetryState()
+        }
+    }
+
+    /// Creates a kept scan's server item. The scan, not just the key, is what the server
+    /// deduplicates by, so a replay after the key has expired still finds the item.
+    func keepScan(for draft: DraftRecord?) async throws {
+        guard let draft, let scanID = draft.scanID,
+              try store.updateDraft(draft.id, { $0.createItemSent = true }) != nil else { return }
+        let item: (id: String, sku: String)
+        do {
+            item = try await api.keepScan(scanID: scanID, idempotencyKey: draft.createItemKey)
         } catch {
             recordDraftFailure(draft.id, error)
             return
@@ -292,6 +315,14 @@ extension PhotoUploader {
             }
             let item = try await api.createItem(idempotencyKey: key)
             try? store.updateDeletion(deletion.id) { $0.serverItemID = item.id }
+        } else if let scanID = deletion.scanID {
+            // Keeping the scan again returns its item; a scan that can no longer be kept has none.
+            do {
+                let item = try await api.keepScan(scanID: scanID, idempotencyKey: UUID().uuidString.lowercased())
+                try? store.updateDeletion(deletion.id) { $0.serverItemID = item.id }
+            } catch where !error.retryable && !error.isUnauthenticated {
+                try? store.removeDeletion(deletion.id)
+            }
         } else if let itemID = try await batchItemID(for: deletion) {
             try? store.updateDeletion(deletion.id) { $0.serverItemID = itemID }
         } else {

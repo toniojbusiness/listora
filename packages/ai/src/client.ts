@@ -13,7 +13,15 @@ import {
 import type { ModelRegistry } from './models.ts';
 import { CURRENT_PRICE_TABLE, costMicros, type PriceTable } from './prices.ts';
 import type { AiProvider, ProviderRequest, ProviderResponse } from './provider.ts';
-import type { AiImage, AiProviderId, AiTier, OutputSchema, TokenUsage } from './types.ts';
+import type {
+  AiImage,
+  AiProviderId,
+  AiTier,
+  OutputSchema,
+  TokenUsage,
+  WebSearchOptions,
+  WebSource,
+} from './types.ts';
 import type { UsageEventInput, UsageStore } from './usage-store.ts';
 
 const PURPOSE = /^[a-z][a-z0-9_]*$/;
@@ -38,6 +46,8 @@ export interface AiCall<T> {
   readonly output: OutputSchema<T>;
   /** The reseller unit this call uses up when it succeeds; omit for calls no plan limits. */
   readonly quota?: QuotaCharge;
+  /** Lets the model search the web; each search is billed and metered. */
+  readonly webSearch?: WebSearchOptions;
   readonly signal?: AbortSignal;
 }
 
@@ -59,6 +69,8 @@ export interface AiResult<T> {
   readonly priceTableVersion: string;
   readonly latencyMs: number;
   readonly usageEventId: string;
+  /** The pages the call's web searches returned; empty without web search. */
+  readonly webSources: readonly WebSource[];
 }
 
 export interface AiClientOptions {
@@ -145,6 +157,7 @@ export class AiClient {
       images: call.images,
       output: call.output,
       maxOutputTokens: settings.maxOutputTokens,
+      ...(call.webSearch === undefined ? {} : { webSearch: call.webSearch }),
       ...(call.signal === undefined ? {} : { signal: call.signal }),
     });
     const latencyMs = Math.round(performance.now() - started);
@@ -212,6 +225,7 @@ export class AiClient {
       priceTableVersion: this.#prices.version,
       latencyMs,
       usageEventId: recorded.id,
+      webSources: sent.response.webSources ?? [],
     };
   }
 

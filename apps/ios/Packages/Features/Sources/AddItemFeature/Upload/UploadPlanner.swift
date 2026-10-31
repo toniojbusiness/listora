@@ -17,6 +17,8 @@ enum UploadWork: Equatable, Sendable {
     /// Get a fresh upload target, or learn that the bytes already arrived.
     case refreshTarget(photoID: String)
     case startTransfer(photoID: String)
+    /// Create a draft's server item: `createItem`, or `keepScan` for a draft kept from a thrift
+    /// scan (docs/features/thrift-scan.md).
     case createItem(draftID: String)
     case attach(photoID: String)
     case deleteOnServer(deletionID: String)

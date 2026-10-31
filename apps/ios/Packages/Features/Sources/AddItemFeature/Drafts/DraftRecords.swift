@@ -53,6 +53,9 @@ struct DraftRecord: Codable, Equatable, Identifiable, Sendable, FetchableRecord,
     /// one submitted: a batch draft is submitted again when its photos change.
     var submitKey: String?
     var submittedPhotoIDs: [String]?
+    /// The thrift scan this draft was kept from (docs/features/thrift-scan.md): its server item is
+    /// the scan's (`keepScan`, with `createItemKey` as the key), carrying what the scan read.
+    var scanID: String?
 
     enum Columns {
         static let createdAt = Column(CodingKeys.createdAt)
@@ -232,18 +235,23 @@ struct ServerDeletionRecord: Codable, Equatable, Identifiable, Sendable, Fetchab
     /// again returns the item.
     var serverBatchID: String?
     var batchPosition: Int?
+    /// For a kept scan's item whose `keepScan` answer never arrived: keeping the scan again
+    /// returns the item.
+    var scanID: String?
 
     static func item(_ draft: DraftRecord, serverBatchID: String?, now: Date) -> ServerDeletionRecord {
         let unknown = draft.serverItemID == nil
         let inBatch = draft.batchID != nil
+        let fromScan = draft.scanID != nil
         return ServerDeletionRecord(
             id: UUID().uuidString.lowercased(),
             kind: .item,
             createdAt: now,
             serverItemID: draft.serverItemID,
-            createItemKey: unknown && !inBatch ? draft.createItemKey : nil,
+            createItemKey: unknown && !inBatch && !fromScan ? draft.createItemKey : nil,
             serverBatchID: unknown && inBatch ? serverBatchID : nil,
             batchPosition: unknown && inBatch ? draft.batchPosition : nil,
+            scanID: unknown ? draft.scanID : nil,
         )
     }
 

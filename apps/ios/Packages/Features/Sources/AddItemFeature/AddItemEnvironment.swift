@@ -31,6 +31,9 @@ public final class AddItemEnvironment {
     /// Opens a saved item to list it everywhere (the app's Inventory, set by the root view);
     /// without it, List it now only closes the review.
     public var onListItem: (@MainActor (_ itemID: String) -> Void)?
+    /// What the app shows (docs/features/verified-features.md): Scan mode only once the thrift
+    /// scan passed live, or in the owner's Test mode. Set by the app; without it, no Scan mode.
+    public var features: MarketplaceFeatures?
 
     enum State {
         case ready(DraftStore, PhotoUploader)
@@ -62,6 +65,15 @@ public final class AddItemEnvironment {
     let signalReader: any PhotoSignalReader
     /// Where the batch screen reads its batch's progress.
     let batchProgress: any BatchProgressSource
+    /// The thrift scan's calls (docs/features/thrift-scan.md).
+    let scanService: any ScanService
+    /// Reads a scan shot's tag text on the device.
+    let tagReader: any TagReader
+    /// Turns the scan camera's held mic into a note; nil offers no mic (previews).
+    let transcriber: (any VoiceTranscriber)?
+    /// Where a scan run keeps its shots' photos until they are kept or the run ends. A run lives
+    /// only while the app does, so the folder is emptied at launch.
+    let scanDirectory: URL
     /// Whether this iPhone holds any draft: the Add Item tab lists only these, so the Today card
     /// for drafts on the server opens it only then.
     public var hasDrafts: Bool {
@@ -84,6 +96,7 @@ public final class AddItemEnvironment {
         batchReviewDestination: BatchReviewDestination?,
         fixturePhotosDirectory: URL? = nil,
         fakeCameraDirectory: URL? = nil,
+        transcriber: (any VoiceTranscriber)? = nil,
     ) {
         self.init(
             dataDirectory: dataDirectory,
@@ -99,6 +112,7 @@ public final class AddItemEnvironment {
             meter: meter,
             reviewDestination: reviewDestination,
             batchReviewDestination: batchReviewDestination,
+            transcriber: transcriber,
         )
     }
 
@@ -117,9 +131,16 @@ public final class AddItemEnvironment {
         reviewDestination: ItemReviewDestination?,
         batchReviewDestination: BatchReviewDestination? = nil,
         batchProgress: (any BatchProgressSource)? = nil,
+        scanService: (any ScanService)? = nil,
+        transcriber: (any VoiceTranscriber)? = nil,
         policy: RetryPolicy = .standard,
     ) {
         let activity = UploadActivity()
+        self.scanService = scanService ?? api
+        self.tagReader = tagReader
+        self.transcriber = transcriber
+        scanDirectory = dataDirectory.appending(path: "ScanRuns", directoryHint: .isDirectory)
+        try? FileManager.default.removeItem(at: scanDirectory)
         self.activity = activity
         self.meter = meter
         self.reviewDestination = reviewDestination

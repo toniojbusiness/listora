@@ -1,6 +1,8 @@
 import { MARKETPLACES, type DbExecutor } from '@listora/db';
 import {
+  appFeaturesOn,
   featuresOn,
+  isAppFeatureInTesting,
   isFeatureInTesting,
   loadFeatureGate,
   SELLER_FEATURES,
@@ -50,12 +52,15 @@ async function saveTestMode(db: DbExecutor, accountId: string, on: boolean): Pro
 }
 
 function featureList(gate: FeatureGate, allowed: boolean) {
+  const app = appFeaturesOn(gate);
+  const appTesting = app.filter((feature) => isAppFeatureInTesting(feature, gate));
   return {
     data: MARKETPLACES.map((marketplace) => {
       const features = featuresOn(marketplace, gate);
       const testing = features.filter((feature) => isFeatureInTesting(marketplace, feature, gate));
       return { marketplace, features, ...(testing.length === 0 ? {} : { testing }) };
     }),
+    app: { features: app, ...(appTesting.length === 0 ? {} : { testing: appTesting }) },
     ...(allowed ? { testMode: { on: gate.testMode } } : {}),
   };
 }

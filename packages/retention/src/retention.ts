@@ -59,6 +59,16 @@ export const RETENTION_DAYS = {
   packageTracking: 60,
   /** The buyer's name on an offer, once it stopped waiting on the seller (`closed_at`). */
   offerBuyers: 60,
+  /**
+   * A thrift scan the seller never kept (docs/features/thrift-scan.md), after it was made. Its
+   * run keeps the counts; a kept scan stays with its item.
+   */
+  unkeptScans: 90,
+  /**
+   * The thrift scan's cached web research, past the longest it is used again (an item's facts,
+   * 30 days; a brand's, 7).
+   */
+  scanResearch: 30,
 } as const;
 
 export type RetentionRule = keyof typeof RETENTION_DAYS;
@@ -189,6 +199,28 @@ export async function runDataRetention(
           select id from connection_authorization
           where expires_at < ${cutoff('connectionAuthorizations')}
           order by expires_at
+          limit ${batchSize}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    }),
+    unkeptScans: await repeat(async () => {
+      const result = await sql`
+        delete from item_scan where id in (
+          select id from item_scan
+          where decision <> 'kept' and created_at < ${cutoff('unkeptScans')}
+          order by created_at
+          limit ${batchSize}
+        )
+      `.execute(db);
+      return Number(result.numAffectedRows ?? 0);
+    }),
+    scanResearch: await repeat(async () => {
+      const result = await sql`
+        delete from scan_research where (account_id, kind, key) in (
+          select account_id, kind, key from scan_research
+          where created_at < ${cutoff('scanResearch')}
+          order by created_at
           limit ${batchSize}
         )
       `.execute(db);

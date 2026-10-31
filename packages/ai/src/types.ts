@@ -60,3 +60,15 @@ export const ZERO_USAGE: TokenUsage = {
   cacheWriteTokens: 0,
   webSearches: 0,
 };
+
+/** A page a web search returned, as the provider read it. */
+export interface WebSource {
+  readonly url: string;
+  readonly title: string;
+}
+
+/** The provider's web search, for a call that grounds its answer on the web. */
+export interface WebSearchOptions {
+  /** Most searches the call may make; each is billed (`webSearchMicros`). */
+  readonly maxUses: number;
+}

@@ -28,6 +28,8 @@ export const fakeFixtureSchema = z
     description: z.string().optional(),
     outputs: z.record(z.string(), z.unknown()).optional(),
     usage: usageSchema.optional(),
+    /** The pages a web-search call "found", returned with its answer. */
+    webSources: z.array(z.object({ url: z.string(), title: z.string() }).strict()).optional(),
     error: z
       .object({
         code: z.enum(AI_ERROR_CODES),
@@ -147,7 +149,11 @@ export class FakeAiProvider implements AiProvider {
         { usage },
       );
     }
-    return { output: parsed.data, usage };
+    return {
+      output: parsed.data,
+      usage,
+      ...(fixture.webSources === undefined ? {} : { webSources: fixture.webSources }),
+    };
   }
 }
 
@@ -175,6 +181,6 @@ function estimateUsage(request: ProviderRequest<unknown>, answer: unknown): Toke
     outputTokens: answer === undefined ? 0 : textTokens(JSON.stringify(answer)),
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
-    webSearches: 0,
+    webSearches: request.webSearch === undefined ? 0 : 1,
   };
 }

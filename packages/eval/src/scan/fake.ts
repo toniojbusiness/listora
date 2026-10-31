@@ -33,6 +33,10 @@ export function fakeScanAnswer(item: ScanDatasetItem): ScanAnswer {
   return {
     brand: item.brand ?? '',
     item: item.title.slice(0, 120) || 'item',
+    line: '',
+    styleNumber: '',
+    era: '',
+    material: '',
     category: item.category ?? '',
     department: '',
     sizeLabel: '',
@@ -46,6 +50,8 @@ export function fakeScanAnswer(item: ScanDatasetItem): ScanAnswer {
             midCents: Math.max(1, Math.round(asking * 0.8)),
             highCents: asking,
           },
+    retailPriceCents: 0,
+    style: '',
     searchWords: '',
     flags: { visibleDamage: false, lotOrBundle: false, counterfeitProne: false },
   };

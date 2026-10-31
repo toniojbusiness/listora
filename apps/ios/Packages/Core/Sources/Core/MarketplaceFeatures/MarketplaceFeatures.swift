@@ -23,6 +23,12 @@ public final class MarketplaceFeatures {
         case revise
     }
 
+    /// A feature of Listora itself rather than of one marketplace (`KnownAppFeature`), held to the
+    /// same rule: shown only once it passed live, or in the owner's Test mode.
+    public enum AppFeature: String, CaseIterable, Sendable {
+        case thriftScan = "thrift_scan"
+    }
+
     /// The owner's Test mode as the list says it; every customer's account has none.
     public enum TestMode: Equatable, Sendable {
         case unavailable
@@ -37,15 +43,22 @@ public final class MarketplaceFeatures {
         public var shown: [String: Set<String>]
         public var testing: [String: Set<String>]
         public var testMode: TestMode
+        /// Listora's own features shown, and those on only for Test mode.
+        public var app: Set<String>
+        public var appTesting: Set<String>
 
         public init(
             shown: [String: Set<String>],
             testing: [String: Set<String>] = [:],
             testMode: TestMode = .unavailable,
+            app: Set<String> = [],
+            appTesting: Set<String> = [],
         ) {
             self.shown = shown
             self.testing = testing
             self.testMode = testMode
+            self.app = app
+            self.appTesting = appTesting
         }
 
         public init(dictionaryLiteral elements: (String, Set<String>)...) {
@@ -95,6 +108,17 @@ public final class MarketplaceFeatures {
     public func isTestingEverywhere(_ feature: Feature) -> Bool {
         let shownOn = list.shown.filter { $0.value.contains(feature.rawValue) }.map(\.key)
         return !shownOn.isEmpty && shownOn.allSatisfy { isTesting(feature, on: $0) }
+    }
+
+    /// Whether Listora's own feature shows.
+    public func shows(_ feature: AppFeature) -> Bool {
+        list.app.contains(feature.rawValue)
+    }
+
+    /// Whether Listora's own feature shows only because Test mode is on: it gets a "Testing" tag,
+    /// and the owner sees its measurements.
+    public func isTesting(_ feature: AppFeature) -> Bool {
+        list.appTesting.contains(feature.rawValue)
     }
 
     /// The account's Test mode: `unavailable` for every customer's account.

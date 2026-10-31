@@ -1,5 +1,5 @@
 {
-  "description": "The UI tests' item: the fixture photos in ListoraUITests/Fixtures, a shirt whose tag (3-tag.jpg) reads ACME OUTFITTERS, RN 12345, 60% cotton 40% polyester, style AB1234. The brand and color are uncertain, so review lists them first and offers Identify harder; the size is not on the tag. A spoken correction the phone could not parse comes back as the keyword \"embroidered logo\".",
+  "description": "The UI tests' item: the fixture photos in ListoraUITests/Fixtures, a shirt whose tag (3-tag.jpg) reads ACME OUTFITTERS, RN 12345, 60% cotton 40% polyester, style AB1234. The brand and color are uncertain, so review lists them first and offers Identify harder; the size is not on the tag. A spoken correction the phone could not parse comes back as the keyword \"embroidered logo\". A thrift scan of any shot reads the same shirt with a price guess and no sales of the seller's own, so its call rests on the AI estimate; its web research (invented pages) finds a retail range across two models and one Poshmark page, so the call then rests on web info.",
   "outputs": {
     "voice_correction": {
       "changes": [{ "field": "keywords", "value": "embroidered logo" }]
@@ -76,7 +76,44 @@
       "looksDesigner": false,
       "needsEscalation": false,
       "escalationReason": ""
+    },
+    "thrift_scan": {
+      "brand": "Acme Outfitters",
+      "item": "blue button-up shirt",
+      "category": "clothing/tops/shirts",
+      "department": "men",
+      "sizeLabel": "M",
+      "condition": "pre_owned_good",
+      "identityConfidence": 0.7,
+      "priceEstimate": { "lowCents": 1800, "midCents": 2400, "highCents": 3200 },
+      "line": "",
+      "styleNumber": "",
+      "era": "",
+      "material": "cotton",
+      "retailPriceCents": 0,
+      "style": "",
+      "searchWords": "acme outfitters button up shirt",
+      "flags": { "visibleDamage": false, "lotOrBundle": false, "counterfeitProne": false }
+    },
+    "thrift_scan_research": {
+      "retail": {
+        "lowCents": 4900,
+        "highCents": 6900,
+        "sourceUrls": ["https://acme-outfitters.example/shirts"],
+        "models": ["Oxford", "Poplin"]
+      },
+      "resale": {
+        "lowCents": 1500,
+        "highCents": 2500,
+        "sourceUrls": ["https://poshmark.com/brand/Acme_Outfitters"]
+      },
+      "reputation": "average",
+      "summary": "Acme Outfitters lists its button-ups at $49-$69; used ones ask $15-$25 on Poshmark."
     }
   },
+  "webSources": [
+    { "url": "https://acme-outfitters.example/shirts", "title": "Acme Outfitters shirts" },
+    { "url": "https://poshmark.com/brand/Acme_Outfitters", "title": "Poshmark" }
+  ],
   "usage": { "inputTokens": 1900, "outputTokens": 650 }
 }

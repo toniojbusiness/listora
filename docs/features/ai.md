@@ -166,6 +166,12 @@ guards, cost reports, and spend check (the AI cost alarm is in
   with `enforcement: 'prompt'` sends the JSON schema as system instructions instead), base64
   images, the tier's effort, and a prompt-cache breakpoint on the system prompt. Its live smoke
   test runs only when `ANTHROPIC_API_KEY` is set.
+- **Web search.** A call may let the model search the web first (`webSearch: { maxUses }`, the
+  API's `web_search` server tool): each search is billed and metered (`webSearches`,
+  `webSearchMicros`), the answer is read from the text after the last search result, and the
+  call returns every page the searches returned (`webSources`) so the caller can keep only
+  claims whose page is among them. The fake provider returns a fixture's `webSources`. Only the
+  thrift scan's web research uses it ([thrift-scan.md](thrift-scan.md#web-info)).
 
 ## Data
 

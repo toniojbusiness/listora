@@ -81,7 +81,7 @@ describe('data retention job (real Postgres)', () => {
   }
 
   async function ids(
-    table: 'operation_event' | 'inbound_event' | 'ai_usage_event' | 'sale_check_run',
+    table: 'operation_event' | 'inbound_event' | 'ai_usage_event' | 'sale_check_run' | 'item_scan',
     of: string[],
   ) {
     const { rows } = await sql<{ id: string }>`
@@ -292,6 +292,77 @@ describe('data retention job (real Postgres)', () => {
     await runDataRetention({ db, logger });
     expect(await ids('ai_usage_event', [old, recent])).toEqual([recent]);
     expect(await totals()).toEqual(before);
+  });
+
+  it('deletes thrift scans never kept after 90 days, and their web research past use, keeping kept ones and the run counts', async () => {
+    const { accountId, itemId } = await account();
+    const run = await db
+      .insertInto('sourcing_run')
+      .values({ account_id: accountId, scan_count: 3, kept_count: 1 })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const scan = async (createdAt: Date, decision: 'kept' | 'skipped') =>
+      (
+        await db
+          .insertInto('item_scan')
+          .values({
+            account_id: accountId,
+            run_id: run.id,
+            image_sha256: 'b'.repeat(64),
+            image_count: 1,
+            read: jsonb({}),
+            call: 'your_call',
+            confidence: 'low',
+            basis: 'ai_estimate',
+            call_detail: jsonb({}),
+            decision,
+            item_id: decision === 'kept' ? itemId : null,
+            model: 'claude-haiku-5-5',
+            ai_attempts: 1,
+            cost_micros: 300,
+            read_ms: 1400,
+            created_at: createdAt,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const old = await scan(ago(RETENTION_DAYS.unkeptScans + 1), 'skipped');
+    const recent = await scan(ago(RETENTION_DAYS.unkeptScans - 1), 'skipped');
+    const kept = await scan(ago(RETENTION_DAYS.unkeptScans + 30), 'kept');
+
+    for (const [key, days] of [
+      ['old', RETENTION_DAYS.scanResearch + 1],
+      ['fresh', 1],
+    ] as const) {
+      await db
+        .insertInto('scan_research')
+        .values({
+          account_id: accountId,
+          kind: 'item',
+          key,
+          research: jsonb({}),
+          model: 'claude-haiku-5-5',
+          cost_micros: 20_000,
+          created_at: ago(days),
+        })
+        .execute();
+    }
+
+    const summary = await runDataRetention({ db, logger });
+    expect(summary.unkeptScans).toBeGreaterThanOrEqual(1);
+    const research = await db
+      .selectFrom('scan_research')
+      .select('key')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(research).toEqual([{ key: 'fresh' }]);
+    expect(await ids('item_scan', [old, recent, kept])).toEqual([recent, kept].sort());
+    const counts = await db
+      .selectFrom('sourcing_run')
+      .select(['scan_count', 'kept_count'])
+      .where('id', '=', run.id)
+      .executeTakeFirstOrThrow();
+    expect(counts).toEqual({ scan_count: 3, kept_count: 1 });
   });
 
   it('deletes the data of a connection revoked 30 days ago that was never reconnected', async () => {

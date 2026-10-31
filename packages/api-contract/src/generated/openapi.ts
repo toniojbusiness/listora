@@ -2949,6 +2949,149 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sourcing-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a sourcing run
+         * @description Starts one trip to a store (docs/features/thrift-scan.md): every item the seller scans
+         *     there (`createScan`) belongs to it, and the items they keep join it. Only for an account
+         *     the thrift scan is on for (`listMarketplaceFeatures`'s `app`); otherwise `404`.
+         */
+        post: operations["createSourcingRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sourcing-runs/{runId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a sourcing run
+         * @description Ends the run: its scans that were not kept count as skipped, and none of them can be kept
+         *     any more. Ending a run that already ended answers it as it is.
+         */
+        post: operations["endSourcingRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan an item at the store
+         * @description The thrift scan's read (docs/features/thrift-scan.md): one shot of the item and an
+         *     optional tag close-up, sent inline as small JPEGs, with the text the phone read on the
+         *     tag and the seller's spoken note. Answers at once with what the item is, the household's
+         *     own sales like it, a labeled AI estimate, and the Buy / Your call / Skip call with its
+         *     confidence and what it rests on. The call judges resale value only: no cost or profit,
+         *     which come at the haul's checkout. The images are checked, sent to the AI, and dropped:
+         *     only their hash is kept. Nothing is read from or sent to a marketplace.
+         *
+         *     The read is metered and counted in the account's daily AI budget, but uses no plan
+         *     quota. Only for an account the thrift scan is on for (`404` otherwise, and for a run of
+         *     another account); `409 invalid_state_transition` when the run ended;
+         *     `429 rate_limited` past the account's daily scan limit and `429 ai_budget_exceeded`
+         *     once the AI budget is used up; `503 service_unavailable` while AI is switched off or
+         *     the model could not answer (retryable); `403 forbidden` when AI is turned off for the
+         *     account. `replacesScanId` names an earlier scan of the same item (a note added after
+         *     its read), which is then no longer offered to keep.
+         */
+        post: operations["createScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/scans/{scanId}/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scanId: components["parameters"]["ScanId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep a scanned item
+         * @description The seller is buying the item: creates its `draft` item (with its SKU), its details
+         *     the scan's read (provenance `ai`): the title, brand, category, department, size, and
+         *     condition. Attach its photos as for any item. A scan already kept answers `200` with
+         *     its item instead of creating another, so an app that keeps it again, even after the
+         *     Idempotency-Key has expired, never creates two. `409 invalid_state_transition` when
+         *     the scan's run ended without it, or a later scan replaced it.
+         */
+        post: operations["keepScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/scans/{scanId}/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scanId: components["parameters"]["ScanId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Look the scanned item up on the web
+         * @description After the scan's read, the app asks for this without waiting on it: what the web says
+         *     about the identified brand and item, the way a seller would ask a chatbot that searches.
+         *     The server searches (the Claude API's web search, at most two searches) for the original
+         *     retail price on the brand's or a retailer's site or another reputable source, and how such
+         *     items resell, keeps only the numbers whose page the search returned, and answers the scan
+         *     again with its `research`, `retail`, and the call made again with it (web info ranks after
+         *     the household's own sales and before the AI estimate, and never makes a high-confidence
+         *     call). One brand makes many models in every category, so an item's results are reused only
+         *     for the same exact model (its model or style number, item type, and era) for 30 days; an
+         *     item whose exact model the read could not pin is looked up afresh every time, its retail
+         *     price a range across the likely models it names. A brand's resale reputation is kept for 7
+         *     days. A scan already researched answers as it is; a read without a brand answers
+         *     `no_brand`.
+         *     Metered in the daily AI budget like the read: `429 ai_budget_exceeded`,
+         *     `503 service_unavailable` (retryable), `403 forbidden` as for `createScan`.
+         */
+        post: operations["researchScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6657,8 +6800,28 @@ export interface components {
         };
         MarketplaceFeatureList: {
             data: components["schemas"]["MarketplaceFeatures"][];
+            app?: components["schemas"]["AppFeatures"];
             testMode?: components["schemas"]["TestMode"];
         };
+        /**
+         * @description Listora's own features the account is shown, held to the same rule as a marketplace's:
+         *     those that passed a live end-to-end test, or in Test mode every built one.
+         */
+        AppFeatures: {
+            features: components["schemas"]["AppFeature"][];
+            /** @description In Test mode only, the features of `features` on only for the test. */
+            testing?: components["schemas"]["AppFeature"][];
+        };
+        /**
+         * @description A `KnownAppFeature`, or one added after this client was built. Clients ignore a feature
+         *     they do not know.
+         */
+        AppFeature: components["schemas"]["KnownAppFeature"];
+        /**
+         * @description `thrift_scan`: scanning items at the store for the Buy / Your call / Skip call.
+         * @enum {string}
+         */
+        KnownAppFeature: "thrift_scan";
         /**
          * @description Test mode (docs/features/test-mode.md), present only for an account that may turn it on:
          *     the owner or an admin of the deployment owner's account. Off until turned on.
@@ -6746,6 +6909,311 @@ export interface components {
              *     suggested price or a sourcing call (eBay's, until the eBay licence review).
              */
             displayOnly: boolean;
+        };
+        SourcingRunCreate: {
+            /** @description Where the seller is, as they name it ("Goodwill Outlet on 5th"). */
+            place?: string;
+        };
+        /** @description One trip to a store, scanning items to buy (docs/features/thrift-scan.md). */
+        SourcingRun: {
+            id: components["schemas"]["Id"];
+            place?: string;
+            startedAt: components["schemas"]["Timestamp"];
+            /** @description When the run ended; absent while it goes on. */
+            endedAt?: components["schemas"]["Timestamp"];
+            /**
+             * Format: int32
+             * @description Items scanned in the run.
+             */
+            scanCount: number;
+            /**
+             * Format: int32
+             * @description Scanned items the seller kept.
+             */
+            keptCount: number;
+        };
+        ScanCreate: {
+            runId: components["schemas"]["Id"];
+            /** @description The item as the seller holds it, then an optional close-up of its tag. */
+            images: components["schemas"]["ScanImage"][];
+            /** @description What the seller said about the item, as text ("medium, small stain"). */
+            note?: string;
+            /** @description The lines of text the phone read on the tag, in reading order. */
+            tagText?: string[];
+            /** @description An earlier scan of the same item in the run that this one replaces. */
+            replacesScanId?: components["schemas"]["Id"];
+        };
+        ScanImage: {
+            role: components["schemas"]["KnownScanImageRole"];
+            /**
+             * @description The JPEG, base64-encoded: at most 1600 pixels on its long side and 350 KB (the app
+             *     sends 1024 pixels). Never stored; sent to the AI and dropped.
+             */
+            jpegBase64: string;
+        };
+        /** @description A `KnownScanImageRole`; requests hold to the known values. */
+        ScanImageRole: components["schemas"]["KnownScanImageRole"];
+        /**
+         * @description `item`: the item as the seller holds it. `tag`: a close-up of its tag.
+         * @enum {string}
+         */
+        KnownScanImageRole: "item" | "tag";
+        /**
+         * @description One item scanned at the store: what it is, the household's own sales like it, the AI's
+         *     estimate, and the call. Every price is a range with its source; "sold" appears only next
+         *     to the seller's own sales.
+         */
+        ItemScan: {
+            id: components["schemas"]["Id"];
+            runId: components["schemas"]["Id"];
+            createdAt: components["schemas"]["Timestamp"];
+            identity: components["schemas"]["ScanIdentity"];
+            aiEstimate?: components["schemas"]["ScanAiEstimate"];
+            flags: components["schemas"]["ScanFlags"];
+            retail?: components["schemas"]["ScanRetail"];
+            trend?: components["schemas"]["ScanTrend"];
+            research?: components["schemas"]["ScanResearch"];
+            /**
+             * @description The household's own sales of items like it, per marketplace in `KnownMarketplace`
+             *     order, never ranked: each marketplace with at least two that match its brand. Empty
+             *     without a brand or such sales.
+             */
+            ownSales: components["schemas"]["ScanOwnSales"][];
+            call: components["schemas"]["ScanCall"];
+            /** @description The words a buyer would search to find items like it. */
+            searchWords: string;
+            /**
+             * @description Searches the seller opens in their own browser to look at prices themselves, Depop
+             *     first. Listora never fetches or reads these pages.
+             */
+            researchLinks: components["schemas"]["ResearchLink"][];
+            decision: components["schemas"]["ScanDecision"];
+            /** @description The item the scan was kept as. */
+            itemId?: components["schemas"]["Id"];
+        };
+        /** @description What the AI read the item as; each detail absent when it could not tell. */
+        ScanIdentity: {
+            /** @description A short name of the item ("black high-rise straight jeans"). */
+            item: string;
+            brand?: string;
+            /** @description The canonical category path (`ItemDetails.category`). */
+            category?: string;
+            department?: string;
+            sizeLabel?: string;
+            condition?: components["schemas"]["ItemCondition"];
+            /** @description The exact model or line ("501"), only when printed or unmistakable. */
+            model?: string;
+            styleNumber?: string;
+            /** @description "current", or "vintage 1990s", where that changes what the item is. */
+            era?: string;
+            /** @description A style or era buyers search by ("Y2K", "gorpcore"), the AI's read. */
+            style?: string;
+            /** @description How sure the AI is of the brand and item together. */
+            confidence: components["schemas"]["Confidence"];
+        };
+        /** @description The AI's guess of what a buyer would pay on Depop; never sold data. */
+        ScanAiEstimate: {
+            /** @description Shown with it, always ("AI estimate - not based on sold listings"). */
+            label: string;
+            low: components["schemas"]["Money"];
+            mid: components["schemas"]["Money"];
+            high: components["schemas"]["Money"];
+        };
+        /** @description What the AI saw that keeps an item from being a Buy whatever its price. */
+        ScanFlags: {
+            visibleDamage: boolean;
+            lotOrBundle: boolean;
+            /** @description A brand often faked whose authenticity the images cannot show. */
+            counterfeitProne: boolean;
+        };
+        /** @description The household's own sales like the item on one marketplace. */
+        ScanOwnSales: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description "Your Lululemon sales on Depop (last 365 days)". */
+            label: string;
+            /** Format: int32 */
+            soldCount: number;
+            /** @description The low quartile of what buyers paid. */
+            low: components["schemas"]["Money"];
+            median: components["schemas"]["Money"];
+            /** @description The high quartile of what buyers paid. */
+            high: components["schemas"]["Money"];
+            /** @description True when shown but never feeding the call (eBay's, until its licence review). */
+            displayOnly: boolean;
+        };
+        /**
+         * @description Buy, Your call, or Skip, from resale value only: whether the item pays out at least the
+         *     worth-listing amount after the marketplace's fees. Always shown with its confidence and
+         *     `basedOn`.
+         */
+        ScanCall: {
+            call: components["schemas"]["ScanCallKind"];
+            /** @description The call as shown ("Buy", "Your call", "Skip"). */
+            label: string;
+            confidence: components["schemas"]["ScanConfidence"];
+            basis: components["schemas"]["ScanBasis"];
+            /** @description What the call rests on, as the seller reads it ("Your 5 sales like it"). */
+            basedOn: string;
+            /** @description The low end of the price range the call rests on. */
+            low?: components["schemas"]["Money"];
+            /** @description The high end of that range. */
+            high?: components["schemas"]["Money"];
+            /** @description What the range's low end pays out after fees, an estimate; absent with no range. */
+            conservativePayout?: components["schemas"]["Money"];
+            /** @description What the range's high end pays out after fees, an estimate. */
+            optimisticPayout?: components["schemas"]["Money"];
+            /** @description The marketplace whose fees the payouts are after. */
+            payoutMarketplace?: components["schemas"]["Marketplace"];
+            /** @description The least payout worth buying for. */
+            worthListing: components["schemas"]["Money"];
+            /**
+             * @description What else the call weighed, each with what it rests on: the retail price, new with
+             *     tags, how the brand resells on the web, the household's own sales trend, the style.
+             */
+            signals: components["schemas"]["ScanSignal"][];
+        };
+        /** @description A `KnownScanCallKind`, or one added after this client was built (shown by `label`). */
+        ScanCallKind: components["schemas"]["KnownScanCallKind"];
+        /**
+         * @description `buy`, `your_call` (the seller decides), or `skip`.
+         * @enum {string}
+         */
+        KnownScanCallKind: "buy" | "your_call" | "skip";
+        /** @description A `KnownScanConfidence`, or one added after this client was built. */
+        ScanConfidence: components["schemas"]["KnownScanConfidence"];
+        /** @enum {string} */
+        KnownScanConfidence: "high" | "medium" | "low";
+        /** @description A `KnownScanBasis`, or one added after this client was built (shown by `basedOn`). */
+        ScanBasis: components["schemas"]["KnownScanBasis"];
+        /**
+         * @description `own_history`: the household's own sales like it. `web_info`: what web pages say such items
+         *     resell for (the research, with its sites), never a high-confidence call. `ai_estimate`: the
+         *     AI's estimate alone, never a high-confidence Buy. `none`: nothing to go on.
+         * @enum {string}
+         */
+        KnownScanBasis: "own_history" | "web_info" | "ai_estimate" | "none";
+        /** @description A `KnownScanDecision`, or one added after this client was built. */
+        ScanDecision: components["schemas"]["KnownScanDecision"];
+        /**
+         * @description `undecided` until the seller keeps it (`kept`), a later scan of the same item replaces it
+         *     (`replaced`), or its run ends without it (`skipped`).
+         * @enum {string}
+         */
+        KnownScanDecision: "undecided" | "kept" | "skipped" | "replaced";
+        ScanSignal: {
+            kind: components["schemas"]["ScanSignalKind"];
+            /** @description As the card shows it ("Retail about $139", "Trending up", "Y2K"). */
+            label: string;
+            /** @description What it rests on, as the seller reads it. */
+            basedOn: string;
+        };
+        /** @description A `KnownScanSignalKind`, or one added after this client was built (shown by its label). */
+        ScanSignalKind: components["schemas"]["KnownScanSignalKind"];
+        /**
+         * @description `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
+         *     are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
+         *     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
+         * @enum {string}
+         */
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style";
+        /**
+         * @description The item's original retail price, with where it came from: one model's price (`low` equals
+         *     `high`), or, when the scan could not pin the exact model, the range across the likely
+         *     `models`.
+         */
+        ScanRetail: {
+            low: components["schemas"]["Money"];
+            high: components["schemas"]["Money"];
+            /** @description The models the price covers. */
+            models?: string[];
+            source: components["schemas"]["ScanRetailSource"];
+            /** @description The site that states it, for a web price ("levi.com"). */
+            site?: string;
+            /** Format: uri */
+            url?: string;
+            /** @description "Retail $68 on the tag", "Retail about $98", or "Retail $59-$98 across 501, 505, 550". */
+            label: string;
+        };
+        /** @description A `KnownScanRetailSource`, or one added after this client was built. */
+        ScanRetailSource: components["schemas"]["KnownScanRetailSource"];
+        /**
+         * @description `tag`: printed on a price tag in the shot. `web`: found by the web research.
+         * @enum {string}
+         */
+        KnownScanRetailSource: "tag" | "web";
+        /**
+         * @description How the household's own sales of items like it are moving: the last 90 days against the
+         *     9 months before. `label` only when the numbers support a direction. Marketplace trends
+         *     come with the comparisons (a later `source`).
+         */
+        ScanTrend: {
+            source: components["schemas"]["ScanTrendSource"];
+            direction: components["schemas"]["ScanTrendDirection"];
+            /** Format: int32 */
+            recentSales: number;
+            /** Format: int32 */
+            earlierSales: number;
+            /** Format: int32 */
+            lastSoldDaysAgo?: number;
+            label?: string;
+            basedOn: string;
+        };
+        /** @description A `KnownScanTrendSource`, or one added after this client was built. */
+        ScanTrendSource: components["schemas"]["KnownScanTrendSource"];
+        /**
+         * @description `own_history`: the household's own sales.
+         * @enum {string}
+         */
+        KnownScanTrendSource: "own_history";
+        /** @description A `KnownScanTrendDirection`, or one added after this client was built. */
+        ScanTrendDirection: components["schemas"]["KnownScanTrendDirection"];
+        /** @enum {string} */
+        KnownScanTrendDirection: "up" | "down" | "steady" | "unknown";
+        /**
+         * @description What the web said about the brand and item (`researchScan`), always under `label`: its
+         *     retail price and how such items resell, every number with the pages it came from. Web
+         *     info, never sold prices.
+         */
+        ScanResearch: {
+            status: components["schemas"]["ScanResearchStatus"];
+            /** @description "Web info - not sold listings". */
+            label: string;
+            retail?: components["schemas"]["ScanResearchRetail"];
+            resale?: components["schemas"]["ScanResearchResale"];
+            reputation: components["schemas"]["ScanResearchReputation"];
+            /** @description What the pages said, in a sentence naming them. */
+            summary?: string;
+            /** @description Answered from an earlier research of the same brand and item. */
+            cached: boolean;
+        };
+        /** @description A `KnownScanResearchStatus`, or one added after this client was built. */
+        ScanResearchStatus: components["schemas"]["KnownScanResearchStatus"];
+        /**
+         * @description `found`: a page backs a retail price or a resale range. `not_found`: nothing the search
+         *     returned did. `no_brand`: the read named no brand to look up.
+         * @enum {string}
+         */
+        KnownScanResearchStatus: "found" | "not_found" | "no_brand";
+        /** @description A `KnownScanResearchReputation`, or one added after this client was built. */
+        ScanResearchReputation: components["schemas"]["KnownScanResearchReputation"];
+        /** @enum {string} */
+        KnownScanResearchReputation: "strong" | "average" | "weak" | "unknown";
+        ScanResearchRetail: {
+            low: components["schemas"]["Money"];
+            high: components["schemas"]["Money"];
+            sources: components["schemas"]["ScanWebSource"][];
+            /** @description The exact model, or each likely model the range covers. */
+            models: string[];
+        };
+        ScanResearchResale: {
+            low: components["schemas"]["Money"];
+            high: components["schemas"]["Money"];
+            sources: components["schemas"]["ScanWebSource"][];
+        };
+        ScanWebSource: {
+            site: string;
+            /** Format: uri */
+            url: string;
         };
     };
     responses: {
@@ -6879,6 +7347,7 @@ export interface components {
         CallIndex: string;
         ImportId: components["schemas"]["Id"];
         QuestionId: components["schemas"]["Id"];
+        ScanId: components["schemas"]["Id"];
     };
     requestBodies: never;
     headers: never;
@@ -7292,11 +7761,53 @@ export type MarketplaceFeature = components['schemas']['MarketplaceFeature'];
 export type KnownMarketplaceFeature = components['schemas']['KnownMarketplaceFeature'];
 export type MarketplaceFeatures = components['schemas']['MarketplaceFeatures'];
 export type MarketplaceFeatureList = components['schemas']['MarketplaceFeatureList'];
+export type AppFeatures = components['schemas']['AppFeatures'];
+export type AppFeature = components['schemas']['AppFeature'];
+export type KnownAppFeature = components['schemas']['KnownAppFeature'];
 export type TestMode = components['schemas']['TestMode'];
 export type TestModeReplace = components['schemas']['TestModeReplace'];
 export type SourcingKit = components['schemas']['SourcingKit'];
 export type OwnSalesBucket = components['schemas']['OwnSalesBucket'];
 export type OwnSalesOnMarketplace = components['schemas']['OwnSalesOnMarketplace'];
+export type SourcingRunCreate = components['schemas']['SourcingRunCreate'];
+export type SourcingRun = components['schemas']['SourcingRun'];
+export type ScanCreate = components['schemas']['ScanCreate'];
+export type ScanImage = components['schemas']['ScanImage'];
+export type ScanImageRole = components['schemas']['ScanImageRole'];
+export type KnownScanImageRole = components['schemas']['KnownScanImageRole'];
+export type ItemScan = components['schemas']['ItemScan'];
+export type ScanIdentity = components['schemas']['ScanIdentity'];
+export type ScanAiEstimate = components['schemas']['ScanAiEstimate'];
+export type ScanFlags = components['schemas']['ScanFlags'];
+export type ScanOwnSales = components['schemas']['ScanOwnSales'];
+export type ScanCall = components['schemas']['ScanCall'];
+export type ScanCallKind = components['schemas']['ScanCallKind'];
+export type KnownScanCallKind = components['schemas']['KnownScanCallKind'];
+export type ScanConfidence = components['schemas']['ScanConfidence'];
+export type KnownScanConfidence = components['schemas']['KnownScanConfidence'];
+export type ScanBasis = components['schemas']['ScanBasis'];
+export type KnownScanBasis = components['schemas']['KnownScanBasis'];
+export type ScanDecision = components['schemas']['ScanDecision'];
+export type KnownScanDecision = components['schemas']['KnownScanDecision'];
+export type ScanSignal = components['schemas']['ScanSignal'];
+export type ScanSignalKind = components['schemas']['ScanSignalKind'];
+export type KnownScanSignalKind = components['schemas']['KnownScanSignalKind'];
+export type ScanRetail = components['schemas']['ScanRetail'];
+export type ScanRetailSource = components['schemas']['ScanRetailSource'];
+export type KnownScanRetailSource = components['schemas']['KnownScanRetailSource'];
+export type ScanTrend = components['schemas']['ScanTrend'];
+export type ScanTrendSource = components['schemas']['ScanTrendSource'];
+export type KnownScanTrendSource = components['schemas']['KnownScanTrendSource'];
+export type ScanTrendDirection = components['schemas']['ScanTrendDirection'];
+export type KnownScanTrendDirection = components['schemas']['KnownScanTrendDirection'];
+export type ScanResearch = components['schemas']['ScanResearch'];
+export type ScanResearchStatus = components['schemas']['ScanResearchStatus'];
+export type KnownScanResearchStatus = components['schemas']['KnownScanResearchStatus'];
+export type ScanResearchReputation = components['schemas']['ScanResearchReputation'];
+export type KnownScanResearchReputation = components['schemas']['KnownScanResearchReputation'];
+export type ScanResearchRetail = components['schemas']['ScanResearchRetail'];
+export type ScanResearchResale = components['schemas']['ScanResearchResale'];
+export type ScanWebSource = components['schemas']['ScanWebSource'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -7329,6 +7840,7 @@ export type ParameterRunId = components['parameters']['RunId'];
 export type ParameterCallIndex = components['parameters']['CallIndex'];
 export type ParameterImportId = components['parameters']['ImportId'];
 export type ParameterQuestionId = components['parameters']['QuestionId'];
+export type ParameterScanId = components['parameters']['ScanId'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -11493,6 +12005,220 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    createSourcingRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourcingRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Started. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcingRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    endSourcingRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                runId: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ended run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcingRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createScan: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanCreate"];
+            };
+        };
+        responses: {
+            /** @description The scan's read and call. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemScan"];
+                };
+            };
+            /** @description AI is turned off for this account (`forbidden`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    keepScan: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                scanId: components["parameters"]["ScanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item the scan was already kept as. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
+                };
+            };
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    researchScan: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                scanId: components["parameters"]["ScanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan with its research. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemScan"];
+                };
+            };
+            /** @description AI is turned off for this account (`forbidden`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -11597,3 +12323,15 @@ export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
 export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];
 export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise"];
+export const knownAppFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownAppFeature"]> = ["thrift_scan"];
+export const knownScanImageRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanImageRole"]> = ["item", "tag"];
+export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanCallKind"]> = ["buy", "your_call", "skip"];
+export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
+export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "web_info", "ai_estimate", "none"];
+export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style"];
+export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
+export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
+export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];
+export const knownScanResearchStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanResearchStatus"]> = ["found", "not_found", "no_brand"];
+export const knownScanResearchReputationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanResearchReputation"]> = ["strong", "average", "weak", "unknown"];

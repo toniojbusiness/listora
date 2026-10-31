@@ -55,7 +55,7 @@ describe('runScanBacktest', () => {
         worthListingCents: 800,
         counts: { buy: 5, your_call: 3, skip: 0 },
         byConfidence: { high: 0, medium: 5, low: 3 },
-        byBasis: { own_history: 5, ai_estimate: 0, none: 3 },
+        byBasis: { own_history: 5, web_info: 0, ai_estimate: 0, none: 3 },
         buyHeld: 5,
         skipHeld: 0,
       },

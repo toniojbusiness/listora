@@ -253,6 +253,9 @@ src/
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   sourcing/      The household's own sales that count, the sourcing kit (getSourcingKit), and
                  the price screen's own history (docs/features/thrift-scan.md)
+  sourcing-runs/ Thrift scan runs: a trip to a store, started and ended
+  scans/         The thrift scan: an item's read and call at the store, and Keep
+                 (docs/features/thrift-scan.md)
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
@@ -438,7 +441,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [marketplace-prefill.md](features/marketplace-prefill.md#data); listing imports in
   [imports.md](features/imports.md#data); Pack check's setting, labels, and packages in
   [pack-check.md](features/pack-check.md#data); offers, their answers, and their reads in
-  [offers.md](features/offers.md#data). Billing
+  [offers.md](features/offers.md#data); thrift scan runs and scans in
+  [thrift-scan.md](features/thrift-scan.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -584,7 +588,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/sync.md](features/sync.md)                               | Sync now, the sync on opening the app, its indicator, and "Last synced"        |
 | [features/verified-features.md](features/verified-features.md)     | Sellers see only features that passed live: the list, its evidence, the gate   |
 | [features/test-mode.md](features/test-mode.md)                     | The owner's Test mode: live-testing hidden features, and the owner's log       |
-| [features/thrift-scan.md](features/thrift-scan.md)                 | The thrift scan's call, AI read, backtest; own sales on the price screen, kit  |
+| [features/thrift-scan.md](features/thrift-scan.md)                 | The thrift scan: Scan mode, its read and call, Keep, backtest, own sales, kit  |
 
 ### Former section numbers
 

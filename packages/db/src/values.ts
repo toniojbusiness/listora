@@ -429,3 +429,26 @@ export type OfferCheckOutcome = (typeof OFFER_CHECK_OUTCOMES)[number];
  */
 export const BACKGROUND_READS = ['sale_check', 'listing_import', 'offer_check'] as const;
 export type BackgroundRead = (typeof BACKGROUND_READS)[number];
+
+/** `item_scan.call` (docs/features/thrift-scan.md); `SCAN_CALLS` in @listora/sourcing. */
+export const ITEM_SCAN_CALLS = ['buy', 'your_call', 'skip'] as const;
+export type ItemScanCall = (typeof ITEM_SCAN_CALLS)[number];
+
+/** `item_scan.confidence`: how sure the call is. */
+export const ITEM_SCAN_CONFIDENCES = ['high', 'medium', 'low'] as const;
+export type ItemScanConfidence = (typeof ITEM_SCAN_CONFIDENCES)[number];
+
+/** `item_scan.basis`: where the range the call rests on came from. */
+export const ITEM_SCAN_BASES = ['own_history', 'web_info', 'ai_estimate', 'none'] as const;
+export type ItemScanBasis = (typeof ITEM_SCAN_BASES)[number];
+
+/**
+ * `item_scan.decision`: `undecided` until the seller keeps the scan, a later scan of the same
+ * item replaces it, or its run ends with it not kept (`skipped`).
+ */
+export const ITEM_SCAN_DECISIONS = ['undecided', 'kept', 'skipped', 'replaced'] as const;
+export type ItemScanDecision = (typeof ITEM_SCAN_DECISIONS)[number];
+
+/** `scan_research.kind`: an item's web facts, or a brand's (kept shorter). */
+export const SCAN_RESEARCH_KINDS = ['item', 'brand'] as const;
+export type ScanResearchKind = (typeof SCAN_RESEARCH_KINDS)[number];

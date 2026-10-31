@@ -91,6 +91,10 @@ tags:
     description: Each marketplace's features that passed a live end-to-end test, the only ones the app shows (docs/features/verified-features.md).
   - name: sourcing
     description: The household's own sales, grouped for sourcing at the store (docs/features/thrift-scan.md).
+  - name: sourcing-runs
+    description: Trips to a store scanning items to buy (docs/features/thrift-scan.md).
+  - name: scans
+    description: Items scanned at the store, with the AI's read and the Buy / Your call / Skip call (docs/features/thrift-scan.md).
 
 paths:
   /health/live:
@@ -325,6 +329,16 @@ paths:
     $ref: './paths/marketplace-features.yaml#/~1v1~1marketplace-features~1test-mode'
   /v1/sourcing/kit:
     $ref: './paths/sourcing.yaml#/~1v1~1sourcing~1kit'
+  /v1/sourcing-runs:
+    $ref: './paths/sourcing-runs.yaml#/~1v1~1sourcing-runs'
+  /v1/sourcing-runs/{runId}/end:
+    $ref: './paths/sourcing-runs.yaml#/~1v1~1sourcing-runs~1{runId}~1end'
+  /v1/scans:
+    $ref: './paths/scans.yaml#/~1v1~1scans'
+  /v1/scans/{scanId}/keep:
+    $ref: './paths/scans.yaml#/~1v1~1scans~1{scanId}~1keep'
+  /v1/scans/{scanId}/research:
+    $ref: './paths/scans.yaml#/~1v1~1scans~1{scanId}~1research'
 
 components:
   securitySchemes:
@@ -382,6 +396,8 @@ components:
       $ref: './components/parameters.yaml#/ImportId'
     QuestionId:
       $ref: './components/parameters.yaml#/QuestionId'
+    ScanId:
+      $ref: './components/parameters.yaml#/ScanId'
 
   responses:
     DefaultError:
@@ -1253,6 +1269,12 @@ components:
       $ref: './components/schemas/marketplace-features.yaml#/MarketplaceFeatures'
     MarketplaceFeatureList:
       $ref: './components/schemas/marketplace-features.yaml#/MarketplaceFeatureList'
+    AppFeatures:
+      $ref: './components/schemas/marketplace-features.yaml#/AppFeatures'
+    AppFeature:
+      $ref: './components/schemas/marketplace-features.yaml#/AppFeature'
+    KnownAppFeature:
+      $ref: './components/schemas/marketplace-features.yaml#/KnownAppFeature'
     TestMode:
       $ref: './components/schemas/marketplace-features.yaml#/TestMode'
     TestModeReplace:
@@ -1264,3 +1286,81 @@ components:
       $ref: './components/schemas/sourcing.yaml#/OwnSalesBucket'
     OwnSalesOnMarketplace:
       $ref: './components/schemas/sourcing.yaml#/OwnSalesOnMarketplace'
+    SourcingRunCreate:
+      $ref: './components/schemas/sourcing.yaml#/SourcingRunCreate'
+    SourcingRun:
+      $ref: './components/schemas/sourcing.yaml#/SourcingRun'
+    ScanCreate:
+      $ref: './components/schemas/sourcing.yaml#/ScanCreate'
+    ScanImage:
+      $ref: './components/schemas/sourcing.yaml#/ScanImage'
+    ScanImageRole:
+      $ref: './components/schemas/sourcing.yaml#/ScanImageRole'
+    KnownScanImageRole:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanImageRole'
+    ItemScan:
+      $ref: './components/schemas/sourcing.yaml#/ItemScan'
+    ScanIdentity:
+      $ref: './components/schemas/sourcing.yaml#/ScanIdentity'
+    ScanAiEstimate:
+      $ref: './components/schemas/sourcing.yaml#/ScanAiEstimate'
+    ScanFlags:
+      $ref: './components/schemas/sourcing.yaml#/ScanFlags'
+    ScanOwnSales:
+      $ref: './components/schemas/sourcing.yaml#/ScanOwnSales'
+    ScanCall:
+      $ref: './components/schemas/sourcing.yaml#/ScanCall'
+    ScanCallKind:
+      $ref: './components/schemas/sourcing.yaml#/ScanCallKind'
+    KnownScanCallKind:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanCallKind'
+    ScanConfidence:
+      $ref: './components/schemas/sourcing.yaml#/ScanConfidence'
+    KnownScanConfidence:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanConfidence'
+    ScanBasis:
+      $ref: './components/schemas/sourcing.yaml#/ScanBasis'
+    KnownScanBasis:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanBasis'
+    ScanDecision:
+      $ref: './components/schemas/sourcing.yaml#/ScanDecision'
+    KnownScanDecision:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanDecision'
+    ScanSignal:
+      $ref: './components/schemas/sourcing.yaml#/ScanSignal'
+    ScanSignalKind:
+      $ref: './components/schemas/sourcing.yaml#/ScanSignalKind'
+    KnownScanSignalKind:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanSignalKind'
+    ScanRetail:
+      $ref: './components/schemas/sourcing.yaml#/ScanRetail'
+    ScanRetailSource:
+      $ref: './components/schemas/sourcing.yaml#/ScanRetailSource'
+    KnownScanRetailSource:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanRetailSource'
+    ScanTrend:
+      $ref: './components/schemas/sourcing.yaml#/ScanTrend'
+    ScanTrendSource:
+      $ref: './components/schemas/sourcing.yaml#/ScanTrendSource'
+    KnownScanTrendSource:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanTrendSource'
+    ScanTrendDirection:
+      $ref: './components/schemas/sourcing.yaml#/ScanTrendDirection'
+    KnownScanTrendDirection:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanTrendDirection'
+    ScanResearch:
+      $ref: './components/schemas/sourcing.yaml#/ScanResearch'
+    ScanResearchStatus:
+      $ref: './components/schemas/sourcing.yaml#/ScanResearchStatus'
+    KnownScanResearchStatus:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanResearchStatus'
+    ScanResearchReputation:
+      $ref: './components/schemas/sourcing.yaml#/ScanResearchReputation'
+    KnownScanResearchReputation:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanResearchReputation'
+    ScanResearchRetail:
+      $ref: './components/schemas/sourcing.yaml#/ScanResearchRetail'
+    ScanResearchResale:
+      $ref: './components/schemas/sourcing.yaml#/ScanResearchResale'
+    ScanWebSource:
+      $ref: './components/schemas/sourcing.yaml#/ScanWebSource'

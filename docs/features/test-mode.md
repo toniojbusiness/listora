@@ -44,6 +44,10 @@ that account only:
 - **Offers and offer answers:** reading Poshmark's offers, and Accept, Decline, and Counter.
 - **Poshmark's sale checks and imports:** checks in Sync and on the cloud schedule, the overdue
   mark, and Import listings.
+- **The thrift scan:** Add Item's Scan mode and its API (`isAppFeatureOn('thrift_scan', gate)`,
+  [thrift-scan.md](thrift-scan.md)); the scan camera shows the owner its speed against the
+  plan's targets, tagged "Testing". A scan reads nothing from a marketplace, so it records no
+  run in the owner's log.
 
 The gate is the same one the API, the worker, the browser runner, and the phone's claim use, so
 each part runs the same features for the account. The cross-account schedulers (sale checks,

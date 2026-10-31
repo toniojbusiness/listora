@@ -4,12 +4,14 @@
  * the API returns passes `labelGuardViolations` first, and a violation fails the request
  * instead of showing a misleading label.
  */
-import type { PricingSuggestion } from '@listora/api-contract';
+import type { ItemScan, PricingSuggestion } from '@listora/api-contract';
 
 import { RESEARCH_LINK_LABELS } from './research-links.ts';
 import { isRealSoldDataSource, SOLD_DATA_LISTING_CONTEXT } from './sources.ts';
 
 export const AI_ESTIMATE_LABEL = 'AI estimate - not based on sold listings';
+/** Shown with whatever the thrift scan's web research found: web pages, never sales. */
+export const WEB_INFO_LABEL = 'Web info - not sold listings';
 export const NO_SOLD_DATA_MESSAGE = 'No sold data available for this item';
 
 /** Words that claim sold data, anywhere in a label. */
@@ -86,6 +88,51 @@ export function labelGuardViolations(suggestion: PricingSuggestion): string[] {
   ]);
   for (const { path, text } of strings(suggestion, '', exempt)) {
     if (path === 'noSoldDataMessage' && text === NO_SOLD_DATA_MESSAGE) continue;
+    if (claimsSoldData(text)) violations.push(`${path} mentions sold data: "${text}"`);
+  }
+  return violations;
+}
+
+/**
+ * Every way a thrift scan's answer breaks the label rules (docs/features/thrift-scan.md), like
+ * `labelGuardViolations`: the AI estimate is always labeled `AI_ESTIMATE_LABEL`, research
+ * links carry only the builder's labels, and nothing but the seller's own sales mentions sold
+ * data, the call's wording included. What the AI read the item as (its identity and search
+ * words) names the item, not a price source, so it is exempt.
+ */
+export function scanLabelViolations(scan: ItemScan): string[] {
+  const violations: string[] = [];
+  if (scan.aiEstimate && scan.aiEstimate.label !== AI_ESTIMATE_LABEL) {
+    violations.push(`aiEstimate.label is "${scan.aiEstimate.label}"`);
+  }
+  for (const [index, link] of scan.researchLinks.entries()) {
+    if (!RESEARCH_LINK_LABELS.has(link.label)) {
+      violations.push(`researchLinks[${String(index)}] is labeled "${link.label}"`);
+    }
+  }
+  if (scan.call.basis === 'ai_estimate' && scan.call.basedOn !== AI_ESTIMATE_LABEL) {
+    violations.push(`call.basedOn is "${scan.call.basedOn}" for an AI estimate`);
+  }
+  if (scan.call.basis === 'web_info' && !scan.call.basedOn.startsWith(WEB_INFO_LABEL)) {
+    violations.push(`call.basedOn is "${scan.call.basedOn}" for web info`);
+  }
+  if (scan.research && scan.research.label !== WEB_INFO_LABEL) {
+    violations.push(`research.label is "${scan.research.label}"`);
+  }
+  if (scan.research?.summary !== undefined && claimsSoldData(scan.research.summary)) {
+    violations.push(`research.summary mentions sold data: "${scan.research.summary}"`);
+  }
+  const exempt = new Set<unknown>([
+    scan.identity,
+    scan.aiEstimate,
+    scan.research,
+    ...scan.ownSales,
+    ...scan.researchLinks,
+  ]);
+  for (const { path, text } of strings(scan, '', exempt)) {
+    if (path === 'searchWords') continue;
+    // The honest labels themselves name sold listings to say they are not any.
+    if (text.startsWith(AI_ESTIMATE_LABEL) || text.startsWith(WEB_INFO_LABEL)) continue;
     if (claimsSoldData(text)) violations.push(`${path} mentions sold data: "${text}"`);
   }
   return violations;

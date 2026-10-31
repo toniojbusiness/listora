@@ -41,6 +41,30 @@ const scanAnswerSchema = z
       .min(1)
       .max(120)
       .describe('A short name of the item, for example "black high-rise straight jeans"'),
+    line: z
+      .string()
+      .trim()
+      .max(60)
+      .describe(
+        'The exact model or line, as printed or unmistakable ("501", "Align"); empty when unsure',
+      ),
+    styleNumber: z
+      .string()
+      .trim()
+      .max(40)
+      .describe('The style or model number printed on a tag or label; empty when none is readable'),
+    era: z
+      .string()
+      .trim()
+      .max(30)
+      .describe(
+        'When it was made, where that changes what it is: "current", "vintage 1990s"; empty when unsure',
+      ),
+    material: z
+      .string()
+      .trim()
+      .max(40)
+      .describe('The main material, as the tag or item shows it; empty when unsure'),
     category: z.enum([NOT_FOUND, ...CATEGORY_PATHS]),
     department: z.enum([NOT_FOUND, ...DEPARTMENTS]),
     sizeLabel: z.string().trim().max(32),
@@ -54,6 +78,16 @@ const scanAnswerSchema = z
       .object({ lowCents: cents, midCents: cents, highCents: cents })
       .strict()
       .describe('What a buyer would pay for it on Depop, in US cents; all zero when unsure'),
+    retailPriceCents: cents.describe(
+      'The original retail price printed on a price tag shown in an image, in US cents; 0 when none is shown',
+    ),
+    style: z
+      .string()
+      .trim()
+      .max(40)
+      .describe(
+        'A style or era buyers search by, such as "Y2K" or "gorpcore"; empty when none clearly applies',
+      ),
     searchWords: z
       .string()
       .trim()
@@ -99,9 +133,17 @@ Evidence
 Identity
 - brand: the maker as printed or as the item clearly shows it. item: a short name a buyer would
   recognize (color, style, item type).
+- line: the exact model or line ("501", "550", "Align", "Synchilla", "Air Force 1") only when
+  printed or unmistakable: one brand makes many models, so never guess one. styleNumber: a
+  style or model number printed on a tag or label. era: "current", or "vintage" with its decade,
+  when that changes what the item is. material: the main material ("wool", "cotton",
+  "leather"). "" for any of them when unsure.
 - category, as <category>/<subcategory>, from: ${CATEGORY_PATHS.join(', ')}.
 - department: ${DEPARTMENTS.join(', ')}. sizeLabel: the size as on the tag, short ("M", "28").
-- condition: ${CONDITIONS.join(', ')}; judge only what the images show.
+- condition: ${CONDITIONS.join(', ')}; judge only what the images show. new_with_tags only
+  when the store's or the maker's price tag is still attached.
+- style: a style or era buyers search by ("Y2K", "gorpcore", "90s vintage", "coquette") only
+  when the item clearly is one; otherwise "".
 - identityConfidence: how sure you are of the brand and item together, 0 to 1. Use less than 0.6
   when the brand is not readable or the item could be several things.
 
@@ -110,6 +152,9 @@ Price
   shipping), as low, mid, and high in US cents, from the brand, item, era, and condition. It
   is shown as "${AI_ESTIMATE_LABEL}", so never claim it rests on sales.
   Use all zeros when you cannot tell.
+- retailPriceCents: the original retail price printed on a price tag you can read in an image
+  (the maker's or a store's original tag, not a thrift store's own sticker), in US cents; 0 when
+  no such price is readable. Never guess it.
 - searchWords: brand and item type plus at most two words that narrow it (style, era, size).
 
 Flags
@@ -136,6 +181,11 @@ export interface ScanInput {
 export interface ThriftScan {
   readonly brand: string | null;
   readonly item: string;
+  /** The exact model or line ("501"), its printed style number, its era, and the main material; null when unsure. */
+  readonly line: string | null;
+  readonly styleNumber: string | null;
+  readonly era: string | null;
+  readonly material: string | null;
   readonly category: string | null;
   readonly department: (typeof DEPARTMENTS)[number] | null;
   readonly sizeLabel: string | null;
@@ -147,6 +197,10 @@ export interface ThriftScan {
     readonly midCents: number;
     readonly highCents: number;
   } | null;
+  /** The original retail price read off a price tag in the images; null when none was readable. */
+  readonly retailPriceCents: number | null;
+  /** A style or era buyers search by ("Y2K"), the AI's read; null when none clearly applies. */
+  readonly style: string | null;
   readonly searchWords: string;
   readonly flags: ScanAnswer['flags'];
 }
@@ -231,6 +285,10 @@ export function decodeScanAnswer(answer: ScanAnswer): ThriftScan {
   return {
     brand: orNull(answer.brand),
     item: answer.item,
+    line: answer.line === '' ? null : answer.line,
+    styleNumber: answer.styleNumber === '' ? null : answer.styleNumber,
+    era: answer.era === '' ? null : answer.era,
+    material: answer.material === '' ? null : answer.material,
     category: orNull(answer.category),
     department: orNull(answer.department),
     sizeLabel: orNull(answer.sizeLabel),
@@ -238,6 +296,8 @@ export function decodeScanAnswer(answer: ScanAnswer): ThriftScan {
     identityConfidence: answer.identityConfidence,
     aiEstimate:
       price.lowCents === 0 && price.midCents === 0 && price.highCents === 0 ? null : price,
+    retailPriceCents: answer.retailPriceCents === 0 ? null : answer.retailPriceCents,
+    style: answer.style === '' ? null : answer.style,
     searchWords: answer.searchWords,
     flags: answer.flags,
   };
