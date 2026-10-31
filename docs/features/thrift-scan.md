@@ -8,13 +8,14 @@ milestone M0); the seller's own sales as real sold data (`own_history`, M1) on t
 price screen and in the sourcing kit (`GET /v1/sourcing/kit`); and the scan itself online
 (M2): Add Item's Scan mode, `POST /v1/scans`, Keep into the run, and the run's tray; Depop's
 comparisons from its public search, read on the seller's iPhone logged out (M3, "Marketplace
-comparisons" below); and upgrading a run's kept drafts with real photos (M6): "Needs photos",
-Shoot this run, the full analysis with the scan's read as a hint, and the run's rapid review.
-Scan mode is hidden from sellers until it passes live (`thrift_scan`,
-[verified-features.md](verified-features.md)), and each marketplace's comparisons until they do
-(`market_comps`): only the owner's Test mode has them. The server never reads or writes a
-marketplace; nothing in the scan ever writes one, and the comparisons read only what any
-logged-out visitor's browser reads.
+comparisons" below); the run itself (M4): its place, the checkout at the register into a haul,
+and the run's summary with the haul's estimated resale and profit; and upgrading a run's kept
+drafts with real photos (M6): "Needs photos", Shoot this run, the full analysis with the scan's
+read as a hint, and the run's rapid review. Scan mode is hidden from sellers until it passes live
+(`thrift_scan`, [verified-features.md](verified-features.md)), and each marketplace's
+comparisons until they do (`market_comps`): only the owner's Test mode has them. The server
+never reads or writes a marketplace; nothing in the scan ever writes one, and the comparisons
+read only what any logged-out visitor's browser reads.
 
 Code:
 
@@ -30,11 +31,12 @@ Code:
   no item quota), with its own small output schema `thrift_scan` and a cached system prompt.
 - `packages/eval/src/scan/`: the backtest, `npm run eval -- scan`.
 - `apps/api/src/scans` and `apps/api/src/sourcing-runs`: the scan's read and Keep, and the run
-  (below); `scanOwnHistory` in `@listora/sourcing` and `scanResearchLinks` and
-  `scanLabelViolations` in `@listora/pricing`.
+  with its checkout and summary (below); `scanOwnHistory` and `runEstimate` in
+  `@listora/sourcing` and `scanResearchLinks` and `scanLabelViolations` in `@listora/pricing`.
 - iPhone: `AddItemFeature/Scan` (the camera, the card, the tray, the run, the note, the
-  measurements, and the kept run's section, guided shoot, and review); a kept scan is an
-  ordinary draft whose server item `keepScan` creates.
+  measurements, the start and checkout sheets, the run's summary, and the kept run's section,
+  guided shoot, and review); a kept scan is an ordinary draft whose server item `keepScan`
+  creates.
 - `packages/analysis/src/load-input.ts`: the full analysis of a kept item carries its scan's
   read as a hint (`scanRead`, `scanReadHint`).
 - Comparisons: `marketStats` and `marketDemand` in `@listora/sourcing` (`market.ts`, also the
@@ -194,8 +196,8 @@ What it set and found:
 ### On the iPhone
 
 Add Item has a third mode, **Scan**, next to One item and Batch, shown only where `thrift_scan`
-is on. **Start scanning** opens the scan camera and starts a run (the server's is made with the
-first scan).
+is on. **Start scanning** asks where the seller is (checkout below), then opens the scan camera
+and starts a run (the server's is made with the first scan).
 
 - **One shot** of the item in hand. The shutter is at the bottom center; the read starts at
   once and the camera is ready for the next item while it runs.
@@ -221,7 +223,8 @@ first scan).
   before a shot, it rides along with that shot's read; said after, the item is read again once
   with it (about $0.0004).
 - **Done** closes the camera and keeps the run going (Add Item shows "This run: 12 scanned, 3
-  kept" and **Keep scanning**); **End run** ends it: the items not kept are skipped.
+  kept" and **Keep scanning**). **Finish** offers **Check out** (below) or **End without checking
+  out**; either way the items not kept are skipped. Add Item's **End run** is the second.
 - **Failures**: a read that fails says why ("Couldn't read this one. Try again.", "Can't reach
   Listora. Check your connection.") with **Retry**; nothing is shown as read until it was.
 
@@ -252,6 +255,44 @@ the folder is emptied at launch. Reading with no signal is M5.
 - **Limits.** 300 scans an account a day (`MAX_SCANS_PER_DAY`, `429 rate_limited`) on top of the
   daily AI budget; a scan uses no plan item quota. All four routes answer `404` for an account
   the thrift scan is not on for.
+
+### Checkout (M4)
+
+A run is the haul-to-be: the seller pays once at the register, for everything they kept, and
+that is when the cost is known. The scan itself never shows a cost, margin, or profit.
+
+- **Starting a run** asks only where the seller is: the places they bought from lately (the cost
+  screen's, `RecentPurchaseSources`, shared on this iPhone) or a typed one, or nothing.
+  `createSourcingRun` takes it as the run's `place`.
+- **Checkout** (Finish > **Check out** on the camera, or **Check out** on Add Item): "Paid for the
+  haul" ($), "Items in the haul" (the kept items by default; more when some were bought without a
+  scan, never fewer), and "Miles driven (optional)" for the seller's mileage log (whole miles, up
+  to 2,000; only recorded, never priced). A Keep still being saved on the iPhone holds the button
+  until it is.
+- **`POST /v1/sourcing-runs/{runId}/checkout`** (`checkoutSourcingRun`) does it in one
+  transaction: the app sends the scans it kept (`keptScanIds`), and one whose item the upload
+  queue had not sent yet is kept there and then (`keepAsItem`, `keepScan`'s), so a slow upload
+  never leaves an item out; the queue's later `keepScan` answers that item (`200`). Every kept
+  item of the run joins one new haul (`createHaulWithItems`, [hauls.md](hauls.md)) of the total
+  and count, in the order kept, each costing its share, with the haul's date (the iPhone's day)
+  and place (the run's); the run ends (its open scans skipped) and records the haul, when, and
+  the miles. A run already checked out or ended is `409`; a listed scan of another run, replaced,
+  or skipped is a `422` field error naming it; nothing changes on either. The app keeps one
+  Idempotency-Key per run's checkout, so a retry after a lost answer replays the one that went
+  through instead of making a second haul. Nothing shows as checked out until Listora answered;
+  a failure says why ("Nothing was recorded; check out again to retry").
+- **The run's summary** (`getSourcingRunSummary`, and checkout's answer), on a tag stamped
+  "Checked out": what was scanned and kept, the miles, "Paid $47.20 for 23 items · $2.05 each",
+  the kept items' **estimated resale** and what it pays out after fees, and the **estimated
+  profit**: the payout less what the whole haul cost, so it exists only once the haul's total is
+  known, and it follows the haul when its total or count is fixed (`replaceHaul`). The sums are
+  the kept scans' calls as the card showed them (`runEstimate` in `@listora/sourcing`): their
+  ranges and payouts, each after its marketplace's fees; a kept item with nothing to go on is
+  left out, and the summary says how many of the kept items the estimate covers. It always
+  says what the ranges rest on ("1 from your own sales, 2 from the AI estimate") and is labeled
+  "Estimated", or "Estimated - includes the AI estimate, not based on sold listings" when any
+  range is the AI's. It stays on Add Item until the next run starts. Real profit comes in Sales,
+  Profit, and Reports as the items sell, from each item's share as its cost.
 
 ### Web info
 
@@ -345,8 +386,10 @@ no-thinking setting for this one call), then streaming the identity first.
 
 ### Data
 
-- `sourcing_run`: account, who started it, the place (none yet: M4 asks for it), started and
-  ended, and its scan and kept counts, which stay after skipped scans are deleted.
+- `sourcing_run`: account, who started it, the place, started and ended, its scan and kept
+  counts, which stay after skipped scans are deleted, and from checkout the haul it became
+  (`haul_id`, one run per haul), `checked_out_at`, and the miles (migration
+  `20261031113754_sourcing_run_checkout`).
 - `item_scan`: the run, the item shot's SHA-256 and the image count (never the images), the
   AI's read (`read`), the web research once asked for (`research`, `research_ms`), the call, its confidence and basis, the call as the app showed it with the
   own-sales lines (`call_detail`: counts and quartiles of the household's own sales only), the
@@ -375,6 +418,16 @@ no-thinking setting for this one call), then streaming the identity first.
 - `@listora/sourcing` (`scanOwnHistory`, the signals, `salesTrend`, the research keys),
   `@listora/pricing` (`scanResearchLinks`, `scanLabelViolations`), the retention rules, and the
   app feature gate.
+- Checkout: `sourcing-runs.int.test.ts` (the gate; the kept items into one haul with their
+  shares, the place, the date, and the miles, a Keep the app had not sent kept there and its later
+  `keepScan` answering it, the open scans skipped; the summary before and after, its sums and
+  labels, and the profit following a fixed haul; the count grown to the kept items; nothing kept
+  with a range; a replayed checkout and a second one, an ended run, another account's run, a scan
+  of another run or replaced, and a negative total, changing nothing); `run.test.ts` in
+  `@listora/sourcing` (the sums, the left-out scans, the wording); iPhone `ScanCheckoutTests.swift`
+  (the run's place, the checkout's kept scans, the iPhone's date, the miles, the run ended after,
+  a failure retried as the same checkout, the summary's words); `ThriftScanUITests` starts a run
+  at a place and checks it out on the local stack.
 - iPhone: `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
   run, the small JPEG with tag text, implicit skip and Keep from the tray, notes before and after
   a read, the tag close-up, Retry, End run; the upload queue's `keepScan`, a deleted draft's item
@@ -383,7 +436,8 @@ no-thinking setting for this one call), then streaming the identity first.
   to end on the local stack with the fake camera and the fake AI's scan and web research
   (`FakeAI/default.json`).
 
-**The phone needs a new app build** for Scan mode.
+**The phone needs a new app build** for Scan mode, and again for the run's place, checkout, and
+summary (M4).
 
 ## Marketplace comparisons (M3, Depop)
 
@@ -674,9 +728,13 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   row within 4 s of the shutter, the budgets and the pause tuned on evidence, then
   `market_comps` on Depop into `VERIFIED_FEATURES`. eBay sold, Poshmark, and Mercari readers
   follow, each its own PR and gate.
-- **Later milestones:** the run's place and checkout into a haul (M4), and scanning with no
-  signal and a run that survives a relaunch (M5). Upgrading a run's drafts (M6) is built; its
-  live test is the captain listing a run's draft on `tonioreign`.
+- **M4 live test** (the captain's own trip, Test mode): check a run out at the register and
+  compare the haul's shares and the summary with the receipt.
+- **Mileage** is only recorded on the run; turning it into a deductible expense belongs to the
+  plan's mileage and expenses item.
+- **Later milestones:** scanning with no signal and a run that survives a relaunch (M5).
+  Upgrading a run's drafts (M6) is built; its live test is the captain listing a run's draft on
+  `tonioreign`.
 
 ## Data
 

@@ -135,6 +135,131 @@ SourcingRun:
       format: int32
       minimum: 0
       description: Scanned items the seller kept.
+    checkedOutAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the seller checked the run out (`checkoutSourcingRun`); absent until then.
+    haulId:
+      $ref: './common.yaml#/Id'
+      description: The haul the run's kept items became at checkout (docs/features/hauls.md).
+    miles:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 2000
+      description: The miles driven for the trip, when the seller gave them at checkout.
+SourcingRunCheckout:
+  type: object
+  additionalProperties: false
+  description: |
+    What the seller paid at the register for the items they kept. The run's kept items become
+    one haul of `total` for `itemCount` items, each costing its share.
+  required: [total, itemCount, keptScanIds]
+  properties:
+    total:
+      $ref: './common.yaml#/Money'
+      description: What the whole haul cost.
+    itemCount:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 10000
+      description: |
+        How many items the haul had: the kept items by default, more when an item was bought
+        without a scan. Never fewer than the kept items, which the haul grows to.
+    keptScanIds:
+      type: array
+      description: |
+        The scans the seller kept on the phone, in the order kept. One whose item the app has
+        not sent yet (`keepScan`) is kept now, so a slow upload never leaves an item out of the
+        haul; the app's later `keepScan` answers that item. Scans the server already kept join
+        the haul too, whether listed or not.
+      maxItems: 300
+      uniqueItems: true
+      items:
+        $ref: './common.yaml#/Id'
+    place:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Where the haul was bought, when the run has no place yet or it changed.
+    purchaseDate:
+      type: string
+      format: date
+      description: The seller's date of the trip; the run's start date (UTC) when absent.
+    miles:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 2000
+      description: The miles driven for the trip, if the seller logs them.
+SourcingRunSummary:
+  type: object
+  description: |
+    The run at a glance: what was scanned and kept, what the kept items might resell for, and
+    once checked out, what the haul cost and the estimated profit. Every resale number is an
+    estimate from each kept scan's call (its range and its payout after fees), never a sale.
+  required: [run, keptItems]
+  properties:
+    run:
+      $ref: '#/SourcingRun'
+    keptItems:
+      type: integer
+      format: int32
+      minimum: 0
+      description: The run's kept items that are still in Listora.
+    estimate:
+      $ref: '#/SourcingRunEstimate'
+    haul:
+      $ref: './hauls.yaml#/Haul'
+      description: The haul the run became; absent until checkout.
+    profitEstimate:
+      $ref: '#/SourcingRunProfit'
+SourcingRunEstimate:
+  type: object
+  description: |
+    The kept items' estimated resale: the sums of their scans' price ranges and of what those
+    pay out after the marketplace's fees. Absent when no kept item had a range.
+  required: [itemCount, resaleLow, resaleHigh, payoutLow, payoutHigh, basedOn, label]
+  properties:
+    itemCount:
+      type: integer
+      format: int32
+      minimum: 1
+      description: The kept items with a range, which the sums cover.
+    resaleLow:
+      $ref: './common.yaml#/Money'
+    resaleHigh:
+      $ref: './common.yaml#/Money'
+    payoutLow:
+      $ref: './common.yaml#/Money'
+      description: What `resaleLow` pays out after each item's marketplace fees, an estimate.
+    payoutHigh:
+      $ref: './common.yaml#/Money'
+    basedOn:
+      type: string
+      maxLength: 200
+      description: What the ranges rest on ("2 from your own sales, 5 from the AI estimate").
+    label:
+      type: string
+      maxLength: 120
+      description: |
+        Shown with the numbers, always: "Estimated", and when any range is the AI's, "Estimated
+        - includes the AI estimate, not based on sold listings".
+SourcingRunProfit:
+  type: object
+  description: |
+    The haul's estimated profit: the kept items' estimated payout less what the whole haul
+    cost. Only once the haul's total is known (checkout); an estimate, never a sale.
+  required: [low, high, label]
+  properties:
+    low:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+    label:
+      type: string
+      maxLength: 120
+      description: Shown with it ("Estimated, after fees").
 ScanCreate:
   type: object
   additionalProperties: false

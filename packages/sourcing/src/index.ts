@@ -57,6 +57,14 @@ export {
 } from './trend.ts';
 export type { SalesTrend, TrendDirection, TrendSource } from './trend.ts';
 export {
+  RUN_ESTIMATE_AI_LABEL,
+  RUN_ESTIMATE_LABEL,
+  RUN_PROFIT_LABEL,
+  runEstimate,
+  runProfit,
+} from './run.ts';
+export type { KeptScanCall, RunEstimate } from './run.ts';
+export {
   DEMAND_CROWDED_SUPPLY,
   DEMAND_LOW_SUPPLY,
   DEMAND_STRONG_OWN_SALES,

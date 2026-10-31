@@ -3,14 +3,18 @@ import Foundation
 import ListoraAPI
 
 typealias ItemScan = Components.Schemas.ItemScan
+typealias SourcingRunSummary = Components.Schemas.SourcingRunSummary
 
 /// The thrift scan's calls (docs/features/thrift-scan.md): a run, each scan's read, and keeping
 /// one, which the upload queue sends like an item's create.
 extension UploadAPI {
-    /// Starts a sourcing run; returns its id.
-    func createSourcingRun(idempotencyKey: String) async throws(APIFailure) -> String {
+    /// Starts a sourcing run at the place the seller named, if any; returns its id.
+    func createSourcingRun(place: String?, idempotencyKey: String) async throws(APIFailure) -> String {
         let output = try await call {
-            try await client.createSourcingRun(headers: .init(idempotencyKey: idempotencyKey), body: .json(.init()))
+            try await client.createSourcingRun(
+                headers: .init(idempotencyKey: idempotencyKey),
+                body: .json(.init(place: place)),
+            )
         }
         switch output {
         case let .created(created):
@@ -33,6 +37,42 @@ extension UploadAPI {
             return
         case let .notFound(response):
             throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response):
+            throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    /// Checks the run out at the register: its kept items become one haul of what the seller
+    /// paid, and the answer is the run's summary with the estimated profit.
+    func checkoutSourcingRun(
+        runID: String,
+        _ checkout: RunCheckout,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> SourcingRunSummary {
+        let payload = Components.Schemas.SourcingRunCheckout(
+            total: .init(amountCents: checkout.totalCents, currency: .usd),
+            itemCount: Int32(clamping: checkout.itemCount),
+            keptScanIds: checkout.keptScanIDs,
+            place: checkout.place,
+            purchaseDate: checkout.purchaseDate,
+            miles: checkout.miles.map { Int32(clamping: $0) },
+        )
+        let output = try await call {
+            try await client.checkoutSourcingRun(
+                path: .init(runId: runID),
+                headers: .init(idempotencyKey: idempotencyKey),
+                body: .json(payload),
+            )
+        }
+        switch output {
+        case let .created(created):
+            return try body { try created.body.json }
+        case let .notFound(response):
+            throw APIFailure(statusCode: 404, response: response)
+        case let .conflict(response):
+            throw APIFailure(statusCode: 409, response: response)
+        case let .unprocessableContent(response):
+            throw APIFailure(statusCode: 422, response: response)
         case let .default(statusCode, response):
             throw APIFailure(statusCode: statusCode, response: response)
         }
@@ -147,6 +187,19 @@ extension UploadAPI {
         }
         return (item.id, item.sku)
     }
+}
+
+/// What the seller paid at the register for the run's kept items.
+struct RunCheckout: Equatable, Sendable {
+    var totalCents: Int64
+    /// How many items the haul had: the kept items unless the seller changed it.
+    var itemCount: Int
+    /// The scans kept on this iPhone, in the order kept.
+    var keptScanIDs: [String]
+    var place: String?
+    /// The trip's date on this iPhone ("2026-10-31").
+    var purchaseDate: String
+    var miles: Int?
 }
 
 /// One scan as the app sends it: the item shot (and a tag close-up) as small JPEGs, what the

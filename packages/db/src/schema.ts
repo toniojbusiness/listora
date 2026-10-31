@@ -1259,6 +1259,11 @@ export interface SourcingRunTable {
   /** Every scan of the run and those kept; kept after skipped scans are deleted. */
   scan_count: Generated<number>;
   kept_count: Generated<number>;
+  /** The haul the run's kept items became at checkout (docs/features/hauls.md). */
+  haul_id: Nullable<string>;
+  checked_out_at: NullableTimestamp;
+  /** The miles driven for the trip, when the seller gave them at checkout. */
+  miles: Nullable<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
