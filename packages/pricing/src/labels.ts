@@ -12,6 +12,11 @@ import { isRealSoldDataSource, SOLD_DATA_LISTING_CONTEXT } from './sources.ts';
 export const AI_ESTIMATE_LABEL = 'AI estimate - not based on sold listings';
 /** Shown with whatever the thrift scan's web research found: web pages, never sales. */
 export const WEB_INFO_LABEL = 'Web info - not sold listings';
+/**
+ * Shown with what similar listings for sale ask on a marketplace (the thrift scan's
+ * comparisons): asking prices, never what anything sold for.
+ */
+export const ASKING_PRICES_LABEL = 'Asking prices - not sold listings';
 export const NO_SOLD_DATA_MESSAGE = 'No sold data available for this item';
 
 /** Words that claim sold data, anywhere in a label. */
@@ -119,6 +124,11 @@ export function scanLabelViolations(scan: ItemScan): string[] {
   if (scan.research && scan.research.label !== WEB_INFO_LABEL) {
     violations.push(`research.label is "${scan.research.label}"`);
   }
+  for (const [index, comparison] of (scan.comparisons ?? []).entries()) {
+    if (comparison.asking && comparison.asking.label !== ASKING_PRICES_LABEL) {
+      violations.push(`comparisons[${String(index)}].asking.label is "${comparison.asking.label}"`);
+    }
+  }
   if (scan.research?.summary !== undefined && claimsSoldData(scan.research.summary)) {
     violations.push(`research.summary mentions sold data: "${scan.research.summary}"`);
   }
@@ -132,7 +142,13 @@ export function scanLabelViolations(scan: ItemScan): string[] {
   for (const { path, text } of strings(scan, '', exempt)) {
     if (path === 'searchWords') continue;
     // The honest labels themselves name sold listings to say they are not any.
-    if (text.startsWith(AI_ESTIMATE_LABEL) || text.startsWith(WEB_INFO_LABEL)) continue;
+    if (
+      text.startsWith(AI_ESTIMATE_LABEL) ||
+      text.startsWith(WEB_INFO_LABEL) ||
+      text.startsWith(ASKING_PRICES_LABEL)
+    ) {
+      continue;
+    }
     if (claimsSoldData(text)) violations.push(`${path} mentions sold data: "${text}"`);
   }
   return violations;

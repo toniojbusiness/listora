@@ -36,10 +36,20 @@ describe('recording plans', () => {
       const plan = recordingPlan(marketplace);
       const names = plan.entries.map((entry) => entry.name);
       expect(new Set(names).size).toBe(names.length);
-      // Offers are recorded where a session has read them (docs/features/offers.md).
+      // Offers are recorded where a session has read them (docs/features/offers.md), and the
+      // public search where a comparison reader reads it (comps/).
       const pages = new Set(plan.entries.map((entry) => entry.page));
       pages.delete('offers');
+      pages.delete('search');
       expect(pages).toEqual(new Set(['hub', 'shop', 'listing', 'edit', 'sell-form', 'sold']));
     },
   );
+
+  it('records the public search logged out only, never in the seller session', () => {
+    for (const marketplace of RECORDED_MARKETPLACES) {
+      for (const entry of recordingPlan(marketplace).entries) {
+        expect(entry.page === 'search').toBe(entry.session === 'logged_out');
+      }
+    }
+  });
 });

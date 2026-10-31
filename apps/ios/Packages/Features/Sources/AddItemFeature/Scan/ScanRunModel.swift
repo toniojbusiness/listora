@@ -25,12 +25,12 @@ final class ScanRunModel {
     /// Where the seller is, as they named it when the run started; nil when they named none.
     let place: String?
 
-    private let service: any ScanService
+    let service: any ScanService
     private let tagReader: any TagReader
     private let saveDraft: ScanDraftSaver
     private let directory: URL
     private let now: () -> Date
-    private let log = Logger(subsystem: "com.listora.app", category: "scan")
+    let log = Logger(subsystem: "com.listora.app", category: "scan")
     private var serverRun: Task<String, any Error>?
     private let createRunKey = UUID().uuidString.lowercased()
     /// Each entry's upload-sized photo (and tag photo) as it is prepared.
@@ -38,6 +38,10 @@ final class ScanRunModel {
     private var tagPhotos: [String: Task<StoredScanPhoto, any Error>] = [:]
     /// A note said while the entry's first read was still running: read again once it lands.
     private var notesAfterRead: [String: String] = [:]
+    /// The marketplace comparison lane, where `market_comps` is on (docs/features/thrift-scan.md).
+    let comparisons: (any MarketComparisons)?
+    /// The comparison reads this run started, by id: each is read once.
+    var startedReads: Set<String> = []
 
     /// The longest the tag text reading may hold up a read; past it the read goes without.
     static let tagReadDeadline: Duration = .milliseconds(400)
@@ -49,6 +53,8 @@ final class ScanRunModel {
         directory: URL,
         place: String? = nil,
         saveDraft: @escaping ScanDraftSaver,
+        comparisons: (any MarketComparisons)? = nil,
+        comparing marketplaces: [String] = [],
         now: @escaping () -> Date = Date.init,
     ) {
         let id = UUID().uuidString.lowercased()
@@ -56,6 +62,9 @@ final class ScanRunModel {
         let place = place?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.place = place?.isEmpty == false ? place : nil
         self.service = service
+        self.comparisons = marketplaces.isEmpty ? nil : comparisons
+        // The comparison pages load while the seller walks to the bins.
+        self.comparisons?.warmUp(marketplaces)
         self.tagReader = tagReader
         self.directory = directory.appending(path: id, directoryHint: .isDirectory)
         self.saveDraft = saveDraft
@@ -188,6 +197,7 @@ final class ScanRunModel {
                 Haptics.play(haptic)
             }
             startResearch(entryID, scanID: scan.id)
+            startComparisons(entryID, scan)
             if first, let cardAfter = entries.first(where: { $0.id == entryID })?.cardAfter {
                 log.info("scan card after \(Int(cardAfter * 1000), privacy: .public) ms")
             }
@@ -203,43 +213,6 @@ final class ScanRunModel {
         {
             update(entryID) { $0.note = note }
             await self.read(entryID, replacing: read.scanID)
-        }
-    }
-
-    /// Looks the read item up on the web in the background: the card shows the read at once and
-    /// takes in the research, and the call made again with it, when it comes.
-    private func startResearch(_ entryID: String, scanID: String) {
-        guard let entry = entries.first(where: { $0.id == entryID }), entry.card?.hasBrand == true else { return }
-        update(entryID) { $0.research = .checking }
-        let service = service
-        Task { [weak self] in
-            let result: Result<ItemScan, APIFailure>
-            do {
-                result = try await .success(service.researchScan(
-                    scanID: scanID,
-                    idempotencyKey: UUID().uuidString.lowercased(),
-                ))
-            } catch let failure as APIFailure {
-                result = .failure(failure)
-            } catch {
-                result = .failure(.networkUnavailable)
-            }
-            self?.finishResearch(entryID, scanID: scanID, result)
-        }
-    }
-
-    private func finishResearch(_ entryID: String, scanID: String, _ result: Result<ItemScan, APIFailure>) {
-        // A later read of the item (a note, the tag) replaced this scan: its research is stale.
-        guard entries.first(where: { $0.id == entryID })?.scanID == scanID else { return }
-        switch result {
-        case let .success(scan):
-            update(entryID) { entry in
-                entry.state = .read(ScanCard(scan))
-                entry.research = .done
-            }
-        case let .failure(failure):
-            log.error("Scan research failed: \(failure.message, privacy: .public)")
-            update(entryID) { $0.research = .failed }
         }
     }
 
@@ -288,7 +261,7 @@ final class ScanRunModel {
         }
     }
 
-    private func update(_ entryID: String, _ change: (inout ScanEntry) -> Void) {
+    func update(_ entryID: String, _ change: (inout ScanEntry) -> Void) {
         guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         change(&entries[index])
     }
@@ -325,6 +298,7 @@ extension ScanRunModel {
             }
         }
         try? FileManager.default.removeItem(at: directory)
+        comparisons?.coolDown()
     }
 
     /// The run takes no more shots, and its photos still being prepared are dropped.
@@ -348,6 +322,7 @@ extension ScanRunModel {
     func close() {
         finish()
         try? FileManager.default.removeItem(at: directory)
+        comparisons?.coolDown()
     }
 }
 

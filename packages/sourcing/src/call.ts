@@ -1,4 +1,6 @@
-import { AI_ESTIMATE_LABEL, WEB_INFO_LABEL } from '@listora/pricing';
+import { AI_ESTIMATE_LABEL, ASKING_PRICES_LABEL, WEB_INFO_LABEL } from '@listora/pricing';
+
+import type { MarketDemand } from './market.ts';
 
 import type { OwnHistoryComparisons } from './own-history.ts';
 import type { SalesTrend } from './trend.ts';
@@ -33,6 +35,8 @@ export interface ScanCallSettings {
    * as a share (0.15 is 15%). A starting estimate: the backtest's sales had no tag reads.
    */
   readonly newWithTagsBump: number;
+  /** Close matches for sale a marketplace's asking prices need before they hold a range. */
+  readonly minAskingMatches: number;
 }
 
 /**
@@ -50,6 +54,7 @@ export const DEFAULT_SCAN_CALL_SETTINGS: ScanCallSettings = {
   minIdentityConfidence: 0.6,
   highIdentityConfidence: 0.8,
   newWithTagsBump: 0.15,
+  minAskingMatches: 5,
 };
 
 /** What else the call weighed, each said with what it rests on. */
@@ -59,6 +64,8 @@ export const SCAN_SIGNAL_KINDS = [
   'web_resale',
   'trend',
   'style',
+  'asking',
+  'demand',
 ] as const;
 export type ScanSignalKind = (typeof SCAN_SIGNAL_KINDS)[number];
 
@@ -114,6 +121,28 @@ export interface ScanCallInput {
   readonly trend?: SalesTrend | undefined;
   /** A style or era buyers search by, the AI's read. */
   readonly style?: string | undefined;
+  /**
+   * A marketplace's comparisons (the public search, read logged out): what close matches for
+   * sale ask, and the demand (the household's recent sales against the marketplace's supply).
+   * The demand is a signal only: supply alone says little about how fast an item sells, so it
+   * moves no call until a marketplace's own sold pace comes with its comparisons.
+   */
+  readonly market?:
+    | {
+        /** As the seller reads it: "Depop". */
+        readonly marketplace: string;
+        readonly asking?: {
+          readonly count: number;
+          readonly lowCents: number;
+          readonly highCents: number;
+        };
+        readonly demand?: {
+          readonly demand: MarketDemand;
+          readonly label?: string | undefined;
+          readonly basedOn: string;
+        };
+      }
+    | undefined;
 }
 
 export interface ScanCall {
@@ -216,6 +245,32 @@ export function scanCall(
           : `${source}; the range is ${percentOf(range.lowCents, retail.highCents)}-${percentOf(range.highCents, retail.highCents)} of ${dollars(retail.highCents)}`,
     });
   }
+  const market = input.market;
+  const asking =
+    market?.asking !== undefined && market.asking.count >= settings.minAskingMatches
+      ? market.asking
+      : undefined;
+  if (market !== undefined && asking !== undefined) {
+    // Sellers ask more than buyers pay, so a guess above what close matches ask is not taken.
+    const held =
+      (basis === 'ai_estimate' || basis === 'web_info') &&
+      range !== undefined &&
+      range.highCents > asking.highCents;
+    if (held && range) {
+      range = { lowCents: Math.min(range.lowCents, asking.highCents), highCents: asking.highCents };
+    }
+    signals.push({
+      kind: 'asking',
+      label: `Asking ${dollars(asking.lowCents)}-${dollars(asking.highCents)} on ${market.marketplace}`,
+      basedOn: `${ASKING_PRICES_LABEL}: ${String(asking.count)} like it for sale on ${market.marketplace}${
+        held ? '; the range is held to them' : ''
+      }`,
+    });
+  }
+  const demand = market?.demand;
+  if (demand?.label !== undefined) {
+    signals.push({ kind: 'demand', label: demand.label, basedOn: demand.basedOn });
+  }
   if (web !== undefined && web.reputation !== 'unknown' && web.reputation !== 'average') {
     signals.push({
       kind: 'web_resale',
@@ -251,6 +306,7 @@ export function scanCall(
         : 'low';
   // Slowing sales of the seller's own never back a high-confidence call; a rise never raises one.
   if (trend?.direction === 'down' && confidence === 'high') confidence = 'medium';
+
   const conservativePayoutCents = payout(range.lowCents, input.fees);
   const optimisticPayoutCents = payout(range.highCents, input.fees);
   const flagged =

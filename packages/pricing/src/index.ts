@@ -12,6 +12,7 @@ export {
 export type { FeeCalibration, Floor, FloorInput, ObservedFee, ObservedSale } from './floor.ts';
 export {
   AI_ESTIMATE_LABEL,
+  ASKING_PRICES_LABEL,
   claimsSoldData,
   labelGuardViolations,
   NO_SOLD_DATA_MESSAGE,

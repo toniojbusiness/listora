@@ -4370,6 +4370,44 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/scans/{scanId}/comparisons/{comparisonId}:
+    parameters:
+      - $ref: '#/components/parameters/ScanId'
+      - $ref: '#/components/parameters/ComparisonId'
+    put:
+      tags:
+        - scans
+      operationId: saveScanComparison
+      summary: Answer a marketplace comparison read
+      description: |
+        The phone's answer to a scan's comparison it was asked to read (a `checking` entry of
+        `comparisons`, docs/features/thrift-scan.md, "Marketplace comparisons"): the counts and
+        quartiles of the listings like the item in the marketplace's public search, read logged
+        out, or why there are none. Answers the scan with the comparison in it and the call made
+        again. A check (`check`) pauses the marketplace's comparisons for the account for 24 hours,
+        and a request to slow down (`rate_limited`) for an hour; Listora never passes a check. An
+        answer to a comparison already answered changes nothing and answers the scan as it is.
+        `404` where the thrift scan or the marketplace's comparisons are not on for the account,
+        or for another account's scan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanComparisonAnswer'
+      responses:
+        '200':
+          description: The scan with the comparison.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemScan'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
 components:
   securitySchemes:
     bearerAuth:
@@ -4533,6 +4571,12 @@ components:
         $ref: '#/components/schemas/Id'
     ScanId:
       name: scanId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ComparisonId:
+      name: comparisonId
       in: path
       required: true
       schema:
@@ -11651,7 +11695,8 @@ components:
         buyers' offers read into Tasks. `offer_answers`: accepting, declining, or countering an
         offer from Listora. `listing_import`: importing the seller's existing listings.
         `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
-        listing's details from Listora (`reviseListing`).
+        listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
+        comparisons from the marketplace's public search, read on the iPhone logged out.
       enum:
         - sales_history
         - sale_checks
@@ -11660,6 +11705,7 @@ components:
         - listing_import
         - listing_refresh
         - revise
+        - market_comps
     MarketplaceFeatures:
       type: object
       required:
@@ -12154,6 +12200,15 @@ components:
           type: string
           maxLength: 100
           description: The words a buyer would search to find items like it.
+        comparisons:
+          type: array
+          description: |
+            Each marketplace's comparisons, in `KnownMarketplace` order, where they are on for the
+            account (`market_comps`): listings like the item in the marketplace's public search,
+            read on the seller's iPhone logged out. Absent where none are on.
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/ScanComparison'
         researchLinks:
           type: array
           description: |
@@ -12211,6 +12266,245 @@ components:
         confidence:
           $ref: '#/components/schemas/Confidence'
           description: How sure the AI is of the brand and item together.
+    ScanComparison:
+      type: object
+      description: |
+        One marketplace's comparisons for the scanned item (docs/features/thrift-scan.md,
+        "Marketplace comparisons"): listings of the same brand and item type (and the model and size
+        where the scan read them) in the marketplace's public search, read on the seller's iPhone in
+        a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
+        asking prices (`asking`), always labeled so; the household's own sales (`ownSales`) are the
+        sold side. While `status` is `checking`, the phone reads `read` and answers it with
+        `saveScanComparison`.
+      required:
+        - marketplace
+        - status
+        - label
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        status:
+          $ref: '#/components/schemas/ScanComparisonStatus'
+        label:
+          type: string
+          maxLength: 120
+          description: |
+            The row in words: "Depop: asking $25-$40, 12 like it for sale", "Checking Depop...",
+            "Not enough similar listings on Depop", "Depop prices paused today", "Not checked: Depop
+            limit for this hour", "Couldn't check Depop".
+        read:
+          $ref: '#/components/schemas/ScanComparisonRead'
+        asking:
+          $ref: '#/components/schemas/ScanAskingPrices'
+        supply:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Listings for sale in the marketplace's search for the item, by its own count.
+        demand:
+          $ref: '#/components/schemas/ScanDemand'
+        cached:
+          type: boolean
+          description: The numbers are a read of the same search from the last 24 hours.
+    ScanComparisonStatus:
+      description: A `KnownScanComparisonStatus`, or one added after this client was built (shown by `label`).
+      anyOf:
+        - $ref: '#/components/schemas/KnownScanComparisonStatus'
+        - type: string
+          maxLength: 64
+    KnownScanComparisonStatus:
+      type: string
+      description: |
+        `checking`: the phone reads it now (`read`). `read`: the numbers came in. `not_enough`: too
+        few similar listings to show, or nothing to search for (no brand or item type). `paused`:
+        the marketplace showed a check or asked to slow down, so its comparisons wait (for the day,
+        or an hour). `limit`: this hour's or day's reads are used up. `failed`: the read did not go
+        through.
+      enum:
+        - checking
+        - read
+        - not_enough
+        - paused
+        - limit
+        - failed
+    ScanComparisonRead:
+      type: object
+      description: What the phone reads, passed to the phone runtime's comparison reader as it is.
+      required:
+        - id
+        - input
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        input:
+          type: object
+          additionalProperties: true
+    ScanAskingPrices:
+      type: object
+      description: What similar listings for sale ask; never what anything sold for.
+      required:
+        - count
+        - low
+        - median
+        - high
+        - label
+      properties:
+        count:
+          type: integer
+          format: int32
+          minimum: 1
+        low:
+          $ref: '#/components/schemas/Money'
+          description: The low quartile of the asking prices.
+        median:
+          $ref: '#/components/schemas/Money'
+        high:
+          $ref: '#/components/schemas/Money'
+        label:
+          type: string
+          maxLength: 80
+          description: Shown with them, always ("Asking prices - not sold listings").
+    ScanDemand:
+      type: object
+      description: |
+        How the item sells against the competition: the household's own recent sales like it
+        against what the marketplace has for sale now. `label` only when the numbers say so.
+      required:
+        - demand
+        - basedOn
+      properties:
+        demand:
+          $ref: '#/components/schemas/ScanDemandKind'
+        label:
+          type: string
+          maxLength: 60
+        basedOn:
+          type: string
+          maxLength: 200
+    ScanDemandKind:
+      description: A `KnownScanDemandKind`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownScanDemandKind'
+        - type: string
+          maxLength: 64
+    KnownScanDemandKind:
+      type: string
+      enum:
+        - strong
+        - steady
+        - crowded
+        - unknown
+    ScanComparisonAnswer:
+      type: object
+      additionalProperties: false
+      description: |
+        The phone's comparison read: numbers only, never a listing, a seller, or a photo.
+        `check`: the marketplace showed a bot check or CAPTCHA (never passed); `rate_limited`: it
+        asked to slow down; `failed`: the read did not go through.
+      required:
+        - outcome
+        - ms
+      properties:
+        outcome:
+          $ref: '#/components/schemas/ScanComparisonOutcome'
+        stats:
+          $ref: '#/components/schemas/ScanComparisonStats'
+        forSaleTotal:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Listings for sale in the whole search, as the marketplace counts them.
+        ms:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 600000
+        message:
+          type: string
+          maxLength: 200
+          description: Why a read did not go through, for the server's log; never page text.
+    ScanComparisonOutcome:
+      description: A `KnownScanComparisonOutcome`; requests hold to the known values.
+      anyOf:
+        - $ref: '#/components/schemas/KnownScanComparisonOutcome'
+        - type: string
+          maxLength: 64
+    KnownScanComparisonOutcome:
+      type: string
+      enum:
+        - read
+        - check
+        - rate_limited
+        - failed
+    ScanComparisonStats:
+      type: object
+      additionalProperties: false
+      required:
+        - read
+      properties:
+        level:
+          type: string
+          enum:
+            - model_and_size
+            - model
+            - type_and_size
+            - type
+          description: How closely the counted listings match; absent when none matched.
+        forSale:
+          $ref: '#/components/schemas/ScanPriceQuartiles'
+        sold:
+          $ref: '#/components/schemas/ScanPriceQuartiles'
+        read:
+          type: object
+          additionalProperties: false
+          required:
+            - sold
+            - forSale
+          properties:
+            sold:
+              type: integer
+              format: int32
+              minimum: 0
+              maximum: 1000
+            forSale:
+              type: integer
+              format: int32
+              minimum: 0
+              maximum: 1000
+    ScanPriceQuartiles:
+      type: object
+      additionalProperties: false
+      required:
+        - count
+        - lowCents
+        - medianCents
+        - highCents
+      properties:
+        count:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000
+        lowCents:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000000
+        medianCents:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000000
+        highCents:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000000
+        windowDays:
+          type: integer
+          format: int32
+          minimum: 0
+          description: How many days back the oldest sold one sold, where the marketplace dates them.
     ScanAiEstimate:
       type: object
       description: The AI's guess of what a buyer would pay on Depop; never sold data.
@@ -12420,12 +12714,16 @@ components:
         `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
         are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
         own sales of items like it coming faster or slower. `style`: the AI's read of the style.
+        `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
+        household's recent sales against the marketplace's supply.
       enum:
         - retail
         - new_with_tags
         - web_resale
         - trend
         - style
+        - asking
+        - demand
     ScanRetail:
       type: object
       description: |

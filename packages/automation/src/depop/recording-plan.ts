@@ -21,7 +21,10 @@ import { openEditor } from './pages/edit-page.ts';
 import { expectSubmit, fillListing, openSellForm } from './pages/listing-form.ts';
 import { buildDepopAutomationPayload } from './payload.ts';
 import { createDepopScripts } from './scripts.ts';
-import { DEPOP_SITE_URL, DEPOP_SLUG, depopSite } from './site.ts';
+import { DEPOP_PACING, DEPOP_SITE_URL, DEPOP_SLUG, depopSite } from './site.ts';
+import { depopComparisonScript } from '../comps/depop.ts';
+import { comparisonProfile } from '../comps/run.ts';
+import type { ComparisonQuery } from '../comps/types.ts';
 
 const site = depopSite(DEPOP_SITE_URL);
 /** No entry posts, so none gets a photo. */
@@ -67,6 +70,18 @@ function shape(
   };
 }
 
+/** The search entry's item: a pair of Levi's 501 jeans, size 28, as a scan would name it. */
+const SEARCH_QUERY: ComparisonQuery = {
+  words: 'levis 501 jeans',
+  brand: "Levi's",
+  model: '501',
+  sizeLabel: '28',
+  productTypes: ['jeans'],
+  typeWords: ['jeans', 'denim'],
+};
+/** Depop dates nothing a visitor sees, so the search's result does not depend on the time. */
+const SEARCH_NOW = new Date('2026-10-31T00:00:00Z');
+
 const sized = (sizeLabel: string, sizeSystem: ListingContent['item']['sizeSystem'] = 'letter') => ({
   sizeLabel,
   sizeSystem,
@@ -80,6 +95,16 @@ export const depopRecordingPlan: RecordingPlan = {
   sessionGapMs: 10 * 60_000,
   entries: [
     { name: 'hub', page: 'hub', mode: 'read', script: () => (step) => scripts.health(step) },
+    {
+      // The public search a comparison read makes (comps/), as a logged-out visitor: a fresh
+      // browser context with no cookies, never the seller's session.
+      name: 'search',
+      page: 'search',
+      mode: 'read',
+      session: 'logged_out',
+      profile: comparisonProfile('depop', { pacing: DEPOP_PACING }),
+      script: () => depopComparisonScript(DEPOP_SITE_URL, SEARCH_QUERY, SEARCH_NOW),
+    },
     {
       name: 'listings',
       page: 'shop',
@@ -161,13 +186,17 @@ export const depopRecordingPlan: RecordingPlan = {
   identity: depopIdentity,
 };
 
-/** The seller's username, which starts each of their product slugs (`<username>-<words>`). */
+/**
+ * The seller's username, which starts each of their product slugs (`<username>-<words>`); and
+ * in a public search, every seller's (their slugs) and the towns their listings ship from.
+ */
 function depopIdentity(recordings: readonly ExpandedRecording[]): string[] {
   const usernames = new Set<string>();
   const visit = (value: unknown, key: string | null): void => {
     if (typeof value === 'string') {
-      const slug = key === 'externalListingId' || key === 'externalOrderId';
+      const slug = key === 'externalListingId' || key === 'externalOrderId' || key === 'slug';
       if (slug && DEPOP_SLUG.test(value)) usernames.add(value.slice(0, value.indexOf('-')));
+      if (key === 'location' && value !== '') usernames.add(value);
       return;
     }
     if (Array.isArray(value)) {
@@ -178,6 +207,9 @@ function depopIdentity(recordings: readonly ExpandedRecording[]): string[] {
   };
   for (const recording of recordings) {
     if (recording.name === 'listings' || recording.name === 'sold') visit(recording.result, null);
+    if (recording.page === 'search') {
+      for (const answer of recording.api) visit(answer.json, null);
+    }
   }
   return [...usernames];
 }

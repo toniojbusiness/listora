@@ -145,6 +145,8 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       OPERATION_RETRY_DELAY_SCALE: '0.1',
       // Every feature built, on the fakes, verified live or not (verified-features.md).
       MARKETPLACE_FEATURES: 'all',
+      // The simulator's app never reads a real marketplace's public search.
+      MARKET_COMPARISONS: 'off',
       TOKEN_ENCRYPTION_KEY: tokenKey.toString('base64'),
       ...(fakes === undefined ? {} : { ...fakes.env, ...ebayNotificationEnv(apiUrl) }),
     };

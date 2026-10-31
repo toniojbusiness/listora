@@ -127,6 +127,7 @@ const app = buildApp({
   },
   itemChanges: itemChanges.signals,
   saleEmails: { ingest: config.emailIngest },
+  marketComparisons: config.marketComparisons,
   pingDatabase: () => pingDatabase(pool),
 });
 

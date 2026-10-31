@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import Foundation
 import ListoraAPI
 import Synchronization
@@ -51,6 +52,39 @@ func itemScanJSON(
     ]
 }
 
+/// The scan's answer with a Depop comparison: one for the phone to read (`checking`), or read.
+func comparedScanJSON(id: String, status: String, readID: String = "read-1") -> [String: Any] {
+    var scan = itemScanJSON(id: id)
+    var row: [String: Any] = ["marketplace": "depop", "status": status]
+    switch status {
+    case "checking":
+        row["label"] = "Checking Depop..."
+        let input: [String: Any] = ["version": 1, "marketplace": "depop", "query": ["words": "levis 501 jeans"]]
+        row["read"] = ["id": readID, "input": input]
+    case "read":
+        row["label"] = "Depop: asking $15-$25, 6 like it for sale"
+        row["asking"] = [
+            "count": 6, "low": usd(1500), "median": usd(2000), "high": usd(2500),
+            "label": "Asking prices - not sold listings",
+        ]
+        row["supply"] = 40
+        row["demand"] = [
+            "demand": "strong", "label": "Sells for you, little competition",
+            "basedOn": "Your 4 sales like it in the last 90 days; 40 for sale on Depop now",
+        ]
+        var call = scan["call"] as? [String: Any] ?? [:]
+        call["signals"] = [[
+            "kind": "asking", "label": "Asking $15-$25 on Depop",
+            "basedOn": "Asking prices - not sold listings: 6 like it for sale on Depop",
+        ]]
+        scan["call"] = call
+    default:
+        row["label"] = "Depop prices paused today"
+    }
+    scan["comparisons"] = [row]
+    return scan
+}
+
 /// The scan's answer once the web research came in.
 func researchedScanJSON(id: String) -> [String: Any] {
     var scan = itemScanJSON(id: id, call: "buy", basis: "web_info")
@@ -81,66 +115,6 @@ func researchedScanJSON(id: String) -> [String: Any] {
 
 private func usd(_ cents: Int) -> [String: Any] {
     ["amountCents": cents, "currency": "USD"]
-}
-
-/// A run's summary as the server would send it: checked out by default, with the estimated
-/// profit; `checkedOut: false` is the run before checkout.
-func runSummaryJSON(
-    checkedOut: Bool = true,
-    place: String? = "Goodwill Outlet",
-    miles: Int? = 8,
-    keptItems: Int = 3,
-    estimatedItems: Int? = 3,
-    profit: (low: Int, high: Int) = (4210, 7110),
-) -> [String: Any] {
-    var run: [String: Any] = [
-        "id": "0193a000-0000-7000-8000-000000000002",
-        "startedAt": "2026-10-31T00:00:00Z",
-        "scanCount": 12,
-        "keptCount": keptItems,
-    ]
-    run["place"] = place
-    var summary: [String: Any] = ["run": run, "keptItems": keptItems]
-    if let estimatedItems {
-        summary["estimate"] = [
-            "itemCount": estimatedItems,
-            "resaleLow": usd(7500), "resaleHigh": usd(11200),
-            "payoutLow": usd(6210), "payoutHigh": usd(9110),
-            "basedOn": "1 from your own sales, 2 from the AI estimate",
-            "label": "Estimated - includes the AI estimate, not based on sold listings",
-        ]
-    }
-    if checkedOut {
-        run["endedAt"] = "2026-10-31T01:00:00Z"
-        run["checkedOutAt"] = "2026-10-31T01:00:00Z"
-        run["haulId"] = "0193a000-0000-7000-8000-000000000009"
-        run["miles"] = miles
-        summary["run"] = run
-        var haul: [String: Any] = [
-            "id": "0193a000-0000-7000-8000-000000000009",
-            "total": usd(2000), "itemCount": 4, "itemsAdded": keptItems, "eachCost": usd(500),
-            "purchaseDate": "2026-10-31",
-            "createdAt": "2026-10-31T01:00:00Z", "updatedAt": "2026-10-31T01:00:00Z",
-        ]
-        haul["purchaseSource"] = place
-        summary["haul"] = haul
-        if estimatedItems != nil {
-            summary["profitEstimate"] = [
-                "low": usd(profit.low), "high": usd(profit.high), "label": "Estimated, after fees",
-            ]
-        }
-    }
-    return summary
-}
-
-func decodeRunSummary(_ object: [String: Any]) throws -> SourcingRunSummary {
-    try decodeRunSummary(JSONSerialization.data(withJSONObject: object))
-}
-
-func decodeRunSummary(_ data: Data) throws -> SourcingRunSummary {
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    return try decoder.decode(SourcingRunSummary.self, from: data)
 }
 
 func decodeScan(_ object: [String: Any]) throws -> ItemScan {
@@ -279,6 +253,80 @@ final class FakeScanService: ScanService {
 
     func endSourcingRun(runID: String, idempotencyKey _: String) async throws(APIFailure) {
         state.withLock { $0.calls.ended.append(runID) }
+    }
+
+    /// One comparison answer the phone sent.
+    struct SentComparison {
+        let scanID: String
+        let readID: String
+        let data: Data
+
+        var answer: [String: Any] {
+            (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        }
+    }
+
+    /// The comparison answers the phone sent, and the scripted replies.
+    private let compared = Mutex<(sent: [SentComparison], replies: [Result<Data, APIFailure>])>(([], []))
+
+    var comparisonsSent: [SentComparison] {
+        compared.withLock(\.sent)
+    }
+
+    func answerComparison(_ object: [String: Any]) {
+        let data = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
+        compared.withLock { $0.replies.append(.success(data)) }
+    }
+
+    func answerComparison(failure: APIFailure) {
+        compared.withLock { $0.replies.append(.failure(failure)) }
+    }
+
+    func saveScanComparison(scanID: String, comparisonID: String, answer: Data) async throws(APIFailure) -> ItemScan {
+        let next = compared.withLock { state -> Result<Data, APIFailure>? in
+            state.sent.append(SentComparison(scanID: scanID, readID: comparisonID, data: answer))
+            return state.replies.isEmpty ? nil : state.replies.removeFirst()
+        }
+        switch next ?? .failure(.networkUnavailable) {
+        case let .success(data):
+            do {
+                return try decodeScan(data)
+            } catch {
+                throw APIFailure(error)
+            }
+        case let .failure(failure):
+            throw failure
+        }
+    }
+}
+
+/// The comparison lane, scripted: what each read answers, and what was asked of it.
+@MainActor
+final class FakeComparisons: MarketComparisons {
+    var warmed: [[String]] = []
+    var cooled = 0
+    var reads: [(input: [String: Any], marketplace: String)] = []
+    /// The runtime's answer to every read; nil as an app that can't read.
+    var answer: [String: Any]? = [
+        "outcome": "read", "ms": 900, "forSaleTotal": 40,
+        "stats": [
+            "level": "model",
+            "forSale": ["count": 6, "lowCents": 1500, "medianCents": 2000, "highCents": 2500],
+            "read": ["sold": 0, "forSale": 24],
+        ],
+    ]
+
+    func warmUp(_ marketplaces: [String]) {
+        warmed.append(marketplaces)
+    }
+
+    func compare(_ input: Data, marketplace: String) async -> Data? {
+        reads.append(((try? JSONSerialization.jsonObject(with: input)) as? [String: Any] ?? [:], marketplace))
+        return answer.flatMap { try? JSONSerialization.data(withJSONObject: $0) }
+    }
+
+    func coolDown() {
+        cooled += 1
     }
 }
 

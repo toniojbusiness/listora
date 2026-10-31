@@ -788,6 +788,21 @@ const COLUMNS = {
     'updated_at',
   ],
   scan_research: ['account_id', 'kind', 'key', 'research', 'model', 'cost_micros', 'created_at'],
+  market_comparison: [
+    'id',
+    'account_id',
+    'scan_id',
+    'marketplace',
+    'query_key',
+    'query',
+    'status',
+    'stats',
+    'for_sale_total',
+    'read_ms',
+    'answered_at',
+    'created_at',
+    'updated_at',
+  ],
   item_batch: [
     'id',
     'account_id',
@@ -1035,6 +1050,8 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['item_scan', 'basis', values.ITEM_SCAN_BASES],
   ['item_scan', 'decision', values.ITEM_SCAN_DECISIONS],
   ['scan_research', 'kind', values.SCAN_RESEARCH_KINDS],
+  ['market_comparison', 'marketplace', values.MARKETPLACES],
+  ['market_comparison', 'status', values.MARKET_COMPARISON_STATUSES],
 ];
 
 /** Parses the literals out of a normalized `CHECK ((col = ANY (ARRAY['a'::text, ...])))`. */

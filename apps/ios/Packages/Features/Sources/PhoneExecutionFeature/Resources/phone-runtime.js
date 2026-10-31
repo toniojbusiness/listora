@@ -157,13 +157,384 @@
 		return seen !== null && seen !== call.expectedSeller;
 	}
 
-// ../marketplaces/src/adapter.ts
-/** The listing states every adapter maps its marketplace's own statuses onto. */
-	const REMOTE_LISTING_STATUSES = [
-		"active",
-		"ended",
-		"sold"
+// src/depop/site.ts
+/** Depop. Products are `/products/<slug>/`; the seller's own pages are under `/sellinghub/`. */
+	const DEPOP_SITE_URL = "https://www.depop.com";
+	/**
+	* Depop's web API, which its own pages read their data from (with the session's token, the
+	* `access_token` cookie): the reads Listora makes there are the ones the pages make
+	* (`PageDriver.apiGet`, pages/api.ts). Every change still goes through the pages.
+	*/
+	const DEPOP_API_URL = "https://webapi.depop.com";
+	/**
+	* Depop's pacing: 0.3 seconds before each action, the floor (`PACING_FLOOR`; the captain's
+	* call, 2026-10-28), still a person's pace.
+	*/
+	const DEPOP_PACING = {
+		actionDelayMs: [300, 300],
+		keystrokeDelayMs: [40, 120],
+		sessionGapMs: [5e3, 2e4]
+	};
+	/**
+	* A read-only Depop connection's pace (a production shop Listora only reads): 0.3 to 0.8 seconds
+	* before each action, as Depop's reads were paced before 2026-10-28.
+	*/
+	const DEPOP_READ_ONLY_PACING = {
+		...DEPOP_PACING,
+		actionDelayMs: [300, 800]
+	};
+	/**
+	* The site a script set drives: Depop and its web API, or a stand-in in development and tests,
+	* which serves the API's reads itself.
+	*/
+	function depopSite(siteUrl) {
+		const origin = new URL(siteUrl).origin;
+		return {
+			origin,
+			api: origin === "https://www.depop.com" ? DEPOP_API_URL : origin
+		};
+	}
+	/**
+	* A Depop product slug: the seller's username and words of the listing, lowercase and joined by
+	* hyphens (`jdoe-levis-trucker-jacket`); a username may have underscores and periods
+	* (`365_nails-black-and-white-nail-set`). The Selling API addresses the same products by it
+	* (`/api/v1/products/by-slug/{slug}/`), so a listing automated today is still found once the
+	* seller connects the API. At least one hyphen, so `/products/create/` is never a product.
+	*/
+	const DEPOP_SLUG = /^[a-z0-9][a-z0-9._]*(?:-[a-z0-9_]+)+$/;
+	/** Paths on Depop's site, relative to its origin. */
+	const DEPOP_PATHS = {
+		/** The selling hub's home, which only a logged-in seller sees. */
+		hub: "/sellinghub/",
+		sell: "/products/create/",
+		product: (slug) => `/products/${encodeURIComponent(slug)}/`,
+		edit: (slug) => `/products/edit/${encodeURIComponent(slug)}/`,
+		/** The seller's sold items, newest first. */
+		sold: (page) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ""}`,
+		/** The selling hub's offers ("Review offers"). */
+		offers: "/sellinghub/offers/",
+		/** One offer, where the seller answers it. */
+		offer: (id) => `/sellinghub/offers/${encodeURIComponent(id)}/`
+	};
+	/**
+	* The slug in a path that opens a product (`/products/jdoe-levis-jacket/`, or its seller's own
+	* view, `/products/jdoe-levis-jacket/manage/`, where Depop sends them), else `null`.
+	*/
+	function slugFromPath(path) {
+		const slug = /^\/products\/([^/]+)\/(?:manage\/?)?$/.exec(path)?.[1];
+		if (slug === void 0) return null;
+		const decoded = decodeURIComponent(slug);
+		return DEPOP_SLUG.test(decoded) ? decoded : null;
+	}
+	/**
+	* Depop's own signs of a page automation must stop at, on top of the generic ones
+	* (safety/challenges.ts, which already know the frames of DataDome's and the other CAPTCHA
+	* services, bot-check titles and wording, a 403, and the wording of verification-code steps).
+	*/
+	const DEPOP_CHALLENGE_SIGNS = {
+		loginPaths: [/^\/(login|log-in|signin|sign-in|signup|sign-up|register)(\/|$)/i],
+		verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge|mfa)(\/|$)/i, /^\/login\/(verify|verification|code|magic-link|mfa|otp|challenge)(\/|$)/i],
+		botCheckPaths: [],
+		challengeSelectors: []
+	};
+	/**
+	* Parts of Depop's pages a failure screenshot blacks out besides every form field: buyers'
+	* names and addresses on sold items, messages, and the seller's own name.
+	*/
+	const DEPOP_PRIVATE_SELECTORS = [
+		"[data-testid=\"buyerName\"]",
+		"[data-testid=\"shippingAddress\"]",
+		"[data-testid=\"messages\"]",
+		"[data-testid=\"sellerUsername\"]"
 	];
+
+// src/ebay/site.ts
+/**
+	* An eBay item number (`ItemID`): digits, 12 of them today. The Trading API addresses the same
+	* listings by it, so a listing automated today is the same listing record once the seller
+	* connects the API.
+	*/
+	const EBAY_ITEM_ID = /^\d{9,19}$/;
+	/** Paths on eBay's site, relative to its origin. */
+	const EBAY_PATHS = {
+		/** Seller Hub's overview, which only a logged-in seller sees. */
+		overview: "/sh/ovw",
+		/**
+		* The listing form: a new listing in a category, or an existing listing to revise or relist
+		* (its category changed to `categoryId` when one is given).
+		*/
+		form: (mode, options) => {
+			const query = new URLSearchParams({ mode });
+			if (options.itemId !== void 0) query.set("itemId", options.itemId);
+			if (options.categoryId !== void 0 && options.categoryId !== null) query.set("categoryId", options.categoryId);
+			return `/lstng?${query.toString()}`;
+		},
+		/** A listing's page. */
+		item: (itemId) => `/itm/${encodeURIComponent(itemId)}`,
+		/** Ending one listing early. */
+		end: (itemId) => `/sh/lst/end?${new URLSearchParams({ itemId }).toString()}`,
+		/** Seller Hub's active listings, newest first, from the `offset`th. */
+		active: (offset) => `/sh/lst/active${offset > 0 ? `?offset=${String(offset)}` : ""}`,
+		/** Seller Hub's sold listings, newest first, from the `offset`th. */
+		sold: (offset) => `/sh/lst/sold${offset > 0 ? `?offset=${String(offset)}` : ""}`
+	};
+	/** The item number in a path that opens a listing (`/itm/1234567890`), else `null`. */
+	function itemIdFromPath$1(path) {
+		const id = /^\/itm\/(?:[^/]+\/)?(\d+)\/?$/.exec(path)?.[1];
+		return id !== void 0 && EBAY_ITEM_ID.test(id) ? id : null;
+	}
+	/**
+	* eBay's own signs of a page automation must stop at, on top of the generic ones
+	* (safety/challenges.ts, which already know hCaptcha's and reCAPTCHA's frames and widgets,
+	* "Pardon Our Interruption" and the other bot-check titles, a 403, and the wording of
+	* verification-code steps).
+	*/
+	const EBAY_CHALLENGE_SIGNS = {
+		loginPaths: [/^\/(signin|sign-in|login|register)(\/|$)/i],
+		verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge|mfa)(\/|$)/i, /^\/signin\/.*\b(mfa|otp|verify|verification|challenge|2fa|passkey)\b/i],
+		botCheckPaths: [/^\/splashui\/(challenge|captcha)(\/|$)/i],
+		challengeSelectors: []
+	};
+	/**
+	* Parts of eBay's pages a failure screenshot blacks out besides every form field: buyers' user
+	* ids and addresses on sold listings, messages, and the seller's own user id.
+	*/
+	const EBAY_PRIVATE_SELECTORS = [
+		"[data-testid=\"buyer\"]",
+		"[data-testid=\"shipping-address\"]",
+		"[data-testid=\"messages\"]",
+		"[data-testid=\"seller-user-id\"]"
+	];
+
+// src/mercari/site.ts
+/** Mercari item ids: `m` and digits, for example `m12345678901`. */
+	const MERCARI_ITEM_ID = /^m\d{6,20}$/;
+	/** Paths on Mercari's site, relative to its origin. */
+	const MERCARI_PATHS = {
+		account: "/mypage/",
+		sell: "/sell/",
+		item: (id) => `/us/item/${encodeURIComponent(id)}/`,
+		edit: (id) => `/sell/edit/${encodeURIComponent(id)}/`,
+		listings: (tab, page) => `/mypage/listings/${tab}/${page > 1 ? `?page=${String(page)}` : ""}`
+	};
+	/** The item id in a path that opens a listing (`/us/item/m123.../`), else `null`. */
+	function itemIdFromPath(path) {
+		const id = /^\/us\/item\/([^/]+)\/?$/.exec(path)?.[1];
+		if (id === void 0) return null;
+		const decoded = decodeURIComponent(id);
+		return MERCARI_ITEM_ID.test(decoded) ? decoded : null;
+	}
+	/**
+	* Mercari's own signs of a page automation must stop at, on top of the generic ones
+	* (safety/challenges.ts, which already know Cloudflare's "Just a moment..." interstitial, its
+	* Turnstile widget and challenge frames, a 403, and the wording of verification-code steps).
+	*/
+	const MERCARI_CHALLENGE_SIGNS = {
+		loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in|signup|sign-up|register)(\/|$)/i],
+		verificationPaths: [
+			/^\/(verify|verification|two-factor|2fa|otp|challenge|mfa)(\/|$)/i,
+			/^\/(login|signin)\/(verify|verification|code|mfa|otp|challenge)(\/|$)/i,
+			/^\/(identity|id-verification|identity-verification)(\/|$)/i
+		],
+		botCheckPaths: [],
+		challengeSelectors: ["#turnstile-wrapper"]
+	};
+	/**
+	* Parts of Mercari's pages a failure screenshot blacks out besides every form field: buyers'
+	* names and addresses on sold items, and messages.
+	*/
+	const MERCARI_PRIVATE_SELECTORS = [
+		"[data-testid=\"BuyerName\"]",
+		"[data-testid=\"ShippingAddress\"]",
+		"[data-testid=\"Messages\"]",
+		"[data-testid=\"UserName\"]"
+	];
+
+// src/profiles.ts
+/**
+	* The pace of a practiced seller: 0.3 s before each action (the floor, `PACING_FLOOR`; the
+	* captain's call, 2026-10-28, on the efficiency audit: at 0.45 to 1.1 s pacing was about half
+	* of a listing), a quick typist's keystrokes, and a few seconds between sessions
+	* (docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
+	*/
+	const DEFAULT_PACING = {
+		actionDelayMs: [300, 300],
+		keystrokeDelayMs: [45, 130],
+		sessionGapMs: [2e3, 4e3]
+	};
+	/** The default pace before 2026-10-28, which read-only connections keep (`readOnlyPacing`). */
+	const READ_ONLY_PACING = {
+		...DEFAULT_PACING,
+		actionDelayMs: [450, 1100]
+	};
+	/** Well inside what one busy seller does by hand. */
+	const DEFAULT_LIMITS = {
+		runsPerHour: 30,
+		runsPerDay: 200
+	};
+	const PROFILES = {
+		poshmark: {
+			marketplace: "poshmark",
+			origins: ["https://poshmark.com", "https://www.poshmark.com"],
+			cookieDomains: ["poshmark.com"],
+			apiOrigins: [],
+			loginUrl: "https://poshmark.com/login",
+			emailsSignInLinks: false,
+			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
+			limits: DEFAULT_LIMITS,
+			challenges: {
+				loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in)(\/|$)/i],
+				verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i],
+				botCheckPaths: [],
+				challengeSelectors: []
+			},
+			privateSelectors: [],
+			runsOn: "phone",
+			cloudAllowed: false
+		},
+		mercari: {
+			marketplace: "mercari",
+			origins: ["https://www.mercari.com", "https://mercari.com"],
+			cookieDomains: ["mercari.com"],
+			apiOrigins: [],
+			loginUrl: "https://www.mercari.com/login/",
+			emailsSignInLinks: false,
+			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
+			limits: DEFAULT_LIMITS,
+			challenges: MERCARI_CHALLENGE_SIGNS,
+			privateSelectors: MERCARI_PRIVATE_SELECTORS,
+			runsOn: "phone",
+			cloudAllowed: false
+		},
+		depop: {
+			marketplace: "depop",
+			origins: ["https://www.depop.com", "https://depop.com"],
+			cookieDomains: ["depop.com"],
+			apiOrigins: [DEPOP_API_URL],
+			loginUrl: "https://www.depop.com/login/",
+			emailsSignInLinks: true,
+			pacing: DEPOP_PACING,
+			readOnlyPacing: DEPOP_READ_ONLY_PACING,
+			limits: DEFAULT_LIMITS,
+			challenges: DEPOP_CHALLENGE_SIGNS,
+			privateSelectors: DEPOP_PRIVATE_SELECTORS,
+			runsOn: "phone",
+			cloudAllowed: false
+		},
+		ebay: {
+			marketplace: "ebay",
+			origins: [
+				"https://www.ebay.com",
+				"https://ebay.com",
+				"https://signin.ebay.com"
+			],
+			cookieDomains: ["ebay.com"],
+			apiOrigins: [],
+			loginUrl: "https://signin.ebay.com/signin/",
+			emailsSignInLinks: false,
+			pacing: DEFAULT_PACING,
+			readOnlyPacing: READ_ONLY_PACING,
+			limits: DEFAULT_LIMITS,
+			challenges: EBAY_CHALLENGE_SIGNS,
+			privateSelectors: EBAY_PRIVATE_SELECTORS,
+			runsOn: "cloud",
+			cloudAllowed: true
+		}
+	};
+	/** The built-in profile of a marketplace; settings.ts applies the configured pacing and limits. */
+	function automationProfile(marketplace) {
+		return PROFILES[marketplace];
+	}
+
+// src/safety/challenges.ts
+/** Frames of the CAPTCHA and bot-check services marketplaces use. */
+	const CHALLENGE_FRAME_PATTERN = /(google\.com|recaptcha\.net)\/recaptcha\/.*\/(bframe|fallback)|(google\.com|recaptcha\.net)\/recaptcha\/.*anchor(?!.*size=invisible)|hcaptcha\.com|challenges\.cloudflare\.com|arkoselabs\.com|funcaptcha\.com|captcha-delivery\.com|perimeterx\.net|px-cdn\.net|px-captcha|hsprotect\.net|geetest\.com/i;
+	/** Elements of CAPTCHA widgets, on any marketplace; each counts only while visible. */
+	const CHALLENGE_SELECTORS = [
+		".g-recaptcha",
+		".h-captcha",
+		".cf-turnstile",
+		"#px-captcha",
+		"#captcha",
+		"[data-sitekey]",
+		"iframe[title*=\"captcha\" i]",
+		"iframe[title*=\"challenge\" i]"
+	];
+	/** Titles of bot-check interstitials (Cloudflare, Akamai, Imperva, PerimeterX, DataDome). */
+	const BOT_CHECK_TITLES = /just a moment|attention required|access denied|are you a (human|robot)|verify(ing)? (that )?you are (a )?human|pardon our interruption|robot or human|security check|checking your browser|please wait while we verify/i;
+	const BOT_CHECK_TEXT = /(verify|confirm|prove) (that )?you('| a)re (a )?human|unusual (traffic|activity)|automated (access|requests|queries)|are you a robot|press (and|&) hold|enable javascript and cookies to continue/;
+	const VERIFICATION_TEXT = /enter the (\d-digit |verification |security |one-time )?code|we (just )?sent (you )?a (verification |security )?code|one-time (code|passcode|password)|two-factor|2-step verification/;
+	/**
+	* The first problem the page shows, or `null` when the run may go on. Checks come in order of
+	* how much they put at stake: a CAPTCHA, a bot check, a page outside the marketplace, a
+	* verification step, a login page, then rate limits and errors.
+	*/
+	function inspectPage(signals, profile) {
+		const [frame] = signals.challengeFrames;
+		if (frame !== void 0) return {
+			type: "challenge",
+			kind: "captcha",
+			sign: `frame ${frame}`
+		};
+		const [selector] = signals.matchedSelectors;
+		if (selector !== void 0) return {
+			type: "challenge",
+			kind: "captcha",
+			sign: `element ${selector}`
+		};
+		if (BOT_CHECK_TITLES.test(signals.title)) return {
+			type: "challenge",
+			kind: "bot_check",
+			sign: "page title"
+		};
+		if (BOT_CHECK_TEXT.test(signals.text)) return {
+			type: "challenge",
+			kind: "bot_check",
+			sign: "page text"
+		};
+		if (signals.status === 403) return {
+			type: "challenge",
+			kind: "bot_check",
+			sign: "status 403"
+		};
+		const url = URL.canParse(signals.url) ? new URL(signals.url) : null;
+		if (url === null || url.protocol !== "about:" && !profile.origins.includes(url.origin)) return {
+			type: "challenge",
+			kind: "unexpected_page",
+			sign: "origin"
+		};
+		const path = url.pathname;
+		if (profile.challenges.botCheckPaths.some((pattern) => pattern.test(path))) return {
+			type: "challenge",
+			kind: "bot_check",
+			sign: "bot-check page"
+		};
+		if (profile.challenges.verificationPaths.some((pattern) => pattern.test(path)) || VERIFICATION_TEXT.test(signals.text)) return {
+			type: "challenge",
+			kind: "login_challenge",
+			sign: "verification step"
+		};
+		if (signals.hasPasswordField || profile.challenges.loginPaths.some((pattern) => pattern.test(path))) return {
+			type: "challenge",
+			kind: "session_rejected",
+			sign: "login page"
+		};
+		if (signals.status === 429) return {
+			type: "rate_limited",
+			retryAfterMs: signals.retryAfterSeconds === null ? null : signals.retryAfterSeconds * 1e3
+		};
+		if (signals.status !== null && signals.status >= 500) return {
+			type: "server_error",
+			status: signals.status
+		};
+		return null;
+	}
+	/** The selectors the page driver tests for this profile. */
+	function challengeSelectors(profile) {
+		return [...CHALLENGE_SELECTORS, ...profile.challenges.challengeSelectors];
+	}
 
 // ../../node_modules/zod/v4/core/util.js
 	function getEnumValues(entries) {
@@ -5811,6 +6182,2018 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return _isoDateTime(ZodISODateTime, params);
 	}
 
+// src/safety/evidence.ts
+/**
+	* What a run that stopped at a page Listora no longer understands (`element_missing`) logs about
+	* that page: its structure, never its content (docs/features/automation.md, "When a page
+	* changes"). The page modules are Listora's model of each marketplace's pages, and a logged-in
+	* page can only be seen in a seller's own session, so this is how the one module that names the
+	* missing part gets fixed against the real page.
+	*
+	* Everything is reduced before it leaves the page's host (the phone, or the browser runner):
+	*
+	* - paths keep only structural words (`/closet/<x>`), never a username or an id;
+	* - titles and labels keep only common interface words (`Sell on Poshmark`, `<x>'s closet`);
+	* - the page's own data (`window.__INITIAL_STATE__`, `__NEXT_DATA__`) is a skeleton of key
+	*   paths and value types, with true or false spelled out, never a string or a number;
+	* - test ids lose their digits, and nothing the run typed survives anywhere.
+	*/
+	/** The page globals marketplaces keep their data in. */
+	const DATA_GLOBALS = [
+		"__INITIAL_STATE__",
+		"__NEXT_DATA__",
+		"__NUXT__",
+		"__APOLLO_STATE__",
+		"__PRELOADED_STATE__"
+	];
+	/** The first path segment of a link to the seller's own pages. */
+	const ACCOUNT_LINK = /^(closet|mypage|my-page|my|account|accounts|settings|profile|user|users|u|me|seller|member|members|people|logout|log-out|signout|sign-out|login|log-in|signin|sign-in)$/i;
+	/**
+	* What the page reads of itself: one evaluation in its isolated script world, bounded. It is
+	* source text, so each host evaluates the same script.
+	*/
+	const EVIDENCE_SCRIPT = `(() => {
+  const accountLink = new RegExp(${JSON.stringify(ACCOUNT_LINK.source)}, 'i');
+  const testIds = [...new Set([...document.querySelectorAll('[data-testid]')].map((element) => element.getAttribute('data-testid')))].slice(0, 120);
+  const links = [];
+  for (const anchor of document.querySelectorAll('a[href]')) {
+    let url;
+    try { url = new URL(anchor.getAttribute('href'), location.href); } catch { continue; }
+    if (url.origin !== location.origin || !accountLink.test(url.pathname.split('/')[1] || '')) continue;
+    const holder = anchor.closest('[data-testid]');
+    links.push({
+      path: url.pathname,
+      et: anchor.getAttribute('data-et-name'),
+      testId: holder ? holder.getAttribute('data-testid') : null,
+      label: anchor.getAttribute('aria-label'),
+    });
+    if (links.length >= 40) break;
+  }
+  const requests = [...new Set(performance.getEntriesByType('resource')
+    .filter((entry) => entry.initiatorType === 'fetch' || entry.initiatorType === 'xmlhttprequest')
+    .map((entry) => entry.name))].slice(0, 120);
+  const scripts = [...document.querySelectorAll('script[id], script[type]:not([src])')]
+    .map((script) => ({ id: script.id || null, type: script.type || null }))
+    .slice(0, 40);
+  const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
+  const controls = [...document.querySelectorAll('input, textarea, select, button, summary, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"], [data-et-name]:not(a), [data-test]:not(a)')]
+    .slice(0, 120)
+    .map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      type: element.getAttribute('type'),
+      names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text: element.tagName === 'BUTTON' || element.tagName === 'SUMMARY' || element.getAttribute('role') === 'button' || (element.hasAttribute('data-et-name') && !/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
+    }));
+  const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
+    .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
+    .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
+  const describe = (element) => {
+    const role = element.getAttribute('role');
+    const text = (element.children.length === 0 || role === 'option' || role === 'group' || role === 'presentation' || element.tagName === 'LI') ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : '';
+    return {
+      tag: element.tagName.toLowerCase(),
+      names: ['role', 'id', 'aria-label', 'aria-labelledby', 'aria-selected', 'data-testid'].flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text,
+    };
+  };
+  const lists = [];
+  for (const list of document.querySelectorAll('[role="listbox"], [role="menu"]')) {
+    if (list.children.length === 0) continue;
+    lists.push({ depth: 0, ...describe(list) });
+    const walk = (node, depth) => {
+      for (const child of node.children) {
+        if (lists.length >= 120) return;
+        lists.push({ depth, ...describe(child) });
+        if (depth < 3) walk(child, depth + 1);
+      }
+    };
+    walk(list, 1);
+    if (lists.length >= 120) break;
+  }
+  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices, lists };
+})()`;
+	/** Words of paths, titles, and labels that say what a page is, never whose it is. */
+	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications add apply cancel choose color colour condition continue cover department description designer discard done enter next optional photo photos post price quantity required save select single size sizes style subcategory title type update upload".split(" "));
+	/** Keys whose children are keyed by a user, an id, or a name. */
+	const KEYED_BY_RECORD = /^(users|profiles|closets|accounts|byId|entities|people|members)$/i;
+	/** Subtrees of a page's data the skeleton follows down: who is signed in, and Next.js props. */
+	const FOLLOWED = /auth|user|session|account|identity|viewer|profile|login|^me$|self|current/i;
+	const FOLLOWED_CONTAINERS = /^(props|pageProps|initialState|initialProps|state)$/;
+	/** Keys whose string value is a route (`__NEXT_DATA__.page`), kept as a reduced path. */
+	const ROUTE_KEYS = /* @__PURE__ */ new Set([
+		"page",
+		"route",
+		"pathname"
+	]);
+	const MAX_ITEM_LENGTH = 160;
+	const MAX_DATA_LINES = 160;
+	const MAX_DEPTH$1 = 4;
+	const rawSchema = object({
+		path: string(),
+		title: string(),
+		testIds: array(string().nullable()),
+		links: array(object({
+			path: string(),
+			et: string().nullable(),
+			testId: string().nullable(),
+			label: string().nullable()
+		})),
+		requests: array(string()),
+		scripts: array(object({
+			id: string().nullable(),
+			type: string().nullable()
+		})),
+		controls: array(object({
+			tag: string(),
+			type: string().nullable(),
+			names: array(tuple([string(), string()])),
+			text: string().nullable()
+		})).default([]),
+		choices: array(string()).default([]),
+		lists: array(object({
+			depth: number(),
+			tag: string(),
+			names: array(tuple([string(), string()])),
+			text: string()
+		})).default([])
+	});
+	/** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
+	const CODE_NAMES = /* @__PURE__ */ new Set([
+		"data-testid",
+		"data-test",
+		"data-vv-name",
+		"data-et-name",
+		"name",
+		"id",
+		"role"
+	]);
+	/**
+	* The evidence of what `EVIDENCE_SCRIPT` read and of the page's data globals (`data`, by name),
+	* reduced to structure; `null` when the page answered something else.
+	*/
+	function redactEvidence(raw, data, context) {
+		const parsed = rawSchema.safeParse(raw);
+		if (!parsed.success) return null;
+		const read = parsed.data;
+		const typed = [...context.typed].filter((value) => value.length >= 3);
+		const clean = (text) => {
+			let result = text;
+			for (const value of typed) result = result.split(value).join("<x>");
+			return result.slice(0, MAX_ITEM_LENGTH);
+		};
+		const links = read.links.map((link) => clean([
+			reducedPath(link.path),
+			link.et === null ? null : `et:${reducedId(link.et)}`,
+			link.testId === null ? null : `testid:${reducedId(link.testId)}`,
+			link.label === null ? null : `label:${reducedWords(link.label)}`
+		].filter((part) => part !== null).join(" ")));
+		let elsewhere = 0;
+		const requests = [];
+		for (const request of read.requests) {
+			const reduced = reducedRequest(request, context.cookieDomains);
+			if (reduced === null) elsewhere += 1;
+			else requests.push(clean(reduced));
+		}
+		if (elsewhere > 0) requests.push(`+${String(elsewhere)} elsewhere`);
+		return {
+			path: clean(reducedPath(read.path)),
+			title: clean(reducedWords(read.title)),
+			testIds: distinct(read.testIds.flatMap((id) => id === null || id === "" ? [] : [clean(reducedId(id))])),
+			links: distinct(links),
+			requests: distinct(requests),
+			scripts: distinct(read.scripts.map((script) => clean([script.id === null ? null : `#${reducedId(script.id)}`, script.type].filter((part) => part !== null).join(" ")))),
+			data: Object.entries(data).flatMap(([name, value]) => dataSkeleton(name, value)).slice(0, MAX_DATA_LINES).map(clean),
+			controls: distinct(read.controls.map((control) => clean([
+				control.type === null ? control.tag : `${control.tag}[${reducedId(control.type)}]`,
+				...control.names.map(([name, value]) => CODE_NAMES.has(name) ? `${name}:${reducedId(value)}` : `${name}:${reducedWords(value)}`),
+				control.text === null || control.text === "" ? null : `text:${reducedWords(control.text)}`
+			].filter((part) => part !== null).join(" ")))),
+			choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean)),
+			lists: read.lists.map((item) => clean([
+				`${"  ".repeat(Math.min(item.depth, 4))}${item.tag}`,
+				...item.names.map(([name, value]) => name === "aria-label" ? `${name}:${reducedWords(value)}` : `${name}:${reducedId(value)}`),
+				item.text === "" ? null : `text:${/[0-9@]/.test(item.text) ? "<x>" : item.text}`
+			].filter((part) => part !== null).join(" ")))
+		};
+	}
+	/** `/closet/janedoe/edit` → `/closet/<x>/edit`: only structural words stay. */
+	function reducedPath(path) {
+		return path.split("/").map((segment) => {
+			if (segment === "") return segment;
+			let decoded;
+			try {
+				decoded = decodeURIComponent(segment);
+			} catch {
+				return "<x>";
+			}
+			return STRUCTURAL_WORDS.has(decoded.toLowerCase()) ? decoded : "<x>";
+		}).join("/") || "/";
+	}
+	/** Interface words stay, every other word is `<x>`: `Jane's Closet | Poshmark` → `<x> Closet | Poshmark`. */
+	function reducedWords(text) {
+		return text.split(/(\s+)/).map((token) => {
+			if (/^\s*$/.test(token) || !/[\p{L}\p{N}]/u.test(token)) return token;
+			const word = token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+			return STRUCTURAL_WORDS.has(word.toLowerCase()) ? token : "<x>";
+		}).join("").trim();
+	}
+	/** A developer's id (a test id, an event name) without the digits a record's id brings. */
+	function reducedId(id) {
+		return id.includes("@") ? "<x>" : id.replace(/[0-9a-f]{16,}/gi, "<id>").replace(/\d+/g, "#");
+	}
+	/** A request on the marketplace's domains: its reduced path and its GraphQL operation. */
+	function reducedRequest(request, cookieDomains) {
+		if (!URL.canParse(request)) return null;
+		const url = new URL(request);
+		if (!cookieDomains.some((domain) => {
+			const bare = domain.replace(/^\./, "");
+			return url.hostname === bare || url.hostname.endsWith(`.${bare}`);
+		})) return null;
+		const operation = url.searchParams.get("operationName");
+		const named = operation !== null && /^[A-Za-z_]\w{0,80}$/.test(operation);
+		return `${url.hostname}${reducedPath(url.pathname)}${named ? `?operationName=${operation}` : ""}`;
+	}
+	/**
+	* The skeleton of a page's data: its top-level keys and, down the parts that say who is signed
+	* in, every key path with its value's type (`true` and `false` as they are).
+	*/
+	function dataSkeleton(name, value) {
+		const lines = [];
+		const walk = (path, node, depth, follow) => {
+			if (lines.length >= MAX_DATA_LINES) return;
+			const key = path.slice(path.lastIndexOf(".") + 1);
+			lines.push(`${path}: ${describe(key, node)}`);
+			if (node === null || typeof node !== "object" || depth >= MAX_DEPTH$1) return;
+			const entries = Array.isArray(node) ? node.slice(0, 1).map((item) => ["0", item]) : Object.entries(node);
+			const keyedByRecord = KEYED_BY_RECORD.test(key);
+			for (const [child, childValue] of entries.slice(0, 60)) {
+				const shown = keyedByRecord ? "<key>" : reducedId(child);
+				const followed = follow || FOLLOWED.test(child);
+				if (depth === 0 || followed || FOLLOWED_CONTAINERS.test(child)) walk(`${path}.${shown}`, childValue, depth + 1, followed);
+				if (keyedByRecord) break;
+			}
+		};
+		walk(name, value, 0, false);
+		return lines;
+	}
+	function describe(key, value) {
+		if (value === null) return "null";
+		if (typeof value === "boolean") return String(value);
+		if (Array.isArray(value)) return `array(${String(value.length)})`;
+		if (typeof value === "string" && ROUTE_KEYS.has(key)) return `"${reducedPath(value)}"`;
+		return typeof value;
+	}
+	function distinct(values) {
+		return [...new Set(values)];
+	}
+	/** Evidence as an answer or a log carries it, bounded. */
+	const pageEvidenceSchema = object({
+		path: string().max(MAX_ITEM_LENGTH),
+		title: string().max(MAX_ITEM_LENGTH),
+		testIds: array(string().max(MAX_ITEM_LENGTH)).max(120),
+		links: array(string().max(MAX_ITEM_LENGTH)).max(40),
+		requests: array(string().max(MAX_ITEM_LENGTH)).max(121),
+		scripts: array(string().max(MAX_ITEM_LENGTH)).max(40),
+		data: array(string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
+		controls: array(string().max(MAX_ITEM_LENGTH)).max(120).default([]),
+		choices: array(string().max(MAX_ITEM_LENGTH)).max(150).default([]),
+		lists: array(string().max(MAX_ITEM_LENGTH)).max(121).default([])
+	});
+
+// src/safety/redaction.ts
+	const MAX_ERROR_LENGTH = 200;
+	/** The origin of a URL, the only part of it that logs and history keep. */
+	function originForLog(url) {
+		return URL.canParse(url) ? new URL(url).origin : "unknown";
+	}
+	/**
+	* The first line of an error message, cut short, with every value the run typed or uploaded
+	* replaced, and URLs reduced to their origin.
+	*/
+	function sanitizeMessage(message, typed) {
+		let line = message.split("\n", 1)[0] ?? "";
+		for (const value of typed) if (value.length >= 3) line = line.split(value).join("[redacted]");
+		line = line.replace(/\bhttps?:\/\/[^\s'")]+/g, (url) => originForLog(url));
+		return line.length > MAX_ERROR_LENGTH ? `${line.slice(0, MAX_ERROR_LENGTH)}...` : line;
+	}
+
+// src/runner/errors.ts
+/**
+	* What a script throws when a page is not the way it expects: a field missing from the page's
+	* data, a status it does not know, a form without the button it submits with. The run ends as
+	* `element_missing` (the page is not as the script expects), so a step that changed nothing goes to the
+	* user instead of being retried against a page that will not change back. The message is
+	* logged and stored, so it says what the script expected and never repeats page content.
+	*/
+	var PageChangedError = class extends Error {
+		constructor(message) {
+			super(message);
+			this.name = "PageChangedError";
+		}
+	};
+	/**
+	* What a script throws when the marketplace's own page says it failed and to try again (Mercari's
+	* "Your item could not be listed due to an error"): not a refusal of the listing, and not a page
+	* Listora no longer understands. The run ends as `server_error`, which is retried once the
+	* listing is read back. The message is logged and stored, so it never repeats page content.
+	*/
+	var MarketplaceError = class extends Error {
+		constructor(message) {
+			super(message);
+			this.name = "MarketplaceError";
+		}
+	};
+
+// src/runner/script-session.ts
+	var PageBackendError = class extends Error {
+		failure;
+		constructor(failure, message) {
+			super(message);
+			this.name = "PageBackendError";
+			this.failure = failure;
+		}
+	};
+	/**
+	* A page's data as a backend's `pageData` reads it: the JSON its global serializes to (the page
+	* serializes it, so only JSON values cross), or `null` when the page has none.
+	*/
+	function parsePageData(text) {
+		if (text === null || text === void 0) return null;
+		if (typeof text !== "string") throw new PageBackendError("other", "the page sent no data");
+		try {
+			return JSON.parse(text);
+		} catch {
+			throw new PageBackendError("other", "the page's data is not JSON");
+		}
+	}
+	/** The page stopped the run: a check, a rate limit, or a marketplace error. */
+	var PageProblemError = class extends Error {
+		problem;
+		constructor(problem) {
+			super(`the page stopped the run: ${problem.type}`);
+			this.problem = problem;
+		}
+	};
+	/** A script failure with a code and a message that are safe to log and store. */
+	var StepError = class extends Error {
+		code;
+		constructor(code, message) {
+			super(message);
+			this.code = code;
+		}
+	};
+	var StepTimeoutError = class extends Error {};
+	/** How long a page Listora no longer understands settles before its evidence is read. */
+	const EVIDENCE_SETTLE_MS = 3e3;
+	/** Bounds of what an inspection reads of the page. */
+	const INSPECTED_TEXT_LENGTH = 4e3;
+	var ScriptSession = class {
+		marketplace;
+		#backend;
+		#deps;
+		#inspection;
+		/** Every value typed or uploaded; error messages never repeat them. */
+		#typed = /* @__PURE__ */ new Set();
+		/** The check that stopped the session; nothing runs after it. */
+		#challenge = null;
+		/** The page that stopped the current run, if one did. */
+		#stoppedBy = null;
+		#closed = null;
+		constructor(backend, deps) {
+			this.marketplace = deps.profile.marketplace;
+			this.#backend = backend;
+			this.#deps = deps;
+			this.#inspection = inspectionScript(challengeSelectors(deps.profile));
+		}
+		run(name, script, signal) {
+			return this.#execute(name, script, signal, false);
+		}
+		read(name, script, signal) {
+			return this.#execute(name, script, signal, true);
+		}
+		close() {
+			this.#closed ??= this.#deps.close();
+			return this.#closed;
+		}
+		async #execute(name, script, signal, readOnly) {
+			const steps = [];
+			const stepMs = [];
+			let mutated = false;
+			let current = "start";
+			if (this.#closed !== null) return failed(steps, stepMs, mutated, error("start", "aborted", "the session is closed"));
+			if (this.#challenge !== null) return failed(steps, stepMs, mutated, {
+				kind: "challenge",
+				challenge: this.#challenge,
+				step: "start",
+				screenshotKey: null
+			});
+			this.#stoppedBy = null;
+			const runStep = async (stepName, options, body) => {
+				if (readOnly && options.mutates) throw new StepError("script_error", `step ${stepName} would change the listing in a read`);
+				current = stepName;
+				steps.push(stepName);
+				const index = stepMs.push(0) - 1;
+				this.#deps.onStep?.({
+					name: stepName,
+					index: steps.length
+				});
+				if (options.mutates) mutated = true;
+				const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs * Math.max(1, options.timeScale ?? 1);
+				const startedAt = Date.now();
+				try {
+					return await this.#runStep(body, timeoutMs, signal, readOnly);
+				} finally {
+					stepMs[index] = Date.now() - startedAt;
+				}
+			};
+			try {
+				const value = await script(runStep);
+				const stopped = this.#stop();
+				if (stopped !== null) throw new PageProblemError(stopped);
+				this.#deps.logger.debug({
+					script: name,
+					steps,
+					stepMs
+				}, "automation script finished");
+				return {
+					ok: true,
+					value,
+					mutated,
+					steps,
+					stepMs
+				};
+			} catch (caught) {
+				const stopped = this.#stop();
+				const thrown = stopped === null ? caught : new PageProblemError(stopped);
+				const failure = await this.#failure(thrown, current, signal);
+				this.#deps.logger.warn({
+					script: name,
+					step: failure.step,
+					failure: failure.kind,
+					...failure.kind === "challenge" ? { challenge: failure.challenge } : {},
+					...failure.kind === "error" ? {
+						code: failure.code,
+						reason: failure.message
+					} : {},
+					...(failure.kind === "error" || failure.kind === "timeout") && failure.evidence !== void 0 ? { evidence: failure.evidence } : {},
+					origin: originForLog(this.#safeUrl()),
+					mutated,
+					...this.#deps.networkSummary === void 0 ? {} : { network: this.#deps.networkSummary() }
+				}, "automation script stopped");
+				return failed(steps, stepMs, mutated, failure);
+			}
+		}
+		async #runStep(body, timeoutMs, outer, readOnly) {
+			const controller = new AbortController();
+			const onAbort = () => {
+				controller.abort(outer.reason);
+			};
+			outer.addEventListener("abort", onAbort, { once: true });
+			if (outer.aborted) onAbort();
+			this.#backend.setTimeout(Math.floor(timeoutMs * .9));
+			const driver = new Driver(this, controller.signal, readOnly);
+			let timer;
+			const deadline = new Promise((_, reject) => {
+				timer = setTimeout(() => {
+					reject(new StepTimeoutError("the step ran out of time"));
+					controller.abort(new StepTimeoutError("the step ran out of time"));
+				}, timeoutMs);
+			});
+			const aborted = new Promise((_, reject) => {
+				controller.signal.addEventListener("abort", () => {
+					reject(new StepError("aborted", "the run was stopped"));
+				}, { once: true });
+				if (controller.signal.aborted) reject(new StepError("aborted", "the run was stopped"));
+			});
+			const work = body(driver, controller.signal);
+			work.catch(() => void 0);
+			deadline.catch(() => void 0);
+			aborted.catch(() => void 0);
+			try {
+				return await Promise.race([
+					work,
+					deadline,
+					aborted
+				]);
+			} finally {
+				clearTimeout(timer);
+				outer.removeEventListener("abort", onAbort);
+				driver.retire();
+			}
+		}
+		async #failure(thrown, step, signal) {
+			if (thrown instanceof PageProblemError) {
+				const { problem } = thrown;
+				switch (problem.type) {
+					case "challenge":
+						this.#challenge = problem.kind;
+						return {
+							kind: "challenge",
+							challenge: problem.kind,
+							step,
+							screenshotKey: await this.#screenshot()
+						};
+					case "rate_limited": return {
+						...error(step, "rate_limited", "the marketplace asked to slow down"),
+						retryAfterMs: problem.retryAfterMs,
+						screenshotKey: await this.#screenshot()
+					};
+					case "server_error": return {
+						...error(step, "server_error", `the marketplace answered ${String(problem.status)}`),
+						screenshotKey: await this.#screenshot()
+					};
+				}
+			}
+			if (thrown instanceof StepTimeoutError) return {
+				kind: "timeout",
+				step,
+				screenshotKey: await this.#screenshot(),
+				...await this.#evidence()
+			};
+			if (thrown instanceof StepError) {
+				const screenshotKey = thrown.code === "aborted" ? null : await this.#screenshot();
+				return {
+					...error(step, thrown.code, thrown.message),
+					screenshotKey,
+					...thrown.code === "element_missing" ? await this.#evidence() : {}
+				};
+			}
+			if (signal.aborted) return error(step, "aborted", "the run was stopped");
+			if (thrown instanceof MarketplaceError) return {
+				...error(step, "server_error", sanitizeMessage(thrown.message, this.#typed)),
+				screenshotKey: await this.#screenshot()
+			};
+			if (thrown instanceof PageChangedError) return {
+				...error(step, "element_missing", sanitizeMessage(thrown.message, this.#typed)),
+				screenshotKey: await this.#screenshot(),
+				...await this.#evidence()
+			};
+			const message = thrown instanceof Error ? thrown.message : String(thrown);
+			return {
+				...error(step, "script_error", sanitizeMessage(message, this.#typed)),
+				screenshotKey: await this.#screenshot()
+			};
+		}
+		/** The page that stopped the current run (set by `inspect` while the script runs). */
+		#stop() {
+			return this.#stoppedBy;
+		}
+		#screenshot() {
+			return this.#backend.screenshot(this.#typed).catch(() => null);
+		}
+		/** What the page has instead of what the script expected, structure only; none if unreadable. */
+		async #evidence() {
+			try {
+				await new Promise((resolve) => setTimeout(resolve, EVIDENCE_SETTLE_MS));
+				const raw = await this.#backend.read(EVIDENCE_SCRIPT);
+				const data = {};
+				for (const name of DATA_GLOBALS) {
+					const value = await this.#backend.pageData(name).catch(() => null);
+					if (value !== null) data[name] = value;
+				}
+				const evidence = redactEvidence(raw, data, {
+					cookieDomains: this.#deps.profile.cookieDomains,
+					typed: this.#typed
+				});
+				return evidence === null ? {} : { evidence };
+			} catch {
+				return {};
+			}
+		}
+		#safeUrl() {
+			try {
+				return this.#backend.url();
+			} catch {
+				return "about:blank";
+			}
+		}
+		get backend() {
+			return this.#backend;
+		}
+		get profile() {
+			return this.#deps.profile;
+		}
+		get pacing() {
+			return this.#deps.pacing;
+		}
+		noteTyped(value) {
+			this.#typed.add(value);
+		}
+		/** Throws when the page already stopped this run or session. */
+		ensureGoing() {
+			if (this.#stoppedBy !== null) throw new PageProblemError(this.#stoppedBy);
+			if (this.#challenge !== null) throw new PageProblemError({
+				type: "challenge",
+				kind: this.#challenge,
+				sign: "earlier"
+			});
+		}
+		/** Stops the run at a problem the page's own API answered with (`PageDriver.apiGet`). */
+		stopFor(problem) {
+			this.#stoppedBy = problem;
+			if (problem.type === "challenge") this.#challenge = problem.kind;
+			throw new PageProblemError(problem);
+		}
+		/** Inspects the page; throws when it shows something the run must stop at. */
+		async inspect() {
+			this.ensureGoing();
+			const read = await this.#backend.inspect(this.#inspection);
+			const signals = {
+				url: this.#backend.url(),
+				status: this.#backend.status(),
+				retryAfterSeconds: this.#backend.retryAfterSeconds(),
+				...read
+			};
+			const problem = inspectPage(signals, this.#deps.profile);
+			if (problem === null) return;
+			this.#stoppedBy = problem;
+			if (problem.type === "challenge") this.#challenge = problem.kind;
+			throw new PageProblemError(problem);
+		}
+		/** A backend failure as a step failure; the session's own errors pass through. */
+		translate(thrown) {
+			if (thrown instanceof PageProblemError || thrown instanceof StepError) return thrown;
+			if (thrown instanceof StepTimeoutError) return thrown;
+			if (thrown instanceof PageBackendError) switch (thrown.failure) {
+				case "element_timeout": return new StepError("element_missing", sanitizeMessage(thrown.message, this.#typed));
+				case "navigation_timeout": return new StepTimeoutError("the page did not finish loading");
+				case "unreachable": return new StepError("unreachable", "the marketplace could not be reached");
+				case "closed": return new StepError("aborted", "the session was closed");
+				case "other": return new StepError("script_error", sanitizeMessage(thrown.message, this.#typed));
+			}
+			const message = thrown instanceof Error ? thrown.message : String(thrown);
+			return new StepError("script_error", sanitizeMessage(message, this.#typed));
+		}
+	};
+	/** The most of an API answer's body a read takes (Depop's largest are about 2 MB). */
+	const API_BODY_LIMIT = 4e6;
+	/**
+	* The page script of `PageDriver.apiGet`: a GET from the page, with the site's cookie as the
+	* bearer token when one is named, returning only the status, `Retry-After`, and the body's text.
+	* Source text, so each host evaluates the same script in its own page.
+	*/
+	function apiGetScript(url, bearerCookie) {
+		return `(async () => {
+    const name = ${JSON.stringify(bearerCookie)};
+    const headers = { accept: 'application/json' };
+    if (name !== null) {
+      const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(name + '='));
+      if (pair !== undefined) headers.authorization = 'Bearer ' + decodeURIComponent(pair.slice(name.length + 1));
+    }
+    let response;
+    try {
+      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+    } catch (error) {
+      return { status: null, failed: String(error) };
+    }
+    const text = await response.text();
+    return { status: response.status, retryAfter: response.headers.get('retry-after'), text: text.length > ${String(API_BODY_LIMIT)} ? null : text };
+  })()`;
+	}
+	/** How many times a read of a marketplace's API is tried when the page couldn't make it. */
+	const API_ATTEMPTS = 2;
+	/** The pauses before a read of a marketplace's API that answered 5xx is asked again. */
+	const SERVER_ERROR_PAUSES_MS = [1e3, 4e3];
+	/** Whether the page's request never got an answer (`fetch` rejected: the network, or a page load). */
+	function fetchFailed(answer) {
+		return answer !== null && typeof answer === "object" && "failed" in answer;
+	}
+	function apiAnswer(answer) {
+		const read = answer;
+		if (read === null || typeof read !== "object" || typeof read.status !== "number") throw new StepError("script_error", "the marketplace's API sent no answer");
+		const retryAfter = Number(read.retryAfter);
+		return {
+			status: read.status,
+			text: typeof read.text === "string" ? read.text : null,
+			retryAfterSeconds: read.retryAfter !== null && Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : null
+		};
+	}
+	function jsonOrNull(text) {
+		if (text === null) return null;
+		try {
+			return JSON.parse(text);
+		} catch {
+			return null;
+		}
+	}
+	/**
+	* What `inspect` reads in the page: one evaluation, bounded, returning plain data. It is source
+	* text, so each host evaluates the same script in its own page.
+	*/
+	function inspectionScript(selectors) {
+		return `(() => {
+    const visible = (element) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return false;
+      const style = getComputedStyle(element);
+      return style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity) > 0;
+    };
+    const selectors = ${JSON.stringify(selectors)};
+    const matchedSelectors = selectors.filter((selector) => {
+      try {
+        return [...document.querySelectorAll(selector)].some(visible);
+      } catch {
+        return false;
+      }
+    });
+    const pattern = ${CHALLENGE_FRAME_PATTERN.toString()};
+    const challengeFrames = [...document.querySelectorAll('iframe')]
+      .filter((frame) => pattern.test(frame.src) && visible(frame))
+      .map((frame) => { try { return new URL(frame.src).origin; } catch { return 'unknown'; } });
+    const hasPasswordField = [...document.querySelectorAll('input[type="password" i]')].some(visible);
+    const text = (document.body ? document.body.innerText : '').slice(0, ${String(INSPECTED_TEXT_LENGTH)}).toLowerCase();
+    return { title: document.title, challengeFrames, hasPasswordField, matchedSelectors, text };
+  })()`;
+	}
+	var Driver = class {
+		#session;
+		#signal;
+		#readOnly;
+		#retired = false;
+		constructor(session, signal, readOnly) {
+			this.#session = session;
+			this.#signal = signal;
+			this.#readOnly = readOnly;
+		}
+		retire() {
+			this.#retired = true;
+		}
+		async goto(url) {
+			const target = URL.canParse(url) ? new URL(url) : null;
+			if (target === null || !this.#session.profile.origins.includes(target.origin)) throw new StepError("script_error", "the script asked for a page outside the marketplace");
+			await this.#act(async (backend) => {
+				backend.clearStatus();
+				await backend.goto(target.href);
+			});
+		}
+		async click(selector) {
+			await this.#act(async (backend) => {
+				backend.clearStatus();
+				await backend.click(selector);
+			});
+		}
+		async fill(selector, text) {
+			this.#input("fill");
+			this.#session.noteTyped(text);
+			await this.#act((backend) => backend.fill(selector, text));
+		}
+		async type(selector, text) {
+			this.#input("type");
+			this.#session.noteTyped(text);
+			await this.#act(async (backend) => {
+				await backend.focus(selector);
+				for (const character of text) {
+					await this.#session.pacing.wait("keystroke", this.#signal);
+					this.#active();
+					await backend.press(character);
+				}
+			});
+		}
+		async select(selector, value) {
+			this.#input("select");
+			await this.#act((backend) => backend.select(selector, value));
+		}
+		async check(selector, checked) {
+			this.#input("check");
+			await this.#act((backend) => backend.check(selector, checked));
+		}
+		async upload(selector, files) {
+			this.#input("upload");
+			for (const file of files) this.#session.noteTyped(file.name);
+			await this.#act((backend) => backend.upload(selector, files));
+		}
+		acceptNextDialog() {
+			this.#input("acceptNextDialog");
+			this.#active();
+			this.#session.backend.acceptNextDialog();
+		}
+		async waitFor(selector, state = "visible") {
+			await this.#observe((backend) => backend.waitFor(selector, state));
+		}
+		async waitForPath(pattern) {
+			await this.#observe((backend) => backend.waitForPath(pattern));
+		}
+		url() {
+			this.#active();
+			return this.#session.backend.url();
+		}
+		status() {
+			this.#active();
+			return this.#session.backend.status();
+		}
+		exists(selector) {
+			return this.#query((backend) => backend.exists(selector));
+		}
+		count(selector) {
+			return this.#query((backend) => backend.count(selector));
+		}
+		text(selector) {
+			return this.#query((backend) => backend.text(selector));
+		}
+		texts(selector) {
+			return this.#query((backend) => backend.texts(selector));
+		}
+		attribute(selector, name) {
+			return this.#query((backend) => backend.attribute(selector, name));
+		}
+		attributes(selector, name) {
+			return this.#query((backend) => backend.attributes(selector, name));
+		}
+		value(selector) {
+			return this.#query((backend) => backend.value(selector));
+		}
+		pageData(name) {
+			return this.#query((backend) => backend.pageData(name));
+		}
+		async apiGet(url, options = {}) {
+			const target = URL.canParse(url) ? new URL(url) : null;
+			if (target === null || !this.#session.profile.apiOrigins.includes(target.origin)) throw new StepError("script_error", "the script asked for an API outside the marketplace's");
+			this.#active();
+			let read;
+			for (let failedFetches = 0, serverErrors = 0;;) {
+				await this.#session.pacing.wait("action", this.#signal);
+				const answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
+				this.#active();
+				if (fetchFailed(answer)) {
+					failedFetches += 1;
+					if (failedFetches === API_ATTEMPTS) throw new StepError("script_error", `the page couldn't reach the marketplace's API`);
+					continue;
+				}
+				read = apiAnswer(answer);
+				const pause = read.status >= 500 ? SERVER_ERROR_PAUSES_MS[serverErrors] : void 0;
+				if (pause === void 0) break;
+				serverErrors += 1;
+				await this.#session.pacing.waitFor(pause, this.#signal);
+				this.#active();
+			}
+			const { status, text, retryAfterSeconds } = read;
+			const body = jsonOrNull(text);
+			if (status === 429) this.#session.stopFor({
+				type: "rate_limited",
+				retryAfterMs: retryAfterSeconds === null ? null : retryAfterSeconds * 1e3
+			});
+			if (status >= 500) this.#session.stopFor({
+				type: "server_error",
+				status
+			});
+			if (status === 403 && body === null) this.#session.stopFor({
+				type: "challenge",
+				kind: "bot_check",
+				sign: "api"
+			});
+			return {
+				status,
+				body
+			};
+		}
+		/** A paced action, inspected afterwards. */
+		async #act(action) {
+			this.#active();
+			await this.#session.pacing.wait("action", this.#signal);
+			this.#active();
+			try {
+				await action(this.#session.backend);
+			} catch (thrown) {
+				throw this.#session.translate(thrown);
+			}
+			this.#active();
+			await this.#inspect();
+		}
+		/** A wait for the page, inspected afterwards (whether or not what it waited for came). */
+		async #observe(wait) {
+			this.#active();
+			let failure = null;
+			try {
+				await wait(this.#session.backend);
+			} catch (thrown) {
+				failure = this.#session.translate(thrown);
+			}
+			this.#active();
+			await this.#inspect();
+			if (failure !== null) throw failure;
+		}
+		async #query(read) {
+			this.#active();
+			try {
+				return await read(this.#session.backend);
+			} catch (thrown) {
+				throw this.#session.translate(thrown);
+			}
+		}
+		async #inspect() {
+			try {
+				await this.#session.inspect();
+			} catch (thrown) {
+				throw this.#session.translate(thrown);
+			}
+		}
+		#input(method) {
+			if (this.#readOnly) throw new StepError("script_error", `a read cannot ${method}: it would change the listing`);
+		}
+		#active() {
+			this.#session.ensureGoing();
+			if (this.#retired || this.#signal.aborted) throw new StepError("aborted", "the step is over");
+		}
+	};
+	function failed(steps, stepMs, mutated, failure) {
+		return {
+			ok: false,
+			failure,
+			mutated,
+			steps,
+			stepMs
+		};
+	}
+	function error(step, code, message) {
+		return {
+			kind: "error",
+			step,
+			code,
+			message,
+			retryAfterMs: null,
+			screenshotKey: null
+		};
+	}
+
+// src/phone/dom.ts
+/**
+	* The page functions the phone runtime evaluates in the marketplace's page (through the app's
+	* `evaluate`), one per page action. They do in the page what Playwright does for the browser
+	* runner: wait for an element to be there and usable, then act on it the way a person's tap or
+	* paste would (focus, the field's own value setter, the input and change events), and read
+	* text and attributes. They are source text, so they run unchanged in WebKit and, in tests, in
+	* Chromium; each is self-contained.
+	*
+	* A wait that runs out of time rejects with `element_timeout: <what>`; the backend reports it as
+	* the page missing what the script expects.
+	*/
+	/** Helpers every function starts with. */
+	const PRELUDE = `
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const visible = (element) => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    const style = getComputedStyle(element);
+    return style.visibility !== 'hidden' && style.display !== 'none';
+  };
+  const usable = (element) =>
+    visible(element) && !element.disabled && element.getAttribute('aria-disabled') !== 'true';
+  const waitUntil = async (find, what) => {
+    const end = Date.now() + timeoutMs;
+    for (;;) {
+      const found = find();
+      if (found) return found;
+      if (Date.now() >= end) throw new Error('element_timeout: ' + what);
+      await sleep(50);
+    }
+  };
+  // Playwright's selector chains: 'A >> B' is B inside A's matches, 'A >> nth=1' A's second.
+  const resolveAll = (selector) => {
+    let current = [document];
+    for (const part of selector.split(' >> ')) {
+      const nth = /^nth=(-?\\d+)$/.exec(part.trim());
+      if (nth) {
+        const picked = current.at(Number(nth[1]));
+        current = picked === undefined ? [] : [picked];
+        continue;
+      }
+      // Playwright's ':text-is("...")': the element's whole text, whitespace collapsed.
+      const textIs = /:text-is\\("((?:[^"\\\\]|\\\\.)*)"\\)$/.exec(part);
+      const css = textIs === null ? part : part.slice(0, textIs.index);
+      const wanted = textIs === null ? null : JSON.parse('"' + textIs[1] + '"');
+      const next = [];
+      for (const root of current) {
+        for (const element of root.querySelectorAll(css)) {
+          const text = (element.textContent || '').replace(/\\s+/g, ' ').trim();
+          if (wanted !== null && text !== wanted) continue;
+          if (!next.includes(element)) next.push(element);
+        }
+      }
+      current = next;
+    }
+    return current.filter((node) => node !== document);
+  };
+  const first = (selector) => resolveAll(selector)[0] ?? null;
+  // An action needs exactly one match, as Playwright's strict locators do.
+  const only = (selector) => {
+    const matches = resolveAll(selector);
+    if (matches.length > 1) {
+      throw new Error('strict mode violation: ' + selector + ' matches ' + matches.length + ' elements');
+    }
+    return matches[0] ?? null;
+  };
+  const usableElement = (selector) =>
+    waitUntil(() => {
+      const element = only(selector);
+      return element && usable(element) ? element : null;
+    }, 'a usable ' + selector);
+  const nativeSet = (element, value) => {
+    const prototype =
+      element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : element instanceof HTMLSelectElement
+          ? HTMLSelectElement.prototype
+          : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
+    setter.call(element, value);
+  };
+  const fire = (element, type, init) =>
+    element.dispatchEvent(
+      type === 'input'
+        ? new InputEvent('input', { bubbles: true, composed: true, ...init })
+        : new Event(type, { bubbles: true, composed: true }),
+    );
+`;
+	function pageFunction(body) {
+		return `${PRELUDE}\n${body}`;
+	}
+	/** Clicks the first match once it is visible and enabled, like a tap. Args: selector, timeoutMs. */
+	const CLICK = pageFunction(`
+  const element = await usableElement(selector);
+  element.scrollIntoView({ block: 'center', inline: 'center' });
+  const rect = element.getBoundingClientRect();
+  const point = { bubbles: true, cancelable: true, composed: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0 };
+  element.dispatchEvent(new PointerEvent('pointerdown', { ...point, pointerType: 'touch', isPrimary: true }));
+  element.dispatchEvent(new MouseEvent('mousedown', point));
+  if (typeof element.focus === 'function') element.focus();
+  element.dispatchEvent(new PointerEvent('pointerup', { ...point, pointerType: 'touch', isPrimary: true }));
+  element.dispatchEvent(new MouseEvent('mouseup', point));
+  element.click();
+  return true;
+`);
+	/** Puts the whole text into a field at once, like a paste. Args: selector, text, timeoutMs. */
+	const FILL = pageFunction(`
+  const element = await usableElement(selector);
+  element.focus();
+  if (element.isContentEditable) {
+    element.textContent = text;
+    fire(element, 'input', { inputType: 'insertFromPaste', data: text });
+    return true;
+  }
+  if (!('value' in element) || element.readOnly) throw new Error('the element is not a text field');
+  nativeSet(element, text);
+  fire(element, 'input', { inputType: 'insertFromPaste', data: text });
+  fire(element, 'change');
+  return true;
+`);
+	/** Focuses a field once it is usable. Args: selector, timeoutMs. */
+	const FOCUS = pageFunction(`
+  const element = await usableElement(selector);
+  element.focus();
+  return true;
+`);
+	/** Types one character into the focused field. Args: character, timeoutMs. */
+	const PRESS = pageFunction(`
+  const element = document.activeElement;
+  if (!element || element === document.body) throw new Error('no field has the focus');
+  const key = { key: character, bubbles: true, cancelable: true, composed: true };
+  element.dispatchEvent(new KeyboardEvent('keydown', key));
+  element.dispatchEvent(new KeyboardEvent('keypress', key));
+  if (element.isContentEditable) {
+    element.textContent = (element.textContent || '') + character;
+  } else {
+    nativeSet(element, element.value + character);
+  }
+  fire(element, 'input', { inputType: 'insertText', data: character });
+  element.dispatchEvent(new KeyboardEvent('keyup', key));
+  return true;
+`);
+	/** Chooses the option whose value (or label) is `value`. Args: selector, value, timeoutMs. */
+	const SELECT = pageFunction(`
+  const element = await usableElement(selector);
+  if (!(element instanceof HTMLSelectElement)) throw new Error('the element is not a select');
+  const option = await waitUntil(
+    () => [...element.options].find((candidate) => candidate.value === value || candidate.label === value),
+    'the option ' + value + ' in ' + selector,
+  );
+  nativeSet(element, option.value);
+  fire(element, 'input', {});
+  fire(element, 'change');
+  return true;
+`);
+	/** Sets a checkbox or radio. Args: selector, checked, timeoutMs. */
+	const CHECK = pageFunction(`
+  const element = await usableElement(selector);
+  if (element.checked !== checked) element.click();
+  if (element.checked !== checked) throw new Error('the checkbox did not change');
+  return true;
+`);
+	/**
+	* Gives a file input its files (base64 bytes), as picking them would. The input may be hidden,
+	* as sell forms' photo inputs usually are. Args: selector, files, timeoutMs.
+	*/
+	const UPLOAD = pageFunction(`
+  const element = await waitUntil(() => only(selector), 'the file input ' + selector);
+  if (!(element instanceof HTMLInputElement) || element.type !== 'file') {
+    throw new Error('the element is not a file input');
+  }
+  const transfer = new DataTransfer();
+  for (const file of files) {
+    const binary = atob(file.base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    transfer.items.add(new File([bytes], file.name, { type: file.mimeType }));
+  }
+  element.files = transfer.files;
+  fire(element, 'input', {});
+  fire(element, 'change');
+  return true;
+`);
+	/** Waits for the first match to be attached, detached, visible, or hidden. Args: selector, state, timeoutMs. */
+	const WAIT_FOR = pageFunction(`
+  await waitUntil(() => {
+    const element = first(selector);
+    switch (state) {
+      case 'attached': return element !== null;
+      case 'detached': return element === null;
+      case 'visible': return element !== null && visible(element);
+      case 'hidden': return element === null || !visible(element);
+      default: throw new Error('unknown state ' + state);
+    }
+  }, selector + ' to be ' + state);
+  return true;
+`);
+	/**
+	* What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`, and
+	* `value` (the first match's current value, which a page's scripts may set without an attribute).
+	*/
+	const QUERY = pageFunction(`
+  const elements = resolveAll(selector);
+  switch (what) {
+    case 'count': return elements.length;
+    case 'text': return elements.length === 0 ? null : (elements[0].textContent || '').trim();
+    case 'texts': return elements.map((element) => (element.textContent || '').trim());
+    case 'attribute': return elements.length === 0 ? null : elements[0].getAttribute(name);
+    case 'attributes': return elements.map((element) => element.getAttribute(name));
+    case 'value': return elements.length === 0 || typeof elements[0].value !== 'string' ? null : elements[0].value;
+    default: throw new Error('unknown query ' + what);
+  }
+`);
+
+// src/phone/host.ts
+/**
+	* Why a host call failed, as the app reports it. `navigated`: the page loaded another document
+	* while a page function ran, so the function's answer was lost with the old one.
+	*/
+	const HOST_FAILURES = [
+		"timeout",
+		"unreachable",
+		"blocked",
+		"closed",
+		"navigated"
+	];
+
+// src/phone/backend.ts
+/** Extra time a host call gets over the wait it runs, so the page's own timeout reports first. */
+	const HOST_MARGIN_MS = 2e3;
+	/** How often a wait for the main frame's path looks at it. */
+	const PATH_POLL_MS = 100;
+	var BridgeBackend = class {
+		#host;
+		#waitMs = 3e4;
+		#state = {
+			url: "about:blank",
+			status: null,
+			retryAfterSeconds: null
+		};
+		constructor(host) {
+			this.#host = host;
+		}
+		setTimeout(ms) {
+			this.#waitMs = ms;
+		}
+		async goto(href) {
+			this.#state = await this.#call("navigation", () => this.#host.navigate(href, this.#waitMs));
+		}
+		async click(selector) {
+			try {
+				await this.#page(CLICK, { selector });
+			} catch (thrown) {
+				if (!navigated(thrown)) throw thrown;
+			}
+			this.#state = await this.#call("navigation", () => this.#host.settle(this.#waitMs));
+		}
+		async fill(selector, text) {
+			await this.#page(FILL, {
+				selector,
+				text
+			});
+		}
+		async focus(selector) {
+			await this.#page(FOCUS, { selector });
+		}
+		async press(character) {
+			await this.#page(PRESS, { character });
+		}
+		async select(selector, value) {
+			await this.#page(SELECT, {
+				selector,
+				value
+			});
+		}
+		async check(selector, checked) {
+			await this.#page(CHECK, {
+				selector,
+				checked
+			});
+		}
+		async upload(selector, files) {
+			await this.#page(UPLOAD, {
+				selector,
+				files: files.map((file) => ({
+					name: file.name,
+					mimeType: file.mimeType,
+					base64: toBase64(file.bytes)
+				}))
+			});
+		}
+		acceptNextDialog() {
+			this.#host.acceptNextDialog().catch(() => void 0);
+		}
+		async waitFor(selector, state) {
+			await this.#look(WAIT_FOR, {
+				selector,
+				state
+			});
+		}
+		async waitForPath(pattern) {
+			const end = Date.now() + this.#waitMs;
+			for (;;) {
+				this.#state = await this.#call("navigation", () => this.#host.state());
+				const path = URL.canParse(this.#state.url) ? new URL(this.#state.url).pathname : "";
+				if (pattern.test(path)) break;
+				if (Date.now() >= end) throw new PageBackendError("navigation_timeout", "the page never reached the path");
+				await sleep(PATH_POLL_MS);
+			}
+			this.#state = await this.#call("navigation", () => this.#host.settle(Math.max(0, end - Date.now())));
+		}
+		url() {
+			return this.#state.url;
+		}
+		status() {
+			return this.#state.status;
+		}
+		retryAfterSeconds() {
+			return this.#state.retryAfterSeconds;
+		}
+		clearStatus() {
+			this.#state = {
+				...this.#state,
+				status: null,
+				retryAfterSeconds: null
+			};
+		}
+		async exists(selector) {
+			return await this.count(selector) > 0;
+		}
+		async count(selector) {
+			return expectNumber(await this.#look(QUERY, {
+				selector,
+				what: "count",
+				name: null
+			}));
+		}
+		async text(selector) {
+			return expectText(await this.#look(QUERY, {
+				selector,
+				what: "text",
+				name: null
+			}));
+		}
+		async texts(selector) {
+			return expectTexts(await this.#look(QUERY, {
+				selector,
+				what: "texts",
+				name: null
+			}));
+		}
+		async attribute(selector, name) {
+			return expectText(await this.#look(QUERY, {
+				selector,
+				what: "attribute",
+				name
+			}));
+		}
+		async value(selector) {
+			return expectText(await this.#look(QUERY, {
+				selector,
+				what: "value",
+				name: null
+			}));
+		}
+		async attributes(selector, name) {
+			const values = await this.#look(QUERY, {
+				selector,
+				what: "attributes",
+				name
+			});
+			if (!Array.isArray(values)) throw new PageBackendError("other", "the page sent no list");
+			return values.map(expectText);
+		}
+		async pageData(name) {
+			return parsePageData(await this.#call("element", () => this.#host.pageData(name, this.#waitMs + HOST_MARGIN_MS)));
+		}
+		async inspect(script) {
+			this.#state = await this.#call("navigation", () => this.#host.state());
+			return await this.#look(`return ${script};`, {}, false);
+		}
+		read(script) {
+			return this.#look(`return ${script};`, {}, false);
+		}
+		screenshot() {
+			return Promise.resolve(null);
+		}
+		/**
+		* Evaluates one of dom.ts's functions that only reads the page. One a navigation cut short
+		* (the page a click or the site itself was loading took over) is run again on the new page
+		* once it has loaded, within the step's wait: reading changes nothing. `waits`: the function
+		* is given the step's wait (dom.ts's functions take it; a script's own read does not).
+		*/
+		async #look(body, args, waits = true) {
+			const end = Date.now() + this.#waitMs;
+			for (;;) {
+				try {
+					return await (waits ? this.#page(body, args) : this.#call("element", () => this.#host.evaluate(body, args, this.#waitMs + HOST_MARGIN_MS)));
+				} catch (thrown) {
+					if (!navigated(thrown) || Date.now() >= end) throw thrown;
+				}
+				this.#state = await this.#call("navigation", () => this.#host.settle(Math.max(0, end - Date.now())));
+			}
+		}
+		/** Evaluates one of dom.ts's functions with the step's wait. */
+		#page(body, args) {
+			return this.#call("element", () => this.#host.evaluate(body, {
+				...args,
+				timeoutMs: this.#waitMs
+			}, this.#waitMs + HOST_MARGIN_MS));
+		}
+		/** A host call, its failure in the session's terms. */
+		async #call(kind, work) {
+			try {
+				return await work();
+			} catch (thrown) {
+				throw backendError(thrown, kind);
+			}
+		}
+	};
+	/** Whether a page function failed because the page loaded another document while it ran. */
+	function navigated(thrown) {
+		return thrown instanceof PageBackendError && thrown.message === "navigated";
+	}
+	function backendError(thrown, kind) {
+		const message = thrown instanceof Error ? thrown.message : String(thrown);
+		if (message.startsWith("element_timeout")) return new PageBackendError("element_timeout", message);
+		const failure = HOST_FAILURES.find((candidate) => candidate === message);
+		return new PageBackendError(failure === void 0 ? "other" : failure === "timeout" ? kind === "navigation" ? "navigation_timeout" : "element_timeout" : failure === "closed" ? "closed" : failure === "navigated" ? "other" : "unreachable", message);
+	}
+	function expectNumber(value) {
+		if (typeof value !== "number") throw new PageBackendError("other", "the page sent no number");
+		return value;
+	}
+	function expectText(value) {
+		if (value !== null && typeof value !== "string") throw new PageBackendError("other", "the page sent no text");
+		return value;
+	}
+	function expectTexts(value) {
+		if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) throw new PageBackendError("other", "the page sent no texts");
+		return value;
+	}
+	function toBase64(bytes) {
+		let binary = "";
+		const chunk = 32768;
+		for (let start = 0; start < bytes.length; start += chunk) binary += String.fromCharCode(...bytes.subarray(start, start + chunk));
+		return btoa(binary);
+	}
+	function fromBase64(text) {
+		const binary = atob(text);
+		const bytes = new Uint8Array(binary.length);
+		for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+		return bytes;
+	}
+	function sleep(ms) {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+// src/safety/pacing.ts
+	var Pacing = class {
+		settings;
+		#random;
+		#sleep;
+		constructor(settings, options = {}) {
+			for (const range of [
+				settings.actionDelayMs,
+				settings.keystrokeDelayMs,
+				settings.sessionGapMs
+			]) checkRange(range);
+			this.settings = settings;
+			this.#random = options.random ?? Math.random;
+			this.#sleep = options.sleep ?? abortableSleep;
+		}
+		/** A delay for `kind`, uniform in its range. */
+		delayMs(kind) {
+			const [min, max] = this.#range(kind);
+			return Math.round(min + (max - min) * this.#random());
+		}
+		/** Waits a delay for `kind`; rejects when `signal` aborts. */
+		async wait(kind, signal) {
+			await this.#sleep(this.delayMs(kind), signal);
+		}
+		/** Waits whatever is left of `ms`, for example the rest of a session gap. */
+		async waitFor(ms, signal) {
+			if (ms > 0) await this.#sleep(ms, signal);
+		}
+		#range(kind) {
+			switch (kind) {
+				case "action": return this.settings.actionDelayMs;
+				case "keystroke": return this.settings.keystrokeDelayMs;
+				case "session": return this.settings.sessionGapMs;
+			}
+		}
+	};
+	function checkRange([min, max]) {
+		if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) throw new RangeError("a delay range needs 0 <= min <= max");
+	}
+	function abortableSleep(ms, signal) {
+		return new Promise((resolve, reject) => {
+			if (signal.aborted) {
+				reject(abortReason(signal));
+				return;
+			}
+			const onAbort = () => {
+				clearTimeout(timer);
+				reject(abortReason(signal));
+			};
+			const timer = setTimeout(() => {
+				signal.removeEventListener("abort", onAbort);
+				resolve();
+			}, ms);
+			signal.addEventListener("abort", onAbort, { once: true });
+		});
+	}
+	function abortReason(signal) {
+		return signal.reason instanceof Error ? signal.reason : /* @__PURE__ */ new Error("aborted");
+	}
+
+// ../sourcing/src/brand.ts
+/**
+	* Words dropped from a brand before it is compared: joiners and company suffixes, so
+	* "Abercrombie & Fitch" and "Abercrombie" or "Hollister Co." and "Hollister" compare equal.
+	*/
+	const IGNORED_WORDS = /* @__PURE__ */ new Set([
+		"and",
+		"by",
+		"co",
+		"company",
+		"inc",
+		"the",
+		"outfitter"
+	]);
+	/**
+	* Leading words too common to name a brand on their own: the key keeps the next word too, so
+	* "American Eagle" and "American Apparel", or "Old Navy" and "Old Money", stay apart.
+	*/
+	const SHARED_LEADING_WORDS = /* @__PURE__ */ new Set([
+		"american",
+		"banana",
+		"free",
+		"j",
+		"new",
+		"old",
+		"polo",
+		"true",
+		"urban"
+	]);
+	/**
+	* The key two brands are compared by, or undefined for an empty brand: lowercase, accents and
+	* punctuation dropped ("Levi's" and "LEVI" both `levi`), a plural `s` dropped from each word,
+	* the ignored words left out, then the first word (two when the first is a shared leading
+	* word). It is a match key for the seller's own sales, not a display name.
+	*/
+	function brandKey$1(brand) {
+		if (brand === null || brand === void 0) return void 0;
+		const [first, second] = brand.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/&/g, " and ").replace(/['’]/g, "").split(/[^\p{L}\p{N}]+/u).filter((word) => word !== "").map((word) => word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word).filter((word) => !IGNORED_WORDS.has(word));
+		if (first === void 0) return void 0;
+		return SHARED_LEADING_WORDS.has(first) && second !== void 0 ? `${first} ${second}` : first;
+	}
+
+// ../sourcing/src/size.ts
+/**
+	* How the sourcing kit groups sizes: compared without case or spaces, with letter sizes spelled
+	* short, so "Medium" and "M" are one group (`OwnSalesBucket.sizeBucket`).
+	*/
+	/** The longest size kept; longer ones are cut, so one odd value cannot grow the kit. */
+	const MAX_SIZE_BUCKET_LENGTH = 32;
+	/** Spelled-out letter sizes, by their key without spaces or punctuation. */
+	const LETTER_SIZES = {
+		xxsmall: "xxs",
+		extraextrasmall: "xxs",
+		xsmall: "xs",
+		extrasmall: "xs",
+		small: "s",
+		medium: "m",
+		med: "m",
+		large: "l",
+		xlarge: "xl",
+		extralarge: "xl",
+		xxlarge: "xxl",
+		extraextralarge: "xxl",
+		"2xl": "xxl",
+		xxxlarge: "xxxl",
+		"3xl": "xxxl",
+		onesize: "os",
+		onesizefitsall: "os",
+		osfa: "os"
+	};
+	/** The size's group: "m" for "Medium" and "M", "32x30" for "32 x 30". Null without a size. */
+	function sizeBucket(sizeLabel) {
+		if (sizeLabel === null || sizeLabel === void 0) return null;
+		const key = sizeLabel.normalize("NFKC").toLowerCase().replace(/[\s\-_.]/g, "");
+		if (key === "") return null;
+		return (LETTER_SIZES[key] ?? key).slice(0, 32);
+	}
+
+// ../sourcing/src/stats.ts
+/**
+	* The quartiles of `prices` (whole cents, interpolated between neighbours and rounded), or
+	* undefined when there are none. One price is its own range.
+	*/
+	function quartiles(prices) {
+		for (const price of prices) if (!Number.isSafeInteger(price) || price < 0) throw new RangeError(`a price must be whole cents, got ${String(price)}`);
+		if (prices.length === 0) return void 0;
+		const sorted = [...prices].sort((a, b) => a - b);
+		return {
+			count: sorted.length,
+			lowCents: quantile(sorted, .25),
+			medianCents: quantile(sorted, .5),
+			highCents: quantile(sorted, .75)
+		};
+	}
+	/** The `q` quantile of sorted values, linear between the two nearest (R's type 7). */
+	function quantile(sorted, q) {
+		const position = (sorted.length - 1) * q;
+		const below = Math.floor(position);
+		const lower = sorted[below] ?? 0;
+		const upper = sorted[Math.min(below + 1, sorted.length - 1)] ?? lower;
+		return Math.round(lower + (upper - lower) * (position - below));
+	}
+
+// ../sourcing/src/market.ts
+/**
+	* Marketplace comparisons (docs/features/thrift-scan.md, "Marketplace comparisons"): the
+	* public search results a marketplace shows a logged-out visitor, matched to the scanned item
+	* and reduced to counts and quartiles: asking prices of listings for sale, and sold prices where
+	* the marketplace shows a visitor sold listings (Depop never does). Pure: the phone's comparison reader
+	* runs it on what it read, and only its numbers ever leave the phone (never a listing, a
+	* seller, or a photo).
+	*
+	* A brand alone is never a match: one brand sells very different items, so a listing must be
+	* the item's brand **and** its item type, and the tighter levels add the exact model or line and
+	* the size where the scan knows them.
+	*/
+	/**
+	* How closely the comparisons match the item, tightest first. Every level is the brand and the
+	* item type; `model` adds the exact model or line, `size` the size.
+	*/
+	const MARKET_MATCH_LEVELS = [
+		"model_and_size",
+		"model",
+		"type_and_size",
+		"type"
+	];
+	/** Fewest listings (sold, else for sale) a level needs before a looser one is tried. */
+	const MIN_MARKET_MATCHES = 5;
+	const DAY_MS = 864e5;
+	/** The words of a text, lowercase, accents and punctuation dropped. */
+	function words(text) {
+		return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/['’]/g, "").split(/[^\p{L}\p{N}]+/u).filter((word) => word !== "");
+	}
+	/** Whether `text` has the phrase `phrase` as whole words, in order. */
+	function hasPhrase(text, phrase) {
+		const wanted = words(phrase);
+		if (wanted.length === 0) return false;
+		for (let start = 0; start + wanted.length <= text.length; start += 1) if (wanted.every((word, offset) => text[start + offset] === word)) return true;
+		return false;
+	}
+	/** A word, its plural `s` dropped, so "jeans" and "jean" or "hoodies" and "hoodie" agree. */
+	function stem(word) {
+		return word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
+	}
+	/** The listings of the item's brand and type, and whether each is its model and its size. */
+	function matched(listings, target) {
+		const brand = brandKey$1(target.brand);
+		if (brand === void 0) return [];
+		const types = new Set(target.productTypes);
+		const typeStems = new Set(target.typeWords.flatMap(words).map(stem));
+		const size = sizeBucket(target.sizeLabel);
+		const model = target.model?.trim() ?? "";
+		const out = [];
+		for (const listing of listings) {
+			if (!Number.isSafeInteger(listing.priceCents) || listing.priceCents <= 0) continue;
+			if (brandKey$1(listing.brand) !== brand) continue;
+			const text = words(listing.text);
+			if (!(listing.productType !== null && types.size > 0 ? types.has(listing.productType) : text.some((word) => typeStems.has(stem(word))))) continue;
+			out.push({
+				listing,
+				model: model !== "" && hasPhrase(text, model),
+				size: size !== null && listing.sizes.some((one) => sizeBucket(one) === size)
+			});
+		}
+		return out;
+	}
+	function atLevel(found, level) {
+		return found.filter((one) => {
+			switch (level) {
+				case "model_and_size": return one.model && one.size;
+				case "model": return one.model;
+				case "type_and_size": return one.size;
+				case "type": return true;
+			}
+		}).map((one) => one.listing);
+	}
+	/**
+	* The prices with outliers left out (outside 1.5 times the interquartile range past the
+	* quartiles, from 5 prices up: a "$1 to trade" or a "$500 rare" listing must not move a range).
+	*/
+	function withoutOutliers(prices) {
+		if (prices.length < 5) return [...prices];
+		const q = quartiles(prices);
+		if (q === void 0) return [];
+		const spread = q.highCents - q.lowCents;
+		const low = q.lowCents - 1.5 * spread;
+		const high = q.highCents + 1.5 * spread;
+		return prices.filter((price) => price >= low && price <= high);
+	}
+	/**
+	* The comparisons of one marketplace: the tightest level with at least `minMatches` sold
+	* listings, or, where the marketplace shows no sold ones, listings for sale (with none that
+	* tight, the tightest with any), and its sold and asking quartiles without outliers.
+	*/
+	function marketStats(listings, target, now, options = {}) {
+		const minMatches = options.minMatches ?? 5;
+		const found = matched(listings, target);
+		const read = {
+			sold: listings.filter((listing) => listing.sold).length,
+			forSale: listings.filter((listing) => !listing.sold).length
+		};
+		const anySold = found.some((one) => one.listing.sold);
+		const counted = (level) => atLevel(found, level).filter((listing) => listing.sold === anySold).length;
+		const level = MARKET_MATCH_LEVELS.find((candidate) => counted(candidate) >= minMatches) ?? MARKET_MATCH_LEVELS.find((candidate) => counted(candidate) > 0) ?? null;
+		if (level === null) return {
+			level: null,
+			read
+		};
+		const chosen = atLevel(found, level);
+		const sold = chosen.filter((listing) => listing.sold);
+		const soldPrices = quartiles(withoutOutliers(sold.map((listing) => listing.priceCents)));
+		const forSalePrices = quartiles(withoutOutliers(chosen.filter((listing) => !listing.sold).map((listing) => listing.priceCents)));
+		const ages = sold.flatMap((listing) => listing.at === null ? [] : [Math.max(0, (now.getTime() - listing.at.getTime()) / DAY_MS)]);
+		const dated = ages.length === sold.length && sold.length > 0;
+		return {
+			level,
+			...soldPrices === void 0 ? {} : { sold: {
+				...soldPrices,
+				windowDays: dated ? Math.ceil(Math.max(...ages)) : null
+			} },
+			...forSalePrices === void 0 ? {} : { forSale: forSalePrices },
+			read
+		};
+	}
+
+// src/depop/pages/common.ts
+/**
+	* What every Depop page module shares: absolute URLs on the site the adapter runs against
+	* (Depop, or the fake Depop site in development and tests), and the failure every page module
+	* throws for a page that is not as it expects.
+	*/
+	function absolute$2(site, path) {
+		return `${site.origin}${path}`;
+	}
+	/** A product's page: the listing's `externalUrl`. */
+	function productUrl(site, slug) {
+		return absolute$2(site, DEPOP_PATHS.product(slug));
+	}
+	/**
+	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
+	* page has `selector`.
+	*/
+	async function expectElement$2(page, selector, pageName, what) {
+		if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
+	}
+	/**
+	* Waits, within the step's time, for `selector` on a page that Depop's own scripts draw after
+	* its document is ready, and throws `PageChangedError` naming the part when it never comes. A
+	* check the page shows instead still stops the run as one: the page driver throws it again.
+	*/
+	async function awaitElement$1(page, selector, pageName, what) {
+		try {
+			await page.waitFor(selector, "attached");
+		} catch {
+			if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
+		}
+	}
+	/** The failure for a Depop page that is not as the script expects. */
+	function changed$2(pageName, problem) {
+		return new PageChangedError(`Depop's ${pageName} ${problem}.`);
+	}
+	/**
+	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
+	* the run) and learns its address anew, which the page's own scripts may have changed without
+	* loading a page (Depop opens a new listing that way).
+	*/
+	async function lookAgain$1(page, ms) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		await page.waitFor("body", "attached");
+	}
+
+// src/depop/pages/search.ts
+/**
+	* Depop's public search, as any logged-out visitor's browser reads it (docs/features/
+	* thrift-scan.md, "Marketplace comparisons"). The search page (`/search/?q=<words>`) loads its
+	* results from Depop's own same-origin API, 24 at a time, the most relevant first:
+	* `GET /presentation/api/v1/search/products/?what=<words>&limit=24&country=us&currency=USD
+	* &from=in_country_search`, answering `{ meta: { total_count }, page_info, objects }` (read live
+	* on 2026-10-31 in a fresh browser context with no cookies: the page's next pages as it
+	* scrolled, and its first page in its App Router payload). The comparison read makes that one
+	* GET from a warm search page, as the page itself does.
+	*
+	* Each product carries its brand (`brand_name`), its product type (`attributes.product_type`,
+	* Depop's taxonomy id, `jeans`), its sizes, its description, its status, and its price (the
+	* item's own, without shipping). Only those are read: never the seller (the slug names them),
+	* the photos, or the location.
+	*/
+	const PAGE$12 = "search";
+	/** Statuses of a product that sold, as Depop names them (page-data.ts). */
+	const SOLD_STATUSES = /* @__PURE__ */ new Set([
+		"STATUS_SOLD",
+		"STATUS_PURCHASED",
+		"STATUS_MARKED_AS_SOLD",
+		"SOLD",
+		"PURCHASED",
+		"MARKED_AS_SOLD"
+	]);
+	const ON_SALE_STATUSES = /* @__PURE__ */ new Set(["STATUS_ONSALE", "ONSALE"]);
+	const amount$2 = object({ amount: string() });
+	const searchProductSchema = object({
+		brand_name: string().nullish(),
+		status: string(),
+		description: string(),
+		sizes: array(object({ name: string() })).nullish(),
+		attributes: object({ product_type: string().nullish() }).catchall(unknown()).nullish(),
+		pricing: object({
+			currency_name: string(),
+			current_price: object({ price_breakdown: object({ price: amount$2 }) })
+		}).catchall(unknown())
+	});
+	const searchAnswerSchema = object({
+		meta: object({ total_count: number().int().min(0).optional() }).catchall(unknown()),
+		objects: array(unknown())
+	});
+	/** One page of results, as the search page asks for it. */
+	const DEPOP_SEARCH_PAGE_SIZE = 24;
+	/** The public search page, where a comparison read starts (and its warm-up loads). */
+	function depopSearchPageUrl(site) {
+		return `${site.origin}/search/`;
+	}
+	/** The search API's first page for these words, as the search page asks for it. */
+	function depopSearchApiUrl(site, words) {
+		const query = new URLSearchParams({
+			what: words.trim(),
+			limit: String(24),
+			country: "us",
+			currency: "USD",
+			from: "in_country_search"
+		});
+		return `${site.origin}/presentation/api/v1/search/products/?${query.toString()}`;
+	}
+	/** Reads the first page of the public search for `words`, from a page on Depop's site. */
+	async function readDepopSearch(page, site, words) {
+		if (!page.url().startsWith(`${site.origin}/`)) await page.goto(depopSearchPageUrl(site));
+		const answer = await page.apiGet(depopSearchApiUrl(site, words));
+		if (answer.status !== 200) throw changed$2(PAGE$12, `answered ${String(answer.status)}`);
+		return depopSearchFromAnswer(answer.body);
+	}
+	/** The search's products and count, out of its API answer. */
+	function depopSearchFromAnswer(body) {
+		const read = searchAnswerSchema.safeParse(body);
+		if (!read.success) throw changed$2(PAGE$12, "answered with results Listora does not know");
+		const listings = [];
+		for (const entry of read.data.objects) {
+			const product = searchProductSchema.safeParse(entry);
+			if (!product.success) throw changed$2(PAGE$12, "shows a product Listora does not know");
+			const listing = listingOf(product.data);
+			if (listing !== null) listings.push(listing);
+		}
+		return {
+			listings,
+			total: read.data.meta.total_count ?? null
+		};
+	}
+	function listingOf(product) {
+		if (product.pricing.currency_name !== "USD") return null;
+		const sold = SOLD_STATUSES.has(product.status);
+		if (!sold && !ON_SALE_STATUSES.has(product.status)) return null;
+		const priceCents = cents$3(product.pricing.current_price.price_breakdown.price.amount);
+		if (priceCents === null) return null;
+		return {
+			priceCents,
+			sold,
+			brand: product.brand_name ?? null,
+			productType: product.attributes?.product_type ?? null,
+			sizes: (product.sizes ?? []).map((size) => size.name),
+			text: product.description,
+			at: null
+		};
+	}
+	/** A US dollar amount (`"18.00"`) in cents, or null for one Listora can't read. */
+	function cents$3(value) {
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+		if (match?.[1] === void 0) return null;
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+	}
+
+// src/comps/depop.ts
+/**
+	* Depop's comparison reader (docs/features/thrift-scan.md, "Marketplace comparisons"): the
+	* item's public search on Depop, read from a warm search page that holds no session, matched to
+	* the item and reduced to counts and quartiles (`marketStats`). Nothing in it signs in, likes,
+	* saves, or follows anything: it only reads what any visitor's browser reads.
+	*/
+	/** Depop's site for comparison reads: its own origin only, whose same-origin API it reads. */
+	function depopComparisonSite(siteUrl) {
+		const site = depopSite(siteUrl);
+		return {
+			...site,
+			api: site.origin
+		};
+	}
+	/** The warm-up: the public search page, loaded once while the seller walks to the bins. */
+	function depopWarmUpScript(siteUrl) {
+		const site = depopComparisonSite(siteUrl);
+		return (step) => step("open the search", { mutates: false }, async (page) => {
+			await page.goto(depopSearchPageUrl(site));
+			return "warm";
+		});
+	}
+	/** One comparison read: the item's search, matched and counted. */
+	function depopComparisonScript(siteUrl, query, now) {
+		const site = depopComparisonSite(siteUrl);
+		return async (step) => {
+			const found = await step("search Depop", { mutates: false }, (page) => readDepopSearch(page, site, query.words));
+			return {
+				stats: marketStats(found.listings, {
+					brand: query.brand,
+					productTypes: query.productTypes,
+					typeWords: query.typeWords,
+					model: query.model,
+					sizeLabel: query.sizeLabel
+				}, now),
+				forSaleTotal: found.total
+			};
+		};
+	}
+
+// src/comps/run.ts
+/**
+	* Runs a comparison read on the phone (docs/features/thrift-scan.md, "Marketplace
+	* comparisons"), through the same session rules as every automated read (runner/
+	* script-session.ts: pacing, a read-only page driver, the page inspection after every action),
+	* on the phone's page backend, in the app's comparison web view: its own data store, no cookies,
+	* never signed in. The first check (a CAPTCHA, a bot check, a sign-in page, a 403 that is not
+	* JSON) ends the read as `check`, and the app stops that marketplace's comparisons for the day;
+	* nothing ever tries to get past it, and it is never handed to the seller (no seller session is
+	* involved, so there is nothing of theirs to unblock).
+	*/
+	/** The marketplaces' sites the comparison lane reads; never configurable by a call. */
+	const SITES = { depop: "https://www.depop.com" };
+	/**
+	* The marketplace's profile for a logged-out read: its own origins and checks, its site's
+	* origin as the only API it may read, and no cookie domains (a read never holds a cookie).
+	*/
+	function comparisonProfile(marketplace, input, siteUrl = SITES[marketplace]) {
+		const builtIn = automationProfile(marketplace);
+		const origin = new URL(siteUrl).origin;
+		const origins = builtIn.origins.includes(origin) ? builtIn.origins : [origin];
+		return {
+			...builtIn,
+			origins,
+			apiOrigins: [origin],
+			cookieDomains: [],
+			pacing: input.pacing,
+			readOnlyPacing: input.pacing
+		};
+	}
+	/** Runs one comparison read; a failure of the runtime itself is reported as one, never thrown. */
+	async function runComparison(input, host, options = {}) {
+		const now = options.now ?? Date.now;
+		const started = now();
+		const ms = () => Math.max(0, Math.round(now() - started));
+		if (input.version !== 1) return {
+			outcome: "failed",
+			message: "this app reads another comparison version",
+			ms: ms()
+		};
+		const siteUrl = options.siteUrl ?? SITES[input.marketplace];
+		const result = await runRead(input, host, depopComparisonScript(siteUrl, input.query, new Date(input.now)), siteUrl, options);
+		if (result.ok) return {
+			outcome: "read",
+			stats: result.value.stats,
+			forSaleTotal: result.value.forSaleTotal,
+			ms: ms()
+		};
+		return {
+			...failureOutcome(result.failure),
+			ms: ms()
+		};
+	}
+	/** A warm-up's step and call time when the app names none. */
+	const WARM_UP_STEP_MS = 15e3;
+	const WARM_UP_CALL_MS = 3e4;
+	/** Loads the marketplace's search page once, so the first read starts warm. */
+	async function warmUpComparisons(input, host, options = {}) {
+		const now = options.now ?? Date.now;
+		const started = now();
+		const ms = () => Math.max(0, Math.round(now() - started));
+		const siteUrl = options.siteUrl ?? SITES[input.marketplace];
+		const result = await runRead({
+			marketplace: input.marketplace,
+			pacing: input.pacing ?? automationProfile(input.marketplace).readOnlyPacing,
+			stepTimeoutMs: input.stepTimeoutMs ?? WARM_UP_STEP_MS,
+			callTimeoutMs: input.callTimeoutMs ?? WARM_UP_CALL_MS
+		}, host, depopWarmUpScript(siteUrl), siteUrl, options);
+		return result.ok ? {
+			outcome: "warm",
+			ms: ms()
+		} : {
+			...failureOutcome(result.failure),
+			ms: ms()
+		};
+	}
+	async function runRead(input, host, script, siteUrl, options) {
+		const profile = comparisonProfile(input.marketplace, input, siteUrl);
+		const session = new ScriptSession(new BridgeBackend(host), {
+			profile,
+			pacing: new Pacing(profile.pacing, options.pacing),
+			logger: {
+				debug: (fields, message) => {
+					host.log("debug", message, fields);
+				},
+				warn: (fields, message) => {
+					host.log("warn", message, fields);
+				}
+			},
+			stepTimeoutMs: input.stepTimeoutMs,
+			close: () => Promise.resolve([])
+		});
+		try {
+			return await session.read("compare", script, AbortSignal.timeout(input.callTimeoutMs));
+		} catch (thrown) {
+			return {
+				ok: false,
+				mutated: false,
+				steps: [],
+				failure: {
+					kind: "error",
+					step: "phone",
+					code: "script_error",
+					message: (thrown instanceof Error ? thrown.message : String(thrown)).slice(0, 200),
+					retryAfterMs: null,
+					screenshotKey: null
+				}
+			};
+		} finally {
+			await session.close();
+		}
+	}
+	/** How a read that stopped is reported: a check or a rate limit pauses the marketplace. */
+	function failureOutcome(failure) {
+		switch (failure.kind) {
+			case "challenge": return {
+				outcome: "check",
+				message: `the page showed a ${failure.challenge.replace("_", " ")}`
+			};
+			case "timeout": return {
+				outcome: "failed",
+				message: "the read ran out of time"
+			};
+			case "error": return failure.code === "rate_limited" ? {
+				outcome: "rate_limited",
+				message: "the marketplace asked Listora to slow down"
+			} : {
+				outcome: "failed",
+				message: `${failure.code}: ${failure.message}`.slice(0, 200)
+			};
+			default: return assertNever(failure, "script failure");
+		}
+	}
+
+// ../marketplaces/src/adapter.ts
+/** The listing states every adapter maps its marketplace's own statuses onto. */
+	const REMOTE_LISTING_STATUSES = [
+		"active",
+		"ended",
+		"sold"
+	];
+
 // ../marketplaces/src/ebay/description.ts
 	const ENTITIES = {
 		amp: "&",
@@ -5861,170 +8244,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			description: shown.slice(0, match.index).trim(),
 			sku: match[1]
 		};
-	}
-
-// src/runner/errors.ts
-/**
-	* What a script throws when a page is not the way it expects: a field missing from the page's
-	* data, a status it does not know, a form without the button it submits with. The run ends as
-	* `element_missing` (the page is not as the script expects), so a step that changed nothing goes to the
-	* user instead of being retried against a page that will not change back. The message is
-	* logged and stored, so it says what the script expected and never repeats page content.
-	*/
-	var PageChangedError = class extends Error {
-		constructor(message) {
-			super(message);
-			this.name = "PageChangedError";
-		}
-	};
-	/**
-	* What a script throws when the marketplace's own page says it failed and to try again (Mercari's
-	* "Your item could not be listed due to an error"): not a refusal of the listing, and not a page
-	* Listora no longer understands. The run ends as `server_error`, which is retried once the
-	* listing is read back. The message is logged and stored, so it never repeats page content.
-	*/
-	var MarketplaceError = class extends Error {
-		constructor(message) {
-			super(message);
-			this.name = "MarketplaceError";
-		}
-	};
-
-// src/depop/site.ts
-/** Depop. Products are `/products/<slug>/`; the seller's own pages are under `/sellinghub/`. */
-	const DEPOP_SITE_URL = "https://www.depop.com";
-	/**
-	* Depop's web API, which its own pages read their data from (with the session's token, the
-	* `access_token` cookie): the reads Listora makes there are the ones the pages make
-	* (`PageDriver.apiGet`, pages/api.ts). Every change still goes through the pages.
-	*/
-	const DEPOP_API_URL = "https://webapi.depop.com";
-	/**
-	* Depop's pacing: 0.3 seconds before each action, the floor (`PACING_FLOOR`; the captain's
-	* call, 2026-10-28), still a person's pace.
-	*/
-	const DEPOP_PACING = {
-		actionDelayMs: [300, 300],
-		keystrokeDelayMs: [40, 120],
-		sessionGapMs: [5e3, 2e4]
-	};
-	/**
-	* A read-only Depop connection's pace (a production shop Listora only reads): 0.3 to 0.8 seconds
-	* before each action, as Depop's reads were paced before 2026-10-28.
-	*/
-	const DEPOP_READ_ONLY_PACING = {
-		...DEPOP_PACING,
-		actionDelayMs: [300, 800]
-	};
-	/**
-	* The site a script set drives: Depop and its web API, or a stand-in in development and tests,
-	* which serves the API's reads itself.
-	*/
-	function depopSite(siteUrl) {
-		const origin = new URL(siteUrl).origin;
-		return {
-			origin,
-			api: origin === "https://www.depop.com" ? DEPOP_API_URL : origin
-		};
-	}
-	/**
-	* A Depop product slug: the seller's username and words of the listing, lowercase and joined by
-	* hyphens (`jdoe-levis-trucker-jacket`); a username may have underscores and periods
-	* (`365_nails-black-and-white-nail-set`). The Selling API addresses the same products by it
-	* (`/api/v1/products/by-slug/{slug}/`), so a listing automated today is still found once the
-	* seller connects the API. At least one hyphen, so `/products/create/` is never a product.
-	*/
-	const DEPOP_SLUG = /^[a-z0-9][a-z0-9._]*(?:-[a-z0-9_]+)+$/;
-	/** Paths on Depop's site, relative to its origin. */
-	const DEPOP_PATHS = {
-		/** The selling hub's home, which only a logged-in seller sees. */
-		hub: "/sellinghub/",
-		sell: "/products/create/",
-		product: (slug) => `/products/${encodeURIComponent(slug)}/`,
-		edit: (slug) => `/products/edit/${encodeURIComponent(slug)}/`,
-		/** The seller's sold items, newest first. */
-		sold: (page) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ""}`,
-		/** The selling hub's offers ("Review offers"). */
-		offers: "/sellinghub/offers/",
-		/** One offer, where the seller answers it. */
-		offer: (id) => `/sellinghub/offers/${encodeURIComponent(id)}/`
-	};
-	/**
-	* The slug in a path that opens a product (`/products/jdoe-levis-jacket/`, or its seller's own
-	* view, `/products/jdoe-levis-jacket/manage/`, where Depop sends them), else `null`.
-	*/
-	function slugFromPath(path) {
-		const slug = /^\/products\/([^/]+)\/(?:manage\/?)?$/.exec(path)?.[1];
-		if (slug === void 0) return null;
-		const decoded = decodeURIComponent(slug);
-		return DEPOP_SLUG.test(decoded) ? decoded : null;
-	}
-	/**
-	* Depop's own signs of a page automation must stop at, on top of the generic ones
-	* (safety/challenges.ts, which already know the frames of DataDome's and the other CAPTCHA
-	* services, bot-check titles and wording, a 403, and the wording of verification-code steps).
-	*/
-	const DEPOP_CHALLENGE_SIGNS = {
-		loginPaths: [/^\/(login|log-in|signin|sign-in|signup|sign-up|register)(\/|$)/i],
-		verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge|mfa)(\/|$)/i, /^\/login\/(verify|verification|code|magic-link|mfa|otp|challenge)(\/|$)/i],
-		botCheckPaths: [],
-		challengeSelectors: []
-	};
-	/**
-	* Parts of Depop's pages a failure screenshot blacks out besides every form field: buyers'
-	* names and addresses on sold items, messages, and the seller's own name.
-	*/
-	const DEPOP_PRIVATE_SELECTORS = [
-		"[data-testid=\"buyerName\"]",
-		"[data-testid=\"shippingAddress\"]",
-		"[data-testid=\"messages\"]",
-		"[data-testid=\"sellerUsername\"]"
-	];
-
-// src/depop/pages/common.ts
-/**
-	* What every Depop page module shares: absolute URLs on the site the adapter runs against
-	* (Depop, or the fake Depop site in development and tests), and the failure every page module
-	* throws for a page that is not as it expects.
-	*/
-	function absolute$2(site, path) {
-		return `${site.origin}${path}`;
-	}
-	/** A product's page: the listing's `externalUrl`. */
-	function productUrl(site, slug) {
-		return absolute$2(site, DEPOP_PATHS.product(slug));
-	}
-	/**
-	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
-	* page has `selector`.
-	*/
-	async function expectElement$2(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
-	}
-	/**
-	* Waits, within the step's time, for `selector` on a page that Depop's own scripts draw after
-	* its document is ready, and throws `PageChangedError` naming the part when it never comes. A
-	* check the page shows instead still stops the run as one: the page driver throws it again.
-	*/
-	async function awaitElement$1(page, selector, pageName, what) {
-		try {
-			await page.waitFor(selector, "attached");
-		} catch {
-			if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
-		}
-	}
-	/** The failure for a Depop page that is not as the script expects. */
-	function changed$2(pageName, problem) {
-		return new PageChangedError(`Depop's ${pageName} ${problem}.`);
-	}
-	/**
-	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
-	* the run) and learns its address anew, which the page's own scripts may have changed without
-	* loading a page (Depop opens a new listing that way).
-	*/
-	async function lookAgain$1(page, ms) {
-		await new Promise((resolve) => setTimeout(resolve, ms));
-		await page.waitFor("body", "attached");
 	}
 
 // src/depop/sizes.ts
@@ -6876,7 +9095,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** A row: its hex id, an optional type tag, then its JSON (`6:[...]`, `a:I[...]`). */
 	const ROW = /^[0-9a-f]+:[A-Z]{0,2}(?=[[{"])/;
 	/** Bounds on the search through a page's rows, which are a few hundred kilobytes. */
-	const MAX_DEPTH$1 = 48;
+	const MAX_DEPTH = 48;
 	const MAX_NODES = 4e5;
 	const MAX_EMBEDDED = 2e6;
 	/** The JSON values of the page's payload rows, in order; empty for a page without one. */
@@ -6925,7 +9144,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				if (embedded !== void 0) walk(embedded, depth + 1);
 				return;
 			}
-			if (node === null || typeof node !== "object" || depth > MAX_DEPTH$1) return;
+			if (node === null || typeof node !== "object" || depth > MAX_DEPTH) return;
 			nodes += 1;
 			if (nodes > MAX_NODES) return;
 			const values = Array.isArray(node) ? node : Object.values(node);
@@ -8222,64 +10441,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		} : { type: "applied" };
 	}
 
-// src/ebay/site.ts
-/**
-	* An eBay item number (`ItemID`): digits, 12 of them today. The Trading API addresses the same
-	* listings by it, so a listing automated today is the same listing record once the seller
-	* connects the API.
-	*/
-	const EBAY_ITEM_ID = /^\d{9,19}$/;
-	/** Paths on eBay's site, relative to its origin. */
-	const EBAY_PATHS = {
-		/** Seller Hub's overview, which only a logged-in seller sees. */
-		overview: "/sh/ovw",
-		/**
-		* The listing form: a new listing in a category, or an existing listing to revise or relist
-		* (its category changed to `categoryId` when one is given).
-		*/
-		form: (mode, options) => {
-			const query = new URLSearchParams({ mode });
-			if (options.itemId !== void 0) query.set("itemId", options.itemId);
-			if (options.categoryId !== void 0 && options.categoryId !== null) query.set("categoryId", options.categoryId);
-			return `/lstng?${query.toString()}`;
-		},
-		/** A listing's page. */
-		item: (itemId) => `/itm/${encodeURIComponent(itemId)}`,
-		/** Ending one listing early. */
-		end: (itemId) => `/sh/lst/end?${new URLSearchParams({ itemId }).toString()}`,
-		/** Seller Hub's active listings, newest first, from the `offset`th. */
-		active: (offset) => `/sh/lst/active${offset > 0 ? `?offset=${String(offset)}` : ""}`,
-		/** Seller Hub's sold listings, newest first, from the `offset`th. */
-		sold: (offset) => `/sh/lst/sold${offset > 0 ? `?offset=${String(offset)}` : ""}`
-	};
-	/** The item number in a path that opens a listing (`/itm/1234567890`), else `null`. */
-	function itemIdFromPath$1(path) {
-		const id = /^\/itm\/(?:[^/]+\/)?(\d+)\/?$/.exec(path)?.[1];
-		return id !== void 0 && EBAY_ITEM_ID.test(id) ? id : null;
-	}
-	/**
-	* eBay's own signs of a page automation must stop at, on top of the generic ones
-	* (safety/challenges.ts, which already know hCaptcha's and reCAPTCHA's frames and widgets,
-	* "Pardon Our Interruption" and the other bot-check titles, a 403, and the wording of
-	* verification-code steps).
-	*/
-	const EBAY_CHALLENGE_SIGNS = {
-		loginPaths: [/^\/(signin|sign-in|login|register)(\/|$)/i],
-		verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge|mfa)(\/|$)/i, /^\/signin\/.*\b(mfa|otp|verify|verification|challenge|2fa|passkey)\b/i],
-		botCheckPaths: [/^\/splashui\/(challenge|captcha)(\/|$)/i],
-		challengeSelectors: []
-	};
-	/**
-	* Parts of eBay's pages a failure screenshot blacks out besides every form field: buyers' user
-	* ids and addresses on sold listings, messages, and the seller's own user id.
-	*/
-	const EBAY_PRIVATE_SELECTORS = [
-		"[data-testid=\"buyer\"]",
-		"[data-testid=\"shipping-address\"]",
-		"[data-testid=\"messages\"]",
-		"[data-testid=\"seller-user-id\"]"
-	];
-
 // src/ebay/pages/common.ts
 /**
 	* What every eBay page module shares: absolute URLs on the site the adapter runs against (eBay,
@@ -9082,50 +11243,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	function isStatus(value) {
 		return value !== null && REMOTE_LISTING_STATUSES.includes(value);
 	}
-
-// src/mercari/site.ts
-/** Mercari item ids: `m` and digits, for example `m12345678901`. */
-	const MERCARI_ITEM_ID = /^m\d{6,20}$/;
-	/** Paths on Mercari's site, relative to its origin. */
-	const MERCARI_PATHS = {
-		account: "/mypage/",
-		sell: "/sell/",
-		item: (id) => `/us/item/${encodeURIComponent(id)}/`,
-		edit: (id) => `/sell/edit/${encodeURIComponent(id)}/`,
-		listings: (tab, page) => `/mypage/listings/${tab}/${page > 1 ? `?page=${String(page)}` : ""}`
-	};
-	/** The item id in a path that opens a listing (`/us/item/m123.../`), else `null`. */
-	function itemIdFromPath(path) {
-		const id = /^\/us\/item\/([^/]+)\/?$/.exec(path)?.[1];
-		if (id === void 0) return null;
-		const decoded = decodeURIComponent(id);
-		return MERCARI_ITEM_ID.test(decoded) ? decoded : null;
-	}
-	/**
-	* Mercari's own signs of a page automation must stop at, on top of the generic ones
-	* (safety/challenges.ts, which already know Cloudflare's "Just a moment..." interstitial, its
-	* Turnstile widget and challenge frames, a 403, and the wording of verification-code steps).
-	*/
-	const MERCARI_CHALLENGE_SIGNS = {
-		loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in|signup|sign-up|register)(\/|$)/i],
-		verificationPaths: [
-			/^\/(verify|verification|two-factor|2fa|otp|challenge|mfa)(\/|$)/i,
-			/^\/(login|signin)\/(verify|verification|code|mfa|otp|challenge)(\/|$)/i,
-			/^\/(identity|id-verification|identity-verification)(\/|$)/i
-		],
-		botCheckPaths: [],
-		challengeSelectors: ["#turnstile-wrapper"]
-	};
-	/**
-	* Parts of Mercari's pages a failure screenshot blacks out besides every form field: buyers'
-	* names and addresses on sold items, and messages.
-	*/
-	const MERCARI_PRIVATE_SELECTORS = [
-		"[data-testid=\"BuyerName\"]",
-		"[data-testid=\"ShippingAddress\"]",
-		"[data-testid=\"Messages\"]",
-		"[data-testid=\"UserName\"]"
-	];
 
 // src/mercari/pages/common.ts
 /**
@@ -11759,1617 +13876,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		};
 	}
 
-// src/profiles.ts
-/**
-	* The pace of a practiced seller: 0.3 s before each action (the floor, `PACING_FLOOR`; the
-	* captain's call, 2026-10-28, on the efficiency audit: at 0.45 to 1.1 s pacing was about half
-	* of a listing), a quick typist's keystrokes, and a few seconds between sessions
-	* (docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
-	*/
-	const DEFAULT_PACING = {
-		actionDelayMs: [300, 300],
-		keystrokeDelayMs: [45, 130],
-		sessionGapMs: [2e3, 4e3]
-	};
-	/** The default pace before 2026-10-28, which read-only connections keep (`readOnlyPacing`). */
-	const READ_ONLY_PACING = {
-		...DEFAULT_PACING,
-		actionDelayMs: [450, 1100]
-	};
-	/** Well inside what one busy seller does by hand. */
-	const DEFAULT_LIMITS = {
-		runsPerHour: 30,
-		runsPerDay: 200
-	};
-	const PROFILES = {
-		poshmark: {
-			marketplace: "poshmark",
-			origins: ["https://poshmark.com", "https://www.poshmark.com"],
-			cookieDomains: ["poshmark.com"],
-			apiOrigins: [],
-			loginUrl: "https://poshmark.com/login",
-			emailsSignInLinks: false,
-			pacing: DEFAULT_PACING,
-			readOnlyPacing: READ_ONLY_PACING,
-			limits: DEFAULT_LIMITS,
-			challenges: {
-				loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in)(\/|$)/i],
-				verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i],
-				botCheckPaths: [],
-				challengeSelectors: []
-			},
-			privateSelectors: [],
-			runsOn: "phone",
-			cloudAllowed: false
-		},
-		mercari: {
-			marketplace: "mercari",
-			origins: ["https://www.mercari.com", "https://mercari.com"],
-			cookieDomains: ["mercari.com"],
-			apiOrigins: [],
-			loginUrl: "https://www.mercari.com/login/",
-			emailsSignInLinks: false,
-			pacing: DEFAULT_PACING,
-			readOnlyPacing: READ_ONLY_PACING,
-			limits: DEFAULT_LIMITS,
-			challenges: MERCARI_CHALLENGE_SIGNS,
-			privateSelectors: MERCARI_PRIVATE_SELECTORS,
-			runsOn: "phone",
-			cloudAllowed: false
-		},
-		depop: {
-			marketplace: "depop",
-			origins: ["https://www.depop.com", "https://depop.com"],
-			cookieDomains: ["depop.com"],
-			apiOrigins: [DEPOP_API_URL],
-			loginUrl: "https://www.depop.com/login/",
-			emailsSignInLinks: true,
-			pacing: DEPOP_PACING,
-			readOnlyPacing: DEPOP_READ_ONLY_PACING,
-			limits: DEFAULT_LIMITS,
-			challenges: DEPOP_CHALLENGE_SIGNS,
-			privateSelectors: DEPOP_PRIVATE_SELECTORS,
-			runsOn: "phone",
-			cloudAllowed: false
-		},
-		ebay: {
-			marketplace: "ebay",
-			origins: [
-				"https://www.ebay.com",
-				"https://ebay.com",
-				"https://signin.ebay.com"
-			],
-			cookieDomains: ["ebay.com"],
-			apiOrigins: [],
-			loginUrl: "https://signin.ebay.com/signin/",
-			emailsSignInLinks: false,
-			pacing: DEFAULT_PACING,
-			readOnlyPacing: READ_ONLY_PACING,
-			limits: DEFAULT_LIMITS,
-			challenges: EBAY_CHALLENGE_SIGNS,
-			privateSelectors: EBAY_PRIVATE_SELECTORS,
-			runsOn: "cloud",
-			cloudAllowed: true
-		}
-	};
-	/** The built-in profile of a marketplace; settings.ts applies the configured pacing and limits. */
-	function automationProfile(marketplace) {
-		return PROFILES[marketplace];
-	}
-
-// src/safety/pacing.ts
-	var Pacing = class {
-		settings;
-		#random;
-		#sleep;
-		constructor(settings, options = {}) {
-			for (const range of [
-				settings.actionDelayMs,
-				settings.keystrokeDelayMs,
-				settings.sessionGapMs
-			]) checkRange(range);
-			this.settings = settings;
-			this.#random = options.random ?? Math.random;
-			this.#sleep = options.sleep ?? abortableSleep;
-		}
-		/** A delay for `kind`, uniform in its range. */
-		delayMs(kind) {
-			const [min, max] = this.#range(kind);
-			return Math.round(min + (max - min) * this.#random());
-		}
-		/** Waits a delay for `kind`; rejects when `signal` aborts. */
-		async wait(kind, signal) {
-			await this.#sleep(this.delayMs(kind), signal);
-		}
-		/** Waits whatever is left of `ms`, for example the rest of a session gap. */
-		async waitFor(ms, signal) {
-			if (ms > 0) await this.#sleep(ms, signal);
-		}
-		#range(kind) {
-			switch (kind) {
-				case "action": return this.settings.actionDelayMs;
-				case "keystroke": return this.settings.keystrokeDelayMs;
-				case "session": return this.settings.sessionGapMs;
-			}
-		}
-	};
-	function checkRange([min, max]) {
-		if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) throw new RangeError("a delay range needs 0 <= min <= max");
-	}
-	function abortableSleep(ms, signal) {
-		return new Promise((resolve, reject) => {
-			if (signal.aborted) {
-				reject(abortReason(signal));
-				return;
-			}
-			const onAbort = () => {
-				clearTimeout(timer);
-				reject(abortReason(signal));
-			};
-			const timer = setTimeout(() => {
-				signal.removeEventListener("abort", onAbort);
-				resolve();
-			}, ms);
-			signal.addEventListener("abort", onAbort, { once: true });
-		});
-	}
-	function abortReason(signal) {
-		return signal.reason instanceof Error ? signal.reason : /* @__PURE__ */ new Error("aborted");
-	}
-
-// src/safety/challenges.ts
-/** Frames of the CAPTCHA and bot-check services marketplaces use. */
-	const CHALLENGE_FRAME_PATTERN = /(google\.com|recaptcha\.net)\/recaptcha\/.*\/(bframe|fallback)|(google\.com|recaptcha\.net)\/recaptcha\/.*anchor(?!.*size=invisible)|hcaptcha\.com|challenges\.cloudflare\.com|arkoselabs\.com|funcaptcha\.com|captcha-delivery\.com|perimeterx\.net|px-cdn\.net|px-captcha|hsprotect\.net|geetest\.com/i;
-	/** Elements of CAPTCHA widgets, on any marketplace; each counts only while visible. */
-	const CHALLENGE_SELECTORS = [
-		".g-recaptcha",
-		".h-captcha",
-		".cf-turnstile",
-		"#px-captcha",
-		"#captcha",
-		"[data-sitekey]",
-		"iframe[title*=\"captcha\" i]",
-		"iframe[title*=\"challenge\" i]"
-	];
-	/** Titles of bot-check interstitials (Cloudflare, Akamai, Imperva, PerimeterX, DataDome). */
-	const BOT_CHECK_TITLES = /just a moment|attention required|access denied|are you a (human|robot)|verify(ing)? (that )?you are (a )?human|pardon our interruption|robot or human|security check|checking your browser|please wait while we verify/i;
-	const BOT_CHECK_TEXT = /(verify|confirm|prove) (that )?you('| a)re (a )?human|unusual (traffic|activity)|automated (access|requests|queries)|are you a robot|press (and|&) hold|enable javascript and cookies to continue/;
-	const VERIFICATION_TEXT = /enter the (\d-digit |verification |security |one-time )?code|we (just )?sent (you )?a (verification |security )?code|one-time (code|passcode|password)|two-factor|2-step verification/;
-	/**
-	* The first problem the page shows, or `null` when the run may go on. Checks come in order of
-	* how much they put at stake: a CAPTCHA, a bot check, a page outside the marketplace, a
-	* verification step, a login page, then rate limits and errors.
-	*/
-	function inspectPage(signals, profile) {
-		const [frame] = signals.challengeFrames;
-		if (frame !== void 0) return {
-			type: "challenge",
-			kind: "captcha",
-			sign: `frame ${frame}`
-		};
-		const [selector] = signals.matchedSelectors;
-		if (selector !== void 0) return {
-			type: "challenge",
-			kind: "captcha",
-			sign: `element ${selector}`
-		};
-		if (BOT_CHECK_TITLES.test(signals.title)) return {
-			type: "challenge",
-			kind: "bot_check",
-			sign: "page title"
-		};
-		if (BOT_CHECK_TEXT.test(signals.text)) return {
-			type: "challenge",
-			kind: "bot_check",
-			sign: "page text"
-		};
-		if (signals.status === 403) return {
-			type: "challenge",
-			kind: "bot_check",
-			sign: "status 403"
-		};
-		const url = URL.canParse(signals.url) ? new URL(signals.url) : null;
-		if (url === null || url.protocol !== "about:" && !profile.origins.includes(url.origin)) return {
-			type: "challenge",
-			kind: "unexpected_page",
-			sign: "origin"
-		};
-		const path = url.pathname;
-		if (profile.challenges.botCheckPaths.some((pattern) => pattern.test(path))) return {
-			type: "challenge",
-			kind: "bot_check",
-			sign: "bot-check page"
-		};
-		if (profile.challenges.verificationPaths.some((pattern) => pattern.test(path)) || VERIFICATION_TEXT.test(signals.text)) return {
-			type: "challenge",
-			kind: "login_challenge",
-			sign: "verification step"
-		};
-		if (signals.hasPasswordField || profile.challenges.loginPaths.some((pattern) => pattern.test(path))) return {
-			type: "challenge",
-			kind: "session_rejected",
-			sign: "login page"
-		};
-		if (signals.status === 429) return {
-			type: "rate_limited",
-			retryAfterMs: signals.retryAfterSeconds === null ? null : signals.retryAfterSeconds * 1e3
-		};
-		if (signals.status !== null && signals.status >= 500) return {
-			type: "server_error",
-			status: signals.status
-		};
-		return null;
-	}
-	/** The selectors the page driver tests for this profile. */
-	function challengeSelectors(profile) {
-		return [...CHALLENGE_SELECTORS, ...profile.challenges.challengeSelectors];
-	}
-
-// src/safety/evidence.ts
-/**
-	* What a run that stopped at a page Listora no longer understands (`element_missing`) logs about
-	* that page: its structure, never its content (docs/features/automation.md, "When a page
-	* changes"). The page modules are Listora's model of each marketplace's pages, and a logged-in
-	* page can only be seen in a seller's own session, so this is how the one module that names the
-	* missing part gets fixed against the real page.
-	*
-	* Everything is reduced before it leaves the page's host (the phone, or the browser runner):
-	*
-	* - paths keep only structural words (`/closet/<x>`), never a username or an id;
-	* - titles and labels keep only common interface words (`Sell on Poshmark`, `<x>'s closet`);
-	* - the page's own data (`window.__INITIAL_STATE__`, `__NEXT_DATA__`) is a skeleton of key
-	*   paths and value types, with true or false spelled out, never a string or a number;
-	* - test ids lose their digits, and nothing the run typed survives anywhere.
-	*/
-	/** The page globals marketplaces keep their data in. */
-	const DATA_GLOBALS = [
-		"__INITIAL_STATE__",
-		"__NEXT_DATA__",
-		"__NUXT__",
-		"__APOLLO_STATE__",
-		"__PRELOADED_STATE__"
-	];
-	/** The first path segment of a link to the seller's own pages. */
-	const ACCOUNT_LINK = /^(closet|mypage|my-page|my|account|accounts|settings|profile|user|users|u|me|seller|member|members|people|logout|log-out|signout|sign-out|login|log-in|signin|sign-in)$/i;
-	/**
-	* What the page reads of itself: one evaluation in its isolated script world, bounded. It is
-	* source text, so each host evaluates the same script.
-	*/
-	const EVIDENCE_SCRIPT = `(() => {
-  const accountLink = new RegExp(${JSON.stringify(ACCOUNT_LINK.source)}, 'i');
-  const testIds = [...new Set([...document.querySelectorAll('[data-testid]')].map((element) => element.getAttribute('data-testid')))].slice(0, 120);
-  const links = [];
-  for (const anchor of document.querySelectorAll('a[href]')) {
-    let url;
-    try { url = new URL(anchor.getAttribute('href'), location.href); } catch { continue; }
-    if (url.origin !== location.origin || !accountLink.test(url.pathname.split('/')[1] || '')) continue;
-    const holder = anchor.closest('[data-testid]');
-    links.push({
-      path: url.pathname,
-      et: anchor.getAttribute('data-et-name'),
-      testId: holder ? holder.getAttribute('data-testid') : null,
-      label: anchor.getAttribute('aria-label'),
-    });
-    if (links.length >= 40) break;
-  }
-  const requests = [...new Set(performance.getEntriesByType('resource')
-    .filter((entry) => entry.initiatorType === 'fetch' || entry.initiatorType === 'xmlhttprequest')
-    .map((entry) => entry.name))].slice(0, 120);
-  const scripts = [...document.querySelectorAll('script[id], script[type]:not([src])')]
-    .map((script) => ({ id: script.id || null, type: script.type || null }))
-    .slice(0, 40);
-  const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
-  const controls = [...document.querySelectorAll('input, textarea, select, button, summary, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"], [data-et-name]:not(a), [data-test]:not(a)')]
-    .slice(0, 120)
-    .map((element) => ({
-      tag: element.tagName.toLowerCase(),
-      type: element.getAttribute('type'),
-      names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
-      text: element.tagName === 'BUTTON' || element.tagName === 'SUMMARY' || element.getAttribute('role') === 'button' || (element.hasAttribute('data-et-name') && !/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
-    }));
-  const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
-    .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
-    .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
-  const describe = (element) => {
-    const role = element.getAttribute('role');
-    const text = (element.children.length === 0 || role === 'option' || role === 'group' || role === 'presentation' || element.tagName === 'LI') ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : '';
-    return {
-      tag: element.tagName.toLowerCase(),
-      names: ['role', 'id', 'aria-label', 'aria-labelledby', 'aria-selected', 'data-testid'].flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
-      text,
-    };
-  };
-  const lists = [];
-  for (const list of document.querySelectorAll('[role="listbox"], [role="menu"]')) {
-    if (list.children.length === 0) continue;
-    lists.push({ depth: 0, ...describe(list) });
-    const walk = (node, depth) => {
-      for (const child of node.children) {
-        if (lists.length >= 120) return;
-        lists.push({ depth, ...describe(child) });
-        if (depth < 3) walk(child, depth + 1);
-      }
-    };
-    walk(list, 1);
-    if (lists.length >= 120) break;
-  }
-  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices, lists };
-})()`;
-	/** Words of paths, titles, and labels that say what a page is, never whose it is. */
-	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications add apply cancel choose color colour condition continue cover department description designer discard done enter next optional photo photos post price quantity required save select single size sizes style subcategory title type update upload".split(" "));
-	/** Keys whose children are keyed by a user, an id, or a name. */
-	const KEYED_BY_RECORD = /^(users|profiles|closets|accounts|byId|entities|people|members)$/i;
-	/** Subtrees of a page's data the skeleton follows down: who is signed in, and Next.js props. */
-	const FOLLOWED = /auth|user|session|account|identity|viewer|profile|login|^me$|self|current/i;
-	const FOLLOWED_CONTAINERS = /^(props|pageProps|initialState|initialProps|state)$/;
-	/** Keys whose string value is a route (`__NEXT_DATA__.page`), kept as a reduced path. */
-	const ROUTE_KEYS = /* @__PURE__ */ new Set([
-		"page",
-		"route",
-		"pathname"
-	]);
-	const MAX_ITEM_LENGTH = 160;
-	const MAX_DATA_LINES = 160;
-	const MAX_DEPTH = 4;
-	const rawSchema = object({
-		path: string(),
-		title: string(),
-		testIds: array(string().nullable()),
-		links: array(object({
-			path: string(),
-			et: string().nullable(),
-			testId: string().nullable(),
-			label: string().nullable()
-		})),
-		requests: array(string()),
-		scripts: array(object({
-			id: string().nullable(),
-			type: string().nullable()
-		})),
-		controls: array(object({
-			tag: string(),
-			type: string().nullable(),
-			names: array(tuple([string(), string()])),
-			text: string().nullable()
-		})).default([]),
-		choices: array(string()).default([]),
-		lists: array(object({
-			depth: number(),
-			tag: string(),
-			names: array(tuple([string(), string()])),
-			text: string()
-		})).default([])
-	});
-	/** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
-	const CODE_NAMES = /* @__PURE__ */ new Set([
-		"data-testid",
-		"data-test",
-		"data-vv-name",
-		"data-et-name",
-		"name",
-		"id",
-		"role"
-	]);
-	/**
-	* The evidence of what `EVIDENCE_SCRIPT` read and of the page's data globals (`data`, by name),
-	* reduced to structure; `null` when the page answered something else.
-	*/
-	function redactEvidence(raw, data, context) {
-		const parsed = rawSchema.safeParse(raw);
-		if (!parsed.success) return null;
-		const read = parsed.data;
-		const typed = [...context.typed].filter((value) => value.length >= 3);
-		const clean = (text) => {
-			let result = text;
-			for (const value of typed) result = result.split(value).join("<x>");
-			return result.slice(0, MAX_ITEM_LENGTH);
-		};
-		const links = read.links.map((link) => clean([
-			reducedPath(link.path),
-			link.et === null ? null : `et:${reducedId(link.et)}`,
-			link.testId === null ? null : `testid:${reducedId(link.testId)}`,
-			link.label === null ? null : `label:${reducedWords(link.label)}`
-		].filter((part) => part !== null).join(" ")));
-		let elsewhere = 0;
-		const requests = [];
-		for (const request of read.requests) {
-			const reduced = reducedRequest(request, context.cookieDomains);
-			if (reduced === null) elsewhere += 1;
-			else requests.push(clean(reduced));
-		}
-		if (elsewhere > 0) requests.push(`+${String(elsewhere)} elsewhere`);
-		return {
-			path: clean(reducedPath(read.path)),
-			title: clean(reducedWords(read.title)),
-			testIds: distinct(read.testIds.flatMap((id) => id === null || id === "" ? [] : [clean(reducedId(id))])),
-			links: distinct(links),
-			requests: distinct(requests),
-			scripts: distinct(read.scripts.map((script) => clean([script.id === null ? null : `#${reducedId(script.id)}`, script.type].filter((part) => part !== null).join(" ")))),
-			data: Object.entries(data).flatMap(([name, value]) => dataSkeleton(name, value)).slice(0, MAX_DATA_LINES).map(clean),
-			controls: distinct(read.controls.map((control) => clean([
-				control.type === null ? control.tag : `${control.tag}[${reducedId(control.type)}]`,
-				...control.names.map(([name, value]) => CODE_NAMES.has(name) ? `${name}:${reducedId(value)}` : `${name}:${reducedWords(value)}`),
-				control.text === null || control.text === "" ? null : `text:${reducedWords(control.text)}`
-			].filter((part) => part !== null).join(" ")))),
-			choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean)),
-			lists: read.lists.map((item) => clean([
-				`${"  ".repeat(Math.min(item.depth, 4))}${item.tag}`,
-				...item.names.map(([name, value]) => name === "aria-label" ? `${name}:${reducedWords(value)}` : `${name}:${reducedId(value)}`),
-				item.text === "" ? null : `text:${/[0-9@]/.test(item.text) ? "<x>" : item.text}`
-			].filter((part) => part !== null).join(" ")))
-		};
-	}
-	/** `/closet/janedoe/edit` → `/closet/<x>/edit`: only structural words stay. */
-	function reducedPath(path) {
-		return path.split("/").map((segment) => {
-			if (segment === "") return segment;
-			let decoded;
-			try {
-				decoded = decodeURIComponent(segment);
-			} catch {
-				return "<x>";
-			}
-			return STRUCTURAL_WORDS.has(decoded.toLowerCase()) ? decoded : "<x>";
-		}).join("/") || "/";
-	}
-	/** Interface words stay, every other word is `<x>`: `Jane's Closet | Poshmark` → `<x> Closet | Poshmark`. */
-	function reducedWords(text) {
-		return text.split(/(\s+)/).map((token) => {
-			if (/^\s*$/.test(token) || !/[\p{L}\p{N}]/u.test(token)) return token;
-			const word = token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
-			return STRUCTURAL_WORDS.has(word.toLowerCase()) ? token : "<x>";
-		}).join("").trim();
-	}
-	/** A developer's id (a test id, an event name) without the digits a record's id brings. */
-	function reducedId(id) {
-		return id.includes("@") ? "<x>" : id.replace(/[0-9a-f]{16,}/gi, "<id>").replace(/\d+/g, "#");
-	}
-	/** A request on the marketplace's domains: its reduced path and its GraphQL operation. */
-	function reducedRequest(request, cookieDomains) {
-		if (!URL.canParse(request)) return null;
-		const url = new URL(request);
-		if (!cookieDomains.some((domain) => {
-			const bare = domain.replace(/^\./, "");
-			return url.hostname === bare || url.hostname.endsWith(`.${bare}`);
-		})) return null;
-		const operation = url.searchParams.get("operationName");
-		const named = operation !== null && /^[A-Za-z_]\w{0,80}$/.test(operation);
-		return `${url.hostname}${reducedPath(url.pathname)}${named ? `?operationName=${operation}` : ""}`;
-	}
-	/**
-	* The skeleton of a page's data: its top-level keys and, down the parts that say who is signed
-	* in, every key path with its value's type (`true` and `false` as they are).
-	*/
-	function dataSkeleton(name, value) {
-		const lines = [];
-		const walk = (path, node, depth, follow) => {
-			if (lines.length >= MAX_DATA_LINES) return;
-			const key = path.slice(path.lastIndexOf(".") + 1);
-			lines.push(`${path}: ${describe(key, node)}`);
-			if (node === null || typeof node !== "object" || depth >= MAX_DEPTH) return;
-			const entries = Array.isArray(node) ? node.slice(0, 1).map((item) => ["0", item]) : Object.entries(node);
-			const keyedByRecord = KEYED_BY_RECORD.test(key);
-			for (const [child, childValue] of entries.slice(0, 60)) {
-				const shown = keyedByRecord ? "<key>" : reducedId(child);
-				const followed = follow || FOLLOWED.test(child);
-				if (depth === 0 || followed || FOLLOWED_CONTAINERS.test(child)) walk(`${path}.${shown}`, childValue, depth + 1, followed);
-				if (keyedByRecord) break;
-			}
-		};
-		walk(name, value, 0, false);
-		return lines;
-	}
-	function describe(key, value) {
-		if (value === null) return "null";
-		if (typeof value === "boolean") return String(value);
-		if (Array.isArray(value)) return `array(${String(value.length)})`;
-		if (typeof value === "string" && ROUTE_KEYS.has(key)) return `"${reducedPath(value)}"`;
-		return typeof value;
-	}
-	function distinct(values) {
-		return [...new Set(values)];
-	}
-	/** Evidence as an answer or a log carries it, bounded. */
-	const pageEvidenceSchema = object({
-		path: string().max(MAX_ITEM_LENGTH),
-		title: string().max(MAX_ITEM_LENGTH),
-		testIds: array(string().max(MAX_ITEM_LENGTH)).max(120),
-		links: array(string().max(MAX_ITEM_LENGTH)).max(40),
-		requests: array(string().max(MAX_ITEM_LENGTH)).max(121),
-		scripts: array(string().max(MAX_ITEM_LENGTH)).max(40),
-		data: array(string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
-		controls: array(string().max(MAX_ITEM_LENGTH)).max(120).default([]),
-		choices: array(string().max(MAX_ITEM_LENGTH)).max(150).default([]),
-		lists: array(string().max(MAX_ITEM_LENGTH)).max(121).default([])
-	});
-
-// src/safety/redaction.ts
-	const MAX_ERROR_LENGTH = 200;
-	/** The origin of a URL, the only part of it that logs and history keep. */
-	function originForLog(url) {
-		return URL.canParse(url) ? new URL(url).origin : "unknown";
-	}
-	/**
-	* The first line of an error message, cut short, with every value the run typed or uploaded
-	* replaced, and URLs reduced to their origin.
-	*/
-	function sanitizeMessage(message, typed) {
-		let line = message.split("\n", 1)[0] ?? "";
-		for (const value of typed) if (value.length >= 3) line = line.split(value).join("[redacted]");
-		line = line.replace(/\bhttps?:\/\/[^\s'")]+/g, (url) => originForLog(url));
-		return line.length > MAX_ERROR_LENGTH ? `${line.slice(0, MAX_ERROR_LENGTH)}...` : line;
-	}
-
-// src/runner/script-session.ts
-	var PageBackendError = class extends Error {
-		failure;
-		constructor(failure, message) {
-			super(message);
-			this.name = "PageBackendError";
-			this.failure = failure;
-		}
-	};
-	/**
-	* A page's data as a backend's `pageData` reads it: the JSON its global serializes to (the page
-	* serializes it, so only JSON values cross), or `null` when the page has none.
-	*/
-	function parsePageData(text) {
-		if (text === null || text === void 0) return null;
-		if (typeof text !== "string") throw new PageBackendError("other", "the page sent no data");
-		try {
-			return JSON.parse(text);
-		} catch {
-			throw new PageBackendError("other", "the page's data is not JSON");
-		}
-	}
-	/** The page stopped the run: a check, a rate limit, or a marketplace error. */
-	var PageProblemError = class extends Error {
-		problem;
-		constructor(problem) {
-			super(`the page stopped the run: ${problem.type}`);
-			this.problem = problem;
-		}
-	};
-	/** A script failure with a code and a message that are safe to log and store. */
-	var StepError = class extends Error {
-		code;
-		constructor(code, message) {
-			super(message);
-			this.code = code;
-		}
-	};
-	var StepTimeoutError = class extends Error {};
-	/** How long a page Listora no longer understands settles before its evidence is read. */
-	const EVIDENCE_SETTLE_MS = 3e3;
-	/** Bounds of what an inspection reads of the page. */
-	const INSPECTED_TEXT_LENGTH = 4e3;
-	var ScriptSession = class {
-		marketplace;
-		#backend;
-		#deps;
-		#inspection;
-		/** Every value typed or uploaded; error messages never repeat them. */
-		#typed = /* @__PURE__ */ new Set();
-		/** The check that stopped the session; nothing runs after it. */
-		#challenge = null;
-		/** The page that stopped the current run, if one did. */
-		#stoppedBy = null;
-		#closed = null;
-		constructor(backend, deps) {
-			this.marketplace = deps.profile.marketplace;
-			this.#backend = backend;
-			this.#deps = deps;
-			this.#inspection = inspectionScript(challengeSelectors(deps.profile));
-		}
-		run(name, script, signal) {
-			return this.#execute(name, script, signal, false);
-		}
-		read(name, script, signal) {
-			return this.#execute(name, script, signal, true);
-		}
-		close() {
-			this.#closed ??= this.#deps.close();
-			return this.#closed;
-		}
-		async #execute(name, script, signal, readOnly) {
-			const steps = [];
-			const stepMs = [];
-			let mutated = false;
-			let current = "start";
-			if (this.#closed !== null) return failed(steps, stepMs, mutated, error("start", "aborted", "the session is closed"));
-			if (this.#challenge !== null) return failed(steps, stepMs, mutated, {
-				kind: "challenge",
-				challenge: this.#challenge,
-				step: "start",
-				screenshotKey: null
-			});
-			this.#stoppedBy = null;
-			const runStep = async (stepName, options, body) => {
-				if (readOnly && options.mutates) throw new StepError("script_error", `step ${stepName} would change the listing in a read`);
-				current = stepName;
-				steps.push(stepName);
-				const index = stepMs.push(0) - 1;
-				this.#deps.onStep?.({
-					name: stepName,
-					index: steps.length
-				});
-				if (options.mutates) mutated = true;
-				const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs * Math.max(1, options.timeScale ?? 1);
-				const startedAt = Date.now();
-				try {
-					return await this.#runStep(body, timeoutMs, signal, readOnly);
-				} finally {
-					stepMs[index] = Date.now() - startedAt;
-				}
-			};
-			try {
-				const value = await script(runStep);
-				const stopped = this.#stop();
-				if (stopped !== null) throw new PageProblemError(stopped);
-				this.#deps.logger.debug({
-					script: name,
-					steps,
-					stepMs
-				}, "automation script finished");
-				return {
-					ok: true,
-					value,
-					mutated,
-					steps,
-					stepMs
-				};
-			} catch (caught) {
-				const stopped = this.#stop();
-				const thrown = stopped === null ? caught : new PageProblemError(stopped);
-				const failure = await this.#failure(thrown, current, signal);
-				this.#deps.logger.warn({
-					script: name,
-					step: failure.step,
-					failure: failure.kind,
-					...failure.kind === "challenge" ? { challenge: failure.challenge } : {},
-					...failure.kind === "error" ? {
-						code: failure.code,
-						reason: failure.message
-					} : {},
-					...(failure.kind === "error" || failure.kind === "timeout") && failure.evidence !== void 0 ? { evidence: failure.evidence } : {},
-					origin: originForLog(this.#safeUrl()),
-					mutated,
-					...this.#deps.networkSummary === void 0 ? {} : { network: this.#deps.networkSummary() }
-				}, "automation script stopped");
-				return failed(steps, stepMs, mutated, failure);
-			}
-		}
-		async #runStep(body, timeoutMs, outer, readOnly) {
-			const controller = new AbortController();
-			const onAbort = () => {
-				controller.abort(outer.reason);
-			};
-			outer.addEventListener("abort", onAbort, { once: true });
-			if (outer.aborted) onAbort();
-			this.#backend.setTimeout(Math.floor(timeoutMs * .9));
-			const driver = new Driver(this, controller.signal, readOnly);
-			let timer;
-			const deadline = new Promise((_, reject) => {
-				timer = setTimeout(() => {
-					reject(new StepTimeoutError("the step ran out of time"));
-					controller.abort(new StepTimeoutError("the step ran out of time"));
-				}, timeoutMs);
-			});
-			const aborted = new Promise((_, reject) => {
-				controller.signal.addEventListener("abort", () => {
-					reject(new StepError("aborted", "the run was stopped"));
-				}, { once: true });
-				if (controller.signal.aborted) reject(new StepError("aborted", "the run was stopped"));
-			});
-			const work = body(driver, controller.signal);
-			work.catch(() => void 0);
-			deadline.catch(() => void 0);
-			aborted.catch(() => void 0);
-			try {
-				return await Promise.race([
-					work,
-					deadline,
-					aborted
-				]);
-			} finally {
-				clearTimeout(timer);
-				outer.removeEventListener("abort", onAbort);
-				driver.retire();
-			}
-		}
-		async #failure(thrown, step, signal) {
-			if (thrown instanceof PageProblemError) {
-				const { problem } = thrown;
-				switch (problem.type) {
-					case "challenge":
-						this.#challenge = problem.kind;
-						return {
-							kind: "challenge",
-							challenge: problem.kind,
-							step,
-							screenshotKey: await this.#screenshot()
-						};
-					case "rate_limited": return {
-						...error(step, "rate_limited", "the marketplace asked to slow down"),
-						retryAfterMs: problem.retryAfterMs,
-						screenshotKey: await this.#screenshot()
-					};
-					case "server_error": return {
-						...error(step, "server_error", `the marketplace answered ${String(problem.status)}`),
-						screenshotKey: await this.#screenshot()
-					};
-				}
-			}
-			if (thrown instanceof StepTimeoutError) return {
-				kind: "timeout",
-				step,
-				screenshotKey: await this.#screenshot(),
-				...await this.#evidence()
-			};
-			if (thrown instanceof StepError) {
-				const screenshotKey = thrown.code === "aborted" ? null : await this.#screenshot();
-				return {
-					...error(step, thrown.code, thrown.message),
-					screenshotKey,
-					...thrown.code === "element_missing" ? await this.#evidence() : {}
-				};
-			}
-			if (signal.aborted) return error(step, "aborted", "the run was stopped");
-			if (thrown instanceof MarketplaceError) return {
-				...error(step, "server_error", sanitizeMessage(thrown.message, this.#typed)),
-				screenshotKey: await this.#screenshot()
-			};
-			if (thrown instanceof PageChangedError) return {
-				...error(step, "element_missing", sanitizeMessage(thrown.message, this.#typed)),
-				screenshotKey: await this.#screenshot(),
-				...await this.#evidence()
-			};
-			const message = thrown instanceof Error ? thrown.message : String(thrown);
-			return {
-				...error(step, "script_error", sanitizeMessage(message, this.#typed)),
-				screenshotKey: await this.#screenshot()
-			};
-		}
-		/** The page that stopped the current run (set by `inspect` while the script runs). */
-		#stop() {
-			return this.#stoppedBy;
-		}
-		#screenshot() {
-			return this.#backend.screenshot(this.#typed).catch(() => null);
-		}
-		/** What the page has instead of what the script expected, structure only; none if unreadable. */
-		async #evidence() {
-			try {
-				await new Promise((resolve) => setTimeout(resolve, EVIDENCE_SETTLE_MS));
-				const raw = await this.#backend.read(EVIDENCE_SCRIPT);
-				const data = {};
-				for (const name of DATA_GLOBALS) {
-					const value = await this.#backend.pageData(name).catch(() => null);
-					if (value !== null) data[name] = value;
-				}
-				const evidence = redactEvidence(raw, data, {
-					cookieDomains: this.#deps.profile.cookieDomains,
-					typed: this.#typed
-				});
-				return evidence === null ? {} : { evidence };
-			} catch {
-				return {};
-			}
-		}
-		#safeUrl() {
-			try {
-				return this.#backend.url();
-			} catch {
-				return "about:blank";
-			}
-		}
-		get backend() {
-			return this.#backend;
-		}
-		get profile() {
-			return this.#deps.profile;
-		}
-		get pacing() {
-			return this.#deps.pacing;
-		}
-		noteTyped(value) {
-			this.#typed.add(value);
-		}
-		/** Throws when the page already stopped this run or session. */
-		ensureGoing() {
-			if (this.#stoppedBy !== null) throw new PageProblemError(this.#stoppedBy);
-			if (this.#challenge !== null) throw new PageProblemError({
-				type: "challenge",
-				kind: this.#challenge,
-				sign: "earlier"
-			});
-		}
-		/** Stops the run at a problem the page's own API answered with (`PageDriver.apiGet`). */
-		stopFor(problem) {
-			this.#stoppedBy = problem;
-			if (problem.type === "challenge") this.#challenge = problem.kind;
-			throw new PageProblemError(problem);
-		}
-		/** Inspects the page; throws when it shows something the run must stop at. */
-		async inspect() {
-			this.ensureGoing();
-			const read = await this.#backend.inspect(this.#inspection);
-			const signals = {
-				url: this.#backend.url(),
-				status: this.#backend.status(),
-				retryAfterSeconds: this.#backend.retryAfterSeconds(),
-				...read
-			};
-			const problem = inspectPage(signals, this.#deps.profile);
-			if (problem === null) return;
-			this.#stoppedBy = problem;
-			if (problem.type === "challenge") this.#challenge = problem.kind;
-			throw new PageProblemError(problem);
-		}
-		/** A backend failure as a step failure; the session's own errors pass through. */
-		translate(thrown) {
-			if (thrown instanceof PageProblemError || thrown instanceof StepError) return thrown;
-			if (thrown instanceof StepTimeoutError) return thrown;
-			if (thrown instanceof PageBackendError) switch (thrown.failure) {
-				case "element_timeout": return new StepError("element_missing", sanitizeMessage(thrown.message, this.#typed));
-				case "navigation_timeout": return new StepTimeoutError("the page did not finish loading");
-				case "unreachable": return new StepError("unreachable", "the marketplace could not be reached");
-				case "closed": return new StepError("aborted", "the session was closed");
-				case "other": return new StepError("script_error", sanitizeMessage(thrown.message, this.#typed));
-			}
-			const message = thrown instanceof Error ? thrown.message : String(thrown);
-			return new StepError("script_error", sanitizeMessage(message, this.#typed));
-		}
-	};
-	/** The most of an API answer's body a read takes (Depop's largest are about 2 MB). */
-	const API_BODY_LIMIT = 4e6;
-	/**
-	* The page script of `PageDriver.apiGet`: a GET from the page, with the site's cookie as the
-	* bearer token when one is named, returning only the status, `Retry-After`, and the body's text.
-	* Source text, so each host evaluates the same script in its own page.
-	*/
-	function apiGetScript(url, bearerCookie) {
-		return `(async () => {
-    const name = ${JSON.stringify(bearerCookie)};
-    const headers = { accept: 'application/json' };
-    if (name !== null) {
-      const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(name + '='));
-      if (pair !== undefined) headers.authorization = 'Bearer ' + decodeURIComponent(pair.slice(name.length + 1));
-    }
-    let response;
-    try {
-      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
-    } catch (error) {
-      return { status: null, failed: String(error) };
-    }
-    const text = await response.text();
-    return { status: response.status, retryAfter: response.headers.get('retry-after'), text: text.length > ${String(API_BODY_LIMIT)} ? null : text };
-  })()`;
-	}
-	/** How many times a read of a marketplace's API is tried when the page couldn't make it. */
-	const API_ATTEMPTS = 2;
-	/** The pauses before a read of a marketplace's API that answered 5xx is asked again. */
-	const SERVER_ERROR_PAUSES_MS = [1e3, 4e3];
-	/** Whether the page's request never got an answer (`fetch` rejected: the network, or a page load). */
-	function fetchFailed(answer) {
-		return answer !== null && typeof answer === "object" && "failed" in answer;
-	}
-	function apiAnswer(answer) {
-		const read = answer;
-		if (read === null || typeof read !== "object" || typeof read.status !== "number") throw new StepError("script_error", "the marketplace's API sent no answer");
-		const retryAfter = Number(read.retryAfter);
-		return {
-			status: read.status,
-			text: typeof read.text === "string" ? read.text : null,
-			retryAfterSeconds: read.retryAfter !== null && Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : null
-		};
-	}
-	function jsonOrNull(text) {
-		if (text === null) return null;
-		try {
-			return JSON.parse(text);
-		} catch {
-			return null;
-		}
-	}
-	/**
-	* What `inspect` reads in the page: one evaluation, bounded, returning plain data. It is source
-	* text, so each host evaluates the same script in its own page.
-	*/
-	function inspectionScript(selectors) {
-		return `(() => {
-    const visible = (element) => {
-      const rect = element.getBoundingClientRect();
-      if (rect.width < 2 || rect.height < 2) return false;
-      const style = getComputedStyle(element);
-      return style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity) > 0;
-    };
-    const selectors = ${JSON.stringify(selectors)};
-    const matchedSelectors = selectors.filter((selector) => {
-      try {
-        return [...document.querySelectorAll(selector)].some(visible);
-      } catch {
-        return false;
-      }
-    });
-    const pattern = ${CHALLENGE_FRAME_PATTERN.toString()};
-    const challengeFrames = [...document.querySelectorAll('iframe')]
-      .filter((frame) => pattern.test(frame.src) && visible(frame))
-      .map((frame) => { try { return new URL(frame.src).origin; } catch { return 'unknown'; } });
-    const hasPasswordField = [...document.querySelectorAll('input[type="password" i]')].some(visible);
-    const text = (document.body ? document.body.innerText : '').slice(0, ${String(INSPECTED_TEXT_LENGTH)}).toLowerCase();
-    return { title: document.title, challengeFrames, hasPasswordField, matchedSelectors, text };
-  })()`;
-	}
-	var Driver = class {
-		#session;
-		#signal;
-		#readOnly;
-		#retired = false;
-		constructor(session, signal, readOnly) {
-			this.#session = session;
-			this.#signal = signal;
-			this.#readOnly = readOnly;
-		}
-		retire() {
-			this.#retired = true;
-		}
-		async goto(url) {
-			const target = URL.canParse(url) ? new URL(url) : null;
-			if (target === null || !this.#session.profile.origins.includes(target.origin)) throw new StepError("script_error", "the script asked for a page outside the marketplace");
-			await this.#act(async (backend) => {
-				backend.clearStatus();
-				await backend.goto(target.href);
-			});
-		}
-		async click(selector) {
-			await this.#act(async (backend) => {
-				backend.clearStatus();
-				await backend.click(selector);
-			});
-		}
-		async fill(selector, text) {
-			this.#input("fill");
-			this.#session.noteTyped(text);
-			await this.#act((backend) => backend.fill(selector, text));
-		}
-		async type(selector, text) {
-			this.#input("type");
-			this.#session.noteTyped(text);
-			await this.#act(async (backend) => {
-				await backend.focus(selector);
-				for (const character of text) {
-					await this.#session.pacing.wait("keystroke", this.#signal);
-					this.#active();
-					await backend.press(character);
-				}
-			});
-		}
-		async select(selector, value) {
-			this.#input("select");
-			await this.#act((backend) => backend.select(selector, value));
-		}
-		async check(selector, checked) {
-			this.#input("check");
-			await this.#act((backend) => backend.check(selector, checked));
-		}
-		async upload(selector, files) {
-			this.#input("upload");
-			for (const file of files) this.#session.noteTyped(file.name);
-			await this.#act((backend) => backend.upload(selector, files));
-		}
-		acceptNextDialog() {
-			this.#input("acceptNextDialog");
-			this.#active();
-			this.#session.backend.acceptNextDialog();
-		}
-		async waitFor(selector, state = "visible") {
-			await this.#observe((backend) => backend.waitFor(selector, state));
-		}
-		async waitForPath(pattern) {
-			await this.#observe((backend) => backend.waitForPath(pattern));
-		}
-		url() {
-			this.#active();
-			return this.#session.backend.url();
-		}
-		status() {
-			this.#active();
-			return this.#session.backend.status();
-		}
-		exists(selector) {
-			return this.#query((backend) => backend.exists(selector));
-		}
-		count(selector) {
-			return this.#query((backend) => backend.count(selector));
-		}
-		text(selector) {
-			return this.#query((backend) => backend.text(selector));
-		}
-		texts(selector) {
-			return this.#query((backend) => backend.texts(selector));
-		}
-		attribute(selector, name) {
-			return this.#query((backend) => backend.attribute(selector, name));
-		}
-		attributes(selector, name) {
-			return this.#query((backend) => backend.attributes(selector, name));
-		}
-		value(selector) {
-			return this.#query((backend) => backend.value(selector));
-		}
-		pageData(name) {
-			return this.#query((backend) => backend.pageData(name));
-		}
-		async apiGet(url, options = {}) {
-			const target = URL.canParse(url) ? new URL(url) : null;
-			if (target === null || !this.#session.profile.apiOrigins.includes(target.origin)) throw new StepError("script_error", "the script asked for an API outside the marketplace's");
-			this.#active();
-			let read;
-			for (let failedFetches = 0, serverErrors = 0;;) {
-				await this.#session.pacing.wait("action", this.#signal);
-				const answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
-				this.#active();
-				if (fetchFailed(answer)) {
-					failedFetches += 1;
-					if (failedFetches === API_ATTEMPTS) throw new StepError("script_error", `the page couldn't reach the marketplace's API`);
-					continue;
-				}
-				read = apiAnswer(answer);
-				const pause = read.status >= 500 ? SERVER_ERROR_PAUSES_MS[serverErrors] : void 0;
-				if (pause === void 0) break;
-				serverErrors += 1;
-				await this.#session.pacing.waitFor(pause, this.#signal);
-				this.#active();
-			}
-			const { status, text, retryAfterSeconds } = read;
-			const body = jsonOrNull(text);
-			if (status === 429) this.#session.stopFor({
-				type: "rate_limited",
-				retryAfterMs: retryAfterSeconds === null ? null : retryAfterSeconds * 1e3
-			});
-			if (status >= 500) this.#session.stopFor({
-				type: "server_error",
-				status
-			});
-			if (status === 403 && body === null) this.#session.stopFor({
-				type: "challenge",
-				kind: "bot_check",
-				sign: "api"
-			});
-			return {
-				status,
-				body
-			};
-		}
-		/** A paced action, inspected afterwards. */
-		async #act(action) {
-			this.#active();
-			await this.#session.pacing.wait("action", this.#signal);
-			this.#active();
-			try {
-				await action(this.#session.backend);
-			} catch (thrown) {
-				throw this.#session.translate(thrown);
-			}
-			this.#active();
-			await this.#inspect();
-		}
-		/** A wait for the page, inspected afterwards (whether or not what it waited for came). */
-		async #observe(wait) {
-			this.#active();
-			let failure = null;
-			try {
-				await wait(this.#session.backend);
-			} catch (thrown) {
-				failure = this.#session.translate(thrown);
-			}
-			this.#active();
-			await this.#inspect();
-			if (failure !== null) throw failure;
-		}
-		async #query(read) {
-			this.#active();
-			try {
-				return await read(this.#session.backend);
-			} catch (thrown) {
-				throw this.#session.translate(thrown);
-			}
-		}
-		async #inspect() {
-			try {
-				await this.#session.inspect();
-			} catch (thrown) {
-				throw this.#session.translate(thrown);
-			}
-		}
-		#input(method) {
-			if (this.#readOnly) throw new StepError("script_error", `a read cannot ${method}: it would change the listing`);
-		}
-		#active() {
-			this.#session.ensureGoing();
-			if (this.#retired || this.#signal.aborted) throw new StepError("aborted", "the step is over");
-		}
-	};
-	function failed(steps, stepMs, mutated, failure) {
-		return {
-			ok: false,
-			failure,
-			mutated,
-			steps,
-			stepMs
-		};
-	}
-	function error(step, code, message) {
-		return {
-			kind: "error",
-			step,
-			code,
-			message,
-			retryAfterMs: null,
-			screenshotKey: null
-		};
-	}
-
-// src/phone/dom.ts
-/**
-	* The page functions the phone runtime evaluates in the marketplace's page (through the app's
-	* `evaluate`), one per page action. They do in the page what Playwright does for the browser
-	* runner: wait for an element to be there and usable, then act on it the way a person's tap or
-	* paste would (focus, the field's own value setter, the input and change events), and read
-	* text and attributes. They are source text, so they run unchanged in WebKit and, in tests, in
-	* Chromium; each is self-contained.
-	*
-	* A wait that runs out of time rejects with `element_timeout: <what>`; the backend reports it as
-	* the page missing what the script expects.
-	*/
-	/** Helpers every function starts with. */
-	const PRELUDE = `
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const visible = (element) => {
-    const rect = element.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
-    const style = getComputedStyle(element);
-    return style.visibility !== 'hidden' && style.display !== 'none';
-  };
-  const usable = (element) =>
-    visible(element) && !element.disabled && element.getAttribute('aria-disabled') !== 'true';
-  const waitUntil = async (find, what) => {
-    const end = Date.now() + timeoutMs;
-    for (;;) {
-      const found = find();
-      if (found) return found;
-      if (Date.now() >= end) throw new Error('element_timeout: ' + what);
-      await sleep(50);
-    }
-  };
-  // Playwright's selector chains: 'A >> B' is B inside A's matches, 'A >> nth=1' A's second.
-  const resolveAll = (selector) => {
-    let current = [document];
-    for (const part of selector.split(' >> ')) {
-      const nth = /^nth=(-?\\d+)$/.exec(part.trim());
-      if (nth) {
-        const picked = current.at(Number(nth[1]));
-        current = picked === undefined ? [] : [picked];
-        continue;
-      }
-      // Playwright's ':text-is("...")': the element's whole text, whitespace collapsed.
-      const textIs = /:text-is\\("((?:[^"\\\\]|\\\\.)*)"\\)$/.exec(part);
-      const css = textIs === null ? part : part.slice(0, textIs.index);
-      const wanted = textIs === null ? null : JSON.parse('"' + textIs[1] + '"');
-      const next = [];
-      for (const root of current) {
-        for (const element of root.querySelectorAll(css)) {
-          const text = (element.textContent || '').replace(/\\s+/g, ' ').trim();
-          if (wanted !== null && text !== wanted) continue;
-          if (!next.includes(element)) next.push(element);
-        }
-      }
-      current = next;
-    }
-    return current.filter((node) => node !== document);
-  };
-  const first = (selector) => resolveAll(selector)[0] ?? null;
-  // An action needs exactly one match, as Playwright's strict locators do.
-  const only = (selector) => {
-    const matches = resolveAll(selector);
-    if (matches.length > 1) {
-      throw new Error('strict mode violation: ' + selector + ' matches ' + matches.length + ' elements');
-    }
-    return matches[0] ?? null;
-  };
-  const usableElement = (selector) =>
-    waitUntil(() => {
-      const element = only(selector);
-      return element && usable(element) ? element : null;
-    }, 'a usable ' + selector);
-  const nativeSet = (element, value) => {
-    const prototype =
-      element instanceof HTMLTextAreaElement
-        ? HTMLTextAreaElement.prototype
-        : element instanceof HTMLSelectElement
-          ? HTMLSelectElement.prototype
-          : HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(prototype, 'value').set;
-    setter.call(element, value);
-  };
-  const fire = (element, type, init) =>
-    element.dispatchEvent(
-      type === 'input'
-        ? new InputEvent('input', { bubbles: true, composed: true, ...init })
-        : new Event(type, { bubbles: true, composed: true }),
-    );
-`;
-	function pageFunction(body) {
-		return `${PRELUDE}\n${body}`;
-	}
-	/** Clicks the first match once it is visible and enabled, like a tap. Args: selector, timeoutMs. */
-	const CLICK = pageFunction(`
-  const element = await usableElement(selector);
-  element.scrollIntoView({ block: 'center', inline: 'center' });
-  const rect = element.getBoundingClientRect();
-  const point = { bubbles: true, cancelable: true, composed: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0 };
-  element.dispatchEvent(new PointerEvent('pointerdown', { ...point, pointerType: 'touch', isPrimary: true }));
-  element.dispatchEvent(new MouseEvent('mousedown', point));
-  if (typeof element.focus === 'function') element.focus();
-  element.dispatchEvent(new PointerEvent('pointerup', { ...point, pointerType: 'touch', isPrimary: true }));
-  element.dispatchEvent(new MouseEvent('mouseup', point));
-  element.click();
-  return true;
-`);
-	/** Puts the whole text into a field at once, like a paste. Args: selector, text, timeoutMs. */
-	const FILL = pageFunction(`
-  const element = await usableElement(selector);
-  element.focus();
-  if (element.isContentEditable) {
-    element.textContent = text;
-    fire(element, 'input', { inputType: 'insertFromPaste', data: text });
-    return true;
-  }
-  if (!('value' in element) || element.readOnly) throw new Error('the element is not a text field');
-  nativeSet(element, text);
-  fire(element, 'input', { inputType: 'insertFromPaste', data: text });
-  fire(element, 'change');
-  return true;
-`);
-	/** Focuses a field once it is usable. Args: selector, timeoutMs. */
-	const FOCUS = pageFunction(`
-  const element = await usableElement(selector);
-  element.focus();
-  return true;
-`);
-	/** Types one character into the focused field. Args: character, timeoutMs. */
-	const PRESS = pageFunction(`
-  const element = document.activeElement;
-  if (!element || element === document.body) throw new Error('no field has the focus');
-  const key = { key: character, bubbles: true, cancelable: true, composed: true };
-  element.dispatchEvent(new KeyboardEvent('keydown', key));
-  element.dispatchEvent(new KeyboardEvent('keypress', key));
-  if (element.isContentEditable) {
-    element.textContent = (element.textContent || '') + character;
-  } else {
-    nativeSet(element, element.value + character);
-  }
-  fire(element, 'input', { inputType: 'insertText', data: character });
-  element.dispatchEvent(new KeyboardEvent('keyup', key));
-  return true;
-`);
-	/** Chooses the option whose value (or label) is `value`. Args: selector, value, timeoutMs. */
-	const SELECT = pageFunction(`
-  const element = await usableElement(selector);
-  if (!(element instanceof HTMLSelectElement)) throw new Error('the element is not a select');
-  const option = await waitUntil(
-    () => [...element.options].find((candidate) => candidate.value === value || candidate.label === value),
-    'the option ' + value + ' in ' + selector,
-  );
-  nativeSet(element, option.value);
-  fire(element, 'input', {});
-  fire(element, 'change');
-  return true;
-`);
-	/** Sets a checkbox or radio. Args: selector, checked, timeoutMs. */
-	const CHECK = pageFunction(`
-  const element = await usableElement(selector);
-  if (element.checked !== checked) element.click();
-  if (element.checked !== checked) throw new Error('the checkbox did not change');
-  return true;
-`);
-	/**
-	* Gives a file input its files (base64 bytes), as picking them would. The input may be hidden,
-	* as sell forms' photo inputs usually are. Args: selector, files, timeoutMs.
-	*/
-	const UPLOAD = pageFunction(`
-  const element = await waitUntil(() => only(selector), 'the file input ' + selector);
-  if (!(element instanceof HTMLInputElement) || element.type !== 'file') {
-    throw new Error('the element is not a file input');
-  }
-  const transfer = new DataTransfer();
-  for (const file of files) {
-    const binary = atob(file.base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    transfer.items.add(new File([bytes], file.name, { type: file.mimeType }));
-  }
-  element.files = transfer.files;
-  fire(element, 'input', {});
-  fire(element, 'change');
-  return true;
-`);
-	/** Waits for the first match to be attached, detached, visible, or hidden. Args: selector, state, timeoutMs. */
-	const WAIT_FOR = pageFunction(`
-  await waitUntil(() => {
-    const element = first(selector);
-    switch (state) {
-      case 'attached': return element !== null;
-      case 'detached': return element === null;
-      case 'visible': return element !== null && visible(element);
-      case 'hidden': return element === null || !visible(element);
-      default: throw new Error('unknown state ' + state);
-    }
-  }, selector + ' to be ' + state);
-  return true;
-`);
-	/**
-	* What a read asks for: `count`, `text` (first match), `texts`, `attribute`, `attributes`, and
-	* `value` (the first match's current value, which a page's scripts may set without an attribute).
-	*/
-	const QUERY = pageFunction(`
-  const elements = resolveAll(selector);
-  switch (what) {
-    case 'count': return elements.length;
-    case 'text': return elements.length === 0 ? null : (elements[0].textContent || '').trim();
-    case 'texts': return elements.map((element) => (element.textContent || '').trim());
-    case 'attribute': return elements.length === 0 ? null : elements[0].getAttribute(name);
-    case 'attributes': return elements.map((element) => element.getAttribute(name));
-    case 'value': return elements.length === 0 || typeof elements[0].value !== 'string' ? null : elements[0].value;
-    default: throw new Error('unknown query ' + what);
-  }
-`);
-
-// src/phone/host.ts
-/**
-	* Why a host call failed, as the app reports it. `navigated`: the page loaded another document
-	* while a page function ran, so the function's answer was lost with the old one.
-	*/
-	const HOST_FAILURES = [
-		"timeout",
-		"unreachable",
-		"blocked",
-		"closed",
-		"navigated"
-	];
-
-// src/phone/backend.ts
-/** Extra time a host call gets over the wait it runs, so the page's own timeout reports first. */
-	const HOST_MARGIN_MS = 2e3;
-	/** How often a wait for the main frame's path looks at it. */
-	const PATH_POLL_MS = 100;
-	var BridgeBackend = class {
-		#host;
-		#waitMs = 3e4;
-		#state = {
-			url: "about:blank",
-			status: null,
-			retryAfterSeconds: null
-		};
-		constructor(host) {
-			this.#host = host;
-		}
-		setTimeout(ms) {
-			this.#waitMs = ms;
-		}
-		async goto(href) {
-			this.#state = await this.#call("navigation", () => this.#host.navigate(href, this.#waitMs));
-		}
-		async click(selector) {
-			try {
-				await this.#page(CLICK, { selector });
-			} catch (thrown) {
-				if (!navigated(thrown)) throw thrown;
-			}
-			this.#state = await this.#call("navigation", () => this.#host.settle(this.#waitMs));
-		}
-		async fill(selector, text) {
-			await this.#page(FILL, {
-				selector,
-				text
-			});
-		}
-		async focus(selector) {
-			await this.#page(FOCUS, { selector });
-		}
-		async press(character) {
-			await this.#page(PRESS, { character });
-		}
-		async select(selector, value) {
-			await this.#page(SELECT, {
-				selector,
-				value
-			});
-		}
-		async check(selector, checked) {
-			await this.#page(CHECK, {
-				selector,
-				checked
-			});
-		}
-		async upload(selector, files) {
-			await this.#page(UPLOAD, {
-				selector,
-				files: files.map((file) => ({
-					name: file.name,
-					mimeType: file.mimeType,
-					base64: toBase64(file.bytes)
-				}))
-			});
-		}
-		acceptNextDialog() {
-			this.#host.acceptNextDialog().catch(() => void 0);
-		}
-		async waitFor(selector, state) {
-			await this.#look(WAIT_FOR, {
-				selector,
-				state
-			});
-		}
-		async waitForPath(pattern) {
-			const end = Date.now() + this.#waitMs;
-			for (;;) {
-				this.#state = await this.#call("navigation", () => this.#host.state());
-				const path = URL.canParse(this.#state.url) ? new URL(this.#state.url).pathname : "";
-				if (pattern.test(path)) break;
-				if (Date.now() >= end) throw new PageBackendError("navigation_timeout", "the page never reached the path");
-				await sleep(PATH_POLL_MS);
-			}
-			this.#state = await this.#call("navigation", () => this.#host.settle(Math.max(0, end - Date.now())));
-		}
-		url() {
-			return this.#state.url;
-		}
-		status() {
-			return this.#state.status;
-		}
-		retryAfterSeconds() {
-			return this.#state.retryAfterSeconds;
-		}
-		clearStatus() {
-			this.#state = {
-				...this.#state,
-				status: null,
-				retryAfterSeconds: null
-			};
-		}
-		async exists(selector) {
-			return await this.count(selector) > 0;
-		}
-		async count(selector) {
-			return expectNumber(await this.#look(QUERY, {
-				selector,
-				what: "count",
-				name: null
-			}));
-		}
-		async text(selector) {
-			return expectText(await this.#look(QUERY, {
-				selector,
-				what: "text",
-				name: null
-			}));
-		}
-		async texts(selector) {
-			return expectTexts(await this.#look(QUERY, {
-				selector,
-				what: "texts",
-				name: null
-			}));
-		}
-		async attribute(selector, name) {
-			return expectText(await this.#look(QUERY, {
-				selector,
-				what: "attribute",
-				name
-			}));
-		}
-		async value(selector) {
-			return expectText(await this.#look(QUERY, {
-				selector,
-				what: "value",
-				name: null
-			}));
-		}
-		async attributes(selector, name) {
-			const values = await this.#look(QUERY, {
-				selector,
-				what: "attributes",
-				name
-			});
-			if (!Array.isArray(values)) throw new PageBackendError("other", "the page sent no list");
-			return values.map(expectText);
-		}
-		async pageData(name) {
-			return parsePageData(await this.#call("element", () => this.#host.pageData(name, this.#waitMs + HOST_MARGIN_MS)));
-		}
-		async inspect(script) {
-			this.#state = await this.#call("navigation", () => this.#host.state());
-			return await this.#look(`return ${script};`, {}, false);
-		}
-		read(script) {
-			return this.#look(`return ${script};`, {}, false);
-		}
-		screenshot() {
-			return Promise.resolve(null);
-		}
-		/**
-		* Evaluates one of dom.ts's functions that only reads the page. One a navigation cut short
-		* (the page a click or the site itself was loading took over) is run again on the new page
-		* once it has loaded, within the step's wait: reading changes nothing. `waits`: the function
-		* is given the step's wait (dom.ts's functions take it; a script's own read does not).
-		*/
-		async #look(body, args, waits = true) {
-			const end = Date.now() + this.#waitMs;
-			for (;;) {
-				try {
-					return await (waits ? this.#page(body, args) : this.#call("element", () => this.#host.evaluate(body, args, this.#waitMs + HOST_MARGIN_MS)));
-				} catch (thrown) {
-					if (!navigated(thrown) || Date.now() >= end) throw thrown;
-				}
-				this.#state = await this.#call("navigation", () => this.#host.settle(Math.max(0, end - Date.now())));
-			}
-		}
-		/** Evaluates one of dom.ts's functions with the step's wait. */
-		#page(body, args) {
-			return this.#call("element", () => this.#host.evaluate(body, {
-				...args,
-				timeoutMs: this.#waitMs
-			}, this.#waitMs + HOST_MARGIN_MS));
-		}
-		/** A host call, its failure in the session's terms. */
-		async #call(kind, work) {
-			try {
-				return await work();
-			} catch (thrown) {
-				throw backendError(thrown, kind);
-			}
-		}
-	};
-	/** Whether a page function failed because the page loaded another document while it ran. */
-	function navigated(thrown) {
-		return thrown instanceof PageBackendError && thrown.message === "navigated";
-	}
-	function backendError(thrown, kind) {
-		const message = thrown instanceof Error ? thrown.message : String(thrown);
-		if (message.startsWith("element_timeout")) return new PageBackendError("element_timeout", message);
-		const failure = HOST_FAILURES.find((candidate) => candidate === message);
-		return new PageBackendError(failure === void 0 ? "other" : failure === "timeout" ? kind === "navigation" ? "navigation_timeout" : "element_timeout" : failure === "closed" ? "closed" : failure === "navigated" ? "other" : "unreachable", message);
-	}
-	function expectNumber(value) {
-		if (typeof value !== "number") throw new PageBackendError("other", "the page sent no number");
-		return value;
-	}
-	function expectText(value) {
-		if (value !== null && typeof value !== "string") throw new PageBackendError("other", "the page sent no text");
-		return value;
-	}
-	function expectTexts(value) {
-		if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) throw new PageBackendError("other", "the page sent no texts");
-		return value;
-	}
-	function toBase64(bytes) {
-		let binary = "";
-		const chunk = 32768;
-		for (let start = 0; start < bytes.length; start += chunk) binary += String.fromCharCode(...bytes.subarray(start, start + chunk));
-		return btoa(binary);
-	}
-	function fromBase64(text) {
-		const binary = atob(text);
-		const bytes = new Uint8Array(binary.length);
-		for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-		return bytes;
-	}
-	function sleep(ms) {
-		return new Promise((resolve) => setTimeout(resolve, ms));
-	}
-
 // src/phone/progress.ts
 /** Short verbs whose last letter doubles before "-ing" ("set", "setting"). */
 	const DOUBLED = /* @__PURE__ */ new Set([
@@ -13623,6 +14129,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* loads the bundle into a hidden web view of its own and calls `listoraPhone.run(input)` for each
 	* call the server hands it; the runtime reaches the app back through the `listora` script
 	* message handler, whose every message is answered (`WKScriptMessageHandlerWithReply`).
+	*
+	* The comparison lane (docs/features/thrift-scan.md, "Marketplace comparisons") runs in the same
+	* bundle, in controller pages of its own: `listoraPhone.compare(input)` reads a marketplace's
+	* public search for a scanned item and `listoraPhone.warmUp(input)` opens its search page, both
+	* on a page that holds no session.
 	*/
 	function webkitHost() {
 		const handler = globalThis.webkit.messageHandlers.listora;
@@ -13690,9 +14201,19 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			};
 		}
 	}
+	/** One comparison read; its output is plain JSON for the app to hand the server. */
+	async function compare(input) {
+		return JSON.parse(JSON.stringify(await runComparison(input, webkitHost())));
+	}
+	async function warmUp(input) {
+		return JSON.parse(JSON.stringify(await warmUpComparisons(input, webkitHost())));
+	}
 	globalThis["listoraPhone"] = {
 		runtimeVersion: 3,
-		run
+		run,
+		comparisonVersion: 1,
+		compare,
+		warmUp
 	};
 
 })();

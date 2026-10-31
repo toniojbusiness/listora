@@ -64,3 +64,22 @@ export {
   runProfit,
 } from './run.ts';
 export type { KeptScanCall, RunEstimate } from './run.ts';
+export {
+  DEMAND_CROWDED_SUPPLY,
+  DEMAND_LOW_SUPPLY,
+  DEMAND_STRONG_OWN_SALES,
+  MARKET_DEMANDS,
+  MARKET_MATCH_LEVELS,
+  MIN_MARKET_MATCHES,
+  marketDemand,
+  marketStats,
+  withoutOutliers,
+} from './market.ts';
+export type {
+  MarketDemand,
+  MarketDemandRead,
+  MarketListing,
+  MarketMatchLevel,
+  MarketStats,
+  MarketTarget,
+} from './market.ts';

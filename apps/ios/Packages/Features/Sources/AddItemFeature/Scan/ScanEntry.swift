@@ -8,6 +8,7 @@ protocol ScanService: Sendable {
     func createScan(_ request: ScanRequest, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func researchScan(scanID: String, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func endSourcingRun(runID: String, idempotencyKey: String) async throws(APIFailure)
+    func saveScanComparison(scanID: String, comparisonID: String, answer: Data) async throws(APIFailure) -> ItemScan
     func checkoutSourcingRun(
         runID: String,
         _ checkout: RunCheckout,

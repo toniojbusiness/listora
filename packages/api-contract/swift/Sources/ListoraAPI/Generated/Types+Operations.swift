@@ -28643,4 +28643,224 @@ public enum Operations {
             }
         }
     }
+    /// Answer a marketplace comparison read
+    ///
+    /// The phone's answer to a scan's comparison it was asked to read (a `checking` entry of
+    /// `comparisons`, docs/features/thrift-scan.md, "Marketplace comparisons"): the counts and
+    /// quartiles of the listings like the item in the marketplace's public search, read logged
+    /// out, or why there are none. Answers the scan with the comparison in it and the call made
+    /// again. A check (`check`) pauses the marketplace's comparisons for the account for 24 hours,
+    /// and a request to slow down (`rate_limited`) for an hour; Listora never passes a check. An
+    /// answer to a comparison already answered changes nothing and answers the scan as it is.
+    /// `404` where the thrift scan or the marketplace's comparisons are not on for the account,
+    /// or for another account's scan.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/scans/{scanId}/comparisons/{comparisonId}`.
+    /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)`.
+    public enum SaveScanComparison {
+        public static let id: Swift.String = "saveScanComparison"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/path/scanId`.
+                public var scanId: Components.Parameters.ScanId
+                /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/path/comparisonId`.
+                public var comparisonId: Components.Parameters.ComparisonId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - scanId:
+                ///   - comparisonId:
+                public init(
+                    scanId: Components.Parameters.ScanId,
+                    comparisonId: Components.Parameters.ComparisonId
+                ) {
+                    self.scanId = scanId
+                    self.comparisonId = comparisonId
+                }
+            }
+            public var path: Operations.SaveScanComparison.Input.Path
+            /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SaveScanComparison.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.SaveScanComparison.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.SaveScanComparison.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.ScanComparisonAnswer)
+            }
+            public var body: Operations.SaveScanComparison.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.SaveScanComparison.Input.Path,
+                headers: Operations.SaveScanComparison.Input.Headers = .init(),
+                body: Operations.SaveScanComparison.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/scans/{scanId}/comparisons/{comparisonId}/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ItemScan)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ItemScan {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.SaveScanComparison.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.SaveScanComparison.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The scan with the comparison.
+            ///
+            /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.SaveScanComparison.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.SaveScanComparison.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
 }

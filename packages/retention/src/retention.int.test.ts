@@ -365,6 +365,34 @@ describe('data retention job (real Postgres)', () => {
     expect(counts).toEqual({ scan_count: 3, kept_count: 1 });
   });
 
+  it('deletes marketplace comparison reads after 7 days', async () => {
+    const { accountId } = await account();
+    const read = async (days: number) =>
+      (
+        await db
+          .insertInto('market_comparison')
+          .values({
+            account_id: accountId,
+            marketplace: 'depop',
+            query_key: 'c'.repeat(64),
+            query: jsonb({ words: 'levis 501 jeans' }),
+            created_at: ago(days),
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow()
+      ).id;
+    const old = await read(RETENTION_DAYS.marketComparisons + 1);
+    const recent = await read(1);
+    const summary = await runDataRetention({ db, logger });
+    expect(summary.marketComparisons).toBeGreaterThanOrEqual(1);
+    const left = await db
+      .selectFrom('market_comparison')
+      .select('id')
+      .where('id', 'in', [old, recent])
+      .execute();
+    expect(left.map((row) => row.id)).toEqual([recent]);
+  });
+
   it('deletes the data of a connection revoked 30 days ago that was never reconnected', async () => {
     const { accountId } = await account();
     const connection = async (status: 'revoked' | 'connected', since: Date) =>

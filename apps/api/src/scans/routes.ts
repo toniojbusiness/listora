@@ -7,6 +7,7 @@ import {
   type ThriftScan,
 } from '@listora/analysis';
 import { inTransaction } from '@listora/db';
+import { isFeatureOn, loadFeatureGate } from '@listora/marketplaces';
 import { scanLabelViolations } from '@listora/pricing';
 import { assertNever, photoSetHash } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
@@ -21,6 +22,12 @@ import type { ListingViewContext } from '../listings/views.ts';
 import { assertThriftScanOn, countScan, findRun, lockRun } from '../sourcing-runs/repository.ts';
 
 import { assessScan } from './assess.ts';
+import {
+  answerComparison,
+  comparisonAnswerErrors,
+  planComparisons,
+  startComparisons,
+} from './comparisons.ts';
 import { decodeScanImages } from './images.ts';
 import { keepAsItem } from './keep.ts';
 import {
@@ -28,8 +35,11 @@ import {
   insertScan,
   lockScan,
   markReplaced,
+  saveDetail,
   saveResearch,
   scansSince,
+  type ScanCallDetail,
+  type StoredResearch,
 } from './repository.ts';
 import { researchFor } from './research.ts';
 import { scanView } from './views.ts';
@@ -40,6 +50,8 @@ export interface ScanRouteDependencies extends RouteDependencies {
   storage: ObjectStorage;
   /** Each marketplace's capabilities, for the item's listings. */
   connections: ListingViewContext;
+  /** Whether scans hand the iPhone marketplace comparison reads (`MARKET_COMPARISONS`). */
+  marketComparisons: boolean;
   now: () => Date;
 }
 
@@ -100,9 +112,13 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
     }
     const read = outcome.scan;
 
-    const detail = await assessScan(db, tenant, read, undefined, now);
+    const gate = await loadFeatureGate(db, tenant.accountId);
+    const planned = deps.marketComparisons
+      ? await planComparisons(db, tenant, read, gate, now)
+      : [];
+    const detail = await assessScan(db, tenant, read, undefined, now, planned);
     const readMs = Math.round(performance.now() - started);
-    const row = await insertScan(db, tenant, {
+    let row = await insertScan(db, tenant, {
       runId: run.id,
       imageSha256: images[0]?.sha256 ?? '',
       imageCount: images.length,
@@ -113,6 +129,11 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
       costMicros: outcome.costMicros,
       readMs,
     });
+    // The reads for the phone name the scan, so they are written once it is.
+    if (planned.some((comparison) => comparison.status === 'checking')) {
+      const comparisons = await startComparisons(db, tenant, row.id, planned);
+      row = await saveDetail(db, tenant, row.id, { ...detail, comparisons });
+    }
     await countScan(db, tenant, run.id, 'scanned');
     if (body.replacesScanId !== undefined) await markReplaced(db, tenant, body.replacesScanId);
 
@@ -125,6 +146,7 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         basis: row.basis,
         readMs,
         aiAttempts: outcome.attempts,
+        comparisons: planned.map((comparison) => `${comparison.marketplace}:${comparison.status}`),
       },
       'scan read',
     );
@@ -145,9 +167,23 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
     } catch (error) {
       throw scanFailure(error, now);
     }
-    const detail = await assessScan(db, tenant, read, found.stored.research, now);
     const researchMs = Math.round(performance.now() - started);
-    const row = await saveResearch(db, tenant, scan.id, found.stored, detail, researchMs);
+    // Made again under the scan's lock, with the comparisons as they are now: a comparison the
+    // phone answered while the research ran is kept.
+    const row = await inTransaction(db, async (trx) => {
+      const current = await lockScan(trx, tenant, scan.id);
+      if (!current) throw notFound('Scan');
+      const stored = current.call_detail as unknown as ScanCallDetail;
+      const detail = await assessScan(
+        trx,
+        tenant,
+        read,
+        found.stored.research,
+        now,
+        stored.comparisons ?? [],
+      );
+      return saveResearch(trx, tenant, scan.id, found.stored, detail, researchMs);
+    });
     request.log.info(
       {
         scanId: row.id,
@@ -163,6 +199,61 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
     );
     return { status: 200, body: checked(scanView(row)) };
   });
+
+  contractRoute(app, deps, 'saveScanComparison', async ({ tenant, db, params, body, request }) =>
+    inTransaction(db, async (trx) => {
+      const now = deps.now();
+      await assertThriftScanOn(trx, tenant);
+      const scan = await lockScan(trx, tenant, params.scanId);
+      if (!scan) throw notFound('Scan');
+      const stored = scan.call_detail as unknown as ScanCallDetail;
+      const gate = await loadFeatureGate(trx, tenant.accountId);
+      const comparison = (stored.comparisons ?? []).find(
+        (one) => one.comparisonId === params.comparisonId,
+      );
+      if (comparison === undefined || !isFeatureOn(comparison.marketplace, 'market_comps', gate)) {
+        throw notFound('Comparison');
+      }
+      const invalid = comparisonAnswerErrors(body);
+      if (invalid.length > 0) throw validationFailed(invalid);
+      const answered = await answerComparison(
+        trx,
+        tenant,
+        scan.id,
+        stored.comparisons ?? [],
+        params.comparisonId,
+        body,
+        now,
+      );
+      if (answered === null) throw notFound('Comparison');
+      if (!answered.changed) return { status: 200, body: checked(scanView(scan)) };
+      const research = (scan.research as unknown as StoredResearch | null)?.research;
+      const detail = await assessScan(
+        trx,
+        tenant,
+        scan.read as unknown as ThriftScan,
+        research,
+        now,
+        answered.comparisons,
+      );
+      const row = await saveDetail(trx, tenant, scan.id, detail);
+      request.log.info(
+        {
+          scanId: row.id,
+          marketplace: comparison.marketplace,
+          outcome: body.outcome,
+          ms: body.ms,
+          level: body.stats?.level ?? null,
+          forSale: body.stats?.forSale?.count ?? 0,
+          ...(body.message === undefined ? {} : { reason: body.message }),
+          call: row.call,
+          basis: row.basis,
+        },
+        'scan comparison answered',
+      );
+      return { status: 200, body: checked(scanView(row)) };
+    }),
+  );
 
   contractRoute(app, deps, 'keepScan', async ({ tenant, db, params }) =>
     inTransaction(db, async (trx) => {
