@@ -5,11 +5,16 @@ import Synchronization
 
 /// What a scan run sends to Listora: the API, or a fake in tests.
 protocol ScanService: Sendable {
-    func createSourcingRun(idempotencyKey: String) async throws(APIFailure) -> String
+    func createSourcingRun(place: String?, idempotencyKey: String) async throws(APIFailure) -> String
     func createScan(_ request: ScanRequest, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func researchScan(scanID: String, idempotencyKey: String) async throws(APIFailure) -> ItemScan
     func endSourcingRun(runID: String, idempotencyKey: String) async throws(APIFailure)
     func saveScanComparison(scanID: String, comparisonID: String, answer: Data) async throws(APIFailure) -> ItemScan
+    func checkoutSourcingRun(
+        runID: String,
+        _ checkout: RunCheckout,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> SourcingRunSummary
 }
 
 extension UploadAPI: ScanService {}

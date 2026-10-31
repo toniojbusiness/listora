@@ -22,6 +22,8 @@ final class ScanRunModel {
     /// A note said before the next shot, which rides along with its read.
     private(set) var pendingNote: String?
     private(set) var isEnded = false
+    /// Where the seller is, as they named it when the run started; nil when they named none.
+    let place: String?
 
     let service: any ScanService
     private let tagReader: any TagReader
@@ -56,6 +58,7 @@ final class ScanRunModel {
         service: any ScanService,
         tagReader: any TagReader,
         directory: URL,
+        place: String? = nil,
         saveDraft: @escaping ScanDraftSaver,
         comparisons: (any MarketComparisons)? = nil,
         comparing marketplaces: [String] = [],
@@ -64,6 +67,8 @@ final class ScanRunModel {
     ) {
         let id = UUID().uuidString.lowercased()
         self.id = id
+        let place = place?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.place = place?.isEmpty == false ? place : nil
         self.service = service
         self.comparisons = marketplaces.isEmpty ? nil : comparisons
         // The comparison pages load while the seller walks to the bins.
@@ -176,30 +181,6 @@ final class ScanRunModel {
 
     // MARK: The run
 
-    /// Ends the run: the items not kept count as skipped, and the shots' files go. The kept
-    /// drafts stay, uploading in the background.
-    func end() async {
-        guard !isEnded else { return }
-        isEnded = true
-        tagShotFor = nil
-        for task in photos.values {
-            task.cancel()
-        }
-        for task in tagPhotos.values {
-            task.cancel()
-        }
-        if let serverRun, let runID = try? await serverRun.value {
-            do {
-                try await service.endSourcingRun(runID: runID, idempotencyKey: UUID().uuidString.lowercased())
-            } catch {
-                // The run stays open on the server; its scans were never kept either way.
-                log.error("Ending a sourcing run failed: \(error.message, privacy: .public)")
-            }
-        }
-        try? FileManager.default.removeItem(at: directory)
-        comparisons?.coolDown()
-    }
-
     /// The owner's measurements of the run (Test mode only): how long each card took from the
     /// shutter, as the plan's speed targets count them.
     var cardTimes: [TimeInterval] {
@@ -269,7 +250,10 @@ final class ScanRunModel {
     private func makeServerRun() -> Task<String, any Error> {
         let service = service
         let key = createRunKey
-        return Task { () async throws -> String in try await service.createSourcingRun(idempotencyKey: key) }
+        let place = place
+        return Task { () async throws -> String in
+            try await service.createSourcingRun(place: place, idempotencyKey: key)
+        }
     }
 
     private func addTag(_ capture: Data, to entryID: String) async {
@@ -305,6 +289,65 @@ final class ScanRunModel {
     func update(_ entryID: String, _ change: (inout ScanEntry) -> Void) {
         guard let index = entries.firstIndex(where: { $0.id == entryID }) else { return }
         change(&entries[index])
+    }
+}
+
+/// The run's checkout (`ScanCheckoutModel`): what it sends, and how the run ends with it.
+extension ScanRunModel {
+    /// A Keep still being saved on this iPhone: checkout waits for it.
+    var isKeeping: Bool {
+        entries.contains { $0.decision == .keeping }
+    }
+
+    /// The run can be checked out once anything was scanned and no Keep is still being saved.
+    var canCheckOut: Bool {
+        !isEnded && !entries.isEmpty && !isKeeping
+    }
+
+    /// The scans kept on this iPhone, in the order shot.
+    var keptScanIDs: [String] {
+        entries.filter(\.isKept).compactMap(\.scanID)
+    }
+
+    /// Ends the run: the items not kept count as skipped, and the shots' files go. The kept
+    /// drafts stay, uploading in the background.
+    func end() async {
+        guard !isEnded else { return }
+        finish()
+        if let serverRun, let runID = try? await serverRun.value {
+            do {
+                try await service.endSourcingRun(runID: runID, idempotencyKey: UUID().uuidString.lowercased())
+            } catch {
+                // The run stays open on the server; its scans were never kept either way.
+                log.error("Ending a sourcing run failed: \(error.message, privacy: .public)")
+            }
+        }
+        try? FileManager.default.removeItem(at: directory)
+        comparisons?.coolDown()
+    }
+
+    /// The run takes no more shots, and its photos still being prepared are dropped.
+    private func finish() {
+        isEnded = true
+        tagShotFor = nil
+        for task in photos.values {
+            task.cancel()
+        }
+        for task in tagPhotos.values {
+            task.cancel()
+        }
+    }
+
+    /// The run's server id, creating the run if no read did yet.
+    func serverRunID() async throws -> String {
+        try await ensureServerRun()
+    }
+
+    /// Ends the run once it was checked out: no more shots, and the shots' files go.
+    func close() {
+        finish()
+        try? FileManager.default.removeItem(at: directory)
+        comparisons?.coolDown()
     }
 }
 

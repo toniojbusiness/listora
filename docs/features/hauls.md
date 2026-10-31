@@ -55,13 +55,18 @@ request keeps its Idempotency-Key across retries of the same haul, so it is reco
 The item screen's cost says when it is the item's share of a haul ("Its share of a $50.00 haul of
 30").
 
+A thrift scan run's checkout makes a haul too: the run's kept items, with what the seller paid
+at the register ([thrift-scan.md](thrift-scan.md#checkout-m4)).
+
 In the batch review, **One $12 haul: $4.00 each** marks every item still to approve as one haul
 in one step (one `createHaul` with their ids), and each page then shows its share. Typing a price
 on a page afterwards makes it that item's own price.
 
 ## Local development
 
-Nothing needs a credential. `shares.test.ts` covers the rounding, `hauls.int.test.ts` the API on a
+Nothing needs a credential. The share math and the joining are in `shares.ts` and
+`membership.ts` (`createHaulWithItems`, which `createHaul` and a scan run's checkout share).
+`shares.test.ts` covers the rounding, `hauls.int.test.ts` the API on a
 real Postgres (the $50 over 30 split, joining, the count, leaving, moving, deleting, a batch, other
 accounts, and the profit dashboard's cost of goods), and `ReviewFeatureTests` (`HaulCostTests`,
 `BatchReviewTests`) the app's models against a fake server. `BatchListingUITests` marks a 3-item
