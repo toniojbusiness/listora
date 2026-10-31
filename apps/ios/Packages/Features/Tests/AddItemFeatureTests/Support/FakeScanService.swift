@@ -83,6 +83,66 @@ private func usd(_ cents: Int) -> [String: Any] {
     ["amountCents": cents, "currency": "USD"]
 }
 
+/// A run's summary as the server would send it: checked out by default, with the estimated
+/// profit; `checkedOut: false` is the run before checkout.
+func runSummaryJSON(
+    checkedOut: Bool = true,
+    place: String? = "Goodwill Outlet",
+    miles: Int? = 8,
+    keptItems: Int = 3,
+    estimatedItems: Int? = 3,
+    profit: (low: Int, high: Int) = (4210, 7110),
+) -> [String: Any] {
+    var run: [String: Any] = [
+        "id": "0193a000-0000-7000-8000-000000000002",
+        "startedAt": "2026-10-31T00:00:00Z",
+        "scanCount": 12,
+        "keptCount": keptItems,
+    ]
+    run["place"] = place
+    var summary: [String: Any] = ["run": run, "keptItems": keptItems]
+    if let estimatedItems {
+        summary["estimate"] = [
+            "itemCount": estimatedItems,
+            "resaleLow": usd(7500), "resaleHigh": usd(11200),
+            "payoutLow": usd(6210), "payoutHigh": usd(9110),
+            "basedOn": "1 from your own sales, 2 from the AI estimate",
+            "label": "Estimated - includes the AI estimate, not based on sold listings",
+        ]
+    }
+    if checkedOut {
+        run["endedAt"] = "2026-10-31T01:00:00Z"
+        run["checkedOutAt"] = "2026-10-31T01:00:00Z"
+        run["haulId"] = "0193a000-0000-7000-8000-000000000009"
+        run["miles"] = miles
+        summary["run"] = run
+        var haul: [String: Any] = [
+            "id": "0193a000-0000-7000-8000-000000000009",
+            "total": usd(2000), "itemCount": 4, "itemsAdded": keptItems, "eachCost": usd(500),
+            "purchaseDate": "2026-10-31",
+            "createdAt": "2026-10-31T01:00:00Z", "updatedAt": "2026-10-31T01:00:00Z",
+        ]
+        haul["purchaseSource"] = place
+        summary["haul"] = haul
+        if estimatedItems != nil {
+            summary["profitEstimate"] = [
+                "low": usd(profit.low), "high": usd(profit.high), "label": "Estimated, after fees",
+            ]
+        }
+    }
+    return summary
+}
+
+func decodeRunSummary(_ object: [String: Any]) throws -> SourcingRunSummary {
+    try decodeRunSummary(JSONSerialization.data(withJSONObject: object))
+}
+
+func decodeRunSummary(_ data: Data) throws -> SourcingRunSummary {
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return try decoder.decode(SourcingRunSummary.self, from: data)
+}
+
 func decodeScan(_ object: [String: Any]) throws -> ItemScan {
     try decodeScan(JSONSerialization.data(withJSONObject: object))
 }
@@ -97,8 +157,17 @@ func decodeScan(_ data: Data) throws -> ItemScan {
 final class FakeScanService: ScanService {
     struct Calls {
         var runs = 0
+        /// The place each run was started at.
+        var places: [String?] = []
         var ended: [String] = []
         var scans: [ScanRequest] = []
+        var checkouts: [Checkout] = []
+    }
+
+    struct Checkout {
+        var runID: String
+        var checkout: RunCheckout
+        var key: String
     }
 
     /// Scripted answers, as the JSON the server would send.
@@ -119,9 +188,38 @@ final class FakeScanService: ScanService {
         state.withLock { $0.answers.append(.failure(failure)) }
     }
 
-    func createSourcingRun(idempotencyKey _: String) async throws(APIFailure) -> String {
-        state.withLock { $0.calls.runs += 1 }
+    func createSourcingRun(place: String?, idempotencyKey _: String) async throws(APIFailure) -> String {
+        state.withLock { state in
+            state.calls.runs += 1
+            state.calls.places.append(place)
+        }
         return "run-1"
+    }
+
+    /// Scripted checkout answers; by default a checked-out summary.
+    private let checkoutAnswers = Mutex<[Result<Data, APIFailure>]>([])
+
+    func answerCheckout(failure: APIFailure) {
+        checkoutAnswers.withLock { $0.append(.failure(failure)) }
+    }
+
+    func checkoutSourcingRun(
+        runID: String,
+        _ checkout: RunCheckout,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> SourcingRunSummary {
+        state.withLock { $0.calls.checkouts.append(Checkout(runID: runID, checkout: checkout, key: idempotencyKey)) }
+        let next = checkoutAnswers.withLock { $0.isEmpty ? nil : $0.removeFirst() }
+        switch next ?? .success((try? JSONSerialization.data(withJSONObject: runSummaryJSON())) ?? Data()) {
+        case let .success(data):
+            do {
+                return try decodeRunSummary(data)
+            } catch {
+                throw APIFailure(error)
+            }
+        case let .failure(failure):
+            throw failure
+        }
     }
 
     func createScan(_ request: ScanRequest, idempotencyKey _: String) async throws(APIFailure) -> ItemScan {

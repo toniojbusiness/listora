@@ -760,6 +760,9 @@ const COLUMNS = {
     'kept_count',
     'created_at',
     'updated_at',
+    'haul_id',
+    'checked_out_at',
+    'miles',
   ],
   item_scan: [
     'id',

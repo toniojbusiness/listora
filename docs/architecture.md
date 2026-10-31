@@ -253,7 +253,8 @@ src/
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   sourcing/      The household's own sales that count, the sourcing kit (getSourcingKit), and
                  the price screen's own history (docs/features/thrift-scan.md)
-  sourcing-runs/ Thrift scan runs: a trip to a store, started and ended
+  sourcing-runs/ Thrift scan runs: a trip to a store, started, ended, and checked out into a
+                 haul, and the run's summary with its estimated profit
   scans/         The thrift scan: an item's read and call at the store, and Keep
                  (docs/features/thrift-scan.md)
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce

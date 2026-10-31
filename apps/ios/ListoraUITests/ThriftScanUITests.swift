@@ -3,8 +3,9 @@ import XCTest
 /// The thrift scan end to end against the local stack (`make ios-test`, packages/e2e), with the
 /// fake camera and the fake AI's scan of the fixture shirt (`FakeAI/default.json`): Add Item's
 /// Scan mode, one shot read into a card with the call and the labeled AI estimate, Keep saving a
-/// draft without leaving the camera, the next shot skipping the last one, and the run's tray. The
-/// stack shows every built feature, so Scan mode is on.
+/// draft without leaving the camera, the next shot skipping the last one, the run's tray, and the
+/// checkout at the register into a haul with the run's summary and estimated profit. The stack
+/// shows every built feature, so Scan mode is on.
 @MainActor
 final class ThriftScanUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -20,6 +21,14 @@ final class ThriftScanUITests: XCTestCase {
         scanMode.tap()
         XCTAssertTrue(app.staticTexts["Scan at the bins"].waitForExistence(timeout: 5))
         app.buttons["addItem.startScan"].tap()
+
+        // Starting a run asks only where the seller is.
+        let place = app.textFields["scanStart.place"]
+        XCTAssertTrue(place.waitForExistence(timeout: 5))
+        place.tap()
+        place.typeText("Invented Thrift")
+        attachScreenshot("start a run")
+        app.buttons["scanStart.start"].tap()
 
         // One shot: the card lands with the call, its confidence, and the AI estimate under its label.
         let shutter = app.buttons["camera.shutter"]
@@ -60,9 +69,39 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["This run"].exists)
         attachScreenshot("add item with the run")
         XCTAssertTrue(app.buttons["addItem.startScan"].label.contains("Keep scanning"))
-        app.buttons["addItem.endScan"].tap()
+        try checkOutTheRun()
+    }
+
+    /// Checkout at the register, from Add Item's bottom bar, into the run's summary.
+    private func checkOutTheRun() throws {
+        // Checkout at the register: what the haul cost, the kept item by default, the miles.
+        app.buttons["addItem.checkoutScan"].tap()
+        let paid = app.textFields["Paid for the haul"]
+        XCTAssertTrue(paid.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["scanCheckout.items"].value as? String, "1")
+        paid.tap()
+        paid.typeText("3")
+        app.textFields["scanCheckout.miles"].tap()
+        app.textFields["scanCheckout.miles"].typeText("7")
+        attachScreenshot("checkout")
+        app.buttons["scanCheckout.submit"].tap()
+
+        // The run's summary: the haul's cost, the estimated resale, and the estimated profit.
+        XCTAssertTrue(element("runSummary.paid").waitForExistence(timeout: 20))
+        XCTAssertEqual(element("runSummary.paid").label, "Paid $3.00 for 1 item · $3.00 each")
+        XCTAssertEqual(element("runSummary.counts").label, "2 scanned · 1 kept · 7 miles")
+        XCTAssertTrue(element("runSummary.resale").exists)
+        XCTAssertTrue(element("runSummary.profit").exists)
+        XCTAssertTrue(element("runSummary.label").label.contains("not based on sold listings"))
+        attachScreenshot("run summary")
+        app.buttons["scanCheckout.done"].tap()
+
+        // The run is over; its summary stays on Add Item until the next run starts.
         XCTAssertTrue(app.buttons["addItem.startScan"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["addItem.startScan"].label.contains("Start scanning"))
+        XCTAssertTrue(element("runSummary").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["addItem.endScan"].exists)
+        attachScreenshot("add item after checkout")
     }
 
     private func launch(signedInTo stack: E2EStack) throws {

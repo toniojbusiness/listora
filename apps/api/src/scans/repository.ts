@@ -101,6 +101,43 @@ export async function lockScan(
     .executeTakeFirst();
 }
 
+/** These scans, locked in id order for the rest of the transaction, by id. */
+export async function lockScans(
+  db: DbExecutor,
+  tenant: Tenant,
+  scanIds: readonly string[],
+): Promise<Map<string, ItemScanRow>> {
+  if (scanIds.length === 0) return new Map();
+  const rows = await db
+    .selectFrom('item_scan')
+    .selectAll()
+    .where('account_id', '=', tenant.accountId)
+    .where('id', 'in', scanIds)
+    .orderBy('id')
+    .forUpdate()
+    .execute();
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+/** The run's kept scans whose item is still in Listora, in the order they were scanned. */
+export async function keptScans(
+  db: DbExecutor,
+  tenant: Tenant,
+  runId: string,
+): Promise<(ItemScanRow & { item_id: string })[]> {
+  const rows = await db
+    .selectFrom('item_scan')
+    .selectAll()
+    .where('account_id', '=', tenant.accountId)
+    .where('run_id', '=', runId)
+    .where('decision', '=', 'kept')
+    .where('item_id', 'is not', null)
+    .orderBy('created_at')
+    .orderBy('id')
+    .execute();
+  return rows.flatMap((row) => (row.item_id === null ? [] : [{ ...row, item_id: row.item_id }]));
+}
+
 /** A scan the seller has not decided on is replaced by a later scan of the same item. */
 export async function markReplaced(db: DbExecutor, tenant: Tenant, scanId: string): Promise<void> {
   await db

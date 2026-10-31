@@ -56,3 +56,11 @@ export {
   TREND_WINDOW_DAYS,
 } from './trend.ts';
 export type { SalesTrend, TrendDirection, TrendSource } from './trend.ts';
+export {
+  RUN_ESTIMATE_AI_LABEL,
+  RUN_ESTIMATE_LABEL,
+  RUN_PROFIT_LABEL,
+  runEstimate,
+  runProfit,
+} from './run.ts';
+export type { KeptScanCall, RunEstimate } from './run.ts';
