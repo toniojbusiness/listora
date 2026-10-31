@@ -187,6 +187,13 @@ keep it `off`. While it is off, each run clears nothing of buyers and logs how m
 the three would clear (`buyer data retention is off`, `wouldClear`), so the owner can see what
 turning it on will do.
 
+When a sale was done is when Listora saw it shipped, canceled, or returned on the marketplace. A
+sale the marketplace already showed done when Listora first recorded it (most of a sales history
+import, [sales.md](sales.md)) was done before Listora found it, and the marketplaces' pages name
+no date for that, so its 60 days count from the order's last date the marketplace does name: its
+ship-by date, else its sale time, never later than the import. The sale itself still shows it
+shipped when Listora recorded it so (`saleDone` in `packages/retention`).
+
 Kept elsewhere, by the code that writes them: automation screenshots 14 days and run records
 90 days (the automation dispatcher, [automation.md](automation.md)), package photos 60 days after
 the sale shipped, like the buyer's other details ([pack-check.md](pack-check.md#package-photo)),

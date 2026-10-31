@@ -49,8 +49,10 @@ export const RETENTION_DAYS = {
   deletionRecords: 730,
   /**
    * The buyer's details on a sale's label (their first name, the tracking number), after the sale
-   * is done: shipped, canceled, or returned, from the latest of those. Past the marketplaces'
-   * claim windows, like its package photo (`PACK_PHOTO_RETENTION_DAYS` in @listora/pack-check).
+   * is done: shipped, canceled, or returned, from the latest of those on the marketplace (a sale
+   * already done when Listora recorded it, from its ship-by date or sale time: `saleDone`). Past
+   * the marketplaces' claim windows, like its package photo (`PACK_PHOTO_RETENTION_DAYS` in
+   * @listora/pack-check).
    */
   saleLabelBuyers: 60,
   /** A packed sale's tracking number, as long as its label's; the package record stays. */
@@ -303,11 +305,23 @@ async function countBuyerData(
 
 /**
  * The query's `sale` is done (shipped, canceled, or returned) since before `cutoff`, counted from
- * the latest of those: a return after shipping starts the count again.
+ * when it was done on the marketplace: the latest of those (a return after shipping starts the
+ * count again), as Listora recorded it when it saw the change.
+ *
+ * A sale the marketplace already showed done when Listora first recorded it (most of a sales
+ * history import) was marked done in the transaction that recorded it, so its done time is its
+ * `created_at` exactly (both `now()`), and that is only when Listora found it: it was done on the
+ * marketplace before then, and the marketplaces' pages name no date it shipped, was canceled, or
+ * was returned. Its count starts at the order's last date the marketplace does name, its ship-by
+ * date or else its sale time, and never later than the recording.
  */
 function saleDone(cutoff: Date) {
   return sql<boolean>`sale.status in ('shipped', 'canceled', 'returned')
-    and greatest(sale.shipped_at, sale.canceled_at, sale.returned_at) < ${cutoff}`;
+    and (case
+      when greatest(sale.shipped_at, sale.canceled_at, sale.returned_at) = sale.created_at
+        then least(greatest(sale.sold_at, sale.ship_by), sale.created_at)
+      else greatest(sale.shipped_at, sale.canceled_at, sale.returned_at)
+    end) < ${cutoff}`;
 }
 
 /**
