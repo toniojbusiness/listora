@@ -9,11 +9,17 @@ import XCTest
 final class PackCheckUITests: XCTestCase {
     private let app = XCUIApplication()
 
-    /// Order A's label as the camera reads its IMpb barcode, order B's, and order A's label
-    /// printed twice, read the plain way.
-    private static let labelA = "]C142094107\u{1d}9400111899223197428490"
-    private static let labelB = "420900129400111899223197420001"
-    private static let labelACopy = "420941079400111899223197428490"
+    /// An order's label as the camera reads its IMpb barcode (a symbology identifier, the
+    /// routing code and ZIP, a separator, then the tracking number), and the same label printed
+    /// twice, read the plain way. Each seed's labels are its own, so a label one test packs is
+    /// never already used in the next, nor in a retry.
+    private static func label(_ order: PackOrderSeed) -> String {
+        "]C142094107\u{1d}\(order.trackingNumber)"
+    }
+
+    private static func plainLabel(_ order: PackOrderSeed, zip: String = "94107") -> String {
+        "420\(zip)\(order.trackingNumber)"
+    }
 
     override func setUp() async throws {
         continueAfterFailure = false
@@ -29,7 +35,8 @@ final class PackCheckUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
-            "LISTORA_SCANNED_CODES": [Self.labelB, Self.labelA, Self.labelACopy].joined(separator: "|"),
+            "LISTORA_SCANNED_CODES": [Self.plainLabel(dress, zip: "90012"), Self.label(tee), Self.plainLabel(tee)]
+                .joined(separator: "|"),
         ]
         app.launchQuietly()
         try packTheTeeAfterStoppingTheDressLabel(tee)
@@ -115,7 +122,7 @@ final class PackCheckUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
-            "LISTORA_SCANNED_CODES": Self.labelA,
+            "LISTORA_SCANNED_CODES": Self.label(tee),
             "LISTORA_SCRIPTED_PRINTING": "1",
         ]
         app.launchQuietly()
@@ -148,8 +155,7 @@ final class PackCheckUITests: XCTestCase {
         XCTAssertTrue(app.buttons["sale.action.markShipped"].exists)
         keepScreenshot("Sale - packed")
 
-        // Open package shows it in Pack check, on its package; unpacked, it is to pack again (and
-        // its label, a shared fixture, is free for the other tests).
+        // Open package shows it in Pack check, on its package; unpacked, it is to pack again.
         app.buttons["sale.package.open"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["pack.packedBanner"].waitForExistence(timeout: 10))
         app.buttons["pack.unpack"].tap()

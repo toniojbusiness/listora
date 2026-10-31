@@ -271,9 +271,11 @@ buyerFirstName, labelFile }, { status })`, `sellBundle(lines, soldAt, shipping)`
 `labelFile` the parcel names its label's file (`label_url`), which the fake's web API serves as a
 4 × 6 in PDF to the seller's session. UI tests set `LISTORA_SCRIPTED_PRINTING=1`: the label is a
 test PDF and every print "prints" at once, with no print sheet. The local stack's control
-endpoint seeds two orders to pack with the double-print fixtures (`POST /pack/orders`), and the
-app's scanner reads `LISTORA_SCANNED_CODES` (codes separated by `|`) in UI tests. The
-scanned-label fixtures are in `@listora/pack-check/testing`.
+endpoint seeds two orders to pack (`POST /pack/orders`), each call with labels of its own in the
+double-print fixtures' shape (`packLabels`), so a label one UI test packs is never already used
+in the next test or in a retry; the tests scan the seeded numbers. The app's scanner reads
+`LISTORA_SCANNED_CODES` (codes separated by `|`) in UI tests. The scanned-label fixtures of the
+server tests are in `@listora/pack-check/testing`.
 
 ## Tests
 

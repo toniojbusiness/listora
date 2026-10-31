@@ -22,8 +22,9 @@
  * - `POST /today/sold-item`: a ready item (as above) kept in bin `B-12` that sold on eBay an hour
  *   ago and ships by tomorrow, answering `{ id, sku, saleId, saleItemId }`: a Today "ship" card.
  * - `POST /pack/orders`: Pack check turned on, and two sold items to pack whose labels Listora
- *   read (order A's `9400111899223197428490` and order B's `9400111899223197420001`, the
- *   double-print fixtures), answering `[{ id, sku, saleId, trackingNumber }]`.
+ *   read, answering `[{ id, sku, saleId, trackingNumber }]`: each call's labels are its own
+ *   (`packLabels`: order A's ends `8490`, order B's `0001`), so a label packed by one test is
+ *   never already used in the next.
  * - `POST /items/depop`: a ready item (as above) whose Depop listing is being published, answering
  *   `{ id, sku, listingId }`. Depop runs on the phone, so the publish waits for the app to run it.
  * - `POST /depop/faults` `{ action, fault, times? }`: the fake Depop site (which the phone
@@ -62,7 +63,6 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 
 import type { FakeDepopSite, FakeDepopSiteAction } from '@listora/automation';
 import type { Db, Marketplace } from '@listora/db';
-import { DOUBLE_PRINT } from '@listora/pack-check/testing';
 import type {
   FakeDepopAction,
   FakeDepopFault,
@@ -80,6 +80,7 @@ import {
   createReadyItem,
   recordSoldItem,
   type StackApi,
+  packLabels,
   seedPackOrders,
 } from './seed.ts';
 
@@ -298,11 +299,7 @@ async function handle(request: IncomingMessage, deps: ControlDependencies): Prom
       });
       return {
         status: 201,
-        body: await seedPackOrders(
-          deps.db,
-          [tee, dress],
-          [DOUBLE_PRINT.trackingA, DOUBLE_PRINT.trackingB],
-        ),
+        body: await seedPackOrders(deps.db, [tee, dress], packLabels()),
       };
     }
     case 'POST /today/sold-item': {
