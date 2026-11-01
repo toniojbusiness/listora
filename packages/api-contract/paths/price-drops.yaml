@@ -1,0 +1,125 @@
+/v1/price-drops:
+  get:
+    tags: [price-drops]
+    operationId: listPriceDrops
+    summary: List price drop rules and planned drops
+    description: |
+      The account's price drop rules and each planned drop, so the seller sees every drop before
+      it runs (docs/features/price-drops.md). `404` while price drops are not shown to the
+      account (they have not passed live, and it is not in Test mode).
+    parameters:
+      - name: itemId
+        in: query
+        description: Only the rule that applies to this item, and its listings' drops.
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+    responses:
+      '200':
+        description: The rules and the planned drops.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/price-drops.yaml#/PriceDrops'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/price-drops/defaults:
+  get:
+    tags: [price-drops]
+    operationId: getPriceDropDefaults
+    summary: Get a new price drop rule's defaults
+    description: |
+      What a new rule starts from, from the seller's own days to sell: for the item's brand with
+      `itemId` (and its own lowest price as the floor), for `brand`, or over all their sales.
+    parameters:
+      - name: itemId
+        in: query
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+      - name: brand
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+    responses:
+      '200':
+        description: The defaults.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/price-drops.yaml#/PriceDropDefaults'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/price-drops/rules:
+  post:
+    tags: [price-drops]
+    operationId: createPriceDropRule
+    summary: Create a price drop rule
+    description: |
+      A rule for one item or a brand, on. It changes no price by itself: its first drops come at
+      the earliest a day later, after the seller has seen them planned.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/price-drops.yaml#/PriceDropRuleCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/price-drops.yaml#/PriceDropRule'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/price-drops/rules/{ruleId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/PriceDropRuleId'
+  put:
+    tags: [price-drops]
+    operationId: replacePriceDropRule
+    summary: Change a price drop rule, or turn it on or off
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/price-drops.yaml#/PriceDropRuleReplace'
+    responses:
+      '200':
+        description: The saved rule.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/price-drops.yaml#/PriceDropRule'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [price-drops]
+    operationId: deletePriceDropRule
+    summary: Delete a price drop rule
+    description: A drop already queued still runs; the rest are no longer planned.
+    responses:
+      '204':
+        description: Deleted.
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

@@ -12859,6 +12859,497 @@ extension Components {
                 case lastAt
             }
         }
+        /// A `KnownPriceDropRuleScope`, or a scope added after this client was built, which clients
+        /// show by name.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PriceDropRuleScope`.
+        public struct PriceDropRuleScope: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleScope/value1`.
+            public var value1: Components.Schemas.KnownPriceDropRuleScope?
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleScope/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PriceDropRuleScope`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPriceDropRuleScope? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `item`: one item's own rule. `brand`: every item of the brand without a rule of its own.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPriceDropRuleScope`.
+        @frozen public enum KnownPriceDropRuleScope: String, Codable, Hashable, Sendable, CaseIterable {
+            case item = "item"
+            case brand = "brand"
+        }
+        /// A seller's price drop rule: each drop takes `percent` off the price of a live listing that
+        /// went `afterDays` unsold (since it went live or its price last changed), never below
+        /// `floor`, rounded down to whole dollars. An item's own rule wins over its brand's, also when
+        /// it is off. No drop runs within a day of the rule taking effect (`armedAt`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PriceDropRule`.
+        public struct PriceDropRule: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/scope`.
+            public var scope: Components.Schemas.PriceDropRuleScope
+            /// With `item`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// With `item`, the item's SKU.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/sku`.
+            public var sku: Swift.String?
+            /// With `item`, the item's title when it has one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/title`.
+            public var title: Swift.String?
+            /// With `brand`, as the seller wrote it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/brand`.
+            public var brand: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/percent`.
+            public var percent: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/afterDays`.
+            public var afterDays: Swift.Int32
+            /// The lowest price a drop sets.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/floor`.
+            public var floor: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/enabled`.
+            public var enabled: Swift.Bool
+            /// When the rule last took effect (made, changed, or turned on).
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/armedAt`.
+            public var armedAt: Components.Schemas.Timestamp
+            /// The live listings it applies to now, on the marketplaces with price drops.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropRule/liveListings`.
+            public var liveListings: Swift.Int32
+            /// Creates a new `PriceDropRule`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - scope:
+            ///   - itemId: With `item`.
+            ///   - sku: With `item`, the item's SKU.
+            ///   - title: With `item`, the item's title when it has one.
+            ///   - brand: With `brand`, as the seller wrote it.
+            ///   - percent:
+            ///   - afterDays:
+            ///   - floor: The lowest price a drop sets.
+            ///   - enabled:
+            ///   - armedAt: When the rule last took effect (made, changed, or turned on).
+            ///   - liveListings: The live listings it applies to now, on the marketplaces with price drops.
+            public init(
+                id: Components.Schemas.Id,
+                scope: Components.Schemas.PriceDropRuleScope,
+                itemId: Components.Schemas.Id? = nil,
+                sku: Swift.String? = nil,
+                title: Swift.String? = nil,
+                brand: Swift.String? = nil,
+                percent: Swift.Int32,
+                afterDays: Swift.Int32,
+                floor: Components.Schemas.Money,
+                enabled: Swift.Bool,
+                armedAt: Components.Schemas.Timestamp,
+                liveListings: Swift.Int32
+            ) {
+                self.id = id
+                self.scope = scope
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.brand = brand
+                self.percent = percent
+                self.afterDays = afterDays
+                self.floor = floor
+                self.enabled = enabled
+                self.armedAt = armedAt
+                self.liveListings = liveListings
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case scope
+                case itemId
+                case sku
+                case title
+                case brand
+                case percent
+                case afterDays
+                case floor
+                case enabled
+                case armedAt
+                case liveListings
+            }
+        }
+        /// A new rule, on, for one item (`itemId`) or a brand (`brand`), exactly one of them. A second
+        /// rule for the same item or brand is `409 conflict`; an item not in the account is `404`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PriceDropRuleCreate`.
+        public struct PriceDropRuleCreate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleCreate/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleCreate/brand`.
+            public var brand: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleCreate/percent`.
+            public var percent: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleCreate/afterDays`.
+            public var afterDays: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleCreate/floor`.
+            public var floor: Components.Schemas.Money
+            /// Creates a new `PriceDropRuleCreate`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - brand:
+            ///   - percent:
+            ///   - afterDays:
+            ///   - floor:
+            public init(
+                itemId: Components.Schemas.Id? = nil,
+                brand: Swift.String? = nil,
+                percent: Swift.Int32,
+                afterDays: Swift.Int32,
+                floor: Components.Schemas.Money
+            ) {
+                self.itemId = itemId
+                self.brand = brand
+                self.percent = percent
+                self.afterDays = afterDays
+                self.floor = floor
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case brand
+                case percent
+                case afterDays
+                case floor
+            }
+        }
+        /// The rule's terms and its switch. Changing the terms, or turning it on, starts its day of
+        /// notice again; turning it off stops its drops that have not been queued yet.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PriceDropRuleReplace`.
+        public struct PriceDropRuleReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleReplace/percent`.
+            public var percent: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleReplace/afterDays`.
+            public var afterDays: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleReplace/floor`.
+            public var floor: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/PriceDropRuleReplace/enabled`.
+            public var enabled: Swift.Bool
+            /// Creates a new `PriceDropRuleReplace`.
+            ///
+            /// - Parameters:
+            ///   - percent:
+            ///   - afterDays:
+            ///   - floor:
+            ///   - enabled:
+            public init(
+                percent: Swift.Int32,
+                afterDays: Swift.Int32,
+                floor: Components.Schemas.Money,
+                enabled: Swift.Bool
+            ) {
+                self.percent = percent
+                self.afterDays = afterDays
+                self.floor = floor
+                self.enabled = enabled
+            }
+            public enum CodingKeys: String, CodingKey {
+                case percent
+                case afterDays
+                case floor
+                case enabled
+            }
+        }
+        /// A `KnownPlannedPriceDropState`, or a state added after this client was built, which clients
+        /// show without a time.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PlannedPriceDropState`.
+        public struct PlannedPriceDropState: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDropState/value1`.
+            public var value1: Components.Schemas.KnownPlannedPriceDropState?
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDropState/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PlannedPriceDropState`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPlannedPriceDropState? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `scheduled`: it drops to `nextPrice` at `at` (now for one due already, then within the daily
+        /// cap's pace). `at_floor`: it is at the rule's lowest price. `last_failed`: its last price
+        /// change failed; once it is retried and goes through, drops go on. `unavailable`: Listora can't
+        /// change its price there (no linked marketplace session that works, or a read-only shop).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPlannedPriceDropState`.
+        @frozen public enum KnownPlannedPriceDropState: String, Codable, Hashable, Sendable, CaseIterable {
+            case scheduled = "scheduled"
+            case atFloor = "at_floor"
+            case lastFailed = "last_failed"
+            case unavailable = "unavailable"
+        }
+        /// A live listing's next drop under the rule that applies to it, before it runs.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop`.
+        public struct PlannedPriceDrop: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/listingId`.
+            public var listingId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/sku`.
+            public var sku: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/ruleId`.
+            public var ruleId: Components.Schemas.Id
+            /// Its price now.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/price`.
+            public var price: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/state`.
+            public var state: Components.Schemas.PlannedPriceDropState
+            /// With `scheduled`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/at`.
+            public var at: Components.Schemas.Timestamp?
+            /// With `scheduled`, the price it drops to.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PlannedPriceDrop/nextPrice`.
+            public var nextPrice: Components.Schemas.Money?
+            /// Creates a new `PlannedPriceDrop`.
+            ///
+            /// - Parameters:
+            ///   - listingId:
+            ///   - itemId:
+            ///   - sku:
+            ///   - title:
+            ///   - marketplace:
+            ///   - ruleId:
+            ///   - price: Its price now.
+            ///   - state:
+            ///   - at: With `scheduled`.
+            ///   - nextPrice: With `scheduled`, the price it drops to.
+            public init(
+                listingId: Components.Schemas.Id,
+                itemId: Components.Schemas.Id,
+                sku: Swift.String,
+                title: Swift.String? = nil,
+                marketplace: Components.Schemas.Marketplace,
+                ruleId: Components.Schemas.Id,
+                price: Components.Schemas.Money,
+                state: Components.Schemas.PlannedPriceDropState,
+                at: Components.Schemas.Timestamp? = nil,
+                nextPrice: Components.Schemas.Money? = nil
+            ) {
+                self.listingId = listingId
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.marketplace = marketplace
+                self.ruleId = ruleId
+                self.price = price
+                self.state = state
+                self.at = at
+                self.nextPrice = nextPrice
+            }
+            public enum CodingKeys: String, CodingKey {
+                case listingId
+                case itemId
+                case sku
+                case title
+                case marketplace
+                case ruleId
+                case price
+                case state
+                case at
+                case nextPrice
+            }
+        }
+        /// The account's rules (item rules first, then brands by name) and every planned drop of a live
+        /// listing under a rule that is on, soonest first. With `itemId`, only the rule that applies to
+        /// that item (its own or its brand's) and its listings' drops.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PriceDrops`.
+        public struct PriceDrops: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceDrops/rules`.
+            public var rules: [Components.Schemas.PriceDropRule]
+            /// - Remark: Generated from `#/components/schemas/PriceDrops/planned`.
+            public var planned: [Components.Schemas.PlannedPriceDrop]
+            /// Creates a new `PriceDrops`.
+            ///
+            /// - Parameters:
+            ///   - rules:
+            ///   - planned:
+            public init(
+                rules: [Components.Schemas.PriceDropRule],
+                planned: [Components.Schemas.PlannedPriceDrop]
+            ) {
+                self.rules = rules
+                self.planned = planned
+            }
+            public enum CodingKeys: String, CodingKey {
+                case rules
+                case planned
+            }
+        }
+        /// The seller's own sales a default rests on.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PriceDropDefaultsBasis`.
+        public struct PriceDropDefaultsBasis: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceDropDefaultsBasis/sales`.
+            public var sales: Swift.Int32
+            /// Half of them sold within this many days.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropDefaultsBasis/medianDays`.
+            public var medianDays: Swift.Int32
+            /// Present when they are the brand's sales, not all of them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceDropDefaultsBasis/brand`.
+            public var brand: Swift.String?
+            /// Creates a new `PriceDropDefaultsBasis`.
+            ///
+            /// - Parameters:
+            ///   - sales:
+            ///   - medianDays: Half of them sold within this many days.
+            ///   - brand: Present when they are the brand's sales, not all of them.
+            public init(
+                sales: Swift.Int32,
+                medianDays: Swift.Int32,
+                brand: Swift.String? = nil
+            ) {
+                self.sales = sales
+                self.medianDays = medianDays
+                self.brand = brand
+            }
+            public enum CodingKeys: String, CodingKey {
+                case sales
+                case medianDays
+                case brand
+            }
+        }
+        /// What a new rule starts from: `afterDays` from the seller's own days to sell over the last year
+        /// (the brand's with three or more sales of it, else all of them, held to 7 to 90 days), else 21;
+        /// `floor` from the item's own lowest price when it has one.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PriceDropDefaults`.
+        public struct PriceDropDefaults: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceDropDefaults/percent`.
+            public var percent: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PriceDropDefaults/afterDays`.
+            public var afterDays: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PriceDropDefaults/floor`.
+            public var floor: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/PriceDropDefaults/basis`.
+            public var basis: Components.Schemas.PriceDropDefaultsBasis?
+            /// Creates a new `PriceDropDefaults`.
+            ///
+            /// - Parameters:
+            ///   - percent:
+            ///   - afterDays:
+            ///   - floor:
+            ///   - basis:
+            public init(
+                percent: Swift.Int32,
+                afterDays: Swift.Int32,
+                floor: Components.Schemas.Money? = nil,
+                basis: Components.Schemas.PriceDropDefaultsBasis? = nil
+            ) {
+                self.percent = percent
+                self.afterDays = afterDays
+                self.floor = floor
+                self.basis = basis
+            }
+            public enum CodingKeys: String, CodingKey {
+                case percent
+                case afterDays
+                case floor
+                case basis
+            }
+        }
         /// Whether Pack check is on. It is off until the seller turns it on in Settings.
         ///
         /// - Remark: Generated from `#/components/schemas/PackCheckSettings`.
@@ -15920,6 +16411,8 @@ extension Components {
         /// `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
         /// listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
         /// comparisons from the marketplace's public search, read on the iPhone logged out.
+        /// `price_drops`: the seller's rules lowering a live listing's price after it went unsold a
+        /// while, each drop a price change confirmed by a read-back.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownMarketplaceFeature`.
@@ -15932,6 +16425,7 @@ extension Components {
             case listingRefresh = "listing_refresh"
             case revise = "revise"
             case marketComps = "market_comps"
+            case priceDrops = "price_drops"
         }
         /// - Remark: Generated from `#/components/schemas/MarketplaceFeatures`.
         public struct MarketplaceFeatures: Codable, Hashable, Sendable {

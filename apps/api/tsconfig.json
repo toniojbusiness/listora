@@ -30,6 +30,7 @@
     { "path": "../../packages/storage" },
     { "path": "../../packages/today" },
     { "path": "../../packages/listing-refresh" },
+    { "path": "../../packages/price-drops" },
     { "path": "../../packages/testing" }
   ]
 }

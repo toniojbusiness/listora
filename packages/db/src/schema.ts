@@ -95,6 +95,7 @@ import type {
   UserTaskKind,
   UserTaskStatus,
   UserTaskUrgency,
+  PriceDropRuleScope,
   RefreshCadence,
 } from './values.ts';
 
@@ -610,6 +611,8 @@ export interface MarketplaceOperationTable {
   updated_at: UpdatedAt;
   /** The listing content a create, revise, or relist publishes; null for every other kind. */
   content: NullableJsonb<JsonObject>;
+  /** The price drop rule a `reprice_rule` price change ran under; null once the rule is deleted. */
+  price_drop_rule_id: Nullable<string>;
 }
 
 /**
@@ -1207,6 +1210,30 @@ export interface ListingRefreshSettingTable {
   updated_at: UpdatedAt;
 }
 
+/** A seller's price drop rule, for one item or a brand (docs/features/price-drops.md). */
+export interface PriceDropRuleTable {
+  id: Id;
+  account_id: string;
+  scope: PriceDropRuleScope;
+  /** With `item`. */
+  item_id: Nullable<string>;
+  /** With `brand`: as the seller wrote it, and its match key (`brandKey`). */
+  brand: Nullable<string>;
+  brand_key: Nullable<string>;
+  /** The share each drop takes off the price, 1 to 50. */
+  percent: number;
+  /** Days unsold (since live or the last price change) before each drop. */
+  after_days: number;
+  /** The price no drop goes below. */
+  floor_cents: number;
+  currency: Generated<CurrencyCode>;
+  enabled: Generated<boolean>;
+  /** When the rule last took effect; no drop runs until a day after it. */
+  armed_at: ColumnType<Date, Date | undefined, Date>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 export interface TodaySummarySettingTable {
   account_id: string;
   enabled: Generated<boolean>;
@@ -1612,6 +1639,7 @@ export interface Database {
   listing_import_entry: ListingImportEntryTable;
   today_summary_setting: TodaySummarySettingTable;
   listing_refresh_setting: ListingRefreshSettingTable;
+  price_drop_rule: PriceDropRuleTable;
   description_style: DescriptionStyleTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;

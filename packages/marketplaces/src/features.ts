@@ -31,6 +31,11 @@ export const MARKETPLACE_FEATURES = [
    * logged out (docs/features/thrift-scan.md, "Marketplace comparisons").
    */
   'market_comps',
+  /**
+   * Smart price drops: the seller's rules lower a live listing's price after it went unsold a
+   * while, each drop a price change confirmed by a read-back (docs/features/price-drops.md).
+   */
+  'price_drops',
 ] as const;
 export type MarketplaceFeature = (typeof MARKETPLACE_FEATURES)[number];
 
@@ -74,6 +79,10 @@ export const VERIFIED_FEATURES: VerifiedFeatures = {
     listing_import: {
       passedOn: '2026-10-28',
       run: 'An import read every listing of a real 118-listing shop and imported them all, none failed.',
+    },
+    price_drops: {
+      passedOn: '2026-10-31',
+      run: "A rule's drop on the captain's test shop showed a day ahead, then the schedule ran it to the rule's floor, confirmed by read-back, and queued no more past the floor or the daily cap.",
     },
   },
   poshmark: {},

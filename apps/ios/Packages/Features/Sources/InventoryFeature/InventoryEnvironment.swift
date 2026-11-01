@@ -68,6 +68,9 @@ public final class InventoryEnvironment {
     /// Listing refresh's setting and each item's own cadence; without it, the item screen offers
     /// no "Refresh this item".
     var refreshService: (any ListingRefreshService)?
+    /// Smart price drops' rules and planned drops; without it, the item screen offers no price
+    /// drop and Settings has no Price drops.
+    var priceDropService: (any PriceDropService)?
     /// What shows of each marketplace (docs/features/verified-features.md): refresh only where
     /// it passed live; without it, nothing of refresh shows.
     public var features: MarketplaceFeatures?
@@ -99,6 +102,7 @@ public final class InventoryEnvironment {
             taskDestination: taskDestination,
         )
         refreshService = APIListingRefreshService(client: apiClient.client)
+        priceDropService = APIPriceDropService(client: apiClient.client)
     }
 
     init(
@@ -126,6 +130,16 @@ public final class InventoryEnvironment {
         guard features?.showsAnywhere(.listingRefresh) == true else { return nil }
         return refreshService.map {
             AnyView(ListingRefreshSettingsView(model: ListingRefreshSettingsModel(service: $0)))
+        }
+    }
+
+    /// Settings > Price drops, for Settings' navigation stack; nil without a price drop service,
+    /// or while price drops passed live on no marketplace (docs/features/price-drops.md).
+    public func priceDropsScreen() -> AnyView? {
+        guard let features, features.showsAnywhere(.priceDrops) else { return nil }
+        let testing = features.isTestingEverywhere(.priceDrops)
+        return priceDropService.map {
+            AnyView(PriceDropsView(model: PriceDropsModel(service: $0), testing: testing))
         }
     }
 

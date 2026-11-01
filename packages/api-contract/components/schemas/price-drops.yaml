@@ -1,0 +1,213 @@
+PriceDropRuleScope:
+  description: |
+    A `KnownPriceDropRuleScope`, or a scope added after this client was built, which clients
+    show by name.
+  anyOf:
+    - $ref: '#/KnownPriceDropRuleScope'
+    - type: string
+      maxLength: 64
+KnownPriceDropRuleScope:
+  type: string
+  description: "`item`: one item's own rule. `brand`: every item of the brand without a rule of its own."
+  enum: [item, brand]
+PriceDropRule:
+  type: object
+  description: |
+    A seller's price drop rule: each drop takes `percent` off the price of a live listing that
+    went `afterDays` unsold (since it went live or its price last changed), never below
+    `floor`, rounded down to whole dollars. An item's own rule wins over its brand's, also when
+    it is off. No drop runs within a day of the rule taking effect (`armedAt`).
+  required: [id, scope, percent, afterDays, floor, enabled, armedAt, liveListings]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    scope:
+      $ref: '#/PriceDropRuleScope'
+    itemId:
+      $ref: './common.yaml#/Id'
+      description: With `item`.
+    sku:
+      type: string
+      maxLength: 64
+      description: With `item`, the item's SKU.
+    title:
+      type: string
+      maxLength: 500
+      description: With `item`, the item's title when it has one.
+    brand:
+      type: string
+      maxLength: 200
+      description: With `brand`, as the seller wrote it.
+    percent:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 50
+    afterDays:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 365
+    floor:
+      $ref: './common.yaml#/Money'
+      description: The lowest price a drop sets.
+    enabled:
+      type: boolean
+    armedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the rule last took effect (made, changed, or turned on).
+    liveListings:
+      type: integer
+      format: int32
+      minimum: 0
+      description: The live listings it applies to now, on the marketplaces with price drops.
+PriceDropRuleCreate:
+  type: object
+  description: |
+    A new rule, on, for one item (`itemId`) or a brand (`brand`), exactly one of them. A second
+    rule for the same item or brand is `409 conflict`; an item not in the account is `404`.
+  required: [percent, afterDays, floor]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    brand:
+      type: string
+      minLength: 1
+      maxLength: 200
+    percent:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 50
+    afterDays:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 365
+    floor:
+      $ref: './common.yaml#/Money'
+PriceDropRuleReplace:
+  type: object
+  description: |
+    The rule's terms and its switch. Changing the terms, or turning it on, starts its day of
+    notice again; turning it off stops its drops that have not been queued yet.
+  required: [percent, afterDays, floor, enabled]
+  properties:
+    percent:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 50
+    afterDays:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 365
+    floor:
+      $ref: './common.yaml#/Money'
+    enabled:
+      type: boolean
+PlannedPriceDropState:
+  description: |
+    A `KnownPlannedPriceDropState`, or a state added after this client was built, which clients
+    show without a time.
+  anyOf:
+    - $ref: '#/KnownPlannedPriceDropState'
+    - type: string
+      maxLength: 64
+KnownPlannedPriceDropState:
+  type: string
+  description: |
+    `scheduled`: it drops to `nextPrice` at `at` (now for one due already, then within the daily
+    cap's pace). `at_floor`: it is at the rule's lowest price. `last_failed`: its last price
+    change failed; once it is retried and goes through, drops go on. `unavailable`: Listora can't
+    change its price there (no linked marketplace session that works, or a read-only shop).
+  enum: [scheduled, at_floor, last_failed, unavailable]
+PlannedPriceDrop:
+  type: object
+  description: A live listing's next drop under the rule that applies to it, before it runs.
+  required: [listingId, itemId, sku, marketplace, ruleId, price, state]
+  properties:
+    listingId:
+      $ref: './common.yaml#/Id'
+    itemId:
+      $ref: './common.yaml#/Id'
+    sku:
+      type: string
+      maxLength: 64
+    title:
+      type: string
+      maxLength: 500
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    ruleId:
+      $ref: './common.yaml#/Id'
+    price:
+      $ref: './common.yaml#/Money'
+      description: Its price now.
+    state:
+      $ref: '#/PlannedPriceDropState'
+    at:
+      $ref: './common.yaml#/Timestamp'
+      description: With `scheduled`.
+    nextPrice:
+      $ref: './common.yaml#/Money'
+      description: With `scheduled`, the price it drops to.
+PriceDrops:
+  type: object
+  description: |
+    The account's rules (item rules first, then brands by name) and every planned drop of a live
+    listing under a rule that is on, soonest first. With `itemId`, only the rule that applies to
+    that item (its own or its brand's) and its listings' drops.
+  required: [rules, planned]
+  properties:
+    rules:
+      type: array
+      maxItems: 1000
+      items:
+        $ref: '#/PriceDropRule'
+    planned:
+      type: array
+      maxItems: 5000
+      items:
+        $ref: '#/PlannedPriceDrop'
+PriceDropDefaultsBasis:
+  type: object
+  description: The seller's own sales a default rests on.
+  required: [sales, medianDays]
+  properties:
+    sales:
+      type: integer
+      format: int32
+      minimum: 1
+    medianDays:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Half of them sold within this many days.
+    brand:
+      type: string
+      maxLength: 200
+      description: Present when they are the brand's sales, not all of them.
+PriceDropDefaults:
+  type: object
+  description: |
+    What a new rule starts from: `afterDays` from the seller's own days to sell over the last year
+    (the brand's with three or more sales of it, else all of them, held to 7 to 90 days), else 21;
+    `floor` from the item's own lowest price when it has one.
+  required: [percent, afterDays]
+  properties:
+    percent:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 50
+    afterDays:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 365
+    floor:
+      $ref: './common.yaml#/Money'
+    basis:
+      $ref: '#/PriceDropDefaultsBasis'

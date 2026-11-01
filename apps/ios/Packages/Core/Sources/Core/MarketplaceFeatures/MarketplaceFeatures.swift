@@ -23,6 +23,8 @@ public final class MarketplaceFeatures {
         case revise
         /// The thrift scan's comparisons from the marketplace's public search, read logged out.
         case marketComps = "market_comps"
+        /// Smart price drops: the seller's rules lowering an unsold listing's price.
+        case priceDrops = "price_drops"
     }
 
     /// A feature of Listora itself rather than of one marketplace (`KnownAppFeature`), held to the

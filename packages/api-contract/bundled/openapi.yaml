@@ -73,6 +73,8 @@ tags:
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
   - name: listing-refresh
     description: Listing refresh, which keeps live listings that have not sold fresh on each marketplace (docs/features/listing-refresh.md).
+  - name: price-drops
+    description: Smart price drops, the seller's rules that lower the price of a live listing that has not sold (docs/features/price-drops.md).
   - name: pack-check
     description: Pack check, an optional mode that checks each package's label before it ships.
   - name: voice
@@ -3351,6 +3353,136 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/price-drops:
+    get:
+      tags:
+        - price-drops
+      operationId: listPriceDrops
+      summary: List price drop rules and planned drops
+      description: |
+        The account's price drop rules and each planned drop, so the seller sees every drop before
+        it runs (docs/features/price-drops.md). `404` while price drops are not shown to the
+        account (they have not passed live, and it is not in Test mode).
+      parameters:
+        - name: itemId
+          in: query
+          description: Only the rule that applies to this item, and its listings' drops.
+          schema:
+            $ref: '#/components/schemas/Id'
+      responses:
+        '200':
+          description: The rules and the planned drops.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDrops'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/price-drops/defaults:
+    get:
+      tags:
+        - price-drops
+      operationId: getPriceDropDefaults
+      summary: Get a new price drop rule's defaults
+      description: |
+        What a new rule starts from, from the seller's own days to sell: for the item's brand with
+        `itemId` (and its own lowest price as the floor), for `brand`, or over all their sales.
+      parameters:
+        - name: itemId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: brand
+          in: query
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+      responses:
+        '200':
+          description: The defaults.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDropDefaults'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/price-drops/rules:
+    post:
+      tags:
+        - price-drops
+      operationId: createPriceDropRule
+      summary: Create a price drop rule
+      description: |
+        A rule for one item or a brand, on. It changes no price by itself: its first drops come at
+        the earliest a day later, after the seller has seen them planned.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceDropRuleCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDropRule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/price-drops/rules/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PriceDropRuleId'
+    put:
+      tags:
+        - price-drops
+      operationId: replacePriceDropRule
+      summary: Change a price drop rule, or turn it on or off
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceDropRuleReplace'
+      responses:
+        '200':
+          description: The saved rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDropRule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+        - price-drops
+      operationId: deletePriceDropRule
+      summary: Delete a price drop rule
+      description: A drop already queued still runs; the rest are no longer planned.
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/pack-check/settings:
     get:
       tags:
@@ -4754,6 +4886,12 @@ components:
         format: int32
         minimum: 2000
         maximum: 2100
+    PriceDropRuleId:
+      name: ruleId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     DefaultError:
       description: Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
@@ -10803,6 +10941,253 @@ components:
         lastAt:
           $ref: '#/components/schemas/Timestamp'
           description: When its last refresh was confirmed by the marketplace.
+    PriceDropRuleScope:
+      description: |
+        A `KnownPriceDropRuleScope`, or a scope added after this client was built, which clients
+        show by name.
+      anyOf:
+        - $ref: '#/components/schemas/KnownPriceDropRuleScope'
+        - type: string
+          maxLength: 64
+    KnownPriceDropRuleScope:
+      type: string
+      description: '`item`: one item''s own rule. `brand`: every item of the brand without a rule of its own.'
+      enum:
+        - item
+        - brand
+    PriceDropRule:
+      type: object
+      description: |
+        A seller's price drop rule: each drop takes `percent` off the price of a live listing that
+        went `afterDays` unsold (since it went live or its price last changed), never below
+        `floor`, rounded down to whole dollars. An item's own rule wins over its brand's, also when
+        it is off. No drop runs within a day of the rule taking effect (`armedAt`).
+      required:
+        - id
+        - scope
+        - percent
+        - afterDays
+        - floor
+        - enabled
+        - armedAt
+        - liveListings
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        scope:
+          $ref: '#/components/schemas/PriceDropRuleScope'
+        itemId:
+          $ref: '#/components/schemas/Id'
+          description: With `item`.
+        sku:
+          type: string
+          maxLength: 64
+          description: With `item`, the item's SKU.
+        title:
+          type: string
+          maxLength: 500
+          description: With `item`, the item's title when it has one.
+        brand:
+          type: string
+          maxLength: 200
+          description: With `brand`, as the seller wrote it.
+        percent:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 50
+        afterDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 365
+        floor:
+          $ref: '#/components/schemas/Money'
+          description: The lowest price a drop sets.
+        enabled:
+          type: boolean
+        armedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When the rule last took effect (made, changed, or turned on).
+        liveListings:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The live listings it applies to now, on the marketplaces with price drops.
+    PriceDropRuleCreate:
+      type: object
+      description: |
+        A new rule, on, for one item (`itemId`) or a brand (`brand`), exactly one of them. A second
+        rule for the same item or brand is `409 conflict`; an item not in the account is `404`.
+      required:
+        - percent
+        - afterDays
+        - floor
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        brand:
+          type: string
+          minLength: 1
+          maxLength: 200
+        percent:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 50
+        afterDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 365
+        floor:
+          $ref: '#/components/schemas/Money'
+    PriceDropRuleReplace:
+      type: object
+      description: |
+        The rule's terms and its switch. Changing the terms, or turning it on, starts its day of
+        notice again; turning it off stops its drops that have not been queued yet.
+      required:
+        - percent
+        - afterDays
+        - floor
+        - enabled
+      properties:
+        percent:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 50
+        afterDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 365
+        floor:
+          $ref: '#/components/schemas/Money'
+        enabled:
+          type: boolean
+    PlannedPriceDropState:
+      description: |
+        A `KnownPlannedPriceDropState`, or a state added after this client was built, which clients
+        show without a time.
+      anyOf:
+        - $ref: '#/components/schemas/KnownPlannedPriceDropState'
+        - type: string
+          maxLength: 64
+    KnownPlannedPriceDropState:
+      type: string
+      description: |
+        `scheduled`: it drops to `nextPrice` at `at` (now for one due already, then within the daily
+        cap's pace). `at_floor`: it is at the rule's lowest price. `last_failed`: its last price
+        change failed; once it is retried and goes through, drops go on. `unavailable`: Listora can't
+        change its price there (no linked marketplace session that works, or a read-only shop).
+      enum:
+        - scheduled
+        - at_floor
+        - last_failed
+        - unavailable
+    PlannedPriceDrop:
+      type: object
+      description: A live listing's next drop under the rule that applies to it, before it runs.
+      required:
+        - listingId
+        - itemId
+        - sku
+        - marketplace
+        - ruleId
+        - price
+        - state
+      properties:
+        listingId:
+          $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+        sku:
+          type: string
+          maxLength: 64
+        title:
+          type: string
+          maxLength: 500
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        ruleId:
+          $ref: '#/components/schemas/Id'
+        price:
+          $ref: '#/components/schemas/Money'
+          description: Its price now.
+        state:
+          $ref: '#/components/schemas/PlannedPriceDropState'
+        at:
+          $ref: '#/components/schemas/Timestamp'
+          description: With `scheduled`.
+        nextPrice:
+          $ref: '#/components/schemas/Money'
+          description: With `scheduled`, the price it drops to.
+    PriceDrops:
+      type: object
+      description: |
+        The account's rules (item rules first, then brands by name) and every planned drop of a live
+        listing under a rule that is on, soonest first. With `itemId`, only the rule that applies to
+        that item (its own or its brand's) and its listings' drops.
+      required:
+        - rules
+        - planned
+      properties:
+        rules:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/PriceDropRule'
+        planned:
+          type: array
+          maxItems: 5000
+          items:
+            $ref: '#/components/schemas/PlannedPriceDrop'
+    PriceDropDefaultsBasis:
+      type: object
+      description: The seller's own sales a default rests on.
+      required:
+        - sales
+        - medianDays
+      properties:
+        sales:
+          type: integer
+          format: int32
+          minimum: 1
+        medianDays:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Half of them sold within this many days.
+        brand:
+          type: string
+          maxLength: 200
+          description: Present when they are the brand's sales, not all of them.
+    PriceDropDefaults:
+      type: object
+      description: |
+        What a new rule starts from: `afterDays` from the seller's own days to sell over the last year
+        (the brand's with three or more sales of it, else all of them, held to 7 to 90 days), else 21;
+        `floor` from the item's own lowest price when it has one.
+      required:
+        - percent
+        - afterDays
+      properties:
+        percent:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 50
+        afterDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 365
+        floor:
+          $ref: '#/components/schemas/Money'
+        basis:
+          $ref: '#/components/schemas/PriceDropDefaultsBasis'
     PackCheckSettings:
       type: object
       description: Whether Pack check is on. It is off until the seller turns it on in Settings.
@@ -12081,6 +12466,8 @@ components:
         `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
         listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
         comparisons from the marketplace's public search, read on the iPhone logged out.
+        `price_drops`: the seller's rules lowering a live listing's price after it went unsold a
+        while, each drop a price change confirmed by a read-back.
       enum:
         - sales_history
         - sale_checks
@@ -12090,6 +12477,7 @@ components:
         - listing_refresh
         - revise
         - market_comps
+        - price_drops
     MarketplaceFeatures:
       type: object
       required:

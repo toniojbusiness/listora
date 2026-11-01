@@ -79,5 +79,7 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/parameters/ReportYear`.
         public typealias ReportYear = Swift.Int32
+        /// - Remark: Generated from `#/components/parameters/PriceDropRuleId`.
+        public typealias PriceDropRuleId = Components.Schemas.Id
     }
 }

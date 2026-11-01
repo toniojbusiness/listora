@@ -23,6 +23,7 @@
     { "path": "../../packages/storage" },
     { "path": "../../packages/today" },
     { "path": "../../packages/listing-refresh" },
+    { "path": "../../packages/price-drops" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/photos" },
     { "path": "../../packages/analysis" },

@@ -74,7 +74,7 @@ side against fakes.
   and no miles (`expense_kind_whole`). One mileage row per run (`expense_run_mileage_idx`), and
   the year's rows by day (`expense_incurred_on_idx`).
 - `mileage_rate`: the seller's rate per year, `tenth_cents_per_mile`, 0 to 10,000.
-- Migration `20261031225120_mileage_expenses` also records the miles of runs checked out before
+- Migration `20261101014333_mileage_expenses` also records the miles of runs checked out before
   it as their mileage expenses, on the haul's day.
 
 ## Follow-ups
