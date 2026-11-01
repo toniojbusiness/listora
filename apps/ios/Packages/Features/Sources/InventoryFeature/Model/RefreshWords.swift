@@ -4,17 +4,20 @@ import ListoraAPI
 /// How listing refresh reads in the app: each cadence's name, and a listing's next and last
 /// refresh (docs/features/listing-refresh.md).
 enum RefreshWords {
-    /// The choices, in the order the pickers show them.
+    /// The choices, in the order Settings > Listing refresh shows them.
     static let cadences: [Components.Schemas.KnownRefreshCadence] = [
-        .every72Hours, .daily, .everyFewDays, .weekly, .custom, .off,
+        .off, .every72Hours, .daily, .everyFewDays, .weekly, .custom,
     ]
+
+    /// The item screen's choices: the account's custom time is set only in Settings.
+    static let itemCadences: [Components.Schemas.KnownRefreshCadence] = cadences.filter { $0 != .custom }
 
     /// "Every 72 hours", "Every 36 hours" for a custom one, "Off".
     static func name(_ cadence: Components.Schemas.KnownRefreshCadence, customHours: Int? = nil) -> String {
         switch cadence {
         case .every72Hours: "Every 72 hours"
         case .daily: "Daily"
-        case .everyFewDays: "Every few days"
+        case .everyFewDays: "Every 5 days"
         case .weekly: "Weekly"
         case .custom: customHours.map(hours) ?? "Custom"
         case .off: "Off"

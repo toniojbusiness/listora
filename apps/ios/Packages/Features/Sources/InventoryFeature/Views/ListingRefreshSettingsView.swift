@@ -59,13 +59,19 @@ struct ListingRefreshSettingsView: View {
 
     private var cadenceCard: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            Picker("Refresh listings", selection: $model.cadence) {
+            SectionHeader("Refresh listings", subtitle: "Tap one to change how often.")
+            // Every choice is on screen with the current one checked, so it reads as a choice
+            // to change rather than a fixed value (a menu row hid the other choices).
+            FlowLayout {
                 ForEach(RefreshWords.cadences, id: \.self) { cadence in
-                    Text(RefreshWords.name(cadence)).tag(cadence)
+                    ChoiceChip(RefreshWords.name(cadence), isSelected: model.cadence == cadence) {
+                        model.cadence = cadence
+                    }
+                    .accessibilityIdentifier("refreshSettings.cadence.\(cadence.rawValue)")
                 }
             }
-            .pickerStyle(.navigationLink)
-            .font(Typography.body)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Refresh listings")
             .accessibilityIdentifier("refreshSettings.cadence")
             if model.cadence == .custom {
                 Divider().overlay(Palette.separator.color)

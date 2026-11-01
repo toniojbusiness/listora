@@ -16,6 +16,10 @@ actor FakeListingRefreshService: ListingRefreshService {
         self.failure = failure
     }
 
+    func setItem(_ item: Components.Schemas.ItemRefresh) {
+        self.item = item
+    }
+
     func settings() async throws(APIFailure) -> Components.Schemas.ListingRefreshSettings {
         if let failure {
             throw failure
@@ -78,7 +82,7 @@ struct ListingRefreshTests {
     @Test
     func `names each cadence, a custom one in hours or whole days`() {
         #expect(RefreshWords.name(.every72Hours) == "Every 72 hours")
-        #expect(RefreshWords.name(.everyFewDays) == "Every few days")
+        #expect(RefreshWords.name(.everyFewDays) == "Every 5 days")
         #expect(RefreshWords.name(.off) == "Off")
         #expect(RefreshWords.name(.custom, customHours: 36) == "Every 36 hours")
         #expect(RefreshWords.name(.custom, customHours: 96) == "Every 4 days")
@@ -180,5 +184,60 @@ struct ListingRefreshTests {
         await model.choose(nil)
         #expect(model.label == "My setting (every 72 hours)")
         #expect(await service.savedItem == [.init(cadence: .off), .init()])
+    }
+
+    @Test
+    func `checks the item's chip in use, and none before it loads`() async {
+        let service = FakeListingRefreshService()
+        let model = ItemRefreshModel(itemID: Fixtures.itemID, service: service)
+        #expect(!model.isChosen(nil))
+        #expect(model.accountLabel == "My setting")
+        await model.load()
+        #expect(model.isChosen(nil))
+        #expect(!model.isChosen(.every72Hours))
+        #expect(model.accountLabel == "My setting (every 72 hours)")
+        await model.choose(.daily)
+        #expect(model.isChosen(.daily))
+        #expect(!model.isChosen(nil))
+        #expect(!model.isChosen(.weekly))
+        #expect(model.hint == "Tap one to change how often.")
+    }
+
+    @Test
+    func `a failed item save keeps the chip in use and shows why`() async {
+        let service = FakeListingRefreshService()
+        let model = ItemRefreshModel(itemID: Fixtures.itemID, service: service)
+        await model.load()
+        await service.fail(with: APIFailure(
+            statusCode: 500,
+            code: "internal_error",
+            message: "Listora is down.",
+            retryable: true,
+        ))
+        await model.choose(.weekly)
+        #expect(model.isChosen(nil))
+        #expect(!model.isChosen(.weekly))
+        #expect(model.saveError == "Listora is down.")
+    }
+
+    @Test
+    func `an item's own custom time is named in the hint, with no chip checked`() async {
+        let service = FakeListingRefreshService()
+        await service.setItem(.init(
+            cadence: .init(value1: .custom),
+            customHours: 36,
+            accountCadence: .init(value1: .every72Hours),
+        ))
+        let model = ItemRefreshModel(itemID: Fixtures.itemID, service: service)
+        await model.load()
+        #expect(RefreshWords.itemCadences.allSatisfy { !model.isChosen($0) })
+        #expect(!model.isChosen(nil))
+        #expect(model.hint == "Every 36 hours. Tap one to change how often.")
+    }
+
+    @Test
+    func `offers every choice in order, the item screen all but custom`() {
+        #expect(RefreshWords.cadences == [.off, .every72Hours, .daily, .everyFewDays, .weekly, .custom])
+        #expect(RefreshWords.itemCadences == [.off, .every72Hours, .daily, .everyFewDays, .weekly])
     }
 }
