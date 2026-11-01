@@ -51,6 +51,17 @@ struct OfflineScanCallTests {
     }
 
     @Test
+    func `decodes the server's insights from the golden kit`() throws {
+        let insights = try #require(Self.golden().kit.insights)
+        #expect(insights.soldCount == 12)
+        #expect(insights.lookFor.map(\.brandKey) == ["lululemon"])
+        #expect(insights.best.first?.medianDaysToSell == 9)
+        #expect(insights.best.first?.medianPayout?.amountCents == 2100)
+        #expect(insights.worst.first?.medianDaysToSell == nil)
+        #expect(insights.worst.first?.category == "bags/handbags")
+    }
+
+    @Test
     func `ignores a kit of a format this app does not read`() throws {
         let kit = try Self.golden().kit
         let older = SourcingKit(version: 1, generatedAt: kit.generatedAt, call: kit.call, buckets: kit.buckets)

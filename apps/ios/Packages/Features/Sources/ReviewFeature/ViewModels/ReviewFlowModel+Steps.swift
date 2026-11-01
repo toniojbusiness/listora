@@ -11,6 +11,10 @@ extension ReviewFlowModel {
         if Self.prefillKeys.contains(key) {
             prefillDetailsChanged()
         }
+        if key == .category {
+            // The measurements' order in the copy follows the category.
+            refreshCopies()
+        }
     }
 
     /// Opens `key`'s in-place editor, keeping the text of the one open before.

@@ -11,6 +11,8 @@ struct ScanGuide: View {
     let lastRun: SourcingRunSummary?
     /// The thrift scan is on only for the owner's Test mode.
     let isTesting: Bool
+    /// The sourcing kit on this iPhone, for the way to "What sells for you"; nil hides it.
+    var kit: SourcingKitCache?
 
     private struct Step {
         let title: String
@@ -71,6 +73,9 @@ struct ScanGuide: View {
             } else if run == nil, let lastRun {
                 ScanRunSummaryView(card: RunSummaryCard(lastRun))
             }
+            if let kit {
+                SourcingInsightsLink(kit: kit).cardStyle()
+            }
             VStack(spacing: 0) {
                 ForEach(Array(Self.steps.enumerated()), id: \.offset) { index, step in
                     if index > 0 {
@@ -86,6 +91,8 @@ struct ScanGuide: View {
         }
         .frame(maxWidth: Layout.readableWidth, alignment: .leading)
         .frame(maxWidth: .infinity)
+        // A container, so the link inside keeps its own identifier.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addItem.scanGuide")
     }
 }

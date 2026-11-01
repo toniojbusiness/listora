@@ -1,12 +1,15 @@
 import APIClient
 import Core
 import Foundation
+import Observation
 import os
 
 /// The sourcing kit on this iPhone (docs/features/thrift-scan.md, "Offline at the bins"): read
 /// from Listora while there is signal, kept in a file, and read by the scan's instant call with
-/// or without signal. A kit of a format this app does not read is never used.
+/// or without signal, and by "What sells for you". A kit of a format this app does not read is
+/// never used.
 @MainActor
+@Observable
 final class SourcingKitCache {
     /// The kit is fetched again at most this often.
     static let refreshInterval: TimeInterval = 15 * 60
@@ -14,8 +17,8 @@ final class SourcingKitCache {
     private(set) var kit: SourcingKit?
     private let file: URL?
     private let now: () -> Date
-    private var fetchedAt: Date?
-    private var fetching: Task<Void, Never>?
+    @ObservationIgnored private var fetchedAt: Date?
+    @ObservationIgnored private var fetching: Task<Void, Never>?
     private let log = Logger(subsystem: "com.listora.app", category: "scan")
 
     /// `file` nil keeps the kit in memory only (tests, previews).

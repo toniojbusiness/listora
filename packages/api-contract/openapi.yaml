@@ -1302,6 +1302,10 @@ components:
     # ---------------------------------------------------------------- sourcing
     SourcingKit:
       $ref: './components/schemas/sourcing.yaml#/SourcingKit'
+    SourcingInsights:
+      $ref: './components/schemas/sourcing.yaml#/SourcingInsights'
+    SourcingInsightGroup:
+      $ref: './components/schemas/sourcing.yaml#/SourcingInsightGroup'
     SourcingKitCall:
       $ref: './components/schemas/sourcing.yaml#/SourcingKitCall'
     OwnSalesBucket:

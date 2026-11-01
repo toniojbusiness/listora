@@ -23,6 +23,16 @@ export type {
 } from './call.ts';
 export { buildSourcingKit, MAX_KIT_BUCKETS, SOURCING_KIT_VERSION } from './kit.ts';
 export type { SourcingKitInput } from './kit.ts';
+export {
+  buildSourcingInsights,
+  INSIGHT_GOOD_SELL_THROUGH_BP,
+  INSIGHT_LIST_LENGTH,
+  INSIGHT_MIN_DAYS_SALES,
+  INSIGHT_MIN_ITEMS,
+  INSIGHT_SLOW_DAYS,
+  INSIGHT_UNSOLD_MIN_AGE_DAYS,
+} from './insights.ts';
+export type { SourcingInsightsInput } from './insights.ts';
 export { OFFLINE_CALL_LABEL, offlineScanCall, tagBrandBucket } from './offline-call.ts';
 export type { OfflineScanRead } from './offline-call.ts';
 export { unsoldLikeIt } from './unsold.ts';

@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import Foundation
 
 /// How to take back one accepted change.
@@ -10,6 +11,8 @@ enum VoiceUndo: Equatable, Sendable {
     case cost(AmountEntry)
     case purchaseSource(String)
     case listPrice(ReviewFlowModel.PriceChoice?)
+    /// Puts the measurement called `name` from before back (nil: there was none).
+    case measurement(name: String, ItemMeasurement?)
 }
 
 /// What a spoken correction changes: the review's details, the cost draft, and the price
@@ -48,6 +51,8 @@ extension ReviewFlowModel: VoiceCorrectionTarget {
             return cost.source.caseInsensitiveCompare(source) == .orderedSame
         case let .listPrice(cents):
             return priceChoice == .custom(cents)
+        case let .measurement(measurement):
+            return form?.details.measurement(named: measurement.name) == measurement
         }
     }
 
@@ -79,6 +84,11 @@ extension ReviewFlowModel: VoiceCorrectionTarget {
             let before = priceChoice
             priceChoice = .custom(cents)
             return .listPrice(before)
+        case let .measurement(measurement):
+            let before = form?.details.measurement(named: measurement.name)
+            form?.setMeasurement(named: measurement.name, to: measurement)
+            refreshCopies()
+            return .measurement(name: measurement.name, before)
         }
     }
 
@@ -99,6 +109,9 @@ extension ReviewFlowModel: VoiceCorrectionTarget {
             cost.source = source
         case let .listPrice(choice):
             priceChoice = choice
+        case let .measurement(name, measurement):
+            form?.setMeasurement(named: name, to: measurement)
+            refreshCopies()
         }
     }
 

@@ -69,16 +69,27 @@ struct MarketplaceCopy: Equatable, Identifiable, Sendable {
         Self.problems(of: current, marketplace: marketplace)
     }
 
-    /// The analysis's variants merged with the seller's saved edits, in the server's order.
-    static func copies(result: AnalysisResult?, edits: [String: ListingCopy]) -> [MarketplaceCopy] {
+    /// The analysis's variants merged with the seller's saved edits, in the server's order, with
+    /// the item's measurements written into the descriptions that carry them (``MeasurementCopy``).
+    static func copies(
+        result: AnalysisResult?,
+        edits: [String: ListingCopy],
+        measurements: [ItemMeasurement] = [],
+    ) -> [MarketplaceCopy] {
         (result?.variants ?? []).map { variant in
             let marketplace = variant.marketplace.id
-            let suggested = ListingCopy(
-                title: variant.title,
-                description: variant.description,
-                hashtags: variant.hashtags ?? [],
+            let suggested = MeasurementCopy.applying(
+                measurements,
+                to: ListingCopy(
+                    title: variant.title,
+                    description: variant.description,
+                    hashtags: variant.hashtags ?? [],
+                ),
+                marketplace: marketplace,
             )
-            let edit = edits[marketplace]
+            let edit = edits[marketplace].map {
+                MeasurementCopy.applying(measurements, to: $0, marketplace: marketplace)
+            }
             return MarketplaceCopy(
                 marketplace: marketplace,
                 suggested: suggested,
