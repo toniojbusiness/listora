@@ -1,9 +1,8 @@
-import { createServer, type AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { startNodeProcess, type StartedProcess } from '@listora/testing';
+import { startNodeProcess, startOnFreePort, type StartedProcess } from '@listora/testing';
 
 import {
   FAKE_DEPOP_CLIENT_ID,
@@ -12,18 +11,6 @@ import {
 } from './constants.ts';
 
 const entry = fileURLToPath(new URL('cli.ts', import.meta.url));
-
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address() as AddressInfo;
-  await new Promise<void>((resolve) => {
-    server.close(() => {
-      resolve();
-    });
-  });
-  return port;
-}
 
 describe('fake Depop command', () => {
   let fake: StartedProcess | undefined;
@@ -34,9 +21,18 @@ describe('fake Depop command', () => {
   });
 
   it("serves the fake Depop at DEPOP_FAKE_URL, renews the development seller's grant, and stops on SIGTERM", async () => {
-    const url = `http://127.0.0.1:${String(await freePort())}`;
-    fake = startNodeProcess(entry, { PATH: process.env['PATH'], DEPOP_FAKE_URL: url });
-    await fake.waitForLog((line) => line['msg'] === 'fake Depop ready');
+    const { url, started } = await startOnFreePort(async (port) => {
+      const url = `http://127.0.0.1:${String(port)}`;
+      const started = startNodeProcess(entry, { PATH: process.env['PATH'], DEPOP_FAKE_URL: url });
+      try {
+        await started.waitForLog((line) => line['msg'] === 'fake Depop ready');
+      } catch (error) {
+        await started.stop();
+        throw error;
+      }
+      return { url, started };
+    });
+    fake = started;
 
     const refresh = () =>
       fetch(`${url}/api/v1/oauth2/access-token/`, {
