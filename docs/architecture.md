@@ -283,8 +283,10 @@ src/
                  double sales; the sales in total and per marketplace (getSalesSummary); Mark as
                  sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
-  reports/       Reports (getYearReport) and the sales and inventory CSV exports
+  reports/       Reports (getYearReport) and the sales, expenses, and inventory CSV exports
                  (docs/features/reports.md)
+  expenses/      Expenses for taxes: miles and money spent, the year's mileage rate
+                 (docs/features/expenses.md)
   today/         The Today summary (getToday) and the morning summary setting
   listing-refresh/ The listing refresh setting and an item's own cadence
                  (docs/features/listing-refresh.md)
@@ -438,7 +440,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   sale-check records and health in [activity.md](features/activity.md#data), and background read
   health in [read-health.md](features/read-health.md#data);
   inventory, photos, and history in [items.md](features/items.md); batches in
-  [batch.md](features/batch.md#data); hauls in [hauls.md](features/hauls.md#data); uploads in
+  [batch.md](features/batch.md#data); hauls in [hauls.md](features/hauls.md#data); expenses and mileage rates in
+  [expenses.md](features/expenses.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data) (double-sale incidents in
@@ -584,6 +587,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/email-sales.md](features/email-sales.md)                 | Sale emails: forwarding address, SES ingest, DKIM/SPF, parsers, matching                     |
 | [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders                         |
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule                 |
+| [features/expenses.md](features/expenses.md)                       | Expenses: a run's miles and trip spend, money spent, the mileage rate, in Reports            |
 | [features/reports.md](features/reports.md)                         | Reports: the year by month and marketplace, the sales and inventory CSV files                |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push                 |
 | [features/listing-refresh.md](features/listing-refresh.md)         | Refreshing live listings that haven't sold, its schedule, pace, and settings                 |

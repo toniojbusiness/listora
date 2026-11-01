@@ -473,5 +473,9 @@ export const MARKET_COMPARISON_STATUSES = [
 export type MarketComparisonStatus = (typeof MARKET_COMPARISON_STATUSES)[number];
 
 /** `scan_research.kind`: an item's web facts, or a brand's (kept shorter). */
+/** `expense.kind`: miles driven (priced at the year's mileage rate) or money spent. */
+export const EXPENSE_KINDS = ['mileage', 'spend'] as const;
+export type ExpenseKind = (typeof EXPENSE_KINDS)[number];
+
 export const SCAN_RESEARCH_KINDS = ['item', 'brand'] as const;
 export type ScanResearchKind = (typeof SCAN_RESEARCH_KINDS)[number];

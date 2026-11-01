@@ -1,0 +1,129 @@
+Expense:
+  type: object
+  description: |
+    A business expense for the seller's taxes (docs/features/expenses.md): money spent
+    (`amount`), or miles driven (`miles`), which Reports prices at the year's mileage rate.
+    Exactly one of `amount` and `miles` is present.
+  required: [id, incurredOn, category, createdAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    incurredOn:
+      type: string
+      format: date
+      description: The seller's day of the expense.
+    category:
+      type: string
+      maxLength: 100
+      description: What it was for, as the seller named it (`Mileage` for miles), for example `Parking`.
+    description:
+      type: string
+      maxLength: 500
+    amount:
+      $ref: './common.yaml#/Money'
+      description: The money spent; absent for miles.
+    miles:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 2000
+      description: The miles driven; absent for money spent.
+    sourcingRunId:
+      $ref: './common.yaml#/Id'
+      description: The sourcing run it was entered at checkout for, while the run is kept.
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+ExpenseWrite:
+  type: object
+  additionalProperties: false
+  description: |
+    An expense as the seller enters it: exactly one of `amount` (money spent) and `miles`
+    (miles driven); both or neither is `422`.
+  required: [incurredOn, category]
+  properties:
+    incurredOn:
+      type: string
+      format: date
+      description: The seller's day of the expense.
+    category:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: What it was for, for example `Parking`, `Supplies`, or `Mileage`.
+    description:
+      type: string
+      maxLength: 500
+    amount:
+      $ref: './common.yaml#/Money'
+      description: The money spent, at least 1 cent.
+    miles:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 2000
+      description: The miles driven, in whole miles.
+ExpenseList:
+  type: object
+  description: A year's expenses, oldest day first.
+  required: [year, expenses]
+  properties:
+    year:
+      type: integer
+      format: int32
+    expenses:
+      type: array
+      maxItems: 5000
+      items:
+        $ref: '#/Expense'
+MileageRate:
+  type: object
+  description: |
+    The standard mileage rate for a year, in tenths of a cent per mile (`725` is 72.5 cents).
+    The seller's own when they set one (`setBySeller`), otherwise the IRS business rate Listora
+    knows for the year. Absent `tenthCentsPerMile` means Listora knows no rate for the year and
+    the seller has set none, so the year's miles are not priced.
+  required: [year, setBySeller]
+  properties:
+    year:
+      type: integer
+      format: int32
+    tenthCentsPerMile:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 10000
+    setBySeller:
+      type: boolean
+    irsTenthCentsPerMile:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 10000
+      description: The IRS business rate Listora knows for the year, when it knows one.
+MileageRateWrite:
+  type: object
+  additionalProperties: false
+  required: [tenthCentsPerMile]
+  properties:
+    tenthCentsPerMile:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 10000
+      description: The rate in tenths of a cent per mile, for example `725` for 72.5 cents.
+SourcingSpend:
+  type: object
+  additionalProperties: false
+  description: Money spent on a sourcing trip other than the haul, for example parking or an entry fee.
+  required: [category, amount]
+  properties:
+    category:
+      type: string
+      minLength: 1
+      maxLength: 100
+    amount:
+      $ref: './common.yaml#/Money'
+      description: At least 1 cent.
+    description:
+      type: string
+      maxLength: 500

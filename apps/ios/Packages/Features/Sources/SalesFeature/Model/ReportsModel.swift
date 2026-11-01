@@ -1,3 +1,4 @@
+import APIClient
 import Foundation
 import Observation
 
@@ -32,6 +33,12 @@ final class ReportsModel {
     private(set) var report: YearReport?
     private(set) var phase: Phase = .loading
     private(set) var exports: [ReportExport: ExportState] = [:]
+    /// The chosen year's expenses, oldest first, once read (`listExpenses`).
+    private(set) var expenses: [Expense]?
+    /// Why the expenses couldn't be read or the last change to them failed, for a Retry.
+    private(set) var expenseFailure: String?
+    /// An expense or rate change on its way to the server.
+    private(set) var isSavingExpense = false
     let calendar: Calendar
     private let service: any ReportsService
     private let isSignedIn: @MainActor () -> Bool
@@ -91,12 +98,68 @@ final class ReportsModel {
         }
     }
 
-    /// The previous (`-1`) or next (`1`) year; a sales export made for another year is dropped.
+    /// The previous (`-1`) or next (`1`) year; an export made for another year is dropped.
     func step(_ steps: Int) async {
         guard steps < 0 || canStepForward else { return }
         year += steps
         exports[.sales] = nil
+        exports[.expenses] = nil
+        expenses = nil
+        expenseFailure = nil
         await load()
+    }
+
+    // MARK: Expenses (docs/features/expenses.md)
+
+    /// Reads the chosen year's expenses for the list.
+    func loadExpenses() async {
+        let requested = year
+        do {
+            let list = try await service.expenses(year: requested)
+            guard requested == year else { return }
+            expenses = list
+            expenseFailure = nil
+        } catch {
+            guard requested == year else { return }
+            expenseFailure = error.message
+        }
+    }
+
+    /// Records an expense, then reads the year's report and list again. `nil` when it went
+    /// through, otherwise why not (nothing was recorded; the same key makes a retry safe).
+    func addExpense(_ expense: ExpenseWrite, idempotencyKey: String) async -> String? {
+        await change { [service] () async throws(APIFailure) in _ = try await service.addExpense(
+            expense,
+            idempotencyKey: idempotencyKey,
+        ) }
+    }
+
+    func deleteExpense(id: String) async -> String? {
+        await change { [service] () async throws(APIFailure) in try await service.deleteExpense(id: id) }
+    }
+
+    /// The chosen year's standard mileage rate, in tenths of a cent per mile.
+    func setMileageRate(tenthCentsPerMile: Int) async -> String? {
+        let requested = year
+        return await change { [service] () async throws(APIFailure) in
+            _ = try await service.setMileageRate(year: requested, tenthCentsPerMile: tenthCentsPerMile)
+        }
+    }
+
+    private func change(_ body: @Sendable () async throws(APIFailure) -> Void) async -> String? {
+        guard !isSavingExpense else { return "Still saving the last change." }
+        isSavingExpense = true
+        defer { isSavingExpense = false }
+        do {
+            try await body()
+        } catch {
+            return error.message
+        }
+        // Every number stays the server's: the totals and the list are read again.
+        exports[.expenses] = nil
+        await load()
+        await loadExpenses()
+        return nil
     }
 
     /// Reads the export from the server and saves it as its file, for the share sheet.

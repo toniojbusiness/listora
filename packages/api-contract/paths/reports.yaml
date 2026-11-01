@@ -113,3 +113,27 @@
         $ref: '../components/responses.yaml#/ValidationFailed'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/reports/expenses-export:
+  get:
+    tags: [reports]
+    operationId: exportExpenses
+    summary: Export a year's expenses as CSV
+    description: |
+      One CSV row per expense of the year, oldest first: the day, the category, the
+      description, the miles and their deduction at the year's rate (empty while the year has
+      no rate), the money spent, and the sourcing run's place when it was entered at checkout.
+      The app saves `content` as `fileName` and shares it. `422 validation_failed` for a year
+      outside 2000 to 2100.
+    parameters:
+      - $ref: '../components/parameters.yaml#/ReportYear'
+    responses:
+      '200':
+        description: The year's expenses as a CSV file.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/reports.yaml#/CsvExport'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

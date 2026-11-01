@@ -57,9 +57,15 @@ struct ScanCheckoutTests {
         await run.keep(first.id)
         #expect(checkout.canCheckOut)
 
-        await checkout.checkout(totalCents: 2000, itemCount: 4, miles: 8)
+        await checkout.checkout(
+            totalCents: 2000,
+            itemCount: 4,
+            miles: 8,
+            otherSpend: [RunSpend(category: "Parking", amountCents: 300)],
+        )
 
         let sent = try #require(service.calls.checkouts.first)
+        #expect(sent.checkout.otherSpend == [RunSpend(category: "Parking", amountCents: 300)])
         #expect(sent.runID == "run-1")
         #expect(sent.checkout.totalCents == 2000)
         #expect(sent.checkout.itemCount == 4)
