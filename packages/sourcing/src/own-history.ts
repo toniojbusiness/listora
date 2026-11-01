@@ -85,6 +85,11 @@ export interface OwnSale extends HistorySale {
   readonly itemId: string;
   readonly marketplace: KnownMarketplace;
   readonly sizeLabel: string | null;
+  /**
+   * When the item was first listed through Listora, before it sold: the start of its days to
+   * sell. Absent when it never was (an imported listing's date is when Listora read it).
+   */
+  readonly listedAt?: Date | null | undefined;
 }
 
 /** The item whose own sales the price screen shows; a scanned item has no id yet. */

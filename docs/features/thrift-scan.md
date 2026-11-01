@@ -14,7 +14,8 @@ summary with the haul's estimated resale and profit; the scan with no signal (M5
 read and call from the household's own sales, the queue that reads the waiting scans once there
 is signal, and duplicate warnings; and upgrading a run's kept drafts with real photos (M6):
 "Needs photos", Shoot this run, the full analysis with the scan's read as a hint, and the run's
-rapid review. Scan mode is hidden from sellers until it passes live
+rapid review; and "What sells for you" (plan rank 7, "Sourcing insights" below): the household's
+best and worst brand and item type pairs and a short "Look for" list for the bins. Scan mode is hidden from sellers until it passes live
 (`thrift_scan`, [verified-features.md](verified-features.md)), and each marketplace's
 comparisons until they do (`market_comps`): only the owner's Test mode has them. The server
 never reads or writes a marketplace; nothing in the scan ever writes one, and the comparisons
@@ -27,7 +28,7 @@ Code:
   `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS` and `decideCall` (the rule both calls share),
   `ownHistoryByMarketplace` (the price screen's), `sizeBucket`, `buildSourcingKit`,
   `offlineScanCall` (the call with no signal) with its golden cases (`offline-call.cases.ts`),
-  and `unsoldLikeIt`.
+  `unsoldLikeIt`, and `buildSourcingInsights` ("What sells for you", `insights.ts`).
 - `apps/api/src/sourcing`: the sales that count, the kit's route, and the price screen's own
   history, which `getItemPricing` shows ([pricing.md](pricing.md)). Nothing there calls a
   marketplace or AI: every number comes from the sales Listora already recorded
@@ -42,7 +43,8 @@ Code:
 - iPhone: `AddItemFeature/Scan` (the camera, the card, the tray, the run, the note, the
   measurements, the start and checkout sheets, the run's summary, the kept run's section,
   guided shoot, and review, and with no signal `ScanRuns`, the queue `ScanQueueStore`,
-  `SourcingKitCache`, and `ScanConnectivity`); `Core/Sourcing` (the kit, `BrandKey`, and
+  `SourcingKitCache`, and `ScanConnectivity`; and `SourcingInsights.swift`, "What sells for
+  you"); `Core/Sourcing` (the kit, `BrandKey`, and
   `OfflineScanCall`, the app's copy of the offline call). A kept scan is an ordinary draft whose
   server item `keepScan` creates.
 - `packages/analysis/src/load-input.ts`: the full analysis of a kept item carries its scan's
@@ -963,7 +965,8 @@ the store with no signal ([Offline at the bins](#offline-at-the-bins-m5)).
 
 - **Format** 2: the call's thresholds (`call`: worth listing and the fewest sales) and each
   group's sales for the call (`forCall`, below) were added for the offline call. A client that
-  does not know a kit's `version` ignores the kit.
+  does not know a kit's `version` ignores the kit. `insights` ("Sourcing insights" below) was
+  added within format 2: a client that does not read it still reads the rest.
 - **Groups** (`buildSourcingKit`): every brand (by `brandKey`), then each of its categories, then
   each size in a category (`sizeBucket`: without case or spaces, letter sizes spelled short, so
   "Medium" is `m`). Each group with a sale is listed, so a group missing from the kit has none.
@@ -988,6 +991,58 @@ the store with no signal ([Offline at the bins](#offline-at-the-bins-m5)).
   out; two sales needed; no brand, no history), the gate for a seller and in Test mode, and the
   kit, empty without sales, gated the same way, with eBay display only.
 
+## Sourcing insights: "What sells for you"
+
+The household's own sales and stock read as advice for the bins: the brand and item type pairs
+that sell best and worst, by sell-through and days to sell, and a short "Look for" list. It is
+`insights` in the sourcing kit, so the iPhone keeps it with the kit and shows it with no signal.
+Nothing new is read: it is the kit's sales ("The sales that count" above) and the account's
+items in stock.
+
+- **Brand and item type, never a brand alone.** Each line is a brand (`brandKey`) with a
+  category: Lululemon's leggings and its jackets sell differently, and a brand-wide figure would
+  hide both. A sale or an item without a brand or a category is left out.
+- **Sell-through**: the pair's items sold in the kit's window over those plus its items in stock
+  (ready or listed) that were added at least 30 days ago, so a new item does not count against
+  its pair before it had time to sell. A pair is judged only from 3 such items.
+- **Days to sell**: from the item's first listing through Listora (a listing whose create
+  operation succeeded) to the sale, the median over the pair's sales that have one, from 2 of
+  them. An imported listing's date is when Listora read it, so its days would understate; such a
+  sale counts as sold but has no day count. The screen says how many sales the days rest on.
+- **Payout**: the median of what the pair's sales paid out after each marketplace's estimated
+  fees, calibrated as the scan's call works them (`payoutFees`); never eBay's, which are display
+  only. An estimate.
+- **Best** (`best`): half or more sold, and a median under 90 days where known; the highest
+  sell-through first, then the fastest, then the most sold. **Worst** (`worst`): the rest,
+  under half sold or 90 days or more to sell, including a pair that never sold; the lowest
+  sell-through first, then the slowest, then the most left unsold. Five each.
+- **Look for** (`lookFor`): the best whose median payout is at least the call's worth listing
+  (`call.worthListing`, $8 by default), best first, five at most.
+- **On the iPhone** (Hang Tag): "What sells for you" is reachable from Scan mode (a row above the
+  run, and in the guide before the first scan) and from the start of a run, whose sheet shows the
+  top three to look for on a tag. The screen puts the "Look for" list on a tag stamped "Look
+  for", then "Sells best" and "Sells slowest", ruled: each line names the pair ("Lululemon
+  leggings"), how many of how many sold, the median days, the payout, and how many are in stock
+  now, so the seller does not buy more of what waits. Without enough sales it says so; with no
+  kit and no signal it says to open it once with signal. Opening it fetches a newer kit when
+  there is signal.
+
+**A new app build is needed** for the screen; the server's `insights` needs none of the app.
+
+### Tests
+
+- `packages/sourcing/src/insights.test.ts`: pairs never a brand alone, sell-through, the median
+  days and payout, the 3-item and 2-dated-sale minimums, unsold items given time, a pair that
+  never sold, a slow seller among the worst, the order of both lists, Look for's payout floor
+  and length, and eBay left out of the payout.
+- `apps/api/src/sourcing/sourcing.int.test.ts`: days from Listora's listings only (an imported
+  listing's date ignored), sell-through with stock added 60 days ago, the worst pair that never
+  sold, and another account's kit seeing none of it.
+- iPhone: `SourcingInsightsTests` (the lines' words, the basis, Scan mode's row, the kit fetched
+  before a run with signal only and kept with its insights), `OfflineScanCallTests` (the golden
+  kit's insights decoded), `VocabularyNameTests` (`itemType`), and
+  `SourcingInsightsUITests` (the screen from Scan mode and from the start of a run).
+
 ## Local development
 
 The rules and the read need nothing running: `@listora/sourcing` is pure, and `scanItem` runs on
@@ -1007,8 +1062,9 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   items (those it listed); the others came from the sales history with only a title. The price
   screen's own history and the kit (M1) leave out a sale without a brand, so until they are
   filled, for example from the title or the photos, they show little of the household's history.
-- **Days to sell.** Not shown yet: an imported listing's `listed_at` is when Listora read it, not
-  when the seller listed it, so a day count from it would understate.
+- **Days to sell** show only in "What sells for you", and only from sales Listora listed: an
+  imported listing's `listed_at` is when Listora read it, not when the seller listed it. Reading
+  the marketplace's own listing date at import would give the rest a day count.
 - **Scale the AI estimate** by the seller's own sale-to-estimate ratio once Listora has enough
   of both for an account.
 - **Re-run the backtest** as sales accumulate, and on shots taken at a store (M2), before showing

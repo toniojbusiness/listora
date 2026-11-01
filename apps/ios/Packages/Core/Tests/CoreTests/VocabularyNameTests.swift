@@ -13,4 +13,12 @@ struct VocabularyNameTests {
         #expect(VocabularyName.humanize("tank_tops") == "Tank tops")
         #expect(VocabularyName.humanize("hoodies_sweatshirts") == "Hoodies & sweatshirts")
     }
+
+    @Test
+    func `names a category's item type for a phrase, the level above for other`() {
+        #expect(VocabularyName.itemType("clothing/bottoms/leggings") == "leggings")
+        #expect(VocabularyName.itemType("clothing/tops/t_shirts") == "t-shirts")
+        #expect(VocabularyName.itemType("bags/other") == "bags")
+        #expect(VocabularyName.itemType("other/other") == "other")
+    }
 }
