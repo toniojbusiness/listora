@@ -72,6 +72,8 @@ that account only:
 - **Offers and offer answers:** reading Poshmark's offers, and Accept, Decline, and Counter.
 - **Poshmark's sale checks and imports:** checks in Sync and on the cloud schedule, the overdue
   mark, and Import listings.
+- **Price drops:** Settings > Price drops, the item's Price drop, and the price drop schedule
+  ([price-drops.md](price-drops.md)).
 - **The thrift scan:** Add Item's Scan mode and its API (`isAppFeatureOn('thrift_scan', gate)`,
   [thrift-scan.md](thrift-scan.md)); the scan camera shows the owner its speed against the
   plan's targets, tagged "Testing". A scan reads nothing from a marketplace, so it records no
@@ -82,8 +84,8 @@ each part runs the same features for the account. The cross-account schedulers (
 their overdue mark, refresh) include accounts in Test mode.
 
 **Testing tags.** The app tags with a small neutral "Testing" label each feature it shows only
-because of Test mode: Settings > Listing refresh, the item's Refresh this item, Edit listing and
-its sheet, and an offer on Tasks' offer screen. Lists the server filters (Sync, Import listings,
+because of Test mode: Settings > Listing refresh, the item's Refresh this item, Settings > Price
+drops and the item's Price drop, Edit listing and its sheet, and an offer on Tasks' offer screen. Lists the server filters (Sync, Import listings,
 Tasks) show a test feature's rows without a tag.
 
 ## What it never changes
@@ -103,11 +105,12 @@ Each run of a feature on only because of Test mode is recorded in `feature_test_
 settles, with its outcome (`passed` or `failed`), what ran, and a failure's code and sanitized
 words (never page text or anything typed):
 
-| Feature                                   | Recorded when                                                              | Subject      |
-| ----------------------------------------- | -------------------------------------------------------------------------- | ------------ |
-| `sale_checks`, `listing_import`, `offers` | the read records its health (`recordReadSucceeded`, `recordReadFailed`)    | connection   |
-| `revise`, `listing_refresh`               | its operation succeeds (with a read-back) or fails (`transitionOperation`) | operation    |
-| `offer_answers`                           | the answer succeeds (read back) or fails (`recordOfferAnswer`)             | offer answer |
+| Feature                                   | Recorded when                                                               | Subject      |
+| ----------------------------------------- | --------------------------------------------------------------------------- | ------------ |
+| `sale_checks`, `listing_import`, `offers` | the read records its health (`recordReadSucceeded`, `recordReadFailed`)     | connection   |
+| `revise`, `listing_refresh`               | its operation succeeds (with a read-back) or fails (`transitionOperation`)  | operation    |
+| `price_drops`                             | a drop's price change succeeds (read back) or fails (`transitionOperation`) | operation    |
+| `offer_answers`                           | the answer succeeds (read back) or fails (`recordOfferAnswer`)              | offer answer |
 
 A verified feature, or an account not in Test mode, records nothing. To read the log:
 
@@ -140,6 +143,8 @@ phone needs a new app build** for the switch, the tags, and Edit listing.
   - A read-only connection gets no revise or price change and refuses an offer answer.
   - The owner's log records hidden reads only, and never a customer's.
 - `operations/refresh.int.test.ts`: a refresh in Test mode is logged with its outcome.
+- `operations/price-drop.int.test.ts`: a price drop in Test mode is logged as `price_drops`, and
+  the seller's own price change is not.
 - `admin/commands.int.test.ts`: `feature-tests`, newest first, with `--marketplace` and `--json`;
   `test-mode-access` grant, list, and revoke (switch off, audited, idempotent), and
   `account-find --shop`.

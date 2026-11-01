@@ -9,6 +9,8 @@ public struct SettingsScreens {
     public var imports: (@MainActor () -> AnyView)?
     /// Listing refresh: how often live listings that haven't sold are refreshed.
     public var listingRefresh: (@MainActor () -> AnyView)?
+    /// Price drops: the seller's rules lowering the price of listings that haven't sold.
+    public var priceDrops: (@MainActor () -> AnyView)?
     public var notifications: (@MainActor () -> AnyView)?
     public var saleEmails: (@MainActor () -> AnyView)?
     public var packCheck: (@MainActor () -> AnyView)?
@@ -23,6 +25,7 @@ public struct SettingsScreens {
         case .marketplaces: marketplaces?()
         case .imports: imports?()
         case .listingRefresh: listingRefresh?()
+        case .priceDrops: priceDrops?()
         case .notifications: notifications?()
         case .saleEmails: saleEmails?()
         case .packCheck: packCheck?()
@@ -36,6 +39,7 @@ public struct SettingsScreens {
         marketplaces: (@MainActor () -> AnyView)? = nil,
         imports: (@MainActor () -> AnyView)? = nil,
         listingRefresh: (@MainActor () -> AnyView)? = nil,
+        priceDrops: (@MainActor () -> AnyView)? = nil,
         notifications: (@MainActor () -> AnyView)? = nil,
         saleEmails: (@MainActor () -> AnyView)? = nil,
         packCheck: (@MainActor () -> AnyView)? = nil,
@@ -45,6 +49,7 @@ public struct SettingsScreens {
         self.marketplaces = marketplaces
         self.imports = imports
         self.listingRefresh = listingRefresh
+        self.priceDrops = priceDrops
         self.notifications = notifications
         self.saleEmails = saleEmails
         self.packCheck = packCheck
@@ -60,6 +65,7 @@ public enum SettingsDestination: Hashable, Sendable {
     case marketplaces
     case imports
     case listingRefresh
+    case priceDrops
     case notifications
     case saleEmails
     case packCheck

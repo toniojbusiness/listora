@@ -71,6 +71,8 @@ tags:
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
   - name: listing-refresh
     description: Listing refresh, which keeps live listings that have not sold fresh on each marketplace (docs/features/listing-refresh.md).
+  - name: price-drops
+    description: Smart price drops, the seller's rules that lower the price of a live listing that has not sold (docs/features/price-drops.md).
   - name: pack-check
     description: Pack check, an optional mode that checks each package's label before it ships.
   - name: voice
@@ -275,6 +277,14 @@ paths:
     $ref: './paths/listing-refresh.yaml#/~1v1~1listing-refresh~1settings'
   /v1/items/{itemId}/refresh:
     $ref: './paths/listing-refresh.yaml#/~1v1~1items~1{itemId}~1refresh'
+  /v1/price-drops:
+    $ref: './paths/price-drops.yaml#/~1v1~1price-drops'
+  /v1/price-drops/defaults:
+    $ref: './paths/price-drops.yaml#/~1v1~1price-drops~1defaults'
+  /v1/price-drops/rules:
+    $ref: './paths/price-drops.yaml#/~1v1~1price-drops~1rules'
+  /v1/price-drops/rules/{ruleId}:
+    $ref: './paths/price-drops.yaml#/~1v1~1price-drops~1rules~1{ruleId}'
   /v1/pack-check/settings:
     $ref: './paths/pack-check.yaml#/~1v1~1pack-check~1settings'
   /v1/pack-check/orders:
@@ -416,6 +426,8 @@ components:
       $ref: './components/parameters.yaml#/ScanId'
     ComparisonId:
       $ref: './components/parameters.yaml#/ComparisonId'
+    PriceDropRuleId:
+      $ref: './components/parameters.yaml#/PriceDropRuleId'
     StorageLocationId:
       $ref: './components/parameters.yaml#/StorageLocationId'
 
@@ -1125,6 +1137,29 @@ components:
       $ref: './components/schemas/listing-refresh.yaml#/KnownListingRefreshState'
     ListingRefresh:
       $ref: './components/schemas/listing-refresh.yaml#/ListingRefresh'
+    # ---------------------------------------------------------------- price drops
+    PriceDropRuleScope:
+      $ref: './components/schemas/price-drops.yaml#/PriceDropRuleScope'
+    KnownPriceDropRuleScope:
+      $ref: './components/schemas/price-drops.yaml#/KnownPriceDropRuleScope'
+    PriceDropRule:
+      $ref: './components/schemas/price-drops.yaml#/PriceDropRule'
+    PriceDropRuleCreate:
+      $ref: './components/schemas/price-drops.yaml#/PriceDropRuleCreate'
+    PriceDropRuleReplace:
+      $ref: './components/schemas/price-drops.yaml#/PriceDropRuleReplace'
+    PlannedPriceDropState:
+      $ref: './components/schemas/price-drops.yaml#/PlannedPriceDropState'
+    KnownPlannedPriceDropState:
+      $ref: './components/schemas/price-drops.yaml#/KnownPlannedPriceDropState'
+    PlannedPriceDrop:
+      $ref: './components/schemas/price-drops.yaml#/PlannedPriceDrop'
+    PriceDrops:
+      $ref: './components/schemas/price-drops.yaml#/PriceDrops'
+    PriceDropDefaultsBasis:
+      $ref: './components/schemas/price-drops.yaml#/PriceDropDefaultsBasis'
+    PriceDropDefaults:
+      $ref: './components/schemas/price-drops.yaml#/PriceDropDefaults'
     # ---------------------------------------------------------------- pack-check
     PackCheckSettings:
       $ref: './components/schemas/pack-check.yaml#/PackCheckSettings'

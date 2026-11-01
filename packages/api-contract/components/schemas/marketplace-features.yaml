@@ -16,6 +16,8 @@ KnownMarketplaceFeature:
     `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
     listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
     comparisons from the marketplace's public search, read on the iPhone logged out.
+    `price_drops`: the seller's rules lowering a live listing's price after it went unsold a
+    while, each drop a price change confirmed by a read-back.
   enum:
     [
       sales_history,
@@ -26,6 +28,7 @@ KnownMarketplaceFeature:
       listing_refresh,
       revise,
       market_comps,
+      price_drops,
     ]
 MarketplaceFeatures:
   type: object

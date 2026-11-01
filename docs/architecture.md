@@ -94,7 +94,8 @@ apps/
                 check, item analysis, batch items' analysis start, photo processing, trust
                 metrics, the daily connection health check, the delist SLA, push delivery, sale
                 fees, the morning summary, sale email ingest, sale-check health, background read
-                alerts, listing imports, the listing refresh schedule, package photos); and the
+                alerts, listing imports, the listing refresh schedule, the price drop schedule,
+                package photos); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
@@ -160,6 +161,9 @@ packages/
                 morning summary job and its setting (@listora/today)
   listing-refresh/ Listing refresh: the cadence and quiet-window rules, the settings, each live
                 listing's next and last refresh, the paced schedule (@listora/listing-refresh)
+  price-drops/  Smart price drops: the seller's rules per item or brand, the defaults from their
+                days to sell, each live listing's planned drop, the paced schedule
+                (@listora/price-drops)
   pack-check/   Pack check: label scans and their verdicts, the to-ship list, packing (one label
                 per package), label reads' records, the setting, private package photos and
                 their job (@listora/pack-check)
@@ -284,6 +288,8 @@ src/
   today/         The Today summary (getToday) and the morning summary setting
   listing-refresh/ The listing refresh setting and an item's own cadence
                  (docs/features/listing-refresh.md)
+  price-drops/   Price drop rules, their defaults, and every planned drop
+                 (docs/features/price-drops.md)
   pack-check/    Pack check: the to-ship list, label reads, scans, packing, the package photo
                  (docs/features/pack-check.md)
   activity/      An item's and an operation's activity, and a sale's explanation
@@ -581,6 +587,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/reports.md](features/reports.md)                         | Reports: the year by month and marketplace, the sales and inventory CSV files                |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push                 |
 | [features/listing-refresh.md](features/listing-refresh.md)         | Refreshing live listings that haven't sold, its schedule, pace, and settings                 |
+| [features/price-drops.md](features/price-drops.md)                 | Smart price drops: rules per item or brand, the planned drops, the schedule and daily cap    |
 | [features/pack-check.md](features/pack-check.md)                   | Pack check: the to-ship list, label scans, the duplicate-print guard, stickers               |
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"                         |
 | [features/marketplace-prefill.md](features/marketplace-prefill.md) | Each marketplace's form pre-filled on the review, and its one-tap questions                  |

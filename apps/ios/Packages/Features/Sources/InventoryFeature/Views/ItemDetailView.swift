@@ -351,7 +351,7 @@ extension ItemDetailView {
 
 /// The marketplaces part of the item screen, apart so the view's body stays short.
 extension ItemDetailView {
-    /// Its marketplaces, each with its status and actions, and the item's own refresh cadence.
+    /// Its marketplaces, each with its status and actions, then its refresh cadence and price drop.
     @ViewBuilder
     private func marketplaces(of item: Item) -> some View {
         MarketplacesSection(
@@ -370,27 +370,6 @@ extension ItemDetailView {
             listEverywhere: openListEverywhere,
             loadEvents: { id in await model.loadEvents(operationID: id) },
         )
-        refreshSection(for: item)
-    }
-
-    /// The item's own refresh cadence, once it is live on a marketplace whose refresh passed live
-    /// (listing-refresh.md, verified-features.md).
-    /// In the owner's Test mode it is tagged Testing where refresh shows only for the test.
-    @ViewBuilder
-    private func refreshSection(for item: Item) -> some View {
-        let refreshed = environment.features.map { features in
-            item.listings.compactMap { listing -> String? in
-                let marketplace = listing.marketplace.value1?.rawValue ?? listing.marketplace.value2 ?? ""
-                return listing.status.value1 == .active && features.shows(.listingRefresh, on: marketplace)
-                    ? marketplace : nil
-            }
-        } ?? []
-        if let service = environment.refreshService, let features = environment.features, !refreshed.isEmpty {
-            ItemRefreshSection(
-                itemID: item.id,
-                service: service,
-                testing: refreshed.allSatisfy { features.isTesting(.listingRefresh, on: $0) },
-            )
-        }
+        ItemScheduleSections(item: item, environment: environment)
     }
 }

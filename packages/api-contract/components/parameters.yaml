@@ -160,6 +160,12 @@ ComparisonId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+PriceDropRuleId:
+  name: ruleId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
 StorageLocationId:
   name: storageLocationId
   in: path

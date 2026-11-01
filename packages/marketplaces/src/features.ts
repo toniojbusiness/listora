@@ -31,6 +31,11 @@ export const MARKETPLACE_FEATURES = [
    * logged out (docs/features/thrift-scan.md, "Marketplace comparisons").
    */
   'market_comps',
+  /**
+   * Smart price drops: the seller's rules lower a live listing's price after it went unsold a
+   * while, each drop a price change confirmed by a read-back (docs/features/price-drops.md).
+   */
+  'price_drops',
 ] as const;
 export type MarketplaceFeature = (typeof MARKETPLACE_FEATURES)[number];
 

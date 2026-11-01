@@ -73,6 +73,8 @@ extension Components {
         public typealias ScanId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/ComparisonId`.
         public typealias ComparisonId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/PriceDropRuleId`.
+        public typealias PriceDropRuleId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/StorageLocationId`.
         public typealias StorageLocationId = Components.Schemas.Id
     }

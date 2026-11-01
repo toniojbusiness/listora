@@ -321,8 +321,8 @@ extension SettingsView {
             if let profile {
                 EditProfileView(model: profile)
             }
-        case .linkAccounts, .marketplaces, .imports, .listingRefresh, .notifications, .saleEmails, .packCheck,
-             .storageBins:
+        case .linkAccounts, .marketplaces, .imports, .listingRefresh, .priceDrops, .notifications, .saleEmails,
+             .packCheck, .storageBins:
             screens.screen(for: destination)
         case .people, .descriptionStyle:
             accountScreen(for: destination)
