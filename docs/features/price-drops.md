@@ -7,8 +7,10 @@ is the price change that already passed live on Depop, Poshmark, and Mercari, so
 done only after the marketplace's read-back confirms it, and a failure shows with Retry. The
 seller sees each planned drop at least a day before it runs and can turn any rule off.
 
-Price drops are hidden until they pass a live test on a real shop: sellers see none of it, and
-only an account in Test mode ([test-mode.md](test-mode.md)) can live-test them.
+Price drops passed live on Depop (2026-10-31, [verified-features.md](verified-features.md)), so
+every seller sees them for their Depop listings. Poshmark and Mercari stay hidden until each
+passes its own live run; there, only an account in Test mode ([test-mode.md](test-mode.md)) sees
+and runs them.
 
 | Where                                     | What                                                                               |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -104,23 +106,45 @@ year).").
 - **The item screen**, under the marketplaces once the item is live where price drops show: the
   rule that applies (its own or its brand's) with its next drop on each marketplace, or Price
   drop to give it a rule; with a brand's rule, Give this item its own rule.
-- Both are tagged "Testing" while they show only in Test mode.
+- Both are tagged "Testing" while they show only because of Test mode.
 
 ## The gate
 
 `price_drops` is a marketplace feature ([verified-features.md](verified-features.md)), verified
-per marketplace like listing refresh. While it is verified nowhere for the account:
+per marketplace like listing refresh. It is verified on Depop only, so:
 
-- every route answers `404` (`listPriceDrops` and the rest), so for a seller it does not exist;
-- the schedule takes only connections on marketplaces where it passed live, or of accounts in
-  Test mode, and only of accounts with a rule on;
-- the app shows no Settings row and nothing on the item screen.
+- a listing on a marketplace where it is hidden is not planned (`planDrops`): it is not on
+  Coming up, not counted under its rule, and never dropped; the schedule takes only connections
+  on marketplaces where it passed live, or of accounts in Test mode, and only of accounts with a
+  rule on;
+- the item screen shows Price drop only for its marketplaces where it shows;
+- were it verified nowhere for the account, every route would answer `404` (`listPriceDrops`
+  and the rest) and the app would show no Settings row.
 
 In Test mode each finished drop goes in the owner's log (`feature_test_run`, feature
 `price_drops`, the operation as its subject), passed with its read-back or failed with its
-error: the evidence for marking it verified. Its live test runs only on the captain's own Depop
-test shop. **The phone needs a new app build** for Settings > Price drops and the item screen's
-Price drop; the server side ships with a deploy.
+error: the evidence for marking it verified. Its live tests run only on the captain's own test
+shops.
+
+### The Depop live run (2026-10-31)
+
+On the captain's Depop test shop (the signed-in shop read first, nothing written otherwise), with
+Listora's own API, the real schedule (`runPriceDrops`), and the operation engine on a local
+database, and the Depop scripts in the signed-in Mac Chrome as the phone runs them:
+
+1. A marked test listing at $250, made by the engine, and an item rule of 50% after 1 day with a
+   $200 floor, made through `createPriceDropRule`.
+2. Coming up showed the drop to $200 (not $125: the floor held) a day after the rule was made,
+   and the schedule queued nothing that day (the day of notice).
+3. With the day passed (the rule's `armed_at` and the listing's time moved back), Coming up showed
+   it due now; the schedule queued one `reprice_rule` price change with its history line; the
+   engine sent it and it succeeded only on the read-back of $200 (`read_back`), which a separate
+   read of Depop matched. The owner's log recorded it passed.
+4. The schedule then queued nothing (at the floor, and the pace), and Coming up showed `at_floor`.
+5. The daily cap, on the local database only: with ten drops in the day it queued nothing for a
+   due drop, and with nine it queued one (canceled before any worker ran it).
+6. The test listing was deleted and read back gone. **The phone needs a new app build** for Settings > Price drops and the item screen's
+   Price drop; the server side ships with a deploy.
 
 ## Local development
 
@@ -137,23 +161,23 @@ the fake sites' price change like the seller's own. The pace's numbers are const
   with its listing price and history; the day of notice; both floors; an item rule over its
   brand's, also off; the days starting again after any price change; no drop after a failure,
   on a busy listing, after a canceled drop, on a read-only shop, under a rule that is off, or on
-  an assisted marketplace; the pace (one at a time, the gap, the daily cap); the gate (verified
-  or Test mode); the defaults from days to sell.
+  an assisted marketplace; the pace (one at a time, the gap, the daily cap); the gate (Depop for
+  every seller, Mercari not planned or dropped outside Test mode); the defaults from days to sell.
 - `operations/price-drop.int.test.ts`: a drop succeeds only with a read-back, fails visibly,
   keeps its history when its rule is deleted, is refused without its rule or as another kind,
   and is recorded in the owner's log in Test mode.
 - `api/price-drops/price-drops.int.test.ts`: a brand rule and its planned drop a day ahead with
   no price sent, an item rule over its brand's with the item's floor, `409` for a second rule,
   off and on re-arming, delete, a read-only shop's listing unavailable, terms refused, another
-  account's rules unreachable, and `404` until verified except in Test mode.
+  account's rules unreachable, and, under the real gate, a hidden marketplace's listing left
+  off Coming up except in Test mode.
 - `PriceDropsTests` (iOS): the words, the screen's model (load, a failed load, a rule's switch
   and its failure), and the editor (defaults for a brand and an item, the missing floor, save,
   change, delete).
 
 ## Follow-ups
 
-- The live test on the captain's Depop test shop in Test mode, then the `VERIFIED_FEATURES`
-  entry; Poshmark and Mercari each after their own live run.
+- Poshmark and Mercari each after their own live run, then their `VERIFIED_FEATURES` entries.
 - A seller-set daily cap and a skip for one planned drop, if the live test shows they are needed.
 - A drop's own trust metric, like refresh's.
 

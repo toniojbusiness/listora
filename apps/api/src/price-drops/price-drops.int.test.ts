@@ -222,25 +222,31 @@ describe('price drops (real Postgres)', () => {
     expect((await api.call('deletePriceDropRule', { token: other, params })).status).toBe(404);
   });
 
-  it('is hidden (404) until it passes live, except in Test mode', async () => {
+  it('shows for every seller since it passed live on Depop, and plans no hidden marketplace', async () => {
     useMarketplaceFeatures('verified');
     try {
-      expect((await api.call('listPriceDrops', { token })).status).toBe(404);
-      expect((await api.call('getPriceDropDefaults', { token })).status).toBe(404);
-      expect(
-        (
-          await api.call('createPriceDropRule', {
-            token,
-            body: { brand: 'Nike', percent: 10, afterDays: 21, floor: usd(2000) },
-          })
-        ).status,
-      ).toBe(404);
+      // A Mercari listing (the helper's only other marketplace), where price drops have not
+      // passed live (verified-features.md).
+      const mercari = await liveListing('Fjällräven', { readOnly: true });
+      const made = await api.call('createPriceDropRule', {
+        token,
+        body: { brand: 'Fjällräven', percent: 10, afterDays: 21, floor: usd(2000) },
+      });
+      expect(made.status).toBe(201);
+      const listed = await api.call('listPriceDrops', { token });
+      expect(listed.status).toBe(200);
+      expect(listed.body.planned.map((plan) => plan.listingId)).not.toContain(mercari.listingId);
+      expect(listed.body.rules.find((rule) => rule.id === made.body.id)?.liveListings).toBe(0);
+
+      // In Test mode it is planned, for its live test.
       await api.db
         .updateTable('account')
         .set({ test_mode: true })
         .where('id', '=', tenant.accountId)
         .execute();
-      expect((await api.call('listPriceDrops', { token })).status).toBe(200);
+      const testing = await api.call('listPriceDrops', { token });
+      expect(testing.body.planned.map((plan) => plan.listingId)).toContain(mercari.listingId);
+      await api.call('deletePriceDropRule', { token, params: { ruleId: made.body.id } });
     } finally {
       useMarketplaceFeatures('all');
       await api.db

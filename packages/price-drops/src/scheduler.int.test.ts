@@ -74,7 +74,12 @@ describe('the price drop schedule', () => {
     accountId: string,
     connectionId: string,
     listedAt: Date,
-    options: { brand?: string; priceCents?: number; floorCents?: number } = {},
+    options: {
+      brand?: string;
+      priceCents?: number;
+      floorCents?: number;
+      marketplace?: Marketplace;
+    } = {},
   ): Promise<{ itemId: string; listingId: string }> {
     sequence += 1;
     const item = await createInventoryItem(db, accountId, {
@@ -88,7 +93,7 @@ describe('the price drop schedule', () => {
       .values({
         account_id: accountId,
         item_id: item.id,
-        marketplace: 'depop',
+        marketplace: options.marketplace ?? 'depop',
         status: 'active',
         connection_id: connectionId,
         external_listing_id: `ext-${String(sequence)}`,
@@ -402,10 +407,18 @@ describe('the price drop schedule', () => {
   it('runs only where price drops passed live, or in Test mode', async () => {
     useMarketplaceFeatures('verified');
     try {
-      const { accountId, connectionId } = await seller();
+      // Depop passed live (verified-features.md): a seller's drop runs there.
+      const depop = await seller();
+      await rule(depop.accountId);
+      await listing(depop.accountId, depop.connectionId, ago(30 * DAY));
+      await run();
+      expect(await sent(depop.accountId)).toBe(1);
+
+      // Mercari has not: its listing is not even planned, and nothing is sent.
+      const { accountId, connectionId } = await seller('mercari');
       await rule(accountId);
-      await listing(accountId, connectionId, ago(30 * DAY));
-      expect((await plans(accountId)).map(({ plan }) => plan.state)).toEqual(['unavailable']);
+      await listing(accountId, connectionId, ago(30 * DAY), { marketplace: 'mercari' });
+      expect(await plans(accountId)).toEqual([]);
       await run();
       expect(await sent(accountId)).toBe(0);
 

@@ -110,8 +110,9 @@ The tests run like this:
     while a draft still edits.
   - `features.test.ts`: the list's evidence, what each feature requires, and the key.
   - `cadence.test.ts`: refresh unavailable.
-  - `price-drops.int.test.ts` (API) and `scheduler.int.test.ts` (price drops): `404` and no drop
-    queued until verified, except in Test mode.
+  - `price-drops.int.test.ts` (API) and `scheduler.int.test.ts` (price drops): Depop's drops
+    shown and run for every seller, a hidden marketplace's listing neither planned nor dropped
+    except in Test mode.
   - `MarketplaceFeaturesTests` (iOS).
 
 ## The verified list and its evidence
@@ -119,29 +120,29 @@ The tests run like this:
 Only live runs on real accounts count here. A run on a fake site or a recorded page doesn't. A
 write ran only on the captain's own accounts. Tristin's Depop shop was only ever read.
 
-| Marketplace | Feature                         | Verdict                                                                                                                                               |
-| ----------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Depop       | `sales_history`                 | **Verified** 2026-10-28: the new sale check read every sale on a real shop's receipts, refund left out, totals matching to the cent                   |
-| Depop       | `sale_checks`                   | **Verified** 2026-10-28: a check on the iPhone found a new sale on a real shop (found by the check itself, not by reading the history)                |
-| Depop       | `offers`                        | **Verified** 2026-10-28: an offer read on the iPhone succeeded on a real shop, and its one waiting buyer offer became a task                          |
-| Depop       | `listing_import`                | **Verified** 2026-10-28: an import read and imported all 118 listings of a real shop, with none failed (the import detail fix after it is not re-run) |
-| Depop       | `offer_answers`                 | Hidden: tested only on the fakes; no answer has run on a real shop                                                                                    |
-| Depop       | `listing_refresh`               | Hidden: no live refresh (an unchanged save) yet                                                                                                       |
-| Depop       | `price_drops`                   | Hidden: tested only on the fakes; its live test is the captain's, in Test mode on his own test shop                                                   |
-| Mercari     | `sales_history`                 | **Verified** 2026-10-27: the captain's one real sale read correctly, with its listing                                                                 |
-| Mercari     | `sale_checks`                   | **Verified** 2026-10-28: checks on the iPhone's mobile layout read the real sold page and succeed since that day's fix; no new sale has happened yet  |
-| Mercari     | `listing_import`                | **Verified** 2026-10-27: an import read all 11 of the captain's listings for sale                                                                     |
-| Mercari     | `offers`, answers               | Hidden: not built; Mercari's website shows no offers page ([offers.md](offers.md))                                                                    |
-| Mercari     | `listing_refresh`               | Hidden: no live refresh yet                                                                                                                           |
-| Mercari     | `price_drops`                   | Hidden: no live run yet                                                                                                                               |
-| Every one   | `revise`                        | Hidden: no revise has run live on any marketplace (see below)                                                                                         |
-| Depop       | `market_comps`                  | Hidden: the logged-out reader is tested on a recorded public search; its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))    |
-| Poshmark    | `offers`                        | Hidden: the live read failed (`element_missing`, 2026-10-28) on an account with no offers                                                             |
-| Poshmark    | `sales_history`, `sale_checks`  | Hidden: the checks run and read 0, but the account has never sold, so finding a sale was never proven                                                 |
-| Poshmark    | `listing_import`                | Hidden: the only live run was on an empty closet                                                                                                      |
-| Poshmark    | answers, refresh, `price_drops` | Hidden: no live run                                                                                                                                   |
-| eBay        | every feature                   | Hidden: no eBay connection has run live                                                                                                               |
-| eBay        | `market_comps`                  | Hidden: the logged-out reader is tested on a recorded public search; its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))    |
+| Marketplace | Feature                         | Verdict                                                                                                                                                                                                                            |
+| ----------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Depop       | `sales_history`                 | **Verified** 2026-10-28: the new sale check read every sale on a real shop's receipts, refund left out, totals matching to the cent                                                                                                |
+| Depop       | `sale_checks`                   | **Verified** 2026-10-28: a check on the iPhone found a new sale on a real shop (found by the check itself, not by reading the history)                                                                                             |
+| Depop       | `offers`                        | **Verified** 2026-10-28: an offer read on the iPhone succeeded on a real shop, and its one waiting buyer offer became a task                                                                                                       |
+| Depop       | `listing_import`                | **Verified** 2026-10-28: an import read and imported all 118 listings of a real shop, with none failed (the import detail fix after it is not re-run)                                                                              |
+| Depop       | `offer_answers`                 | Hidden: tested only on the fakes; no answer has run on a real shop                                                                                                                                                                 |
+| Depop       | `listing_refresh`               | Hidden: no live refresh (an unchanged save) yet                                                                                                                                                                                    |
+| Depop       | `price_drops`                   | **Verified** 2026-10-31: on the captain's test shop a rule's drop showed a day ahead, then the schedule ran it to the rule's floor ($250 to $200), confirmed by read-back, and queued nothing more past the floor or the daily cap |
+| Mercari     | `sales_history`                 | **Verified** 2026-10-27: the captain's one real sale read correctly, with its listing                                                                                                                                              |
+| Mercari     | `sale_checks`                   | **Verified** 2026-10-28: checks on the iPhone's mobile layout read the real sold page and succeed since that day's fix; no new sale has happened yet                                                                               |
+| Mercari     | `listing_import`                | **Verified** 2026-10-27: an import read all 11 of the captain's listings for sale                                                                                                                                                  |
+| Mercari     | `offers`, answers               | Hidden: not built; Mercari's website shows no offers page ([offers.md](offers.md))                                                                                                                                                 |
+| Mercari     | `listing_refresh`               | Hidden: no live refresh yet                                                                                                                                                                                                        |
+| Mercari     | `price_drops`                   | Hidden: no live run yet                                                                                                                                                                                                            |
+| Every one   | `revise`                        | Hidden: no revise has run live on any marketplace (see below)                                                                                                                                                                      |
+| Depop       | `market_comps`                  | Hidden: the logged-out reader is tested on a recorded public search; its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                 |
+| Poshmark    | `offers`                        | Hidden: the live read failed (`element_missing`, 2026-10-28) on an account with no offers                                                                                                                                          |
+| Poshmark    | `sales_history`, `sale_checks`  | Hidden: the checks run and read 0, but the account has never sold, so finding a sale was never proven                                                                                                                              |
+| Poshmark    | `listing_import`                | Hidden: the only live run was on an empty closet                                                                                                                                                                                   |
+| Poshmark    | answers, refresh, `price_drops` | Hidden: no live run                                                                                                                                                                                                                |
+| eBay        | every feature                   | Hidden: no eBay connection has run live                                                                                                                                                                                            |
+| eBay        | `market_comps`                  | Hidden: the logged-out reader is tested on a recorded public search; its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                 |
 
 Listing actions, as they ran live (only revise is gated, see above):
 
