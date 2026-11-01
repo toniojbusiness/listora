@@ -177,7 +177,8 @@ packages/
   retention/    Data retention: how long logs and raw payloads are kept, the daily job that
                 deletes what expired (@listora/retention)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
-  testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
+  testing/      Test-only helpers: test DB URL, scratch databases, process harness, free ports
+                (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
   sourcing/     Thrift-scan rules with no I/O: price quartiles, own-sales comparisons (the
                 scan's and the price screen's per marketplace), the marketplace comparisons'
@@ -510,6 +511,11 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   throwaway database with `createScratchDatabase` from `@listora/testing` and drop it after.
 - Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
+- A test server listens on port 0 and reads back the port it was given. Never probe a port, close
+  it, and hand the number on: test files and CI shards run in parallel, and another listener or
+  outgoing connection can take it in between. Only something that must know its URL before it
+  listens (a child process given `API_PORT`) uses `startOnFreePort` from `@listora/testing`,
+  which picks a port below the ephemeral range and starts again on another one if it was taken.
 - Every marketplace adapter passes the shared conformance suite against its fake, and its payloads,
   validation results, and assisted tasks are pinned by golden files
   ([marketplaces.md](features/marketplaces.md#adapter-model)). Sample listing content for tests in

@@ -6,7 +6,6 @@
  * account deletion purges the eBay user's data.
  */
 import { createHash } from 'node:crypto';
-import { createServer } from 'node:net';
 
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -26,6 +25,7 @@ import {
 import { sampleListingContent } from '@listora/marketplaces/testing';
 import { isEbayUserDeletionPayload, purgeEbayUser } from '@listora/sales';
 import { createLogger } from '@listora/shared';
+import { startOnFreePort } from '@listora/testing';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
 import { EBAY_WEBHOOK_PATH } from './ebay.ts';
@@ -33,18 +33,6 @@ import { EBAY_WEBHOOK_PATH } from './ebay.ts';
 const TOKEN = 'listora-webhook-test-verification-token-0123';
 const logger = createLogger({ service: 'webhook-test', level: 'silent' });
 const signal = (): AbortSignal => AbortSignal.timeout(10_000);
-
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise<void>((resolve) => {
-    server.close(() => {
-      resolve();
-    });
-  });
-  return port;
-}
 
 describe('POST /webhooks/ebay', () => {
   let fake: FakeEbay;
@@ -56,31 +44,40 @@ describe('POST /webhooks/ebay', () => {
 
   beforeAll(async () => {
     fake = await FakeEbay.start({ allowHttpNotificationEndpoints: true });
-    endpoint = `http://127.0.0.1:${String(await freePort())}${EBAY_WEBHOOK_PATH}`;
-    const loaded = loadEbayConfig({
-      EBAY_ENV: 'fake',
-      EBAY_FAKE_URL: fake.url,
-      EBAY_NOTIFICATION_ENDPOINT: endpoint,
-      EBAY_NOTIFICATION_VERIFICATION_TOKEN: TOKEN,
+    // The endpoint is part of the API's settings, so its port is chosen before the API listens.
+    await startOnFreePort(async (port) => {
+      endpoint = `http://127.0.0.1:${String(port)}${EBAY_WEBHOOK_PATH}`;
+      const loaded = loadEbayConfig({
+        EBAY_ENV: 'fake',
+        EBAY_FAKE_URL: fake.url,
+        EBAY_NOTIFICATION_ENDPOINT: endpoint,
+        EBAY_NOTIFICATION_VERIFICATION_TOKEN: TOKEN,
+      });
+      if (loaded?.notifications === undefined) throw new Error('no eBay notification config');
+      config = loaded;
+      const oauth = new EbayOAuthClient({
+        tokenUrl: config.endpoints.oauthToken,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+      });
+      const started = await createTestApi('ebay_webhook', {
+        ebayWebhook: {
+          verifier: new EbayNotificationVerifier({
+            endpoints: config.endpoints,
+            token: new ApplicationToken(oauth),
+          }),
+          endpoint,
+          verificationToken: TOKEN,
+        },
+      });
+      try {
+        await started.app.listen({ host: '127.0.0.1', port });
+      } catch (error) {
+        await started.close();
+        throw error;
+      }
+      api = started;
     });
-    if (loaded?.notifications === undefined) throw new Error('no eBay notification config');
-    config = loaded;
-    const oauth = new EbayOAuthClient({
-      tokenUrl: config.endpoints.oauthToken,
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-    });
-    api = await createTestApi('ebay_webhook', {
-      ebayWebhook: {
-        verifier: new EbayNotificationVerifier({
-          endpoints: config.endpoints,
-          token: new ApplicationToken(oauth),
-        }),
-        endpoint,
-        verificationToken: TOKEN,
-      },
-    });
-    await api.app.listen({ host: '127.0.0.1', port: Number(new URL(endpoint).port) });
     accountId = (await api.tenantOf('seller@listora.test')).accountId;
     connectionId = await insertConnection(accountId, 'fakeUser1');
   });
