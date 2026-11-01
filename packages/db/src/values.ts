@@ -125,6 +125,10 @@ export const REFRESH_CADENCES = [
 ] as const;
 export type RefreshCadence = (typeof REFRESH_CADENCES)[number];
 
+/** `price_drop_rule.scope`: a rule for one item, or for every item of a brand (price-drops.md). */
+export const PRICE_DROP_RULE_SCOPES = ['item', 'brand'] as const;
+export type PriceDropRuleScope = (typeof PRICE_DROP_RULE_SCOPES)[number];
+
 export const OPERATION_STATUSES = [
   'queued',
   'running',

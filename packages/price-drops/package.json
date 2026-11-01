@@ -1,0 +1,22 @@
+{
+  "name": "@listora/price-drops",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Smart price drops: the seller's rules per item or brand, the defaults from their own days to sell, each live listing's planned drop, and the paced schedule that runs each drop as a price change through the operation engine.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/operations": "*",
+    "@listora/sales": "*",
+    "@listora/shared": "*",
+    "@listora/sourcing": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

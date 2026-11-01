@@ -2239,6 +2239,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/price-drops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List price drop rules and planned drops
+         * @description The account's price drop rules and each planned drop, so the seller sees every drop before
+         *     it runs (docs/features/price-drops.md). `404` while price drops are not shown to the
+         *     account (they have not passed live, and it is not in Test mode).
+         */
+        get: operations["listPriceDrops"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/price-drops/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a new price drop rule's defaults
+         * @description What a new rule starts from, from the seller's own days to sell: for the item's brand with
+         *     `itemId` (and its own lowest price as the floor), for `brand`, or over all their sales.
+         */
+        get: operations["getPriceDropDefaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/price-drops/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a price drop rule
+         * @description A rule for one item or a brand, on. It changes no price by itself: its first drops come at
+         *     the earliest a day later, after the seller has seen them planned.
+         */
+        post: operations["createPriceDropRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/price-drops/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["PriceDropRuleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a price drop rule, or turn it on or off */
+        put: operations["replacePriceDropRule"];
+        post?: never;
+        /**
+         * Delete a price drop rule
+         * @description A drop already queued still runs; the rest are no longer planned.
+         */
+        delete: operations["deletePriceDropRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pack-check/settings": {
         parameters: {
             query?: never;
@@ -6214,6 +6301,136 @@ export interface components {
             /** @description When its last refresh was confirmed by the marketplace. */
             lastAt?: components["schemas"]["Timestamp"];
         };
+        /**
+         * @description A `KnownPriceDropRuleScope`, or a scope added after this client was built, which clients
+         *     show by name.
+         */
+        PriceDropRuleScope: components["schemas"]["KnownPriceDropRuleScope"];
+        /**
+         * @description `item`: one item's own rule. `brand`: every item of the brand without a rule of its own.
+         * @enum {string}
+         */
+        KnownPriceDropRuleScope: "item" | "brand";
+        /**
+         * @description A seller's price drop rule: each drop takes `percent` off the price of a live listing that
+         *     went `afterDays` unsold (since it went live or its price last changed), never below
+         *     `floor`, rounded down to whole dollars. An item's own rule wins over its brand's, also when
+         *     it is off. No drop runs within a day of the rule taking effect (`armedAt`).
+         */
+        PriceDropRule: {
+            id: components["schemas"]["Id"];
+            scope: components["schemas"]["PriceDropRuleScope"];
+            /** @description With `item`. */
+            itemId?: components["schemas"]["Id"];
+            /** @description With `item`, the item's SKU. */
+            sku?: string;
+            /** @description With `item`, the item's title when it has one. */
+            title?: string;
+            /** @description With `brand`, as the seller wrote it. */
+            brand?: string;
+            /** Format: int32 */
+            percent: number;
+            /** Format: int32 */
+            afterDays: number;
+            /** @description The lowest price a drop sets. */
+            floor: components["schemas"]["Money"];
+            enabled: boolean;
+            /** @description When the rule last took effect (made, changed, or turned on). */
+            armedAt: components["schemas"]["Timestamp"];
+            /**
+             * Format: int32
+             * @description The live listings it applies to now, on the marketplaces with price drops.
+             */
+            liveListings: number;
+        };
+        /**
+         * @description A new rule, on, for one item (`itemId`) or a brand (`brand`), exactly one of them. A second
+         *     rule for the same item or brand is `409 conflict`; an item not in the account is `404`.
+         */
+        PriceDropRuleCreate: {
+            itemId?: components["schemas"]["Id"];
+            brand?: string;
+            /** Format: int32 */
+            percent: number;
+            /** Format: int32 */
+            afterDays: number;
+            floor: components["schemas"]["Money"];
+        };
+        /**
+         * @description The rule's terms and its switch. Changing the terms, or turning it on, starts its day of
+         *     notice again; turning it off stops its drops that have not been queued yet.
+         */
+        PriceDropRuleReplace: {
+            /** Format: int32 */
+            percent: number;
+            /** Format: int32 */
+            afterDays: number;
+            floor: components["schemas"]["Money"];
+            enabled: boolean;
+        };
+        /**
+         * @description A `KnownPlannedPriceDropState`, or a state added after this client was built, which clients
+         *     show without a time.
+         */
+        PlannedPriceDropState: components["schemas"]["KnownPlannedPriceDropState"];
+        /**
+         * @description `scheduled`: it drops to `nextPrice` at `at` (now for one due already, then within the daily
+         *     cap's pace). `at_floor`: it is at the rule's lowest price. `last_failed`: its last price
+         *     change failed; once it is retried and goes through, drops go on. `unavailable`: Listora can't
+         *     change its price there (no linked marketplace session that works, or a read-only shop).
+         * @enum {string}
+         */
+        KnownPlannedPriceDropState: "scheduled" | "at_floor" | "last_failed" | "unavailable";
+        /** @description A live listing's next drop under the rule that applies to it, before it runs. */
+        PlannedPriceDrop: {
+            listingId: components["schemas"]["Id"];
+            itemId: components["schemas"]["Id"];
+            sku: string;
+            title?: string;
+            marketplace: components["schemas"]["Marketplace"];
+            ruleId: components["schemas"]["Id"];
+            /** @description Its price now. */
+            price: components["schemas"]["Money"];
+            state: components["schemas"]["PlannedPriceDropState"];
+            /** @description With `scheduled`. */
+            at?: components["schemas"]["Timestamp"];
+            /** @description With `scheduled`, the price it drops to. */
+            nextPrice?: components["schemas"]["Money"];
+        };
+        /**
+         * @description The account's rules (item rules first, then brands by name) and every planned drop of a live
+         *     listing under a rule that is on, soonest first. With `itemId`, only the rule that applies to
+         *     that item (its own or its brand's) and its listings' drops.
+         */
+        PriceDrops: {
+            rules: components["schemas"]["PriceDropRule"][];
+            planned: components["schemas"]["PlannedPriceDrop"][];
+        };
+        /** @description The seller's own sales a default rests on. */
+        PriceDropDefaultsBasis: {
+            /** Format: int32 */
+            sales: number;
+            /**
+             * Format: int32
+             * @description Half of them sold within this many days.
+             */
+            medianDays: number;
+            /** @description Present when they are the brand's sales, not all of them. */
+            brand?: string;
+        };
+        /**
+         * @description What a new rule starts from: `afterDays` from the seller's own days to sell over the last year
+         *     (the brand's with three or more sales of it, else all of them, held to 7 to 90 days), else 21;
+         *     `floor` from the item's own lowest price when it has one.
+         */
+        PriceDropDefaults: {
+            /** Format: int32 */
+            percent: number;
+            /** Format: int32 */
+            afterDays: number;
+            floor?: components["schemas"]["Money"];
+            basis?: components["schemas"]["PriceDropDefaultsBasis"];
+        };
         /** @description Whether Pack check is on. It is off until the seller turns it on in Settings. */
         PackCheckSettings: {
             enabled: boolean;
@@ -6864,9 +7081,11 @@ export interface components {
          *     `listing_refresh`: refreshing live listings on a schedule. `revise`: editing a live
          *     listing's details from Listora (`reviseListing`). `market_comps`: the thrift scan's
          *     comparisons from the marketplace's public search, read on the iPhone logged out.
+         *     `price_drops`: the seller's rules lowering a live listing's price after it went unsold a
+         *     while, each drop a price change confirmed by a read-back.
          * @enum {string}
          */
-        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise" | "market_comps";
+        KnownMarketplaceFeature: "sales_history" | "sale_checks" | "offers" | "offer_answers" | "listing_import" | "listing_refresh" | "revise" | "market_comps" | "price_drops";
         MarketplaceFeatures: {
             marketplace: components["schemas"]["Marketplace"];
             /**
@@ -7808,6 +8027,7 @@ export interface components {
         QuestionId: components["schemas"]["Id"];
         ScanId: components["schemas"]["Id"];
         ComparisonId: components["schemas"]["Id"];
+        PriceDropRuleId: components["schemas"]["Id"];
     };
     requestBodies: never;
     headers: never;
@@ -8142,6 +8362,17 @@ export type ItemRefreshReplace = components['schemas']['ItemRefreshReplace'];
 export type ListingRefreshState = components['schemas']['ListingRefreshState'];
 export type KnownListingRefreshState = components['schemas']['KnownListingRefreshState'];
 export type ListingRefresh = components['schemas']['ListingRefresh'];
+export type PriceDropRuleScope = components['schemas']['PriceDropRuleScope'];
+export type KnownPriceDropRuleScope = components['schemas']['KnownPriceDropRuleScope'];
+export type PriceDropRule = components['schemas']['PriceDropRule'];
+export type PriceDropRuleCreate = components['schemas']['PriceDropRuleCreate'];
+export type PriceDropRuleReplace = components['schemas']['PriceDropRuleReplace'];
+export type PlannedPriceDropState = components['schemas']['PlannedPriceDropState'];
+export type KnownPlannedPriceDropState = components['schemas']['KnownPlannedPriceDropState'];
+export type PlannedPriceDrop = components['schemas']['PlannedPriceDrop'];
+export type PriceDrops = components['schemas']['PriceDrops'];
+export type PriceDropDefaultsBasis = components['schemas']['PriceDropDefaultsBasis'];
+export type PriceDropDefaults = components['schemas']['PriceDropDefaults'];
 export type PackCheckSettings = components['schemas']['PackCheckSettings'];
 export type PackCheckSettingsReplace = components['schemas']['PackCheckSettingsReplace'];
 export type LabelCarrier = components['schemas']['LabelCarrier'];
@@ -8324,6 +8555,7 @@ export type ParameterImportId = components['parameters']['ImportId'];
 export type ParameterQuestionId = components['parameters']['QuestionId'];
 export type ParameterScanId = components['parameters']['ScanId'];
 export type ParameterComparisonId = components['parameters']['ComparisonId'];
+export type ParameterPriceDropRuleId = components['parameters']['PriceDropRuleId'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -11513,6 +11745,146 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listPriceDrops: {
+        parameters: {
+            query?: {
+                /** @description Only the rule that applies to this item, and its listings' drops. */
+                itemId?: components["schemas"]["Id"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules and the planned drops. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDrops"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getPriceDropDefaults: {
+        parameters: {
+            query?: {
+                itemId?: components["schemas"]["Id"];
+                brand?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDropDefaults"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createPriceDropRule: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceDropRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDropRule"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replacePriceDropRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["PriceDropRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PriceDropRuleReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved rule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDropRule"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    deletePriceDropRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["PriceDropRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getPackCheckSettings: {
         parameters: {
             query?: never;
@@ -12883,6 +13255,8 @@ export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];
 export const knownRefreshCadenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownRefreshCadence"]> = ["off", "every_72_hours", "daily", "every_few_days", "weekly", "custom"];
 export const knownListingRefreshStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingRefreshState"]> = ["scheduled", "off", "unavailable"];
+export const knownPriceDropRuleScopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceDropRuleScope"]> = ["item", "brand"];
+export const knownPlannedPriceDropStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPlannedPriceDropState"]> = ["scheduled", "at_floor", "last_failed", "unavailable"];
 export const knownLabelCarrierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelCarrier"]> = ["usps", "ups", "fedex", "dhl", "other"];
 export const knownLabelSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelSource"]> = ["marketplace", "scan"];
 export const knownPackMatchValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPackMatch"]> = ["sticker", "label", "photo"];
@@ -12900,7 +13274,7 @@ export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const knownOfferActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferAction"]> = ["accept", "decline", "counter"];
 export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOfferResponseStatus"]> = ["queued", "running", "verifying", "succeeded", "failed"];
 export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];
-export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise", "market_comps"];
+export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise", "market_comps", "price_drops"];
 export const knownAppFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownAppFeature"]> = ["thrift_scan"];
 export const knownScanImageRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanImageRole"]> = ["item", "tag"];
 export const knownScanComparisonStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanComparisonStatus"]> = ["checking", "read", "not_enough", "paused", "limit", "failed"];

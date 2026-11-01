@@ -1112,6 +1112,46 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/items/{itemId}/refresh`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/refresh/put(replaceItemRefresh)`.
     func replaceItemRefresh(_ input: Operations.ReplaceItemRefresh.Input) async throws -> Operations.ReplaceItemRefresh.Output
+    /// List price drop rules and planned drops
+    ///
+    /// The account's price drop rules and each planned drop, so the seller sees every drop before
+    /// it runs (docs/features/price-drops.md). `404` while price drops are not shown to the
+    /// account (they have not passed live, and it is not in Test mode).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/price-drops`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/get(listPriceDrops)`.
+    func listPriceDrops(_ input: Operations.ListPriceDrops.Input) async throws -> Operations.ListPriceDrops.Output
+    /// Get a new price drop rule's defaults
+    ///
+    /// What a new rule starts from, from the seller's own days to sell: for the item's brand with
+    /// `itemId` (and its own lowest price as the floor), for `brand`, or over all their sales.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/price-drops/defaults`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/defaults/get(getPriceDropDefaults)`.
+    func getPriceDropDefaults(_ input: Operations.GetPriceDropDefaults.Input) async throws -> Operations.GetPriceDropDefaults.Output
+    /// Create a price drop rule
+    ///
+    /// A rule for one item or a brand, on. It changes no price by itself: its first drops come at
+    /// the earliest a day later, after the seller has seen them planned.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/price-drops/rules`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/rules/post(createPriceDropRule)`.
+    func createPriceDropRule(_ input: Operations.CreatePriceDropRule.Input) async throws -> Operations.CreatePriceDropRule.Output
+    /// Change a price drop rule, or turn it on or off
+    ///
+    /// - Remark: HTTP `PUT /v1/price-drops/rules/{ruleId}`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/rules/{ruleId}/put(replacePriceDropRule)`.
+    func replacePriceDropRule(_ input: Operations.ReplacePriceDropRule.Input) async throws -> Operations.ReplacePriceDropRule.Output
+    /// Delete a price drop rule
+    ///
+    /// A drop already queued still runs; the rest are no longer planned.
+    ///
+    /// - Remark: HTTP `DELETE /v1/price-drops/rules/{ruleId}`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/rules/{ruleId}/delete(deletePriceDropRule)`.
+    func deletePriceDropRule(_ input: Operations.DeletePriceDropRule.Input) async throws -> Operations.DeletePriceDropRule.Output
     /// Get the Pack check setting
     ///
     /// Whether Pack check is on (off until the seller turns it on).
@@ -3492,6 +3532,88 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// List price drop rules and planned drops
+    ///
+    /// The account's price drop rules and each planned drop, so the seller sees every drop before
+    /// it runs (docs/features/price-drops.md). `404` while price drops are not shown to the
+    /// account (they have not passed live, and it is not in Test mode).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/price-drops`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/get(listPriceDrops)`.
+    public func listPriceDrops(
+        query: Operations.ListPriceDrops.Input.Query = .init(),
+        headers: Operations.ListPriceDrops.Input.Headers = .init()
+    ) async throws -> Operations.ListPriceDrops.Output {
+        try await listPriceDrops(Operations.ListPriceDrops.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Get a new price drop rule's defaults
+    ///
+    /// What a new rule starts from, from the seller's own days to sell: for the item's brand with
+    /// `itemId` (and its own lowest price as the floor), for `brand`, or over all their sales.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/price-drops/defaults`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/defaults/get(getPriceDropDefaults)`.
+    public func getPriceDropDefaults(
+        query: Operations.GetPriceDropDefaults.Input.Query = .init(),
+        headers: Operations.GetPriceDropDefaults.Input.Headers = .init()
+    ) async throws -> Operations.GetPriceDropDefaults.Output {
+        try await getPriceDropDefaults(Operations.GetPriceDropDefaults.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Create a price drop rule
+    ///
+    /// A rule for one item or a brand, on. It changes no price by itself: its first drops come at
+    /// the earliest a day later, after the seller has seen them planned.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/price-drops/rules`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/rules/post(createPriceDropRule)`.
+    public func createPriceDropRule(
+        headers: Operations.CreatePriceDropRule.Input.Headers,
+        body: Operations.CreatePriceDropRule.Input.Body
+    ) async throws -> Operations.CreatePriceDropRule.Output {
+        try await createPriceDropRule(Operations.CreatePriceDropRule.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Change a price drop rule, or turn it on or off
+    ///
+    /// - Remark: HTTP `PUT /v1/price-drops/rules/{ruleId}`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/rules/{ruleId}/put(replacePriceDropRule)`.
+    public func replacePriceDropRule(
+        path: Operations.ReplacePriceDropRule.Input.Path,
+        headers: Operations.ReplacePriceDropRule.Input.Headers = .init(),
+        body: Operations.ReplacePriceDropRule.Input.Body
+    ) async throws -> Operations.ReplacePriceDropRule.Output {
+        try await replacePriceDropRule(Operations.ReplacePriceDropRule.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Delete a price drop rule
+    ///
+    /// A drop already queued still runs; the rest are no longer planned.
+    ///
+    /// - Remark: HTTP `DELETE /v1/price-drops/rules/{ruleId}`.
+    /// - Remark: Generated from `#/paths//v1/price-drops/rules/{ruleId}/delete(deletePriceDropRule)`.
+    public func deletePriceDropRule(
+        path: Operations.DeletePriceDropRule.Input.Path,
+        headers: Operations.DeletePriceDropRule.Input.Headers = .init()
+    ) async throws -> Operations.DeletePriceDropRule.Output {
+        try await deletePriceDropRule(Operations.DeletePriceDropRule.Input(
+            path: path,
+            headers: headers
         ))
     }
     /// Get the Pack check setting

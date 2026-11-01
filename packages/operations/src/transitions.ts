@@ -128,7 +128,8 @@ const OPERATION_FEATURES: Partial<Record<OperationKind, MarketplaceFeature>> = {
  * (docs/features/test-mode.md): passed with its read-back, or failed with its error.
  */
 async function recordOperationTest(trx: DbTransaction, op: OperationRow): Promise<void> {
-  const feature = OPERATION_FEATURES[op.kind];
+  // A price drop's price change is the price drops feature's run (docs/features/price-drops.md).
+  const feature = op.origin === 'reprice_rule' ? 'price_drops' : OPERATION_FEATURES[op.kind];
   if (feature === undefined || (op.status !== 'succeeded' && op.status !== 'failed')) return;
   const listing = await trx
     .selectFrom('marketplace_listing')

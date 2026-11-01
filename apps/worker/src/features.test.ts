@@ -21,6 +21,7 @@ import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observabilit
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PACK_PHOTOS_CRONTAB, PACK_PHOTOS_TASK } from '@listora/pack-check';
 import { PHOTO_PROCESSING_TASK, THUMBNAIL_REFRESH_TASK } from '@listora/photos';
+import { PRICE_DROPS_TASK } from '@listora/price-drops';
 import { BACKGROUND_PUSH_TASK, PUSH_TASK } from '@listora/push';
 import { DATA_RETENTION_TASK } from '@listora/retention';
 import { SALE_FEES_TASK } from '@listora/sales';
@@ -95,6 +96,7 @@ describe('worker feature discovery', () => {
       'pack-photos',
       'phone-work',
       'photos',
+      'price-drops',
       'push',
       'read-alerts',
       'sale-check-health',
@@ -132,6 +134,7 @@ describe('worker feature discovery', () => {
       EMAIL_INGEST_TASK,
       LISTING_REFRESH_TASK,
       PHONE_WATCH_TASK,
+      PRICE_DROPS_TASK,
       READ_ALERTS_TASK,
       SALE_CHECK_HEALTH_TASK,
       TODAY_SUMMARY_TASK,
