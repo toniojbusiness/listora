@@ -1,4 +1,5 @@
-import type { Marketplace } from '@listora/db';
+import { jsonb, type Marketplace } from '@listora/db';
+import { sql } from 'kysely';
 import { useMarketplaceFeatures } from '@listora/marketplaces';
 import { estimateFeesCents, feeTableFor, NO_SOLD_DATA_MESSAGE } from '@listora/pricing';
 import { OWN_HISTORY_WINDOW_DAYS, SOURCING_KIT_VERSION } from '@listora/sourcing';
@@ -221,6 +222,7 @@ describe('own sales for sourcing (real Postgres)', () => {
         windowDays: OWN_HISTORY_WINDOW_DAYS,
         call: { worthListing: usd(800), minComparisons: 3 },
         buckets: [],
+        insights: { soldCount: 0, daysToSellCount: 0, lookFor: [], best: [], worst: [] },
       });
     });
 
@@ -276,6 +278,109 @@ describe('own sales for sourcing (real Postgres)', () => {
         payoutMarketplace: 'depop',
         conservativePayout: usd(2150 - fee(2150)),
         optimisticPayout: usd(2650 - fee(2650)),
+      });
+    });
+
+    it('reads the sales and stock as advice: brand and item type pairs, days from Listora listings', async () => {
+      const seller = 'sourcing.insights@example.com';
+      const as = await api.signIn(seller);
+      const owner = await api.tenantOf(seller);
+      const JEANS = 'clothing/bottoms/jeans';
+      const JACKETS = 'clothing/outerwear/jackets';
+      const jeans = {
+        title: 'Madewell jeans',
+        brand: 'Madewell',
+        category: JEANS,
+        sizeLabel: '28',
+      };
+      /** A listing of the item on Depop, listed `daysAgo` back; Listora's when its create succeeded. */
+      const listing = async (itemId: string, daysAgo: number, throughListora: boolean) => {
+        const row = await api.db
+          .insertInto('marketplace_listing')
+          .values({
+            account_id: owner.accountId,
+            item_id: itemId,
+            marketplace: 'depop',
+            status: 'sold',
+            listed_at: new Date(api.clock.now - daysAgo * DAY_MS),
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        if (!throughListora) return;
+        await api.db
+          .insertInto('marketplace_operation')
+          .values({
+            account_id: owner.accountId,
+            listing_id: row.id,
+            kind: 'create',
+            idempotency_key: `insights-${row.id}`,
+            desired: jsonb({ status: 'active' }),
+            status: 'succeeded',
+            success_evidence: 'read_back',
+            origin: 'user',
+            content: jsonb({}),
+          })
+          .execute();
+      };
+      // Three jeans sold 5 days ago, listed through Listora 15, 25, and 35 days back. The
+      // first also had an imported listing from earlier, whose date is when Listora read it.
+      for (const [index, listedDaysAgo] of [20, 30, 40].entries()) {
+        const item = await sell('depop', jeans, 3000, { owner, as, daysAgo: 5 });
+        await listing(item.id, listedDaysAgo, true);
+        if (index === 0) await listing(item.id, 300, false);
+      }
+      // A fourth sold with only an imported listing: it sold, with no day count.
+      const imported = await sell('depop', jeans, 3000, { owner, as, daysAgo: 5 });
+      await listing(imported.id, 200, false);
+      // One pair of jeans in stock for 60 days; three jackets that never sold.
+      const inStock = async (details: Record<string, unknown>) => {
+        const item = await createItem(details, as);
+        const added = new Date(api.clock.now - 60 * DAY_MS);
+        await sql`update inventory_item set status = 'listed', created_at = ${added}
+          where id = ${item.id}`.execute(api.db);
+      };
+      await inStock(jeans);
+      for (let count = 0; count < 3; count += 1) {
+        await inStock({ title: 'Madewell jacket', brand: 'Madewell', category: JACKETS });
+      }
+
+      const kit = (await api.call('getSourcingKit', { token: as })).body;
+      expect(kit.insights.soldCount).toBe(4);
+      expect(kit.insights.daysToSellCount).toBe(3);
+      const fee = await payoutFees(api.db, owner, 'depop', new Date(kit.generatedAt));
+      const best = {
+        brand: 'Madewell',
+        brandKey: 'madewell',
+        category: JEANS,
+        soldCount: 4,
+        unsoldCount: 1,
+        inStockCount: 1,
+        sellThroughBasisPoints: 8000,
+        medianDaysToSell: 25,
+        medianPayout: usd(3000 - fee(3000)),
+      };
+      expect(kit.insights.best).toEqual([best]);
+      expect(kit.insights.lookFor).toEqual([best]);
+      expect(kit.insights.worst).toEqual([
+        {
+          brand: 'Madewell',
+          brandKey: 'madewell',
+          category: JACKETS,
+          soldCount: 0,
+          unsoldCount: 3,
+          inStockCount: 3,
+          sellThroughBasisPoints: 0,
+        },
+      ]);
+
+      // Another account sees none of it: its own two sales are too few to judge.
+      const theirs = (await api.call('getSourcingKit', { token: otherToken })).body.insights;
+      expect(theirs).toEqual({
+        soldCount: 2,
+        daysToSellCount: 0,
+        lookFor: [],
+        best: [],
+        worst: [],
       });
     });
 

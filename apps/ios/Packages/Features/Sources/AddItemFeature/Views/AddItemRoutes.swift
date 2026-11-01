@@ -16,6 +16,8 @@ enum AddItemRoute: Hashable {
     /// The rapid review of a thrift run's kept drafts once their real photos are on the server
     /// (docs/features/thrift-scan.md, "Upgrading drafts").
     case runReview(BatchReviewRequest)
+    /// "What sells for you" (docs/features/thrift-scan.md, "Sourcing insights"), from Scan mode.
+    case sourcingInsights
 }
 
 /// Whether Add Item starts one item, a whole haul, or scans items at the store.

@@ -126,8 +126,8 @@ enum VoiceCorrectionParser {
     static func rules(_ phrase: String, _ context: VoiceParseContext) -> [VoiceChange]? {
         let text = core(phrase)
         let rules: [(String, VoiceParseContext) -> [VoiceChange]?] = [
-            noFlaws, cost, listPrice, condition, size, departmentAndSize, department, bareSize, colors, pattern,
-            materials, category, brand, labeled, source,
+            noFlaws, measurements, cost, listPrice, condition, size, departmentAndSize, department, bareSize, colors,
+            pattern, materials, category, brand, labeled, source,
         ]
         for rule in rules {
             if let changes = rule(text, context) {

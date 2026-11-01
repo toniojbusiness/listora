@@ -301,7 +301,7 @@ final class ReviewFlowModel {
         self.analysis = analysis
         self.fastAnalysisID = fastAnalysisID
         form = ReviewForm(item: item, result: analysis.result)
-        copies = MarketplaceCopy.copies(result: analysis.result, edits: listingCopy.edits(itemID: item.id))
+        refreshCopies()
         if let cents = item.details.cost?.amountCents, cost.amount.isEmpty {
             cost.amount = AmountEntry(cents: cents)
         }

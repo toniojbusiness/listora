@@ -1,3 +1,4 @@
+import Core
 import Foundation
 import ListoraAPI
 
@@ -19,6 +20,8 @@ struct ReviewForm: Equatable, Sendable {
     /// The server's `fieldProvenance` when the form was built.
     let serverProvenance: [ReviewFieldKey: ReviewProvenance]
     private(set) var edited: Set<ReviewFieldKey> = []
+    /// The measurements the seller changed (canonical names).
+    private(set) var editedMeasurements: Set<String> = []
     private(set) var attention: [ReviewFieldKey] = []
 
     /// The form for `item` as `result` proposed it. `attention` keeps an earlier form's order
@@ -99,7 +102,7 @@ struct ReviewForm: Equatable, Sendable {
     }
 
     var hasEdits: Bool {
-        !edited.isEmpty
+        !edited.isEmpty || !editedMeasurements.isEmpty
     }
 
     /// Details still needed to list the item.
@@ -113,12 +116,23 @@ struct ReviewForm: Equatable, Sendable {
         edited.insert(key)
     }
 
+    /// Sets one measurement as the seller's edit; nil removes it.
+    mutating func setMeasurement(named name: String, to measurement: ItemMeasurement?) {
+        guard details.measurement(named: name) != measurement else { return }
+        details.setMeasurement(named: name, to: measurement)
+        editedMeasurements.insert(name)
+    }
+
     /// The details with the seller's edits applied over `base` (the server's latest), for a
     /// replace after a version conflict.
     func applyingEdits(to base: ItemDetails) -> ItemDetails {
         var merged = base
         for key in edited {
             merged.set(key, to: details.value(key))
+        }
+        // In name order, the order the server keeps them in.
+        for name in editedMeasurements.sorted() {
+            merged.setMeasurement(named: name, to: details.measurement(named: name))
         }
         return merged
     }

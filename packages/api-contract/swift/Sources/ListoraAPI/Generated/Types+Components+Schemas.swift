@@ -16157,6 +16157,8 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SourcingKit/buckets`.
             public var buckets: [Components.Schemas.OwnSalesBucket]
+            /// - Remark: Generated from `#/components/schemas/SourcingKit/insights`.
+            public var insights: Components.Schemas.SourcingInsights
             /// Creates a new `SourcingKit`.
             ///
             /// - Parameters:
@@ -16165,18 +16167,21 @@ extension Components {
             ///   - windowDays: Only sales from this many days back count.
             ///   - call:
             ///   - buckets: Every brand group, then its category groups, then their size groups, each with at
+            ///   - insights:
             public init(
                 version: Swift.Int32,
                 generatedAt: Components.Schemas.Timestamp,
                 windowDays: Swift.Int32,
                 call: Components.Schemas.SourcingKitCall,
-                buckets: [Components.Schemas.OwnSalesBucket]
+                buckets: [Components.Schemas.OwnSalesBucket],
+                insights: Components.Schemas.SourcingInsights
             ) {
                 self.version = version
                 self.generatedAt = generatedAt
                 self.windowDays = windowDays
                 self.call = call
                 self.buckets = buckets
+                self.insights = insights
             }
             public enum CodingKeys: String, CodingKey {
                 case version
@@ -16184,6 +16189,165 @@ extension Components {
                 case windowDays
                 case call
                 case buckets
+                case insights
+            }
+        }
+        /// "What sells for you" (docs/features/thrift-scan.md, "Sourcing insights"): the household's
+        /// brand and item type pairs that sell best and worst, by sell-through and days to sell, and
+        /// the short "Look for" list for the bins. Always a brand with a category, never a brand alone:
+        /// a brand's leggings and its jackets sell differently. Every number is the seller's own sales
+        /// and stock; each list is empty without enough of them.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingInsights`.
+        public struct SourcingInsights: Codable, Hashable, Sendable {
+            /// The sales with a brand and category the insights rest on.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsights/soldCount`.
+            public var soldCount: Swift.Int32
+            /// Those of them with a known day count: the item was listed through Listora. An imported
+            /// listing's date is when Listora read it, so it never counts.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsights/daysToSellCount`.
+            public var daysToSellCount: Swift.Int32
+            /// The best sellers whose median payout is worth buying for (`call.worthListing`), best
+            /// first: the short list to look for at the bins.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsights/lookFor`.
+            public var lookFor: [Components.Schemas.SourcingInsightGroup]
+            /// The pairs that sell best: at least half of them sold and a median under 90 days to
+            /// sell where known; the highest sell-through first, then the fastest, then the most sold.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsights/best`.
+            public var best: [Components.Schemas.SourcingInsightGroup]
+            /// The pairs that sell worst: under half of them sold, or a median of 90 days or more to
+            /// sell; the lowest sell-through first, then the slowest, then the most left unsold.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsights/worst`.
+            public var worst: [Components.Schemas.SourcingInsightGroup]
+            /// Creates a new `SourcingInsights`.
+            ///
+            /// - Parameters:
+            ///   - soldCount: The sales with a brand and category the insights rest on.
+            ///   - daysToSellCount: Those of them with a known day count: the item was listed through Listora. An imported
+            ///   - lookFor: The best sellers whose median payout is worth buying for (`call.worthListing`), best
+            ///   - best: The pairs that sell best: at least half of them sold and a median under 90 days to
+            ///   - worst: The pairs that sell worst: under half of them sold, or a median of 90 days or more to
+            public init(
+                soldCount: Swift.Int32,
+                daysToSellCount: Swift.Int32,
+                lookFor: [Components.Schemas.SourcingInsightGroup],
+                best: [Components.Schemas.SourcingInsightGroup],
+                worst: [Components.Schemas.SourcingInsightGroup]
+            ) {
+                self.soldCount = soldCount
+                self.daysToSellCount = daysToSellCount
+                self.lookFor = lookFor
+                self.best = best
+                self.worst = worst
+            }
+            public enum CodingKeys: String, CodingKey {
+                case soldCount
+                case daysToSellCount
+                case lookFor
+                case best
+                case worst
+            }
+        }
+        /// One brand and item type pair, from at least 3 of the household's items: sold in the
+        /// window, or still in stock and added at least 30 days ago.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup`.
+        public struct SourcingInsightGroup: Codable, Hashable, Sendable {
+            /// The brand as the household's items spell it most often.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/brand`.
+            public var brand: Swift.String
+            /// The brand's match key (`OwnSalesBucket.brandKey`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/brandKey`.
+            public var brandKey: Swift.String
+            /// The canonical category path (`ItemDetails.category`), the item type.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/category`.
+            public var category: Swift.String
+            /// Items sold in the window (a bundle's items each count).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/soldCount`.
+            public var soldCount: Swift.Int32
+            /// Items in stock (ready or listed) added at least 30 days ago, so given time to sell.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/unsoldCount`.
+            public var unsoldCount: Swift.Int32
+            /// Every item of the pair in stock now (ready or listed), however new.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/inStockCount`.
+            public var inStockCount: Swift.Int32
+            /// `soldCount` over `soldCount` plus `unsoldCount`, in basis points.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/sellThroughBasisPoints`.
+            public var sellThroughBasisPoints: Swift.Int32
+            /// Whole days from the item's first listing through Listora to its sale, the median over
+            /// the sales that have one. Absent with fewer than 2 such sales.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/medianDaysToSell`.
+            public var medianDaysToSell: Swift.Int32?
+            /// The median of what the sales paid out after each marketplace's estimated fees, as the
+            /// scan's call works payouts out; not eBay's, which are display only. An estimate. Absent
+            /// without such sales.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingInsightGroup/medianPayout`.
+            public var medianPayout: Components.Schemas.Money?
+            /// Creates a new `SourcingInsightGroup`.
+            ///
+            /// - Parameters:
+            ///   - brand: The brand as the household's items spell it most often.
+            ///   - brandKey: The brand's match key (`OwnSalesBucket.brandKey`).
+            ///   - category: The canonical category path (`ItemDetails.category`), the item type.
+            ///   - soldCount: Items sold in the window (a bundle's items each count).
+            ///   - unsoldCount: Items in stock (ready or listed) added at least 30 days ago, so given time to sell.
+            ///   - inStockCount: Every item of the pair in stock now (ready or listed), however new.
+            ///   - sellThroughBasisPoints: `soldCount` over `soldCount` plus `unsoldCount`, in basis points.
+            ///   - medianDaysToSell: Whole days from the item's first listing through Listora to its sale, the median over
+            ///   - medianPayout: The median of what the sales paid out after each marketplace's estimated fees, as the
+            public init(
+                brand: Swift.String,
+                brandKey: Swift.String,
+                category: Swift.String,
+                soldCount: Swift.Int32,
+                unsoldCount: Swift.Int32,
+                inStockCount: Swift.Int32,
+                sellThroughBasisPoints: Swift.Int32,
+                medianDaysToSell: Swift.Int32? = nil,
+                medianPayout: Components.Schemas.Money? = nil
+            ) {
+                self.brand = brand
+                self.brandKey = brandKey
+                self.category = category
+                self.soldCount = soldCount
+                self.unsoldCount = unsoldCount
+                self.inStockCount = inStockCount
+                self.sellThroughBasisPoints = sellThroughBasisPoints
+                self.medianDaysToSell = medianDaysToSell
+                self.medianPayout = medianPayout
+            }
+            public enum CodingKeys: String, CodingKey {
+                case brand
+                case brandKey
+                case category
+                case soldCount
+                case unsoldCount
+                case inStockCount
+                case sellThroughBasisPoints
+                case medianDaysToSell
+                case medianPayout
             }
         }
         /// The call's thresholds, so the app makes the scan's history-only call with no signal by

@@ -60,6 +60,27 @@ export async function ownSales(
       'inventory_item.size_label',
       'sale_item.sale_price_cents',
       'sale.sold_at',
+      // The item's first listing through Listora before the sale: one whose create succeeded.
+      // An imported listing's `listed_at` is when Listora read it, so it never counts.
+      (eb) =>
+        eb
+          .selectFrom('marketplace_listing as listing')
+          .select((inner) => inner.fn.min('listing.listed_at').as('first'))
+          .whereRef('listing.account_id', '=', 'sale_item.account_id')
+          .whereRef('listing.item_id', '=', 'sale_item.item_id')
+          .whereRef('listing.listed_at', '<=', 'sale.sold_at')
+          .where((inner) =>
+            inner.exists(
+              inner
+                .selectFrom('marketplace_operation as operation')
+                .select('operation.id')
+                .whereRef('operation.account_id', '=', 'listing.account_id')
+                .whereRef('operation.listing_id', '=', 'listing.id')
+                .where('operation.kind', '=', 'create')
+                .where('operation.status', '=', 'succeeded'),
+            ),
+          )
+          .as('listed_at'),
     ])
     .orderBy('sale.sold_at')
     .orderBy('sale_item.id')
@@ -73,14 +94,18 @@ export async function ownSales(
     sizeLabel: row.size_label,
     salePriceCents: row.sale_price_cents,
     soldAt: row.sold_at,
+    listedAt: row.listed_at,
   }));
 }
 
-/** The account's items with a brand in inventory and not sold: ready, or listed somewhere. */
+/**
+ * The account's items with a brand in inventory and not sold: ready, or listed somewhere, each
+ * with when it was added.
+ */
 export async function unsoldItems(db: DbExecutor, tenant: Tenant): Promise<UnsoldItem[]> {
   const rows = await db
     .selectFrom('inventory_item')
-    .select(['brand', 'category', 'size_label'])
+    .select(['brand', 'category', 'size_label', 'created_at'])
     .where('account_id', '=', tenant.accountId)
     .where('status', 'in', ['ready', 'listed'])
     .where('brand', 'is not', null)
@@ -89,5 +114,6 @@ export async function unsoldItems(db: DbExecutor, tenant: Tenant): Promise<Unsol
     brand: row.brand,
     category: row.category,
     sizeLabel: row.size_label,
+    addedAt: row.created_at,
   }));
 }

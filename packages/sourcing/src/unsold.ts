@@ -6,6 +6,8 @@ export interface UnsoldItem {
   readonly brand: string | null;
   readonly category: string | null;
   readonly sizeLabel: string | null;
+  /** When it was added to Listora, for how long it has had to sell; absent where unknown. */
+  readonly addedAt?: Date | undefined;
 }
 
 /** How many of the household's unsold items are like the scanned one, and how alike. */

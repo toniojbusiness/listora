@@ -3,9 +3,13 @@ import DesignSystem
 import SwiftUI
 
 /// Starting a run (docs/features/thrift-scan.md, "Runs"): where the seller is, picked from the
-/// places they bought from lately or typed, or left out. Nothing else is asked.
+/// places they bought from lately or typed, or left out. Nothing else is asked. Under it, what to
+/// look for at the bins and the way to "What sells for you" ("Sourcing insights").
 struct ScanStartView: View {
     let recentPlaces: [String]
+    /// The sourcing kit on this iPhone; nil where there is no scan run support (tests, previews).
+    var kit: SourcingKitCache?
+    var refreshKit: @MainActor () async -> Void = {}
     let onStart: (_ place: String?) -> Void
     let onCancel: () -> Void
     @State private var place = ""
@@ -40,6 +44,9 @@ struct ScanStartView: View {
                             }
                         }
                     }
+                    if let kit {
+                        insights(kit)
+                    }
                 }
                 .frame(maxWidth: Layout.readableWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
@@ -62,7 +69,25 @@ struct ScanStartView: View {
                 .buttonStyle(.listoraPrimary)
                 .accessibilityIdentifier("scanStart.start")
             }
+            .task { await refreshKit() }
         }
+    }
+
+    /// The top of the "Look for" list, then the way to the whole of "What sells for you".
+    private func insights(_ kit: SourcingKitCache) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            if let insights = kit.kit?.insights {
+                LookForTag(rows: Array(insights.lookFor.prefix(3)).map(SourcingInsightsCard.Row.init))
+            }
+            NavigationLink {
+                SourcingInsightsView(kit: kit, refresh: refreshKit)
+            } label: {
+                Label("What sells for you", systemImage: "tag")
+            }
+            .buttonStyle(.listora(.tertiary, size: .large))
+            .accessibilityIdentifier("scanStart.insights")
+        }
+        .padding(.top, Spacing.sm)
     }
 }
 
