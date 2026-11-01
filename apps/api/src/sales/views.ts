@@ -159,6 +159,16 @@ export function saleView(
         sku: item.sku,
         ...(item.title === null || item.title === '' ? {} : { title: item.title }),
         ...thumbnailOf(thumbnails, item.item_id),
+        ...(item.location_id === null || item.location_code === null
+          ? {}
+          : {
+              // The contract requires a label; a bin without one shows its code.
+              storageLocation: {
+                id: item.location_id,
+                code: item.location_code,
+                label: item.location_label ?? item.location_code,
+              },
+            }),
         ...(item.listing_id === null ? {} : { listingId: item.listing_id }),
         salePrice: { amountCents: item.sale_price_cents, currency: item.currency },
         ...optional('cost', item.cost_cents),

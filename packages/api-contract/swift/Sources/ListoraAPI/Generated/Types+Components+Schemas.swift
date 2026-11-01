@@ -8503,6 +8503,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SaleItem/thumbnailUrl`.
             public var thumbnailUrl: Swift.String?
+            /// The bin the item is kept in, shown as "Find it, bin B-12"; absent when it is in none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/storageLocation`.
+            public var storageLocation: Components.Schemas.StorageLocationSummary?
             /// The listing the item sold through, when known. Absent for a sale recorded without one.
             ///
             /// - Remark: Generated from `#/components/schemas/SaleItem/listingId`.
@@ -8540,6 +8544,7 @@ extension Components {
             ///   - sku:
             ///   - title:
             ///   - thumbnailUrl: The item's cover photo, small; absent until a photo is processed.
+            ///   - storageLocation: The bin the item is kept in, shown as "Find it, bin B-12"; absent when it is in none.
             ///   - listingId: The listing the item sold through, when known. Absent for a sale recorded without one.
             ///   - salePrice: This item's part of the order's sale price (for a bundle, its share of the bundle price).
             ///   - cost: What the item cost the seller. Absent when they never entered it.
@@ -8553,6 +8558,7 @@ extension Components {
                 sku: Swift.String,
                 title: Swift.String? = nil,
                 thumbnailUrl: Swift.String? = nil,
+                storageLocation: Components.Schemas.StorageLocationSummary? = nil,
                 listingId: Components.Schemas.Id? = nil,
                 salePrice: Components.Schemas.Money,
                 cost: Components.Schemas.Money? = nil,
@@ -8566,6 +8572,7 @@ extension Components {
                 self.sku = sku
                 self.title = title
                 self.thumbnailUrl = thumbnailUrl
+                self.storageLocation = storageLocation
                 self.listingId = listingId
                 self.salePrice = salePrice
                 self.cost = cost
@@ -8580,6 +8587,7 @@ extension Components {
                 case sku
                 case title
                 case thumbnailUrl
+                case storageLocation
                 case listingId
                 case salePrice
                 case cost
@@ -19294,6 +19302,242 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case site
                 case url
+            }
+        }
+        /// A bin, shelf, or box where items are kept, named by the short code on its sticker, such
+        /// as `B-12` (docs/features/storage-bins.md).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/StorageLocation`.
+        public struct StorageLocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StorageLocation/id`.
+            public var id: Components.Schemas.Id
+            /// The code on the bin's sticker, `B-12`: letters, digits, spaces, and `- . /`, stored in
+            /// capitals. Unique in the account, whatever its case.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocation/code`.
+            public var code: Swift.String
+            /// Where the bin is, in the seller's words, such as "Garage shelf 3".
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocation/label`.
+            public var label: Swift.String?
+            /// The items in the bin that have not sold.
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocation/itemCount`.
+            public var itemCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/StorageLocation/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/StorageLocation/updatedAt`.
+            public var updatedAt: Components.Schemas.Timestamp
+            /// Creates a new `StorageLocation`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - code: The code on the bin's sticker, `B-12`: letters, digits, spaces, and `- . /`, stored in
+            ///   - label: Where the bin is, in the seller's words, such as "Garage shelf 3".
+            ///   - itemCount: The items in the bin that have not sold.
+            ///   - createdAt:
+            ///   - updatedAt:
+            public init(
+                id: Components.Schemas.Id,
+                code: Swift.String,
+                label: Swift.String? = nil,
+                itemCount: Swift.Int32,
+                createdAt: Components.Schemas.Timestamp,
+                updatedAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.code = code
+                self.label = label
+                self.itemCount = itemCount
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case code
+                case label
+                case itemCount
+                case createdAt
+                case updatedAt
+            }
+        }
+        /// Every bin of the account, at most 1000.
+        ///
+        /// - Remark: Generated from `#/components/schemas/StorageLocationPage`.
+        public struct StorageLocationPage: Codable, Hashable, Sendable {
+            /// By code, with numbers in number order (`B-2` before `B-12`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationPage/data`.
+            public var data: [Components.Schemas.StorageLocation]
+            /// A code for the next bin, to offer when the seller makes one: the number after the
+            /// highest of the newest bin's series (`B-13` after `B-12`), or `B-1` for the first.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationPage/nextCode`.
+            public var nextCode: Swift.String
+            /// Creates a new `StorageLocationPage`.
+            ///
+            /// - Parameters:
+            ///   - data: By code, with numbers in number order (`B-2` before `B-12`).
+            ///   - nextCode: A code for the next bin, to offer when the seller makes one: the number after the
+            public init(
+                data: [Components.Schemas.StorageLocation],
+                nextCode: Swift.String
+            ) {
+                self.data = data
+                self.nextCode = nextCode
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case nextCode
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StorageLocationCreate`.
+        public struct StorageLocationCreate: Codable, Hashable, Sendable {
+            /// Letters, digits, spaces, and `- . /`; stored trimmed and in capitals. A code another
+            /// bin of the account has is `409 already_exists`.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationCreate/code`.
+            public var code: Swift.String
+            /// Blank or left out means none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationCreate/label`.
+            public var label: Swift.String?
+            /// Creates a new `StorageLocationCreate`.
+            ///
+            /// - Parameters:
+            ///   - code: Letters, digits, spaces, and `- . /`; stored trimmed and in capitals. A code another
+            ///   - label: Blank or left out means none.
+            public init(
+                code: Swift.String,
+                label: Swift.String? = nil
+            ) {
+                self.code = code
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case label
+            }
+        }
+        /// The bin's new code and label; a label left out is cleared.
+        ///
+        /// - Remark: Generated from `#/components/schemas/StorageLocationReplace`.
+        public struct StorageLocationReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StorageLocationReplace/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StorageLocationReplace/label`.
+            public var label: Swift.String?
+            /// Creates a new `StorageLocationReplace`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - label:
+            public init(
+                code: Swift.String,
+                label: Swift.String? = nil
+            ) {
+                self.code = code
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case label
+            }
+        }
+        /// An item in the bin.
+        ///
+        /// - Remark: Generated from `#/components/schemas/StorageLocationItem`.
+        public struct StorageLocationItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StorageLocationItem/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/StorageLocationItem/sku`.
+            public var sku: Components.Schemas.Sku
+            /// - Remark: Generated from `#/components/schemas/StorageLocationItem/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/StorageLocationItem/status`.
+            public var status: Components.Schemas.ItemStatus
+            /// The item's cover photo, small; absent until a photo is processed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationItem/thumbnailUrl`.
+            public var thumbnailUrl: Swift.String?
+            /// Creates a new `StorageLocationItem`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - sku:
+            ///   - title:
+            ///   - status:
+            ///   - thumbnailUrl: The item's cover photo, small; absent until a photo is processed.
+            public init(
+                itemId: Components.Schemas.Id,
+                sku: Components.Schemas.Sku,
+                title: Swift.String? = nil,
+                status: Components.Schemas.ItemStatus,
+                thumbnailUrl: Swift.String? = nil
+            ) {
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.status = status
+                self.thumbnailUrl = thumbnailUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case sku
+                case title
+                case status
+                case thumbnailUrl
+            }
+        }
+        /// A bin and the items in it that have not sold.
+        ///
+        /// - Remark: Generated from `#/components/schemas/StorageLocationDetail`.
+        public struct StorageLocationDetail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StorageLocationDetail/location`.
+            public var location: Components.Schemas.StorageLocation
+            /// The newest items first, at most 500 (`location.itemCount` counts them all).
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationDetail/items`.
+            public var items: [Components.Schemas.StorageLocationItem]
+            /// Creates a new `StorageLocationDetail`.
+            ///
+            /// - Parameters:
+            ///   - location:
+            ///   - items: The newest items first, at most 500 (`location.itemCount` counts them all).
+            public init(
+                location: Components.Schemas.StorageLocation,
+                items: [Components.Schemas.StorageLocationItem]
+            ) {
+                self.location = location
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case location
+                case items
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StorageLocationItemsAdd`.
+        public struct StorageLocationItemsAdd: Codable, Hashable, Sendable {
+            /// The items to put in the bin; each leaves the bin it was in. An item already in this
+            /// bin stays. An id that is not an item of this account is `422` with a `fieldErrors`
+            /// entry.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationItemsAdd/itemIds`.
+            public var itemIds: [Components.Schemas.Id]
+            /// Creates a new `StorageLocationItemsAdd`.
+            ///
+            /// - Parameters:
+            ///   - itemIds: The items to put in the bin; each leaves the bin it was in. An item already in this
+            public init(itemIds: [Components.Schemas.Id]) {
+                self.itemIds = itemIds
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemIds
             }
         }
     }

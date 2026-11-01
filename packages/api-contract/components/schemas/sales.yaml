@@ -285,6 +285,9 @@ SaleItem:
       type: string
       format: uri
       description: The item's cover photo, small; absent until a photo is processed.
+    storageLocation:
+      $ref: './items.yaml#/StorageLocationSummary'
+      description: The bin the item is kept in, shown as "Find it, bin B-12"; absent when it is in none.
     listingId:
       $ref: './common.yaml#/Id'
       description: The listing the item sold through, when known. Absent for a sale recorded without one.

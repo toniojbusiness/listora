@@ -431,6 +431,12 @@ export function itemChangeTitle(action: string, changes: JsonObject): string {
       return `Draft listing changed${on}`;
     case 'listing.linked':
       return `Linked to an existing listing${on}`;
+    case 'item.storage_changed': {
+      const move = changes['storageLocation'];
+      const to =
+        typeof move === 'object' && move !== null && !Array.isArray(move) ? move['to'] : null;
+      return typeof to === 'string' ? `Put in bin ${to}` : 'Taken out of its bin';
+    }
     case 'photo.added':
       return 'Photo added';
     case 'photo.removed':

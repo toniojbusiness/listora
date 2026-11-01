@@ -43,6 +43,7 @@ struct SavedItemView: View {
             }
             .multilineTextAlignment(.center)
             itemCard
+            BinPutAwayView(itemIDs: [saved.itemID], bin: saved.bin)
             if let summary = saved.summary {
                 metric(summary)
             }
@@ -101,5 +102,19 @@ struct SavedItemView: View {
         .background(summary.meetsGoal ? Palette.brandSoft : Palette.surfaceSecondary, in: Capsule())
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("saved.metric")
+    }
+}
+
+extension ReviewFlowModel {
+    /// The item the saved screen shows: its SKU, title, price, and bin.
+    struct SavedItem: Equatable {
+        let itemID: String
+        let sku: String
+        let title: String?
+        let price: String?
+        /// The interaction metric, when this flow measured the item.
+        let summary: InteractionSummary?
+        /// The bin it is in, when it is in one.
+        var bin: BinChoice?
     }
 }

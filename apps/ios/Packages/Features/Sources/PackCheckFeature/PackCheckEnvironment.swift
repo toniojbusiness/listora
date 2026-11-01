@@ -10,6 +10,9 @@ import SwiftUI
 @MainActor
 public final class PackCheckEnvironment {
     let service: any PackCheckService
+    /// Storage bins (docs/features/storage-bins.md), which share Pack check's scanner and
+    /// sticker printing.
+    let bins: any BinsService
     let isSignedIn: @MainActor () -> Bool
     let runPhoneWork: @MainActor () -> Void
     let scanSource: ScanSource
@@ -38,6 +41,7 @@ public final class PackCheckEnvironment {
         let run: @MainActor () -> Void = { [weak phoneWork] in phoneWork?.runPhoneWork(.userAction) }
         self.init(
             service: APIPackCheckService(client: apiClient.client),
+            bins: APIBinsService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
             runPhoneWork: run,
             scanSource: scannedCodes.map { .scripted(ScriptedScans($0)) } ?? .camera,
@@ -51,6 +55,7 @@ public final class PackCheckEnvironment {
 
     init(
         service: any PackCheckService,
+        bins: any BinsService = UnavailableBins(),
         isSignedIn: @escaping @MainActor () -> Bool = { true },
         runPhoneWork: @escaping @MainActor () -> Void = {},
         scanSource: ScanSource = .camera,
@@ -59,6 +64,7 @@ public final class PackCheckEnvironment {
         defaults: UserDefaults = .standard,
     ) {
         self.service = service
+        self.bins = bins
         self.isSignedIn = isSignedIn
         self.runPhoneWork = runPhoneWork
         self.scanSource = scanSource
@@ -95,6 +101,21 @@ public final class PackCheckEnvironment {
     /// Printing an item's sticker (the item screen, and after listing).
     public func stickerScreen(_ request: StickerRequest) -> some View {
         StickerPrintView(stickers: [request])
+    }
+
+    /// Settings > Storage bins: every bin, making one, and each bin's items and sticker.
+    public func binsScreen() -> some View {
+        BinsView(environment: self)
+    }
+
+    /// Putting items in a bin (the item screen, a saved item, a run's kept items): scan the
+    /// bin's sticker or pick one. `onDone` gets the bin they are in once Listora has it, or nil
+    /// when the item was taken out of its bin.
+    public func binPicker(
+        _ request: BinRequest,
+        onDone: @escaping @MainActor (BinChoice?) -> Void,
+    ) -> some View {
+        BinPickerView(environment: self, request: request, onDone: onDone)
     }
 
     func makeOrdersModel() -> PackOrdersModel {

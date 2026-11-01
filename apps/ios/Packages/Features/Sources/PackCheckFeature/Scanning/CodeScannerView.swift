@@ -31,11 +31,14 @@ public final class ScriptedScans: @unchecked Sendable {
 enum ScanTarget {
     case label
     case sticker
+    /// A bin's sticker (docs/features/storage-bins.md), to put an item in the bin.
+    case bin
 
     var title: String {
         switch self {
         case .label: "Scan the shipping label"
         case .sticker: "Scan the item sticker"
+        case .bin: "Scan the bin sticker"
         }
     }
 
@@ -43,6 +46,7 @@ enum ScanTarget {
         switch self {
         case .label: "Point the camera at the long barcode on the label."
         case .sticker: "Point the camera at the QR code on the item's sticker."
+        case .bin: "Point the camera at the QR code on the bin's sticker."
         }
     }
 }

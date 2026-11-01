@@ -120,6 +120,13 @@ operation that is not finished.
 - **The item screen** shows each live listing's next refresh (its due time, now for one already
   due, moved out of the quiet window) and its last confirmed one (`ListingRefresh` on `Listing`,
   computed per request by `listingRefresh`), or that refreshing is off for it.
+- **Choosing in the app**: Settings > Listing refresh and the item's Refresh this item show every
+  choice at once as single-choice chips (`ChoiceChip`, [design.md](design.md)), in the order Off,
+  Every 72 hours, Daily, Every 5 days, Weekly, Custom, with the one in use checked, so the
+  schedule plainly reads as something to change (a menu row showing only the current value did
+  not). The item's chips start with My setting (the account's, named) and leave out Custom, which
+  is set in Settings; an item that already has its own custom time names it under the title,
+  with no chip checked. An item's choice saves at once; Settings saves with Save.
 
 ### The pace
 

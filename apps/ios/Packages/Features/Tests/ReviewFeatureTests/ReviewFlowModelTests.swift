@@ -236,6 +236,7 @@ struct ReviewFlowModelTests {
         await model.start()
         #expect(model.phase == .alreadySaved)
         #expect(model.saved == .init(
+            itemID: item.id,
             sku: "AJ-000184",
             title: "Acme Outfitters flannel shirt, men's M",
             price: "$26.00",

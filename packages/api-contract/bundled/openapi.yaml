@@ -97,6 +97,8 @@ tags:
     description: Trips to a store scanning items to buy (docs/features/thrift-scan.md).
   - name: scans
     description: Items scanned at the store, with the AI's read and the Buy / Your call / Skip call (docs/features/thrift-scan.md).
+  - name: storage-locations
+    description: Bins where items are kept, such as B-12, and the items in each (docs/features/storage-bins.md).
 paths:
   /health/live:
     get:
@@ -4541,6 +4543,167 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/storage-locations:
+    get:
+      tags:
+        - storage-locations
+      operationId: listStorageLocations
+      summary: List bins
+      description: Every bin of the account, by code, and the code to offer for the next one.
+      responses:
+        '200':
+          description: The account's bins.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationPage'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - storage-locations
+      operationId: createStorageLocation
+      summary: Make a bin
+      description: |
+        A code another bin of the account has (whatever its case) is `409 already_exists`; a
+        code with other characters than letters, digits, spaces, and `- . /` is `422`. An account
+        has at most 1000 bins.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageLocationCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocation'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/storage-locations/{storageLocationId}:
+    parameters:
+      - $ref: '#/components/parameters/StorageLocationId'
+    get:
+      tags:
+        - storage-locations
+      operationId: getStorageLocation
+      summary: Get a bin and what is in it
+      responses:
+        '200':
+          description: The bin and its items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - storage-locations
+      operationId: replaceStorageLocation
+      summary: Rename a bin
+      description: |
+        Its items stay in it. A code another bin has is `409 already_exists`. A sticker printed
+        with the old code no longer scans as this bin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageLocationReplace'
+      responses:
+        '200':
+          description: The renamed bin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+        - storage-locations
+      operationId: deleteStorageLocation
+      summary: Delete a bin
+      description: Its items stay in inventory, in no bin.
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/storage-locations/{storageLocationId}/items:
+    parameters:
+      - $ref: '#/components/parameters/StorageLocationId'
+    post:
+      tags:
+        - storage-locations
+      operationId: addStorageLocationItems
+      summary: Put items in a bin
+      description: |
+        Each item leaves the bin it was in for this one (a bin sticker scanned on the item's
+        screen, or a run's kept items put away together). Every item that moves gets a new
+        `version` and an `item.updated` entry in its history.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageLocationItemsAdd'
+      responses:
+        '200':
+          description: The bin with the items in it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/storage-locations/{storageLocationId}/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/StorageLocationId'
+      - $ref: '#/components/parameters/ItemId'
+    delete:
+      tags:
+        - storage-locations
+      operationId: removeStorageLocationItem
+      summary: Take an item out of a bin
+      description: The item is then in no bin. `404` when the item is not in this bin.
+      responses:
+        '200':
+          description: The bin without the item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageLocationDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
 components:
   securitySchemes:
     bearerAuth:
@@ -4716,6 +4879,12 @@ components:
         $ref: '#/components/schemas/Id'
     PriceDropRuleId:
       name: ruleId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    StorageLocationId:
+      name: storageLocationId
       in: path
       required: true
       schema:
@@ -8752,6 +8921,9 @@ components:
           type: string
           format: uri
           description: The item's cover photo, small; absent until a photo is processed.
+        storageLocation:
+          $ref: '#/components/schemas/StorageLocationSummary'
+          description: The bin the item is kept in, shown as "Find it, bin B-12"; absent when it is in none.
         listingId:
           $ref: '#/components/schemas/Id'
           description: The listing the item sold through, when known. Absent for a sale recorded without one.
@@ -13572,3 +13744,139 @@ components:
           type: string
           format: uri
           maxLength: 500
+    StorageLocation:
+      type: object
+      description: |
+        A bin, shelf, or box where items are kept, named by the short code on its sticker, such
+        as `B-12` (docs/features/storage-bins.md).
+      required:
+        - id
+        - code
+        - itemCount
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: |
+            The code on the bin's sticker, `B-12`: letters, digits, spaces, and `- . /`, stored in
+            capitals. Unique in the account, whatever its case.
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Where the bin is, in the seller's words, such as "Garage shelf 3".
+        itemCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The items in the bin that have not sold.
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    StorageLocationPage:
+      type: object
+      description: Every bin of the account, at most 1000.
+      required:
+        - data
+        - nextCode
+      properties:
+        data:
+          type: array
+          description: By code, with numbers in number order (`B-2` before `B-12`).
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/StorageLocation'
+        nextCode:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: |
+            A code for the next bin, to offer when the seller makes one: the number after the
+            highest of the newest bin's series (`B-13` after `B-12`), or `B-1` for the first.
+    StorageLocationCreate:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: |
+            Letters, digits, spaces, and `- . /`; stored trimmed and in capitals. A code another
+            bin of the account has is `409 already_exists`.
+        label:
+          type: string
+          maxLength: 120
+          description: Blank or left out means none.
+    StorageLocationReplace:
+      type: object
+      description: The bin's new code and label; a label left out is cleared.
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 32
+        label:
+          type: string
+          maxLength: 120
+    StorageLocationItem:
+      type: object
+      description: An item in the bin.
+      required:
+        - itemId
+        - sku
+        - status
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        sku:
+          $ref: '#/components/schemas/Sku'
+        title:
+          type: string
+          maxLength: 200
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: The item's cover photo, small; absent until a photo is processed.
+    StorageLocationDetail:
+      type: object
+      description: A bin and the items in it that have not sold.
+      required:
+        - location
+        - items
+      properties:
+        location:
+          $ref: '#/components/schemas/StorageLocation'
+        items:
+          type: array
+          description: The newest items first, at most 500 (`location.itemCount` counts them all).
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/StorageLocationItem'
+    StorageLocationItemsAdd:
+      type: object
+      required:
+        - itemIds
+      properties:
+        itemIds:
+          type: array
+          description: |
+            The items to put in the bin; each leaves the bin it was in. An item already in this
+            bin stays. An id that is not an item of this account is `422` with a `fieldErrors`
+            entry.
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Id'
