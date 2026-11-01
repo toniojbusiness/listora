@@ -14,6 +14,8 @@ public struct SettingsScreens {
     public var notifications: (@MainActor () -> AnyView)?
     public var saleEmails: (@MainActor () -> AnyView)?
     public var packCheck: (@MainActor () -> AnyView)?
+    /// Storage bins: where items are kept, and each bin's sticker.
+    public var storageBins: (@MainActor () -> AnyView)?
 
     /// The screen of one of the rows above; nil for every other destination.
     @MainActor
@@ -27,6 +29,7 @@ public struct SettingsScreens {
         case .notifications: notifications?()
         case .saleEmails: saleEmails?()
         case .packCheck: packCheck?()
+        case .storageBins: storageBins?()
         case .profile, .descriptionStyle, .people, .help, .legal, .diagnostics, .deleteAccount: nil
         }
     }
@@ -40,6 +43,7 @@ public struct SettingsScreens {
         notifications: (@MainActor () -> AnyView)? = nil,
         saleEmails: (@MainActor () -> AnyView)? = nil,
         packCheck: (@MainActor () -> AnyView)? = nil,
+        storageBins: (@MainActor () -> AnyView)? = nil,
     ) {
         self.linkAccounts = linkAccounts
         self.marketplaces = marketplaces
@@ -49,6 +53,7 @@ public struct SettingsScreens {
         self.notifications = notifications
         self.saleEmails = saleEmails
         self.packCheck = packCheck
+        self.storageBins = storageBins
     }
 }
 
@@ -64,6 +69,7 @@ public enum SettingsDestination: Hashable, Sendable {
     case notifications
     case saleEmails
     case packCheck
+    case storageBins
     case descriptionStyle
     case people
     case help

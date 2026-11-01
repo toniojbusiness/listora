@@ -59,6 +59,10 @@ public final class InventoryEnvironment {
     /// Prints the item's SKU sticker (Pack check's, docs/features/pack-check.md); without it, the
     /// item screen offers no "Print sticker".
     public var stickerScreen: (@MainActor (StickerRequest) -> AnyView)?
+    /// Putting the item in a storage bin (docs/features/storage-bins.md): scan the bin's sticker or
+    /// pick one; its second argument hears the bin once Listora has it. Without it, the item
+    /// screen only shows the bin.
+    public var binPicker: (@MainActor (BinRequest, @escaping @MainActor (BinChoice?) -> Void) -> AnyView)?
     /// Whether Pack check is on: the item screen then shows "Print sticker" near its top, and
     /// offers the sticker once the item is listed.
     public var isPackCheckOn: @MainActor () -> Bool = { false }

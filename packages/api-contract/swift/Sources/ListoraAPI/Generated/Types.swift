@@ -1681,6 +1681,61 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/scans/{scanId}/comparisons/{comparisonId}`.
     /// - Remark: Generated from `#/paths//v1/scans/{scanId}/comparisons/{comparisonId}/put(saveScanComparison)`.
     func saveScanComparison(_ input: Operations.SaveScanComparison.Input) async throws -> Operations.SaveScanComparison.Output
+    /// List bins
+    ///
+    /// Every bin of the account, by code, and the code to offer for the next one.
+    ///
+    /// - Remark: HTTP `GET /v1/storage-locations`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/get(listStorageLocations)`.
+    func listStorageLocations(_ input: Operations.ListStorageLocations.Input) async throws -> Operations.ListStorageLocations.Output
+    /// Make a bin
+    ///
+    /// A code another bin of the account has (whatever its case) is `409 already_exists`; a
+    /// code with other characters than letters, digits, spaces, and `- . /` is `422`. An account
+    /// has at most 1000 bins.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/storage-locations`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/post(createStorageLocation)`.
+    func createStorageLocation(_ input: Operations.CreateStorageLocation.Input) async throws -> Operations.CreateStorageLocation.Output
+    /// Get a bin and what is in it
+    ///
+    /// - Remark: HTTP `GET /v1/storage-locations/{storageLocationId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/get(getStorageLocation)`.
+    func getStorageLocation(_ input: Operations.GetStorageLocation.Input) async throws -> Operations.GetStorageLocation.Output
+    /// Rename a bin
+    ///
+    /// Its items stay in it. A code another bin has is `409 already_exists`. A sticker printed
+    /// with the old code no longer scans as this bin.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/storage-locations/{storageLocationId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/put(replaceStorageLocation)`.
+    func replaceStorageLocation(_ input: Operations.ReplaceStorageLocation.Input) async throws -> Operations.ReplaceStorageLocation.Output
+    /// Delete a bin
+    ///
+    /// Its items stay in inventory, in no bin.
+    ///
+    /// - Remark: HTTP `DELETE /v1/storage-locations/{storageLocationId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/delete(deleteStorageLocation)`.
+    func deleteStorageLocation(_ input: Operations.DeleteStorageLocation.Input) async throws -> Operations.DeleteStorageLocation.Output
+    /// Put items in a bin
+    ///
+    /// Each item leaves the bin it was in for this one (a bin sticker scanned on the item's
+    /// screen, or a run's kept items put away together). Every item that moves gets a new
+    /// `version` and an `item.updated` entry in its history.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/storage-locations/{storageLocationId}/items`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/items/post(addStorageLocationItems)`.
+    func addStorageLocationItems(_ input: Operations.AddStorageLocationItems.Input) async throws -> Operations.AddStorageLocationItems.Output
+    /// Take an item out of a bin
+    ///
+    /// The item is then in no bin. `404` when the item is not in this bin.
+    ///
+    /// - Remark: HTTP `DELETE /v1/storage-locations/{storageLocationId}/items/{itemId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/items/{itemId}/delete(removeStorageLocationItem)`.
+    func removeStorageLocationItem(_ input: Operations.RemoveStorageLocationItem.Input) async throws -> Operations.RemoveStorageLocationItem.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -4557,6 +4612,115 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// List bins
+    ///
+    /// Every bin of the account, by code, and the code to offer for the next one.
+    ///
+    /// - Remark: HTTP `GET /v1/storage-locations`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/get(listStorageLocations)`.
+    public func listStorageLocations(headers: Operations.ListStorageLocations.Input.Headers = .init()) async throws -> Operations.ListStorageLocations.Output {
+        try await listStorageLocations(Operations.ListStorageLocations.Input(headers: headers))
+    }
+    /// Make a bin
+    ///
+    /// A code another bin of the account has (whatever its case) is `409 already_exists`; a
+    /// code with other characters than letters, digits, spaces, and `- . /` is `422`. An account
+    /// has at most 1000 bins.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/storage-locations`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/post(createStorageLocation)`.
+    public func createStorageLocation(
+        headers: Operations.CreateStorageLocation.Input.Headers,
+        body: Operations.CreateStorageLocation.Input.Body
+    ) async throws -> Operations.CreateStorageLocation.Output {
+        try await createStorageLocation(Operations.CreateStorageLocation.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get a bin and what is in it
+    ///
+    /// - Remark: HTTP `GET /v1/storage-locations/{storageLocationId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/get(getStorageLocation)`.
+    public func getStorageLocation(
+        path: Operations.GetStorageLocation.Input.Path,
+        headers: Operations.GetStorageLocation.Input.Headers = .init()
+    ) async throws -> Operations.GetStorageLocation.Output {
+        try await getStorageLocation(Operations.GetStorageLocation.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Rename a bin
+    ///
+    /// Its items stay in it. A code another bin has is `409 already_exists`. A sticker printed
+    /// with the old code no longer scans as this bin.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/storage-locations/{storageLocationId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/put(replaceStorageLocation)`.
+    public func replaceStorageLocation(
+        path: Operations.ReplaceStorageLocation.Input.Path,
+        headers: Operations.ReplaceStorageLocation.Input.Headers = .init(),
+        body: Operations.ReplaceStorageLocation.Input.Body
+    ) async throws -> Operations.ReplaceStorageLocation.Output {
+        try await replaceStorageLocation(Operations.ReplaceStorageLocation.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Delete a bin
+    ///
+    /// Its items stay in inventory, in no bin.
+    ///
+    /// - Remark: HTTP `DELETE /v1/storage-locations/{storageLocationId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/delete(deleteStorageLocation)`.
+    public func deleteStorageLocation(
+        path: Operations.DeleteStorageLocation.Input.Path,
+        headers: Operations.DeleteStorageLocation.Input.Headers = .init()
+    ) async throws -> Operations.DeleteStorageLocation.Output {
+        try await deleteStorageLocation(Operations.DeleteStorageLocation.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Put items in a bin
+    ///
+    /// Each item leaves the bin it was in for this one (a bin sticker scanned on the item's
+    /// screen, or a run's kept items put away together). Every item that moves gets a new
+    /// `version` and an `item.updated` entry in its history.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/storage-locations/{storageLocationId}/items`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/items/post(addStorageLocationItems)`.
+    public func addStorageLocationItems(
+        path: Operations.AddStorageLocationItems.Input.Path,
+        headers: Operations.AddStorageLocationItems.Input.Headers,
+        body: Operations.AddStorageLocationItems.Input.Body
+    ) async throws -> Operations.AddStorageLocationItems.Output {
+        try await addStorageLocationItems(Operations.AddStorageLocationItems.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Take an item out of a bin
+    ///
+    /// The item is then in no bin. `404` when the item is not in this bin.
+    ///
+    /// - Remark: HTTP `DELETE /v1/storage-locations/{storageLocationId}/items/{itemId}`.
+    /// - Remark: Generated from `#/paths//v1/storage-locations/{storageLocationId}/items/{itemId}/delete(removeStorageLocationItem)`.
+    public func removeStorageLocationItem(
+        path: Operations.RemoveStorageLocationItem.Input.Path,
+        headers: Operations.RemoveStorageLocationItem.Input.Headers = .init()
+    ) async throws -> Operations.RemoveStorageLocationItem.Output {
+        try await removeStorageLocationItem(Operations.RemoveStorageLocationItem.Input(
+            path: path,
+            headers: headers
         ))
     }
 }

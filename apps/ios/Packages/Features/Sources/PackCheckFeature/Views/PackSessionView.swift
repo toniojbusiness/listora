@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
@@ -54,6 +55,7 @@ struct PackSessionView: View {
                         switch target {
                         case .label: await model.scannedLabel(code)
                         case .sticker: await model.scannedSticker(code)
+                        case .bin: break
                         }
                     }
                 }
@@ -236,9 +238,15 @@ private struct OrderHeader: View {
                 .foregroundStyle(Palette.textPrimary)
                 .accessibilityIdentifier("pack.current")
             ForEach(order.items, id: \.itemId) { item in
-                Text([item.sku, item.location.map { "Shelf \($0.code)" }].compactMap(\.self).joined(separator: " · "))
+                Text(item.sku)
                     .font(Typography.sku)
                     .foregroundStyle(Palette.textSecondary)
+            }
+            if let findIt = BinCode.findIt(order.items.map { $0.location?.code }) {
+                Label(findIt, systemImage: "archivebox")
+                    .font(Typography.emphasis)
+                    .foregroundStyle(Palette.textPrimary)
+                    .accessibilityIdentifier("pack.findIt")
             }
             Text(order.buyerFirstName.map { "For \($0) on \(MarketplaceName.of(order.marketplace))" }
                 ?? "Sold on \(MarketplaceName.of(order.marketplace))")

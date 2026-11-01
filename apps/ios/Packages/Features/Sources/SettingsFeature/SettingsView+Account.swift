@@ -58,6 +58,7 @@ extension SettingsView {
 
     /// Selling has a row to show.
     var showsSellingSection: Bool {
-        screens.notifications != nil || screens.saleEmails != nil || screens.packCheck != nil || descriptionStyle != nil
+        screens.notifications != nil || screens.saleEmails != nil || screens.packCheck != nil
+            || screens.storageBins != nil || descriptionStyle != nil
     }
 }

@@ -172,6 +172,12 @@ PriceDropRuleId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+StorageLocationId:
+  name: storageLocationId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
 ReportYear:
   name: year
   in: query

@@ -264,6 +264,8 @@ src/
                  haul, and the run's summary with its estimated profit
   scans/         The thrift scan: an item's read and call at the store, Keep, and the
                  marketplace comparisons the iPhone reads (docs/features/thrift-scan.md)
+  storage-locations/ Storage bins: making, renaming, and deleting bins, and putting items in
+                 and taking them out (docs/features/storage-bins.md)
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
@@ -455,7 +457,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [imports.md](features/imports.md#data); Pack check's setting, labels, and packages in
   [pack-check.md](features/pack-check.md#data); offers, their answers, and their reads in
   [offers.md](features/offers.md#data); thrift scan runs and scans in
-  [thrift-scan.md](features/thrift-scan.md#data). Billing
+  [thrift-scan.md](features/thrift-scan.md#data); storage bins in
+  [storage-bins.md](features/storage-bins.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -605,6 +608,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/verified-features.md](features/verified-features.md)     | Sellers see only features that passed live: the list, its evidence, the gate                 |
 | [features/test-mode.md](features/test-mode.md)                     | The owner's Test mode: live-testing hidden features, and the owner's log                     |
 | [features/thrift-scan.md](features/thrift-scan.md)                 | The thrift scan: Scan mode, its read and call, comparisons, Keep, offline, drafts, own sales |
+| [features/storage-bins.md](features/storage-bins.md)               | Storage bins: bins, their stickers, putting items in, "Find it" on sales and in Pack check   |
 
 ### Former section numbers
 

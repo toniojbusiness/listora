@@ -168,7 +168,7 @@ the session too ([Printing the label](#printing-the-label)).
 
 ## Item stickers
 
-A QR code holding `LISTORA:<SKU>`, the SKU, the shelf code, and the title, printed through
+A QR code holding `LISTORA:<SKU>`, the SKU, the item's bin ("Bin B-12"), and the title, printed through
 AirPrint on a 2.25 × 1.25 in or 2.125 × 1 in label roll (Dymo, Rollo, Zebra, Munbyn, Brother) or
 a letter sheet of 30 (Avery 5160). Every item has a SKU (`inventory_item.sku` is required, and
 an import makes one like any new item), so every item has a sticker. It prints from:
@@ -178,6 +178,10 @@ an import makes one like any new item), so every item has a sticker. It prints f
 - **Pack orders**: "Print sticker" (or "Print 3 stickers") under each order, for its items, and
   in its packing session.
 - **With the order's label** ([Printing the label](#printing-the-label)).
+
+Bins print their own stickers on the same sheet (`LISTORA-BIN:<code>`), and the to-ship cards and
+the packing session say where each item is kept, "Find it: bin B-12"
+([storage-bins.md](storage-bins.md)).
 
 ## Printing the label
 

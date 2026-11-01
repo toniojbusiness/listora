@@ -4,8 +4,9 @@ import ListoraAPI
 import Observation
 import SwiftUI
 
-/// The item's own refresh cadence over the account's (docs/features/listing-refresh.md): one
-/// menu under the marketplaces. Choosing saves at once; it changes no listing by itself.
+/// The item's own refresh cadence over the account's (docs/features/listing-refresh.md): its
+/// choices as chips under the marketplaces, the one in use checked. Choosing saves at once; it
+/// changes no listing by itself.
 @MainActor
 @Observable
 final class ItemRefreshModel {
@@ -37,6 +38,30 @@ final class ItemRefreshModel {
         }
     }
 
+    /// Whether `cadence` is the one in use: `nil` is the account's setting. Nothing is checked
+    /// until it loads, or for a custom time the item screen doesn't offer.
+    func isChosen(_ cadence: Components.Schemas.KnownRefreshCadence?) -> Bool {
+        guard let refresh else { return false }
+        guard let own = refresh.cadence else { return cadence == nil }
+        return cadence != nil && own.value1 == cadence
+    }
+
+    /// "My setting (every 72 hours)": the account's cadence, for its chip.
+    var accountLabel: String {
+        guard let refresh else { return "My setting" }
+        let account = RefreshWords.name(refresh.accountCadence, customHours: refresh.accountCustomHours)
+        return "My setting (\(account.lowercased()))"
+    }
+
+    /// The line under the title: how to change it, or the item's own custom time, which no chip
+    /// shows.
+    var hint: String {
+        if refresh?.cadence?.value1 == .custom {
+            return "\(label). Tap one to change how often."
+        }
+        return "Tap one to change how often."
+    }
+
     /// "My setting (every 72 hours)", or the item's own cadence.
     var label: String {
         guard let refresh else { return "Loading..." }
@@ -58,29 +83,28 @@ struct ItemRefreshSection: View {
         self.testing = testing
     }
 
-    /// The named choices; a custom time is the account setting's (Settings > Listing refresh).
-    private static let choices: [Components.Schemas.KnownRefreshCadence] = [
-        .every72Hours, .daily, .everyFewDays, .weekly, .off,
-    ]
-
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Menu {
-                Button("My setting") { Task { await model.choose(nil) } }
-                ForEach(Self.choices, id: \.self) { cadence in
-                    Button(RefreshWords.name(cadence)) { Task { await model.choose(cadence) } }
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            ListRow("Refresh this item", subtitle: model.hint, systemImage: "arrow.clockwise") {
+                if testing {
+                    TestingTag()
                 }
-            } label: {
-                ListRow("Refresh this item", subtitle: model.label, systemImage: "arrow.clockwise") {
-                    if testing {
-                        TestingTag()
+            }
+            FlowLayout {
+                ChoiceChip(model.accountLabel, isSelected: model.isChosen(nil)) {
+                    Task { await model.choose(nil) }
+                }
+                .accessibilityIdentifier("item.refresh.account")
+                ForEach(RefreshWords.itemCadences, id: \.self) { cadence in
+                    ChoiceChip(RefreshWords.name(cadence), isSelected: model.isChosen(cadence)) {
+                        Task { await model.choose(cadence) }
                     }
-                    Image(systemName: "chevron.up.chevron.down")
-                        .foregroundStyle(Palette.textSecondary)
-                        .accessibilityHidden(true)
+                    .accessibilityIdentifier("item.refresh.\(cadence.rawValue)")
                 }
             }
             .disabled(model.refresh == nil || model.isSaving)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Refresh this item")
             .accessibilityIdentifier("item.refresh")
             if let error = model.saveError {
                 Text(error)

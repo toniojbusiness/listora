@@ -81,5 +81,7 @@ extension Components {
         public typealias ReportYear = Swift.Int32
         /// - Remark: Generated from `#/components/parameters/PriceDropRuleId`.
         public typealias PriceDropRuleId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/StorageLocationId`.
+        public typealias StorageLocationId = Components.Schemas.Id
     }
 }
