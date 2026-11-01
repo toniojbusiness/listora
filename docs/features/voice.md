@@ -35,7 +35,8 @@ Where the code lives:
    each phrase with fixed rules: sizes (letter, numeric, waist x inseam, US/UK/EU, one size; a
    plain number is a US size on shoes), department, colors, pattern, materials (canonical values
    from the vocabulary copy), condition words (NWT, "gently used", ...), "no flaws", flaws (a
-   phrase naming one, added as said), the price paid with where it was bought, the price to list
+   phrase naming one, added as said), measurements ("pit to pit 21", several in one phrase;
+   [measurements.md](measurements.md)), the price paid with where it was bought, the price to list
    at ("price at 30"), brand, category, title, product name, style number, keywords, and
    condition notes. Amounts are integer cents, read from digits or words ("four fifty" is
    $4.50). A later change to a detail replaces an earlier one ("size small, no wait, size
