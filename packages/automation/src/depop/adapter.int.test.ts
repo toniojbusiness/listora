@@ -402,6 +402,85 @@ describe('Depop automation adapter on the fake Depop site', () => {
     expect(posts(before)).toEqual([]);
   });
 
+  describe('refreshes by relisting: a fresh copy first, then the old one deleted', () => {
+    /** A refresh of the listing, carrying its content as the schedule queues it. */
+    function refresh(ref: ListingRef, attempt = 1): OperationRequest<DepopAutomationPayload> {
+      const content = sampleListingContent();
+      return {
+        operationId: `op-${ref.listingId}-refresh`,
+        kind: 'refresh',
+        idempotencyKey: `key-${ref.listingId}-refresh`,
+        attempt,
+        listing: ref,
+        desired: { refreshedAfter: new Date(Date.now() - 1000).toISOString() },
+        payload: adapter.buildPayload(content.item, content.variant),
+      };
+    }
+    const onSale = (sku: string | null) =>
+      site.productsWithSku(sku ?? '').filter((product) => product.status === 'ONSALE');
+
+    it('posts the copy, reads it on sale, and only then deletes the old listing', async () => {
+      const { ref } = await create();
+      const before = site.requests.length;
+      const outcome = await adapter.execute(refresh(ref), ctx());
+      if (outcome.type !== 'confirmed' || outcome.externalListingId === undefined) {
+        throw new Error(`refresh was ${JSON.stringify(outcome)}`);
+      }
+      const copy = outcome.externalListingId;
+      expect(copy).not.toBe(ref.externalListingId);
+      expect(site.product(copy)).toMatchObject({ status: 'ONSALE', priceCents: 4500 });
+      expect(site.product(ref.externalListingId)?.status).toBe('DELETED');
+      expect(onSale(ref.externalSku).map((product) => product.slug)).toEqual([copy]);
+      // The post went first, the delete of the old listing after it.
+      const writes = posts(before).map((entry) => entry.action);
+      expect(writes.indexOf('create')).toBeGreaterThanOrEqual(0);
+      expect(writes.indexOf('create')).toBeLessThan(writes.indexOf('delete'));
+      // The new listing reads as refreshed after the request.
+      const read = await adapter.readListing({ ...ref, externalListingId: copy }, ctx());
+      expect(read).toMatchObject({ found: true, status: 'active' });
+    });
+
+    it('finds the copy an attempt posted before it failed, posts no second, and finishes', async () => {
+      const { ref } = await create();
+      inject('delete', { type: 'server_error' });
+      const first = await adapter.execute(refresh(ref), ctx());
+      expect(first.type).not.toBe('confirmed');
+      // The copy is up and the old listing too: nothing reads as done.
+      expect(onSale(ref.externalSku)).toHaveLength(2);
+
+      const before = site.requests.length;
+      const again = await adapter.execute(refresh(ref, 2), ctx());
+      if (again.type !== 'confirmed' || again.externalListingId === undefined) {
+        throw new Error(`the second attempt was ${JSON.stringify(again)}`);
+      }
+      expect(posts(before).map((entry) => entry.action)).not.toContain('create');
+      expect(onSale(ref.externalSku).map((product) => product.slug)).toEqual([
+        again.externalListingId,
+      ]);
+      expect(site.product(ref.externalListingId)?.status).toBe('DELETED');
+    });
+
+    it('never deletes the old listing when the copy does not show on sale', async () => {
+      const { ref } = await create();
+      // The post is refused: nothing is posted, and the old listing stays as it was.
+      inject('create', { type: 'reject', message: 'Something went wrong' });
+      const outcome = await adapter.execute(refresh(ref), ctx());
+      expect(outcome).toMatchObject({ type: 'rejected' });
+      expect(site.product(ref.externalListingId)?.status).toBe('ONSALE');
+      expect(onSale(ref.externalSku)).toHaveLength(1);
+    });
+
+    it('takes a copy down again when the old listing sold before the refresh finished', async () => {
+      const { ref } = await create();
+      inject('delete', { type: 'server_error' });
+      await adapter.execute(refresh(ref), ctx());
+      site.sell(ref.externalListingId);
+      const again = await adapter.execute(refresh(ref, 2), ctx());
+      expect(again).toMatchObject({ type: 'rejected', code: 'listing_sold' });
+      expect(onSale(ref.externalSku)).toEqual([]);
+    });
+  });
+
   it('refuses to change a listing that sold, reads it as sold, and ends it without a click', async () => {
     const { ref } = await create();
     site.sell(ref.externalListingId);

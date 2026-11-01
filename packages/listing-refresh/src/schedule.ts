@@ -24,12 +24,22 @@ import { itemCadence } from './settings.ts';
 
 /**
  * The marketplaces whose listings Listora refreshes, each under a browser session it can use:
- * Poshmark shares to followers, Mercari and Depop save the edit page unchanged. eBay has no
- * refresh that keeps a listing's watchers (its relist is a new listing), and an assisted
- * marketplace would make the seller do it (docs/features/listing-refresh.md). The adapters'
- * own `refresh` capability agrees (the worker's test checks it), and the schedule asks it too.
+ * Poshmark shares to followers, Mercari saves the edit page unchanged, and Depop relists (see
+ * `REPOST_MARKETPLACES`). eBay has no refresh that keeps a listing's watchers (its relist is a
+ * new listing), and an assisted marketplace would make the seller do it
+ * (docs/features/listing-refresh.md). The adapters' own `refresh` capability agrees (the
+ * worker's test checks it), and the schedule asks it too.
  */
 export const REFRESH_MARKETPLACES: readonly Marketplace[] = ['poshmark', 'mercari', 'depop'];
+
+/**
+ * The marketplaces whose refresh is a repost (`refreshBy: 'repost'`; the worker's test checks
+ * the adapters agree): Depop shows only a new listing as new, so a fresh copy is posted and the
+ * old one deleted, which resets its likes and saves. Their listings are refreshed only when the
+ * account turned relisting on (`relistToRefresh`), only listings Listora wrote (it posts their
+ * content again), and never one with an offer waiting.
+ */
+export const REPOST_MARKETPLACES: readonly Marketplace[] = ['depop'];
 
 /**
  * The marketplaces whose listings Listora refreshes for the account: those of
@@ -43,6 +53,8 @@ export function refreshMarketplaces(gate: FeatureGate): Marketplace[] {
 
 /** The operation kinds whose confirmed change leaves a listing fresh. */
 const CHANGE_KINDS = sql`('create', 'revise', 'price', 'relist')`;
+/** The operation kinds whose content a repost posts again: what Listora wrote of the listing. */
+const CONTENT_KINDS = sql`('create', 'revise', 'relist', 'refresh')`;
 const UNFINISHED = sql`('queued', 'running', 'retrying', 'verifying', 'needs_user_action')`;
 
 /** A live listing of a listed item, with what its refresh depends on. */
@@ -66,24 +78,40 @@ export interface RefreshFact {
   busy: boolean;
   /** Its account is in Test mode (docs/features/test-mode.md). */
   testMode: boolean;
+  /** Its marketplace refreshes by a repost (`REPOST_MARKETPLACES`). */
+  reposts: boolean;
+  /**
+   * Listora wrote it: a confirmed operation carries its content, which a repost posts again
+   * (an imported or linked listing has none).
+   */
+  written: boolean;
+  /** A buyer's offer on it waits for an answer, which a repost would lose. */
+  offerWaiting: boolean;
 }
 
 /** A listing's refresh, as it shows on the item screen. */
 export type ListingRefresh =
   /** Listora refreshes it at `nextAt`. */
   | { state: 'scheduled'; nextAt: Date; lastAt: Date | null }
-  /** Refreshing is off for it (its item's cadence or the account's). */
+  /**
+   * Refreshing is off for it: its item's cadence or the account's, or a relisting marketplace's
+   * listing while the account has relisting off.
+   */
   | { state: 'off'; lastAt: Date | null }
   /** Listora can't refresh it here: the marketplace has no refresh, or no usable session. */
   | { state: 'unavailable'; lastAt: Date | null };
 
-/** Whether Listora can refresh the listing under its connection now. */
+/**
+ * Whether Listora can refresh the listing under its connection now. A repost needs the
+ * listing's content, so only a listing Listora wrote can be relisted.
+ */
 export function canRefresh(
-  fact: Pick<RefreshFact, 'marketplace' | 'connection' | 'testMode'>,
+  fact: Pick<RefreshFact, 'marketplace' | 'connection' | 'testMode' | 'reposts' | 'written'>,
 ): boolean {
   const { connection } = fact;
   return (
     refreshMarketplaces({ testMode: fact.testMode }).includes(fact.marketplace) &&
+    (!fact.reposts || fact.written) &&
     connection !== null &&
     // A read-only connection (a real shop that must not change, read-only.md) gets no refresh.
     !connection.readOnly &&
@@ -94,12 +122,13 @@ export function canRefresh(
 
 export function listingRefresh(
   fact: RefreshFact,
-  account: Cadence,
+  account: Cadence & { relistToRefresh: boolean },
   window: QuietWindow | null,
   now: Date,
 ): ListingRefresh {
   const lastAt = fact.lastRefreshedAt;
   if (!canRefresh(fact)) return { state: 'unavailable', lastAt };
+  if (fact.reposts && !account.relistToRefresh) return { state: 'off', lastAt };
   const hours = intervalHours(effectiveCadence(fact.itemCadence, account));
   if (hours === null) return { state: 'off', lastAt };
   return { state: 'scheduled', nextAt: nextRefreshAt(fact.freshAt, hours, window, now), lastAt };
@@ -130,6 +159,8 @@ export async function loadRefreshFacts(
     last_refreshed_at: Date | null;
     busy: boolean;
     test_mode: boolean;
+    written: boolean;
+    offer_waiting: boolean;
   }>`
     select listing.id, listing.item_id, listing.marketplace, listing.listed_at,
       listing.connection_id, connection.mode, connection.status, connection.read_only,
@@ -150,6 +181,16 @@ export async function loadRefreshFacts(
         where op.account_id = ${accountId} and op.listing_id = listing.id
           and op.status in ${UNFINISHED}
       ) as busy,
+      exists (
+        select 1 from marketplace_operation op
+        where op.account_id = ${accountId} and op.listing_id = listing.id
+          and op.kind in ${CONTENT_KINDS} and op.status = 'succeeded' and op.content is not null
+      ) and listing.title is not null and listing.price_cents is not null as written,
+      exists (
+        select 1 from marketplace_offer offer
+        where offer.account_id = ${accountId} and offer.listing_id = listing.id
+          and offer.status = 'pending'
+      ) as offer_waiting,
       account.test_mode
     from marketplace_listing listing
     join account on account.id = listing.account_id
@@ -185,5 +226,8 @@ export async function loadRefreshFacts(
     itemCadence: itemCadence(row),
     busy: row.busy,
     testMode: row.test_mode,
+    reposts: REPOST_MARKETPLACES.includes(row.marketplace),
+    written: row.written,
+    offerWaiting: row.offer_waiting,
   }));
 }

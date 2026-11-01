@@ -12177,15 +12177,23 @@ extension Components {
                 case end
             }
         }
-        /// How Listora refreshes the account's live listings that have not sold: through each
-        /// marketplace's own way (Poshmark's share to followers, saving the listing unchanged on Mercari
-        /// and Depop), never a delete and repost, within the marketplace's pace. eBay listings are not
-        /// refreshed (eBay has no refresh that keeps watchers). Defaults (`every_72_hours`, no quiet
-        /// window) until saved.
+        /// How Listora refreshes the account's live listings that have not sold, within the
+        /// marketplace's pace: Poshmark's share to followers, saving the listing unchanged on Mercari,
+        /// and on Depop a relist (a fresh copy posted, then the old listing deleted), only with
+        /// `relistToRefresh`. eBay listings are not refreshed (eBay has no refresh that keeps
+        /// watchers). Defaults (`every_72_hours`, no quiet window, relisting off) until saved.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings`.
         public struct ListingRefreshSettings: Codable, Hashable, Sendable {
+            /// Whether Depop listings are refreshed by relisting them: Depop shows only a new listing
+            /// as new, so Listora posts a fresh copy (same photos, text, price, category, and size),
+            /// confirms it, and deletes the old one. Relisting resets the listing's likes and saves.
+            /// Off until the seller turns it on; listings with an offer waiting are skipped.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings/relistToRefresh`.
+            public var relistToRefresh: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/ListingRefreshSettings/cadence`.
             public var cadence: Components.Schemas.RefreshCadence
             /// Present with `custom`.
@@ -12201,22 +12209,26 @@ extension Components {
             /// Creates a new `ListingRefreshSettings`.
             ///
             /// - Parameters:
+            ///   - relistToRefresh: Whether Depop listings are refreshed by relisting them: Depop shows only a new listing
             ///   - cadence:
             ///   - customHours: Present with `custom`.
             ///   - quietWindow:
             ///   - timeZone: An IANA time zone name, for example `America/New_York`.
             public init(
+                relistToRefresh: Swift.Bool,
                 cadence: Components.Schemas.RefreshCadence,
                 customHours: Swift.Int32? = nil,
                 quietWindow: Components.Schemas.QuietWindow? = nil,
                 timeZone: Swift.String? = nil
             ) {
+                self.relistToRefresh = relistToRefresh
                 self.cadence = cadence
                 self.customHours = customHours
                 self.quietWindow = quietWindow
                 self.timeZone = timeZone
             }
             public enum CodingKeys: String, CodingKey {
+                case relistToRefresh
                 case cadence
                 case customHours
                 case quietWindow
@@ -12224,11 +12236,14 @@ extension Components {
             }
         }
         /// The setting, with the device's time zone. `customHours` is required with `custom`, and only
-        /// allowed with it. A time zone the server does not know is `422 validation_failed`.
+        /// allowed with it. A time zone the server does not know is `422 validation_failed`. Without
+        /// `relistToRefresh`, the saved one stays (an app from before it keeps it as it was).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace`.
         public struct ListingRefreshSettingsReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace/relistToRefresh`.
+            public var relistToRefresh: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace/cadence`.
             public var cadence: Components.Schemas.KnownRefreshCadence
             /// - Remark: Generated from `#/components/schemas/ListingRefreshSettingsReplace/customHours`.
@@ -12240,22 +12255,26 @@ extension Components {
             /// Creates a new `ListingRefreshSettingsReplace`.
             ///
             /// - Parameters:
+            ///   - relistToRefresh:
             ///   - cadence:
             ///   - customHours:
             ///   - quietWindow:
             ///   - timeZone:
             public init(
+                relistToRefresh: Swift.Bool? = nil,
                 cadence: Components.Schemas.KnownRefreshCadence,
                 customHours: Swift.Int32? = nil,
                 quietWindow: Components.Schemas.QuietWindow? = nil,
                 timeZone: Swift.String
             ) {
+                self.relistToRefresh = relistToRefresh
                 self.cadence = cadence
                 self.customHours = customHours
                 self.quietWindow = quietWindow
                 self.timeZone = timeZone
             }
             public enum CodingKeys: String, CodingKey {
+                case relistToRefresh
                 case cadence
                 case customHours
                 case quietWindow
@@ -12380,8 +12399,9 @@ extension Components {
             }
         }
         /// `scheduled`: Listora refreshes it at `nextAt`. `off`: refreshing is off for it (its item's
-        /// cadence or the account's). `unavailable`: Listora can't refresh it there (eBay, or no linked
-        /// marketplace session that works).
+        /// cadence or the account's, or a Depop listing while relisting is off). `unavailable`: Listora
+        /// can't refresh it there (eBay, no linked marketplace session that works, or a Depop listing
+        /// Listora didn't write, which it can't relist).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownListingRefreshState`.

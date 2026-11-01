@@ -117,7 +117,7 @@ export interface AutomationAdapterOptions<P extends AssistedListingPayload> {
   capabilities?: Partial<
     Pick<
       MarketplaceCapabilities,
-      'importListings' | 'taxonomy' | 'pricingData' | 'externalSkuReusable' | 'limits'
+      'importListings' | 'taxonomy' | 'pricingData' | 'externalSkuReusable' | 'limits' | 'refreshBy'
     >
   >;
   logger: Logger;

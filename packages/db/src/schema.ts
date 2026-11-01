@@ -1190,6 +1190,11 @@ export interface ListingRefreshSettingTable {
   quiet_end: Nullable<number>;
   /** An IANA time zone name, which the quiet window needs. */
   time_zone: Nullable<string>;
+  /**
+   * Whether a marketplace whose refresh is a repost (Depop: a fresh copy, the old one deleted,
+   * its likes reset) is refreshed at all; off until the seller turns it on.
+   */
+  relist_to_refresh: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

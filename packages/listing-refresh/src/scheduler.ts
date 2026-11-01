@@ -9,7 +9,9 @@
  * `runsPerRefresh` runs: the share or save, and its read-back), so the seller's own changes,
  * delists, and sale checks always have room, at most `maxUnfinished` refreshes wait on one
  * connection at a time (a phone that is away does not collect a pile), and at most `maxPerTick`
- * are queued per connection per run. No refresh is queued in the seller's quiet window. One run
+ * are queued per connection per run. No refresh is queued in the seller's quiet window. A
+ * marketplace whose refresh relists (Depop) is refreshed only for an account that turned
+ * relisting on, each refresh carrying the content its fresh copy posts. One run
  * per connection at a time (a transaction-scoped advisory lock), and one refresh per listing
  * per fresh period (its idempotency key), so two workers never queue two.
  */
@@ -20,6 +22,7 @@ import type { Logger } from '@listora/shared';
 import { sql } from 'kysely';
 
 import { dueAt, effectiveCadence, inQuietWindow, intervalHours } from './cadence.ts';
+import { repostContent } from './repost.ts';
 import { loadRefreshFacts, REFRESH_MARKETPLACES, refreshMarketplaces } from './schedule.ts';
 import { loadRefreshSettings, quietWindowOf } from './settings.ts';
 
@@ -119,6 +122,11 @@ async function refreshConnection(
     const facts = await loadRefreshFacts(trx, accountId, { connectionId: connection.id });
     const due = facts.flatMap((fact) => {
       if (fact.busy) return [];
+      // A relist resets the listing's likes: only when the seller turned it on, only a listing
+      // Listora wrote (its content is posted again), and never one with an offer waiting.
+      if (fact.reposts && (!settings.relistToRefresh || !fact.written || fact.offerWaiting)) {
+        return [];
+      }
       const hours = intervalHours(effectiveCadence(fact.itemCadence, settings));
       if (hours === null) return [];
       const at = dueAt(fact.freshAt, hours);
@@ -129,11 +137,16 @@ async function refreshConnection(
     const refreshedAfter = new Date(Math.floor(now.getTime() / 1000) * 1000).toISOString();
     let queued = 0;
     for (const { fact } of due.slice(0, room)) {
+      const content = fact.reposts
+        ? await repostContent(trx, accountId, fact.listingId)
+        : undefined;
+      if (content === null) continue;
       const { created } = await enqueueOperation(trx, {
         accountId,
         listingId: fact.listingId,
         kind: 'refresh',
         desired: { refreshedAfter },
+        ...(content === undefined ? {} : { content }),
         origin: 'auto_refresh',
         idempotencyKey: `listing.refresh:${fact.listingId}:${String(fact.freshAt.getTime())}`,
       });

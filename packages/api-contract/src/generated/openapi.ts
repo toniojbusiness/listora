@@ -6232,13 +6232,20 @@ export interface components {
             end: string;
         };
         /**
-         * @description How Listora refreshes the account's live listings that have not sold: through each
-         *     marketplace's own way (Poshmark's share to followers, saving the listing unchanged on Mercari
-         *     and Depop), never a delete and repost, within the marketplace's pace. eBay listings are not
-         *     refreshed (eBay has no refresh that keeps watchers). Defaults (`every_72_hours`, no quiet
-         *     window) until saved.
+         * @description How Listora refreshes the account's live listings that have not sold, within the
+         *     marketplace's pace: Poshmark's share to followers, saving the listing unchanged on Mercari,
+         *     and on Depop a relist (a fresh copy posted, then the old listing deleted), only with
+         *     `relistToRefresh`. eBay listings are not refreshed (eBay has no refresh that keeps
+         *     watchers). Defaults (`every_72_hours`, no quiet window, relisting off) until saved.
          */
         ListingRefreshSettings: {
+            /**
+             * @description Whether Depop listings are refreshed by relisting them: Depop shows only a new listing
+             *     as new, so Listora posts a fresh copy (same photos, text, price, category, and size),
+             *     confirms it, and deletes the old one. Relisting resets the listing's likes and saves.
+             *     Off until the seller turns it on; listings with an offer waiting are skipped.
+             */
+            relistToRefresh: boolean;
             cadence: components["schemas"]["RefreshCadence"];
             /**
              * Format: int32
@@ -6251,9 +6258,11 @@ export interface components {
         };
         /**
          * @description The setting, with the device's time zone. `customHours` is required with `custom`, and only
-         *     allowed with it. A time zone the server does not know is `422 validation_failed`.
+         *     allowed with it. A time zone the server does not know is `422 validation_failed`. Without
+         *     `relistToRefresh`, the saved one stays (an app from before it keeps it as it was).
          */
         ListingRefreshSettingsReplace: {
+            relistToRefresh?: boolean;
             cadence: components["schemas"]["KnownRefreshCadence"];
             /** Format: int32 */
             customHours?: number;
@@ -6288,8 +6297,9 @@ export interface components {
         ListingRefreshState: components["schemas"]["KnownListingRefreshState"];
         /**
          * @description `scheduled`: Listora refreshes it at `nextAt`. `off`: refreshing is off for it (its item's
-         *     cadence or the account's). `unavailable`: Listora can't refresh it there (eBay, or no linked
-         *     marketplace session that works).
+         *     cadence or the account's, or a Depop listing while relisting is off). `unavailable`: Listora
+         *     can't refresh it there (eBay, no linked marketplace session that works, or a Depop listing
+         *     Listora didn't write, which it can't relist).
          * @enum {string}
          */
         KnownListingRefreshState: "scheduled" | "off" | "unavailable";

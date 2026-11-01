@@ -150,6 +150,7 @@ export class EbayAdapter implements MarketplaceAdapter<EbayListingPayload> {
       relist: 'api',
       // eBay has no refresh that keeps a listing's watchers: its relist is a new listing.
       refresh: 'none',
+      refreshBy: 'in_place',
       // eBay marks its own sales sold; a sale elsewhere ends the eBay listing instead.
       markSold: 'not_needed',
       verifyRead: 'api',

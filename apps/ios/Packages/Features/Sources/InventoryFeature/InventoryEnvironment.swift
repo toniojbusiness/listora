@@ -128,8 +128,12 @@ public final class InventoryEnvironment {
     /// or while refresh passed live on no marketplace.
     public func refreshSettingsScreen() -> AnyView? {
         guard features?.showsAnywhere(.listingRefresh) == true else { return nil }
+        let showsDepopRelist = features?.shows(.listingRefresh, on: "depop") == true
         return refreshService.map {
-            AnyView(ListingRefreshSettingsView(model: ListingRefreshSettingsModel(service: $0)))
+            AnyView(ListingRefreshSettingsView(model: ListingRefreshSettingsModel(
+                service: $0,
+                showsDepopRelist: showsDepopRelist,
+            )))
         }
     }
 

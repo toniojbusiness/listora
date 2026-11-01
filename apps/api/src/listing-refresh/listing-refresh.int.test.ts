@@ -26,7 +26,8 @@ describe('listing refresh (real Postgres)', () => {
   it('defaults to every 72 hours, and saves a cadence and a quiet window', async () => {
     const before = await api.call('getListingRefreshSettings', { token });
     expect(before.status).toBe(200);
-    expect(before.body).toEqual({ cadence: 'every_72_hours' });
+    // Relisting (Depop's refresh) is off until the seller turns it on.
+    expect(before.body).toEqual({ cadence: 'every_72_hours', relistToRefresh: false });
 
     const saved = await api.call('replaceListingRefreshSettings', {
       token,
@@ -40,6 +41,7 @@ describe('listing refresh (real Postgres)', () => {
     expect(saved.status).toBe(200);
     const expected = {
       cadence: 'custom',
+      relistToRefresh: false,
       customHours: 36,
       quietWindow: { start: '22:00', end: '07:00' },
       timeZone: 'America/New_York',
@@ -52,7 +54,29 @@ describe('listing refresh (real Postgres)', () => {
       token,
       body: { cadence: 'weekly', timeZone: 'America/New_York' },
     });
-    expect(plain.body).toEqual({ cadence: 'weekly', timeZone: 'America/New_York' });
+    expect(plain.body).toEqual({
+      cadence: 'weekly',
+      relistToRefresh: false,
+      timeZone: 'America/New_York',
+    });
+  });
+
+  it('turns relisting on, and keeps it when an app from before it saves without it', async () => {
+    const on = await api.call('replaceListingRefreshSettings', {
+      token,
+      body: { cadence: 'daily', timeZone: 'America/New_York', relistToRefresh: true },
+    });
+    expect(on.body).toMatchObject({ cadence: 'daily', relistToRefresh: true });
+    const older = await api.call('replaceListingRefreshSettings', {
+      token,
+      body: { cadence: 'weekly', timeZone: 'America/New_York' },
+    });
+    expect(older.body).toMatchObject({ cadence: 'weekly', relistToRefresh: true });
+    const off = await api.call('replaceListingRefreshSettings', {
+      token,
+      body: { cadence: 'weekly', timeZone: 'America/New_York', relistToRefresh: false },
+    });
+    expect(off.body).toMatchObject({ relistToRefresh: false });
   });
 
   it('refuses custom hours out of range or without custom, an empty window, and an unknown zone', async () => {

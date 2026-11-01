@@ -71,7 +71,12 @@ interface NewOperationBase {
 export type NewOperation = NewOperationBase &
   (
     | { kind: ContentKind; content: ListingContent }
-    | { kind: Exclude<OperationKind, ContentKind>; desired: DesiredListingState }
+    /**
+     * A refresh that reposts (`refreshBy: 'repost'`, Depop) carries the content its fresh copy
+     * posts; any other refresh carries none.
+     */
+    | { kind: 'refresh'; desired: DesiredListingState; content?: ListingContent }
+    | { kind: Exclude<OperationKind, ContentKind | 'refresh'>; desired: DesiredListingState }
   );
 
 export interface EnqueueResult {
@@ -201,10 +206,21 @@ function operationIntent(input: NewOperation): {
       content: parsed,
     };
   }
+  const desired: unknown = 'desired' in input ? input.desired : undefined;
+  if (kind === 'refresh' && content !== undefined) {
+    try {
+      return {
+        desired: validateDesiredState(kind, desired),
+        content: parseListingContent(content),
+      };
+    } catch (error) {
+      if (error instanceof InvalidOperationError) throw error;
+      throw new InvalidOperationError(error instanceof Error ? error.message : String(error));
+    }
+  }
   if (content !== undefined) {
     throw new InvalidOperationError(`A ${kind} operation carries no listing content`);
   }
-  const desired: unknown = 'desired' in input ? input.desired : undefined;
   return { desired: validateDesiredState(kind, desired), content: null };
 }
 

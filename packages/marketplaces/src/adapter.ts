@@ -67,12 +67,19 @@ export interface MarketplaceCapabilities {
   delist: Mode;
   relist: Mode;
   /**
-   * Refreshing a live listing so it shows as fresh, through the marketplace's own normal
-   * mechanism (Poshmark's share to followers, an edit saved unchanged), never a delete and
-   * repost (docs/features/listing-refresh.md). Listora refreshes on a schedule, so only `api` and
-   * `automation` are ever used: an assisted refresh would ask the seller every few days.
+   * Refreshing a live listing so it shows as fresh (docs/features/listing-refresh.md). Listora
+   * refreshes on a schedule, so only `api` and `automation` are ever used: an assisted refresh
+   * would ask the seller every few days.
    */
   refresh: Mode;
+  /**
+   * How a refresh makes the listing fresh. `in_place`: the marketplace's own normal way, on the
+   * same listing (Poshmark's share to followers, Mercari's edit saved unchanged). `repost`: a
+   * fresh copy is posted, read back, and only then the old listing deleted, because the
+   * marketplace shows only a new listing as new (Depop). A repost resets the listing's likes, so
+   * it runs only for a seller who turned it on, and it carries the listing's content.
+   */
+  refreshBy: 'in_place' | 'repost';
   /** `not_needed`: the marketplace marks its own sales sold; Listora never asks. */
   markSold: Mode | 'not_needed';
   /**

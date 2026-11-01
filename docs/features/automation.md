@@ -182,7 +182,8 @@ from the app
   stops running shows on Today and is announced; a read-only **history read** proves a check
   reads the seller's real sold items without acting on any ([activity.md](activity.md)).
 - **Refreshes**: Poshmark's, Mercari's, and Depop's scripts have a `refresh` (a share to
-  followers, an edit page saved unchanged) that the listing refresh schedule queues as ordinary
+  followers, an edit page saved unchanged, and on Depop a relist: a fresh copy posted and read
+  back, then the old listing deleted) that the listing refresh schedule queues as ordinary
   operations, within half of each session's run limits ([listing-refresh.md](listing-refresh.md)).
   Unlike every other kind, a refresh that meets a check or a page Listora no longer understands
   fails instead of becoming an assisted task.

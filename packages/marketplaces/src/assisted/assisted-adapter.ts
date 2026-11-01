@@ -71,6 +71,7 @@ const ASSISTED_CAPABILITIES: MarketplaceCapabilities = {
   relist: 'assisted',
   // A scheduled refresh the seller had to do every few days would be a chore, not a help.
   refresh: 'none',
+  refreshBy: 'in_place',
   markSold: 'not_needed',
   verifyRead: 'user_confirm',
   readFreshness: 'none',
