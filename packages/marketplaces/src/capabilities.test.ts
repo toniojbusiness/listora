@@ -13,6 +13,7 @@ const API: MarketplaceCapabilities = {
   delist: 'api',
   relist: 'api',
   refresh: 'api',
+  refreshBy: 'in_place',
   markSold: 'api',
   verifyRead: 'api',
   readFreshness: 'revision',

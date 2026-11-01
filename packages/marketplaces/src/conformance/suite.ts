@@ -492,7 +492,52 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         });
       }
 
-      if (isApi('refresh')) {
+      if (isApi('refresh') && capabilities.refreshBy === 'repost') {
+        it('refreshes a live listing by a repost: a fresh copy read as live, the old one gone', async () => {
+          const { ref, sent, content } = await create();
+          const before = await read(ref);
+          const refreshedAfter = new Date(Date.now() - 1000).toISOString();
+          const op = request('refresh', ref, { desired: { refreshedAfter } });
+          const outcome = await adapter.execute(
+            { ...op, payload: adapter.buildPayload(content.item, content.variant, connection) },
+            ctx(),
+          );
+          expect(outcome).toMatchObject({ type: 'confirmed' });
+          const copy = outcome.type === 'confirmed' ? outcome.externalListingId : undefined;
+          expect(copy).toEqual(expect.any(String));
+          expect(copy).not.toBe(ref.externalListingId);
+          const after = await read({ ...ref, externalListingId: copy ?? null });
+          expect(Date.parse(after.refreshedAt ?? '')).toBeGreaterThanOrEqual(
+            Date.parse(refreshedAfter),
+          );
+          // The same listing content, under the new id.
+          expect({ ...after, externalListingId: null, externalUrl: null }).toMatchObject({
+            ...before,
+            externalListingId: null,
+            externalUrl: null,
+            revision: expect.any(Number) as number,
+            refreshedAt: expect.any(String) as string,
+          });
+          // The old one is gone (or reads as ended), so only the copy is on sale, and one copy
+          // was posted: the marketplace holds at most the old one (Depop keeps it, deleted) and it.
+          const gone = await adapter.readListing(ref, ctx());
+          expect(gone.found ? gone.status : 'gone').toMatch(/^(gone|ended)$/);
+          expect(market().countListings(sent)).toBeLessThanOrEqual(2);
+        });
+
+        it('refuses a reposting refresh without the listing content, and changes nothing', async () => {
+          const { ref, sent } = await create();
+          const outcome = await adapter.execute(
+            request('refresh', ref, { desired: { refreshedAfter: new Date().toISOString() } }),
+            ctx(),
+          );
+          expect(outcome).toMatchObject({ type: 'rejected' });
+          expect(await read(ref)).toMatchObject({ status: 'active' });
+          expect(market().countListings(sent)).toBe(1);
+        });
+      }
+
+      if (isApi('refresh') && capabilities.refreshBy === 'in_place') {
         it('refreshes a live listing in place: the same listing, unchanged, read as fresh', async () => {
           const { ref, sent } = await create();
           const before = await read(ref);

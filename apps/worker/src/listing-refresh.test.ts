@@ -7,7 +7,7 @@ import {
   NoBrowserSessions,
 } from '@listora/automation';
 import { MARKETPLACES } from '@listora/db';
-import { canRefresh } from '@listora/listing-refresh';
+import { canRefresh, REPOST_MARKETPLACES } from '@listora/listing-refresh';
 import { createMarketplaceAdapters, operationMode } from '@listora/marketplaces';
 import { createLogger } from '@listora/shared';
 
@@ -36,11 +36,18 @@ describe('which listings Listora refreshes', () => {
         const capabilities = adapters.capabilities(marketplace, connection);
         const mode =
           capabilities === undefined ? 'unsupported' : operationMode(capabilities, 'refresh');
+        const reposts = REPOST_MARKETPLACES.includes(marketplace);
         const fact = {
           marketplace,
           connection: connection && { ...connection, readOnly: false },
           testMode: false,
+          reposts,
+          written: true,
         };
+        // The marketplaces that relist to refresh are those whose adapter reposts.
+        if (mode === 'automation') {
+          expect(capabilities?.refreshBy, marketplace).toBe(reposts ? 'repost' : 'in_place');
+        }
         expect(mode === 'automation', `${marketplace} ${JSON.stringify(connection)}`).toBe(
           canRefresh(fact),
         );
@@ -51,6 +58,8 @@ describe('which listings Listora refreshes', () => {
               marketplace,
               connection: { ...connection, readOnly: true },
               testMode: true,
+              reposts,
+              written: true,
             }),
           ).toBe(false);
         }

@@ -69,7 +69,7 @@ export interface EngineHarness {
   /**
    * Enqueues an operation. A create, revise, or relist publishes `options.content`, or else
    * sample content with the title, description, and price `desired` names; its desired state
-   * then comes from that content.
+   * then comes from that content. A refresh carries `options.content` when given (a repost).
    */
   enqueue(
     listing: Pick<ListingRow, 'id'>,
@@ -207,7 +207,9 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
         db,
         isContentKind(kind)
           ? { ...base, kind, content: options.content ?? contentWith(desired) }
-          : { ...base, kind, desired },
+          : kind === 'refresh' && options.content !== undefined
+            ? { ...base, kind, desired, content: options.content }
+            : { ...base, kind, desired },
       );
       return created;
     },

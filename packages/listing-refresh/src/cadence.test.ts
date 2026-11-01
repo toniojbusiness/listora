@@ -38,7 +38,7 @@ describe('cadences', () => {
   it("lets an item's own cadence win over the account's", () => {
     const account = { cadence: 'every_72_hours', customHours: null } as const;
     expect(effectiveCadence(null, account)).toBe(account);
-    const off = { cadence: 'off', customHours: null } as const;
+    const off = { cadence: 'off', customHours: null, relistToRefresh: false } as const;
     expect(effectiveCadence(off, account)).toBe(off);
   });
 
@@ -109,8 +109,11 @@ describe("a listing's refresh", () => {
     lastRefreshedAt: ago(24 * HOUR),
     itemCadence: null,
     busy: false,
+    reposts: false,
+    written: true,
+    offerWaiting: false,
   };
-  const account = { cadence: 'every_72_hours', customHours: null } as const;
+  const account = { cadence: 'every_72_hours', customHours: null, relistToRefresh: false } as const;
 
   it('is scheduled under a session Listora can use, with its next and last', () => {
     expect(listingRefresh(fact, account, null, NOW)).toEqual({
@@ -121,7 +124,7 @@ describe("a listing's refresh", () => {
   });
 
   it('is off when its item or the account turned it off', () => {
-    const off = { cadence: 'off', customHours: null } as const;
+    const off = { cadence: 'off', customHours: null, relistToRefresh: false } as const;
     expect(listingRefresh({ ...fact, itemCadence: off }, account, null, NOW).state).toBe('off');
     expect(listingRefresh(fact, off, null, NOW).state).toBe('off');
     // An item's own cadence turns it back on for that item.
@@ -132,14 +135,32 @@ describe("a listing's refresh", () => {
     });
   });
 
-  it('is unavailable everywhere until a refresh passes live (verified-features.md)', () => {
+  it('is available only where a refresh passed live (verified-features.md)', () => {
     useMarketplaceFeatures('verified');
     try {
+      // Depop's relist passed live; Poshmark's and Mercari's refreshes have not run live.
+      expect(canRefresh({ ...fact, marketplace: 'depop', reposts: true })).toBe(true);
+      expect(canRefresh({ ...fact, marketplace: 'mercari' })).toBe(false);
       expect(canRefresh(fact)).toBe(false);
       expect(listingRefresh(fact, account, null, NOW).state).toBe('unavailable');
     } finally {
       useMarketplaceFeatures('all');
     }
+  });
+
+  it('relists (Depop) only when the account turned relisting on, and only what Listora wrote', () => {
+    const depop = { ...fact, marketplace: 'depop', reposts: true } as const;
+    // Off by default: relisting resets the listing's likes.
+    expect(listingRefresh(depop, account, null, NOW).state).toBe('off');
+    const relisting = { ...account, relistToRefresh: true };
+    expect(listingRefresh(depop, relisting, null, NOW)).toMatchObject({ state: 'scheduled' });
+    // An imported listing has no content Listora could post again.
+    expect(canRefresh({ ...depop, written: false })).toBe(false);
+    expect(listingRefresh({ ...depop, written: false }, relisting, null, NOW).state).toBe(
+      'unavailable',
+    );
+    // A refresh in place needs no content of its own.
+    expect(canRefresh({ ...fact, written: false })).toBe(true);
   });
 
   it('is unavailable on eBay, without a session, or with one waiting to be relinked', () => {

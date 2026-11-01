@@ -6,7 +6,10 @@ import Testing
 
 /// A ``ListingRefreshService`` that keeps what was saved and can fail.
 actor FakeListingRefreshService: ListingRefreshService {
-    var stored = Components.Schemas.ListingRefreshSettings(cadence: .init(value1: .every72Hours))
+    var stored = Components.Schemas.ListingRefreshSettings(
+        relistToRefresh: false,
+        cadence: .init(value1: .every72Hours),
+    )
     var item = Components.Schemas.ItemRefresh(accountCadence: .init(value1: .every72Hours))
     private(set) var saved: [Components.Schemas.ListingRefreshSettingsReplace] = []
     private(set) var savedItem: [Components.Schemas.ItemRefreshReplace] = []
@@ -35,6 +38,7 @@ actor FakeListingRefreshService: ListingRefreshService {
         }
         saved.append(replace)
         stored = .init(
+            relistToRefresh: replace.relistToRefresh ?? stored.relistToRefresh,
             cadence: .init(value1: replace.cadence),
             customHours: replace.customHours,
             quietWindow: replace.quietWindow,
@@ -140,6 +144,7 @@ struct ListingRefreshTests {
         #expect(await model.save())
         let saved = await service.saved
         #expect(saved == [.init(
+            relistToRefresh: false,
             cadence: .custom,
             customHours: 36,
             quietWindow: .init(start: "22:00", end: "07:00"),
@@ -151,6 +156,27 @@ struct ListingRefreshTests {
         model.cadence = .weekly
         #expect(await model.save())
         #expect(await service.saved.last?.customHours == nil)
+    }
+
+    @Test
+    func `relists on Depop only once the seller turns it on, and keeps the choice`() async {
+        let service = FakeListingRefreshService()
+        let model = ListingRefreshSettingsModel(service: service, showsDepopRelist: true)
+        await model.load()
+        // Off by default: relisting resets a listing's likes.
+        #expect(!model.relistOnDepop)
+        #expect(model.showsDepopRelist)
+        model.relistOnDepop = true
+        #expect(await model.save())
+        #expect(await service.saved.last?.relistToRefresh == true)
+
+        let again = ListingRefreshSettingsModel(service: service)
+        await again.load()
+        #expect(again.relistOnDepop)
+        // Where Depop's refresh doesn't show, the switch doesn't either, and a save keeps it.
+        #expect(!again.showsDepopRelist)
+        #expect(await again.save())
+        #expect(await service.saved.last?.relistToRefresh == true)
     }
 
     @Test

@@ -58,9 +58,13 @@ describe('marketplace features (docs/features/verified-features.md)', () => {
     expect(verifiedFeatures('poshmark')).toEqual([]);
     expect(verifiedFeatures('ebay')).toEqual([]);
     expect(isFeatureVerified('depop', 'offers')).toBe(true);
+    // Depop's refresh (a relist) passed live; Mercari's and Poshmark's have not run live.
+    expect(isFeatureVerified('depop', 'listing_refresh')).toBe(true);
     for (const marketplace of MARKETPLACES) {
       expect(isFeatureVerified(marketplace, 'offer_answers')).toBe(false);
-      expect(isFeatureVerified(marketplace, 'listing_refresh')).toBe(false);
+      if (marketplace !== 'depop') {
+        expect(isFeatureVerified(marketplace, 'listing_refresh')).toBe(false);
+      }
       // Editing a live listing's details has not run live anywhere.
       expect(isFeatureVerified(marketplace, 'revise')).toBe(false);
     }
