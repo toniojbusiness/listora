@@ -102,7 +102,9 @@ export function plannedDrop(
 
 /**
  * The live listings an enabled rule applies to, each with its next drop: scheduled ones soonest
- * first, then the rest. A listing whose rule is off has none (it is not planned).
+ * first, then the rest. A listing whose rule is off has none (it is not planned), and neither
+ * has one on a marketplace where price drops are hidden from the account, so a seller never
+ * sees a drop that can't run there (verified-features.md).
  */
 export function planDrops(
   facts: readonly DropFact[],
@@ -110,7 +112,9 @@ export function planDrops(
   gate: FeatureGate,
   now: Date,
 ): ListingDropPlan[] {
+  const shown = priceDropMarketplaces(gate);
   const plans = facts.flatMap((fact) => {
+    if (!shown.includes(fact.marketplace)) return [];
     const rule = ruleFor(rules, { id: fact.itemId, brand: fact.brand });
     if (!rule?.enabled) return [];
     return [{ fact, rule, plan: plannedDrop(fact, rule, gate, now) }];

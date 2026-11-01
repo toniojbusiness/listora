@@ -80,6 +80,10 @@ export const VERIFIED_FEATURES: VerifiedFeatures = {
       passedOn: '2026-10-28',
       run: 'An import read every listing of a real 118-listing shop and imported them all, none failed.',
     },
+    price_drops: {
+      passedOn: '2026-10-31',
+      run: "A rule's drop on the captain's test shop showed a day ahead, then the schedule ran it to the rule's floor, confirmed by read-back, and queued no more past the floor or the daily cap.",
+    },
   },
   poshmark: {},
   mercari: {

@@ -202,13 +202,7 @@ describe('Test mode (real Postgres, verified features)', () => {
     const depop = turned.body.data.find((entry) => entry.marketplace === 'depop');
     expect(depop?.features).toEqual([...MARKETPLACE_FEATURES]);
     // The verified ones are not tagged; the rest are.
-    expect(depop?.testing).toEqual([
-      'offer_answers',
-      'listing_refresh',
-      'revise',
-      'market_comps',
-      'price_drops',
-    ]);
+    expect(depop?.testing).toEqual(['offer_answers', 'listing_refresh', 'revise', 'market_comps']);
     const poshmark = turned.body.data.find((entry) => entry.marketplace === 'poshmark');
     expect(poshmark?.testing).toEqual([...MARKETPLACE_FEATURES]);
     // Listora's own hidden features too, the thrift scan among them.
