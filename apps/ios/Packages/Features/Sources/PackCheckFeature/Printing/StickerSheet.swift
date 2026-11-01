@@ -49,8 +49,8 @@ enum StickerFormat: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// Item stickers as a PDF to print: each a QR code (`LISTORA:<SKU>`), the SKU, the shelf, and the
-/// title, sized for the format.
+/// Stickers as a PDF to print, sized for the format: an item's QR code (`LISTORA:<SKU>`), SKU,
+/// bin, and title; or a bin's QR code (`LISTORA-BIN:<code>`), code, and where it is.
 enum StickerSheet {
     /// Avery 5160's layout: 3 columns of 10, from the sheet's top left corner.
     private static let sheetOrigin = CGPoint(x: 13.5, y: 36)
@@ -94,9 +94,16 @@ enum StickerSheet {
         let shelfFont = UIFont.systemFont(ofSize: min(11, side / 5.5), weight: .semibold)
         let titleFont = UIFont.systemFont(ofSize: min(8, side / 7.5))
         var y = text.minY
-        y += drawLine(sticker.sku, font: skuFont, x: text.minX, y: y, width: text.width)
-        if let shelf = sticker.locationCode, !shelf.isEmpty {
-            y += drawLine("Shelf \(shelf)", font: shelfFont, x: text.minX, y: y + 2, width: text.width) + 2
+        if sticker.kind == .bin {
+            // A bin's sticker: "BIN", then its code as big as it fits.
+            y += drawLine("BIN", font: shelfFont, x: text.minX, y: y, width: text.width)
+            let codeFont = UIFont.monospacedSystemFont(ofSize: min(26, side / 2.6), weight: .bold)
+            y += drawLine(sticker.sku, font: codeFont, x: text.minX, y: y, width: text.width)
+        } else {
+            y += drawLine(sticker.sku, font: skuFont, x: text.minX, y: y, width: text.width)
+            if let bin = sticker.locationCode, !bin.isEmpty {
+                y += drawLine("Bin \(bin)", font: shelfFont, x: text.minX, y: y + 2, width: text.width) + 2
+            }
         }
         if let title = sticker.title, !title.isEmpty {
             let paragraph = NSMutableParagraphStyle()

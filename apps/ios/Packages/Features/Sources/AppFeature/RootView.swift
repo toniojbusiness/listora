@@ -291,6 +291,7 @@ extension RootView {
                 },
                 saleEmails: { AnyView(SaleEmailsView(model: dependencies.settings.saleEmails)) },
                 packCheck: { AnyView(dependencies.packCheck.settingsScreen()) },
+                storageBins: { AnyView(dependencies.packCheck.binsScreen()) },
             ),
             features: dependencies.features,
             marketplacesSummary: dependencies.marketplaces.healthLine.map {

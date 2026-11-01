@@ -3260,6 +3260,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/storage-locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List bins
+         * @description Every bin of the account, by code, and the code to offer for the next one.
+         */
+        get: operations["listStorageLocations"];
+        put?: never;
+        /**
+         * Make a bin
+         * @description A code another bin of the account has (whatever its case) is `409 already_exists`; a
+         *     code with other characters than letters, digits, spaces, and `- . /` is `422`. An account
+         *     has at most 1000 bins.
+         */
+        post: operations["createStorageLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/storage-locations/{storageLocationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+            };
+            cookie?: never;
+        };
+        /** Get a bin and what is in it */
+        get: operations["getStorageLocation"];
+        /**
+         * Rename a bin
+         * @description Its items stay in it. A code another bin has is `409 already_exists`. A sticker printed
+         *     with the old code no longer scans as this bin.
+         */
+        put: operations["replaceStorageLocation"];
+        post?: never;
+        /**
+         * Delete a bin
+         * @description Its items stay in inventory, in no bin.
+         */
+        delete: operations["deleteStorageLocation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/storage-locations/{storageLocationId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put items in a bin
+         * @description Each item leaves the bin it was in for this one (a bin sticker scanned on the item's
+         *     screen, or a run's kept items put away together). Every item that moves gets a new
+         *     `version` and an `item.updated` entry in its history.
+         */
+        post: operations["addStorageLocationItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/storage-locations/{storageLocationId}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Take an item out of a bin
+         * @description The item is then in no bin. `404` when the item is not in this bin.
+         */
+        delete: operations["removeStorageLocationItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5296,6 +5397,8 @@ export interface components {
              * @description The item's cover photo, small; absent until a photo is processed.
              */
             thumbnailUrl?: string;
+            /** @description The bin the item is kept in, shown as "Find it, bin B-12"; absent when it is in none. */
+            storageLocation?: components["schemas"]["StorageLocationSummary"];
             /** @description The listing the item sold through, when known. Absent for a sale recorded without one. */
             listingId?: components["schemas"]["Id"];
             /** @description This item's part of the order's sale price (for a bundle, its share of the bundle price). */
@@ -7893,6 +7996,77 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        /**
+         * @description A bin, shelf, or box where items are kept, named by the short code on its sticker, such
+         *     as `B-12` (docs/features/storage-bins.md).
+         */
+        StorageLocation: {
+            id: components["schemas"]["Id"];
+            /**
+             * @description The code on the bin's sticker, `B-12`: letters, digits, spaces, and `- . /`, stored in
+             *     capitals. Unique in the account, whatever its case.
+             */
+            code: string;
+            /** @description Where the bin is, in the seller's words, such as "Garage shelf 3". */
+            label?: string;
+            /**
+             * Format: int32
+             * @description The items in the bin that have not sold.
+             */
+            itemCount: number;
+            createdAt: components["schemas"]["Timestamp"];
+            updatedAt: components["schemas"]["Timestamp"];
+        };
+        /** @description Every bin of the account, at most 1000. */
+        StorageLocationPage: {
+            /** @description By code, with numbers in number order (`B-2` before `B-12`). */
+            data: components["schemas"]["StorageLocation"][];
+            /**
+             * @description A code for the next bin, to offer when the seller makes one: the number after the
+             *     highest of the newest bin's series (`B-13` after `B-12`), or `B-1` for the first.
+             */
+            nextCode: string;
+        };
+        StorageLocationCreate: {
+            /**
+             * @description Letters, digits, spaces, and `- . /`; stored trimmed and in capitals. A code another
+             *     bin of the account has is `409 already_exists`.
+             */
+            code: string;
+            /** @description Blank or left out means none. */
+            label?: string;
+        };
+        /** @description The bin's new code and label; a label left out is cleared. */
+        StorageLocationReplace: {
+            code: string;
+            label?: string;
+        };
+        /** @description An item in the bin. */
+        StorageLocationItem: {
+            itemId: components["schemas"]["Id"];
+            sku: components["schemas"]["Sku"];
+            title?: string;
+            status: components["schemas"]["ItemStatus"];
+            /**
+             * Format: uri
+             * @description The item's cover photo, small; absent until a photo is processed.
+             */
+            thumbnailUrl?: string;
+        };
+        /** @description A bin and the items in it that have not sold. */
+        StorageLocationDetail: {
+            location: components["schemas"]["StorageLocation"];
+            /** @description The newest items first, at most 500 (`location.itemCount` counts them all). */
+            items: components["schemas"]["StorageLocationItem"][];
+        };
+        StorageLocationItemsAdd: {
+            /**
+             * @description The items to put in the bin; each leaves the bin it was in. An item already in this
+             *     bin stays. An id that is not an item of this account is `422` with a `fieldErrors`
+             *     entry.
+             */
+            itemIds: components["schemas"]["Id"][];
+        };
     };
     responses: {
         /** @description Any error. See `KnownErrorCode` for the codes and their HTTP statuses. */
@@ -8028,6 +8202,7 @@ export interface components {
         ScanId: components["schemas"]["Id"];
         ComparisonId: components["schemas"]["Id"];
         PriceDropRuleId: components["schemas"]["Id"];
+        StorageLocationId: components["schemas"]["Id"];
     };
     requestBodies: never;
     headers: never;
@@ -8521,6 +8696,13 @@ export type KnownScanResearchReputation = components['schemas']['KnownScanResear
 export type ScanResearchRetail = components['schemas']['ScanResearchRetail'];
 export type ScanResearchResale = components['schemas']['ScanResearchResale'];
 export type ScanWebSource = components['schemas']['ScanWebSource'];
+export type StorageLocation = components['schemas']['StorageLocation'];
+export type StorageLocationPage = components['schemas']['StorageLocationPage'];
+export type StorageLocationCreate = components['schemas']['StorageLocationCreate'];
+export type StorageLocationReplace = components['schemas']['StorageLocationReplace'];
+export type StorageLocationItem = components['schemas']['StorageLocationItem'];
+export type StorageLocationDetail = components['schemas']['StorageLocationDetail'];
+export type StorageLocationItemsAdd = components['schemas']['StorageLocationItemsAdd'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -8556,6 +8738,7 @@ export type ParameterQuestionId = components['parameters']['QuestionId'];
 export type ParameterScanId = components['parameters']['ScanId'];
 export type ParameterComparisonId = components['parameters']['ComparisonId'];
 export type ParameterPriceDropRuleId = components['parameters']['PriceDropRuleId'];
+export type ParameterStorageLocationId = components['parameters']['StorageLocationId'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -13166,6 +13349,206 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listStorageLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's bins. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageLocationPage"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createStorageLocation: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorageLocationCreate"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageLocation"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getStorageLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bin and its items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageLocationDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceStorageLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorageLocationReplace"];
+            };
+        };
+        responses: {
+            /** @description The renamed bin. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageLocation"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    deleteStorageLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    addStorageLocationItems: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorageLocationItemsAdd"];
+            };
+        };
+        responses: {
+            /** @description The bin with the items in it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageLocationDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    removeStorageLocationItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storageLocationId: components["parameters"]["StorageLocationId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bin without the item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageLocationDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
     };

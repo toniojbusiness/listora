@@ -20,6 +20,10 @@ export type SaleItemDetailRow = SaleItemRow & {
   sku: string;
   title: string | null;
   cost_cents: number | null;
+  /** The bin the item is kept in, when it is in one. */
+  location_id: string | null;
+  location_code: string | null;
+  location_label: string | null;
 };
 export type FeeLineRow = Selectable<FeeLineTable>;
 export type DoubleSaleTaskRow = Selectable<UserTaskTable>;
@@ -110,7 +114,7 @@ export async function findSale(
     .executeTakeFirst();
 }
 
-/** The sales' items with their SKU, title, and cost, in the order they were recorded, by sale id. */
+/** The sales' items with their SKU, title, cost, and bin, in the order they were recorded, by sale id. */
 export async function saleItemRows(
   db: DbExecutor,
   tenant: Tenant,
@@ -125,8 +129,20 @@ export async function saleItemRows(
         .onRef('item.account_id', '=', 'sale_item.account_id')
         .onRef('item.id', '=', 'sale_item.item_id'),
     )
+    .leftJoin('storage_location as location', (join) =>
+      join
+        .onRef('location.account_id', '=', 'item.account_id')
+        .onRef('location.id', '=', 'item.storage_location_id'),
+    )
     .selectAll('sale_item')
-    .select(['item.sku', 'item.title', 'item.cost_cents'])
+    .select([
+      'item.sku',
+      'item.title',
+      'item.cost_cents',
+      'location.id as location_id',
+      'location.code as location_code',
+      'location.label as location_label',
+    ])
     .where('sale_item.account_id', '=', tenant.accountId)
     .where('sale_item.sale_id', 'in', saleIds)
     .orderBy('sale_item.id')

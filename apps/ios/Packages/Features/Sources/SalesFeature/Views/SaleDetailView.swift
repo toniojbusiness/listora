@@ -260,6 +260,23 @@ private struct SaleHeader: View {
                 StatusBadge(sale.status.label, tone: sale.status.tone, showsIcon: false)
                     .accessibilityIdentifier("sale.status")
             }
+            if let findIt {
+                Label(findIt, systemImage: "archivebox")
+                    .font(Typography.emphasis)
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.top, Spacing.xxs)
+                    .accessibilityIdentifier("sale.findIt")
+            }
+        }
+    }
+
+    /// "Find it: bin B-12" while the order still has to ship (docs/features/storage-bins.md).
+    private var findIt: String? {
+        switch sale.status.value1 {
+        case .detected, .confirmed:
+            BinCode.findIt(sale.items.map { $0.storageLocation?.code })
+        case .shipped, .canceled, .returned, nil:
+            nil
         }
     }
 }

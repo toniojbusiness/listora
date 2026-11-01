@@ -165,7 +165,7 @@ extension PackSessionModel: Identifiable {
     }
 }
 
-/// One order on the to-ship list: what to pull from the shelf, who it goes to, and its label.
+/// One order on the to-ship list: what to pull from which bin, who it goes to, and its label.
 struct PackOrderCard: View {
     let order: PackOrder
     /// Ruled off from the next card; off where the card's container is ruled instead.
@@ -182,6 +182,11 @@ struct PackOrderCard: View {
                 Text(itemLine)
                     .font(Typography.sku)
                     .foregroundStyle(Palette.textSecondary)
+                if let findIt = BinCode.findIt(order.items.map { $0.location?.code }) {
+                    Label(findIt, systemImage: "archivebox")
+                        .font(Typography.smallEmphasis)
+                        .foregroundStyle(Palette.textPrimary)
+                }
                 Text(buyerLine)
                     .font(Typography.subheadline)
                     .foregroundStyle(Palette.textSecondary)
@@ -208,9 +213,6 @@ struct PackOrderCard: View {
         var parts: [String] = []
         if let item = order.items.first {
             parts.append(item.sku)
-            if let shelf = item.location?.code {
-                parts.append("Shelf \(shelf)")
-            }
         }
         if order.items.count > 1 {
             parts.append("+\(order.items.count - 1) more")

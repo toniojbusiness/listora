@@ -159,6 +159,7 @@ public struct AppDependencies {
         _ packCheck: PackCheckEnvironment,
     ) {
         packCheck.attach(to: inventory)
+        packCheck.attach(to: review)
         inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         inventory.phoneProgress = phone.runner
     }

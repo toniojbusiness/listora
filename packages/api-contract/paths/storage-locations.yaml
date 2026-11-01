@@ -1,0 +1,154 @@
+/v1/storage-locations:
+  get:
+    tags: [storage-locations]
+    operationId: listStorageLocations
+    summary: List bins
+    description: Every bin of the account, by code, and the code to offer for the next one.
+    responses:
+      '200':
+        description: The account's bins.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/storage-locations.yaml#/StorageLocationPage'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [storage-locations]
+    operationId: createStorageLocation
+    summary: Make a bin
+    description: |
+      A code another bin of the account has (whatever its case) is `409 already_exists`; a
+      code with other characters than letters, digits, spaces, and `- . /` is `422`. An account
+      has at most 1000 bins.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/storage-locations.yaml#/StorageLocationCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/storage-locations.yaml#/StorageLocation'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/storage-locations/{storageLocationId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/StorageLocationId'
+  get:
+    tags: [storage-locations]
+    operationId: getStorageLocation
+    summary: Get a bin and what is in it
+    responses:
+      '200':
+        description: The bin and its items.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/storage-locations.yaml#/StorageLocationDetail'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [storage-locations]
+    operationId: replaceStorageLocation
+    summary: Rename a bin
+    description: |
+      Its items stay in it. A code another bin has is `409 already_exists`. A sticker printed
+      with the old code no longer scans as this bin.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/storage-locations.yaml#/StorageLocationReplace'
+    responses:
+      '200':
+        description: The renamed bin.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/storage-locations.yaml#/StorageLocation'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [storage-locations]
+    operationId: deleteStorageLocation
+    summary: Delete a bin
+    description: Its items stay in inventory, in no bin.
+    responses:
+      '204':
+        description: Deleted.
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/storage-locations/{storageLocationId}/items:
+  parameters:
+    - $ref: '../components/parameters.yaml#/StorageLocationId'
+  post:
+    tags: [storage-locations]
+    operationId: addStorageLocationItems
+    summary: Put items in a bin
+    description: |
+      Each item leaves the bin it was in for this one (a bin sticker scanned on the item's
+      screen, or a run's kept items put away together). Every item that moves gets a new
+      `version` and an `item.updated` entry in its history.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/storage-locations.yaml#/StorageLocationItemsAdd'
+    responses:
+      '200':
+        description: The bin with the items in it.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/storage-locations.yaml#/StorageLocationDetail'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/storage-locations/{storageLocationId}/items/{itemId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/StorageLocationId'
+    - $ref: '../components/parameters.yaml#/ItemId'
+  delete:
+    tags: [storage-locations]
+    operationId: removeStorageLocationItem
+    summary: Take an item out of a bin
+    description: The item is then in no bin. `404` when the item is not in this bin.
+    responses:
+      '200':
+        description: The bin without the item.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/storage-locations.yaml#/StorageLocationDetail'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

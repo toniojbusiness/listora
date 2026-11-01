@@ -53,9 +53,11 @@ struct StickerPrintView: View {
                     }
                     .cardStyle(.flat)
                     Text(
-                        "Stick it on the item's bag. When you pack, scanning it with the shipping label "
-                            + "makes sure the right item goes in the box. Printing uses AirPrint: your iPhone "
-                            + "shows the printers on your Wi-Fi.",
+                        (stickers.first?.kind == .bin
+                            ? "Stick it on the bin. Scanning it from an item's screen puts the item in this bin. "
+                            : "Stick it on the item's bag. When you pack, scanning it with the shipping label "
+                            + "makes sure the right item goes in the box. ")
+                            + "Printing uses AirPrint: your iPhone shows the printers on your Wi-Fi.",
                     )
                     .font(Typography.footnote)
                     .foregroundStyle(Palette.textSecondary)
@@ -116,7 +118,9 @@ private struct StickerPreview: View {
             .frame(maxWidth: 280)
             .overlay(RoundedRectangle(cornerRadius: Radius.small).stroke(Palette.separator.color))
             .accessibilityLabel(
-                "Sticker with a QR code, \(sticker.sku)\(sticker.locationCode.map { ", shelf \($0)" } ?? "")",
+                sticker.kind == .bin
+                    ? "Sticker with a QR code, bin \(sticker.sku)"
+                    : "Sticker with a QR code, \(sticker.sku)\(sticker.locationCode.map { ", bin \($0)" } ?? "")",
             )
             .accessibilityIdentifier("sticker.preview")
     }
