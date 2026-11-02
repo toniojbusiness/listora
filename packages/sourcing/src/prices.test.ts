@@ -46,6 +46,15 @@ describe('scanPrices', () => {
     });
   });
 
+  it("never lists under the range's high end", () => {
+    // $20 over 75% is $26.67, a $30 list price; the range reaches $42, so it lists at $45.
+    expect(scanPrices({ lowCents: 1_500, highCents: 4_200 }, 2_000, undefined)).toEqual({
+      listAtCents: 4_500,
+      realisticCents: 2_000,
+      fastCents: 1_500,
+    });
+  });
+
   it('holds the realistic sale inside the range, and the three in order', () => {
     const prices = scanPrices({ lowCents: 1_950, highCents: 2_050 }, 5_000, {
       saleToAsking: 1,
