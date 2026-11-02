@@ -995,8 +995,10 @@ KnownScanSignalKind:
     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
     `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
     household's recent sales against the marketplace's supply. `unsold`: the household already
-    has items like it in inventory, not sold (it never moves the call).
-  enum: [retail, new_with_tags, web_resale, trend, style, asking, demand, unsold]
+    has items like it in inventory, not sold (it never moves the call). `brand_pulse`: what
+    the wider web says of the brand (in demand, steady, or slow, with why and what asks more),
+    by web pages (it never moves the call).
+  enum: [retail, new_with_tags, web_resale, brand_pulse, trend, style, asking, demand, unsold]
 ScanRetail:
   type: object
   description: |

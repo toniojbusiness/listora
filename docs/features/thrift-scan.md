@@ -35,7 +35,9 @@ Code:
   ([sales.md](sales.md#sales-history)).
 - `packages/analysis/src/scan.ts`: the AI read, `scanItem` (purpose `thrift_scan`, standard tier,
   no item quota, thinking off), with its own small output schema `thrift_scan`, held to its enums
-  (`strictEnums`), and a cached system prompt.
+  (`strictEnums`), and a cached system prompt. `scan-research.ts` and `brand-pulse.ts`: the web
+  research and the brand pulse (below), checked against the pages the searches returned
+  (`web-pages.ts`).
 - `packages/eval/src/scan/`: the backtest, `npm run eval -- scan`.
 - `apps/api/src/scans` and `apps/api/src/sourcing-runs`: the scan's read and Keep, and the run
   with its checkout and summary (below); `scanOwnHistory` and `runEstimate` in
@@ -340,7 +342,7 @@ background, so the card never waits on it.
   searches (`researchScanItem` in `@listora/analysis`, purpose `thrift_scan_research`), for the
   item's **original retail price** on the brand's or a retailer's site or another reputable
   source, and **what such items resell for** on the resale marketplaces themselves, with how
-  well the brand resells.
+  well the brand resells. Beside it, the brand's pulse on the wider web ("Brand pulse", below).
 - **Never failed for its length.** The answer's schema allows four times the card's limits
   (model names of 60 characters, 6 models, 4 pages per number, a 240-character summary), and the
   verification cuts it to them (a name or summary at a word, with an ellipsis). An answer that
@@ -365,6 +367,58 @@ background, so the card never waits on it.
   with fewer than 3 own sales like it, the range is the web's resale range, at medium
   confidence only with a sure read and two resale sites, otherwise low, and never high. It
   shows as a signal ("Resells well", "Resells poorly") with its sites.
+
+### Brand pulse
+
+Asking a chatbot that searches "is this brand worth picking up?" checks more than the resale
+apps: fashion and trend coverage, resale market reports, collectors' and resellers' forums, and
+the brand's own news. The brand pulse does the same, per brand.
+
+- **What.** One standard-tier call (Haiku) with one search (`researchBrandPulse` in
+  `@listora/analysis`, purpose `thrift_scan_brand_pulse`), asking only the brand, for a verdict
+  of **in demand**, **steady**, or **slow** (or unknown, when the pages say too little), a
+  one-line reason, which lines, eras, or pieces ask more, and the pages it came from. Only pages
+  the search really returned count (`verifiedPulse`): with none, or with a reason that calls
+  anything sold, it is unknown; a premium that calls anything sold, names a price, or says
+  "None" is dropped alone. Unlike a resale range, any reputable page counts (a fashion site, a
+  forum, a resale report), not only the marketplaces.
+- **When.** With the web research (`POST /v1/scans/{scanId}/research`), beside the item's own
+  lookup rather than after it, so it adds no wait, and never on the first read. A pulse that
+  fails never fails the research: the card shows none, and the next scan of the brand asks
+  again.
+- **Kept a week per brand.** By the brand alone (`brandResearchKey`), per account, for 7 days
+  (`scan_research`, kind `brand_pulse`), like the brand's other facts, including an unknown one,
+  so a brand costs one search a week however often it is scanned. About $0.012 a brand.
+- **On the card.** Its own line under the web info, apart from the prices: "Brand pulse: in
+  demand · Y2K logo pieces are collected and sell within days, per resale guides. Asks more:
+  Y2K logo pieces; pre-1988 vintage. (shedd.app, truefacet.com)" (`brandPulseSignal`, signal
+  `brand_pulse`, resting on web info). The server sends it as one of the call's signals, so the
+  apps already installed show it with no new build; it fits the signal's 200 characters by
+  dropping the last sites, then what asks more.
+- **Not in the call.** It is information only: it never moves Buy, Your call, or Skip. The
+  backtest below found no way it would make the calls hold more often.
+
+**Measured 2026-11-02** on the backtest's 64 sold items, with the reads of the two stored runs
+(`anthropic-2img-2026-11-02.json`, `anthropic-1img.json`) replayed through the production call,
+and each of the 30 brands' pulses asked live once ($0.36 for all 30). A call "held" when a Buy's
+item paid out at least the worth-listing amount ($8) and a Skip's did not.
+
+| Variant on the 2-image reads                          | Buys held | Skips held | Held |
+| ----------------------------------------------------- | --------- | ---------- | ---- |
+| The call as it is                                     | 9 of 11   | 0 of 0     | 82%  |
+| Slow demotes a Buy to Your call                       | 9 of 11   | 0 of 0     | 82%  |
+| In demand makes a Your call a Buy (best payout >= $8) | 25 of 36  | 0 of 0     | 69%  |
+| In demand makes a Your call a Buy (low payout >= $6)  | 22 of 32  | 0 of 0     | 69%  |
+| Slow makes a Your call a Skip (low payout under $8)   | 9 of 11   | 1 of 3     | 71%  |
+
+The 1-image reads came out the same way (91% as it is; 71% to 79% with any pulse rule). The
+verdicts do not tell the items apart: of the items whose brand read in demand, 25 of 36 paid out
+$8 or more, against 6 of 6 steady and 4 of 5 slow. The household sells mall brands that the web
+calls popular whatever they go for, so the pulse says what the web thinks of the brand, not what
+this item will pay. A verdict can also change between two asks of the same brand (Nike read in
+demand, then steady, a few minutes apart). The measurement script is not in the repository: it
+replayed the stored reads through `runScanBacktest` on a reader of its own, which the backtest's
+`--reads` will do once that lands.
 
 ### Retail price, trend, and style
 
@@ -448,7 +502,8 @@ What made the difference, measured one at a time on the backtest's photos:
   which can run past it); and the card's time counts from the shutter press.
 
 The web research is about $0.023 a lookup (two searches at $0.01 and the pages' tokens) and
-6 s to 12 s, in the background. One search instead of two found the retail price for 4 of 10
+6 s to 12 s, in the background; a brand not asked about that week adds its pulse, about $0.012
+(one search), at the same time. One search instead of two found the retail price for 4 of 10
 items instead of 9, so it stays at two. The cost is cut instead by never paying for a lookup
 that fails on a length (above) and by looking up only cards the seller is still looking at
 (two seconds on screen), which at the bins skips most items' lookups.
@@ -469,8 +524,9 @@ build; the server's applies with a deploy.
   own-sales lines (`call_detail`: counts and quartiles of the household's own sales only), the
   seller's decision (`undecided`, `kept`, `skipped`, `replaced`), the kept item, the model, the
   AI attempts and their cost, and `read_ms`.
-- `scan_research`: the web's facts per account, an item's (`kind` `item`, by its exact model)
-  or a brand's (`brand`), with the model and what the research cost.
+- `scan_research`: the web's facts per account, an item's (`kind` `item`, by its exact model),
+  a brand's (`brand`), or the brand's pulse (`brand_pulse`, migration
+  `20261102172558_scan_research_brand_pulse`), with the model and what the research cost.
 - **Retention**: cached research is deleted after 30 days; scans never kept are deleted 90 days after they were made (`unkeptScans`,
   [privacy.md](privacy.md#retention)); a kept scan stays with its item.
 
@@ -490,6 +546,11 @@ build; the server's applies with a deploy.
   retail price ahead of the web), `scan-research.test.ts` (pages verified, resale only from
   the marketplaces, metered searches, an overlong answer cut instead of failed), and the
   provider's web search.
+- The brand pulse: `scans.int.test.ts` (asked beside the item and shown as its own signal that
+  never moves the call; kept a week by the brand, so another item of it costs no search; an
+  unknown pulse shown as nothing and kept; a failed one never failing the research and asked
+  again), `brand-pulse.test.ts` (pages verified, sales words and prices kept out, cut to the
+  card), and `call.test.ts` (the signal's text and fit; no verdict changes the call).
 - The read's speed settings: `scan.test.ts` (thinking off and the enums held on the request; an
   empty item name read as "Unidentified item"), and in `@listora/ai`, `anthropic-provider.test.ts`
   (thinking off only when asked; `outputJsonSchema` the SDK helper's schema without

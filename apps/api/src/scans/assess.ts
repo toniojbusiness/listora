@@ -2,11 +2,11 @@
  * The scan's call (docs/features/thrift-scan.md): from the AI's read, the household's own sales
  * like the item and their trend, the retail price (off a tag, or from the web research), what
  * the web says such items resell for, and each marketplace's comparisons (eBay's sold listings
- * among them). Made when the read lands, and again when the web
- * research comes in.
+ * among them), with the brand's pulse on the wider web as a signal. Made when the read lands,
+ * and again when the web research comes in.
  */
 import type { ScanRetail, ScanTrend } from '@listora/api-contract';
-import type { ScanResearch, ThriftScan } from '@listora/analysis';
+import type { BrandPulse, ScanResearch, ThriftScan } from '@listora/analysis';
 import type { DbExecutor } from '@listora/db';
 import { loadFeatureGate } from '@listora/marketplaces';
 import {
@@ -80,6 +80,7 @@ export async function assessScan(
             sites: research.resale.sources.map((source) => source.site),
             reputation: research.reputation,
           },
+    brandPulse: pulseInput(research?.brandPulse),
     newWithTags: read.condition === 'new_with_tags',
     trend,
     style: read.style ?? undefined,
@@ -98,6 +99,17 @@ export async function assessScan(
     ...(trend === undefined || trend.direction === 'unknown' ? {} : { trend: trendView(trend) }),
     ...(retail === undefined ? {} : { retail }),
     ...(comparisons.length === 0 ? {} : { comparisons: [...comparisons], recentOwnSales }),
+  };
+}
+
+/** The brand's pulse as the call shows it: only one with a verdict. */
+function pulseInput(pulse: BrandPulse | undefined): ScanCallInput['brandPulse'] {
+  if (pulse === undefined || pulse.verdict === 'unknown') return undefined;
+  return {
+    verdict: pulse.verdict,
+    reason: pulse.reason,
+    ...(pulse.premium === null ? {} : { premium: pulse.premium }),
+    sites: pulse.sources.map((source) => source.site),
   };
 }
 

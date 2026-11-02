@@ -9,6 +9,18 @@
 import { AiCallError, type AiClient, type OutputSchema, type WebSource } from '@listora/ai';
 import { z } from 'zod';
 
+import {
+  clipped,
+  dedupeSites,
+  returnedPage,
+  SOLD_WORDS,
+  type ResearchSource,
+} from './web-pages.ts';
+
+import type { BrandPulse } from './brand-pulse.ts';
+
+export type { ResearchSource } from './web-pages.ts';
+
 /** `ai_usage_event.purpose` of every research call. */
 export const SCAN_RESEARCH_PURPOSE = 'thrift_scan_research';
 
@@ -141,13 +153,6 @@ export interface ScanResearchInput {
   readonly signal?: AbortSignal;
 }
 
-/** A page the research rests on, by its address and the site's name. */
-export interface ResearchSource {
-  readonly url: string;
-  /** The site, "patagonia.com". */
-  readonly site: string;
-}
-
 /** What the research found, every number with the pages it came from. */
 export interface ScanResearch {
   /** The retail price: one model's (low equal to high), or a range across the likely models. */
@@ -165,6 +170,11 @@ export interface ScanResearch {
   readonly reputation: 'strong' | 'average' | 'weak' | 'unknown';
   /** What the pages said, in a sentence; null when nothing was found or it claimed sales. */
   readonly summary: string | null;
+  /**
+   * What the wider web says of the brand (`researchBrandPulse`), looked up beside the item and
+   * kept by the brand alone; absent from research made before it, or when it failed.
+   */
+  readonly brandPulse?: BrandPulse | undefined;
 }
 
 export interface ScanResearchOutcome {
@@ -248,8 +258,6 @@ export async function researchScanItem(
   }
 }
 
-const SOLD_WORDS = /\b(sold|comps?|comparables?)\b/i;
-
 /**
  * Where a resale range may come from: the resale marketplaces' own listings and the established
  * resale shops. Price-estimator sites that guess resale values are not sources of what items
@@ -284,13 +292,7 @@ export function verifiedResearch(
   answer: ScanResearchAnswer,
   found: readonly WebSource[],
 ): ScanResearch {
-  const returned = new Set(found.map((source) => normalizeUrl(source.url)));
-  const source = (address: string): ResearchSource | undefined => {
-    const normalized = normalizeUrl(address);
-    if (normalized === '' || !returned.has(normalized)) return undefined;
-    const site = siteOf(address);
-    return site === undefined ? undefined : { url: address, site };
-  };
+  const source = returnedPage(found);
   const retailSources =
     answer.retail.highCents > 0 ? verified(answer.retail.sourceUrls).slice(0, MAX_SOURCES) : [];
   function verified(addresses: readonly string[]): ResearchSource[] {
@@ -333,41 +335,4 @@ export function verifiedResearch(
         ? clipped(summary, MAX_SUMMARY_LENGTH)
         : null,
   };
-}
-
-/** The text cut to at most `max` characters, at a word, with an ellipsis when cut. */
-function clipped(text: string, max: number): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= max) return trimmed;
-  const room = trimmed.slice(0, max - 1);
-  const atWord = room.lastIndexOf(' ');
-  return `${(atWord > max / 2 ? room.slice(0, atWord) : room).trimEnd()}…`;
-}
-
-function normalizeUrl(address: string): string {
-  try {
-    const parsed = new URL(address.trim());
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
-    parsed.hash = '';
-    return `${parsed.hostname.replace(/^www\./, '')}${parsed.pathname.replace(/\/$/, '')}${parsed.search}`;
-  } catch {
-    return '';
-  }
-}
-
-function siteOf(address: string): string | undefined {
-  try {
-    return new URL(address).hostname.replace(/^www\./, '');
-  } catch {
-    return undefined;
-  }
-}
-
-function dedupeSites(sources: readonly ResearchSource[]): ResearchSource[] {
-  const seen = new Set<string>();
-  return sources.filter((source) => {
-    if (seen.has(source.site)) return false;
-    seen.add(source.site);
-    return true;
-  });
 }

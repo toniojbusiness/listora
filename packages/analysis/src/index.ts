@@ -82,6 +82,25 @@ export {
 } from './scan.ts';
 export type { ScanAnswer, ScanInput, ScanOutcome, ThriftScan } from './scan.ts';
 export {
+  BRAND_PULSE_OUTPUT,
+  BRAND_PULSE_OUTPUT_NAME,
+  BRAND_PULSE_PURPOSE,
+  BRAND_PULSE_SYSTEM,
+  BRAND_PULSE_VERDICTS,
+  BrandPulseFailedError,
+  MAX_PULSE_ATTEMPTS,
+  MAX_PULSE_SEARCHES,
+  researchBrandPulse,
+  verifiedPulse,
+} from './brand-pulse.ts';
+export type {
+  BrandPulse,
+  BrandPulseAnswer,
+  BrandPulseInput,
+  BrandPulseOutcome,
+  BrandPulseVerdict,
+} from './brand-pulse.ts';
+export {
   MAX_RESEARCH_ATTEMPTS,
   MAX_RESEARCH_SEARCHES,
   researchScanItem,

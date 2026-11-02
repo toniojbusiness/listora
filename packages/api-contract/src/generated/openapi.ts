@@ -8123,10 +8123,12 @@ export interface components {
          *     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
          *     `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
          *     household's recent sales against the marketplace's supply. `unsold`: the household already
-         *     has items like it in inventory, not sold (it never moves the call).
+         *     has items like it in inventory, not sold (it never moves the call). `brand_pulse`: what
+         *     the wider web says of the brand (in demand, steady, or slow, with why and what asks more),
+         *     by web pages (it never moves the call).
          * @enum {string}
          */
-        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style" | "asking" | "demand" | "unsold";
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "brand_pulse" | "trend" | "style" | "asking" | "demand" | "unsold";
         /**
          * @description The item's original retail price, with where it came from: one model's price (`low` equals
          *     `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -14103,7 +14105,7 @@ export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "market_sold", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
-export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "asking", "demand", "unsold"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "brand_pulse", "trend", "style", "asking", "demand", "unsold"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
 export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
 export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];
