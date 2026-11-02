@@ -7,6 +7,7 @@ import {
   SCAN_RESEARCH_OUTPUT_NAME,
   SCAN_RESEARCH_PURPOSE,
   ScanResearchFailedError,
+  scanResearchSubject,
   verifiedResearch,
   type ScanResearchAnswer,
 } from './scan-research.ts';
@@ -193,5 +194,40 @@ describe('verifiedResearch', () => {
     expect(research.summary?.length).toBeLessThanOrEqual(240);
     expect(research.summary?.endsWith('…')).toBe(true);
     expect(research.summary).not.toMatch(/\s…$/);
+  });
+});
+
+describe('scanResearchSubject', () => {
+  const read = {
+    brand: 'Fernhill',
+    item: 'wide-leg jeans',
+    line: null,
+    styleNumber: 'FH-221',
+    era: null,
+    material: 'denim',
+    category: 'clothing/bottoms/jeans',
+    department: null,
+    sizeLabel: null,
+    condition: null,
+    identityConfidence: 0.8,
+    aiEstimate: null,
+    retailPriceCents: null,
+    style: null,
+    searchWords: '',
+    flags: { visibleDamage: false, lotOrBundle: false, counterfeitProne: false },
+  };
+
+  it("asks about the read's brand and what tells the item apart, leaving out what it lacks", () => {
+    expect(scanResearchSubject(read)).toEqual({
+      brand: 'Fernhill',
+      item: 'wide-leg jeans',
+      category: 'clothing/bottoms/jeans',
+      styleNumber: 'FH-221',
+      material: 'denim',
+    });
+  });
+
+  it('asks nothing about a read without a brand', () => {
+    expect(scanResearchSubject({ ...read, brand: null })).toBeUndefined();
   });
 });

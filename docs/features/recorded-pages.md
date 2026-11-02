@@ -58,11 +58,11 @@ comparisons run. As it never uses the seller's session, a logged-out entry can a
 in a Chrome no seller ever signed in to (Poshmark's search was, on 2026-11-02: a headless Chrome
 with a fresh profile of its own, `--cdp http://127.0.0.1:9334`). A data global read by a dotted
 path (`__INITIAL_STATE__.$_search.gridData.data`, `PageDriver.pageData`) is recorded and
-replayed by that path, so a recording keeps only the part the script read. eBay's public search
-has no recording: eBay
-showed a bot check to the recorder's first logged-out page load on 2026-10-31, so its reader is
-tested on a stand-in page until a recording can be made ([thrift-scan.md](thrift-scan.md),
-"eBay").
+replayed by that path, so a recording keeps only the part the script read. eBay's and
+Mercari's public searches have no recording: each showed a bot check to the recorder's first logged-out page load (eBay on
+2026-10-31, Mercari on 2026-11-02, from a headless Chrome with a fresh profile), so their readers
+are tested on stand-in pages until a recording can be made ([thrift-scan.md](thrift-scan.md),
+"eBay" and "Mercari"), and Mercari's plan gets its `search` entry with its first recording.
 
 **It changes nothing on the marketplace.** Read entries run as reads, which refuse form input and
 any step that changes something. Form entries fill a form exactly as a create does, but without

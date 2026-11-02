@@ -52,8 +52,14 @@ export type {
   QuotaMetric,
   QuotaPolicy,
 } from './guards.ts';
-export { AI_TIERS, createModelRegistry, DEFAULT_MODEL_REGISTRY } from './models.ts';
-export type { ModelRegistry, TierSettings } from './models.ts';
+export {
+  AI_TIERS,
+  createModelRegistry,
+  DEFAULT_MODEL_REGISTRY,
+  THINKING_OFF_BY_MODEL,
+  thinkingOffFor,
+} from './models.ts';
+export type { ModelRegistry, ThinkingOff, TierSettings } from './models.ts';
 export { photoSetHashOfImages } from './photo-set-hash.ts';
 export {
   costMicros,

@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { runScanBacktest } from './backtest.ts';
 import { loadScanDataset, type ScanDataset } from './dataset.ts';
 import { fakeScanFixtures } from './fake.ts';
-import { AiScanReader, type ScanReader } from './readers.ts';
+import { AiScanReader, AiScanResearcher, type ScanReader, type ScanResearcher } from './readers.ts';
 import { formatScanReport } from './report.ts';
-import { INVENTED_ITEMS, writeScanDataset } from './test-support.ts';
+import { INVENTED_ITEMS, item, writeScanDataset } from './test-support.ts';
 
 const settings = { ...DEFAULT_SCAN_CALL_SETTINGS, worthListingCents: 800 };
 
@@ -26,6 +26,31 @@ async function fakeReader(dataset: ScanDataset, images = 1): Promise<ScanReader>
   });
 }
 
+async function fakeAi(dataset: ScanDataset, images = 1) {
+  return createAiClient(loadAiConfig({ AI_PROVIDER: 'fake' }), {
+    usageStore: new InMemoryUsageStore(),
+    provider: new FakeAiProvider({ fixtures: await fakeScanFixtures(dataset, images) }),
+  });
+}
+
+async function fakeResearcher(dataset: ScanDataset): Promise<ScanResearcher> {
+  return new AiScanResearcher({ id: 'fake', description: 'fake', client: await fakeAi(dataset) });
+}
+
+/** Reads Fernhill as "Fernhil" and Quillon as "Quilon": near misses of a brand. */
+function misreading(inner: ScanReader): ScanReader {
+  const near: Readonly<Record<string, string>> = { Fernhill: 'Fernhil', Quillon: 'Quilon' };
+  return {
+    id: 'misread',
+    description: 'near misses of each brand',
+    read: async (set, entry) => {
+      const read = await inner.read(set, entry);
+      if (!read.ok || read.scan.brand === null) return read;
+      return { ...read, scan: { ...read.scan, brand: near[read.scan.brand] ?? read.scan.brand } };
+    },
+  };
+}
+
 describe('runScanBacktest', () => {
   it('compares each item with the other sales and calls it from them alone', async () => {
     const dataset = await loadScanDataset(await writeScanDataset());
@@ -42,7 +67,7 @@ describe('runScanBacktest', () => {
     // The five jeans each match the other four; the two blouses only each other.
     expect(report.ownHistory).toEqual([
       {
-        identity: 'labels',
+        variant: 'labels',
         byLevel: { brand_and_category: 5, brand: 0, category: 0 },
         thin: 2,
         none: 1,
@@ -51,7 +76,7 @@ describe('runScanBacktest', () => {
     ]);
     expect(report.calls).toEqual([
       {
-        identity: 'labels',
+        variant: 'labels',
         worthListingCents: 800,
         counts: { buy: 5, your_call: 3, skip: 0 },
         byConfidence: { high: 0, medium: 5, low: 3 },
@@ -81,7 +106,7 @@ describe('runScanBacktest', () => {
       latencyP50Ms: 100,
     });
     expect(report.read?.costMicrosPerScan).toBeGreaterThan(0);
-    expect(report.calls.map((scores) => scores.identity)).toEqual(['ai', 'labels']);
+    expect(report.calls.map((scores) => scores.variant)).toEqual(['ai', 'calibrated', 'labels']);
     // The blouses' own sales are too few, so the AI estimate decides, at low confidence.
     const blouse = report.items.find((entry) => entry.id === 'b1')?.calls.ai?.call;
     expect(blouse).toMatchObject({ basis: 'ai_estimate', confidence: 'low', call: 'your_call' });
@@ -110,7 +135,84 @@ describe('runScanBacktest', () => {
     };
     const report = await runScanBacktest(dataset, { reader: failing, settings });
     expect(report.read).toMatchObject({ scanned: 8, failed: 8, costMicrosTotal: 56 });
-    expect(report.calls[0]).toMatchObject({ identity: 'ai', counts: { buy: 0, your_call: 8 } });
+    expect(report.calls[0]).toMatchObject({ variant: 'ai', counts: { buy: 0, your_call: 8 } });
+  });
+});
+
+describe('runScanBacktest calibrated', () => {
+  it("scales the AI estimate and the web's asks by the other items' sale-to-asking ratio only", async () => {
+    const dataset = await loadScanDataset(await writeScanDataset());
+    const report = await runScanBacktest(dataset, {
+      reader: await fakeReader(dataset),
+      researcher: await fakeResearcher(dataset),
+      settings,
+    });
+    expect(report.researcher).toEqual({ id: 'fake', description: 'fake' });
+    const a1 = report.items.find((entry) => entry.id === 'a1');
+    // The other six items with an asking price ($20) sold at 70% to 110% of it (held to 100%),
+    // so a1 never weighs its own sale.
+    expect(a1?.calls.calibrated?.calibration?.sales).toBe(6);
+    expect(a1?.calls.ai?.calibration).toBeUndefined();
+    expect(a1?.research).toMatchObject({ ok: true });
+    const ratio = a1?.calls.calibrated?.calibration?.saleToAsking ?? 0;
+    // The fake AI guesses $12-$16-$20 off the $20 ask, for the named brand.
+    expect(a1?.calls.calibrated?.call.aiEstimate).toEqual({
+      lowCents: Math.round(1_200 * ratio),
+      midCents: Math.round(1_600 * ratio),
+      highCents: Math.round(2_000 * ratio),
+    });
+    // The unbranded item has no asking price, no web lookup, and its AI estimate stands.
+    const c1 = report.items.find((entry) => entry.id === 'c1');
+    expect(c1?.research).toBeUndefined();
+
+    const all = (variant: string) =>
+      report.prices.find((scores) => scores.variant === variant && scores.group === 'all');
+    // The fake web asks $20-$40 for items that sold for $5-$22: scaled, they come far closer.
+    expect(all('ai')?.webAsks.priced).toBe(7);
+    expect(all('calibrated')?.webAsks.medianAbsError).toBeLessThan(
+      all('ai')?.webAsks.medianAbsError ?? 0,
+    );
+    expect(report.prices.map((scores) => `${scores.variant} ${scores.group}`)).toEqual([
+      'ai all',
+      'ai clothing/bottoms',
+      'ai clothing/tops',
+      'ai unlabeled',
+      'calibrated all',
+      'calibrated clothing/bottoms',
+      'calibrated clothing/tops',
+      'calibrated unlabeled',
+    ]);
+    expect(formatScanReport(report)).toContain('Prices against the sale');
+  });
+
+  it("snaps a near miss to a brand of the other items' sales, never to the item's own", async () => {
+    const dataset = await loadScanDataset(await writeScanDataset());
+    const misread = misreading(await fakeReader(dataset));
+    const report = await runScanBacktest(dataset, { reader: misread, settings });
+    const a1 = report.items.find((entry) => entry.id === 'a1');
+    expect(a1?.calls.ai?.identity.brand).toBe('Fernhil');
+    expect(a1?.calls.calibrated).toMatchObject({
+      identity: { brand: 'Fernhill' },
+      snappedFrom: 'Fernhil',
+      ownHistory: { level: 'brand_and_category' },
+    });
+    // b1 snaps by b2's sale of Quillon.
+    expect(report.items.find((entry) => entry.id === 'b1')?.calls.calibrated).toMatchObject({
+      identity: { brand: 'Quillon' },
+      snappedFrom: 'Quilon',
+    });
+
+    // The one sale of a brand never snaps its own read: nothing else of the brand sold.
+    const alone = await loadScanDataset(
+      await writeScanDataset([...INVENTED_ITEMS.slice(0, 5), item('q1', { brand: 'Quillon' })]),
+    );
+    const single = await runScanBacktest(alone, {
+      reader: misreading(await fakeReader(alone)),
+      settings,
+    });
+    const q1 = single.items.find((entry) => entry.id === 'q1');
+    expect(q1?.calls.calibrated?.identity.brand).toBe('Quilon');
+    expect(q1?.calls.calibrated?.snappedFrom).toBeUndefined();
   });
 });
 

@@ -177,7 +177,10 @@ guards, cost reports, and spend check (the AI cost alarm is in
 - **Thinking off (`thinking: 'off'`).** A call may turn the model's thinking off; by default it
   thinks adaptively within the tier's effort. Only the thrift scan's read does, where thinking
   added 1.5 s to 3.5 s to a quarter of the reads and most tag shots
-  ([thrift-scan.md](thrift-scan.md#speed)).
+  ([thrift-scan.md](thrift-scan.md#speed)). Each model takes a different setting for it, and
+  answers any other with a 400 (`THINKING_OFF_BY_MODEL` in `models.ts`, `thinkingOffFor`): Haiku
+  5.5 `{ type: 'disabled' }`, Sonnet 5.5 `{ type: 'between_tools' }`, and Opus 5.5 neither, so
+  on Opus (and any model not in the table) the call sends no setting and thinks adaptively.
 - **Web search.** A call may let the model search the web first (`webSearch: { maxUses }`, the
   API's `web_search` server tool): each search is billed and metered (`webSearches`,
   `webSearchMicros`), the answer is read from the text after the last search result, and the

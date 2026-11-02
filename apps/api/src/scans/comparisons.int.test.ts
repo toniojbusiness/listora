@@ -188,8 +188,13 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
         typeWords: ['jeans'],
       },
     });
-    // Only Depop, eBay, and Poshmark have a reader: no other marketplace gets a row.
-    expect(scan.comparisons?.map((one) => one.marketplace)).toEqual(['depop', 'ebay', 'poshmark']);
+    // Every marketplace with a reader gets a row, in the card's order.
+    expect(scan.comparisons?.map((one) => one.marketplace)).toEqual([
+      'depop',
+      'ebay',
+      'poshmark',
+      'mercari',
+    ]);
     const [row] = await reads();
     expect(row).toMatchObject({ status: 'pending', scan_id: scan.id, marketplace: 'depop' });
   });
@@ -219,10 +224,11 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
         basedOn: 'Your 0 sales like it in the last 90 days; 40 for sale on Depop now',
       },
     });
-    // The AI's $20-$40 is held to what close matches ask.
+    // The AI's $20-$40, scaled to $15-$30 by the default 75% (no sales of the household's
+    // yet), is held to what close matches ask.
     expect(answered.body.call).toMatchObject({
       basis: 'ai_estimate',
-      low: { amountCents: 2000 },
+      low: { amountCents: 1500 },
       high: { amountCents: 2500 },
     });
     expect(answered.body.call.signals).toContainEqual({

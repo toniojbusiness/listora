@@ -9,10 +9,11 @@
  *
  * Depop shows a visitor no sold listings, so its numbers are what close matches ask, labeled as
  * asking prices; the household's own sales are the sold side, and the demand is their recent
- * pace against Depop's live supply. eBay and Poshmark show their sold listings, so their numbers
- * are also what close matches sold for (the call's range when the household's own sales are too
- * few), and their demand is their sold pace: eBay's search's sold count against its supply,
- * Poshmark's close matches' sold dates (its sold search counts every sale it ever had).
+ * pace against Depop's live supply. eBay, Poshmark, and Mercari show their sold listings, so their
+ * numbers are also what close matches sold for (the call's range when the household's own sales
+ * are too few); eBay's demand is its search's sold pace against its supply, Poshmark's its close
+ * matches' sold dates (its sold search counts every sale it ever had), and Mercari's how many of
+ * its latest sales were in the last 30 days.
  */
 import type { ScanComparison, ScanComparisonAnswer } from '@listora/api-contract';
 import {
@@ -32,6 +33,7 @@ import { jsonb, type DbExecutor, type JsonObject } from '@listora/db';
 import { isFeatureOn, MARKETPLACE_NAMES, type FeatureGate } from '@listora/marketplaces';
 import { ASKING_PRICES_LABEL, marketSoldLabel } from '@listora/pricing';
 import {
+  latestSoldPace,
   marketDemand,
   marketRecentSoldPace,
   marketSoldPace,
@@ -63,6 +65,7 @@ export const COMPARISON_LIMITS: Readonly<Record<ComparisonMarketplace, Compariso
   depop: { perHour: 60, perDay: 300 },
   ebay: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
   poshmark: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
+  mercari: { perHour: 20, perDay: 100, saveForPricier: { after: 12, minEstimateCents: 2_500 } },
 };
 
 /** A read of the same search answers for this long. */
@@ -241,7 +244,9 @@ function settled(
 ): StoredComparison {
   const enough =
     (stats.forSale?.count ?? 0) >= MIN_ASKING_SHOWN || (stats.sold?.count ?? 0) >= MIN_SOLD_SHOWN;
-  const showsSold = COMPARISON_SOLD_PACE[marketplace] === 'search_count';
+  const showsSold =
+    COMPARISON_SOLD_PACE[marketplace] === 'search_count' ||
+    COMPARISON_SOLD_PACE[marketplace] === 'latest_sold';
   return {
     marketplace,
     comparisonId,
@@ -293,10 +298,10 @@ export async function answerComparison(
     .where('account_id', '=', tenant.accountId)
     .where('id', '=', comparisonId)
     .execute();
-  const marketplace = row.marketplace as ComparisonMarketplace;
+  const marketplace = row.marketplace;
   const next: StoredComparison =
     stats !== undefined
-      ? settled(marketplace, comparisonId, stats as ComparisonStats, false, {
+      ? settled(marketplace, comparisonId, stats, false, {
           forSaleTotal: answer.forSaleTotal ?? null,
           soldTotal: answer.soldTotal ?? null,
         })
@@ -372,7 +377,7 @@ export function marketInputs(
                 count: sold.count,
                 lowCents: sold.lowCents,
                 highCents: sold.highCents,
-                windowDays: sold.windowDays,
+                windowDays: sold.windowDays ?? null,
                 level: stats.level,
               },
             }),
@@ -410,6 +415,14 @@ function demandOf(comparison: StoredComparison, recentOwnSales: number): MarketD
         forSaleCount: comparison.stats?.forSale?.count ?? 0,
         forSaleTotal,
       },
+      name,
+    );
+  }
+  if (pace === 'latest_sold') {
+    return latestSoldPace(
+      comparison.soldTotal ?? null,
+      comparison.stats?.read.sold ?? 0,
+      COMPARISON_SOLD_WINDOW_DAYS[comparison.marketplace] ?? 0,
       name,
     );
   }
@@ -480,7 +493,7 @@ function readView(
   };
   const label =
     sold !== undefined
-      ? `${name}: sold ${dollars(sold.lowCents)}-${dollars(sold.highCents)}, ${soldPace(sold.count, sold.windowDays)}`
+      ? `${name}: sold ${dollars(sold.lowCents)}-${dollars(sold.highCents)}, ${soldPace(sold.count, sold.windowDays ?? null)}`
       : forSale !== undefined
         ? `${name}: asking ${dollars(forSale.lowCents)}-${dollars(forSale.highCents)}, ${String(forSale.count)} like it for sale`
         : undefined;
@@ -519,7 +532,7 @@ function readView(
             low: usd(sold.lowCents),
             median: usd(sold.medianCents),
             high: usd(sold.highCents),
-            ...(sold.windowDays === null ? {} : { windowDays: sold.windowDays }),
+            ...(sold.windowDays === undefined ? {} : { windowDays: sold.windowDays }),
             label: marketSoldLabel(name),
           },
         }),

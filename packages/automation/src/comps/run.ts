@@ -20,6 +20,7 @@ import { Pacing, type PacingOptions } from '../safety/pacing.ts';
 import { depopComparisonScript, depopWarmUpScript } from './depop.ts';
 import { ebayComparisonScript, ebayWarmUpScript } from './ebay.ts';
 import { poshmarkComparisonScript, poshmarkWarmUpScript } from './poshmark.ts';
+import { mercariComparisonScript, mercariWarmUpScript } from './mercari.ts';
 import {
   comparisonStats,
   COMPARISON_VERSION,
@@ -33,6 +34,7 @@ const SITES: Readonly<Record<ComparisonMarketplace, string>> = {
   depop: 'https://www.depop.com',
   ebay: 'https://www.ebay.com',
   poshmark: 'https://poshmark.com',
+  mercari: 'https://www.mercari.com',
 };
 
 /** What a read found, whichever marketplace read it. */
@@ -63,6 +65,10 @@ const READERS: Readonly<
   poshmark: {
     read: (siteUrl, input) => poshmarkComparisonScript(siteUrl, input.query, new Date(input.now)),
     warmUp: poshmarkWarmUpScript,
+  },
+  mercari: {
+    read: (siteUrl, input) => mercariComparisonScript(siteUrl, input.query, new Date(input.now)),
+    warmUp: mercariWarmUpScript,
   },
 };
 

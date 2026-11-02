@@ -29,6 +29,15 @@ export interface ScanCallDetail {
   readonly comparisons?: readonly StoredComparison[];
   /** The household's own sales like it in the last 90 days, which the demand weighs. */
   readonly recentOwnSales?: number;
+  /**
+   * The AI estimate as the card shows it: scaled to the household's sales (`ScanCall.aiEstimate`
+   * in @listora/sourcing). Absent on scans made before the calibration, which show the read's.
+   */
+  readonly aiEstimate?: {
+    readonly lowCents: number;
+    readonly midCents: number;
+    readonly highCents: number;
+  };
 }
 
 /** What `item_scan.research` holds: the web research the app asked for, and where it came from. */

@@ -10,27 +10,31 @@ import type { MarketMatchLevel, MarketStats } from '@listora/sourcing/market';
 import type { PacingSettings } from '../profiles.ts';
 
 /** The marketplaces with a comparison reader, in the order the card shows them. */
-export const COMPARISON_MARKETPLACES = ['depop', 'ebay', 'poshmark'] as const;
+export const COMPARISON_MARKETPLACES = ['depop', 'ebay', 'poshmark', 'mercari'] as const;
 export type ComparisonMarketplace = (typeof COMPARISON_MARKETPLACES)[number];
 
 /**
- * How many days back a marketplace's sold comparisons reach, where it shows a visitor sold
- * listings at all (Depop shows none): eBay's sold search shows about its last 90 days, the
- * window its count of sold listings (`soldTotal`) covers; Poshmark's shows every sale ever, so
- * its reader counts only those of the last 90 days.
+ * Where a marketplace shows a visitor sold listings at all (Depop shows none), how many days
+ * back its sold comparisons reach: eBay's whole sold search, its last 90 days, the window its
+ * count of sold listings (`soldTotal`) covers; Poshmark's sold search shows every sale it ever
+ * had, so its reader counts only those of the last 90 days; and Mercari's latest sold results
+ * read, those that sold in the last 30 days (its sold search reaches back much further and gives
+ * no count of a window, so its pace is how many of the latest sold sold lately, out of
+ * `stats.read.sold`).
  */
 export const COMPARISON_SOLD_WINDOW_DAYS: Readonly<Partial<Record<ComparisonMarketplace, number>>> =
-  { ebay: 90, poshmark: 90 };
+  { ebay: 90, poshmark: 90, mercari: 30 };
 
 /**
  * How a marketplace that shows sold listings tells how fast items like it sell (the trend
  * read): `search_count`, its sold search's own count over the sold window against its count for
  * sale (eBay's); `sold_dates`, the days its close matches sold (Poshmark's, whose sold search
- * counts every sale it ever had, so only the dates say how recent they are).
+ * counts every sale it ever had, so only the dates say how recent they are); `latest_sold`, how
+ * many of its latest sales were in the window (Mercari's).
  */
 export const COMPARISON_SOLD_PACE: Readonly<
-  Partial<Record<ComparisonMarketplace, 'search_count' | 'sold_dates'>>
-> = { ebay: 'search_count', poshmark: 'sold_dates' };
+  Partial<Record<ComparisonMarketplace, 'search_count' | 'sold_dates' | 'latest_sold'>>
+> = { ebay: 'search_count', poshmark: 'sold_dates', mercari: 'latest_sold' };
 
 /** The version of `ComparisonInput` and `ComparisonOutput`; change it with either. */
 export const COMPARISON_VERSION = 1;
@@ -67,14 +71,28 @@ export type ComparisonOutcome = (typeof COMPARISON_OUTCOMES)[number];
 
 /**
  * A read's numbers as the phone sends them: `MarketStats`, its level absent (not `null`) when
- * nothing matched, as the API's answer has it.
+ * nothing matched, and its sold window absent when the marketplace dated none (Mercari's page
+ * without its data), as the API's answer has them.
  */
-export type ComparisonStats = Omit<MarketStats, 'level'> & { readonly level?: MarketMatchLevel };
+export type ComparisonStats = Omit<MarketStats, 'level' | 'sold'> & {
+  readonly level?: MarketMatchLevel;
+  readonly sold?: Omit<NonNullable<MarketStats['sold']>, 'windowDays'> & {
+    readonly windowDays?: number;
+  };
+};
 
 /** `MarketStats` as the phone sends them. */
 export function comparisonStats(stats: MarketStats): ComparisonStats {
-  const { level, ...rest } = stats;
-  return level === null ? rest : { ...rest, level };
+  const { level, sold, ...rest } = stats;
+  const sent: ComparisonStats = sold === undefined ? rest : { ...rest, sold: soldSent(sold) };
+  return level === null ? sent : { ...sent, level };
+}
+
+function soldSent({
+  windowDays,
+  ...prices
+}: NonNullable<MarketStats['sold']>): NonNullable<ComparisonStats['sold']> {
+  return windowDays === null ? prices : { ...prices, windowDays };
 }
 
 /** What the phone answers: the numbers, or why there are none. */
@@ -85,9 +103,10 @@ export type ComparisonOutput =
       /** How many listings the whole for-sale search has, when the marketplace says. */
       readonly forSaleTotal: number | null;
       /**
-       * How many listings the whole sold search has, where the marketplace counts them over its
-       * sold window (eBay's last 90 days); absent where it shows none (Depop) or counts every
-       * sale it ever had (Poshmark).
+       * Sold listings in the marketplace's sold window (`COMPARISON_SOLD_WINDOW_DAYS`), where it
+       * shows a visitor sold ones: eBay's whole sold search over its 90 days, Mercari's latest
+       * sold read that sold in the last 30 days; absent where it shows none (Depop) or counts
+       * every sale it ever had (Poshmark).
        */
       readonly soldTotal?: number | null;
       readonly ms: number;

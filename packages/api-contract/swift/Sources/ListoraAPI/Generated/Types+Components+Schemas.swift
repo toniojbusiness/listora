@@ -17900,8 +17900,8 @@ extension Components {
         /// where the scan read them) in the marketplace's public search, read on the seller's iPhone in
         /// a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
         /// asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
-        /// the sold side; eBay and Poshmark show their sold listings, so their rows have what close
-        /// matches sold for (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
+        /// the sold side; eBay, Poshmark, and Mercari show their sold listings, so their rows have what
+        /// close matches sold for (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
         /// `saveScanComparison`.
         ///
         ///
@@ -18135,8 +18135,8 @@ extension Components {
                 case label
             }
         }
-        /// What similar listings sold for in a marketplace's public search (eBay's, Poshmark's): other
-        /// sellers' real sales, never the household's own.
+        /// What similar listings sold for in a marketplace's public search (eBay's, Poshmark's,
+        /// Mercari's): other sellers' real sales, never the household's own.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ScanSoldPrices`.
@@ -18151,7 +18151,7 @@ extension Components {
             public var median: Components.Schemas.Money
             /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/high`.
             public var high: Components.Schemas.Money
-            /// How many days back the oldest of them sold.
+            /// How many days back the oldest of them sold, where the marketplace dates them.
             ///
             /// - Remark: Generated from `#/components/schemas/ScanSoldPrices/windowDays`.
             public var windowDays: Swift.Int32?
@@ -18166,7 +18166,7 @@ extension Components {
             ///   - low: The low quartile of the sold prices.
             ///   - median:
             ///   - high:
-            ///   - windowDays: How many days back the oldest of them sold.
+            ///   - windowDays: How many days back the oldest of them sold, where the marketplace dates them.
             ///   - label: Shown with them, always ("Sold listings on eBay").
             public init(
                 count: Swift.Int32,
@@ -18192,9 +18192,10 @@ extension Components {
                 case label
             }
         }
-        /// How the item sells against the competition: on a marketplace that shows sold listings, how
-        /// many its search sold lately against how many it has for sale now (eBay), or how many close
-        /// matches sold in the last weeks by their sold dates (Poshmark); elsewhere the
+        /// How the item sells against the competition: on a marketplace that shows sold listings, its
+        /// own sold pace (eBay: how many its search sold lately against how many it has for sale now;
+        /// Poshmark: how many close matches sold in the last weeks, by their sold dates; Mercari: how
+        /// many of its latest sales were in the last 30 days); elsewhere the
         /// household's own recent sales like it against what the marketplace has for sale now. `label`
         /// only when the numbers say so.
         ///
@@ -18299,9 +18300,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/forSaleTotal`.
             public var forSaleTotal: Swift.Int32?
-            /// Sold listings in the whole sold search, as the marketplace counts them, where it counts
-            /// a sold window (eBay's last 90 days); absent where it counts every sale it ever had
-            /// (Poshmark).
+            /// Sold listings in the marketplace's sold window, where it shows a visitor sold listings:
+            /// eBay's whole sold search over its last 90 days, as eBay counts them; Mercari's latest
+            /// sold results read (`stats.read.sold`) that sold in the last 30 days. Absent for
+            /// Poshmark, whose sold search counts every sale it ever had.
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/soldTotal`.
@@ -18318,7 +18320,7 @@ extension Components {
             ///   - outcome:
             ///   - stats:
             ///   - forSaleTotal: Listings for sale in the whole search, as the marketplace counts them.
-            ///   - soldTotal: Sold listings in the whole sold search, as the marketplace counts them, where it counts
+            ///   - soldTotal: Sold listings in the marketplace's sold window, where it shows a visitor sold listings:
             ///   - ms:
             ///   - message: Why a read did not go through, for the server's log; never page text.
             public init(
@@ -18618,7 +18620,11 @@ extension Components {
                 ])
             }
         }
-        /// The AI's guess of what a buyer would pay on Depop; never sold data.
+        /// The AI's guess of what a buyer would pay on Depop; never sold data. For a read that named a
+        /// brand it is scaled by what the household's own items went for against what they asked (the
+        /// call's `calibrated` signal says so), since the AI prices a named brand like its listings ask.
+        /// Scans made before the calibration show the AI's own numbers.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/ScanAiEstimate`.
         public struct ScanAiEstimate: Codable, Hashable, Sendable {
@@ -19023,10 +19029,11 @@ extension Components {
             }
         }
         /// `own_history`: the household's own sales like it. `market_sold`: what close matches sold for
-        /// in a marketplace's public search (eBay's or Poshmark's sold listings, `comparisons`), when
-        /// the household's own sales are too few. `web_info`: what web pages say such items resell for
-        /// (the research, with its sites), never a high-confidence call. `ai_estimate`: the AI's
-        /// estimate alone, never a high-confidence Buy. `none`: nothing to go on.
+        /// in a marketplace's public search (eBay's, Poshmark's, or Mercari's sold listings,
+        /// `comparisons`), when the household's own sales are too few. `web_info`: what web pages say
+        /// such items resell for (the research, with its sites), never a high-confidence call.
+        /// `ai_estimate`: the AI's estimate alone, never a high-confidence Buy. `none`: nothing to go
+        /// on.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanBasis`.
@@ -19184,7 +19191,9 @@ extension Components {
         /// own sales of items like it coming faster or slower. `style`: the AI's read of the style.
         /// `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
         /// household's recent sales against the marketplace's supply. `unsold`: the household already
-        /// has items like it in inventory, not sold (it never moves the call).
+        /// has items like it in inventory, not sold (it never moves the call). `calibrated`: the AI
+        /// estimate and the web's asking prices were scaled by what the household's own items went for
+        /// against what they asked.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
@@ -19197,6 +19206,7 @@ extension Components {
             case asking = "asking"
             case demand = "demand"
             case unsold = "unsold"
+            case calibrated = "calibrated"
         }
         /// The item's original retail price, with where it came from: one model's price (`low` equals
         /// `high`), or, when the scan could not pin the exact model, the range across the likely

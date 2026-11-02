@@ -7762,7 +7762,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	];
 	/** Fewest listings (sold, else for sale) a level needs before a looser one is tried. */
 	const MIN_MARKET_MATCHES = 5;
-	const DAY_MS$1 = 864e5;
+	const DAY_MS$2 = 864e5;
 	/** The words of a text, lowercase, accents and punctuation dropped. */
 	function words(text) {
 		return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/['’]/g, "").split(/[^\p{L}\p{N}]+/u).filter((word) => word !== "");
@@ -7850,7 +7850,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const sold = chosen.filter((listing) => listing.sold);
 		const soldPrices = quartiles(withoutOutliers(sold.map((listing) => listing.priceCents)));
 		const forSalePrices = quartiles(withoutOutliers(chosen.filter((listing) => !listing.sold).map((listing) => listing.priceCents)));
-		const ages = sold.flatMap((listing) => listing.at === null ? [] : [Math.max(0, (now.getTime() - listing.at.getTime()) / DAY_MS$1)]);
+		const ages = sold.flatMap((listing) => listing.at === null ? [] : [Math.max(0, (now.getTime() - listing.at.getTime()) / DAY_MS$2)]);
 		const dated = ages.length === sold.length && sold.length > 0;
 		return {
 			level,
@@ -7925,7 +7925,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* item's own, without shipping). Only those are read: never the seller (the slug names them),
 	* the photos, or the location.
 	*/
-	const PAGE$14 = "search";
+	const PAGE$15 = "search";
 	/** Statuses of a product that sold, as Depop names them (page-data.ts). */
 	const SOLD_STATUSES = /* @__PURE__ */ new Set([
 		"STATUS_SOLD",
@@ -7973,18 +7973,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readDepopSearch(page, site, words) {
 		if (!page.url().startsWith(`${site.origin}/`)) await page.goto(depopSearchPageUrl(site));
 		const answer = await page.apiGet(depopSearchApiUrl(site, words));
-		if (answer.status !== 200) throw changed$2(PAGE$14, `answered ${String(answer.status)}`);
+		if (answer.status !== 200) throw changed$2(PAGE$15, `answered ${String(answer.status)}`);
 		return depopSearchFromAnswer(answer.body);
 	}
 	/** The search's products and count, out of its API answer. */
 	function depopSearchFromAnswer(body) {
 		const read = searchAnswerSchema.safeParse(body);
-		if (!read.success) throw changed$2(PAGE$14, "answered with results Listora does not know");
+		if (!read.success) throw changed$2(PAGE$15, "answered with results Listora does not know");
 		const listings = [];
 		for (const entry of read.data.objects) {
 			const product = searchProductSchema.safeParse(entry);
-			if (!product.success) throw changed$2(PAGE$14, "shows a product Listora does not know");
-			const listing = listingOf$2(product.data);
+			if (!product.success) throw changed$2(PAGE$15, "shows a product Listora does not know");
+			const listing = listingOf$3(product.data);
 			if (listing !== null) listings.push(listing);
 		}
 		return {
@@ -7992,7 +7992,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			total: read.data.meta.total_count ?? null
 		};
 	}
-	function listingOf$2(product) {
+	function listingOf$3(product) {
 		if (product.pricing.currency_name !== "USD") return null;
 		const sold = SOLD_STATUSES.has(product.status);
 		if (!sold && !ON_SALE_STATUSES.has(product.status)) return null;
@@ -8135,7 +8135,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/ebay/pages/search-page.ts
-	const PAGE$13 = "search results";
+	const PAGE$14 = "search results";
 	/**
 	* The results page, in eBay's current card layout (`s-card`) and its earlier one (`s-item`),
 	* which eBay still serves to some visitors.
@@ -8180,15 +8180,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				total: 0,
 				shown: 0
 			};
-			throw changed$1(PAGE$13, `has no results (${EBAY_SEARCH_PAGE.results})`);
+			throw changed$1(PAGE$14, `has no results (${EBAY_SEARCH_PAGE.results})`);
 		}
 		const classes = await page.attributes(EBAY_SEARCH_PAGE.parts, "class");
 		const texts = await page.texts(EBAY_SEARCH_PAGE.parts);
-		if (classes.length !== texts.length) throw changed$1(PAGE$13, "changed while it was read");
+		if (classes.length !== texts.length) throw changed$1(PAGE$14, "changed while it was read");
 		const results = groupResults(classes, texts);
 		return {
 			listings: results.flatMap((result) => {
-				const listing = listingOf$1(result, kind);
+				const listing = listingOf$2(result, kind);
 				return listing === null ? [] : [listing];
 			}),
 			total: resultCount(await page.text(EBAY_SEARCH_PAGE.count)),
@@ -8232,17 +8232,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return "other";
 	}
 	/** Words that make a result many items, or no item at all. */
-	const LOT$1 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	const LOT$2 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
 	/** What eBay adds to a title for screen readers and new listings. */
 	const TITLE_NOISE = [/^new listing\s*/i, /\s*opens in a new window or tab\s*$/i];
 	/** eBay's placeholder result that is no listing. */
 	const PLACEHOLDER_TITLES = /* @__PURE__ */ new Set(["shop on ebay"]);
 	/** A result as a listing; `null` for one the comparisons must not count. */
-	function listingOf$1(result, kind) {
+	function listingOf$2(result, kind) {
 		let title = (result.title ?? "").replace(/\s+/g, " ").trim();
 		for (const noise of TITLE_NOISE) title = title.replace(noise, "");
 		if (title === "" || PLACEHOLDER_TITLES.has(title.toLowerCase())) return null;
-		if (LOT$1.test(title)) return null;
+		if (LOT$2.test(title)) return null;
 		const priceCents = parsePrice$1((result.price ?? "").replace(/\s+/g, " "));
 		if (priceCents === null) return null;
 		const sold = kind === "sold";
@@ -8505,7 +8505,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the change to `sold_out`). A listing of many sizes or quantities (a boutique's, `multi_item`),
 	* lots and bundles, and prices not in US dollars are never counted.
 	*/
-	const PAGE$12 = "search";
+	const PAGE$13 = "search";
 	/** Where the search's results and count are in the page's data (`PageDriver.pageData`). */
 	const POSHMARK_SEARCH_DATA = {
 		results: "__INITIAL_STATE__.$_search.gridData.data",
@@ -8548,10 +8548,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The search's listings and count, out of the page's data. */
 	function poshmarkSearchFromData(results, total, kind) {
-		const records = expectShape$1(array(unknown()), results, PAGE$12);
+		const records = expectShape$1(array(unknown()), results, PAGE$13);
 		const listings = [];
 		for (const record of records) {
-			const listing = listingOf(expectShape$1(searchListingSchema, record, PAGE$12), kind);
+			const listing = listingOf$1(expectShape$1(searchListingSchema, record, PAGE$13), kind);
 			if (listing !== null) listings.push(listing);
 		}
 		const count = number().int().min(0).safeParse(total);
@@ -8562,9 +8562,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 	/** Words that make a result many items. */
-	const LOT = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	const LOT$1 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
 	/** A result as a listing; `null` for one the comparisons must not count. */
-	function listingOf(record, kind) {
+	function listingOf$1(record, kind) {
 		const sold = kind === "sold";
 		const status = record.inventory.status;
 		if (sold ? status !== "sold_out" : status !== "available" && status !== "reserved") return null;
@@ -8573,7 +8573,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const priceCents = cents$2(record.price_amount.val);
 		if (priceCents === null || priceCents === 0) return null;
 		const title = record.title.replace(/\s+/g, " ").trim();
-		if (title === "" || LOT.test(title)) return null;
+		if (title === "" || LOT$1.test(title)) return null;
 		const at = sold ? soldAt(record.inventory.status_changed_at) : null;
 		if (sold && at === null) return null;
 		return {
@@ -8684,21 +8684,35 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
 // src/comps/types.ts
 /**
-	* How many days back a marketplace's sold comparisons reach, where it shows a visitor sold
-	* listings at all (Depop shows none): eBay's sold search shows about its last 90 days, the
-	* window its count of sold listings (`soldTotal`) covers; Poshmark's shows every sale ever, so
-	* its reader counts only those of the last 90 days.
+	* Where a marketplace shows a visitor sold listings at all (Depop shows none), how many days
+	* back its sold comparisons reach: eBay's whole sold search, its last 90 days, the window its
+	* count of sold listings (`soldTotal`) covers; Poshmark's sold search shows every sale it ever
+	* had, so its reader counts only those of the last 90 days; and Mercari's latest sold results
+	* read, those that sold in the last 30 days (its sold search reaches back much further and gives
+	* no count of a window, so its pace is how many of the latest sold sold lately, out of
+	* `stats.read.sold`).
 	*/
 	const COMPARISON_SOLD_WINDOW_DAYS = {
 		ebay: 90,
-		poshmark: 90
+		poshmark: 90,
+		mercari: 30
 	};
 	/** `MarketStats` as the phone sends them. */
 	function comparisonStats(stats) {
-		const { level, ...rest } = stats;
-		return level === null ? rest : {
+		const { level, sold, ...rest } = stats;
+		const sent = sold === void 0 ? rest : {
 			...rest,
+			sold: soldSent(sold)
+		};
+		return level === null ? sent : {
+			...sent,
 			level
+		};
+	}
+	function soldSent({ windowDays, ...prices }) {
+		return windowDays === null ? prices : {
+			...prices,
+			windowDays
 		};
 	}
 
@@ -8714,7 +8728,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* shares, follows, or offers anything: it only loads the results pages any visitor's browser
 	* loads.
 	*/
-	const DAY_MS = 864e5;
+	const DAY_MS$1 = 864e5;
 	/** The warm-up: Poshmark's home page, loaded once while the seller walks to the bins. */
 	function poshmarkWarmUpScript(siteUrl) {
 		const site = new PoshmarkSite(siteUrl);
@@ -8744,8 +8758,301 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** The sold listings of the sold window (`COMPARISON_SOLD_WINDOW_DAYS.poshmark`). */
 	function recentlySold(listings, now) {
 		const days = COMPARISON_SOLD_WINDOW_DAYS.poshmark ?? 0;
-		const since = now.getTime() - days * DAY_MS;
+		const since = now.getTime() - days * DAY_MS$1;
 		return listings.filter((listing) => listing.at !== null && listing.at.getTime() >= since);
+	}
+
+// src/mercari/pages/common.ts
+/**
+	* What every Mercari page module shares: absolute URLs on the site the adapter runs against
+	* (Mercari, or the fake Mercari site in development and tests), Mercari's price format, and
+	* the failure every page module throws for a page that is not as it expects.
+	*/
+	function absolute(site, path) {
+		return `${site.origin}${path}`;
+	}
+	/**
+	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
+	* page has `selector`.
+	*/
+	async function expectElement(page, selector, pageName, what) {
+		if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
+	}
+	/**
+	* Waits, within the step's time, for `selector` on a page that Mercari's own scripts draw after
+	* its document is ready (its signed-in pages are static Next.js pages filled in by the browser,
+	* read 2026-10-26), and throws `PageChangedError` naming the part when it never comes. A check
+	* the page shows instead still stops the run as one: the page driver throws it again.
+	*/
+	async function awaitElement(page, selector, pageName, what) {
+		try {
+			await page.waitFor(selector, "attached");
+		} catch {
+			if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
+		}
+	}
+	/**
+	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
+	* the run) and learns its address anew, which Mercari's own scripts change without loading a
+	* page.
+	*/
+	async function lookAgain(page, ms) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		await page.waitFor("body", "attached");
+	}
+	/** The failure for a Mercari page that is not as the script expects. */
+	function changed(pageName, problem) {
+		return new PageChangedError(`Mercari's ${pageName} ${problem}.`);
+	}
+	/** Cents from a price as Mercari shows it: `$45`, `$1,250`, or `$45.00`. `null` otherwise. */
+	function parsePrice(shown) {
+		const match = /^\$\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?$/.exec(shown?.trim() ?? "");
+		if (match?.[1] === void 0) return null;
+		const dollars = Number(match[1].replaceAll(",", ""));
+		const cents = match[2] === void 0 ? 0 : Number(match[2]);
+		return dollars * 100 + cents;
+	}
+	/** Whole dollars for Mercari's price field (prices are validated to be whole dollars). */
+	function priceField(cents) {
+		return String(Math.floor(cents / 100));
+	}
+
+// src/mercari/pages/search-page.ts
+	const PAGE$12 = "search results";
+	/** Mercari's own item status filter values (`itemStatuses`). */
+	const ITEM_STATUSES = {
+		sold: "2",
+		for_sale: "1"
+	};
+	/** Mercari's "Newest" sort (`sortBy`), for the sold search: the latest sold first. */
+	const NEWEST = "2";
+	/** A card of the search's own results, not one in a carousel of other items. */
+	const CARD = "[data-testid=\"ItemContainer\"]:not([data-testid=\"FeedContainer\"] *)";
+	const MERCARI_SEARCH_PAGE = {
+		/** The search's result cards, or the page's word that it found nothing. */
+		ready: `${CARD}, [data-testid="SearchResultsEmpty"], [data-testid="NoSearchResults"]`,
+		empty: "[data-testid=\"SearchResultsEmpty\"], [data-testid=\"NoSearchResults\"]",
+		card: CARD,
+		/**
+		* One selector for every part read, so one read of their attributes and one of their texts
+		* come back in the page's order and line up: each card, then its name and price.
+		*/
+		parts: [
+			CARD,
+			`${CARD} [data-testid="ItemName"]`,
+			`${CARD} [data-testid="ProductThumbItemPrice"]`
+		].join(", ")
+	};
+	/** The search page's URL, as the page's own status filter makes it. */
+	function mercariSearchUrl(site, words, kind) {
+		const query = new URLSearchParams({
+			keyword: words.trim(),
+			itemStatuses: ITEM_STATUSES[kind]
+		});
+		if (kind === "sold") query.set("sortBy", NEWEST);
+		return absolute(site, `/search/?${query.toString()}`);
+	}
+	/** Loads the search page, waits for its results, and reads them. */
+	async function readMercariSearch(page, site, words, kind) {
+		await page.goto(mercariSearchUrl(site, words, kind));
+		try {
+			await page.waitFor(MERCARI_SEARCH_PAGE.ready, "attached");
+		} catch {
+			if (!await page.exists(MERCARI_SEARCH_PAGE.ready)) throw changed(PAGE$12, `has no results (${MERCARI_SEARCH_PAGE.card})`);
+		}
+		if (!await page.exists(MERCARI_SEARCH_PAGE.card)) return {
+			listings: [],
+			total: 0,
+			shown: 0
+		};
+		const parts = MERCARI_SEARCH_PAGE.parts;
+		const roles = await page.attributes(parts, "data-testid");
+		const ids = await page.attributes(parts, "data-productid");
+		const brands = await page.attributes(parts, "data-brand");
+		const sizes = await page.attributes(parts, "data-size");
+		const onSale = await page.attributes(parts, "data-is-on-sale");
+		const texts = await page.texts(parts);
+		if ((/* @__PURE__ */ new Set([
+			roles.length,
+			ids.length,
+			brands.length,
+			sizes.length,
+			onSale.length,
+			texts.length
+		])).size !== 1) throw changed(PAGE$12, "changed while it was read");
+		const cards = groupCards(roles, {
+			ids,
+			brands,
+			sizes,
+			onSale,
+			texts
+		});
+		const data = searchData(await page.pageData("__NEXT_DATA__"));
+		return {
+			listings: cards.flatMap((card) => {
+				const listing = listingOf(card, kind, data.times);
+				return listing === null ? [] : [listing];
+			}),
+			total: data.count,
+			shown: cards.length
+		};
+	}
+	/**
+	* The item times and the search's count out of `window.__NEXT_DATA__`, the data Mercari's
+	* server drew the page from (its Apollo cache, `props.pageProps.serverState`); empty when the
+	* page has none (its results drawn in the browser) or has another shape: the page's data is
+	* never needed for a read, only for its dates.
+	*/
+	function searchData(nextData) {
+		const state = field(field(field(nextData, "props"), "pageProps"), "serverState");
+		const times = /* @__PURE__ */ new Map();
+		let count = null;
+		if (state === null || typeof state !== "object") return {
+			times,
+			count
+		};
+		for (const [key, value] of Object.entries(state)) {
+			if (value === null || typeof value !== "object") continue;
+			if (key === "ROOT_QUERY") {
+				for (const [name, answer] of Object.entries(value)) {
+					const total = field(answer, "count");
+					if (/^search/i.test(name) && typeof total === "number" && Number.isInteger(total)) count = Math.max(0, total);
+				}
+				continue;
+			}
+			const id = field(value, "id");
+			if (typeof id !== "string") continue;
+			const at = seconds(field(value, "lastSoldAt")) ?? seconds(field(value, "updated"));
+			if (at !== null) times.set(id, at);
+		}
+		return {
+			times,
+			count
+		};
+	}
+	function field(value, name) {
+		return value !== null && typeof value === "object" && Object.hasOwn(value, name) ? value[name] : null;
+	}
+	/** A time in Mercari's seconds since 1970 (or milliseconds) as a date; `null` for none. */
+	function seconds(value) {
+		if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+		return new Date(value < 0xe8d4a51000 ? value * 1e3 : value);
+	}
+	/** The page's parts, in its order, into cards: each card's own name and first price. */
+	function groupCards(roles, values) {
+		const cards = [];
+		for (const [index, role] of roles.entries()) {
+			if (role === "ItemContainer") {
+				cards.push({
+					id: values.ids[index] ?? null,
+					brand: values.brands[index] ?? null,
+					size: values.sizes[index] ?? null,
+					onSale: values.onSale[index] ?? null,
+					name: null,
+					price: null
+				});
+				continue;
+			}
+			const current = cards.at(-1);
+			if (current === void 0) continue;
+			const text = values.texts[index] ?? "";
+			if (role === "ItemName") current.name ??= text;
+			else if (role === "ProductThumbItemPrice") current.price ??= text;
+		}
+		return cards;
+	}
+	/** Words that make a listing many items. */
+	const LOT = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	/** A card as a listing; `null` for one the comparisons must not count. */
+	function listingOf(card, kind, times = /* @__PURE__ */ new Map()) {
+		const sold = kind === "sold";
+		if (sold ? card.onSale === "true" : card.onSale === "false") return null;
+		const name = (card.name ?? "").replace(/\s+/g, " ").trim();
+		if (name === "" || LOT.test(name)) return null;
+		const priceCents = firstPrice(card.price);
+		if (priceCents === null) return null;
+		const brand = card.brand?.trim() ?? "";
+		return {
+			priceCents,
+			sold,
+			brand: brand === "" ? null : brand,
+			productType: null,
+			sizes: cardSizes(card.size),
+			text: name,
+			at: sold && card.id !== null ? times.get(card.id) ?? null : null
+		};
+	}
+	/**
+	* The price a card shows first, in cents: `$25.00` of `$25.00$60.00` (a dropped price, the old
+	* one struck through after it); `null` when it shows none Listora can read.
+	*/
+	function firstPrice(text) {
+		const match = /^\s*\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?/.exec(text ?? "");
+		if (match?.[1] === void 0) return null;
+		return Number(match[1].replaceAll(",", "")) * 100 + Number(match[2] ?? "0");
+	}
+	/** A card's size as the comparisons match it: `S (4-6)` is `S`, and `4-6` too. */
+	function cardSizes(size) {
+		const shown = size?.replace(/\s+/g, " ").trim() ?? "";
+		if (shown === "") return [];
+		const sizes = /* @__PURE__ */ new Set([shown]);
+		const range = /^(.+?)\s*\(([^)]+)\)$/.exec(shown);
+		if (range?.[1] !== void 0 && range[2] !== void 0) sizes.add(range[1].trim()).add(range[2].trim());
+		return [...sizes];
+	}
+
+// src/comps/mercari.ts
+/**
+	* Mercari's comparison reader (docs/features/thrift-scan.md, "Mercari"): the item's public
+	* search on Mercari, read in a web view that holds no session, twice: its sold listings (the
+	* page's own "Sold" filter) and its listings for sale now. Both are matched to the item (the
+	* brand Mercari names, else the name's words, and the type in the name, then the model and the
+	* size) and reduced to counts and quartiles (`marketStats`), with the for-sale search's count and
+	* the sold search's recent pace (`soldLately`). Nothing in it signs in, likes,
+	* offers, or buys anything: it only loads the search pages any visitor's browser loads.
+	*/
+	const DAY_MS = 864e5;
+	/**
+	* How many of the sold listings read sold within Mercari's pace window (30 days) before `now`;
+	* `null` when none of them is dated (an undated one counts as not lately: the pace never runs
+	* high on what the page did not say).
+	*/
+	function soldLately(listings, now) {
+		const sold = listings.filter((listing) => listing.sold);
+		if (!sold.some((listing) => listing.at !== null)) return null;
+		const since = now.getTime() - (COMPARISON_SOLD_WINDOW_DAYS.mercari ?? 30) * DAY_MS;
+		return sold.filter((listing) => listing.at !== null && listing.at.getTime() >= since).length;
+	}
+	/** Mercari's site for comparison reads: its own origin only. */
+	function mercariComparisonSite(siteUrl) {
+		return { origin: new URL(siteUrl).origin };
+	}
+	/** The warm-up: Mercari's home page, loaded once while the seller walks to the bins. */
+	function mercariWarmUpScript(siteUrl) {
+		const site = mercariComparisonSite(siteUrl);
+		return (step) => step("open Mercari", { mutates: false }, async (page) => {
+			await page.goto(`${site.origin}/`);
+			return "warm";
+		});
+	}
+	/** One comparison read: the item's sold and for-sale searches, matched and counted. */
+	function mercariComparisonScript(siteUrl, query, now) {
+		const site = mercariComparisonSite(siteUrl);
+		return async (step) => {
+			const sold = await step("search Mercari sold listings", { mutates: false }, (page) => readMercariSearch(page, site, query.words, "sold"));
+			const forSale = await step("search Mercari listings for sale", { mutates: false }, (page) => readMercariSearch(page, site, query.words, "for_sale"));
+			return {
+				stats: marketStats([...sold.listings, ...forSale.listings], {
+					brand: query.brand,
+					productTypes: query.productTypes,
+					typeWords: query.typeWords,
+					model: query.model,
+					sizeLabel: query.sizeLabel
+				}, now),
+				forSaleTotal: forSale.total,
+				soldTotal: soldLately(sold.listings, now)
+			};
+		};
 	}
 
 // src/comps/run.ts
@@ -8763,7 +9070,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const SITES = {
 		depop: "https://www.depop.com",
 		ebay: "https://www.ebay.com",
-		poshmark: "https://poshmark.com"
+		poshmark: "https://poshmark.com",
+		mercari: "https://www.mercari.com"
 	};
 	/** Each marketplace's read and warm-up. */
 	const READERS = {
@@ -8778,6 +9086,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		poshmark: {
 			read: (siteUrl, input) => poshmarkComparisonScript(siteUrl, input.query, new Date(input.now)),
 			warmUp: poshmarkWarmUpScript
+		},
+		mercari: {
+			read: (siteUrl, input) => mercariComparisonScript(siteUrl, input.query, new Date(input.now)),
+			warmUp: mercariWarmUpScript
 		}
 	};
 	/**
@@ -11962,61 +12274,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	function isStatus(value) {
 		return value !== null && REMOTE_LISTING_STATUSES.includes(value);
-	}
-
-// src/mercari/pages/common.ts
-/**
-	* What every Mercari page module shares: absolute URLs on the site the adapter runs against
-	* (Mercari, or the fake Mercari site in development and tests), Mercari's price format, and
-	* the failure every page module throws for a page that is not as it expects.
-	*/
-	function absolute(site, path) {
-		return `${site.origin}${path}`;
-	}
-	/**
-	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
-	* page has `selector`.
-	*/
-	async function expectElement(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
-	}
-	/**
-	* Waits, within the step's time, for `selector` on a page that Mercari's own scripts draw after
-	* its document is ready (its signed-in pages are static Next.js pages filled in by the browser,
-	* read 2026-10-26), and throws `PageChangedError` naming the part when it never comes. A check
-	* the page shows instead still stops the run as one: the page driver throws it again.
-	*/
-	async function awaitElement(page, selector, pageName, what) {
-		try {
-			await page.waitFor(selector, "attached");
-		} catch {
-			if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
-		}
-	}
-	/**
-	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
-	* the run) and learns its address anew, which Mercari's own scripts change without loading a
-	* page.
-	*/
-	async function lookAgain(page, ms) {
-		await new Promise((resolve) => setTimeout(resolve, ms));
-		await page.waitFor("body", "attached");
-	}
-	/** The failure for a Mercari page that is not as the script expects. */
-	function changed(pageName, problem) {
-		return new PageChangedError(`Mercari's ${pageName} ${problem}.`);
-	}
-	/** Cents from a price as Mercari shows it: `$45`, `$1,250`, or `$45.00`. `null` otherwise. */
-	function parsePrice(shown) {
-		const match = /^\$\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?$/.exec(shown?.trim() ?? "");
-		if (match?.[1] === void 0) return null;
-		const dollars = Number(match[1].replaceAll(",", ""));
-		const cents = match[2] === void 0 ? 0 : Number(match[2]);
-		return dollars * 100 + cents;
-	}
-	/** Whole dollars for Mercari's price field (prices are validated to be whole dollars). */
-	function priceField(cents) {
-		return String(Math.floor(cents / 100));
 	}
 
 // src/mercari/pages/account-page.ts
