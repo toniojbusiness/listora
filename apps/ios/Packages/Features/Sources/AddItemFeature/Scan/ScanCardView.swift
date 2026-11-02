@@ -155,7 +155,10 @@ struct ScanCardView: View {
     private func priceLines(_ card: ScanCard) -> some View {
         if let prices = card.prices {
             ScanThreePrices(prices: prices)
-            Text(card.basedOn).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+            Text(card.basedOn)
+                .font(Typography.footnote)
+                .foregroundStyle(Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         } else if let range = card.range {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 Text(range).font(Typography.price).accessibilityIdentifier("scan.range")
