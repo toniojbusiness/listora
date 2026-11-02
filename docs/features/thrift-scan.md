@@ -26,6 +26,8 @@ Code:
 - `packages/sourcing` (`@listora/sourcing`): the pure rules, with no I/O. `quartiles`, `brandKey`
   (how two brands compare), `ownHistoryComparisons` (the seller's own sales like the item),
   `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS` and `decideCall` (the rule both calls share),
+  `priceCalibration` (`calibration.ts`, the AI estimate and the web's asks scaled to the
+  seller's sales), `snapBrand` (a near miss of an own brand),
   `ownHistoryByMarketplace` (the price screen's), `sizeBucket`, `buildSourcingKit`,
   `offlineScanCall` (the call with no signal) with its golden cases (`offline-call.cases.ts`),
   `unsoldLikeIt`, and `buildSourcingInsights` ("What sells for you", `insights.ts`).
@@ -63,11 +65,14 @@ checkout ([hauls.md](hauls.md)).
 
 1. **The range.** The seller's own matching sales, from the low to the high quartile, when at
    least 3 match (`minComparisons`); otherwise what at least 5 close matches sold for on eBay
-   (`market_sold`, "eBay" below); otherwise what the web says it resells for; otherwise the AI
-   estimate's low to high, labeled "AI estimate - not based on sold listings". Own sales match at the tightest level that has 3:
+   (`market_sold`, "eBay" below); otherwise what the web's used listings ask; otherwise the AI
+   estimate's low to high, labeled "AI estimate - not based on sold listings". The web's asks
+   and the AI estimate are first scaled to what the seller's own items sell for
+   ([Calibrated to the seller's sales](#calibrated-to-the-sellers-sales)). Own sales match at the tightest level that has 3:
    the same brand and category, then the same brand, then the same category (`MATCH_LEVELS`).
    Brands compare by `brandKey` ("Abercrombie & Fitch" and "Abercrombie", "Levi's" and "LEVI"
-   are one brand; "American Eagle" and "American Apparel" are two).
+   are one brand; "American Eagle" and "American Apparel" are two), after a near miss of one of
+   the seller's own brands is snapped to it ([Brand snap](#brand-snap)).
 2. **The payouts.** Each end of the range less the marketplace's estimated fees
    (`feeEstimator` in `@listora/pricing`, calibrated by the seller's actual fees when there are
    enough).
@@ -87,6 +92,50 @@ checkout ([hauls.md](hauls.md)).
 "Sold listings on eBay: 9 like it in the last 14 days", or the AI estimate's label). Ranges are quartiles, never one price, and "sold" appears only next
 to real sold data (a unit test checks the call's wording with `claimsSoldData`).
 
+## Calibrated to the seller's sales
+
+The AI estimate and the web's asking prices both run above what items really sell for: on the
+backtest (below) the AI's middle was 26% over the sale and the web's asks more than twice it.
+So before either holds a range, the call scales it by what the seller's own items went for
+against what their listings asked (`priceCalibration` in `@listora/sourcing`, `calibration.ts`):
+
+- **The ratio.** The median, over the seller's sales whose prices the call models (not eBay's),
+  of each sale price over the asking price it sold from: the sold listing's price, else the
+  item's list price. Each sale's ratio is held to 30%-100%, so a bundle or a typo'd ask never
+  moves it far. It is weighed against a **default of 75%** (what buyers' offers usually come to)
+  as if the default were 5 more sales, so a seller with no history gets 75% and their own ratio
+  takes over as their sales grow. It is computed per account, at each call, from that account's
+  own sales: no seller's numbers live anywhere else.
+- **The AI estimate of a named brand** is scaled by the ratio once: the AI prices a named brand
+  like its listings ask (35% over the sale on the backtest), but not an item it could not name
+  (7%), whose estimate stands.
+- **The web's asks** are scaled by the ratio twice: other sellers' asks run as far above what
+  the seller's own items list for as those listings run above what they sell for (the web's
+  asks were 2.2 times the sale; the household's ratio squared is 0.56).
+- **What it never touches:** the seller's own sales, a marketplace's sold listings, and the
+  ranking (own sales, then sold listings, then the web, then the AI estimate). The retail cap
+  and the hold to what close matches ask apply after the scaling.
+- **On the card.** The AI estimate shows scaled, under its label; the research's own line still
+  shows the web's asks as they came ("Asks $30-$50 on poshmark.com"). A range from the web says
+  it is asks: "Web info - not sold listings: asks on poshmark.com, scaled to your sales". A
+  `calibrated` signal says what was scaled and by what: "Scaled to your sales · Your items went
+  for 75% of what they asked (64 sales); the AI estimate and the web's asking prices are scaled
+  to it" (with no sales: "Items usually go for about 75% of what they ask; ...").
+- **By category** was measured and not taken: one ratio per category group (drawn toward the
+  seller's overall ratio) gave the AI estimate a median error of 38% against 35% for one ratio
+  overall, since a category's few sales move its ratio more than its items differ.
+
+### Brand snap
+
+A read brand that nearly spells one of the seller's own sold brands is snapped to it when the
+scan is read (`snapBrand` in `@listora/sourcing`, `snappedRead` in `apps/api/src/scans`), so the
+card, the own sales, the web research, and a kept item all name the brand the household sells:
+"Wrenfeld" (an invented brand) becomes Wrenfield when the household sold Wrenfield. Only when
+unambiguous: the read does not already match one of them (`brandKey`), its key is at least 5
+letters, and exactly one of the seller's brands is within 2 edits and 1 in 5 letters of it. Only the seller's own
+brands are candidates, so a different brand of a similar spelling they never sold is left as
+read. The scan stores the snapped read; its log line says `brandSnapped`.
+
 ## The backtest (`npm run eval -- scan`)
 
 ```sh
@@ -94,13 +143,26 @@ npm run eval -- scan --dataset <dir>                         # fake AI: plumbing
 npm run eval -- scan --dataset <dir> --provider none         # own sales only, no AI
 npm run eval -- scan --dataset <dir> --provider anthropic    # the real read; ANTHROPIC_API_KEY
 npm run eval -- scan --dataset <dir> --provider anthropic --images 2 --worth-listing 10
+npm run eval -- scan --dataset <dir> --provider anthropic --research --json > run.json  # with the web lookup
+npm run eval -- scan --dataset <dir> --replay run.json       # the same answers again, free
 ```
+
+`--research` looks each read up on the web the way the scan does (`researchScanItem`, asked
+about the read by `scanResearchSubject`, the same as `researchFor`), about $0.025 a lookup.
+`--replay` answers the reads, and the research when the file has them, from an earlier run's
+`--json` report, so a change to the call or the calibration is measured on the same model
+answers without paying for them again.
 
 For each sold item it makes the scan's read from the item's photos, compares the item with the
 set's other sales (leave-one-out), makes the call, and scores all three against what the item
-really sold for. Two call variants run: `ai`, the scan's own read (the call at the store), and
-`labels`, the set's labeled brand and category with full confidence and no AI estimate (the best
-an own-history-only call could do). A sweep repeats the call at worth-listing amounts from $5 to
+really sold for. Three call variants run: `ai`, the scan's own read with the AI estimate and the
+web's asks as they came (the call before the calibration); `calibrated`, the same read with the
+brand snapped and the prices scaled (the call at the store today), each item's snap and ratio
+from the set's other items only, so an item never calibrates itself; and `labels`, the set's
+labeled brand and category with full confidence and no AI estimate (the best an
+own-history-only call could do). With a read, a price table scores the AI estimate, the web's
+asks, the own sales' quartiles, and the call's range, before and after, overall and by the
+labeled category's group. A sweep repeats the call at worth-listing amounts from $5 to
 $20. The report holds counts and money only, no title or brand, so a private set's report can be
 shared; `--items` adds one line per item (its id, sale, payout, and calls) and `--json` the full
 report, including the AI's reads.
@@ -204,6 +266,48 @@ What it set and found:
   backtest's payouts use the calibrated table.
 - The call reached high confidence for no item: 64 sales spread over many brands rarely give 5
   of one brand and category.
+
+### Results, 2026-11-02: the calibration
+
+The same 64 sales, read again by today's prompt (`claude-haiku-5-5`, one photo, all 64 read) and
+looked up on the web (42 with a brand, 40 with a resale range), $1.03; the numbers below
+replay those answers (`--replay`). Each cell: the sale inside the range / priced, the median
+error, and the bias.
+
+| Group (items)     |        | AI estimate       | Web asks            | The call's range  |
+| ----------------- | ------ | ----------------- | ------------------- | ----------------- |
+| All (64)          | before | 34/64, 41% (+26%) | 19/40, 115% (+115%) | 32/64, 48% (+32%) |
+|                   | after  | 40/64, 34% (+1%)  | 23/40, 38% (+21%)   | 36/64, 45% (+22%) |
+| Bottoms (24)      | before | 14/24, 37% (+30%) | 9/17, 130% (+130%)  | 15/24, 31% (+22%) |
+|                   | after  | 17/24, 30% (+10%) | 10/17, 38% (+29%)   | 16/24, 29% (+15%) |
+| of them jeans (8) | before | 3/8, 68% (+68%)   | 4/8, 154% (+154%)   | 4/8, 27% (+22%)   |
+|                   | after  | 6/8, 26% (+26%)   | 6/8, 43% (+43%)     | 4/8, 27% (+22%)   |
+| Tops (34)         | before | 16/34, 43% (+10%) | 10/18, 80% (+80%)   | 16/34, 62% (+36%) |
+|                   | after  | 18/34, 42% (-12%) | 11/18, 27% (+1%)    | 17/34, 52% (+13%) |
+| Outerwear (3)     | before | 2/3, 56% (+56%)   | 0/3, 224% (+224%)   | 0/3, 224% (+224%) |
+|                   | after  | 3/3, 17% (+17%)   | 2/3, 82% (+82%)     | 2/3, 82% (+82%)   |
+| Dresses (2)       | before | 1/2, 194% (+194%) | 0/1, 483% (+483%)   | 1/2, 265% (+265%) |
+|                   | after  | 1/2, 138% (+138%) | 0/1, 228% (+228%)   | 1/2, 137% (+137%) |
+| Shoes (1)         | before | 1/1, 10% (+10%)   | 0/1, 40% (+40%)     | 0/1, 40% (+40%)   |
+|                   | after  | 1/1, 18% (-18%)   | 0/1, 21% (-21%)     | 0/1, 21% (-21%)   |
+
+- Every group's call range held the sale as often or more, at a lower or equal error. The own
+  sales' quartiles are unchanged (44% inside, 44% error): nothing scales them.
+- At $8 worth listing the call made 10 Buys (9 held) against 11 (9 held), and 2 Skips, both
+  held, against none.
+- **Scaling every AI estimate** instead of only a named brand's: the AI estimate 37/64, 35%
+  error, but the call's range back to 32/64, since the unnamed items' estimates, which rest
+  calls more often, were not high to begin with. **The web's asks scaled once**: 64% error.
+- **The brand snap changed no item here, and is kept.** Each near miss of a brand name on this
+  set (one on these reads, one on an earlier one) is the only sale of its brand, so with the
+  item left out there is nothing to snap to: leave-one-out cannot show its benefit, which comes
+  once the household has sold a brand before. It is kept because it is tightly bounded (one own
+  brand within 2 edits, keys of 5 letters or more) and snapped none of 192 reads (three runs) to
+  a wrong brand.
+- **With two photos** (the shot and its closer look, reads only, $0.028): the AI estimate went
+  from 29/64 inside, 50% error (+37%) to 39/64, 35% (+12%), and the call's range from 29/64, 48%
+  (+27%) to 34/64, 41% (+15%), better or equal in every group. No brand snapped there either.
+- The split by a named brand was found on this set; re-check it on the next one.
 
 ## The scan at the store (M2)
 
@@ -494,6 +598,17 @@ build; the server's applies with a deploy.
   empty item name read as "Unidentified item"), and in `@listora/ai`, `anthropic-provider.test.ts`
   (thinking off only when asked; `outputJsonSchema` the SDK helper's schema without
   `strictEnums` and with every enum kept with it) and `client.test.ts`.
+- The calibration and the brand snap: `calibration.test.ts` (the default, the draw toward it,
+  the median, each ratio held to its range, the scaling), `call.test.ts` (the AI estimate of a
+  named brand scaled once and shown scaled, the web's asks twice and said to be asks, a Buy on
+  raw asks turned into Your call, own sales never moved, the retail cap after the scaling, the
+  signal's wording), `brand.test.ts` (`snapBrand`: a near miss in the spelling used most; a
+  match, a short name, a far one, or one near two brands left alone), `scans.int.test.ts` (the
+  ratio from the sold listing's price, else the item's, eBay's sales left out, and the scaled
+  AI estimate and web range on the card; "Wrenfeld" stored and shown as Wrenfield,
+  "Wrenford" left alone), and the backtest's `backtest.test.ts` and `command.test.ts` (the
+  ratio and the snap from the other items only, the price table, `--research`, and `--replay`
+  answering the same report again).
 - `@listora/sourcing` (`scanOwnHistory`, the signals, `salesTrend`, the research keys),
   `@listora/pricing` (`scanResearchLinks`, `scanLabelViolations`), the retention rules, and the
   app feature gate.
@@ -1066,8 +1181,12 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
 - **Days to sell** show only in "What sells for you", and only from sales Listora listed: an
   imported listing's `listed_at` is when Listora read it, not when the seller listed it. Reading
   the marketplace's own listing date at import would give the rest a day count.
-- **Scale the AI estimate** by the seller's own sale-to-estimate ratio once Listora has enough
-  of both for an account.
+- **Calibrate by the scans themselves** once an account has enough kept and sold scans: the
+  ratio of what they sold for to the AI estimate and the web's asks on the same items. On the
+  backtest that ratio worked about as well as the sale-to-asking one (34% and 39% error), and it
+  measures each source directly.
+- **The offline call** (`OfflineScanCall` on the iPhone) has no AI estimate and no brand snap;
+  snapping a tag's brand to the kit's brands would help it the same way.
 - **Re-run the backtest** as sales accumulate, and on shots taken at a store (M2), before showing
   the call to sellers.
 - **M2 live test** (the captain, Test mode, a real store, 30 or more scans): the speed targets

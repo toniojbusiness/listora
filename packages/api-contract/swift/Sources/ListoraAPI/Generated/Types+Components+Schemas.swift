@@ -18616,7 +18616,11 @@ extension Components {
                 ])
             }
         }
-        /// The AI's guess of what a buyer would pay on Depop; never sold data.
+        /// The AI's guess of what a buyer would pay on Depop; never sold data. For a read that named a
+        /// brand it is scaled by what the household's own items went for against what they asked (the
+        /// call's `calibrated` signal says so), since the AI prices a named brand like its listings ask.
+        /// Scans made before the calibration show the AI's own numbers.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/ScanAiEstimate`.
         public struct ScanAiEstimate: Codable, Hashable, Sendable {
@@ -19182,7 +19186,9 @@ extension Components {
         /// own sales of items like it coming faster or slower. `style`: the AI's read of the style.
         /// `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
         /// household's recent sales against the marketplace's supply. `unsold`: the household already
-        /// has items like it in inventory, not sold (it never moves the call).
+        /// has items like it in inventory, not sold (it never moves the call). `calibrated`: the AI
+        /// estimate and the web's asking prices were scaled by what the household's own items went for
+        /// against what they asked.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
@@ -19195,6 +19201,7 @@ extension Components {
             case asking = "asking"
             case demand = "demand"
             case unsold = "unsold"
+            case calibrated = "calibrated"
         }
         /// The item's original retail price, with where it came from: one model's price (`low` equals
         /// `high`), or, when the scan could not pin the exact model, the range across the likely

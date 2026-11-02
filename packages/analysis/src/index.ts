@@ -91,6 +91,7 @@ export {
   SCAN_RESEARCH_PURPOSE,
   SCAN_RESEARCH_SYSTEM,
   ScanResearchFailedError,
+  scanResearchSubject,
   verifiedResearch,
   WEB_INFO_LABEL,
 } from './scan-research.ts';
@@ -98,6 +99,7 @@ export type {
   ResearchSource,
   ScanResearch,
   ScanResearchAnswer,
+  ScanResearchSubject,
   ScanResearchInput,
   ScanResearchOutcome,
 } from './scan-research.ts';

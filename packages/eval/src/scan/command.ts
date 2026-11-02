@@ -13,7 +13,15 @@ import { DEFAULT_SCAN_CALL_SETTINGS } from '@listora/sourcing';
 import { runScanBacktest } from './backtest.ts';
 import { loadScanDataset, type ScanDataset } from './dataset.ts';
 import { fakeScanFixtures } from './fake.ts';
-import { AiScanReader, type ScanReader } from './readers.ts';
+import {
+  AiScanReader,
+  AiScanResearcher,
+  loadRecordedRun,
+  RecordedScanReader,
+  RecordedScanResearcher,
+  type ScanReader,
+  type ScanResearcher,
+} from './readers.ts';
 import { formatScanReport } from './report.ts';
 
 const PROVIDERS = ['fake', 'anthropic', 'none'] as const;
@@ -30,6 +38,11 @@ Options:
                          the real API, needs ANTHROPIC_API_KEY, and spends real money
   --images <n>           photos per scan: 1 (the shot) or 2 (with a closer look) (default: 1)
   --worth-listing <usd>  the worth-listing amount in dollars (default: ${(DEFAULT_SCAN_CALL_SETTINGS.worthListingCents / 100).toFixed(2)})
+  --research             also look each read up on the web the way the scan does (anthropic:
+                         about $0.025 a lookup; fake: none found)
+  --replay <file>        answer the reads, and the research when it has them, from an earlier
+                         run's --json report instead of the AI: free, and the same answers, so
+                         a change to the call is measured against the same reads
   --limit <n>            only the first n items (caps the cost of a live run)
   --items                one line per item: its id, sale, payout, AI range, and calls (no titles)
   --json                 the full report as JSON (it includes the AI's reads)
@@ -52,6 +65,8 @@ export async function scanCommand(
       images: { type: 'string', default: '1' },
       'worth-listing': { type: 'string' },
       limit: { type: 'string' },
+      research: { type: 'boolean', default: false },
+      replay: { type: 'string' },
       items: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
@@ -81,9 +96,13 @@ export async function scanCommand(
           ...loaded,
           manifest: { ...loaded.manifest, items: loaded.manifest.items.slice(0, limit) },
         };
-  const reader = await createReader(provider, dataset, images, env);
+  const { reader, researcher } =
+    values.replay === undefined
+      ? await createReaders(provider, dataset, images, values.research, env)
+      : await replayReaders(values.replay);
   const report = await runScanBacktest(dataset, {
     ...(reader === undefined ? {} : { reader }),
+    ...(researcher === undefined ? {} : { researcher }),
     settings: {
       ...DEFAULT_SCAN_CALL_SETTINGS,
       ...(worthListingCents === undefined ? {} : { worthListingCents }),
@@ -97,13 +116,24 @@ export async function scanCommand(
   return report.read !== null && report.read.failed > 0 ? 1 : 0;
 }
 
-async function createReader(
+async function replayReaders(
+  file: string,
+): Promise<{ reader: ScanReader; researcher: ScanResearcher | undefined }> {
+  const run = await loadRecordedRun(file);
+  return {
+    reader: new RecordedScanReader(run, file),
+    researcher: run.researcher === null ? undefined : new RecordedScanResearcher(run, file),
+  };
+}
+
+async function createReaders(
   provider: ScanProvider,
   dataset: ScanDataset,
   images: number,
+  research: boolean,
   env: NodeJS.ProcessEnv,
-): Promise<ScanReader | undefined> {
-  if (provider === 'none') return undefined;
+): Promise<{ reader: ScanReader | undefined; researcher: ScanResearcher | undefined }> {
+  if (provider === 'none') return { reader: undefined, researcher: undefined };
   let client: AiClient;
   let description: string;
   if (provider === 'fake') {
@@ -120,12 +150,20 @@ async function createReader(
     client = createAiClient(config, { usageStore: new InMemoryUsageStore() });
     description = `Anthropic API: ${config.models.standard} (standard tier)`;
   }
-  return new AiScanReader({
+  const reader = new AiScanReader({
     id: provider,
     description: `${description}, ${String(images)} image${images === 1 ? '' : 's'} per scan`,
     client,
     images,
   });
+  const researcher = research
+    ? new AiScanResearcher({
+        id: provider,
+        description: `${description}, web search`,
+        client,
+      })
+    : undefined;
+  return { reader, researcher };
 }
 
 function parseDollars(raw: string | undefined): number | undefined {

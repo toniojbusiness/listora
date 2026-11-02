@@ -36,7 +36,16 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(element("scan.webInfo").label.contains("Web info - not sold listings"))
         attachScreenshot("scan card")
         XCTAssertEqual(app.staticTexts["scan.title"].label, "Acme Outfitters blue button-up shirt")
-        XCTAssertEqual(app.staticTexts["scan.range"].label, "$15-$25")
+        // The web's $15-$25 is what listings ask, shown as asks; the card's range is those asks
+        // scaled to what the household's items sell for, which depends on the stack's sales.
+        XCTAssertTrue(element("scan.webInfo").label.contains("Asks $15-$25"), element("scan.webInfo").label)
+        let range = app.staticTexts["scan.range"].label
+        let ends = range.split(separator: "-").compactMap { Int($0.trimmingCharacters(in: .init(charactersIn: "$"))) }
+        XCTAssertEqual(ends.count, 2, range)
+        XCTAssertLessThan(ends.last ?? 25, 25, "the range is scaled below the web's asks: \(range)")
+        let scaled = app.descendants(matching: .any).matching(identifier: "scan.signal")
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Scaled to your sales")).firstMatch
+        XCTAssertTrue(scaled.exists, "the card says the prices were scaled to the household's sales")
         XCTAssertTrue(app.buttons["scan.search"].label.contains("Search Depop"))
 
         try keepThenPutBack(shutter)
