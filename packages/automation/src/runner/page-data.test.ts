@@ -10,11 +10,14 @@ const scope = globalThis as Record<string, unknown>;
 
 describe('readPageData', () => {
   afterEach(() => {
-    delete scope.__TEST_STATE__;
+    delete scope['__TEST_STATE__'];
   });
 
   it('reads a global, or only the part of it at a dotted path', () => {
-    scope.__TEST_STATE__ = { $_search: { gridData: { data: [{ id: 'a' }], total: 3 } }, big: 'x' };
+    scope['__TEST_STATE__'] = {
+      $_search: { gridData: { data: [{ id: 'a' }], total: 3 } },
+      big: 'x',
+    };
     expect(parsePageData(readPageData('__TEST_STATE__'))).toMatchObject({ big: 'x' });
     expect(parsePageData(readPageData('__TEST_STATE__.$_search.gridData.data'))).toEqual([
       { id: 'a' },
@@ -23,7 +26,7 @@ describe('readPageData', () => {
   });
 
   it('is null for a global or a path the page does not have', () => {
-    scope.__TEST_STATE__ = { $_search: { gridData: null, count: 2 } };
+    scope['__TEST_STATE__'] = { $_search: { gridData: null, count: 2 } };
     expect(readPageData('__NO_SUCH_GLOBAL__')).toBeNull();
     expect(readPageData('__TEST_STATE__.$_search.gridData.data')).toBeNull();
     expect(readPageData('__TEST_STATE__.$_search.count.more')).toBeNull();
