@@ -120,21 +120,8 @@ struct ScanCard: Equatable, Sendable {
         }
         basedOn = scan.call.basedOn
         range = Self.range(scan.call.low, scan.call.high)
-        prices = scan.call.prices.map { prices in
-            Prices(
-                listAt: Self.dollars(prices.listAt),
-                realistic: Self.dollars(prices.realisticSale),
-                fast: Self.dollars(prices.fastSale),
-                basedOn: prices.basedOn,
-            )
-        }
-        if let low = scan.call.conservativePayout, let high = scan.call.optimisticPayout {
-            let marketplace = scan.call.payoutMarketplace.map(Self.marketplaceName) ?? ""
-            let after = marketplace.isEmpty ? "after fees" : "after \(marketplace) fees"
-            payout = "You'd get about \(Self.range(low, high) ?? "") \(after)"
-        } else {
-            payout = nil
-        }
+        prices = scan.call.prices.map(Self.prices)
+        payout = Self.payout(scan.call)
         ownSales = scan.ownSales.map(Self.ownSales)
         aiEstimate = scan.aiEstimate.flatMap { Self.range($0.low, $0.high) }
         aiEstimateLabel = scan.aiEstimate?.label
@@ -149,6 +136,23 @@ struct ScanCard: Equatable, Sendable {
         signals = scan.call.signals.map(Self.signal)
         web = scan.research.map(Self.webInfo)
         comparisons = (scan.comparisons ?? []).map(Self.comparison)
+    }
+
+    static func prices(_ prices: Components.Schemas.ScanPrices) -> Prices {
+        Prices(
+            listAt: dollars(prices.listAt),
+            realistic: dollars(prices.realisticSale),
+            fast: dollars(prices.fastSale),
+            basedOn: prices.basedOn,
+        )
+    }
+
+    /// "You'd get about $22-$26 after Depop fees", or nil without both payouts.
+    static func payout(_ call: Components.Schemas.ScanCall) -> String? {
+        guard let low = call.conservativePayout, let high = call.optimisticPayout else { return nil }
+        let marketplace = call.payoutMarketplace.map(marketplaceName) ?? ""
+        let after = marketplace.isEmpty ? "after fees" : "after \(marketplace) fees"
+        return "You'd get about \(range(low, high) ?? "") \(after)"
     }
 
     static func signal(_ signal: Components.Schemas.ScanSignal) -> Signal {

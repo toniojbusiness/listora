@@ -36,21 +36,25 @@ struct ScanCardTests {
         var call = json["call"] as? [String: Any] ?? [:]
         call["prices"] = [
             "listAt": dollarsJSON(3500), "realisticSale": dollarsJSON(2800), "fastSale": dollarsJSON(2500),
-            "basedOn": "Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers",
+            "basedOn": Self.pricesBasedOn,
         ]
         call["signals"] = [
-            ["kind": "prices", "label": "List at $35 · Realistic sale $28 · Fast sale $25", "basedOn": "Realistic is..."],
+            ["kind": "prices", "label": Self.pricesLabel, "basedOn": "Realistic is..."],
             ["kind": "style", "label": "Y2K", "basedOn": "The AI's read of the style, not sales data"],
         ]
         json["call"] = call
         let card = try ScanCard(decodeScan(json))
         #expect(card.prices == .init(
             listAt: "$35", realistic: "$28", fast: "$25",
-            basedOn: "Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers",
+            basedOn: Self.pricesBasedOn,
         ))
         #expect(card.listedSignals.map(\.kind) == ["style"])
         #expect(card.range == "$25-$29")
     }
+
+    private static let pricesLabel = "List at $35 · Realistic sale $28 · Fast sale $25"
+    private static let pricesBasedOn =
+        "Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers"
 
     private func dollarsJSON(_ cents: Int) -> [String: Any] {
         ["amountCents": cents, "currency": "USD"]
@@ -60,7 +64,7 @@ struct ScanCardTests {
     func `keeps the range, and any prices signal, from a server without the three prices`() throws {
         var json = itemScanJSON()
         var call = json["call"] as? [String: Any] ?? [:]
-        call["signals"] = [["kind": "prices", "label": "List at $35 · Realistic sale $28 · Fast sale $25", "basedOn": "x"]]
+        call["signals"] = [["kind": "prices", "label": Self.pricesLabel, "basedOn": "x"]]
         json["call"] = call
         let card = try ScanCard(decodeScan(json))
         #expect(card.prices == nil)

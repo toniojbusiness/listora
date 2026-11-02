@@ -48,7 +48,9 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(prices.hasPrefix("List at"), prices)
         XCTAssertGreaterThanOrEqual(amounts.first ?? 0, amounts.dropFirst().first ?? 0, prices)
         XCTAssertGreaterThanOrEqual(amounts.dropFirst().first ?? 0, amounts.last ?? 0, prices)
-        XCTAssertLessThan(amounts.dropFirst().first ?? 25, 25, "the realistic sale is scaled below the web's asks: \(prices)")
+        XCTAssertLessThan(
+            amounts.dropFirst().first ?? 25, 25, "the realistic sale is scaled below the web's asks: \(prices)",
+        )
         XCTAssertFalse(app.staticTexts["scan.range"].exists, "the three prices replace the range")
         let scaled = app.descendants(matching: .any).matching(identifier: "scan.signal")
             .matching(NSPredicate(format: "label BEGINSWITH %@", "Scaled to your sales")).firstMatch
