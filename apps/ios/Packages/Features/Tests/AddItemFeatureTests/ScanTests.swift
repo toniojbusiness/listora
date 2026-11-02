@@ -17,7 +17,7 @@ struct ScanCardTests {
         #expect(card.title == "Lululemon black high-rise leggings")
         #expect(card.subtitle == "Size 6 · Pre-owned good")
         #expect(card.call == .buy)
-        #expect(card.callLabel == "Buy")
+        #expect(card.callLabel == "Grab")
         #expect(card.confidence == "Medium confidence")
         #expect(card.basedOn == "Your 3 sales like it")
         #expect(card.range == "$25-$29")
@@ -39,7 +39,7 @@ struct ScanCardTests {
             "basedOn": Self.pricesBasedOn,
         ]
         call["signals"] = [
-            ["kind": "prices", "label": Self.pricesLabel, "basedOn": "Realistic is..."],
+            ["kind": "prices", "label": Self.pricesLabel, "basedOn": "Likely sale is..."],
             ["kind": "style", "label": "Y2K", "basedOn": "The AI's read of the style, not sales data"],
         ]
         json["call"] = call
@@ -52,9 +52,9 @@ struct ScanCardTests {
         #expect(card.range == "$25-$29")
     }
 
-    private static let pricesLabel = "List at $35 · Realistic sale $28 · Fast sale $25"
+    private static let pricesLabel = "List at $35 · Likely sale $28 · Fast sale $25"
     private static let pricesBasedOn =
-        "Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers"
+        "Likely sale is the middle of your sales like it, fast sale its low end; list at leaves room for offers"
 
     private func dollarsJSON(_ cents: Int) -> [String: Any] {
         ["amountCents": cents, "currency": "USD"]
@@ -119,7 +119,6 @@ struct ScanRunModelTests {
         _ service: FakeScanService,
         saver: Saver = Saver(),
         tagReader: any TagReader = FakeTagReader(),
-        researchDwell: Duration = .zero,
         comparisons: FakeComparisons? = nil,
     ) -> ScanRunModel {
         ScanRunModel(
@@ -132,7 +131,6 @@ struct ScanRunModelTests {
             },
             comparisons: comparisons,
             comparing: comparisons == nil ? [] : ["depop"],
-            researchDwell: researchDwell,
         )
     }
 

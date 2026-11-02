@@ -101,7 +101,8 @@ The card answers the way a reseller asks a chatbot at the bins ("List: $65-$75, 
 $40-$55, Fast sale: $30-$40"), with three prices instead of one range (`scanPrices` in
 `@listora/sourcing`, `prices.ts`; `ScanCall.prices` in the API):
 
-- **Realistic sale**: what the item is expected to sell for, the middle of what the call rests
+- **Likely sale** (called the realistic sale until 2026-11-02; `realisticSale` in the API): what
+  the item is expected to sell for, the middle of what the call rests
   on: the median of the seller's own sales like it (raised with the range for tags still on), the
   AI estimate's middle, or the midpoint of eBay's sold quartiles or of the web's scaled asks;
   held inside the range (a range held to the retail price or to close matches' asks holds it too).
@@ -112,15 +113,15 @@ $40-$55, Fast sale: $30-$40"), with three prices instead of one range (`scanPric
   items like it go for leaves money behind.
 - **Friendly prices.** Whole dollars under $20, $5 steps under $100, then $10 steps; the fast sale
   rounds down and the list price up, so the three never cross.
-- **Fast.** All three come from what the call already has: no AI call, web search, or wait is
-  added to the first read or to the web lookup, and they follow the call when the research or a
-  marketplace's comparisons make it again.
+- **From what the call has.** All three come from the call's range: no AI call or web search is
+  added for them, and they show once the call's sources are in
+  ([Prices after the facts](#prices-after-the-facts)).
 - **The call is untouched.** Buy / Your call / Skip, its confidence, its range, and its payouts
   are as before; the three prices are shown next to it, never fed into it. They are estimates, so
   their wording never says "sold" (a unit test checks it with `claimsSoldData`).
 - **On the card.** The iPhone's card shows the three side by side, the realistic sale leading,
   instead of the range ("scan.prices"). The server also sends them as the call's first signal
-  (`prices`: "List at $35 · Realistic sale $25 · Fast sale $17", with where they come from), so
+  (`prices`: "List at $35 · Likely sale $25 · Fast sale $17", with where they come from), so
   an app built before them lists them with its other signals; a build that shows them leaves that
   signal out. The instant read with no signal (`offlineScanCall`) still shows its range.
 
@@ -141,6 +142,78 @@ the realistic sale, carries no bias. The calls did not change (10 Buys, 9 held; 
 held). Measured and not taken: the list price from the ratio alone, without the range's high end
 as a floor (35/64 fast to list, 17 over the list price); a fast sale at the realistic sale times
 the ratio when under the low end (no change).
+
+## Prices after the facts
+
+The card gives a price only once it has what that judgement needs, never from the first look
+alone (the captain, 2026-11-02: "a price should be given after we have the information needed to
+make that judgement ... i prioritize correctness over quickness"). The read still answers in
+about 1.4 s, and the card says at once what the item is; the prices and the verdict follow when
+what they rest on is in (`apps/api/src/scans/pricing.ts`, `research-runner.ts`, `wait.ts`):
+
+- **What they wait for.** The household's own sales like it (checked with the read); the web
+  research with the brand's pulse ("Web info" below); and each marketplace comparison that is on
+  for the account (`market_comps`, read on the seller's iPhone). A read without a brand has
+  nothing to look up and no comparison to read, so it is priced at once from the own sales and
+  the scaled AI estimate, as before.
+- **The research starts with the read.** The server starts the lookup the moment the scan is
+  stored (after its transaction commits), not when the app asks, so the wait is as short as it
+  can be. The scan's row claims it (`item_scan.research_started_at`, on the database's clock), so
+  of two API tasks, or the read and the app's ask, only one pays for it; a claim over a minute old
+  (`CLAIM_STALE_MS`, its task stopped) can be taken again. Closing the API waits for the lookups
+  it runs.
+- **While they wait** (`ItemScan.pricing.status` `checking`), the answer holds every price: no AI
+  estimate, retail price, research, or own-sales lines, comparisons without their numbers ("Checked
+  Depop", with the count for sale), and the call `checking` ("Checking prices", its confidence the
+  read's). `pricing.label` is the card's quiet progress line, "Checking prices: the web, Depop".
+- **The wait.** `researchScan` (`POST /v1/scans/{scanId}/research`) now answers once the prices
+  are in: it starts the lookup if it is not running (after a failure, or for a scan read before a
+  restart), then waits for the research and the comparisons, woken at once by this process's
+  saves and looking every 0.5 s for another task's (`LOOK_MS`). Each source waits at most 15 s
+  (`PRICE_WAIT_MS`): from the read for a comparison, from its start for the lookup.
+- **What is missing.** A lookup that failed, a comparison that failed, paused, or hit its limit,
+  and a source still out at 15 s are named (`pricing.missing`: "Couldn't check the web in time",
+  "Couldn't check Depop", "Depop prices paused today"), and the prices show from what did come
+  back. A missing source is only ever left out of the call, so it can never raise the confidence:
+  the call is exactly the one made without it (tested). A failed lookup is stored as `failed`, and
+  the next ask tries again; a late answer still comes in and makes the call again.
+- **Installed apps** see the same: the held answer's call is `checking` (shown by its label,
+  "Checking prices"), and once ready each missing source is also a signal (`missing`). An installed
+  app asks for the research two seconds after the card (and the server started it at the read), so
+  its card shows the prices about when a new build's does, if the card is still on screen; a card
+  it moved on from shows them when it is picked again in the tray.
+
+## The card
+
+Easy to follow at a glance, the way a friend who checked would say it (the captain and Tristin,
+2026-11-02, from her ChatGPT answers at the bins: "GRAB - this is actually a solid Depop-style
+sweater ... Verdict: KEEP IT"):
+
+- **The verdict first**, stamped big in its color: **Grab** (green, `buy`), **Maybe** (amber,
+  `your_call`, with "Your call" beside it: the seller decides), **Leave** (red, `skip`), with its
+  one-line why (`ScanCall.why`, `callWhy` in `@listora/sourcing`): "Even its low end pays out $11
+  after fees, over your $8", "Pays out $5-$12 after fees: it may or may not clear your $8", "Pays
+  out $9-$15 after fees, but often faked: check it's real", "Pays out $6 at most after fees, under
+  your $8". The rule is unchanged ("The call" above); only its words are.
+- **What it is**: the brand and item, then the size, material, era, and condition when known
+  ("Size L · Wool · Vintage 1990s · Pre-owned good"); while the prices wait, how sure the read is
+  ("Sure of what it is").
+- **The three prices**: List at, **Likely sale** (leading), Fast sale ("Three prices" above), then
+  the call's confidence and what it rests on in one small line.
+- **A reality check** (`ItemScan.realityCheck`, `apps/api/src/scans/card.ts`): short plain lines,
+  each from the scan's own data: the household's own sales like it ("You sold 3 like it on Depop:
+  $25-$29, most around $28"; eBay's "shown, not used for the price"), sold listings elsewhere only
+  with real sold data ("Sold listings on eBay: $18-$30, 9 like it in the last 14 days"), what
+  listings ask now said to be asks ("Depop asks $15-$25 now, 6 like it for sale (asks, not
+  sales)", "Listings on the web ask $30-$50 (poshmark.com)"), the original retail price ("Retail
+  about $98 (levi.com)"), the brand's pulse in one line ("Levi's is in demand on the web: ..."),
+  and what could not be checked. The label guard holds it: a line of the household's own sales
+  says "sold" only with such sales, one of sold listings only under their label with a comparison
+  of them, and no other line says it.
+- No walls of labels: the per-marketplace own-sales rows, the AI estimate row, the web info block,
+  and the comparison rows give way to the reality check (a server without it shows the call's
+  signals instead). Flags, the duplicate warning, Shoot the tag, Search Depop, **Put back**, and
+  **Keep** are as before, and usable the whole time the prices wait.
 
 ## Calibrated to the seller's sales
 
@@ -376,19 +449,18 @@ connection to Listora.
 - **One shot** of the item in hand. The shutter is at the bottom center; the read starts at
   once and the camera is ready for the next item while it runs.
 - **The card** rises over the bottom of the live viewfinder (Hang Tag: a tag lying on its side,
-  the call stamped on it): the call (**Buy**, **Your call**, **Skip**) with its confidence word,
-  what the item is, the three prices in the tag's print (**List at**, **Realistic**, **Fast
-  sale**, [Three prices](#three-prices); the range the call rests on with a server or build
-  without them) with what they rest on ("Your 3 sales like it", or "AI estimate - not based on
-  sold listings"), the payout after the
-  marketplace's fees, the household's own sales per marketplace, the AI estimate under its
-  label, any flag, **Shoot the tag** and **Search Depop** (the marketplace's own search, opened
-  in the browser for the seller to look; Listora never loads it) on a small line, and the
-  seller's two answers at the bottom, big and side by side: **Put back** and **Keep**. No cost,
-  margin, or profit. The pass action is **Put back**, what the seller does with the item, so it
-  is never confused with the **Skip** call stamped on the card.
-- **Haptics**, so the seller can keep their eyes on the bin: two short taps for Buy, one long
-  buzz for Skip, none for Your call (`Haptics.doubleTap`, `Haptics.longBuzz`).
+  the verdict stamped on it): what the item is at once, with a quiet "Checking prices: the web,
+  Depop" line until the prices are in ([Prices after the facts](#prices-after-the-facts)), then the
+  verdict (**Grab**, **Maybe**, **Leave**) with its why, the three prices, and the reality check
+  ([The card](#the-card)); any flag, **Shoot the tag** and **Search Depop** (the marketplace's own
+  search, opened in the browser for the seller to look; Listora never loads it) on a small line,
+  and the seller's two answers at the bottom, big and side by side: **Put back** and **Keep**. No
+  cost, margin, or profit. The pass action is **Put back**, what the seller does with the item, so
+  it is never confused with the **Leave** verdict stamped on the card. If the prices never come
+  (no connection), the line says "Couldn't get the prices" with **Retry**.
+- **Haptics**, so the seller can keep their eyes on the bin, felt when the verdict lands on the
+  card in view: two short taps for Grab, one long buzz for Leave, none for Maybe
+  (`Haptics.doubleTap`, `Haptics.longBuzz`).
 - **Keep** and **Put back** each close the card at once, back to the live camera for the next
   shot, and a brief line where the card was says what happened: "Keeping item 3" while the draft
   is saved, then "Kept · 3 in this run", or "Put back · 3 kept this run" (2 s; a Keep that
@@ -488,17 +560,14 @@ that is when the cost is known. The scan itself never shows a cost, margin, or p
 ### Web info
 
 Many resellers decide at the bins by asking a chatbot that searches the web whether a brand
-and item are worth it. The scan does the same, in the
-background, so the card never waits on it.
+and item are worth it. The scan does the same, and its prices wait for it
+([Prices after the facts](#prices-after-the-facts)).
 
-- **When.** Once a card has been on screen for 2 seconds (`ScanRunModel.defaultResearchDwell`),
-  or at once when it is picked again in the tray, the app calls `POST
-/v1/scans/{scanId}/research` (`researchScan`); the card says "Checking the web for its retail
-  price" and takes in the answer when it comes. At the bins most items are skipped within a
-  second or two of their card by shooting the next one, and a lookup costs about $0.02, so a
-  card the seller moved on from (Keep, Put back, the next shot, Tag, or a note that reads it again) is never
-  looked up unless they come back to it. Each scan is looked up once. A read without a brand
-  asks nothing (`no_brand`). A scan already researched answers as it is.
+- **When.** The server looks every read with a brand up the moment the read lands; the app asks
+  for the prices (`researchScan`) at once, for every card, and the answer comes when they are
+  in. Each scan is looked up once (again only after a failure, when asked). A read without a
+  brand asks nothing. The two-second wait on screen that used to save lookups is gone: correctness
+  first, and a lookup is about $0.02 (the cost per 1,000 scans is under "Speed").
 - **What.** One standard-tier call (Haiku) with the Claude API's web search, at most two
   searches (`researchScanItem` in `@listora/analysis`, purpose `thrift_scan_research`), for the
   item's **original retail price** on the brand's or a retailer's site or another reputable
@@ -663,11 +732,33 @@ What made the difference, measured one at a time on the backtest's photos:
   which can run past it); and the card's time counts from the shutter press.
 
 The web research is about $0.023 a lookup (two searches at $0.01 and the pages' tokens) and
-6 s to 12 s, in the background; a brand not asked about that week adds its pulse, about $0.012
-(one search), at the same time. One search instead of two found the retail price for 4 of 10
-items instead of 9, so it stays at two. The cost is cut instead by never paying for a lookup
-that fails on a length (above) and by looking up only cards the seller is still looking at
-(two seconds on screen), which at the bins skips most items' lookups.
+6 s to 12 s; a brand not asked about that week adds its pulse, about $0.012 (one search), at the
+same time. One search instead of two found the retail price for 4 of 10 items instead of 9, so it
+stays at two. Since the prices wait for it, every read with a brand is now looked up, not only a
+card left on screen for two seconds.
+
+**Measured 2026-11-02, shutter to price.** The live path as above (the local API with the real
+read, web research, and brand pulse, `claude-haiku-5-5`; 30 scans in a row, 6 invented tag and
+label shots and 24 of the household's listing photos, on a new account so nothing was cached),
+timed at the client from the read's request to the answer with the prices. Comparisons were off
+(no phone answers them on the Mac); on the phone they are read beside the research, in about 4 s.
+The Mac was busy (load average 26 to 63) the whole time.
+
+|                                       | p50   | p95    |
+| ------------------------------------- | ----- | ------ |
+| The card (what the item is), all 30   | 1.7 s | 2.2 s  |
+| The price, the 24 with a brand        | 9.4 s | 13.5 s |
+| The price, all 30 (6 without a brand) | 9.1 s | 13.5 s |
+
+The slowest price came at 14.9 s, under the 15 s wait; one lookup failed and its prices showed
+without the web ("Couldn't check the web"). The 6 reads without a brand were priced with the card.
+
+**What it costs.** The 30 scans cost $0.78: the reads $0.009, 25 lookups $0.567 (one failed and
+was asked again), 18 brand pulses $0.206. So every 1,000 scans now pay about $23 of research per
+1,000 with a brand, plus $11 per 1,000 brands first seen that week: on this mix (80% with a brand,
+18 brands in 30 scans) about $26 per 1,000 scans, against $0.29 for the reads alone. That is the
+most added (when no card used to stay two seconds); a repeat of the same exact model within 30
+days, or of a brand within the week, costs nothing more.
 
 The streaming the plan names ("identity fields come first") is not needed for the target: the
 whole answer is now 1.4 s at the server. The live test on the captain's iPhone measures the rest:
@@ -681,7 +772,9 @@ build; the server's applies with a deploy.
   (`haul_id`, one run per haul), `checked_out_at`, and the miles (migration
   `20261031113754_sourcing_run_checkout`).
 - `item_scan`: the run, the item shot's SHA-256 and the image count (never the images), the
-  AI's read (`read`), the web research once asked for (`research`, `research_ms`), the call, its confidence and basis, the call as the app showed it with the
+  AI's read (`read`), the web research (`research`, `research_ms`, `failed` when the lookup
+  failed) and when it was claimed (`research_started_at`, migration
+  `20261102204533_scan_research_started`), the call, its confidence and basis, the call as the app showed it with the
   own-sales lines (`call_detail`: counts and quartiles of the household's own sales only), the
   seller's decision (`undecided`, `kept`, `skipped`, `replaced`), the kept item, the model, the
   AI attempts and their cost, and `read_ms`.
@@ -712,6 +805,21 @@ build; the server's applies with a deploy.
   unknown pulse shown as nothing and kept; a failed one never failing the research and asked
   again), `brand-pulse.test.ts` (pages verified, sales words and prices kept out, cut to the
   card), and `call.test.ts` (the signal's text and fit; no verdict changes the call).
+- Prices after the facts: `pricing.int.test.ts` (the web looked up as the read lands, before the
+  app asks, and only once for two asks at once; every price held until each comparison is in, a
+  comparison answered meanwhile shown without its prices; the prices from what came back once
+  the wait ends, naming each source, and the same call as with no comparisons on, never a higher
+  confidence; a late answer still taken in; a failed lookup named and tried again when asked; a
+  read without a brand priced at once), `pricing.test.ts` (`scanPricing`'s waits, its cap from
+  the read and from the lookup's start, the missing sources' words; the held answer with no
+  price; the reality check's lines), `scans.int.test.ts` (the held read, then its prices with the
+  web missing; the Grab and Leave words and their why; the reality check of the household's own
+  sales), `call.test.ts` (`callWhy`), and `labels.test.ts` (the reality check's "sold" only on own
+  sales and sold listings). iPhone: `ScanPricesTests.swift` (the held card's words, the verdict
+  with "Your call" and the reality check, the prices asked for at once and taken in, Retry, Put
+  back while waiting), `ScanSpeedTests.swift` (every read's prices asked for at once, a skipped
+  one too, once each), and `ThriftScanUITests` (the card's Maybe, its why, the reality check, and
+  the three prices on the local stack).
 - The read's speed settings: `scan.test.ts` (thinking off and the enums held on the request; an
   empty item name read as "Unidentified item"), and in `@listora/ai`, `anthropic-provider.test.ts`
   (thinking off only when asked; `outputJsonSchema` the SDK helper's schema without

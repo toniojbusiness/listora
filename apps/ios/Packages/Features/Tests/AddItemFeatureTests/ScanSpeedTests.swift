@@ -3,23 +3,21 @@ import Foundation
 import Testing
 @testable import AddItemFeature
 
-/// The scan's speed and lookup cost (docs/features/thrift-scan.md, "Speed"): the run made as
-/// the camera opens, the card timed from the shutter, the tag text's deadline, and web research
-/// only for a card the seller is still looking at.
+/// The scan's speed (docs/features/thrift-scan.md, "Speed"): the run made as the camera opens,
+/// the card timed from the shutter, the tag text's deadline, and every read's prices asked for
+/// at once, since the server looks each one up as its read lands.
 @MainActor
 @Suite(.timeLimit(.minutes(1)))
 struct ScanSpeedTests {
     private func makeRun(
         _ service: FakeScanService,
         tagReader: any TagReader = FakeTagReader(),
-        researchDwell: Duration = .zero,
     ) -> ScanRunModel {
         ScanRunModel(
             service: service,
             tagReader: tagReader,
             directory: FileManager.default.temporaryDirectory.appending(path: "scan-speed-\(UUID().uuidString)"),
             saveDraft: { _, _ in nil },
-            researchDwell: researchDwell,
         )
     }
 
@@ -75,39 +73,35 @@ struct ScanSpeedTests {
     }
 
     @Test
-    func `looks up only a card the seller is still looking at, and a skipped one picked again`() async throws {
+    func `asks for every read's prices at once, a skipped one too, and once each`() async throws {
         let service = FakeScanService()
-        let run = makeRun(service, researchDwell: .milliseconds(300))
+        let run = makeRun(service)
         await run.shoot(capture())
         let skipped = try #require(run.current)
-        // Shot the next item at once: the first is skipped before it was looked up.
+        // Shot the next item at once: the first one's prices were asked for all the same, since
+        // the server looks it up as the read lands.
         service.answer(scanJSON: itemScanJSON(id: "scan-2"))
         await run.shoot(capture(2))
-        #expect(service.researched.isEmpty)
-        // The card on screen is looked up once the dwell passes; the skipped one never was.
-        #expect(try await eventually { service.researched == ["scan-2"] })
-        try await Task.sleep(for: .milliseconds(400))
-        #expect(service.researched == ["scan-2"])
-        // Picked again in the tray, the skipped item is looked up at once, and only once.
-        run.select(skipped.id)
         let skippedScanID = try #require(skipped.scanID)
-        #expect(try await eventually { service.researched == ["scan-2", skippedScanID] })
+        #expect(try await eventually { Set(service.researched) == [skippedScanID, "scan-2"] })
+        #expect(try await eventually { run.entries.allSatisfy { $0.research == .failed } })
+        // Picked again in the tray, nothing is asked twice.
         run.select(skipped.id)
-        #expect(try await eventually { run.current?.research == .failed })
-        run.select(skipped.id)
+        try await Task.sleep(for: .milliseconds(100))
         #expect(service.researched.count == 2)
     }
 
     @Test
-    func `asking for the tag before the dwell looks up only the read with the tag`() async throws {
+    func `a read with the tag asks for its own prices, and the one it replaced never lands`() async throws {
         let service = FakeScanService()
-        let run = makeRun(service, researchDwell: .milliseconds(300))
+        let run = makeRun(service)
         await run.shoot(capture())
         let firstScanID = try #require(run.current?.scanID)
         run.startTagShot()
         service.answer(scanJSON: itemScanJSON(id: "scan-tag"))
         await run.shoot(capture(3))
-        #expect(try await eventually { service.researched == ["scan-tag"] })
-        #expect(!service.researched.contains(firstScanID))
+        #expect(try await eventually { service.researched.contains("scan-tag") })
+        #expect(run.current?.scanID == "scan-tag")
+        #expect(service.researched.filter { $0 == firstScanID }.count <= 1)
     }
 }

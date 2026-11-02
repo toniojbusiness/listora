@@ -23,24 +23,29 @@ final class ThriftScanUITests: XCTestCase {
         // Starting a run asks only where the seller is.
         startRun(at: "Invented Thrift")
 
-        // One shot: the card lands with the call, its confidence, and the AI estimate under its label.
+        // One shot: the card says what the item is at once, and the verdict and the prices come
+        // once the web research the server started with the read is in.
         let shutter = app.buttons["camera.shutter"]
         XCTAssertTrue(shutter.waitForExistence(timeout: 10))
         shutter.tap()
+        XCTAssertTrue(app.staticTexts["scan.title"].waitForExistence(timeout: 20))
         let call = element("scan.call")
         XCTAssertTrue(call.waitForExistence(timeout: 20))
-        XCTAssertEqual(call.label, "Your call")
-        XCTAssertTrue(app.staticTexts["Low confidence"].exists)
-        // The web research comes in after the card, under its label; one site keeps it low.
-        XCTAssertTrue(element("scan.webInfo").waitForExistence(timeout: 20))
-        XCTAssertTrue(element("scan.webInfo").label.contains("Web info - not sold listings"))
-        attachScreenshot("scan card")
         XCTAssertEqual(app.staticTexts["scan.title"].label, "Acme Outfitters blue button-up shirt")
-        // The web's $15-$25 is what listings ask, shown as asks; the card's range is those asks
-        // scaled to what the household's items sell for, which depends on the stack's sales.
-        XCTAssertTrue(element("scan.webInfo").label.contains("Asks $15-$25"), element("scan.webInfo").label)
-        // The three prices (list at, realistic sale, fast sale) stand in for the range: in order,
-        // and the realistic sale below the web's asks.
+        // A Maybe, the seller's call, with its one-line why and what it rests on.
+        XCTAssertEqual(call.label, "Maybe")
+        XCTAssertEqual(element("scan.verdictNote").label, "Your call")
+        XCTAssertTrue(element("scan.why").label.contains("after fees"), element("scan.why").label)
+        let basedOn = element("scan.basedOn").label
+        XCTAssertTrue(basedOn.hasPrefix("Low confidence"), basedOn)
+        // The web's $15-$25 is what listings ask, scaled to what the household's items sell for.
+        XCTAssertTrue(basedOn.contains("scaled to your sales"), basedOn)
+        attachScreenshot("scan card")
+        // The reality check says plainly what the prices rest on: the web's asks, as asks.
+        let reality = element("scan.reality").label
+        XCTAssertTrue(reality.contains("Listings on the web ask $15-$25"), reality)
+        // The three prices (list at, likely sale, fast sale) stand in for the range: in order,
+        // and the likely sale below the web's asks.
         let prices = element("scan.prices").label
         let amounts = prices.split(separator: "$").dropFirst()
             .compactMap { Int($0.prefix { $0.isNumber }) }
@@ -49,12 +54,9 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(amounts.first ?? 0, amounts.dropFirst().first ?? 0, prices)
         XCTAssertGreaterThanOrEqual(amounts.dropFirst().first ?? 0, amounts.last ?? 0, prices)
         XCTAssertLessThan(
-            amounts.dropFirst().first ?? 25, 25, "the realistic sale is scaled below the web's asks: \(prices)",
+            amounts.dropFirst().first ?? 25, 25, "the likely sale is scaled below the web's asks: \(prices)",
         )
         XCTAssertFalse(app.staticTexts["scan.range"].exists, "the three prices replace the range")
-        let scaled = app.descendants(matching: .any).matching(identifier: "scan.signal")
-            .matching(NSPredicate(format: "label BEGINSWITH %@", "Scaled to your sales")).firstMatch
-        XCTAssertTrue(scaled.exists, "the card says the prices were scaled to the household's sales")
         XCTAssertTrue(app.buttons["scan.search"].label.contains("Search Depop"))
 
         try keepThenPutBack(shutter)

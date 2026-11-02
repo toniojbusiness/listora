@@ -2,10 +2,12 @@ import DesignSystem
 import SwiftUI
 import UIKit
 
-/// The scan's card over the bottom of the live camera (Hang Tag): a tag lying on its side with
-/// the call stamped on it, what the item is, the price range in the tag's print, what the call
-/// rests on, the household's own sales, and the AI estimate under its label. Its answers are
-/// Keep and Put back (`ScanCardActions`); shooting the next item puts this one back too.
+/// The scan's card over the bottom of the live camera (Hang Tag), easy to follow at a glance like
+/// a friend's answer at the bins: the verdict stamped big (Grab, Maybe, Leave) with its one-line
+/// why, what the item is, the three prices, and a short reality check of what they rest on.
+/// While the prices wait for what they rest on, what the item is and a quiet "Checking prices"
+/// line. Its answers are Keep and Put back (`ScanCardActions`), there the whole time; shooting
+/// the next item puts this one back too.
 struct ScanCardView: View {
     let entry: ScanEntry
     let onKeep: () -> Void
@@ -13,6 +15,7 @@ struct ScanCardView: View {
     let onClose: () -> Void
     let onTag: () -> Void
     let onRetry: () -> Void
+    var onRetryPrices: () -> Void = {}
 
     var body: some View {
         Group {
@@ -106,24 +109,16 @@ struct ScanCardView: View {
 
     private func read(_ card: ScanCard) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                Stamp(card.callLabel, tone: card.tone, angle: .degrees(-3))
-                    .accessibilityIdentifier("scan.call")
-                Text(card.confidence)
-                    .font(Typography.smallEmphasis)
-                    .foregroundStyle(Palette.textSecondary)
-                Spacer(minLength: 0)
-                Text("Item \(entry.number)").font(Typography.metadata).foregroundStyle(Palette.textSecondary)
+            if card.pricesPending {
+                checkingHeader(card)
+            } else {
+                verdict(card)
             }
-            Text(card.title)
-                .font(Typography.headline)
-                .lineLimit(2)
-                .accessibilityIdentifier("scan.title")
-            if let subtitle = card.subtitle {
-                Text(subtitle).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+            identity(card)
+            if !card.pricesPending {
+                prices(card)
+                realityCheck(card)
             }
-            priceLines(card)
-            signalLines(card)
             if !card.flags.isEmpty {
                 Label(card.flags.joined(separator: " · "), systemImage: "exclamationmark.triangle")
                     .font(Typography.footnote)
@@ -151,117 +146,114 @@ struct ScanCardView: View {
         .padding(.leading, Spacing.md)
     }
 
+    /// The verdict, stamped big in its color, "Your call" under a Maybe, and its one-line why.
+    private func verdict(_ card: ScanCard) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            HStack(alignment: .center, spacing: Spacing.xs) {
+                ScanVerdictStamp(text: card.callLabel, tone: card.tone)
+                    .accessibilityIdentifier("scan.call")
+                if let note = card.verdictNote {
+                    Text(note)
+                        .font(Typography.smallEmphasis)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityIdentifier("scan.verdictNote")
+                }
+                Spacer(minLength: 0)
+                Text("Item \(entry.number)").font(Typography.metadata).foregroundStyle(Palette.textSecondary)
+            }
+            if let why = card.why {
+                Text(why)
+                    .font(Typography.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("scan.why")
+            }
+        }
+    }
+
+    /// While the prices wait: one quiet line of what is being checked, never a spinner wall.
+    private func checkingHeader(_ card: ScanCard) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            if entry.research == .failed {
+                Label("Couldn't get the prices", systemImage: "exclamationmark.triangle")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.warning)
+                    .accessibilityIdentifier("scan.pricesFailed")
+                Button("Retry", action: onRetryPrices)
+                    .buttonStyle(.listora(.secondary, size: .compact))
+                    .accessibilityIdentifier("scan.retryPrices")
+            } else {
+                BrandSpinner().controlSize(.mini)
+                Text(card.pricingLabel ?? "Checking prices")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("scan.checkingPrices")
+            }
+            Spacer(minLength: 0)
+            Text("Item \(entry.number)").font(Typography.metadata).foregroundStyle(Palette.textSecondary)
+        }
+    }
+
+    /// What the item is: the brand and item, its size, material, era, and condition, and how
+    /// sure the read is.
     @ViewBuilder
-    private func priceLines(_ card: ScanCard) -> some View {
+    private func identity(_ card: ScanCard) -> some View {
+        Text(card.title)
+            .font(Typography.headline)
+            .lineLimit(2)
+            .accessibilityIdentifier("scan.title")
+        if let subtitle = card.subtitle {
+            Text(subtitle).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+        }
+        if card.pricesPending {
+            Text(card.readConfidence)
+                .font(Typography.caption)
+                .foregroundStyle(Palette.textSecondary)
+                .accessibilityIdentifier("scan.readConfidence")
+        }
+    }
+
+    /// The three prices, or the range from a server without them, then the call's confidence
+    /// and what it rests on.
+    @ViewBuilder
+    private func prices(_ card: ScanCard) -> some View {
         if let prices = card.prices {
             ScanThreePrices(prices: prices)
-            Text(card.basedOn)
-                .font(Typography.footnote)
-                .foregroundStyle(Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
         } else if let range = card.range {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                Text(range).font(Typography.price).accessibilityIdentifier("scan.range")
-                Text(card.basedOn).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
+            Text(range).font(Typography.price).accessibilityIdentifier("scan.range")
+        }
+        Text("\(card.confidence) · \(card.basedOn)")
+            .font(Typography.caption)
+            .foregroundStyle(Palette.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("scan.basedOn")
+    }
+
+    /// What the prices rest on, a short line each, from the server's verified data; from a
+    /// server without the reality check, the call's signals instead.
+    @ViewBuilder
+    private func realityCheck(_ card: ScanCard) -> some View {
+        if card.realityCheck.isEmpty {
+            ForEach(card.listedSignals, id: \.label) { signal in
+                Text("\(Text(signal.label).font(Typography.smallEmphasis)) · \(signal.shortBasedOn)")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("\(signal.label), \(signal.basedOn)")
+                    .accessibilityIdentifier("scan.signal")
             }
         } else {
-            Text(card.basedOn).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
-        }
-        if let payout = card.payout {
-            Text(payout).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
-        }
-        ForEach(card.ownSales, id: \.marketplace) { line in
-            Text("Your sales on \(line.marketplace): \(line.summary)")
-                .font(Typography.footnote)
-                .accessibilityLabel(line.label + ", " + line.summary)
-        }
-        ForEach(card.comparisons, id: \.marketplace) { comparison in
-            ComparisonLine(comparison: comparison)
-        }
-        // Shown under its label whenever it is there, even when own sales lead the call.
-        if let estimate = card.aiEstimate, let label = card.aiEstimateLabel,
-           card.prices != nil || card.range != estimate
-        {
-            Text("\(estimate) · \(label)")
-                .font(Typography.caption)
-                .foregroundStyle(Palette.textSecondary)
-                .accessibilityIdentifier("scan.aiEstimate")
-        }
-    }
-
-    /// The web research, under its label once, then the call's other signals. A signal that
-    /// rests on web info names only its site here: the label above already says what it is.
-    @ViewBuilder
-    private func signalLines(_ card: ScanCard) -> some View {
-        switch entry.research {
-        case .checking:
-            HStack(spacing: Spacing.xxs) {
-                BrandSpinner().controlSize(.mini)
-                Text("Checking the web for its retail price").font(Typography.caption)
-            }
-            .foregroundStyle(Palette.textSecondary)
-            .accessibilityIdentifier("scan.checkingWeb")
-        case .done:
-            if let web = card.web, web.found {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(web.label).font(Typography.eyebrow).textCase(.uppercase)
-                    if let resale = web.resale {
-                        Text(resale).font(Typography.caption)
-                    }
-                    if let models = web.models {
-                        Text(models).font(Typography.caption)
-                    }
-                    if let summary = web.summary {
-                        Text(summary).font(Typography.caption).fixedSize(horizontal: false, vertical: true)
-                    }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Reality check")
+                    .font(Typography.eyebrow)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Palette.textSecondary)
+                ForEach(Array(card.realityCheck.enumerated()), id: \.offset) { _, line in
+                    ScanRealityRow(line: line)
                 }
-                .foregroundStyle(Palette.textSecondary)
-                .padding(.top, Spacing.xxs)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("scan.webInfo")
             }
-        case .none, .failed:
-            EmptyView()
-        }
-        ForEach(card.listedSignals, id: \.label) { signal in
-            Text("\(Text(signal.label).font(Typography.smallEmphasis)) · \(signal.shortBasedOn)")
-                .font(Typography.caption)
-                .foregroundStyle(Palette.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel("\(signal.label), \(signal.basedOn)")
-                .accessibilityIdentifier("scan.signal")
-        }
-    }
-}
-
-/// The card's three prices side by side, like ChatGPT's answer at the bins: what to list at
-/// (room for offers), what it realistically sells for, and what it goes for fast. The realistic
-/// sale leads; all three are estimates, so none of them says "sold".
-private struct ScanThreePrices: View {
-    let prices: ScanCard.Prices
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
-            column("List at", prices.listAt, emphasized: false)
-            column("Realistic", prices.realistic, emphasized: true)
-            column("Fast sale", prices.fast, emphasized: false)
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "List at \(prices.listAt), realistic sale \(prices.realistic), fast sale \(prices.fast). \(prices.basedOn)",
-        )
-        .accessibilityIdentifier("scan.prices")
-    }
-
-    private func column(_ label: String, _ price: String, emphasized: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(price)
-                .font(Typography.price)
-                .foregroundStyle(emphasized ? Palette.textPrimary : Palette.textSecondary)
-            Text(label)
-                .font(Typography.caption)
-                .foregroundStyle(Palette.textSecondary)
+            .padding(.top, Spacing.xxs)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("scan.reality")
         }
     }
 }
@@ -319,37 +311,6 @@ private struct ScanDuplicateWarning: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Looks like item \(earlier), already scanned")
             .accessibilityIdentifier("scan.duplicate")
-    }
-}
-
-/// One marketplace's comparisons on the card: what close matches sold for (eBay) or ask there,
-/// always under their label, and the demand; or why there are none, in words.
-private struct ComparisonLine: View {
-    let comparison: ScanComparisonLine
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: Spacing.xxs) {
-                if comparison.status == .checking {
-                    BrandSpinner().controlSize(.mini)
-                }
-                Text(comparison.label)
-                    .font(Typography.footnote)
-                    .foregroundStyle(comparison.status == .read ? Palette.textPrimary : Palette.textSecondary)
-            }
-            // The label of the numbers the row shows: sold listings where it has them, else asking.
-            if let source = comparison.soldLabel ?? comparison.askingLabel {
-                Text(source).font(Typography.caption).foregroundStyle(Palette.textSecondary)
-            }
-            if let demand = comparison.demand {
-                Text("\(Text(demand).font(Typography.smallEmphasis)) · \(comparison.demandBasedOn ?? "")")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("scan.comparison.\(comparison.marketplace.lowercased())")
     }
 }
 

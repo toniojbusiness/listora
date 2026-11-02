@@ -2,15 +2,18 @@ import DesignSystem
 import Foundation
 import ListoraAPI
 
-/// A scan's answer as its card shows it (docs/features/thrift-scan.md): what the item is, the
-/// call with its confidence and what it rests on, the household's own sales like it, and the AI
-/// estimate under its label. Every price is a range with its source, in whole dollars; "sold"
-/// is only ever the server's words next to the household's own sales.
+/// A scan's answer as its card shows it (docs/features/thrift-scan.md, "The card"): the verdict
+/// (Grab, Maybe, Leave) with its one-line why, what the item is, the three prices, and a short
+/// reality check of what they rest on. While the prices wait for what they rest on, only what
+/// the item is and a quiet "Checking prices" line. Every price is in whole dollars; "sold" is
+/// only ever the server's words next to real sold data.
 struct ScanCard: Equatable, Sendable {
     enum Call: Equatable, Sendable {
         case buy
         case yourCall
         case skip
+        /// The prices and the call wait for the web research and the comparisons.
+        case checking
         /// A call added after this build: shown by its label, felt as nothing.
         case other
     }
@@ -63,13 +66,39 @@ struct ScanCard: Equatable, Sendable {
         let url: URL
     }
 
+    /// One line of the reality check: "You sold 3 like it on Depop: $25-$29".
+    struct RealityLine: Equatable, Sendable {
+        /// `KnownScanRealityKind`'s raw value.
+        let kind: String
+        let text: String
+    }
+
     let scanID: String
     /// "Lululemon black high-rise leggings".
     let title: String
-    /// "Size 6 · Pre-owned good", whatever the AI could tell.
+    /// "Size 6 · Nylon · Pre-owned good", whatever the AI could tell.
     let subtitle: String?
+    /// How sure the read is of what the item is: "Sure of what it is".
+    let readConfidence: String
     let call: Call
+    /// The verdict, "Grab", "Maybe", "Leave" ("Checking prices" while they wait).
     let callLabel: String
+    /// Under a Maybe: the seller decides.
+    var verdictNote: String? {
+        call == .yourCall ? "Your call" : nil
+    }
+
+    /// The verdict's one-line why: "Even its low end pays out $11 after fees, over your $8".
+    let why: String?
+    /// The prices wait for the web research or a comparison: the card says what it is only.
+    let pricesPending: Bool
+    /// The quiet progress line while they wait ("Checking prices: the web, Depop"), or what was
+    /// checked once they are in.
+    let pricingLabel: String?
+    /// The sources the prices could not wait for or check: "Couldn't check the web in time".
+    let missing: [String]
+    /// What the prices rest on, in short plain lines; empty from a server without it.
+    let realityCheck: [RealityLine]
     /// "High confidence".
     let confidence: String
     let basedOn: String
@@ -88,6 +117,9 @@ struct ScanCard: Equatable, Sendable {
     let wantsTag: Bool
     /// The read named a brand, so the web can be asked about it.
     let hasBrand: Bool
+    /// Asks the server for the prices: they wait, or a server that holds none has a brand to
+    /// look up on the web.
+    let needsPrices: Bool
     let signals: [Signal]
     /// The research, once it came in.
     let web: WebInfo?
@@ -101,18 +133,24 @@ struct ScanCard: Equatable, Sendable {
         let item = identity.item.trimmingCharacters(in: .whitespaces)
         let named = brand.isEmpty || item.lowercased().hasPrefix(brand.lowercased()) ? item : "\(brand) \(item)"
         title = named.prefix(1).uppercased() + named.dropFirst()
-        let details = [
-            identity.sizeLabel.map { "Size \($0)" },
-            identity.condition.map(Self.conditionName),
-        ].compactMap(\.self)
-        subtitle = details.isEmpty ? nil : details.joined(separator: " · ")
+        subtitle = Self.subtitle(identity)
+        readConfidence = Self.readConfidence(identity.confidence)
+        let pending = scan.pricing?.status.value1 == .checking || scan.call.call.value1 == .checking
         call = switch scan.call.call.value1 {
         case .buy?: .buy
         case .yourCall?: .yourCall
         case .skip?: .skip
-        case nil: .other
+        case .checking?: .checking
+        case nil: pending ? .checking : .other
         }
         callLabel = scan.call.label
+        why = pending ? nil : scan.call.why
+        pricesPending = pending
+        pricingLabel = scan.pricing?.label
+        missing = (scan.pricing?.missing ?? []).map(\.label)
+        realityCheck = (scan.realityCheck ?? []).map { line in
+            RealityLine(kind: line.kind.value1?.rawValue ?? line.kind.value2 ?? "", text: line.text)
+        }
         confidence = switch scan.call.confidence.value1 {
         case .high?: "High confidence"
         case .medium?: "Medium confidence"
@@ -133,6 +171,7 @@ struct ScanCard: Equatable, Sendable {
         links = scan.researchLinks.compactMap { link in URL(string: link.url).map { Link(label: link.label, url: $0) } }
         wantsTag = brand.isEmpty || identity.confidence < 0.6
         hasBrand = !brand.isEmpty
+        needsPrices = pending || (scan.pricing == nil && !brand.isEmpty)
         signals = scan.call.signals.map(Self.signal)
         web = scan.research.map(Self.webInfo)
         comparisons = (scan.comparisons ?? []).map(Self.comparison)
@@ -184,7 +223,7 @@ struct ScanCard: Equatable, Sendable {
     /// marketplace's comparison row instead, and the three prices (sent as a signal too, for
     /// builds before them) show in their own row.
     var listedSignals: [Signal] {
-        let listed = signals.filter { $0.kind != "prices" || prices == nil }
+        let listed = signals.filter { ($0.kind != "prices" || prices == nil) && $0.kind != "missing" }
         return comparisons.isEmpty ? listed : listed.filter { $0.kind != "asking" && $0.kind != "demand" }
     }
 
@@ -203,87 +242,23 @@ struct ScanCard: Equatable, Sendable {
         return card
     }
 
-    static func webInfo(_ research: Components.Schemas.ScanResearch) -> WebInfo {
-        let resale = research.resale.map { resale in
-            let sites = resale.sources.map(\.site).joined(separator: ", ")
-            return "Asks \(range(resale.low, resale.high) ?? "") on \(sites)"
-        }
-        let models = research.retail.flatMap { retail in
-            retail.models.count > 1 ? "Models: " + retail.models.joined(separator: ", ") : nil
-        }
-        return WebInfo(
-            label: research.label,
-            summary: research.summary,
-            resale: resale,
-            models: models,
-            found: research.status.value1 == .found,
-        )
-    }
-
     /// What the seller feels when the card lands, so they can keep their eyes on the bin: two
     /// short taps for Buy, one long buzz for Skip, nothing for Your call.
     var haptic: Haptics.Event? {
         switch call {
         case .buy: .doubleTap
         case .skip: .longBuzz
-        case .yourCall, .other: nil
+        case .yourCall, .checking, .other: nil
         }
     }
 
-    /// The call's tone: Buy confirmed-green, Skip red, Your call amber (the seller decides).
+    /// The verdict's tone: Grab green, Leave red, Maybe amber (the seller decides).
     var tone: StatusTone {
         switch call {
         case .buy: .success
         case .skip: .failed
         case .yourCall: .actionNeeded
-        case .other: .neutral
-        }
-    }
-
-    /// "3 sold · $25-$29 · median $28" on one marketplace.
-    static func ownSales(_ line: Components.Schemas.ScanOwnSales) -> OwnSales {
-        let count = line.soldCount == 1 ? "1 sold" : "\(line.soldCount) sold"
-        return OwnSales(
-            marketplace: marketplaceName(line.marketplace),
-            label: line.label,
-            summary: [count, range(line.low, line.high), "median \(dollars(line.median))"]
-                .compactMap(\.self)
-                .joined(separator: " · "),
-            displayOnly: line.displayOnly,
-        )
-    }
-
-    static func dollars(_ money: Components.Schemas.Money) -> String {
-        (Decimal(money.amountCents) / 100)
-            .formatted(.currency(code: money.currency.rawValue).precision(.fractionLength(0)))
-    }
-
-    /// "$25-$29", or one amount when both ends round to it; nil without both.
-    static func range(_ low: Components.Schemas.Money?, _ high: Components.Schemas.Money?) -> String? {
-        guard let low, let high else { return nil }
-        let lowText = dollars(low)
-        let highText = dollars(high)
-        return lowText == highText ? lowText : "\(lowText)-\(highText)"
-    }
-
-    static func marketplaceName(_ marketplace: Components.Schemas.Marketplace) -> String {
-        switch marketplace.value1 {
-        case .ebay?: "eBay"
-        case .depop?: "Depop"
-        case .poshmark?: "Poshmark"
-        case .mercari?: "Mercari"
-        case nil: marketplace.value2 ?? ""
-        }
-    }
-
-    static func conditionName(_ condition: Components.Schemas.ItemCondition) -> String {
-        switch condition {
-        case .newWithTags: "New with tags"
-        case .newWithoutTags: "New without tags"
-        case .newWithDefects: "New with defects"
-        case .preOwnedExcellent: "Pre-owned excellent"
-        case .preOwnedGood: "Pre-owned good"
-        case .preOwnedFair: "Pre-owned fair"
+        case .checking, .other: .neutral
         }
     }
 }

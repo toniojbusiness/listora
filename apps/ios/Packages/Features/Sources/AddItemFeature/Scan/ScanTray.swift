@@ -39,7 +39,7 @@ struct ScanTray: View {
     static func label(_ entry: ScanEntry) -> String {
         let state = switch entry.state {
         case .reading: "reading"
-        case let .read(card): card.callLabel
+        case let .read(card): card.pricesPending ? "checking prices" : card.callLabel
         case .failed: "couldn't read"
         case .waiting: entry.instant.map { "\(OfflineScanCard($0).callLabel), waiting for signal" }
             ?? "waiting for signal"
@@ -96,7 +96,7 @@ private struct ScanTrayTile: View {
                 .padding(2)
                 .background(Palette.surface, in: Circle())
         } else if let card = entry.card {
-            Text(card.callLabel)
+            Text(card.pricesPending ? "…" : card.callLabel)
                 .font(Typography.stamp)
                 .textCase(.uppercase)
                 .lineLimit(1)
