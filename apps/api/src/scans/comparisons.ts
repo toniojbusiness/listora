@@ -9,9 +9,10 @@
  *
  * Depop shows a visitor no sold listings, so its numbers are what close matches ask, labeled as
  * asking prices; the household's own sales are the sold side, and the demand is their recent
- * pace against Depop's live supply. eBay shows its sold listings, so its numbers are also what
- * close matches sold for (the call's range when the household's own sales are too few), and its
- * demand is its search's sold pace against its supply.
+ * pace against Depop's live supply. eBay and Mercari show their sold listings, so their numbers
+ * are also what close matches sold for (the call's range when the household's own sales are too
+ * few); eBay's demand is its search's sold pace against its supply, and Mercari's how many of its
+ * latest sales were in the last 30 days.
  */
 import type { ScanComparison, ScanComparisonAnswer } from '@listora/api-contract';
 import {
@@ -30,6 +31,7 @@ import { jsonb, type DbExecutor, type JsonObject } from '@listora/db';
 import { isFeatureOn, MARKETPLACE_NAMES, type FeatureGate } from '@listora/marketplaces';
 import { ASKING_PRICES_LABEL, marketSoldLabel } from '@listora/pricing';
 import {
+  latestSoldPace,
   marketDemand,
   marketSoldPace,
   soldPace,
@@ -53,12 +55,14 @@ export interface ComparisonLimits {
 
 /**
  * Reads each marketplace's comparisons may make for an account, per hour and per day: starting
- * points to tune in the live test, not proven safe limits (the plan's section 3.3). An eBay read
- * loads two results pages (its sold and its for-sale search).
+ * points to tune in the live test, not proven safe limits (the plan's section 3.3). An eBay or a
+ * Mercari read loads two results pages (its sold and its for-sale search); Mercari's are fewer,
+ * since it showed human checks to automated sessions before (2026-10-27).
  */
 export const COMPARISON_LIMITS: Readonly<Record<ComparisonMarketplace, ComparisonLimits>> = {
   depop: { perHour: 60, perDay: 300 },
   ebay: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
+  mercari: { perHour: 20, perDay: 100, saveForPricier: { after: 12, minEstimateCents: 2_500 } },
 };
 
 /** A read of the same search answers for this long. */
@@ -89,7 +93,10 @@ export interface StoredComparison {
   readonly input?: ComparisonInput;
   readonly stats?: ComparisonStats;
   readonly forSaleTotal?: number | null;
-  /** The whole sold search's count, where the marketplace shows sold listings (eBay). */
+  /**
+   * Sold listings in the marketplace's sold window, where it shows sold listings: eBay's whole
+   * sold search's count, Mercari's latest sold read that sold in the last 30 days.
+   */
   readonly soldTotal?: number | null;
   readonly cached?: boolean;
   /** Why there are no numbers. */
@@ -292,7 +299,7 @@ export async function answerComparison(
   const marketplace = row.marketplace as ComparisonMarketplace;
   const next: StoredComparison =
     stats !== undefined
-      ? settled(marketplace, comparisonId, stats as ComparisonStats, false, {
+      ? settled(marketplace, comparisonId, stats, false, {
           forSaleTotal: answer.forSaleTotal ?? null,
           soldTotal: answer.soldTotal ?? null,
         })
@@ -368,7 +375,7 @@ export function marketInputs(
                 count: sold.count,
                 lowCents: sold.lowCents,
                 highCents: sold.highCents,
-                windowDays: sold.windowDays,
+                windowDays: sold.windowDays ?? null,
                 level: stats.level,
               },
             }),
@@ -382,14 +389,18 @@ export function marketInputs(
 }
 
 /**
- * The trend read: a marketplace's own sold pace against its supply where it shows sold listings
- * (eBay), else the household's recent sales like it against the marketplace's supply.
+ * The trend read: where a marketplace shows sold listings, its own sold pace (eBay's search's
+ * sold count against its supply; Mercari's latest sales, how many were lately); else the
+ * household's recent sales like it against the marketplace's supply (Depop).
  */
 function demandOf(comparison: StoredComparison, recentOwnSales: number): MarketDemandRead {
   const name = MARKETPLACE_NAMES[comparison.marketplace];
   const window = COMPARISON_SOLD_WINDOW_DAYS[comparison.marketplace];
-  return window === undefined
-    ? marketDemand(recentOwnSales, comparison.forSaleTotal ?? null, name)
+  if (window === undefined) {
+    return marketDemand(recentOwnSales, comparison.forSaleTotal ?? null, name);
+  }
+  return comparison.marketplace === 'mercari'
+    ? latestSoldPace(comparison.soldTotal ?? null, comparison.stats?.read.sold ?? 0, window, name)
     : marketSoldPace(comparison.soldTotal ?? null, comparison.forSaleTotal ?? null, window, name);
 }
 
@@ -457,7 +468,7 @@ function readView(
   };
   const label =
     sold !== undefined
-      ? `${name}: sold ${dollars(sold.lowCents)}-${dollars(sold.highCents)}, ${soldPace(sold.count, sold.windowDays)}`
+      ? `${name}: sold ${dollars(sold.lowCents)}-${dollars(sold.highCents)}, ${soldPace(sold.count, sold.windowDays ?? null)}`
       : forSale !== undefined
         ? `${name}: asking ${dollars(forSale.lowCents)}-${dollars(forSale.highCents)}, ${String(forSale.count)} like it for sale`
         : undefined;
@@ -496,7 +507,7 @@ function readView(
             low: usd(sold.lowCents),
             median: usd(sold.medianCents),
             high: usd(sold.highCents),
-            ...(sold.windowDays === null ? {} : { windowDays: sold.windowDays }),
+            ...(sold.windowDays === undefined ? {} : { windowDays: sold.windowDays }),
             label: marketSoldLabel(name),
           },
         }),
