@@ -12,6 +12,7 @@ import type { Browser, Page, Response } from 'playwright-core';
 import type { AutomationSessions, SessionRequest, SessionRun } from '../adapter/sessions.ts';
 import type { AutomationProfile } from '../profiles.ts';
 import { loadChromium } from '../runner/playwright.ts';
+import { readPageData } from '../runner/script-session.ts';
 import { TINY_JPEG, type SessionIssuer } from '../test-support.ts';
 import { toBase64 } from './backend.ts';
 import type { HandOffAnswer, HostPageState, HostPhoto, PhoneHost } from './host.ts';
@@ -73,10 +74,7 @@ export class PlaywrightPhoneHost implements PhoneHost {
 
   pageData(name: string, timeoutMs: number): Promise<string | null> {
     // The app reads it in the page's own world, as `page.evaluate` does.
-    const work = this.page.evaluate((key) => {
-      const value: unknown = (globalThis as Record<string, unknown>)[key];
-      return value === undefined ? null : JSON.stringify(value);
-    }, name);
+    const work = this.page.evaluate(readPageData, name);
     return withDeadline(work, timeoutMs);
   }
 

@@ -119,17 +119,24 @@ final class MarketplacePage: NSObject {
         try await run(body, arguments, in: .defaultClient, timeout: timeout)
     }
 
-    /// The page's own global `name`, serialized by the page as JSON (`null` when it has none).
-    /// This one fixed read runs in the page's own script world, the only place a page's own data
-    /// lives (Poshmark's script that embeds it removes itself once it ran).
+    /// The page's own global `name`, serialized by the page as JSON (`null` when it has none);
+    /// `name` may be a path into it, its property names joined by dots
+    /// (`__INITIAL_STATE__.$_search.gridData`), so a read takes only the part it uses of a page
+    /// whose data is large. This one fixed read runs in the page's own script world, the only
+    /// place a page's own data lives (Poshmark's script that embeds it removes itself once it
+    /// ran); the runtime's tests run the same read (`readPageData`, script-session.ts).
     func pageData(_ name: String, timeout: Duration) async throws -> Any {
-        try await run(
-            "const value = globalThis[name]; return value === undefined ? null : JSON.stringify(value);",
-            ["name": name],
-            in: .page,
-            timeout: timeout,
-        )
+        try await run(Self.pageDataRead, ["name": name], in: .page, timeout: timeout)
     }
+
+    static let pageDataRead = """
+    let value = globalThis;
+    for (const key of name.split('.')) {
+        if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return null;
+        value = value[key];
+    }
+    return value === undefined ? null : JSON.stringify(value);
+    """
 
     private func run(
         _ body: String,

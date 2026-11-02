@@ -137,8 +137,8 @@ an inspection after every action, read-only reads, sticky stops), and the same r
 Only the page backend differs. The app runs the bundle in a hidden controller web view and
 gives it the marketplace page through one message handler. The app only relays: it loads
 pages, evaluates the runtime's page functions in an isolated script world, reads the page's own
-data (`pageData`, one fixed read of a page global, in the page's own world, the only place that
-data lives), reports the main frame's navigations, HTTP status, and dialogs, fetches listing
+data (`pageData`, one fixed read of a page global or a dotted path into one, in the page's own
+world, the only place that data lives), reports the main frame's navigations, HTTP status, and dialogs, fetches listing
 photos, and hands checks to the seller. Every rule stays in the runtime.
 
 - **A page load during a read.** A click that loads a page (Poshmark's Update, read live on

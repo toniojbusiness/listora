@@ -17900,8 +17900,8 @@ extension Components {
         /// where the scan read them) in the marketplace's public search, read on the seller's iPhone in
         /// a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
         /// asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
-        /// the sold side; eBay shows its sold listings, so its row has what close matches sold for
-        /// (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
+        /// the sold side; eBay and Poshmark show their sold listings, so their rows have what close
+        /// matches sold for (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
         /// `saveScanComparison`.
         ///
         ///
@@ -18135,8 +18135,8 @@ extension Components {
                 case label
             }
         }
-        /// What similar listings sold for in a marketplace's public search (eBay's): other sellers'
-        /// real sales, never the household's own.
+        /// What similar listings sold for in a marketplace's public search (eBay's, Poshmark's): other
+        /// sellers' real sales, never the household's own.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ScanSoldPrices`.
@@ -18192,8 +18192,9 @@ extension Components {
                 case label
             }
         }
-        /// How the item sells against the competition: on a marketplace that shows sold listings
-        /// (eBay), how many its search sold lately against how many it has for sale now; elsewhere the
+        /// How the item sells against the competition: on a marketplace that shows sold listings, how
+        /// many its search sold lately against how many it has for sale now (eBay), or how many close
+        /// matches sold in the last weeks by their sold dates (Poshmark); elsewhere the
         /// household's own recent sales like it against what the marketplace has for sale now. `label`
         /// only when the numbers say so.
         ///
@@ -18298,8 +18299,9 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/forSaleTotal`.
             public var forSaleTotal: Swift.Int32?
-            /// Sold listings in the whole sold search, as the marketplace counts them, where it shows a
-            /// visitor sold listings (eBay's last 90 days).
+            /// Sold listings in the whole sold search, as the marketplace counts them, where it counts
+            /// a sold window (eBay's last 90 days); absent where it counts every sale it ever had
+            /// (Poshmark).
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ScanComparisonAnswer/soldTotal`.
@@ -18316,7 +18318,7 @@ extension Components {
             ///   - outcome:
             ///   - stats:
             ///   - forSaleTotal: Listings for sale in the whole search, as the marketplace counts them.
-            ///   - soldTotal: Sold listings in the whole sold search, as the marketplace counts them, where it shows a
+            ///   - soldTotal: Sold listings in the whole sold search, as the marketplace counts them, where it counts
             ///   - ms:
             ///   - message: Why a read did not go through, for the server's log; never page text.
             public init(
@@ -19021,10 +19023,10 @@ extension Components {
             }
         }
         /// `own_history`: the household's own sales like it. `market_sold`: what close matches sold for
-        /// in a marketplace's public search (eBay's sold listings, `comparisons`), when the household's
-        /// own sales are too few. `web_info`: what web pages say such items resell for (the research,
-        /// with its sites), never a high-confidence call. `ai_estimate`: the AI's estimate alone, never
-        /// a high-confidence Buy. `none`: nothing to go on.
+        /// in a marketplace's public search (eBay's or Poshmark's sold listings, `comparisons`), when
+        /// the household's own sales are too few. `web_info`: what web pages say such items resell for
+        /// (the research, with its sites), never a high-confidence call. `ai_estimate`: the AI's
+        /// estimate alone, never a high-confidence Buy. `none`: nothing to go on.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanBasis`.

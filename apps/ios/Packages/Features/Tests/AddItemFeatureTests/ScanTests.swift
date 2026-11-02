@@ -56,6 +56,37 @@ struct ScanCardTests {
         #expect(measured.line == "Card 2.0 s · 95% 9.0 s · active 3.0 s an item")
         #expect(ScanMeasurements(cardTimes: [], active: nil, items: 0).line == nil)
     }
+
+    @Test
+    func `shows eBay's sold listings under their label, with eBay's sold pace`() throws {
+        let card = try ScanCard(decodeScan(ebaySoldScanJSON(id: "scan-1")))
+        let ebay = try #require(card.comparisons.first)
+        #expect(ebay.marketplace == "eBay")
+        #expect(ebay.status == .read)
+        #expect(ebay.label == "eBay: sold $18-$30, 9 like it in the last 14 days")
+        #expect(ebay.soldLabel == "Sold listings on eBay")
+        #expect(ebay.demand == "Sells fast on eBay")
+        #expect(ebay.demandBasedOn == "Sold listings on eBay: 410 in the last 90 days; 320 for sale now")
+        // The demand shows with its row, not again among the signals.
+        #expect(card.listedSignals.isEmpty)
+        #expect(card.basedOn == "Sold listings on eBay: 9 like it in the last 14 days")
+    }
+
+    @Test
+    func `shows Poshmark's sold listings under their label, with its recent sold pace`() throws {
+        let card = try ScanCard(decodeScan(poshmarkSoldScanJSON(id: "scan-1")))
+        let poshmark = try #require(card.comparisons.first)
+        #expect(poshmark.marketplace == "Poshmark")
+        #expect(poshmark.status == .read)
+        #expect(poshmark.label == "Poshmark: sold $18-$34, 44 like it in the last 42 days")
+        #expect(poshmark.soldLabel == "Sold listings on Poshmark")
+        #expect(poshmark.demand == "Sells fast on Poshmark")
+        #expect(
+            poshmark.demandBasedOn == "Sold listings on Poshmark: 44 like it in the last 42 days; 97,581 for sale now",
+        )
+        #expect(card.listedSignals.isEmpty)
+        #expect(card.basedOn == "Sold listings on Poshmark: 44 like it in the last 42 days")
+    }
 }
 
 @MainActor
@@ -284,21 +315,6 @@ struct ScanRunModelTests {
         // The server never answered (the fake's default): the card says so rather than "Checking".
         #expect(try await eventually { run.current?.card?.comparisons.first?.status == .unavailable })
         #expect(run.current?.card?.comparisons.first?.label == "Couldn't check Depop")
-    }
-
-    @Test
-    func `shows eBay's sold listings under their label, with eBay's sold pace`() throws {
-        let card = try ScanCard(decodeScan(ebaySoldScanJSON(id: "scan-1")))
-        let ebay = try #require(card.comparisons.first)
-        #expect(ebay.marketplace == "eBay")
-        #expect(ebay.status == .read)
-        #expect(ebay.label == "eBay: sold $18-$30, 9 like it in the last 14 days")
-        #expect(ebay.soldLabel == "Sold listings on eBay")
-        #expect(ebay.demand == "Sells fast on eBay")
-        #expect(ebay.demandBasedOn == "Sold listings on eBay: 410 in the last 90 days; 320 for sale now")
-        // The demand shows with its row, not again among the signals.
-        #expect(card.listedSignals.isEmpty)
-        #expect(card.basedOn == "Sold listings on eBay: 9 like it in the last 14 days")
     }
 
     @Test

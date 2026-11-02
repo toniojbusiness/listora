@@ -543,7 +543,8 @@ The card gains a row per marketplace whose comparisons are on (`market_comps`, p
 [verified-features.md](verified-features.md)): what listings like the item ask in the
 marketplace's public search, read on the seller's iPhone within seconds of the read. The captain
 approved reading the public, logged-out search results from the seller's iPhone within budgets,
-stopping at any check (2026-10-31); eBay, Poshmark, and Mercari follow as their own readers.
+stopping at any check (2026-10-31); eBay and Poshmark have their own readers (below), and
+Mercari follows as its own.
 
 ### What Depop shows a visitor
 
@@ -766,6 +767,109 @@ a check on the phone pauses eBay's comparisons for the day ("eBay prices paused 
 **Fixed with it.** A read in which nothing matched used to send `level: null`, which the API
 refused, so the card said "Couldn't check Depop"; the phone now leaves the level out, and the row
 says "Not enough similar listings".
+
+## Poshmark (M3)
+
+Poshmark's row is what close matches sold for on Poshmark lately, and how fast they sold. Its
+comparisons are behind their own gate (`market_comps` on Poshmark,
+[verified-features.md](verified-features.md)), hidden from sellers until the captain's live test.
+
+### What Poshmark shows a visitor
+
+Read live on 2026-11-02 in a fresh browser context with no cookies (through `market-pace.sh`):
+the search page (`/search?query=<words>&type=listings&src=dir`, as its search box makes it)
+lists the search's first 48 listings for sale now, and its own "Sold items" filter
+(`&availability=sold_out`) its first 48 sold ones, with no check on either. Both pages are
+rendered from the data they embed (`window.__INITIAL_STATE__`): each result's title, brand,
+department and category (`Women` / `Jeans`), sizes, price, and inventory, whose last change
+(`inventory.status_changed_at`) is the day a sold listing sold; and the search's own count
+(`total_listing_count`). The sold search counts every sale Poshmark ever had (264,413 for
+"levis 501 jeans", against 97,581 for sale), so that count says nothing of recent demand, and
+the reader never sends it; the sold dates do. A read loads the two URLs the search box and the
+filter make, and nothing else (never a signed-in session, a like, a share, an offer, or any
+account).
+
+### The read
+
+1. **The query.** As for Depop (`comparisonQuery`): never the brand alone, so a read needs the
+   brand and an item type; the words are the brand, the model or line, and the type. The match
+   is held to Poshmark's department and category for the item's category (`mapPoshmarkCatalog`,
+   the listing form's own map; both departments when the read could not tell), so a women's
+   pair is never compared with men's.
+2. **The phone reads it** (`listoraPhone.compare`, `comps/poshmark.ts`): the sold page, then the
+   for-sale page, each one page load, through the same session rules as every automated read.
+   The page's data is several megabytes (most of it the search's filters), so the reader takes
+   only the results and the count, by their path (`POSHMARK_SEARCH_DATA`, a dotted path into
+   `__INITIAL_STATE__`; `poshmark/pages/search-page.ts`), about 600 KB a page. Of each result only
+   the title, brand, department and category, sizes, price, and sold day are used; never the
+   seller, the photos, the comments, or the likes.
+3. **What is never counted.** Sales older than 90 days (`COMPARISON_SOLD_WINDOW_DAYS`: an old
+   price says little of today's), lots and bundles, listings of many sizes or quantities (a
+   boutique's, `multi_item`), prices not in US dollars, and on each page any listing that is not
+   what that page shows (a sold one on the for-sale page).
+4. **Matching** (`marketStats`): Poshmark's brand **and** its department and category; the
+   levels add the model in the title and the size. Sold listings choose the level (the tightest
+   with 5), and outliers are left out, as for the others.
+5. **Only numbers leave the phone**: the level, the sold quartiles with how many days back the
+   oldest sold, the asking quartiles, the counts read, and the for-sale search's count.
+
+On the recorded real search (2026-11-02, women's Levi's 501 jeans, size 28): 44 close matches of
+the model sold in the last 42 days for $18-$34 (median $23.50), against 41 for sale asking
+$23-$40: what buyers pay sits well under what sellers ask, which is why the row leads with sold
+prices.
+
+### On the card
+
+- **The row**: "Poshmark: sold $18-$34, 44 like it in the last 42 days" under "Sold listings on
+  Poshmark" (`marketSoldLabel`), from 3 sold close matches; without them, its asking prices, as
+  Depop's. The label guard holds it as eBay's.
+- **The trend read** (`marketRecentSoldPace`, `COMPARISON_SOLD_PACE.poshmark`
+  `sold_dates`): how many close matches sold per 30 days, over the days they span (at least 30,
+  so a burst of a few days is never read as more). "Sells fast on Poshmark" from 8 a month
+  (`RECENT_SOLD_FAST`), "Slow on Poshmark" at one or none while at least 3 like it are for sale
+  (`RECENT_SOLD_SLOW`), with what it rests on ("Sold listings on Poshmark: 44 like it in the last
+  42 days; 97,581 for sale now"). The sold page shows 48 results, so a busy search's count is a
+  floor: it can miss "fast", never invent it. Starting thresholds, to tune in the live test.
+- **In the call**: as eBay's. With fewer than 3 of the household's own sales like it, at least 5
+  sold close matches are the range (`market_sold`); a slow Poshmark keeps a call from high
+  confidence.
+
+### Account risk
+
+As for Depop and eBay ("Account risk" above): no account in the read (the app's own
+non-persistent web view, never the seller's, never the web view their Poshmark automation runs
+in), phone only, stop at the first check (a CAPTCHA, a bot check, a sign-in page), the 24-hour
+cache, the pauses, images and media blocked (Poshmark's photos come from another origin, which
+the page never loads), and the warm-up (Poshmark's home page). **Budgets**: 30 reads an hour and
+150 a day per account (each read loads two pages), the hour's last 10 kept for items the AI
+prices at $25 or more (`COMPARISON_LIMITS.poshmark`).
+
+### Data
+
+No new column: Poshmark's read fills `market_comparison.stats` and `for_sale_total`, and leaves
+`sold_total` empty.
+
+### Tests
+
+- `@listora/sourcing` `pace.test.ts` (the recent pace: fast, steady, slow, a burst, few for
+  sale).
+- `packages/automation`: `poshmark/pages/search-page.test.ts` (the URLs, what a result reads as,
+  what is never counted, a page Listora does not know), `comps/poshmark.int.test.ts` (the lane on
+  the phone's page backend against a stand-in search that embeds its data as Poshmark's pages do:
+  the match and count, the sold window, no results, the warm-up, a bot check and a CAPTCHA, a
+  page Listora does not know), `comps/query.test.ts` (Poshmark's department and category), and
+  the recorded real search (`poshmark/recordings/search.json`, recorded logged out with
+  `npm run recordings:record -- poshmark --logged-out`, [recorded-pages.md](recorded-pages.md)),
+  replayed by `recordings.int.test.ts`. `runner/page-data.test.ts`: the dotted-path read.
+- `apps/api/src/scans/comparisons.int.test.ts`: Poshmark's read handed out by brand, department
+  and category, model, and size; the call on its sold listings with the recent pace and the
+  cache; a slow Poshmark.
+- iPhone: `ScanTests.swift` (Poshmark's row under its sold label).
+
+**The phone needs a new app build** for Poshmark's comparisons: the reader is in the bundled
+phone runtime, and the app's page read (`MarketplacePage.pageData`) now takes a dotted path. Live
+test: the captain on his phone at a store, logged out, Poshmark only, in Test mode (the gate
+stays off for sellers).
 
 ## Upgrading drafts (M6)
 

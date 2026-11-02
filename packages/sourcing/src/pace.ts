@@ -1,7 +1,8 @@
 /**
- * The trend read where a marketplace shows a visitor its sold listings (eBay's, through the
- * thrift scan's comparisons; docs/features/thrift-scan.md, "eBay"). Apart from market.ts, which
- * the phone runs, because it words what it rests on as sold data, under the label guard's label.
+ * The trend read where a marketplace shows a visitor its sold listings (eBay's and Poshmark's,
+ * through the thrift scan's comparisons; docs/features/thrift-scan.md, "eBay" and "Poshmark").
+ * Apart from market.ts, which the phone runs, because it words what it rests on as sold data,
+ * under the label guard's label.
  */
 import { marketSoldLabel } from '@listora/pricing';
 
@@ -46,5 +47,66 @@ export function marketSoldPace(
         ? { label: `Slow on ${marketplace}` }
         : {}),
     basedOn: `${marketSoldLabel(marketplace)}: ${count(soldTotal)} in the last ${String(windowDays)} days; ${count(forSaleTotal)} for sale now`,
+  };
+}
+
+/**
+ * Close matches sold in 30 days that make "sells fast" on a marketplace that dates its sold
+ * listings (Poshmark), and at most how many make "slow" while close matches are for sale:
+ * starting thresholds, to tune in the live test.
+ */
+export const RECENT_SOLD_FAST = 8;
+export const RECENT_SOLD_SLOW = 1;
+/** The month the recent pace is counted over. */
+export const RECENT_PACE_DAYS = 30;
+/** Close matches for sale that make a slow pace "slow" rather than just few of them about. */
+export const RECENT_SLOW_MIN_FOR_SALE = 3;
+
+/** What the recent pace reads of one marketplace's comparisons. */
+export interface RecentSoldInput {
+  /** Close matches sold in the sold window, and how many days back the oldest of them sold. */
+  readonly soldCount: number;
+  readonly windowDays: number | null;
+  /** Close matches for sale now, and the whole for-sale search's own count. */
+  readonly forSaleCount: number;
+  readonly forSaleTotal: number | null;
+}
+
+/**
+ * The trend read on a marketplace that dates its sold listings but counts every sale it ever
+ * had (Poshmark): how many close matches sold lately, per 30 days over the days they span (at
+ * least 30, so a burst of a few days is never read as more). Strong (sells fast) from 8 a month,
+ * crowded (slow) at one or none while at least 3 like it are for sale, steady otherwise. The
+ * sold page shows 48 results, so a busy search's count is a floor: it can miss "fast", never
+ * invent it.
+ */
+export function marketRecentSoldPace(
+  input: RecentSoldInput,
+  marketplace: string,
+): MarketDemandRead {
+  const span = Math.max(input.windowDays ?? RECENT_PACE_DAYS, RECENT_PACE_DAYS);
+  const perMonth = (input.soldCount * RECENT_PACE_DAYS) / span;
+  const demand: MarketDemand =
+    perMonth >= RECENT_SOLD_FAST
+      ? 'strong'
+      : perMonth <= RECENT_SOLD_SLOW && input.forSaleCount >= RECENT_SLOW_MIN_FOR_SALE
+        ? 'crowded'
+        : 'steady';
+  const sold =
+    input.soldCount === 0
+      ? `none like it in the last ${String(span)} days`
+      : `${String(input.soldCount)} like it in the last ${String(span)} days`;
+  const supply =
+    input.forSaleTotal === null
+      ? ''
+      : `; ${input.forSaleTotal.toLocaleString('en-US')} for sale now`;
+  return {
+    demand,
+    ...(demand === 'strong'
+      ? { label: `Sells fast on ${marketplace}` }
+      : demand === 'crowded'
+        ? { label: `Slow on ${marketplace}` }
+        : {}),
+    basedOn: `${marketSoldLabel(marketplace)}: ${sold}${supply}`,
   };
 }

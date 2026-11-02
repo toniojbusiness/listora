@@ -165,6 +165,7 @@ final class ComparisonLane {
     static let origins: [String: [String]] = [
         "depop": ["https://www.depop.com", "https://depop.com"],
         "ebay": ["https://www.ebay.com", "https://ebay.com", "https://signin.ebay.com"],
+        "poshmark": ["https://poshmark.com", "https://www.poshmark.com"],
     ]
 
     /// A warm-up names only the marketplace: the runtime paces it as the marketplace's reads.

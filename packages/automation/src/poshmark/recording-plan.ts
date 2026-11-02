@@ -2,12 +2,16 @@
  * What is recorded on Poshmark (docs/features/recorded-pages.md): the seller's own data (the
  * health check), their closet, one of their listings and its edit form, their sold items, and
  * the listing form filled for each of its form shapes (docs/features/poshmark.md, "Every form
- * shape, on the real form"), without photos and never listed.
+ * shape, on the real form"), without photos and never listed; and, logged out, the public
+ * search a thrift scan comparison reads (docs/features/thrift-scan.md, "Poshmark").
  */
 import type { ListingContent } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 
 import type { PhotoSource } from '../adapter/photos.ts';
+import { poshmarkComparisonScript } from '../comps/poshmark.ts';
+import { comparisonProfile } from '../comps/run.ts';
+import type { ComparisonQuery } from '../comps/types.ts';
 import { automationProfile } from '../profiles.ts';
 import {
   firstListingOnSale,
@@ -22,7 +26,8 @@ import { buildPoshmarkPayload } from './payload.ts';
 import { createPoshmarkScripts, fillListing } from './scripts.ts';
 import { PoshmarkSite } from './site.ts';
 
-const site = new PoshmarkSite('https://poshmark.com');
+const POSHMARK_SITE_URL = 'https://poshmark.com';
+const site = new PoshmarkSite(POSHMARK_SITE_URL);
 /** No entry lists, so none gets a photo. */
 const noPhotos: PhotoSource = {
   fetch: () => Promise.reject(new Error('a recording sends no photos')),
@@ -67,6 +72,21 @@ function shape(
   };
 }
 
+/** The search entry's item: a pair of women's Levi's 501 jeans, size 28, as a scan names it. */
+const SEARCH_QUERY: ComparisonQuery = {
+  words: 'levis 501 jeans',
+  brand: "Levi's",
+  model: '501',
+  sizeLabel: '28',
+  productTypes: ['Women/Jeans'],
+  typeWords: ['jeans'],
+};
+/**
+ * The time the search's sales are dated against: the day of its recording, so a replay counts
+ * the sales it did then (move it with a new recording).
+ */
+const SEARCH_NOW = new Date('2026-11-02T18:00:00Z');
+
 export const poshmarkRecordingPlan: RecordingPlan = {
   marketplace: 'poshmark',
   profile: automationProfile('poshmark'),
@@ -74,6 +94,18 @@ export const poshmarkRecordingPlan: RecordingPlan = {
   sessionGapMs: 0,
   entries: [
     { name: 'hub', page: 'hub', mode: 'read', script: () => (step) => scripts.health(step) },
+    {
+      // The public search a comparison read makes (comps/), as a logged-out visitor: a fresh
+      // browser context with no cookies, never the seller's session.
+      name: 'search',
+      page: 'search',
+      mode: 'read',
+      session: 'logged_out',
+      profile: comparisonProfile('poshmark', {
+        pacing: automationProfile('poshmark').readOnlyPacing,
+      }),
+      script: () => poshmarkComparisonScript(POSHMARK_SITE_URL, SEARCH_QUERY, SEARCH_NOW),
+    },
     {
       name: 'listings',
       page: 'shop',
@@ -171,14 +203,40 @@ export const poshmarkRecordingPlan: RecordingPlan = {
   identity: poshmarkIdentity,
 };
 
-/** The seller's username, which names their closet (`/closet/<username>`). */
+/**
+ * The seller's username, which names their closet (`/closet/<username>`); and in a public
+ * search, every seller's: the usernames, handles, and names its results name them by.
+ */
 function poshmarkIdentity(recordings: readonly ExpandedRecording[]): string[] {
   const usernames = new Set<string>();
+  const visit = (value: unknown, key: string | null): void => {
+    if (typeof value === 'string') {
+      if (key !== null && SEARCH_PERSON_KEYS.has(key) && value.trim() !== '') usernames.add(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, key);
+    } else if (value !== null && typeof value === 'object') {
+      for (const [name, child] of Object.entries(value)) visit(child, name);
+    }
+  };
   for (const recording of recordings) {
     for (const state of recording.states) {
       const found = /^\/closet\/([^/?#]+)/.exec(new URL(state.url).pathname)?.[1];
       if (found !== undefined) usernames.add(decodeURIComponent(found));
+      if (recording.page === 'search') visit(state.data, null);
     }
   }
   return [...usernames];
 }
+
+/** The keys a search result names its seller (or a commenter or liker) by. */
+const SEARCH_PERSON_KEYS: ReadonlySet<string> = new Set([
+  'creator_username',
+  'creator_display_handle',
+  'creator_full_name',
+  'creator_fb_id',
+  'username',
+  'display_handle',
+  'full_name',
+]);

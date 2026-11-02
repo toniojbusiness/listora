@@ -67,6 +67,23 @@ const EBAY_READ = {
   ms: 2400,
 };
 
+/**
+ * What the phone answers for a Poshmark read: 44 close matches sold for $18 to $34 in the last 42
+ * days, 41 for sale at $23 to $40, and the for-sale search's count; Poshmark's sold search counts
+ * every sale it ever had, so no sold count comes with it.
+ */
+const POSHMARK_READ = {
+  outcome: 'read' as const,
+  stats: {
+    level: 'model' as const,
+    sold: { count: 44, lowCents: 1800, medianCents: 2350, highCents: 3400, windowDays: 42 },
+    forSale: { count: 41, lowCents: 2300, medianCents: 3000, highCents: 4000 },
+    read: { sold: 47, forSale: 48 },
+  },
+  forSaleTotal: 97_581,
+  ms: 3100,
+};
+
 describe('the thrift scan marketplace comparisons (real Postgres)', () => {
   let api: TestApi;
   let token: string;
@@ -131,6 +148,12 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     return row;
   }
 
+  function poshmarkOf(scan: Awaited<ReturnType<typeof scanOf>>) {
+    const row = scan.comparisons?.find((one) => one.marketplace === 'poshmark');
+    if (row === undefined) throw new Error('the scan has no Poshmark comparison');
+    return row;
+  }
+
   async function answerRead(scanId: string, comparisonId: string, body: unknown, as = token) {
     return api.call('saveScanComparison', {
       token: as,
@@ -139,7 +162,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     });
   }
 
-  async function reads(marketplace: 'depop' | 'ebay' = 'depop') {
+  async function reads(marketplace: 'depop' | 'ebay' | 'poshmark' = 'depop') {
     return api.db
       .selectFrom('market_comparison')
       .selectAll()
@@ -165,8 +188,8 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
         typeWords: ['jeans'],
       },
     });
-    // Only Depop and eBay have a reader: no other marketplace gets a row.
-    expect(scan.comparisons?.map((one) => one.marketplace)).toEqual(['depop', 'ebay']);
+    // Only Depop, eBay, and Poshmark have a reader: no other marketplace gets a row.
+    expect(scan.comparisons?.map((one) => one.marketplace)).toEqual(['depop', 'ebay', 'poshmark']);
     const [row] = await reads();
     expect(row).toMatchObject({ status: 'pending', scan_id: scan.id, marketplace: 'depop' });
   });
@@ -371,6 +394,95 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
       status: 'not_enough',
       label: 'Not enough similar listings on eBay',
     });
+  });
+
+  it("hands the phone a read of Poshmark by brand, Poshmark's department and category, model, and size", async () => {
+    const scan = await scanOf(answer());
+    expect(poshmarkOf(scan)).toMatchObject({ status: 'checking', label: 'Checking Poshmark...' });
+    expect(poshmarkOf(scan).read?.input).toMatchObject({
+      version: 1,
+      marketplace: 'poshmark',
+      query: {
+        words: 'levis 501 jeans',
+        brand: "Levi's",
+        model: '501',
+        sizeLabel: '28',
+        productTypes: ['Women/Jeans'],
+        typeWords: ['jeans'],
+      },
+    });
+  });
+
+  it("rests the call on Poshmark's sold listings, under their label, with its recent sold pace", async () => {
+    const scan = await scanOf(answer());
+    const read = poshmarkOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    const answered = await answerRead(scan.id, read.id, POSHMARK_READ);
+    expect(answered.status).toBe(200);
+    expect(poshmarkOf(answered.body)).toEqual({
+      marketplace: 'poshmark',
+      status: 'read',
+      label: 'Poshmark: sold $18-$34, 44 like it in the last 42 days',
+      asking: {
+        count: 41,
+        low: { amountCents: 2300, currency: 'USD' },
+        median: { amountCents: 3000, currency: 'USD' },
+        high: { amountCents: 4000, currency: 'USD' },
+        label: ASKING_PRICES_LABEL,
+      },
+      sold: {
+        count: 44,
+        low: { amountCents: 1800, currency: 'USD' },
+        median: { amountCents: 2350, currency: 'USD' },
+        high: { amountCents: 3400, currency: 'USD' },
+        windowDays: 42,
+        label: marketSoldLabel('Poshmark'),
+      },
+      supply: 97_581,
+      cached: false,
+      demand: {
+        demand: 'strong',
+        label: 'Sells fast on Poshmark',
+        basedOn: 'Sold listings on Poshmark: 44 like it in the last 42 days; 97,581 for sale now',
+      },
+    });
+    // No sales of the household's own like it: the call rests on Poshmark's sold listings.
+    expect(answered.body.call).toMatchObject({
+      basis: 'market_sold',
+      basedOn: 'Sold listings on Poshmark: 44 like it in the last 42 days',
+      low: { amountCents: 1800 },
+      high: { amountCents: 3400 },
+    });
+    expect(answered.body.call.signals).toContainEqual({
+      kind: 'demand',
+      label: 'Sells fast on Poshmark',
+      basedOn: 'Sold listings on Poshmark: 44 like it in the last 42 days; 97,581 for sale now',
+    });
+    const [row] = await reads('poshmark');
+    expect(row).toMatchObject({ status: 'read', for_sale_total: 97_581, sold_total: null });
+    const again = await scanOf(answer({ condition: 'new_without_tags' }));
+    expect(poshmarkOf(again)).toMatchObject({ status: 'read', cached: true, sold: { count: 44 } });
+  });
+
+  it('calls Poshmark slow when few close matches sold lately while many are for sale', async () => {
+    const scan = await scanOf(answer());
+    const read = poshmarkOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    const answered = await answerRead(scan.id, read.id, {
+      ...POSHMARK_READ,
+      stats: {
+        ...POSHMARK_READ.stats,
+        sold: { count: 3, lowCents: 1500, medianCents: 1800, highCents: 2200, windowDays: 90 },
+      },
+    });
+    expect(poshmarkOf(answered.body).demand).toEqual({
+      demand: 'crowded',
+      label: 'Slow on Poshmark',
+      basedOn: 'Sold listings on Poshmark: 3 like it in the last 90 days; 97,581 for sale now',
+    });
+    // Too few sold to rest the call on, and a slow search keeps it from high confidence.
+    expect(answered.body.call.basis).not.toBe('market_sold');
+    expect(answered.body.call.confidence).not.toBe('high');
   });
 
   it("saves the last of eBay's hour for items the AI prices at $25 or more", async () => {

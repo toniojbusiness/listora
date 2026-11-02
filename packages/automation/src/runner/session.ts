@@ -16,6 +16,7 @@ import { sanitizedError, SCREENSHOT_MASK_SELECTORS } from '../safety/redaction.t
 import {
   PageBackendError,
   parsePageData,
+  readPageData,
   ScriptSession,
   type InspectedPage,
   type PageBackend,
@@ -256,12 +257,7 @@ export class PlaywrightBackend implements PageBackend {
 
   async pageData(name: string): Promise<unknown> {
     // `page.evaluate` runs in the page's own world, where its scripts keep their data.
-    const text = await element(
-      this.#page.evaluate((key) => {
-        const value: unknown = (globalThis as Record<string, unknown>)[key];
-        return value === undefined ? null : JSON.stringify(value);
-      }, name),
-    );
+    const text = await element(this.#page.evaluate(readPageData, name));
     return parsePageData(text);
   }
 

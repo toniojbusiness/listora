@@ -10,16 +10,27 @@ import type { MarketMatchLevel, MarketStats } from '@listora/sourcing/market';
 import type { PacingSettings } from '../profiles.ts';
 
 /** The marketplaces with a comparison reader, in the order the card shows them. */
-export const COMPARISON_MARKETPLACES = ['depop', 'ebay'] as const;
+export const COMPARISON_MARKETPLACES = ['depop', 'ebay', 'poshmark'] as const;
 export type ComparisonMarketplace = (typeof COMPARISON_MARKETPLACES)[number];
 
 /**
- * How many days back a marketplace's sold search reaches, where it shows a visitor sold
- * listings at all (eBay's last 90 days; Depop shows none): the window its count of sold
- * listings (`soldTotal`) covers.
+ * How many days back a marketplace's sold comparisons reach, where it shows a visitor sold
+ * listings at all (Depop shows none): eBay's sold search shows about its last 90 days, the
+ * window its count of sold listings (`soldTotal`) covers; Poshmark's shows every sale ever, so
+ * its reader counts only those of the last 90 days.
  */
 export const COMPARISON_SOLD_WINDOW_DAYS: Readonly<Partial<Record<ComparisonMarketplace, number>>> =
-  { ebay: 90 };
+  { ebay: 90, poshmark: 90 };
+
+/**
+ * How a marketplace that shows sold listings tells how fast items like it sell (the trend
+ * read): `search_count`, its sold search's own count over the sold window against its count for
+ * sale (eBay's); `sold_dates`, the days its close matches sold (Poshmark's, whose sold search
+ * counts every sale it ever had, so only the dates say how recent they are).
+ */
+export const COMPARISON_SOLD_PACE: Readonly<
+  Partial<Record<ComparisonMarketplace, 'search_count' | 'sold_dates'>>
+> = { ebay: 'search_count', poshmark: 'sold_dates' };
 
 /** The version of `ComparisonInput` and `ComparisonOutput`; change it with either. */
 export const COMPARISON_VERSION = 1;
@@ -74,8 +85,9 @@ export type ComparisonOutput =
       /** How many listings the whole for-sale search has, when the marketplace says. */
       readonly forSaleTotal: number | null;
       /**
-       * How many listings the whole sold search has, where the marketplace shows a visitor sold
-       * ones and counts them (eBay's last 90 days); absent where it shows none (Depop).
+       * How many listings the whole sold search has, where the marketplace counts them over its
+       * sold window (eBay's last 90 days); absent where it shows none (Depop) or counts every
+       * sale it ever had (Poshmark).
        */
       readonly soldTotal?: number | null;
       readonly ms: number;

@@ -15,16 +15,16 @@ The code is in `packages/automation/src/recordings/`; each marketplace's plan is
 
 Each marketplace's plan lists its entries (`plans.ts`); each is one recording:
 
-| Entry      | Page                                        | Script                                                                    |
-| ---------- | ------------------------------------------- | ------------------------------------------------------------------------- |
-| `hub`      | A page only the signed-in seller sees       | The adapter's health check                                                |
-| `listings` | The seller's shop, closet, or listings      | The adapter's `listings` read (imports and drift checks)                  |
-| `listing`  | One of the seller's listings for sale       | The adapter's read-back of it                                             |
-| `edit`     | That listing's edit page                    | Opening the editor (Poshmark's also reads its private SKU)                |
-| `sold`     | The seller's sold items                     | The adapter's sale check (`orders`)                                       |
-| `offers`   | The buyers' offers on the seller's listings | The adapter's offers read ([offers.md](offers.md)); where recorded        |
-| `form-*`   | The sell form, one per form shape           | The create's own form filling, without photos, never sent                 |
-| `search`   | The public search, as a logged-out visitor  | A thrift scan comparison read ([thrift-scan.md](thrift-scan.md)); Depop's |
+| Entry      | Page                                        | Script                                                                                   |
+| ---------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `hub`      | A page only the signed-in seller sees       | The adapter's health check                                                               |
+| `listings` | The seller's shop, closet, or listings      | The adapter's `listings` read (imports and drift checks)                                 |
+| `listing`  | One of the seller's listings for sale       | The adapter's read-back of it                                                            |
+| `edit`     | That listing's edit page                    | Opening the editor (Poshmark's also reads its private SKU)                               |
+| `sold`     | The seller's sold items                     | The adapter's sale check (`orders`)                                                      |
+| `offers`   | The buyers' offers on the seller's listings | The adapter's offers read ([offers.md](offers.md)); where recorded                       |
+| `form-*`   | The sell form, one per form shape           | The create's own form filling, without photos, never sent                                |
+| `search`   | The public search, as a logged-out visitor  | A thrift scan comparison read ([thrift-scan.md](thrift-scan.md)); Depop's and Poshmark's |
 
 The form shapes are each marketplace's distinct forms: on Depop the 17 department and size-list
 shapes ([depop-automation.md](depop-automation.md#live-verification)), on Mercari each size group
@@ -51,9 +51,15 @@ session: each runs in a fresh browser context of that Chrome, which holds no coo
 signed in (the recorder refuses one that holds any). `npm run recordings:record -- depop
 --logged-out` records only those, and refuses to name any other, so a worker can record a public
 page without touching a seller's shop (through `market-pace.sh`, like every session). A search
-names other sellers in its slugs and their towns, which the plan's `identity` adds to the words
-redacted; the entry runs with its own profile (`profile`, the comparison read's), through the
-phone's page backend, where comparisons run. eBay's public search has no recording: eBay
+names other sellers in its slugs and their towns (Depop) or its results' usernames, handles,
+and names (Poshmark), which the plan's `identity` adds to the words redacted; the entry runs
+with its own profile (`profile`, the comparison read's), through the phone's page backend, where
+comparisons run. As it never uses the seller's session, a logged-out entry can also be recorded
+in a Chrome no seller ever signed in to (Poshmark's search was, on 2026-11-02: a headless Chrome
+with a fresh profile of its own, `--cdp http://127.0.0.1:9334`). A data global read by a dotted
+path (`__INITIAL_STATE__.$_search.gridData.data`, `PageDriver.pageData`) is recorded and
+replayed by that path, so a recording keeps only the part the script read. eBay's public search
+has no recording: eBay
 showed a bot check to the recorder's first logged-out page load on 2026-10-31, so its reader is
 tested on a stand-in page until a recording can be made ([thrift-scan.md](thrift-scan.md),
 "eBay").

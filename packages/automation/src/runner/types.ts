@@ -58,7 +58,10 @@ export interface PageDriver {
   /**
    * The data the page keeps for its own scripts in the global `name` (`window.<name>`), as
    * JSON, or `null` when it has none. A page whose data comes in an inline script that removes
-   * itself once it ran (Poshmark's `window.__INITIAL_STATE__`) has it only there.
+   * itself once it ran (Poshmark's `window.__INITIAL_STATE__`) has it only there. `name` may be
+   * a path into it, its property names joined by dots (`__INITIAL_STATE__.$_search.gridData`),
+   * so a read takes only the part it uses of a page whose data is large (`null` when the path
+   * ends early).
    */
   pageData(name: string): Promise<unknown>;
   /**

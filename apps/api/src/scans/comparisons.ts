@@ -9,14 +9,16 @@
  *
  * Depop shows a visitor no sold listings, so its numbers are what close matches ask, labeled as
  * asking prices; the household's own sales are the sold side, and the demand is their recent
- * pace against Depop's live supply. eBay shows its sold listings, so its numbers are also what
- * close matches sold for (the call's range when the household's own sales are too few), and its
- * demand is its search's sold pace against its supply.
+ * pace against Depop's live supply. eBay and Poshmark show their sold listings, so their numbers
+ * are also what close matches sold for (the call's range when the household's own sales are too
+ * few), and their demand is their sold pace: eBay's search's sold count against its supply,
+ * Poshmark's close matches' sold dates (its sold search counts every sale it ever had).
  */
 import type { ScanComparison, ScanComparisonAnswer } from '@listora/api-contract';
 import {
   automationProfile,
   COMPARISON_MARKETPLACES,
+  COMPARISON_SOLD_PACE,
   COMPARISON_SOLD_WINDOW_DAYS,
   COMPARISON_VERSION,
   comparisonQuery,
@@ -31,6 +33,7 @@ import { isFeatureOn, MARKETPLACE_NAMES, type FeatureGate } from '@listora/marke
 import { ASKING_PRICES_LABEL, marketSoldLabel } from '@listora/pricing';
 import {
   marketDemand,
+  marketRecentSoldPace,
   marketSoldPace,
   soldPace,
   type MarketCallInput,
@@ -53,12 +56,13 @@ export interface ComparisonLimits {
 
 /**
  * Reads each marketplace's comparisons may make for an account, per hour and per day: starting
- * points to tune in the live test, not proven safe limits (the plan's section 3.3). An eBay read
- * loads two results pages (its sold and its for-sale search).
+ * points to tune in the live test, not proven safe limits (the plan's section 3.3). An eBay or
+ * a Poshmark read loads two results pages (its sold and its for-sale search).
  */
 export const COMPARISON_LIMITS: Readonly<Record<ComparisonMarketplace, ComparisonLimits>> = {
   depop: { perHour: 60, perDay: 300 },
   ebay: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
+  poshmark: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
 };
 
 /** A read of the same search answers for this long. */
@@ -89,7 +93,7 @@ export interface StoredComparison {
   readonly input?: ComparisonInput;
   readonly stats?: ComparisonStats;
   readonly forSaleTotal?: number | null;
-  /** The whole sold search's count, where the marketplace shows sold listings (eBay). */
+  /** The whole sold search's count, where the marketplace counts its sold window's (eBay). */
   readonly soldTotal?: number | null;
   readonly cached?: boolean;
   /** Why there are no numbers. */
@@ -237,7 +241,7 @@ function settled(
 ): StoredComparison {
   const enough =
     (stats.forSale?.count ?? 0) >= MIN_ASKING_SHOWN || (stats.sold?.count ?? 0) >= MIN_SOLD_SHOWN;
-  const showsSold = COMPARISON_SOLD_WINDOW_DAYS[marketplace] !== undefined;
+  const showsSold = COMPARISON_SOLD_PACE[marketplace] === 'search_count';
   return {
     marketplace,
     comparisonId,
@@ -337,7 +341,7 @@ function dollars(cents: number): string {
 
 /**
  * What the call weighs of each marketplace's comparisons, Depop first: close matches' asking
- * prices, what they sold for where the marketplace shows it (eBay), and the demand.
+ * prices, what they sold for where the marketplace shows it (eBay, Poshmark), and the demand.
  */
 export function marketInputs(
   comparisons: readonly StoredComparison[],
@@ -374,7 +378,7 @@ export function marketInputs(
             }),
         demand: {
           ...demand,
-          fromSoldPace: COMPARISON_SOLD_WINDOW_DAYS[comparison.marketplace] !== undefined,
+          fromSoldPace: COMPARISON_SOLD_PACE[comparison.marketplace] !== undefined,
         },
       },
     ];
@@ -382,15 +386,34 @@ export function marketInputs(
 }
 
 /**
- * The trend read: a marketplace's own sold pace against its supply where it shows sold listings
- * (eBay), else the household's recent sales like it against the marketplace's supply.
+ * The trend read: a marketplace's own sold pace where it shows sold listings (eBay's search's
+ * sold count against its supply, Poshmark's close matches' sold dates), else the household's
+ * recent sales like it against the marketplace's supply.
  */
 function demandOf(comparison: StoredComparison, recentOwnSales: number): MarketDemandRead {
   const name = MARKETPLACE_NAMES[comparison.marketplace];
-  const window = COMPARISON_SOLD_WINDOW_DAYS[comparison.marketplace];
-  return window === undefined
-    ? marketDemand(recentOwnSales, comparison.forSaleTotal ?? null, name)
-    : marketSoldPace(comparison.soldTotal ?? null, comparison.forSaleTotal ?? null, window, name);
+  const forSaleTotal = comparison.forSaleTotal ?? null;
+  const pace = COMPARISON_SOLD_PACE[comparison.marketplace];
+  if (pace === 'search_count') {
+    return marketSoldPace(
+      comparison.soldTotal ?? null,
+      forSaleTotal,
+      COMPARISON_SOLD_WINDOW_DAYS[comparison.marketplace] ?? 0,
+      name,
+    );
+  }
+  if (pace === 'sold_dates') {
+    return marketRecentSoldPace(
+      {
+        soldCount: comparison.stats?.sold?.count ?? 0,
+        windowDays: comparison.stats?.sold?.windowDays ?? null,
+        forSaleCount: comparison.stats?.forSale?.count ?? 0,
+        forSaleTotal,
+      },
+      name,
+    );
+  }
+  return marketDemand(recentOwnSales, forSaleTotal, name);
 }
 
 /** The comparison as the card shows it. */
