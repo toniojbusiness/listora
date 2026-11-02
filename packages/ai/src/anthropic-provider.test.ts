@@ -140,6 +140,17 @@ describe('AnthropicProvider request', () => {
     expect(buildParams({ ...REQUEST, thinking: 'off' }).thinking).toEqual({ type: 'disabled' });
   });
 
+  it('turns thinking off the way each model takes it, and never sends one a model rejects', () => {
+    const off = (model: string) => buildParams({ ...REQUEST, model, thinking: 'off' });
+    expect(off('claude-haiku-5-5').thinking).toEqual({ type: 'disabled' });
+    // Sonnet 5.5 answers { type: 'disabled' } with a 400.
+    expect(off('claude-sonnet-5-5').thinking).toEqual({ type: 'between_tools' });
+    // Opus 5.5 takes neither: its thinking stays adaptive.
+    expect(off('claude-opus-5-5')).not.toHaveProperty('thinking');
+    expect(off('claude-next-model')).not.toHaveProperty('thinking');
+    expect(buildParams({ ...REQUEST, model: 'claude-sonnet-5-5' })).not.toHaveProperty('thinking');
+  });
+
   it('passes the caller abort signal to the SDK', async () => {
     const { provider, create } = providerReturning(message({}));
     const controller = new AbortController();
