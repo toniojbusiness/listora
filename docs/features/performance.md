@@ -103,10 +103,10 @@ Checked and left as they are:
 The worker runs operation steps on Graphile Worker with 5 slots and its other jobs (photos,
 analyses, scheduled tasks) with 2 more. Each of the two runners polls the queue once per
 interval for all its slots (Graphile Worker's local queue, `LOCAL_QUEUE_SIZE` in
-`packages/operations/src/worker.ts`); before 2026-10-29 every slot polled on its own. New jobs never
-wait for a poll: Graphile Worker hears of them through LISTEN/NOTIFY. Only jobs dated in the
-future (retries, read-backs, rechecks) are found by polling, and in production the shortest of
-those is 30 s away.
+`packages/operations/src/worker.ts`); before 2026-10-29 every slot polled on its own. New jobs
+don't wait for a poll: Graphile Worker hears of them through LISTEN/NOTIFY (below: when they
+did). Only jobs dated in the future (retries, read-backs, rechecks) are found by polling, and in
+production the shortest of those is 30 s away.
 
 | Idle worker, 120 s (`OPERATION_RETRY_DELAY_SCALE=1`) | Before (2 s poll) | After (5 s poll) |
 | ---------------------------------------------------- | ----------------: | ---------------: |
@@ -121,6 +121,19 @@ One shared poller per runner, measured 2026-10-29 (an idle worker with productio
 and 5 s poll, 60 s, `pg_stat_statements` on the local cluster): 77 queue polls a minute before,
 24 after. The local queue holds at most one fetched job while every slot is busy, so a newly
 queued delist waits behind one job at most. `engine.int.test.ts` checks that 8 slots poll as one.
+
+Each runner's job fetch looks at listing queues only for jobs it can run
+(`packages/operations/src/job-fetch.ts`, which changes Graphile Worker's fetch on the runner's
+own pool). Until 2026-11-02 the fetch ran as Graphile Worker 0.18 writes it, and Postgres
+checked a job's named queue before its task whenever the runner had many tasks (the other-jobs
+runner has about 30) or the prepared fetch had gone to a generic plan. For any due job in a
+listing queue, even an operation, that check locked every free listing queue for the moment of
+the fetch. The two runners fetch together (each new-job notice reaches both, and their polls
+started together), so the operations runner's fetch skipped every listing queue, found nothing,
+and left a new operation queued until a later poll: 5 s, often 15 s. Run 6 at a time, the
+worker's process test failed 3 times in 48 runs that way (seen on CI as a 20 s test timeout);
+after the change it passed 48 of 48, its eBay test taking 2.3 s at most. `job-fetch.int.test.ts`
+checks that 100 new operations each start within 2 s while the other runner fetches with them.
 
 The poll interval is now a sixth of the shortest retry delay, between 2 s and 5 s
 (`queuePollIntervalMs` in `packages/operations/src/policy.ts`): 5 s in production, so a retry

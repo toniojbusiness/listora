@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { sql } from 'kysely';
 import sharp from 'sharp';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest';
 
 import { startAccountDeletion } from '@listora/accounts';
 import {
@@ -42,6 +42,14 @@ import { AI_SPEND_CHECK_TASK } from './features/ai-spend-check.ts';
 
 const entry = fileURLToPath(new URL('main.ts', import.meta.url));
 const LIFECYCLE = new Set(['worker ready', 'shutting down', 'shutdown complete']);
+/**
+ * How long a wait in a test with the default 20 s limit (vitest.config.ts) gives up after: soon
+ * enough that it fails with what it found, not as a bare test timeout. A test that waits longer
+ * raises its own limit and passes a longer wait.
+ */
+const WAIT_MS = 15_000;
+/** Statuses an operation stays in here (nothing retries it): waiting past one is pointless. */
+const SETTLED = new Set(['succeeded', 'failed', 'canceled']);
 
 describe('worker process (real Postgres)', () => {
   let database: MigratedDatabase;
@@ -90,7 +98,12 @@ describe('worker process (real Postgres)', () => {
       ...env,
     });
     workers.push(worker);
-    await worker.waitForLog((line) => line['msg'] === 'worker ready', 20_000);
+    // A failing test shows what each of its workers logged, so a hang explains itself.
+    const number = workers.length;
+    onTestFailed(() => {
+      process.stderr.write(`worker ${String(number)} output; ${worker.output()}\n`);
+    });
+    await worker.waitForLog((line) => line['msg'] === 'worker ready', WAIT_MS);
     return worker;
   }
 
@@ -115,7 +128,11 @@ describe('worker process (real Postgres)', () => {
     return { listing, operation };
   }
 
-  async function waitForOperation(operationId: string, status: string, timeoutMs = 30_000) {
+  /**
+   * Polls until the operation is `status`. Fails with the operation's state and history when it
+   * settles in another status or the wait runs out.
+   */
+  async function waitForOperation(operationId: string, status: string, timeoutMs = WAIT_MS) {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const op = await database.db
@@ -124,7 +141,23 @@ describe('worker process (real Postgres)', () => {
         .where('id', '=', operationId)
         .executeTakeFirstOrThrow();
       if (op.status === status) return op;
-      if (Date.now() > deadline) throw new Error(`operation is ${op.status}, not ${status}`);
+      const settled = SETTLED.has(op.status);
+      if (settled || Date.now() > deadline) {
+        const events = await database.db
+          .selectFrom('operation_event')
+          .select(['created_at', 'from_status', 'to_status', 'attempt', 'error_code', 'detail'])
+          .where('operation_id', '=', operationId)
+          .orderBy('created_at')
+          .orderBy('id')
+          .execute();
+        const history = events.map((event) => JSON.stringify(event)).join('\n');
+        throw new Error(
+          `operation ${operationId} is ${op.status}, not ${status}, ` +
+            `${settled ? 'and will stay so' : `after ${String(timeoutMs)} ms`} ` +
+            `(error ${op.error_code ?? 'none'}, attempt ${String(op.attempts)}, ` +
+            `next attempt ${op.next_attempt_at?.toISOString() ?? 'none'}); history:\n${history}`,
+        );
+      }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
@@ -168,6 +201,7 @@ describe('worker process (real Postgres)', () => {
     await writeFile(join(fixturesDir, `${hash}.json`), JSON.stringify(fixture));
   }
 
+  // Only the 60 s tests wait for photos and analyses, so this waits longer than WAIT_MS.
   async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean, what: string) {
     const deadline = Date.now() + 30_000;
     for (;;) {
@@ -251,7 +285,7 @@ describe('worker process (real Postgres)', () => {
 
     const line = await worker.waitForLog(
       (candidate) => candidate['VerifiedSuccess'] !== undefined && candidate['Kind'] === 'create',
-      20_000,
+      WAIT_MS,
     );
     expect(line).toMatchObject({
       service: 'worker',
@@ -320,11 +354,11 @@ describe('worker process (real Postgres)', () => {
 
     const doomed = await startWorker();
     await fake.waitForRequest((request) => request.sku === listing.id, 20_000);
-    expect((await waitForOperation(operation.id, 'running')).attempts).toBe(1);
+    expect((await waitForOperation(operation.id, 'running', 30_000)).attempts).toBe(1);
     await doomed.stop('SIGKILL');
 
     await startWorker();
-    const done = await waitForOperation(operation.id, 'succeeded');
+    const done = await waitForOperation(operation.id, 'succeeded', 30_000);
     expect(done.success_evidence).toBe('read_back');
     const transitions = await database.db
       .selectFrom('operation_event')
@@ -355,7 +389,7 @@ describe('worker process (real Postgres)', () => {
     await doomed.stop('SIGKILL');
 
     await startWorker();
-    const retrying = await waitForOperation(operation.id, 'retrying');
+    const retrying = await waitForOperation(operation.id, 'retrying', 30_000);
     expect(retrying).toMatchObject({ error_code: 'not_applied', success_evidence: null });
     expect(retrying.next_attempt_at?.getTime()).toBeGreaterThan(Date.now() + 15_000);
     const sent = fake.requests.filter((request) => request.sku === listing.id);
@@ -459,7 +493,7 @@ describe('worker process (real Postgres)', () => {
       }),
     );
 
-    const deadline = Date.now() + 20_000;
+    const deadline = Date.now() + WAIT_MS;
     for (;;) {
       const left = await database.db
         .selectFrom('account_deletion')
@@ -528,7 +562,7 @@ describe('worker process (real Postgres)', () => {
       );
       await worker.waitForLog(
         (line) => line['msg'] === 'connection health checks finished',
-        20_000,
+        WAIT_MS,
       );
 
       expect(ebay.tokenGrants('refresh_token')).toBe(1);
@@ -584,7 +618,7 @@ describe('worker process (real Postgres)', () => {
     `.execute(database.db);
     await sql`select graphile_worker.add_job(${AI_SPEND_CHECK_TASK})`.execute(database.db);
 
-    const summary = await worker.waitForLog((line) => line['event'] === 'ai_spend_check', 20_000);
+    const summary = await worker.waitForLog((line) => line['event'] === 'ai_spend_check', WAIT_MS);
     expect(summary).toMatchObject({ service: 'worker', accountsOverDailyBudget: 1 });
     expect(worker.logs).toContainEqual(
       expect.objectContaining({
@@ -621,7 +655,7 @@ describe('worker process (real Postgres)', () => {
     });
     workers.push(worker);
 
-    expect(await worker.waitForExit(20_000)).toBe(1);
+    expect(await worker.waitForExit(WAIT_MS)).toBe(1);
     expect(worker.logs).toContainEqual(expect.objectContaining({ msg: 'worker failed to start' }));
   });
 });

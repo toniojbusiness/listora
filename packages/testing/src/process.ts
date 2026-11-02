@@ -9,6 +9,11 @@ export interface StartedProcess {
   readonly logs: readonly LogLine[];
   /** Everything the process has written to stderr so far. */
   readonly stderr: string;
+  /**
+   * The process's last `lines` stdout lines and its stderr, for a failure message: a test that
+   * fails or times out shows what the process was doing instead of nothing.
+   */
+  output(lines?: number): string;
   /** Resolves with the first log line matching `predicate`; rejects on exit or timeout. */
   waitForLog(predicate: (line: LogLine) => boolean, timeoutMs?: number): Promise<LogLine>;
   /** Resolves with the exit code once the process exits on its own; rejects on timeout. */
@@ -56,11 +61,23 @@ export function startNodeProcess(
     () => undefined,
   );
 
+  const output = (lines = 100): string => {
+    const recent = logs.slice(-lines).map((line) => JSON.stringify(line));
+    const skipped = logs.length - recent.length;
+    return [
+      `stdout (${skipped > 0 ? `last ${String(recent.length)} of ${String(logs.length)}` : String(logs.length)} lines):`,
+      ...recent,
+      `stderr:`,
+      stderr,
+    ].join('\n');
+  };
+
   return {
     logs,
     get stderr() {
       return stderr;
     },
+    output,
     waitForLog(predicate, timeoutMs = 10_000) {
       return new Promise((resolve, reject) => {
         const check = (): boolean => {
@@ -73,12 +90,12 @@ export function startNodeProcess(
         };
         const timer = setTimeout(() => {
           cleanup();
-          reject(new Error(`timed out waiting for log line; stderr:\n${stderr}`));
+          reject(new Error(`timed out waiting for log line; ${output()}`));
         }, timeoutMs);
         const onClose = (): void => {
           if (check()) return;
           cleanup();
-          reject(new Error(`process exited before the expected log line; stderr:\n${stderr}`));
+          reject(new Error(`process exited before the expected log line; ${output()}`));
         };
         const cleanup = (): void => {
           clearTimeout(timer);
@@ -98,9 +115,7 @@ export function startNodeProcess(
       let timer: NodeJS.Timeout | undefined;
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
-          reject(
-            new Error(`process did not exit within ${String(timeoutMs)} ms; stderr:\n${stderr}`),
-          );
+          reject(new Error(`process did not exit within ${String(timeoutMs)} ms; ${output()}`));
         }, timeoutMs);
       });
       try {
