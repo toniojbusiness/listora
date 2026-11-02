@@ -21,7 +21,7 @@ type QuietWindow = components['schemas']['QuietWindow'];
 
 /**
  * `getListingRefreshSettings` and `replaceListingRefreshSettings`: how often the account's live
- * listings are refreshed, and the quiet window. `getItemRefresh` and `replaceItemRefresh`: an
+ * listings are refreshed, the quiet window, and whether Depop listings may be relisted. `getItemRefresh` and `replaceItemRefresh`: an
  * item's own cadence over the account's (docs/features/listing-refresh.md). None of them changes
  * a listing: the worker's schedule refreshes each listing when it is due.
  */
@@ -35,12 +35,16 @@ export function registerListingRefreshRoutes(app: FastifyInstance, deps: RouteDe
     onlyWithCustom(body.cadence, body.customHours);
     const window = quietWindow(body.quietWindow);
     try {
+      // An app from before relisting sends none: the saved choice stays.
+      const relistToRefresh =
+        body.relistToRefresh ?? (await loadRefreshSettings(db, tenant.accountId)).relistToRefresh;
       const saved = await saveRefreshSettings(db, tenant.accountId, {
         cadence: body.cadence,
         customHours: body.customHours ?? null,
         quietStart: window?.start ?? null,
         quietEnd: window?.end ?? null,
         timeZone: body.timeZone,
+        relistToRefresh,
       });
       return { status: 200, body: refreshSettingsView(saved) };
     } catch (error) {

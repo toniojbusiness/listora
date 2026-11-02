@@ -108,7 +108,14 @@ describe('marketplace features (real Postgres, verified features)', () => {
       { marketplace: 'ebay', features: [] },
       {
         marketplace: 'depop',
-        features: ['sales_history', 'sale_checks', 'offers', 'listing_import', 'price_drops'],
+        features: [
+          'sales_history',
+          'sale_checks',
+          'offers',
+          'listing_import',
+          'listing_refresh',
+          'price_drops',
+        ],
       },
       { marketplace: 'poshmark', features: [] },
       { marketplace: 'mercari', features: ['sales_history', 'sale_checks', 'listing_import'] },

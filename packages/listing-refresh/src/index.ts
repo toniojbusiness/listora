@@ -19,7 +19,9 @@ export {
   loadRefreshFacts,
   REFRESH_MARKETPLACES,
   refreshMarketplaces,
+  REPOST_MARKETPLACES,
 } from './schedule.ts';
+export { repostContent } from './repost.ts';
 export type { ListingRefresh, RefreshFact } from './schedule.ts';
 export {
   LISTING_REFRESH_SCHEDULE,

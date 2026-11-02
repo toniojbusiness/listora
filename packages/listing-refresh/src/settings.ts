@@ -1,6 +1,7 @@
 /**
- * The refresh settings: one per account (the cadence and the quiet window), and an item's own
- * cadence over it. An account that never saved one refreshes every 72 hours with no quiet window.
+ * The refresh settings: one per account (the cadence, the quiet window, and whether a refresh
+ * may relist), and an item's own cadence over it. An account that never saved one refreshes
+ * every 72 hours with no quiet window, and never relists.
  */
 import type { DbExecutor, RefreshCadence } from '@listora/db';
 import { sql } from 'kysely';
@@ -18,6 +19,11 @@ export interface RefreshSettings extends Cadence {
   quietEnd: number | null;
   /** An IANA time zone name; null until the app sends one. */
   timeZone: string | null;
+  /**
+   * Whether listings on a marketplace whose refresh is a repost (Depop) are refreshed: a fresh
+   * copy posted and the old listing deleted, which resets its likes and saves. Off by default.
+   */
+  relistToRefresh: boolean;
 }
 
 export const DEFAULT_REFRESH_SETTINGS: RefreshSettings = {
@@ -26,6 +32,7 @@ export const DEFAULT_REFRESH_SETTINGS: RefreshSettings = {
   quietStart: null,
   quietEnd: null,
   timeZone: null,
+  relistToRefresh: false,
 };
 
 export type RefreshSettingsField = 'customHours' | 'quietWindow' | 'timeZone';
@@ -54,7 +61,14 @@ export async function loadRefreshSettings(
 ): Promise<RefreshSettings> {
   const row = await executor
     .selectFrom('listing_refresh_setting')
-    .select(['cadence', 'custom_hours', 'quiet_start', 'quiet_end', 'time_zone'])
+    .select([
+      'cadence',
+      'custom_hours',
+      'quiet_start',
+      'quiet_end',
+      'time_zone',
+      'relist_to_refresh',
+    ])
     .where('account_id', '=', accountId)
     .executeTakeFirst();
   if (row === undefined) return DEFAULT_REFRESH_SETTINGS;
@@ -64,6 +78,7 @@ export async function loadRefreshSettings(
     quietStart: row.quiet_start,
     quietEnd: row.quiet_end,
     timeZone: row.time_zone,
+    relistToRefresh: row.relist_to_refresh,
   };
 }
 
@@ -103,12 +118,20 @@ export async function saveRefreshSettings(
     quiet_start: quietStart,
     quiet_end: quietEnd,
     time_zone: settings.timeZone,
+    relist_to_refresh: settings.relistToRefresh,
   };
   const row = await executor
     .insertInto('listing_refresh_setting')
     .values({ account_id: accountId, ...values })
     .onConflict((conflict) => conflict.column('account_id').doUpdateSet(values))
-    .returning(['cadence', 'custom_hours', 'quiet_start', 'quiet_end', 'time_zone'])
+    .returning([
+      'cadence',
+      'custom_hours',
+      'quiet_start',
+      'quiet_end',
+      'time_zone',
+      'relist_to_refresh',
+    ])
     .executeTakeFirstOrThrow();
   return {
     cadence: row.cadence,
@@ -116,6 +139,7 @@ export async function saveRefreshSettings(
     quietStart: row.quiet_start,
     quietEnd: row.quiet_end,
     timeZone: row.time_zone,
+    relistToRefresh: row.relist_to_refresh,
   };
 }
 

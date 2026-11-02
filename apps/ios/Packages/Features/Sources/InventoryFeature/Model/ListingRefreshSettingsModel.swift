@@ -4,7 +4,8 @@ import ListoraAPI
 import Observation
 
 /// The listing refresh setting (docs/features/listing-refresh.md): how often Listora refreshes
-/// live listings that haven't sold, and the quiet hours, in this device's time zone.
+/// live listings that haven't sold, the quiet hours, in this device's time zone, and whether
+/// Depop listings are relisted to refresh them (off until the seller turns it on).
 @MainActor
 @Observable
 final class ListingRefreshSettingsModel {
@@ -21,6 +22,10 @@ final class ListingRefreshSettingsModel {
     var hasQuietHours = false
     var quietStart = DateComponents(hour: 22, minute: 0)
     var quietEnd = DateComponents(hour: 7, minute: 0)
+    /// Whether Depop listings are refreshed by relisting them, which resets their likes.
+    var relistOnDepop = false
+    /// Whether the seller is shown the Depop relist switch: only where Depop's refresh shows.
+    let showsDepopRelist: Bool
     private(set) var isSaving = false
     /// The last save's failure, safe to show.
     private(set) var saveError: String?
@@ -30,8 +35,13 @@ final class ListingRefreshSettingsModel {
     private let service: any ListingRefreshService
     private let timeZone: @MainActor () -> TimeZone
 
-    init(service: any ListingRefreshService, timeZone: @escaping @MainActor () -> TimeZone = { .current }) {
+    init(
+        service: any ListingRefreshService,
+        showsDepopRelist: Bool = false,
+        timeZone: @escaping @MainActor () -> TimeZone = { .current },
+    ) {
         self.service = service
+        self.showsDepopRelist = showsDepopRelist
         self.timeZone = timeZone
     }
 
@@ -55,6 +65,7 @@ final class ListingRefreshSettingsModel {
             : nil
         do {
             try await apply(service.saveSettings(.init(
+                relistToRefresh: relistOnDepop,
                 cadence: cadence,
                 customHours: cadence == .custom ? Int32(customHours) : nil,
                 quietWindow: window,
@@ -74,6 +85,7 @@ final class ListingRefreshSettingsModel {
 
     private func apply(_ settings: Components.Schemas.ListingRefreshSettings) {
         cadence = settings.cadence.value1 ?? .every72Hours
+        relistOnDepop = settings.relistToRefresh
         if let hours = settings.customHours {
             customHours = Int(hours)
         }

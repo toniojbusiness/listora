@@ -5,13 +5,64 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { useMarketplaceFeatures } from '@listora/marketplaces';
+import {
+  useMarketplaceFeatures,
+  type AdapterContext,
+  type MarketplaceAdapter,
+  type OperationRequest,
+  type Outcome,
+} from '@listora/marketplaces';
+import { sampleListingContent } from '@listora/marketplaces/testing';
 
 import { InvalidOperationError } from './errors.ts';
 import { REFRESH_MAX_ATTEMPTS } from './policy.ts';
 import { FAST_POLICY, createEngineHarness, type EngineHarness } from './test-support.ts';
 
 const SETTLED = ['succeeded', 'failed', 'canceled', 'needs_user_action'] as const;
+
+/**
+ * A marketplace whose refresh is a repost (as Depop's is): a fresh copy from the refresh's
+ * content, then the old listing ended, answering with the copy's id.
+ */
+function reposting(inner: MarketplaceAdapter): MarketplaceAdapter {
+  const adapter: MarketplaceAdapter = {
+    id: inner.id,
+    capabilities: (connection) => ({ ...inner.capabilities(connection), refreshBy: 'repost' }),
+    buildPayload: (item, variant, connection) => inner.buildPayload(item, variant, connection),
+    validate: (payload, connection) => inner.validate(payload, connection),
+    readListing: (ref, ctx) => inner.readListing(ref, ctx),
+    healthCheck: (ctx) => inner.healthCheck(ctx),
+    async execute(op: OperationRequest, ctx: AdapterContext): Promise<Outcome> {
+      if (op.kind !== 'refresh') return inner.execute(op, ctx);
+      if (op.payload === null) {
+        return { type: 'rejected', code: 'missing_content', message: 'No content to post.' };
+      }
+      const copy = await inner.execute(
+        {
+          ...op,
+          kind: 'create',
+          idempotencyKey: `${op.idempotencyKey}:copy`,
+          listing: { ...op.listing, externalListingId: null },
+          desired: { status: 'active' },
+        },
+        ctx,
+      );
+      if (copy.type !== 'confirmed') return copy;
+      await inner.execute(
+        {
+          ...op,
+          kind: 'end',
+          idempotencyKey: `${op.idempotencyKey}:end`,
+          desired: { status: 'ended' },
+          payload: null,
+        },
+        ctx,
+      );
+      return copy;
+    },
+  };
+  return adapter;
+}
 
 describe('refresh operations (real Postgres, fake marketplace)', () => {
   let harness: EngineHarness;
@@ -60,6 +111,44 @@ describe('refresh operations (real Postgres, fake marketplace)', () => {
         status: 'active',
         external_listing_id: listing.external_listing_id,
       });
+    } finally {
+      await worker.stop();
+    }
+  });
+
+  it('moves the listing to the fresh copy of a repost, once the read shows the copy', async () => {
+    const ebay = harness.adapters('ebay');
+    if (ebay === undefined) throw new Error('no eBay adapter');
+    const adapter = reposting(ebay);
+    const worker = await harness.startWorker({
+      policy: FAST_POLICY,
+      adapters: (marketplace) => (marketplace === 'ebay' ? adapter : harness.adapters(marketplace)),
+    });
+    try {
+      const listing = await liveListing();
+      const refresh = await harness.enqueue(
+        listing,
+        'refresh',
+        { refreshedAfter: new Date(Date.now() - 1000).toISOString() },
+        { origin: 'auto_refresh', content: sampleListingContent() },
+      );
+      const done = await harness.waitForStatus(refresh.id, SETTLED);
+      expect(done).toMatchObject({ status: 'succeeded', success_evidence: 'read_back' });
+      // The listing now names the copy, still live; the old listing was ended.
+      const moved = await harness.listing(listing.id);
+      expect(moved).toMatchObject({ status: 'active', pending_external_listing_id: null });
+      expect(moved.external_listing_id).not.toBe(listing.external_listing_id);
+      expect(moved.external_listing_id).toEqual(expect.any(String));
+      const old = await adapter.readListing(
+        {
+          listingId: listing.id,
+          externalListingId: listing.external_listing_id,
+          externalSku: listing.external_sku,
+          externalUrl: null,
+        },
+        { signal: AbortSignal.timeout(5_000), connection: null },
+      );
+      expect(old).toMatchObject({ found: true, status: 'ended' });
     } finally {
       await worker.stop();
     }

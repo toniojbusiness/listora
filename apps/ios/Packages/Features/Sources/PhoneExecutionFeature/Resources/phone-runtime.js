@@ -10510,6 +10510,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* listing whose slug Listora never learned is one it just posted, so it is among the newest.
 	*/
 	const SKU_LOOKUP_PAGES = 1;
+	/** Reads of a refresh's new copy, `COPY_READ_GAP_MS` apart, before the old listing goes. */
+	const COPY_READS = 4;
+	const COPY_READ_GAP_MS = 3e3;
 	function createDepopScripts(options) {
 		const { site } = options;
 		const notListed = () => ({
@@ -10532,15 +10535,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		/**
 		* The listing the seller's newest listings for sale hold under this SKU, if any: from the
 		* same list of the seller's own listings the selling hub loads (pages/api.ts), each with its
-		* text and last change time, so it reads exactly as it does by its slug.
+		* text and last change time, so it reads exactly as it does by its slug. `except` is a
+		* listing that shares the SKU and is never the one looked for (a refresh's old listing).
 		*/
-		async function findBySku(step, sku) {
+		async function findBySku(step, sku, except = null) {
 			return step("look for the listing", { mutates: false }, async (page) => {
 				await onDepop$1(page, site);
 				let cursor = null;
 				for (let number = 1; number <= 1; number += 1) {
 					const shown = await readOwnListings(page, site, "selling", cursor);
-					const found = shown.products.find((product) => product.sku === sku);
+					const found = shown.products.find((product) => product.sku === sku && product.state.externalListingId !== except);
 					if (found !== void 0) return found;
 					if (shown.next === null) return null;
 					cursor = shown.next;
@@ -10565,15 +10569,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			};
 		}
 		/**
-		* Posts a new listing (a create, or a relist); an attempt after one that may have posted first
-		* looks for it.
+		* Posts a new listing (a create, a relist, or a refresh's fresh copy); an attempt after one
+		* that may have posted first looks for it. `except` is the listing a refresh copies, which
+		* has the same SKU and is never taken for the new one.
 		*/
-		async function post(op, step) {
+		async function post(op, step, except = null) {
 			const payload = op.payload;
 			if (payload === null) throw new Error(`a ${op.kind} has a payload`);
 			const sku = listingSku(op.listing);
 			if (mayHaveAppliedBefore(op)) {
-				const earlier = await findBySku(step, sku);
+				const earlier = await findBySku(step, sku, except);
 				if (earlier !== null) return {
 					...revisionOf$1(earlier),
 					externalListingId: earlier.state.externalListingId
@@ -10594,13 +10599,50 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			}, async (page) => submitted(await submitListing$2(page, "post")));
 			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
 			try {
-				const found = await findBySku(step, sku);
+				const found = await findBySku(step, sku, except);
 				if (found !== null) return {
 					...revisionOf$1(found),
 					externalListingId: found.state.externalListingId
 				};
 			} catch {}
 			return result;
+		}
+		const noContent = () => ({
+			type: "rejected",
+			code: "missing_content",
+			message: "Listora didn't write this listing, so it can't post a fresh copy of it."
+		});
+		/**
+		* Reads a refresh's new copy until Depop shows it on sale (its page can lag a moment behind
+		* the post); a copy not shown stops the refresh before the old listing is touched.
+		*/
+		async function readCopy(page, copy) {
+			for (let read = 1;; read += 1) {
+				const shown = await readProduct(page, site, copy);
+				if (shown.state.found && shown.state.status === "active") return shown;
+				if (read >= 4) throw changed$2("product page", "doesn't show the new copy of the listing as on sale");
+				await new Promise((resolve) => setTimeout(resolve, COPY_READ_GAP_MS));
+			}
+		}
+		/**
+		* Deletes one of the seller's listings by its slug (Delete listing on its product page, as an
+		* end does), then reads it back: one Depop still shows on sale stops the run.
+		*/
+		async function removeListing(step, slug) {
+			const shown = await step("open the old listing", { mutates: false }, async (page) => {
+				const read = await readProduct(page, site, slug);
+				if (read.state.found && read.state.status === "active") await expectDelete(page);
+				return read;
+			});
+			if (!(shown.state.found && shown.state.status === "active")) return;
+			await step("delete the old listing", {
+				mutates: true,
+				timeScale: 2
+			}, (page) => deleteListing(page));
+			await step("check the old listing is gone", { mutates: false }, async (page) => {
+				const read = await readProduct(page, site, slug);
+				if (read.state.found && read.state.status === "active") throw changed$2("product page", "still shows the old listing on sale after deleting it");
+			});
 		}
 		/** Opens the editor of a listing on sale; a result instead when it can't be edited. */
 		async function editor(op, step) {
@@ -10682,13 +10724,39 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return post(op, step);
 			},
 			refresh: async (op, step) => {
-				const opened = await editor(op, step);
-				if (!("slug" in opened)) return opened;
-				await step("check the form", { mutates: false }, (page) => expectSubmit(page, "save"));
-				return step("save unchanged", {
-					mutates: true,
+				const slug = op.listing.externalListingId;
+				if (slug === null) return notListed();
+				if (op.payload === null) return noContent();
+				const sku = listingSku(op.listing);
+				const old = (await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug))).state;
+				const earlier = mayHaveAppliedBefore(op) ? await findBySku(step, sku, slug) : null;
+				if (old.found && old.status === "sold") {
+					if (earlier !== null) await removeListing(step, earlier.state.externalListingId);
+					return sold();
+				}
+				if (!old.found || old.status !== "active") {
+					if (earlier !== null) return {
+						...revisionOf$1(earlier),
+						externalListingId: earlier.state.externalListingId
+					};
+					return !old.found && !old.authoritative ? notListed() : deleted();
+				}
+				let copy = earlier?.state.externalListingId ?? null;
+				if (copy === null) {
+					const posted = await post(op, step, slug);
+					if (posted.type !== "applied") return posted;
+					copy = posted.externalListingId ?? null;
+				}
+				if (copy === null || copy === slug) throw changed$2("selling hub", "shows no new copy of the listing after posting it");
+				const fresh = await step("read the new listing", {
+					mutates: false,
 					timeScale: 2
-				}, async (page) => submitted(await submitListing$2(page, "save")));
+				}, (page) => readCopy(page, copy));
+				await removeListing(step, slug);
+				return {
+					...revisionOf$1(fresh),
+					externalListingId: copy
+				};
 			},
 			read: async (ref, step) => {
 				const slug = ref.externalListingId;

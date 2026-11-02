@@ -23,6 +23,48 @@ function adapterFor(marketplace: Marketplace, refresh: 'automation' | 'none'): M
   return { id: marketplace, capabilities: () => capabilities } as unknown as MarketplaceAdapter;
 }
 
+/** The content a create posted: the item and its photos (the variant is the listing's own). */
+function postedContent(itemId: string) {
+  return {
+    item: {
+      itemId,
+      sku: 'AJ-000184',
+      brand: 'Pendleton',
+      productName: null,
+      styleNumber: null,
+      upc: null,
+      department: 'women',
+      category: 'clothing/outerwear/coats',
+      sizeLabel: 'M',
+      sizeSystem: 'letter',
+      colors: ['grey'],
+      pattern: null,
+      materials: ['wool'],
+      condition: 'pre_owned_good',
+      conditionNotes: null,
+      flaws: [],
+      measurements: [],
+      photos: [
+        {
+          photoId: '00000000-0000-4000-8000-000000000001',
+          position: 0,
+          role: 'front',
+          url: 'https://photos.listora.test/coat.jpg',
+        },
+      ],
+    },
+    variant: {
+      title: 'Wool coat',
+      description: 'A warm coat.',
+      price: { amountCents: 6000, currency: 'USD' },
+      categoryRef: null,
+      condition: null,
+      aspects: [],
+      hashtags: ['coat'],
+    },
+  };
+}
+
 describe('the refresh schedule', () => {
   let database: MigratedDatabase;
   let db: Db;
@@ -172,6 +214,7 @@ describe('the refresh schedule', () => {
       quietStart: null,
       quietEnd: null,
       timeZone: 'America/New_York',
+      relistToRefresh: false,
     });
     await listing(accountId, connectionId, ago(500 * HOUR));
     const daily = await listing(accountId, connectionId, ago(30 * HOUR));
@@ -190,6 +233,7 @@ describe('the refresh schedule', () => {
       quietStart: 10 * 60,
       quietEnd: 12 * 60,
       timeZone: 'America/New_York',
+      relistToRefresh: false,
     });
     const { listingId } = await listing(accountId, connectionId, ago(100 * HOUR));
     await run();
@@ -226,11 +270,117 @@ describe('the refresh schedule', () => {
     expect(await refreshesOf(accountId)).toEqual([]);
   });
 
-  it('refreshes a Depop listing on schedule under a normal Depop connection', async () => {
+  /** A Depop listing Listora wrote: its text and price, and the create that posted it. */
+  async function writtenListing(accountId: string, connectionId: string, listedAt: Date) {
+    const written = await listing(accountId, connectionId, listedAt, 'depop');
+    await db
+      .updateTable('marketplace_listing')
+      .set({
+        title: 'Wool coat',
+        description: 'A warm coat.',
+        price_cents: 4500,
+        hashtags: ['coat'],
+      })
+      .where('id', '=', written.listingId)
+      .execute();
+    sequence += 1;
+    await db
+      .insertInto('marketplace_operation')
+      .values({
+        account_id: accountId,
+        listing_id: written.listingId,
+        kind: 'create',
+        idempotency_key: `op-${String(sequence)}`,
+        desired: jsonb({ status: 'active' }),
+        content: jsonb(postedContent(written.itemId)),
+        status: 'succeeded',
+        success_evidence: 'read_back',
+        origin: 'user',
+        created_at: listedAt,
+      })
+      .execute();
+    return written;
+  }
+
+  async function relistOn(accountId: string, relistToRefresh: boolean) {
+    await saveRefreshSettings(db, accountId, {
+      cadence: 'every_72_hours',
+      customHours: null,
+      quietStart: null,
+      quietEnd: null,
+      timeZone: 'America/New_York',
+      relistToRefresh,
+    });
+  }
+
+  it('relists Depop listings only for a seller who turned relisting on, off by default', async () => {
     const { accountId, connectionId } = await seller('depop');
-    const { listingId } = await listing(accountId, connectionId, ago(100 * HOUR), 'depop');
+    const { listingId, itemId } = await writtenListing(accountId, connectionId, ago(100 * HOUR));
     await run();
-    expect((await refreshesOf(accountId)).map((op) => op.listing_id)).toEqual([listingId]);
+    expect(await refreshesOf(accountId)).toEqual([]);
+    await relistOn(accountId, false);
+    await run();
+    expect(await refreshesOf(accountId)).toEqual([]);
+
+    await relistOn(accountId, true);
+    await run();
+    const queued = await db
+      .selectFrom('marketplace_operation')
+      .select(['listing_id', 'desired', 'content'])
+      .where('account_id', '=', accountId)
+      .where('kind', '=', 'refresh')
+      .execute();
+    // The fresh copy posts the photos the listing was posted with and the listing's own text
+    // and price now (a price change since is kept).
+    expect(queued).toEqual([
+      {
+        listing_id: listingId,
+        desired: { refreshedAfter: NOW.toISOString() },
+        content: {
+          item: postedContent(itemId).item,
+          variant: {
+            title: 'Wool coat',
+            description: 'A warm coat.',
+            price: { amountCents: 4500, currency: 'USD' },
+            categoryRef: null,
+            condition: null,
+            aspects: [],
+            hashtags: ['coat'],
+          },
+        },
+      },
+    ]);
+  });
+
+  it('never relists a listing Listora did not write, or one with an offer waiting', async () => {
+    const { accountId, connectionId } = await seller('depop');
+    await relistOn(accountId, true);
+    // Imported: no content to post again.
+    await listing(accountId, connectionId, ago(100 * HOUR), 'depop');
+    const offered = await writtenListing(accountId, connectionId, ago(100 * HOUR));
+    await db
+      .insertInto('marketplace_offer')
+      .values({
+        account_id: accountId,
+        connection_id: connectionId,
+        marketplace: 'depop',
+        external_offer_id: `offer-${String(sequence)}`,
+        listing_id: offered.listingId,
+        item_id: offered.itemId,
+        amount_cents: 3000,
+      })
+      .execute();
+    await run();
+    expect(await refreshesOf(accountId)).toEqual([]);
+
+    // Once the offer is answered, the listing is relisted on schedule.
+    await db
+      .updateTable('marketplace_offer')
+      .set({ status: 'declined', closed_at: NOW })
+      .where('listing_id', '=', offered.listingId)
+      .execute();
+    await run();
+    expect((await refreshesOf(accountId)).map((op) => op.listing_id)).toEqual([offered.listingId]);
   });
 
   it('never queues anything for a read-only connection, Depop or any other', async () => {

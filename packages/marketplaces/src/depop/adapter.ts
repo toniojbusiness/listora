@@ -82,6 +82,7 @@ export class DepopAdapter implements MarketplaceAdapter<DepopListingPayload> {
     relist: 'api',
     // Depop's API refresh is not known yet; its browser automation refreshes (depop-automation.md).
     refresh: 'none',
+    refreshBy: 'in_place',
     // "You're expected to call this as soon as you make a sale on a different platform."
     markSold: 'api',
     verifyRead: 'api',

@@ -16,6 +16,9 @@
  * - End: Delete listing on the product page; the deleted product's page answers 410 Gone, which
  *   confirms it ended. Relist: a new listing from the listing's content (Depop cannot put a
  *   deleted listing back on sale), with a new slug, as Depop's API relists with a new product.
+ * - Refresh: a repost (Depop shows only a new listing as new): a fresh copy from the listing's
+ *   content is posted and read back, and only then the old listing deleted; the operation then
+ *   moves to the new listing (docs/features/listing-refresh.md).
  * - Mark sold is not automated: after a sale elsewhere the auto-delist ends Depop listings.
  * - Read-back: the seller's own product from Depop's web API, as its edit page reads it, with
  *   Depop's last change time as the revision (pages/api.ts).
@@ -71,6 +74,7 @@ export function createDepopAutomationAdapter(
     readFreshness: 'revision',
     buildPayload: buildDepopAutomationPayload,
     validate: validateDepopAutomationPayload,
+    capabilities: { refreshBy: 'repost' },
     logger: options.logger,
   });
 }

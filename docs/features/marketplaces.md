@@ -115,7 +115,8 @@ under a connection.
 the marketplace's `ListingVariant` (title, description, price, category, condition, aspects,
 hashtags), mirroring the API contract. `enqueueOperation` stores it on the operation and derives
 the operation's desired state from it (`desiredStateForContent`), so what is sent and what a
-read-back checks cannot disagree. Every attempt builds the payload from that stored content
+read-back checks cannot disagree. A refresh that relists (Depop, [listing-refresh.md](listing-refresh.md))
+carries the content of its fresh copy too, though its desired state stays `refreshedAfter`. Every attempt builds the payload from that stored content
 with the adapter's pure `buildPayload`, under the connection it runs with, so a queued item edit
 never changes an operation in flight. The engine sends nothing the adapter's `validate` refuses:
 the operation fails with the first issue's message (for example "eBay titles can be at most 80
@@ -212,4 +213,4 @@ produce each failure mode the suite asks for (`ConformanceMarketplace`).
   `user_confirmed_at` for the user's confirmation; `shop_unlinked_at` for a listing from an
   unlinked shop, [marketplace-linking.md](marketplace-linking.md#relinking-another-shop); a
   listing known only by a share short link is unique by its URL), `marketplace_operation` (with the listing `content` a create, revise,
-  or relist publishes), and the append-only `operation_event`.
+  relist, or relisting refresh publishes), and the append-only `operation_event`.

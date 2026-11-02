@@ -20,6 +20,7 @@ import type { Tenant } from '../tenancy.ts';
 export function refreshSettingsView(settings: RefreshSettings): ListingRefreshSettings {
   return {
     cadence: settings.cadence,
+    relistToRefresh: settings.relistToRefresh,
     ...(settings.customHours === null ? {} : { customHours: settings.customHours }),
     ...(settings.quietStart === null || settings.quietEnd === null
       ? {}

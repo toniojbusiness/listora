@@ -172,7 +172,10 @@ interface StepContext {
    * id; `null` when the step named none.
    */
   namedListingId: string | null;
-  /** The listing content a create, revise, or relist publishes; `null` for other kinds. */
+  /**
+   * The listing content a create, revise, or relist publishes, or a reposting refresh posts
+   * again; `null` for other kinds.
+   */
   content: ListingContent | null;
   /** How the operation runs under the connection; an `unsupported` one is never sent. */
   mode: OperationMode;
@@ -427,7 +430,10 @@ async function loadStepBase(
   let content: ListingContent | null = null;
   try {
     desired = validateDesiredState(op.kind, op.desired);
-    if (isContentKind(op.kind)) content = parseListingContent(op.content);
+    // A refresh that reposts carries the content of its fresh copy (listing-refresh.md).
+    if (isContentKind(op.kind) || (op.kind === 'refresh' && op.content !== null)) {
+      content = parseListingContent(op.content);
+    }
   } catch (error) {
     return {
       type: 'invalid',
@@ -1244,9 +1250,9 @@ type PreparedPayload =
   | { ok: false; error: OperationError; detail: Record<string, unknown> };
 
 /**
- * Builds the payload of a create, revise, or relist from its listing content with the adapter's
- * pure builder, under the connection the step runs with, and refuses it when the adapter's
- * validation finds issues. Other kinds carry no payload.
+ * Builds the payload of a create, revise, relist, or reposting refresh from its listing content
+ * with the adapter's pure builder, under the connection the step runs with, and refuses it when
+ * the adapter's validation finds issues. Other kinds carry no payload.
  */
 function preparePayload(deps: StepDependencies, ctx: StepContext): PreparedPayload {
   if (ctx.content === null) return { ok: true, payload: null };
