@@ -108,7 +108,15 @@ export {
   marketStats,
   withoutOutliers,
 } from './market.ts';
-export { marketSoldPace, SELL_THROUGH_FAST, SELL_THROUGH_SLOW } from './pace.ts';
+export {
+  LATEST_SOLD_FAST,
+  LATEST_SOLD_SLOW,
+  latestSoldPace,
+  marketSoldPace,
+  MIN_LATEST_SOLD,
+  SELL_THROUGH_FAST,
+  SELL_THROUGH_SLOW,
+} from './pace.ts';
 export type {
   MarketDemand,
   MarketDemandRead,

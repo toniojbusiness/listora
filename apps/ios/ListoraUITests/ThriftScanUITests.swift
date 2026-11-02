@@ -8,7 +8,7 @@ import XCTest
 /// shows every built feature, so Scan mode is on.
 @MainActor
 final class ThriftScanUITests: XCTestCase {
-    private let app = XCUIApplication()
+    let app = XCUIApplication()
 
     override func setUp() async throws {
         continueAfterFailure = false
@@ -36,7 +36,16 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(element("scan.webInfo").label.contains("Web info - not sold listings"))
         attachScreenshot("scan card")
         XCTAssertEqual(app.staticTexts["scan.title"].label, "Acme Outfitters blue button-up shirt")
-        XCTAssertEqual(app.staticTexts["scan.range"].label, "$15-$25")
+        // The web's $15-$25 is what listings ask, shown as asks; the card's range is those asks
+        // scaled to what the household's items sell for, which depends on the stack's sales.
+        XCTAssertTrue(element("scan.webInfo").label.contains("Asks $15-$25"), element("scan.webInfo").label)
+        let range = app.staticTexts["scan.range"].label
+        let ends = range.split(separator: "-").compactMap { Int($0.trimmingCharacters(in: .init(charactersIn: "$"))) }
+        XCTAssertEqual(ends.count, 2, range)
+        XCTAssertLessThan(ends.last ?? 25, 25, "the range is scaled below the web's asks: \(range)")
+        let scaled = app.descendants(matching: .any).matching(identifier: "scan.signal")
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Scaled to your sales")).firstMatch
+        XCTAssertTrue(scaled.exists, "the card says the prices were scaled to the household's sales")
         XCTAssertTrue(app.buttons["scan.search"].label.contains("Search Depop"))
 
         try keepThenPutBack(shutter)
@@ -187,7 +196,7 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(app.buttons["draft.row"].waitForNonExistence(timeout: 10))
     }
 
-    private func waitForLabel(of element: XCUIElement, prefix: String, timeout: TimeInterval = 10) -> Bool {
+    func waitForLabel(of element: XCUIElement, prefix: String, timeout: TimeInterval = 10) -> Bool {
         let predicate = NSPredicate(format: "label BEGINSWITH %@", prefix)
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
@@ -246,7 +255,7 @@ final class ThriftScanUITests: XCTestCase {
     }
 
     /// Starts a run from Add Item: the start sheet asks where the seller is, which can be left out.
-    private func startRun(at place: String? = nil) {
+    func startRun(at place: String? = nil) {
         app.buttons["addItem.startScan"].tap()
         let start = app.buttons["scanStart.start"]
         XCTAssertTrue(start.waitForExistence(timeout: 5))
@@ -259,7 +268,7 @@ final class ThriftScanUITests: XCTestCase {
         start.tap()
     }
 
-    private func launch(signedInTo stack: E2EStack, noSignal: Bool = false, resetLocalData: Bool = true) throws {
+    func launch(signedInTo stack: E2EStack, noSignal: Bool = false, resetLocalData: Bool = true) throws {
         let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
         app.launchEnvironment = [
             "LISTORA_FAKE_CAMERA": fixtures.path(percentEncoded: false),
@@ -280,7 +289,7 @@ final class ThriftScanUITests: XCTestCase {
     }
 
     /// Any element by its identifier: a stamp or label reads as text or as a group.
-    private func element(_ identifier: String) -> XCUIElement {
+    func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
@@ -293,7 +302,7 @@ final class ThriftScanUITests: XCTestCase {
         add(attachment)
     }
 
-    private func attachScreenshot(_ name: String) {
+    func attachScreenshot(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
