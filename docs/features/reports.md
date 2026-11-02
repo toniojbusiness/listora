@@ -1,8 +1,9 @@
 # Reports
 
 For taxes and bookkeeping: a calendar year's sales, revenue, marketplace fees, shipping, cost of
-goods, and profit, in total, by month, and by marketplace, plus CSV files of the year's sales and
-of the inventory, shared from the iPhone through the share sheet. Code: `yearReport` in
+goods, and profit, in total, by month, and by marketplace, the year's expenses (miles and
+sourcing spend, [expenses.md](expenses.md)) and the profit after them, plus CSV files of the
+year's sales, its expenses, and the inventory, shared from the iPhone through the share sheet. Code: `yearReport` in
 `packages/sales/src/reports.ts` (the math, pure), `apps/api/src/reports` (`getYearReport`,
 `exportSales`, `exportInventory`, the CSV writer), and the iPhone's `SalesFeature` (`ReportsView`,
 `ReportsModel`, `ReportsService`). No AI and no marketplace call is involved.
@@ -91,6 +92,7 @@ No new table or migration: the reports read `sale`, `sale_item`, `fee_line`, `in
 
 ## Follow-ups
 
-- Expenses (`expense`) and mileage are not in the report yet, nor sales tax collected.
+- Sales tax collected is not in the report yet. Expenses and mileage are
+  ([expenses.md](expenses.md)).
 - Poshmark's and Mercari's fees stay estimated (their checks show none), so their sales' fees and
   profit stay out of the report until Listora reads them.

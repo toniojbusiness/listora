@@ -328,6 +328,74 @@ describe('sourcing runs: checkout and the summary (real Postgres)', () => {
     });
   });
 
+  it("records the trip's miles and other spend as expenses of the haul's day", async () => {
+    const run = await startRun('Invented Thrift Barn');
+    const scanned = await scan(run.id);
+    const response = await checkout(run.id, {
+      keptScanIds: [scanned.id],
+      miles: 23,
+      purchaseDate: '2026-11-02',
+      otherSpend: [
+        { category: ' Parking ', amount: usd(400) },
+        { category: 'Entry fee', amount: usd(200), description: 'Bin day' },
+      ],
+    });
+    expect(response.status).toBe(201);
+    const rows = await api.db
+      .selectFrom('expense')
+      .select(['kind', 'category', 'description', 'miles', 'amount_cents', 'incurred_on'])
+      .where('account_id', '=', tenant.accountId)
+      .where('sourcing_run_id', '=', run.id)
+      .orderBy('id')
+      .execute();
+    expect(rows).toEqual([
+      {
+        kind: 'mileage',
+        category: 'Mileage',
+        description: 'Invented Thrift Barn',
+        miles: 23,
+        amount_cents: null,
+        incurred_on: '2026-11-02',
+      },
+      {
+        kind: 'spend',
+        category: 'Parking',
+        description: null,
+        miles: null,
+        amount_cents: 400,
+        incurred_on: '2026-11-02',
+      },
+      {
+        kind: 'spend',
+        category: 'Entry fee',
+        description: 'Bin day',
+        miles: null,
+        amount_cents: 200,
+        incurred_on: '2026-11-02',
+      },
+    ]);
+
+    // No miles, or 0, records no mileage; a bad spend refuses the whole checkout.
+    const quiet = await startRun();
+    expect((await checkout(quiet.id, { miles: 0 })).status).toBe(201);
+    const bad = await startRun();
+    const hauls = await haulCount();
+    const refused = await checkout(bad.id, {
+      otherSpend: [{ category: 'Parking', amount: usd(0) }],
+    });
+    expect(refused.status).toBe(422);
+    expect(refused.error.fieldErrors).toEqual([
+      { field: 'otherSpend[0].amount.amountCents', message: 'must be at least 1 cent' },
+    ]);
+    expect(await haulCount()).toBe(hauls);
+    const recorded = await api.db
+      .selectFrom('expense')
+      .select('id')
+      .where('sourcing_run_id', 'in', [quiet.id, bad.id])
+      .execute();
+    expect(recorded).toEqual([]);
+  });
+
   it('replays a retried checkout, and refuses a second one or an ended run', async () => {
     const run = await startRun();
     const scanned = await scan(run.id);

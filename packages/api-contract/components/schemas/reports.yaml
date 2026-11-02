@@ -75,7 +75,7 @@ MarketplaceReport:
 YearReport:
   type: object
   description: A calendar year in the seller's time zone.
-  required: [year, timeZone, total, months, marketplaces]
+  required: [year, timeZone, total, months, marketplaces, expenses]
   properties:
     year:
       type: integer
@@ -98,6 +98,65 @@ YearReport:
       maxItems: 64
       items:
         $ref: '#/MarketplaceReport'
+    expenses:
+      $ref: '#/YearExpenses'
+    netAfterExpenses:
+      $ref: './common.yaml#/Money'
+      description: |
+        `total.netProfit` less `expenses.total`. Absent while either is absent.
+YearExpenses:
+  type: object
+  description: |
+    The year's business expenses (docs/features/expenses.md) by the day each was incurred:
+    miles driven, priced at the year's mileage rate, and money spent, by category. `total` is
+    absent while the miles have no rate.
+  required: [mileage, spent, categories]
+  properties:
+    mileage:
+      $ref: '#/MileageTotals'
+    spent:
+      $ref: './common.yaml#/Money'
+      description: All money spent.
+    categories:
+      type: array
+      description: Money spent per category, the largest first.
+      maxItems: 500
+      items:
+        $ref: '#/SpendCategory'
+    total:
+      $ref: './common.yaml#/Money'
+      description: The mileage deduction plus `spent`; absent while the deduction is.
+MileageTotals:
+  type: object
+  required: [miles, trips, rate]
+  properties:
+    miles:
+      type: integer
+      format: int32
+      minimum: 0
+    trips:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Mileage entries.
+    rate:
+      $ref: './expenses.yaml#/MileageRate'
+    deduction:
+      $ref: './common.yaml#/Money'
+      description: The miles at the rate, rounded to the cent; absent while the year has no rate.
+SpendCategory:
+  type: object
+  required: [category, spent, count]
+  properties:
+    category:
+      type: string
+      maxLength: 100
+    spent:
+      $ref: './common.yaml#/Money'
+    count:
+      type: integer
+      format: int32
+      minimum: 0
 CsvExport:
   type: object
   description: |

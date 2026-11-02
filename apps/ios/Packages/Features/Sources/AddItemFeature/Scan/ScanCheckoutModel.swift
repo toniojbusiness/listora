@@ -34,7 +34,7 @@ final class ScanCheckoutModel: Identifiable {
         summary == nil && !isCheckingOut && run.canCheckOut
     }
 
-    func checkout(totalCents: Int64, itemCount: Int, miles: Int?) async {
+    func checkout(totalCents: Int64, itemCount: Int, miles: Int?, otherSpend: [RunSpend] = []) async {
         guard canCheckOut, totalCents >= 0, itemCount >= 1 else { return }
         isCheckingOut = true
         failure = nil
@@ -46,6 +46,7 @@ final class ScanCheckoutModel: Identifiable {
             place: run.place,
             purchaseDate: Self.localDate(now()),
             miles: miles,
+            otherSpend: otherSpend,
         )
         do {
             let runID = try await run.serverRunID()

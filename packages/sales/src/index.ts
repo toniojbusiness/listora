@@ -117,3 +117,5 @@ export type {
   YearReport,
   YearReportInput,
 } from './reports.ts';
+export { IRS_MILEAGE_RATES, mileageDeductionCents, mileageRate, yearExpenses } from './expenses.ts';
+export type { ExpenseRow, MileageRateChoice, YearExpenseTotals } from './expenses.ts';

@@ -939,6 +939,60 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/reports/inventory-export`.
     /// - Remark: Generated from `#/paths//v1/reports/inventory-export/get(exportInventory)`.
     func exportInventory(_ input: Operations.ExportInventory.Input) async throws -> Operations.ExportInventory.Output
+    /// Export a year's expenses as CSV
+    ///
+    /// One CSV row per expense of the year, oldest first: the day, the category, the
+    /// description, the miles and their deduction at the year's rate (empty while the year has
+    /// no rate), the money spent, and the sourcing run's place when it was entered at checkout.
+    /// The app saves `content` as `fileName` and shares it. `422 validation_failed` for a year
+    /// outside 2000 to 2100.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/expenses-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/expenses-export/get(exportExpenses)`.
+    func exportExpenses(_ input: Operations.ExportExpenses.Input) async throws -> Operations.ExportExpenses.Output
+    /// List a year's expenses
+    ///
+    /// The year's expenses (miles and money spent), oldest day first, then in the order entered.
+    /// `422 validation_failed` for a year outside 2000 to 2100.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/expenses`.
+    /// - Remark: Generated from `#/paths//v1/expenses/get(listExpenses)`.
+    func listExpenses(_ input: Operations.ListExpenses.Input) async throws -> Operations.ListExpenses.Output
+    /// Record an expense
+    ///
+    /// Miles driven or money spent. Both `amount` and `miles`, neither, an amount of 0 or not in
+    /// dollars, or a day outside 2000 to 2100 is `422`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/expenses`.
+    /// - Remark: Generated from `#/paths//v1/expenses/post(createExpense)`.
+    func createExpense(_ input: Operations.CreateExpense.Input) async throws -> Operations.CreateExpense.Output
+    /// Change an expense
+    ///
+    /// Replaces the expense's day, category, description, and amount or miles; `422` as for `createExpense`.
+    ///
+    /// - Remark: HTTP `PUT /v1/expenses/{expenseId}`.
+    /// - Remark: Generated from `#/paths//v1/expenses/{expenseId}/put(replaceExpense)`.
+    func replaceExpense(_ input: Operations.ReplaceExpense.Input) async throws -> Operations.ReplaceExpense.Output
+    /// Delete an expense
+    ///
+    /// - Remark: HTTP `DELETE /v1/expenses/{expenseId}`.
+    /// - Remark: Generated from `#/paths//v1/expenses/{expenseId}/delete(deleteExpense)`.
+    func deleteExpense(_ input: Operations.DeleteExpense.Input) async throws -> Operations.DeleteExpense.Output
+    /// Get a year's standard mileage rate
+    ///
+    /// - Remark: HTTP `GET /v1/expenses/mileage-rate`.
+    /// - Remark: Generated from `#/paths//v1/expenses/mileage-rate/get(getMileageRate)`.
+    func getMileageRate(_ input: Operations.GetMileageRate.Input) async throws -> Operations.GetMileageRate.Output
+    /// Set a year's standard mileage rate
+    ///
+    /// The seller's rate for the year, used for every mile of the year in Reports.
+    ///
+    /// - Remark: HTTP `PUT /v1/expenses/mileage-rate`.
+    /// - Remark: Generated from `#/paths//v1/expenses/mileage-rate/put(setMileageRate)`.
+    func setMileageRate(_ input: Operations.SetMileageRate.Input) async throws -> Operations.SetMileageRate.Output
     /// List assisted-mode tasks
     ///
     /// Urgent first, then oldest first.
@@ -3296,6 +3350,120 @@ extension APIProtocol {
         try await exportInventory(Operations.ExportInventory.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// Export a year's expenses as CSV
+    ///
+    /// One CSV row per expense of the year, oldest first: the day, the category, the
+    /// description, the miles and their deduction at the year's rate (empty while the year has
+    /// no rate), the money spent, and the sourcing run's place when it was entered at checkout.
+    /// The app saves `content` as `fileName` and shares it. `422 validation_failed` for a year
+    /// outside 2000 to 2100.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/reports/expenses-export`.
+    /// - Remark: Generated from `#/paths//v1/reports/expenses-export/get(exportExpenses)`.
+    public func exportExpenses(
+        query: Operations.ExportExpenses.Input.Query,
+        headers: Operations.ExportExpenses.Input.Headers = .init()
+    ) async throws -> Operations.ExportExpenses.Output {
+        try await exportExpenses(Operations.ExportExpenses.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// List a year's expenses
+    ///
+    /// The year's expenses (miles and money spent), oldest day first, then in the order entered.
+    /// `422 validation_failed` for a year outside 2000 to 2100.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/expenses`.
+    /// - Remark: Generated from `#/paths//v1/expenses/get(listExpenses)`.
+    public func listExpenses(
+        query: Operations.ListExpenses.Input.Query,
+        headers: Operations.ListExpenses.Input.Headers = .init()
+    ) async throws -> Operations.ListExpenses.Output {
+        try await listExpenses(Operations.ListExpenses.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Record an expense
+    ///
+    /// Miles driven or money spent. Both `amount` and `miles`, neither, an amount of 0 or not in
+    /// dollars, or a day outside 2000 to 2100 is `422`.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/expenses`.
+    /// - Remark: Generated from `#/paths//v1/expenses/post(createExpense)`.
+    public func createExpense(
+        headers: Operations.CreateExpense.Input.Headers,
+        body: Operations.CreateExpense.Input.Body
+    ) async throws -> Operations.CreateExpense.Output {
+        try await createExpense(Operations.CreateExpense.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Change an expense
+    ///
+    /// Replaces the expense's day, category, description, and amount or miles; `422` as for `createExpense`.
+    ///
+    /// - Remark: HTTP `PUT /v1/expenses/{expenseId}`.
+    /// - Remark: Generated from `#/paths//v1/expenses/{expenseId}/put(replaceExpense)`.
+    public func replaceExpense(
+        path: Operations.ReplaceExpense.Input.Path,
+        headers: Operations.ReplaceExpense.Input.Headers = .init(),
+        body: Operations.ReplaceExpense.Input.Body
+    ) async throws -> Operations.ReplaceExpense.Output {
+        try await replaceExpense(Operations.ReplaceExpense.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Delete an expense
+    ///
+    /// - Remark: HTTP `DELETE /v1/expenses/{expenseId}`.
+    /// - Remark: Generated from `#/paths//v1/expenses/{expenseId}/delete(deleteExpense)`.
+    public func deleteExpense(
+        path: Operations.DeleteExpense.Input.Path,
+        headers: Operations.DeleteExpense.Input.Headers = .init()
+    ) async throws -> Operations.DeleteExpense.Output {
+        try await deleteExpense(Operations.DeleteExpense.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Get a year's standard mileage rate
+    ///
+    /// - Remark: HTTP `GET /v1/expenses/mileage-rate`.
+    /// - Remark: Generated from `#/paths//v1/expenses/mileage-rate/get(getMileageRate)`.
+    public func getMileageRate(
+        query: Operations.GetMileageRate.Input.Query,
+        headers: Operations.GetMileageRate.Input.Headers = .init()
+    ) async throws -> Operations.GetMileageRate.Output {
+        try await getMileageRate(Operations.GetMileageRate.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Set a year's standard mileage rate
+    ///
+    /// The seller's rate for the year, used for every mile of the year in Reports.
+    ///
+    /// - Remark: HTTP `PUT /v1/expenses/mileage-rate`.
+    /// - Remark: Generated from `#/paths//v1/expenses/mileage-rate/put(setMileageRate)`.
+    public func setMileageRate(
+        query: Operations.SetMileageRate.Input.Query,
+        headers: Operations.SetMileageRate.Input.Headers = .init(),
+        body: Operations.SetMileageRate.Input.Body
+    ) async throws -> Operations.SetMileageRate.Output {
+        try await setMileageRate(Operations.SetMileageRate.Input(
+            query: query,
+            headers: headers,
+            body: body
         ))
     }
     /// List assisted-mode tasks

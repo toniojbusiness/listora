@@ -1,0 +1,123 @@
+/v1/expenses:
+  get:
+    tags: [expenses]
+    operationId: listExpenses
+    summary: List a year's expenses
+    description: |
+      The year's expenses (miles and money spent), oldest day first, then in the order entered.
+      `422 validation_failed` for a year outside 2000 to 2100.
+    parameters:
+      - $ref: '../components/parameters.yaml#/ReportYear'
+    responses:
+      '200':
+        description: The year's expenses.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/expenses.yaml#/ExpenseList'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [expenses]
+    operationId: createExpense
+    summary: Record an expense
+    description: |
+      Miles driven or money spent. Both `amount` and `miles`, neither, an amount of 0 or not in
+      dollars, or a day outside 2000 to 2100 is `422`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/expenses.yaml#/ExpenseWrite'
+    responses:
+      '201':
+        description: Recorded.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/expenses.yaml#/Expense'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/expenses/{expenseId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ExpenseId'
+  put:
+    tags: [expenses]
+    operationId: replaceExpense
+    summary: Change an expense
+    description: Replaces the expense's day, category, description, and amount or miles; `422` as for `createExpense`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/expenses.yaml#/ExpenseWrite'
+    responses:
+      '200':
+        description: The changed expense.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/expenses.yaml#/Expense'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [expenses]
+    operationId: deleteExpense
+    summary: Delete an expense
+    responses:
+      '204':
+        description: Deleted.
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/expenses/mileage-rate:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ReportYear'
+  get:
+    tags: [expenses]
+    operationId: getMileageRate
+    summary: Get a year's standard mileage rate
+    responses:
+      '200':
+        description: The year's rate.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/expenses.yaml#/MileageRate'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [expenses]
+    operationId: setMileageRate
+    summary: Set a year's standard mileage rate
+    description: The seller's rate for the year, used for every mile of the year in Reports.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/expenses.yaml#/MileageRateWrite'
+    responses:
+      '200':
+        description: The year's rate.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/expenses.yaml#/MileageRate'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

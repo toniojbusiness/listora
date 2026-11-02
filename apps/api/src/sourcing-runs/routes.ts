@@ -4,6 +4,8 @@ import type { FastifyInstance } from 'fastify';
 
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
+import { insertExpenses } from '../expenses/repository.ts';
+import { sourcingSpendValues } from '../expenses/values.ts';
 import { createHaulWithItems } from '../hauls/membership.ts';
 import { keepAsItem } from '../scans/keep.ts';
 import { keptScans, lockScans } from '../scans/repository.ts';
@@ -112,6 +114,23 @@ export function registerSourcingRunRoutes(
         now,
       );
       await endRun(trx, tenant, run, now);
+      // The trip's miles and other spend, as expenses of the haul's day (docs/features/expenses.md).
+      const tripDay = haul.purchase_date ?? run.started_at.toISOString().slice(0, 10);
+      await insertExpenses(trx, tenant, [
+        ...(body.miles !== undefined && body.miles > 0
+          ? [
+              {
+                incurredOn: tripDay,
+                category: 'Mileage',
+                description: place,
+                amountCents: null,
+                miles: body.miles,
+                sourcingRunId: run.id,
+              },
+            ]
+          : []),
+        ...sourcingSpendValues(body.otherSpend ?? [], tripDay, run.id),
+      ]);
       const checkedOut = await markCheckedOut(trx, tenant, run.id, {
         haulId: haul.id,
         place,

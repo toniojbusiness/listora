@@ -7,17 +7,22 @@ import type {
 import type { ItemStatus } from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import {
+  mileageDeductionCents,
   soldItemMoney,
   yearDays,
+  yearExpenses,
   yearReport,
   type ReportTotals,
   type SoldItemMoney,
+  type YearExpenseTotals,
 } from '@listora/sales';
 import { assertNever } from '@listora/shared';
 import type { FastifyInstance } from 'fastify';
 
 import { contractRoute } from '../contract/routes.ts';
 import { validationFailed } from '../errors.ts';
+import { loadMileageRate, yearExpenseRows } from '../expenses/repository.ts';
+import { mileageRateView } from '../expenses/views.ts';
 import type { ApiRouteContext } from '../features.ts';
 import { feeRows, soldItemRows, type ProfitPeriodQuery } from '../profit/repository.ts';
 import { dayIn, isTimeZone } from '../profit/routes.ts';
@@ -39,11 +44,22 @@ import {
 export function registerReportRoutes(app: FastifyInstance, deps: ApiRouteContext): void {
   contractRoute(app, deps, 'getYearReport', async ({ tenant, db, query }) => {
     const period = yearPeriod(query);
-    const [items, fees] = await Promise.all([
+    const [items, fees, expenseRows, rate] = await Promise.all([
       soldItemRows(db, tenant, period),
       feeRows(db, tenant, period),
+      yearExpenseRows(db, tenant, query.year),
+      loadMileageRate(db, tenant, query.year),
     ]);
     const report = yearReport({ year: query.year, items, fees });
+    const expenses = yearExpenses(
+      expenseRows.map((row) => ({
+        category: row.category,
+        amountCents: row.amount_cents,
+        miles: row.miles,
+      })),
+      rate,
+    );
+    const net = report.total.netProfitCents;
     const body: YearReport = {
       year: report.year,
       timeZone: period.timeZone,
@@ -53,6 +69,38 @@ export function registerReportRoutes(app: FastifyInstance, deps: ApiRouteContext
         marketplace: row.marketplace,
         totals: totalsView(row),
       })),
+      expenses: expensesView(expenses),
+      ...optional(
+        'netAfterExpenses',
+        net === null || expenses.totalCents === null ? null : money(net - expenses.totalCents),
+      ),
+    };
+    return { status: 200, body };
+  });
+
+  contractRoute(app, deps, 'exportExpenses', async ({ tenant, db, query }) => {
+    const [rows, rate] = await Promise.all([
+      yearExpenseRows(db, tenant, query.year),
+      loadMileageRate(db, tenant, query.year),
+    ]);
+    const perMile = rate.tenthCentsPerMile;
+    const body: CsvExport = {
+      fileName: `listora-expenses-${String(query.year)}.csv`,
+      rowCount: rows.length,
+      content: csvFile(
+        EXPENSE_COLUMNS,
+        rows.map((row) => [
+          row.incurred_on,
+          row.category,
+          row.description,
+          row.miles === null ? null : integer(row.miles),
+          row.miles === null || perMile === null
+            ? null
+            : dollars(mileageDeductionCents(row.miles, perMile)),
+          dollars(row.amount_cents),
+          row.run_place,
+        ]),
+      ),
     };
     return { status: 200, body };
   });
@@ -83,6 +131,20 @@ export function registerReportRoutes(app: FastifyInstance, deps: ApiRouteContext
     return { status: 200, body };
   });
 }
+
+/**
+ * One row per expense. A row's mileage deduction is its own miles at the year's rate, so the
+ * rows can differ by a cent from the year's total, which prices all the year's miles at once.
+ */
+const EXPENSE_COLUMNS = [
+  'Date',
+  'Category',
+  'Description',
+  'Miles',
+  'Mileage deduction',
+  'Amount',
+  'Sourcing trip',
+] as const;
 
 const SALES_COLUMNS = [
   'Sold on',
@@ -234,6 +296,24 @@ function totalsView(totals: ReportTotals): ReportTotalsView {
     ...optional('costOfGoods', moneyOrNull(totals.costOfGoodsCents)),
     missingCostCount: totals.missingCostCount,
     ...optional('netProfit', moneyOrNull(totals.netProfitCents)),
+  };
+}
+
+function expensesView(totals: YearExpenseTotals): YearReport['expenses'] {
+  return {
+    mileage: {
+      miles: totals.miles,
+      trips: totals.trips,
+      rate: mileageRateView(totals.rate),
+      ...optional('deduction', moneyOrNull(totals.deductionCents)),
+    },
+    spent: money(totals.spentCents),
+    categories: totals.categories.map((entry) => ({
+      category: entry.category,
+      spent: money(entry.spentCents),
+      count: entry.count,
+    })),
+    ...optional('total', moneyOrNull(totals.totalCents)),
   };
 }
 

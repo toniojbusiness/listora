@@ -445,7 +445,11 @@ const COLUMNS = {
     'amount_cents',
     'created_at',
     'updated_at',
+    'kind',
+    'miles',
+    'sourcing_run_id',
   ],
+  mileage_rate: ['account_id', 'year', 'tenth_cents_per_mile', 'created_at', 'updated_at'],
   pricing_snapshot: [
     'id',
     'account_id',
@@ -1070,6 +1074,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['item_scan', 'basis', values.ITEM_SCAN_BASES],
   ['item_scan', 'decision', values.ITEM_SCAN_DECISIONS],
   ['scan_research', 'kind', values.SCAN_RESEARCH_KINDS],
+  ['expense', 'kind', values.EXPENSE_KINDS],
   ['market_comparison', 'marketplace', values.MARKETPLACES],
   ['market_comparison', 'status', values.MARKET_COMPARISON_STATUSES],
 ];

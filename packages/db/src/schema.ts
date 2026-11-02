@@ -52,6 +52,7 @@ import type {
   ItemScanCall,
   ItemScanConfidence,
   ItemScanDecision,
+  ExpenseKind,
   ScanResearchKind,
   MarketComparisonStatus,
   LabelOrderState,
@@ -786,7 +787,22 @@ export interface ExpenseTable {
   category: string;
   description: Nullable<string>;
   currency: Generated<CurrencyCode>;
-  amount_cents: number;
+  /** Money spent; null for a mileage row, priced at the year's `mileage_rate`. */
+  amount_cents: Nullable<number>;
+  kind: Generated<ExpenseKind>;
+  /** The miles driven, for a mileage row only. */
+  miles: Nullable<number>;
+  /** The sourcing run the expense was entered at checkout for (docs/features/expenses.md). */
+  sourcing_run_id: Nullable<string>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** The standard mileage rate a seller uses for a year, in tenths of a cent per mile. */
+export interface MileageRateTable {
+  account_id: string;
+  year: number;
+  tenth_cents_per_mile: number;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -1599,6 +1615,7 @@ export interface Database {
   user_task: UserTaskTable;
   fee_line: FeeLineTable;
   expense: ExpenseTable;
+  mileage_rate: MileageRateTable;
   pricing_snapshot: PricingSnapshotTable;
   subscription: SubscriptionTable;
   entitlement: EntitlementTable;

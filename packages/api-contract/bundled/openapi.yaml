@@ -57,6 +57,8 @@ tags:
     description: Sales and the automatic delist run each sale starts.
   - name: profit
     description: The profit dashboard over the seller's sales and inventory.
+  - name: expenses
+    description: Business expenses for taxes, miles driven and money spent, and the standard mileage rate (docs/features/expenses.md).
   - name: reports
     description: The year's reports and the CSV exports of sales and inventory, for taxes and bookkeeping.
   - name: tasks
@@ -2741,6 +2743,160 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/reports/expenses-export:
+    get:
+      tags:
+        - reports
+      operationId: exportExpenses
+      summary: Export a year's expenses as CSV
+      description: |
+        One CSV row per expense of the year, oldest first: the day, the category, the
+        description, the miles and their deduction at the year's rate (empty while the year has
+        no rate), the money spent, and the sourcing run's place when it was entered at checkout.
+        The app saves `content` as `fileName` and shares it. `422 validation_failed` for a year
+        outside 2000 to 2100.
+      parameters:
+        - $ref: '#/components/parameters/ReportYear'
+      responses:
+        '200':
+          description: The year's expenses as a CSV file.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsvExport'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/expenses:
+    get:
+      tags:
+        - expenses
+      operationId: listExpenses
+      summary: List a year's expenses
+      description: |
+        The year's expenses (miles and money spent), oldest day first, then in the order entered.
+        `422 validation_failed` for a year outside 2000 to 2100.
+      parameters:
+        - $ref: '#/components/parameters/ReportYear'
+      responses:
+        '200':
+          description: The year's expenses.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseList'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - expenses
+      operationId: createExpense
+      summary: Record an expense
+      description: |
+        Miles driven or money spent. Both `amount` and `miles`, neither, an amount of 0 or not in
+        dollars, or a day outside 2000 to 2100 is `422`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseWrite'
+      responses:
+        '201':
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/expenses/{expenseId}:
+    parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+    put:
+      tags:
+        - expenses
+      operationId: replaceExpense
+      summary: Change an expense
+      description: Replaces the expense's day, category, description, and amount or miles; `422` as for `createExpense`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseWrite'
+      responses:
+        '200':
+          description: The changed expense.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags:
+        - expenses
+      operationId: deleteExpense
+      summary: Delete an expense
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/expenses/mileage-rate:
+    parameters:
+      - $ref: '#/components/parameters/ReportYear'
+    get:
+      tags:
+        - expenses
+      operationId: getMileageRate
+      summary: Get a year's standard mileage rate
+      responses:
+        '200':
+          description: The year's rate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MileageRate'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - expenses
+      operationId: setMileageRate
+      summary: Set a year's standard mileage rate
+      description: The seller's rate for the year, used for every mile of the year in Reports.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MileageRateWrite'
+      responses:
+        '200':
+          description: The year's rate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MileageRate'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/tasks:
     get:
       tags:
@@ -4877,6 +5033,22 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    ExpenseId:
+      name: expenseId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ReportYear:
+      name: year
+      in: query
+      required: true
+      description: The calendar year.
+      schema:
+        type: integer
+        format: int32
+        minimum: 2000
+        maximum: 2100
     PriceDropRuleId:
       name: ruleId
       in: path
@@ -9674,6 +9846,7 @@ components:
         - total
         - months
         - marketplaces
+        - expenses
       properties:
         year:
           type: integer
@@ -9696,6 +9869,12 @@ components:
           maxItems: 64
           items:
             $ref: '#/components/schemas/MarketplaceReport'
+        expenses:
+          $ref: '#/components/schemas/YearExpenses'
+        netAfterExpenses:
+          $ref: '#/components/schemas/Money'
+          description: |
+            `total.netProfit` less `expenses.total`. Absent while either is absent.
     CsvExport:
       type: object
       description: |
@@ -9721,6 +9900,210 @@ components:
           type: string
           maxLength: 50000000
           description: The file's text.
+    YearExpenses:
+      type: object
+      description: |
+        The year's business expenses (docs/features/expenses.md) by the day each was incurred:
+        miles driven, priced at the year's mileage rate, and money spent, by category. `total` is
+        absent while the miles have no rate.
+      required:
+        - mileage
+        - spent
+        - categories
+      properties:
+        mileage:
+          $ref: '#/components/schemas/MileageTotals'
+        spent:
+          $ref: '#/components/schemas/Money'
+          description: All money spent.
+        categories:
+          type: array
+          description: Money spent per category, the largest first.
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/SpendCategory'
+        total:
+          $ref: '#/components/schemas/Money'
+          description: The mileage deduction plus `spent`; absent while the deduction is.
+    MileageTotals:
+      type: object
+      required:
+        - miles
+        - trips
+        - rate
+      properties:
+        miles:
+          type: integer
+          format: int32
+          minimum: 0
+        trips:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Mileage entries.
+        rate:
+          $ref: '#/components/schemas/MileageRate'
+        deduction:
+          $ref: '#/components/schemas/Money'
+          description: The miles at the rate, rounded to the cent; absent while the year has no rate.
+    SpendCategory:
+      type: object
+      required:
+        - category
+        - spent
+        - count
+      properties:
+        category:
+          type: string
+          maxLength: 100
+        spent:
+          $ref: '#/components/schemas/Money'
+        count:
+          type: integer
+          format: int32
+          minimum: 0
+    Expense:
+      type: object
+      description: |
+        A business expense for the seller's taxes (docs/features/expenses.md): money spent
+        (`amount`), or miles driven (`miles`), which Reports prices at the year's mileage rate.
+        Exactly one of `amount` and `miles` is present.
+      required:
+        - id
+        - incurredOn
+        - category
+        - createdAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        incurredOn:
+          type: string
+          format: date
+          description: The seller's day of the expense.
+        category:
+          type: string
+          maxLength: 100
+          description: What it was for, as the seller named it (`Mileage` for miles), for example `Parking`.
+        description:
+          type: string
+          maxLength: 500
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: The money spent; absent for miles.
+        miles:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 2000
+          description: The miles driven; absent for money spent.
+        sourcingRunId:
+          $ref: '#/components/schemas/Id'
+          description: The sourcing run it was entered at checkout for, while the run is kept.
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+    ExpenseWrite:
+      type: object
+      additionalProperties: false
+      description: |
+        An expense as the seller enters it: exactly one of `amount` (money spent) and `miles`
+        (miles driven); both or neither is `422`.
+      required:
+        - incurredOn
+        - category
+      properties:
+        incurredOn:
+          type: string
+          format: date
+          description: The seller's day of the expense.
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: What it was for, for example `Parking`, `Supplies`, or `Mileage`.
+        description:
+          type: string
+          maxLength: 500
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: The money spent, at least 1 cent.
+        miles:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 2000
+          description: The miles driven, in whole miles.
+    ExpenseList:
+      type: object
+      description: A year's expenses, oldest day first.
+      required:
+        - year
+        - expenses
+      properties:
+        year:
+          type: integer
+          format: int32
+        expenses:
+          type: array
+          maxItems: 5000
+          items:
+            $ref: '#/components/schemas/Expense'
+    MileageRate:
+      type: object
+      description: |
+        The standard mileage rate for a year, in tenths of a cent per mile (`725` is 72.5 cents).
+        The seller's own when they set one (`setBySeller`), otherwise the IRS business rate Listora
+        knows for the year. Absent `tenthCentsPerMile` means Listora knows no rate for the year and
+        the seller has set none, so the year's miles are not priced.
+      required:
+        - year
+        - setBySeller
+      properties:
+        year:
+          type: integer
+          format: int32
+        tenthCentsPerMile:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+        setBySeller:
+          type: boolean
+        irsTenthCentsPerMile:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: The IRS business rate Listora knows for the year, when it knows one.
+    MileageRateWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - tenthCentsPerMile
+      properties:
+        tenthCentsPerMile:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: The rate in tenths of a cent per mile, for example `725` for 72.5 cents.
+    SourcingSpend:
+      type: object
+      additionalProperties: false
+      description: Money spent on a sourcing trip other than the haul, for example parking or an entry fee.
+      required:
+        - category
+        - amount
+      properties:
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: At least 1 cent.
+        description:
+          type: string
+          maxLength: 500
     UserTaskKind:
       description: |
         A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
@@ -12746,7 +13129,15 @@ components:
           format: int32
           minimum: 0
           maximum: 2000
-          description: The miles driven for the trip, if the seller logs them.
+          description: |
+            The miles driven for the trip, if the seller logs them. More than 0 is also recorded as
+            the trip's mileage expense (docs/features/expenses.md).
+        otherSpend:
+          type: array
+          description: Other money spent on the trip (parking, an entry fee), each recorded as an expense of the trip's day.
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/SourcingSpend'
     SourcingRunSummary:
       type: object
       description: |
