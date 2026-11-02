@@ -162,6 +162,25 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     });
   }
 
+  /**
+   * The phone's answer to one read, and the scan once its prices are in: the other reads the
+   * phone still has are answered as failed (as the app answers a read it can't make), and the
+   * web research (which these items have no fixture for, so it fails) comes back.
+   */
+  async function answerAndPrice(scanId: string, comparisonId: string, body: unknown) {
+    const answered = await answerRead(scanId, comparisonId, body);
+    expect(answered.status).toBe(200);
+    for (const other of answered.body.comparisons ?? []) {
+      if (other.read === undefined) continue;
+      const failed = await answerRead(scanId, other.read.id, { outcome: 'failed', ms: 0 });
+      expect(failed.status).toBe(200);
+    }
+    const priced = await api.call('researchScan', { token, params: { scanId } });
+    expect(priced.status).toBe(200);
+    expect(priced.body.pricing?.status).toBe('ready');
+    return priced;
+  }
+
   async function reads(marketplace: 'depop' | 'ebay' | 'mercari' = 'depop') {
     return api.db
       .selectFrom('market_comparison')
@@ -198,8 +217,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const scan = await scanOf(answer());
     const read = depopOf(scan).read;
     if (read === undefined) throw new Error('no read');
-    const answered = await answerRead(scan.id, read.id, READ);
-    expect(answered.status).toBe(200);
+    const answered = await answerAndPrice(scan.id, read.id, READ);
     const depop = depopOf(answered.body);
     expect(depop).toEqual({
       marketplace: 'depop',
@@ -310,8 +328,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const scan = await scanOf(answer({ line: '501', sizeLabel: '32x30' }));
     const read = ebayOf(scan).read;
     if (read === undefined) throw new Error('no read');
-    const answered = await answerRead(scan.id, read.id, EBAY_READ);
-    expect(answered.status).toBe(200);
+    const answered = await answerAndPrice(scan.id, read.id, EBAY_READ);
     const ebay = ebayOf(answered.body);
     expect(ebay).toEqual({
       marketplace: 'ebay',
@@ -360,8 +377,18 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const again = await scanOf(
       answer({ line: '501', sizeLabel: '32x30', condition: 'new_without_tags' }),
     );
-    expect(ebayOf(again)).toMatchObject({ status: 'read', cached: true, sold: { count: 9 } });
-    expect(again.call).toMatchObject({ basis: 'market_sold' });
+    // Held while the web research runs, with no price but the count of what is for sale.
+    expect(ebayOf(again)).toEqual({
+      marketplace: 'ebay',
+      status: 'read',
+      label: 'Checked eBay',
+      supply: 320,
+      cached: true,
+    });
+    const pricedAgain = (await api.call('researchScan', { token, params: { scanId: again.id } }))
+      .body;
+    expect(ebayOf(pricedAgain)).toMatchObject({ status: 'read', cached: true, sold: { count: 9 } });
+    expect(pricedAgain.call).toMatchObject({ basis: 'market_sold' });
   });
 
   it('shows eBay asking prices alone when no close match sold, and says when none match', async () => {
@@ -369,7 +396,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const read = ebayOf(scan).read;
     if (read === undefined) throw new Error('no read');
     const { level, forSale } = EBAY_READ.stats;
-    const answered = await answerRead(scan.id, read.id, {
+    const answered = await answerAndPrice(scan.id, read.id, {
       ...EBAY_READ,
       stats: { level, forSale, read: { sold: 12, forSale: 40 } },
     });
@@ -402,7 +429,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const read = ebayOf(scan).read;
     if (read === undefined) throw new Error('no read');
     const { level, forSale } = EBAY_READ.stats;
-    const answered = await answerRead(scan.id, read.id, {
+    const answered = await answerAndPrice(scan.id, read.id, {
       outcome: 'read',
       stats: { level, forSale, read: { sold: 0, forSale: 40 } },
       forSaleTotal: 320,
@@ -441,8 +468,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const scan = await scanOf(answer({ line: '501', sizeLabel: '32' }));
     const read = mercariOf(scan).read;
     if (read === undefined) throw new Error('no read');
-    const answered = await answerRead(scan.id, read.id, MERCARI_READ);
-    expect(answered.status).toBe(200);
+    const answered = await answerAndPrice(scan.id, read.id, MERCARI_READ);
     const pace = 'Sold listings on Mercari: 24 of the latest 30 sold in the last 30 days';
     expect(mercariOf(answered.body)).toEqual({
       marketplace: 'mercari',
@@ -479,7 +505,9 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const again = await scanOf(
       answer({ line: '501', sizeLabel: '32', condition: 'pre_owned_excellent' }),
     );
-    expect(mercariOf(again)).toMatchObject({
+    const pricedAgain = (await api.call('researchScan', { token, params: { scanId: again.id } }))
+      .body;
+    expect(mercariOf(pricedAgain)).toMatchObject({
       status: 'read',
       cached: true,
       sold: { count: 7 },
@@ -491,7 +519,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const slow = await scanOf(answer({ line: '501', sizeLabel: '30' }));
     const slowRead = mercariOf(slow).read;
     if (slowRead === undefined) throw new Error('no read');
-    const answered = await answerRead(slow.id, slowRead.id, { ...MERCARI_READ, soldTotal: 3 });
+    const answered = await answerAndPrice(slow.id, slowRead.id, { ...MERCARI_READ, soldTotal: 3 });
     expect(mercariOf(answered.body).demand).toEqual({
       demand: 'crowded',
       label: 'Slow on Mercari',
@@ -503,7 +531,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const undated = await scanOf(answer({ line: '505' }));
     const undatedRead = mercariOf(undated).read;
     if (undatedRead === undefined) throw new Error('no read');
-    const plain = await answerRead(undated.id, undatedRead.id, {
+    const plain = await answerAndPrice(undated.id, undatedRead.id, {
       outcome: 'read',
       stats: {
         ...MERCARI_READ.stats,

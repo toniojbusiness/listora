@@ -7808,7 +7808,10 @@ export interface components {
         /**
          * @description One item scanned at the store: what it is, the household's own sales like it, the AI's
          *     estimate, and the call. Every price is a range with its source; "sold" appears only next
-         *     to the seller's own sales.
+         *     to the seller's own sales. The prices and the call wait for what they rest on (`pricing`):
+         *     while `pricing.status` is `checking`, the scan says what the item is and holds every price
+         *     (no `aiEstimate`, `retail`, `research`, or `ownSales`, comparisons without their numbers)
+         *     and its call is `checking`.
          */
         ItemScan: {
             id: components["schemas"]["Id"];
@@ -7827,6 +7830,14 @@ export interface components {
              */
             ownSales: components["schemas"]["ScanOwnSales"][];
             call: components["schemas"]["ScanCall"];
+            pricing?: components["schemas"]["ScanPricing"];
+            /**
+             * @description What the prices rest on, in short plain lines, once they are in: the household's own
+             *     sales like it, sold listings elsewhere (only with real sold data), what listings ask now
+             *     (said to be asks), the original retail price, the brand's pulse, and any source that
+             *     could not be checked. Every line comes from the scan's own data. Empty while checking.
+             */
+            realityCheck?: components["schemas"]["ScanRealityLine"][];
             /** @description The words a buyer would search to find items like it. */
             searchWords: string;
             /**
@@ -7859,6 +7870,8 @@ export interface components {
             styleNumber?: string;
             /** @description "current", or "vintage 1990s", where that changes what the item is. */
             era?: string;
+            /** @description The main material, as the tag or the item shows it ("wool"), when sure. */
+            material?: string;
             /** @description A style or era buyers search by ("Y2K", "gorpcore"), the AI's read. */
             style?: string;
             /** @description How sure the AI is of the brand and item together. */
@@ -8061,8 +8074,16 @@ export interface components {
          */
         ScanCall: {
             call: components["schemas"]["ScanCallKind"];
-            /** @description The call as shown ("Buy", "Your call", "Skip"). */
+            /**
+             * @description The call as the card's headline says it: "Grab" (`buy`), "Maybe" (`your_call`),
+             *     "Leave" (`skip`), or "Checking prices" while the prices wait (`checking`).
+             */
             label: string;
+            /**
+             * @description The headline's one-line why, from the payouts against the worth-listing amount and any
+             *     flag ("Even its low end pays out $11 after fees, over your $8"). Absent while checking.
+             */
+            why?: string;
             confidence: components["schemas"]["ScanConfidence"];
             basis: components["schemas"]["ScanBasis"];
             /** @description What the call rests on, as the seller reads it ("Your 5 sales like it"). */
@@ -8079,19 +8100,80 @@ export interface components {
             payoutMarketplace?: components["schemas"]["Marketplace"];
             /** @description The least payout worth buying for. */
             worthListing: components["schemas"]["Money"];
+            prices?: components["schemas"]["ScanPrices"];
             /**
              * @description What else the call weighed, each with what it rests on: the retail price, new with
              *     tags, how the brand resells on the web, the household's own sales trend, the style.
+             *     The first is the three `prices` (kind `prices`) when there are any, for a client built
+             *     before `prices`; a client that shows `prices` leaves that signal out.
              */
             signals: components["schemas"]["ScanSignal"][];
         };
         /** @description A `KnownScanCallKind`, or one added after this client was built (shown by `label`). */
         ScanCallKind: components["schemas"]["KnownScanCallKind"];
         /**
-         * @description `buy`, `your_call` (the seller decides), or `skip`.
+         * @description `buy`, `your_call` (the seller decides), or `skip`; `checking` while the prices wait for
+         *     what they rest on (`ItemScan.pricing`), with no range, payouts, or prices, and its
+         *     `confidence` the read's (how sure the identification is).
          * @enum {string}
          */
-        KnownScanCallKind: "buy" | "your_call" | "skip";
+        KnownScanCallKind: "buy" | "your_call" | "skip" | "checking";
+        /**
+         * @description Whether the scan's prices and call are in (docs/features/thrift-scan.md, "Prices after the
+         *     facts"). They wait for the household's own sales, the web research with the brand's pulse,
+         *     and each marketplace comparison that is on, up to about 15 seconds after the read
+         *     (`waitUntil`); then they show from what came back, naming what is `missing`.
+         */
+        ScanPricing: {
+            status: components["schemas"]["ScanPricingStatus"];
+            /**
+             * @description The card's quiet progress line while checking ("Checking prices: the web, Depop"), or
+             *     what the prices rest on once ready.
+             */
+            label: string;
+            /** @description The sources still being checked, while `checking`. */
+            waitingOn?: components["schemas"]["ScanPricingSource"][];
+            /** @description The sources the prices could not wait for or check, once `ready`. */
+            missing?: components["schemas"]["ScanMissingSource"][];
+            /** @description When the prices stop waiting and show from what came back. */
+            waitUntil?: components["schemas"]["Timestamp"];
+        };
+        /** @description A `KnownScanPricingStatus`, or one added after this client was built. */
+        ScanPricingStatus: components["schemas"]["KnownScanPricingStatus"];
+        /**
+         * @description `checking` while the prices wait; `ready` once they show.
+         * @enum {string}
+         */
+        KnownScanPricingStatus: "checking" | "ready";
+        /** @description A `KnownScanPricingSource`, or one added after this client was built. */
+        ScanPricingSource: components["schemas"]["KnownScanPricingSource"];
+        /**
+         * @description `web`: the web research and the brand pulse; a marketplace: its comparisons.
+         * @enum {string}
+         */
+        KnownScanPricingSource: "web" | "ebay" | "depop" | "poshmark" | "mercari";
+        ScanMissingSource: {
+            source: components["schemas"]["ScanPricingSource"];
+            /**
+             * @description As the card says it: "Couldn't check the web in time", "Couldn't check Depop", "Depop
+             *     prices paused today".
+             */
+            label: string;
+        };
+        ScanRealityLine: {
+            kind: components["schemas"]["ScanRealityKind"];
+            text: string;
+        };
+        /** @description A `KnownScanRealityKind`, or one added after this client was built (shown by its text). */
+        ScanRealityKind: components["schemas"]["KnownScanRealityKind"];
+        /**
+         * @description `own_sales`: the household's own sales like it. `market_sold`: a marketplace's sold
+         *     listings of close matches. `asking`: what listings like it ask now (never sold prices). `retail`: the
+         *     original retail price. `web`: what the web's listings ask (never sold prices).
+         *     `brand_pulse`: what the wider web says of the brand. `missing`: a source not checked.
+         * @enum {string}
+         */
+        KnownScanRealityKind: "own_sales" | "market_sold" | "asking" | "retail" | "web" | "brand_pulse" | "missing";
         /** @description A `KnownScanConfidence`, or one added after this client was built. */
         ScanConfidence: components["schemas"]["KnownScanConfidence"];
         /** @enum {string} */
@@ -8125,7 +8207,9 @@ export interface components {
         /** @description A `KnownScanSignalKind`, or one added after this client was built (shown by its label). */
         ScanSignalKind: components["schemas"]["KnownScanSignalKind"];
         /**
-         * @description `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
+         * @description `missing`: a source the prices could not wait for or could not check (the web, a
+         *     marketplace), named so the seller knows what the prices lack.
+         *     `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
          *     are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
          *     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
          *     `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
@@ -8134,10 +8218,11 @@ export interface components {
          *     the wider web says of the brand (in demand, steady, or slow, with why and what asks more),
          *     by web pages (it never moves the call). `calibrated`: the AI
          *     estimate and the web's asking prices were scaled by what the household's own items went for
-         *     against what they asked.
+         *     against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
+         *     built before them.
          * @enum {string}
          */
-        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "brand_pulse" | "trend" | "style" | "asking" | "demand" | "unsold" | "calibrated";
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "brand_pulse" | "trend" | "style" | "asking" | "demand" | "unsold" | "calibrated" | "prices" | "missing";
         /**
          * @description The item's original retail price, with where it came from: one model's price (`low` equals
          *     `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -8307,6 +8392,20 @@ export interface components {
              *     entry.
              */
             itemIds: components["schemas"]["Id"][];
+        };
+        /**
+         * @description The card's three prices, from the range the call rests on (no further lookup): what to list
+         *     at, leaving room for offers (the realistic sale over what the household's items go for
+         *     against what they ask); the realistic sale, the middle of the range; and the fast sale, its
+         *     low end. Rounded to prices a seller would type. Estimates, never sold prices; absent with
+         *     no range.
+         */
+        ScanPrices: {
+            listAt: components["schemas"]["Money"];
+            realisticSale: components["schemas"]["Money"];
+            fastSale: components["schemas"]["Money"];
+            /** @description Where the three come from, as the seller reads it. */
+            basedOn: string;
         };
     };
     responses: {
@@ -8924,6 +9023,15 @@ export type ScanOwnSales = components['schemas']['ScanOwnSales'];
 export type ScanCall = components['schemas']['ScanCall'];
 export type ScanCallKind = components['schemas']['ScanCallKind'];
 export type KnownScanCallKind = components['schemas']['KnownScanCallKind'];
+export type ScanPricing = components['schemas']['ScanPricing'];
+export type ScanPricingStatus = components['schemas']['ScanPricingStatus'];
+export type KnownScanPricingStatus = components['schemas']['KnownScanPricingStatus'];
+export type ScanPricingSource = components['schemas']['ScanPricingSource'];
+export type KnownScanPricingSource = components['schemas']['KnownScanPricingSource'];
+export type ScanMissingSource = components['schemas']['ScanMissingSource'];
+export type ScanRealityLine = components['schemas']['ScanRealityLine'];
+export type ScanRealityKind = components['schemas']['ScanRealityKind'];
+export type KnownScanRealityKind = components['schemas']['KnownScanRealityKind'];
 export type ScanConfidence = components['schemas']['ScanConfidence'];
 export type KnownScanConfidence = components['schemas']['KnownScanConfidence'];
 export type ScanBasis = components['schemas']['ScanBasis'];
@@ -8956,6 +9064,7 @@ export type StorageLocationReplace = components['schemas']['StorageLocationRepla
 export type StorageLocationItem = components['schemas']['StorageLocationItem'];
 export type StorageLocationDetail = components['schemas']['StorageLocationDetail'];
 export type StorageLocationItemsAdd = components['schemas']['StorageLocationItemsAdd'];
+export type ScanPrices = components['schemas']['ScanPrices'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -14110,11 +14219,14 @@ export const knownScanComparisonStatusValues: ReadonlyArray<FlattenedDeepRequire
 export const knownScanDemandKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDemandKind"]> = ["strong", "steady", "crowded", "unknown"];
 export const knownScanComparisonOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanComparisonOutcome"]> = ["read", "check", "rate_limited", "failed"];
 export const scanComparisonStatsLevelValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ScanComparisonStats"]["level"]> = ["model_and_size", "model", "type_and_size", "type"];
-export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanCallKind"]> = ["buy", "your_call", "skip"];
+export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanCallKind"]> = ["buy", "your_call", "skip", "checking"];
+export const knownScanPricingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanPricingStatus"]> = ["checking", "ready"];
+export const knownScanPricingSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanPricingSource"]> = ["web", "ebay", "depop", "poshmark", "mercari"];
+export const knownScanRealityKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRealityKind"]> = ["own_sales", "market_sold", "asking", "retail", "web", "brand_pulse", "missing"];
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "market_sold", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
-export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "brand_pulse", "trend", "style", "asking", "demand", "unsold", "calibrated"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "brand_pulse", "trend", "style", "asking", "demand", "unsold", "calibrated", "prices", "missing"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
 export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
 export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];

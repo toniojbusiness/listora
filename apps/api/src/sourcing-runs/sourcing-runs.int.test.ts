@@ -46,7 +46,7 @@ describe('sourcing runs: checkout and the summary (real Postgres)', () => {
   let seed = 0;
 
   beforeAll(async () => {
-    api = await createTestApi('sourcing_runs');
+    api = await createTestApi('sourcing_runs', { marketComparisons: false });
     token = await api.signIn(OWNER);
     tenant = await api.tenantOf(OWNER);
     otherToken = await api.signIn(OTHER);
@@ -91,7 +91,10 @@ describe('sourcing runs: checkout and the summary (real Postgres)', () => {
       body: { runId, images: [{ role: 'item', jpegBase64: await scanImage(output) }], ...extra },
     });
     expect(response.status).toBe(201);
-    return response.body;
+    // The scan once its prices are in (they wait for the web research, which these items fail).
+    const priced = await api.call('researchScan', { token, params: { scanId: response.body.id } });
+    expect(priced.body.pricing?.status).toBe('ready');
+    return priced.body;
   }
 
   async function checkout(runId: string, body: Record<string, unknown>, as = token) {

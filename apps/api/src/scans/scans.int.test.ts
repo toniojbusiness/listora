@@ -61,7 +61,7 @@ describe('the thrift scan (real Postgres)', () => {
   let seed = 0;
 
   beforeAll(async () => {
-    api = await createTestApi('scans');
+    api = await createTestApi('scans', { marketComparisons: false });
     token = await api.signIn(OWNER);
     tenant = await api.tenantOf(OWNER);
     otherToken = await api.signIn(OTHER);
@@ -104,6 +104,14 @@ describe('the thrift scan (real Postgres)', () => {
       body: place === undefined ? {} : { place },
     });
     expect(response.status).toBe(201);
+    return response.body;
+  }
+
+  /** The scan once its prices are in: the research (and any comparison) came back, or its wait ended. */
+  async function priced(scanId: string) {
+    const response = await api.call('researchScan', { token, params: { scanId } });
+    expect(response.status).toBe(200);
+    expect(response.body.pricing?.status).toBe('ready');
     return response.body;
   }
 
@@ -241,16 +249,51 @@ describe('the thrift scan (real Postgres)', () => {
       tagText: ['lululemon', '6'],
     });
     expect(response.status).toBe(201);
-    const body = response.body;
-    expect(body.identity).toEqual({
+    const identity = {
       item: 'black high-rise leggings',
       brand: 'Lululemon',
       model: 'Align',
+      material: 'nylon',
       category: LEGGINGS,
       department: 'women',
       sizeLabel: '6',
       condition: 'pre_owned_good',
       confidence: 0.9,
+    };
+    // The read answers at once with what the item is, and holds every price and the call until
+    // the web research is in.
+    const held = response.body;
+    expect(held.identity).toEqual(identity);
+    expect(held.aiEstimate).toBeUndefined();
+    expect(held.ownSales).toEqual([]);
+    expect(held.realityCheck).toBeUndefined();
+    expect(held.call).toEqual({
+      call: 'checking',
+      label: 'Checking prices',
+      confidence: 'high',
+      basis: 'none',
+      basedOn: 'Checking prices: the web',
+      worthListing: usd(800),
+      signals: [],
+    });
+    expect(held.pricing).toMatchObject({
+      status: 'checking',
+      label: 'Checking prices: the web',
+      waitingOn: ['web'],
+    });
+
+    // No web fixture: the lookup fails, and the prices show from the rest, naming the web.
+    const body = await priced(held.id);
+    expect(body.identity).toEqual(identity);
+    expect(body.pricing).toMatchObject({
+      status: 'ready',
+      label: "Checked your sales. Couldn't check the web.",
+      missing: [{ source: 'web', label: "Couldn't check the web" }],
+    });
+    expect(body.call.signals).toContainEqual({
+      kind: 'missing',
+      label: "Couldn't check the web",
+      basedOn: 'The prices rest on what did come back, never on this',
     });
     // The AI's $24-$32-$40 for a named brand, scaled by the household's 80% drawn toward the
     // default 75% as if it were 5 more sales: (3 * 0.8 + 5 * 0.75) / 8 = 0.76875.
@@ -269,10 +312,11 @@ describe('the thrift scan (real Postgres)', () => {
     // Three sales on Depop and Mercari; the Depop fee table's payout of the low quartile.
     expect(body.call).toMatchObject({
       call: 'buy',
-      label: 'Buy',
+      label: 'Grab',
       confidence: 'medium',
       basis: 'own_history',
       basedOn: 'Your 3 sales like it',
+      why: 'Even its low end pays out $24 after fees, over your $8',
       low: usd(2500),
       high: usd(2900),
       payoutMarketplace: 'depop',
@@ -288,6 +332,16 @@ describe('the thrift scan (real Postgres)', () => {
     expect(body.ownSales[1]?.label).toBe(
       'Your sales of similar Lululemon items on Depop (last 365 days)',
     );
+    // The reality check: the household's own sales, eBay's shown but not priced from, and the
+    // web that could not be checked.
+    expect(body.realityCheck).toEqual([
+      {
+        kind: 'own_sales',
+        text: 'You sold 2 like it on eBay: $92-$97, most around $95 (shown, not used for the price)',
+      },
+      { kind: 'own_sales', text: 'You sold 2 like it on Depop: $24-$27, most around $25' },
+      { kind: 'missing', text: "Couldn't check the web" },
+    ]);
     expect(body.researchLinks[0]?.label).toBe(DEPOP_SEARCH_LABEL);
     expect(body.decision).toBe('undecided');
     // "Sold" only next to the household's own sales.
@@ -355,7 +409,7 @@ describe('the thrift scan (real Postgres)', () => {
   it("warns of the household's unsold items like it, without moving the call", async () => {
     const run = await startRun();
     const image = await scanImage(answer());
-    const before = await scan(run.id, image.base64);
+    const before = { body: await priced((await scan(run.id, image.base64)).body.id) };
     expect(before.body.call.signals.map((signal) => signal.kind)).not.toContain('unsold');
 
     for (const brand of ['Lululemon', 'LULULEMON']) {
@@ -381,8 +435,9 @@ describe('the thrift scan (real Postgres)', () => {
       .execute();
     await sell('depop', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 2200);
 
-    const again = await scan(run.id, (await scanImage(answer())).base64);
-    expect(again.status).toBe(201);
+    const scanned = await scan(run.id, (await scanImage(answer())).base64);
+    expect(scanned.status).toBe(201);
+    const again = { body: await priced(scanned.body.id) };
     expect(again.body.call.call).toBe(before.body.call.call);
     expect(again.body.call.signals.find((signal) => signal.kind === 'unsold')).toEqual({
       kind: 'unsold',
@@ -396,7 +451,7 @@ describe('the thrift scan (real Postgres)', () => {
     const unknown = await scanImage(
       answer({ brand: 'Nobody Knows', category: 'clothing/tops/t_shirts' }),
     );
-    const ai = (await scan(run.id, unknown.base64)).body;
+    const ai = await priced((await scan(run.id, unknown.base64)).body.id);
     expect(ai.ownSales).toEqual([]);
     expect(ai.call).toMatchObject({
       call: 'your_call',
@@ -411,9 +466,14 @@ describe('the thrift scan (real Postgres)', () => {
         priceEstimate: { lowCents: 300, midCents: 400, highCents: 600 },
       }),
     );
-    expect((await scan(run.id, cheap.base64)).body.call).toMatchObject({
+    // A read with no brand has nothing to look up: priced at once, from the AI estimate.
+    const leave = (await scan(run.id, cheap.base64)).body;
+    expect(leave.pricing).toMatchObject({ status: 'ready', label: 'Checked your sales.' });
+    expect(leave.call).toMatchObject({
       call: 'skip',
+      label: 'Leave',
       confidence: 'low',
+      why: 'Pays out $5 at most after fees, under your $8',
     });
     const nothing = await scanImage(
       answer({
@@ -677,12 +737,13 @@ describe('the thrift scan (real Postgres)', () => {
       const run = await startRun();
       const item = read();
       web(item, found);
-      const scanned = (await scan(run.id, (await scanImage(item)).base64)).body;
-      // The read never waits on the web: it rests on the AI estimate.
-      expect(scanned.research).toBeUndefined();
-      expect(scanned.call.basis).toBe('ai_estimate');
-      expect(scanned.identity).toMatchObject({ model: '501', era: 'current' });
       const before = (await researchCalls()).length;
+      const scanned = (await scan(run.id, (await scanImage(item)).base64)).body;
+      // The read never waits on the web, but its prices do: the lookup starts with the read.
+      expect(scanned.research).toBeUndefined();
+      expect(scanned.call.call).toBe('checking');
+      expect(scanned.pricing?.waitingOn).toEqual(['web']);
+      expect(scanned.identity).toMatchObject({ model: '501', era: 'current' });
 
       const researched = await api.call('researchScan', { token, params: { scanId: scanned.id } });
       expect(researched.status).toBe(200);
@@ -724,11 +785,35 @@ describe('the thrift scan (real Postgres)', () => {
         low: usd(1_773),
         high: usd(2_955),
       });
+      // The three prices from that range: the middle ($23.64) a $25 realistic sale, the low
+      // end ($17.73) a $17 fast sale, and the list price $25 over 0.76875 ($30.75), raised to $35.
+      expect(body.call.prices).toEqual({
+        listAt: usd(3_500),
+        realisticSale: usd(2_500),
+        fastSale: usd(1_700),
+        basedOn:
+          "Likely sale is the middle of the web's asks, scaled to your sales, fast sale its low end; list at leaves room for offers (your items went for 77% of what they asked)",
+      });
+      expect(body.call.label).toBe('Grab');
+      expect(body.call.why).toBe('Even its low end pays out $17 after fees, over your $8');
+      expect(body.pricing).toMatchObject({
+        status: 'ready',
+        label: 'Checked your sales and the web.',
+      });
+      expect(body.pricing?.missing).toBeUndefined();
+      // What the prices rest on, plainly: the web's asks said to be asks, and the retail price.
+      expect(body.realityCheck).toEqual([
+        { kind: 'web', text: 'Listings on the web ask $30-$50 (poshmark.com, ebay.com)' },
+        { kind: 'retail', text: 'Retail about $98 (levi.com)' },
+      ]);
+      // They lead the signals too, for an app built before them.
       expect(body.call.signals.map((signal) => signal.kind)).toEqual([
+        'prices',
         'retail',
         'web_resale',
         'calibrated',
       ]);
+      expect(body.call.signals[0]?.label).toBe('List at $35 · Likely sale $25 · Fast sale $17');
       expect(body.call.signals.at(-1)?.basedOn).toBe(
         "Your items went for 77% of what they asked (3 sales); the AI estimate and the web's asking prices are scaled to it",
       );
@@ -969,10 +1054,15 @@ describe('the thrift scan (real Postgres)', () => {
       expect(body.retail).toBeUndefined();
       expect(body.research?.resale?.sources).toHaveLength(2);
 
+      // Without a brand nothing is looked up, and the prices never wait for the web.
+      const calls = (await researchCalls()).length;
       const unbranded = (await scan(run.id, (await scanImage(read({ brand: '' }))).base64)).body;
+      expect(unbranded.pricing?.status).toBe('ready');
       const none = (await api.call('researchScan', { token, params: { scanId: unbranded.id } }))
         .body;
-      expect(none.research).toMatchObject({ status: 'no_brand', cached: false });
+      expect(none.research).toBeUndefined();
+      expect(none.pricing?.missing).toBeUndefined();
+      expect((await researchCalls()).length).toBe(calls);
     });
   });
 
@@ -987,7 +1077,7 @@ describe('the thrift scan (real Postgres)', () => {
         style: 'Y2K',
       }),
     );
-    const body = (await scan(run.id, tagged.base64)).body;
+    const body = await priced((await scan(run.id, tagged.base64)).body.id);
     expect(body.retail).toEqual({
       low: usd(6_800),
       high: usd(6_800),
@@ -996,9 +1086,16 @@ describe('the thrift scan (real Postgres)', () => {
     });
     expect(body.identity.style).toBe('Y2K');
     expect(body.call.signals.map((signal) => [signal.kind, signal.label])).toEqual([
+      ['prices', 'List at $35 · Likely sale $25 · Fast sale $18'],
       ['retail', 'Retail $68 on the tag'],
       ['style', 'Y2K'],
       ['calibrated', 'Scaled to your sales'],
+      // No web fixture for it: the lookup failed, and the card says so.
+      ['missing', "Couldn't check the web"],
+    ]);
+    expect(body.realityCheck).toEqual([
+      { kind: 'retail', text: 'Retail $68 on the tag' },
+      { kind: 'missing', text: "Couldn't check the web" },
     ]);
     // The AI estimate ($24-$40, scaled by the household's 0.76875 to $18-$31) is under the
     // tag's $68, so it stands.

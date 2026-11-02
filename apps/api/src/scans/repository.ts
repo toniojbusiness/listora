@@ -12,6 +12,7 @@ import {
   type ScanResearchKind,
 } from '@listora/db';
 import type { ScanResearch, ThriftScan } from '@listora/analysis';
+import type { ScanCallKind } from '@listora/sourcing';
 import type { Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
@@ -19,9 +20,13 @@ import type { StoredComparison } from './comparisons.ts';
 
 export type ItemScanRow = Selectable<ItemScanTable>;
 
-/** What `item_scan.call_detail` holds: the call and the own-sales lines, as the app saw them. */
+/**
+ * What `item_scan.call_detail` holds: the call and the own-sales lines, as the card shows them
+ * once its prices are in. A stored call is always Buy, Your call, or Skip: `checking` is only
+ * how a scan whose prices wait is shown (`heldView`).
+ */
 export interface ScanCallDetail {
-  readonly call: ScanCall;
+  readonly call: ScanCall & { readonly call: ScanCallKind };
   readonly ownSales: readonly ScanOwnSales[];
   readonly trend?: ScanTrend;
   readonly retail?: ScanRetail;
@@ -40,9 +45,12 @@ export interface ScanCallDetail {
   };
 }
 
-/** What `item_scan.research` holds: the web research the app asked for, and where it came from. */
+/**
+ * What `item_scan.research` holds: the web research, and where it came from; `failed` when the
+ * lookup failed, so the prices show without it and the next ask tries again.
+ */
 export interface StoredResearch {
-  readonly status: 'found' | 'not_found' | 'no_brand';
+  readonly status: 'found' | 'not_found' | 'no_brand' | 'failed';
   readonly research?: ScanResearch;
   readonly cached: boolean;
 }

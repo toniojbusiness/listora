@@ -24,13 +24,13 @@ struct OfflineScanCard: Equatable {
         switch read.call {
         case .buy:
             call = .buy
-            callLabel = "Buy"
+            callLabel = "Grab"
         case .yourCall:
             call = .yourCall
-            callLabel = "Your call"
+            callLabel = "Maybe"
         case .skip:
             call = .skip
-            callLabel = "Skip"
+            callLabel = "Leave"
         }
         confidence = switch read.confidence {
         case .high: "High confidence"
@@ -54,7 +54,7 @@ struct OfflineScanCard: Equatable {
         switch call {
         case .buy: .doubleTap
         case .skip: .longBuzz
-        case .yourCall, .other: nil
+        case .yourCall, .checking, .other: nil
         }
     }
 
@@ -63,7 +63,7 @@ struct OfflineScanCard: Equatable {
         case .buy: .success
         case .skip: .failed
         case .yourCall: .actionNeeded
-        case .other: .neutral
+        case .checking, .other: .neutral
         }
     }
 

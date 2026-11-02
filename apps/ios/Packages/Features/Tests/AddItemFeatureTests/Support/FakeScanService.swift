@@ -24,7 +24,7 @@ func itemScanJSON(
         "confidence": identityConfidence,
     ]
     identity["brand"] = brand
-    let label = ["buy": "Buy", "your_call": "Your call", "skip": "Skip"][call] ?? call
+    let label = ["buy": "Grab", "your_call": "Maybe", "skip": "Leave"][call] ?? call
     return [
         "id": id,
         "runId": "0193a000-0000-7000-8000-000000000002",

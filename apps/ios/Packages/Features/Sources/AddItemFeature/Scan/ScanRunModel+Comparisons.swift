@@ -46,10 +46,7 @@ extension ScanRunModel {
 
     private func finishComparison(_ entryID: String, _ scan: ItemScan) {
         guard entries.first(where: { $0.id == entryID })?.scanID == scan.id else { return }
-        update(entryID) { entry in
-            entry.scan = scan
-            entry.state = .read(ScanCard(scan))
-        }
+        take(entryID, scan)
     }
 
     private func failComparison(_ entryID: String, scanID: String, marketplace: String) {

@@ -1343,9 +1343,14 @@ export interface ItemScanTable {
   ai_attempts: number;
   cost_micros: number;
   read_ms: number;
-  /** The web research that came in after the read; null until the app asked for it. */
+  /**
+   * The web research that came in after the read (`StoredResearch` in apps/api/src/scans):
+   * null until it came, or `failed`, after which it may be asked again.
+   */
   research: NullableJsonb<JsonObject>;
   research_ms: Nullable<number>;
+  /** When the research was claimed, at the read; a claim this old is stale (`CLAIM_STALE_MS`). */
+  research_started_at: Nullable<Date>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

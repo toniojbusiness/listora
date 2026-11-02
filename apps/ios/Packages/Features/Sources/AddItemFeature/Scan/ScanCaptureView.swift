@@ -72,6 +72,7 @@ struct ScanCaptureView: View {
                         onClose: { run.closeCard(entry.id) },
                         onTag: { run.startTagShot() },
                         onRetry: { Task { await run.retry(entry.id) } },
+                        onRetryPrices: { run.retryPrices(entry.id) },
                     )
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.horizontal, Spacing.md)

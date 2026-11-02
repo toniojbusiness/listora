@@ -6,12 +6,14 @@ import {
 } from '@listora/pricing';
 
 import {
+  DEFAULT_PRICE_CALIBRATION_SETTINGS,
   calibratedAiEstimate,
   calibratedWebAsks,
   calibrationPercent,
   type PriceCalibration,
 } from './calibration.ts';
 import type { MarketDemand, MarketMatchLevel } from './market.ts';
+import { scanPrices, type ScanPrices } from './prices.ts';
 
 import type { OwnHistoryComparisons } from './own-history.ts';
 import type { UnsoldLikeIt } from './unsold.ts';
@@ -96,6 +98,8 @@ export const SCAN_SIGNAL_KINDS = [
   'asking',
   'demand',
   'calibrated',
+  'prices',
+  'missing',
 ] as const;
 export type ScanSignalKind = (typeof SCAN_SIGNAL_KINDS)[number];
 
@@ -213,6 +217,11 @@ export interface MarketCallInput {
   };
 }
 
+/** The card's three prices, with where they come from as the seller reads it. */
+export interface ScanCallPrices extends ScanPrices {
+  readonly basedOn: string;
+}
+
 export interface ScanCall {
   readonly call: ScanCallKind;
   readonly confidence: CallConfidence;
@@ -224,12 +233,19 @@ export interface ScanCall {
   readonly optimisticPayoutCents?: number;
   /** What the call is based on, as the seller reads it. */
   readonly basedOn: string;
+  /**
+   * The headline's one-line why (`callWhy`): what the range pays out against the worth-listing
+   * amount, a flag, or how little there is to go on.
+   */
+  readonly why: string;
   /** The AI estimate as the card shows it: scaled by the calibration when there is one. */
   readonly aiEstimate?: {
     readonly lowCents: number;
     readonly midCents: number;
     readonly highCents: number;
   };
+  /** List at, realistic sale, and fast sale, from the range (`scanPrices`); absent with no range. */
+  readonly prices?: ScanCallPrices;
   /** The retail tag, new with tags, the trend, and the style, when there is something to say. */
   readonly signals: readonly ScanSignal[];
 }
@@ -288,13 +304,12 @@ export function scanCall(
               lowCents: aiEstimate.lowCents,
               highCents: aiEstimate.highCents,
             };
-  if (
-    range !== undefined &&
-    useHistory &&
-    input.newWithTags === true &&
-    settings.newWithTagsBump > 0
-  ) {
-    const bump = 1 + settings.newWithTagsBump;
+  const tagsBump =
+    range !== undefined && useHistory && input.newWithTags === true && settings.newWithTagsBump > 0
+      ? 1 + settings.newWithTagsBump
+      : 1;
+  if (range !== undefined && tagsBump !== 1) {
+    const bump = tagsBump;
     range = {
       lowCents: Math.round(range.lowCents * bump),
       highCents: Math.round(range.highCents * bump),
@@ -397,6 +412,7 @@ export function scanCall(
       confidence: 'low',
       basis: 'none',
       basedOn: 'Not enough to go on',
+      why: 'Not enough to price it: no sales like it, web prices, or AI estimate',
       ...shownEstimate,
       signals,
     };
@@ -424,6 +440,22 @@ export function scanCall(
     { conservativePayoutCents, optimisticPayoutCents, confidence, flagged },
     settings,
   );
+  const why = callWhy(
+    call,
+    { conservativePayoutCents, optimisticPayoutCents, confidence },
+    input.flags,
+    settings,
+  );
+  const expected =
+    basis === 'own_history' && history
+      ? Math.round(history.prices.medianCents * tagsBump)
+      : basis === 'ai_estimate' && aiEstimate
+        ? aiEstimate.midCents
+        : (range.lowCents + range.highCents) / 2;
+  const prices = {
+    ...scanPrices(range, expected, calibration),
+    basedOn: pricesBasedOn(basis, calibration),
+  };
   return {
     call,
     confidence,
@@ -431,6 +463,7 @@ export function scanCall(
     range,
     conservativePayoutCents,
     optimisticPayoutCents,
+    prices,
     basedOn:
       basis === 'own_history' && history
         ? yourSales(history.prices.count)
@@ -439,9 +472,47 @@ export function scanCall(
           : basis === 'web_info' && web
             ? `${WEB_INFO_LABEL}: ${webBasis(web.sites, calibration !== undefined)}`
             : AI_ESTIMATE_LABEL,
+    why,
     ...shownEstimate,
     signals,
   };
+}
+
+/**
+ * The headline's one-line why, from the payouts after fees against the worth-listing amount:
+ * a Grab pays out enough even at the range's low end; a Leave not even at its high end; a Maybe
+ * says what holds it back (a flag, little to go on, or a range across the amount). Never says
+ * "sold": the payouts are estimates whatever the range rests on.
+ */
+export function callWhy(
+  call: ScanCallKind,
+  payouts: {
+    readonly conservativePayoutCents: number;
+    readonly optimisticPayoutCents: number;
+    readonly confidence: CallConfidence;
+  },
+  flags: ScanFlags,
+  settings: Pick<ScanCallSettings, 'worthListingCents'>,
+): string {
+  const low = dollars(Math.max(0, payouts.conservativePayoutCents));
+  const high = dollars(Math.max(0, payouts.optimisticPayoutCents));
+  const worth = dollars(settings.worthListingCents);
+  const range = low === high ? low : `${low}-${high}`;
+  switch (call) {
+    case 'buy':
+      return `Even its low end pays out ${low} after fees, over your ${worth}`;
+    case 'skip':
+      return `Pays out ${high} at most after fees, under your ${worth}`;
+    case 'your_call':
+      if (flags.counterfeitProne)
+        return `Pays out ${range} after fees, but often faked: check it's real`;
+      if (flags.visibleDamage) return `Pays out ${range} after fees, but it shows damage`;
+      if (flags.lotOrBundle) return `Pays out ${range} after fees, but it's a lot or bundle`;
+      if (payouts.conservativePayoutCents >= settings.worthListingCents) {
+        return `Pays out ${range} after fees, but on little to go on`;
+      }
+      return `Pays out ${range} after fees: it may or may not clear your ${worth}`;
+  }
 }
 
 /**
@@ -465,6 +536,42 @@ export function decideCall(
     !range.flagged
     ? 'buy'
     : 'your_call';
+}
+
+/**
+ * Where the three prices come from, as the seller reads it: the realistic sale is the middle of
+ * what the call rests on, the fast sale its low end, and the list price leaves room for offers.
+ * Never says "sold": the three are estimates, whatever the range rests on.
+ */
+function pricesBasedOn(basis: CallBasis, calibration: PriceCalibration | undefined): string {
+  const middle =
+    basis === 'own_history'
+      ? 'the middle of your sales like it'
+      : basis === 'market_sold'
+        ? "the middle of the marketplace's prices"
+        : basis === 'web_info'
+          ? "the middle of the web's asks, scaled to your sales"
+          : 'the middle of the AI estimate';
+  const share = calibrationPercent(
+    calibration?.saleToAsking ?? DEFAULT_PRICE_CALIBRATION_SETTINGS.defaultSaleToAsking,
+  );
+  const room =
+    calibration !== undefined && calibration.sales > 0
+      ? `your items went for ${share} of what they asked`
+      : `items usually go for about ${share} of what they ask`;
+  return `Likely sale is ${middle}, fast sale its low end; list at leaves room for offers (${room})`;
+}
+
+/**
+ * The three prices as a signal, for a card built before they had a place of their own (it
+ * lists signals by their label): "List at $35 · Likely sale $25 · Fast sale $18".
+ */
+export function pricesSignal(prices: ScanCallPrices): ScanSignal {
+  return {
+    kind: 'prices',
+    label: `List at ${dollars(prices.listAtCents)} · Likely sale ${dollars(prices.realisticCents)} · Fast sale ${dollars(prices.fastCents)}`,
+    basedOn: prices.basedOn,
+  };
 }
 
 /** The web's asks a range rests on: "asks on poshmark.com, scaled to your sales". */

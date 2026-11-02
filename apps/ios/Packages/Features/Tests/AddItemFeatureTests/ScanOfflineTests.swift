@@ -156,7 +156,7 @@ struct ScanOfflineTests {
         #expect(run.service.calls.scans.isEmpty)
         #expect(run.service.calls.runs == 0)
         let instant = try OfflineScanCard(#require(entry.instant))
-        #expect(instant.callLabel == "Buy")
+        #expect(instant.callLabel == "Grab")
         #expect(instant.confidence == "Medium confidence")
         #expect(instant.label == "From your sales only")
         #expect(instant.basedOn == "Your 5 Acme sales")

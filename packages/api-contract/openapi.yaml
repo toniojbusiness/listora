@@ -1446,6 +1446,24 @@ components:
       $ref: './components/schemas/sourcing.yaml#/ScanCallKind'
     KnownScanCallKind:
       $ref: './components/schemas/sourcing.yaml#/KnownScanCallKind'
+    ScanPricing:
+      $ref: './components/schemas/sourcing.yaml#/ScanPricing'
+    ScanPricingStatus:
+      $ref: './components/schemas/sourcing.yaml#/ScanPricingStatus'
+    KnownScanPricingStatus:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanPricingStatus'
+    ScanPricingSource:
+      $ref: './components/schemas/sourcing.yaml#/ScanPricingSource'
+    KnownScanPricingSource:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanPricingSource'
+    ScanMissingSource:
+      $ref: './components/schemas/sourcing.yaml#/ScanMissingSource'
+    ScanRealityLine:
+      $ref: './components/schemas/sourcing.yaml#/ScanRealityLine'
+    ScanRealityKind:
+      $ref: './components/schemas/sourcing.yaml#/ScanRealityKind'
+    KnownScanRealityKind:
+      $ref: './components/schemas/sourcing.yaml#/KnownScanRealityKind'
     ScanConfidence:
       $ref: './components/schemas/sourcing.yaml#/ScanConfidence'
     KnownScanConfidence:
