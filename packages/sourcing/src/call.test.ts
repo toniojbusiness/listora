@@ -248,6 +248,7 @@ describe('scanCall', () => {
       conservativePayoutCents: 1_350,
       optimisticPayoutCents: 2_700,
       basedOn: AI_ESTIMATE_LABEL,
+      aiEstimate,
       signals: [],
     });
     const low = { lowCents: 300, midCents: 500, highCents: 800 };
@@ -406,7 +407,7 @@ describe('scanCall', () => {
       confidence: 'medium',
       call: 'buy',
       range: { lowCents: 3_000, highCents: 5_000 },
-      basedOn: 'Web info - not sold listings: poshmark.com, ebay.com',
+      basedOn: 'Web info - not sold listings: asks on poshmark.com, ebay.com',
     });
     expect(call.signals).toEqual([
       {
@@ -426,5 +427,95 @@ describe('scanCall', () => {
     expect(scanCall(input({ web, ownHistory: history(1_200, 2_000) }), settings).basis).toBe(
       'own_history',
     );
+  });
+});
+
+describe("scanCall calibrated to the seller's sales", () => {
+  // The seller's items go for 80% of what they ask: the AI estimate counts 80%, the web's
+  // asking prices 64% (80% of 80%).
+  const calibration = { saleToAsking: 0.8, sales: 12 };
+  const web = {
+    lowCents: 2_500,
+    highCents: 5_000,
+    sites: ['poshmark.com', 'ebay.com'],
+    reputation: 'unknown' as const,
+  };
+
+  it('scales the AI estimate once, shows it scaled, and says why', () => {
+    const aiEstimate = { lowCents: 2_000, midCents: 3_000, highCents: 4_000 };
+    const call = scanCall(input({ aiEstimate, calibration, namedBrand: true }), settings);
+    expect(call).toMatchObject({
+      basis: 'ai_estimate',
+      range: { lowCents: 1_600, highCents: 3_200 },
+      aiEstimate: { lowCents: 1_600, midCents: 2_400, highCents: 3_200 },
+      basedOn: AI_ESTIMATE_LABEL,
+    });
+    expect(call.signals).toEqual([
+      {
+        kind: 'calibrated',
+        label: 'Scaled to your sales',
+        basedOn:
+          'Your items went for 80% of what they asked (12 sales); the AI estimate is scaled to it',
+      },
+    ]);
+  });
+
+  it("scales the web's asking prices twice, saying they are asks", () => {
+    const call = scanCall(input({ web, calibration }), settings);
+    expect(call).toMatchObject({
+      basis: 'web_info',
+      range: { lowCents: 1_600, highCents: 3_200 },
+      basedOn: 'Web info - not sold listings: asks on poshmark.com, ebay.com, scaled to your sales',
+    });
+    expect(call.signals.map((signal) => signal.basedOn)).toEqual([
+      "Your items went for 80% of what they asked (12 sales); the web's asking prices are scaled to it",
+    ]);
+  });
+
+  it('can turn a Buy on raw asks into Your call, and says the default with no sales', () => {
+    // At $15 worth listing: the raw asks' low end pays $22.50, the scaled one $14.40.
+    const fifteen = { ...settings, worthListingCents: 1_500 };
+    expect(scanCall(input({ web }), fifteen).call).toBe('buy');
+    expect(scanCall(input({ web, calibration }), fifteen).call).toBe('your_call');
+    const call = scanCall(
+      input({
+        web,
+        aiEstimate: { lowCents: 1_000, midCents: 1_500, highCents: 2_000 },
+        calibration: { saleToAsking: 0.75, sales: 0 },
+        namedBrand: true,
+      }),
+      settings,
+    );
+    expect(call.signals.map((signal) => signal.basedOn)).toEqual([
+      "Items usually go for about 75% of what they ask; the AI estimate and the web's asking prices are scaled to it",
+    ]);
+    for (const signal of call.signals) expect(claimsSoldData(signal.basedOn)).toBe(false);
+  });
+
+  it("never moves a range from the household's own sales", () => {
+    const call = scanCall(input({ ownHistory: history(1_200, 2_000), web, calibration }), settings);
+    expect(call.basis).toBe('own_history');
+    expect(call.range).toEqual({ lowCents: 1_200, highCents: 2_000 });
+  });
+
+  it('holds the scaled AI estimate to the retail price after scaling it', () => {
+    const call = scanCall(
+      input({
+        aiEstimate: { lowCents: 4_000, midCents: 6_000, highCents: 8_000 },
+        retail: { lowCents: 5_000, highCents: 5_000, from: 'tag' },
+        calibration,
+        namedBrand: true,
+      }),
+      settings,
+    );
+    expect(call.range).toEqual({ lowCents: 3_200, highCents: 5_000 });
+  });
+
+  it('leaves the AI estimate of an item it could not name as it is', () => {
+    const aiEstimate = { lowCents: 2_000, midCents: 3_000, highCents: 4_000 };
+    const call = scanCall(input({ aiEstimate, calibration, namedBrand: false }), settings);
+    expect(call.range).toEqual({ lowCents: 2_000, highCents: 4_000 });
+    expect(call.aiEstimate).toEqual(aiEstimate);
+    expect(call.signals).toEqual([]);
   });
 });

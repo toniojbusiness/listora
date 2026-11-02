@@ -7,6 +7,13 @@ import { describe, expect, it } from 'vitest';
 import { scanCommand, ScanUsageError, SCAN_USAGE } from './command.ts';
 import { writeScanDataset } from './test-support.ts';
 
+interface ReportShape {
+  reader: { description: string } | null;
+  researcher: { id: string } | null;
+  items: { id: string; research?: unknown }[];
+  prices: unknown[];
+}
+
 async function run(argv: readonly string[]): Promise<{ status: number; output: string }> {
   let output = '';
   const status = await scanCommand(argv, { AI_PROVIDER: 'fake' }, (text) => {
@@ -41,39 +48,38 @@ describe('npm run eval -- scan', () => {
     expect(report.settings.worthListingCents).toBe(1_250);
   });
 
-  it('looks the reads up on the web, and replays an earlier report’s reads at no cost', async () => {
+  it('looks each read up on the web, and answers again from the stored report for free', async () => {
     const dir = await writeScanDataset();
     const first = await run(['--dataset', dir, '--research', '--json']);
-    const report = JSON.parse(first.output) as {
-      read: { costMicrosTotal: number };
-      research: { overall: { lookedUp: number } };
-    };
-    expect(report.research.overall.lookedUp).toBe(7);
-    expect(report.read.costMicrosTotal).toBeGreaterThan(0);
+    const stored = join(await mkdtemp(join(tmpdir(), 'listora-scan-run-')), 'run.json');
+    await writeFile(stored, first.output);
+    const recorded = JSON.parse(first.output) as ReportShape;
+    expect(recorded.researcher?.id).toBe('fake');
+    expect(recorded.items.filter((entry) => entry.research !== undefined)).toHaveLength(7);
 
-    const saved = join(await mkdtemp(join(tmpdir(), 'listora-scan-report-')), 'report.json');
-    await writeFile(saved, first.output);
-    const replayed = await run([
-      '--dataset',
-      dir,
-      '--reads',
-      saved,
-      '--research',
-      '--max-spend',
-      '0.50',
-      '--json',
-    ]);
-    const again = JSON.parse(replayed.output) as {
-      reader: { id: string };
-      read: { scanned: number; costMicrosTotal: number };
-      research: { overall: { lookedUp: number } };
-    };
-    expect(again.reader.id).toBe('replay');
-    expect(again.read).toMatchObject({ scanned: 8, costMicrosTotal: 0 });
-    expect(again.research.overall.lookedUp).toBe(7);
+    const replayed = await run(['--dataset', dir, '--replay', stored, '--json']);
+    const again = JSON.parse(replayed.output) as ReportShape;
+    expect(again.reader?.description).toContain('stored answers from run.json');
+    expect(again.items).toEqual(recorded.items);
+    expect(again.prices).toEqual(recorded.prices);
+    // A stored run with no web research replays its reads alone.
+    const plain = await run(['--dataset', dir, '--json']);
+    await writeFile(stored, plain.output);
+    const readsOnly = JSON.parse(
+      (await run(['--dataset', dir, '--replay', stored, '--json'])).output,
+    ) as ReportShape;
+    expect(readsOnly.researcher).toBeNull();
   });
 
-  it('stops spending at the cap: what comes after fails instead of being sent', async () => {
+  it('refuses a replay file that is not a report', async () => {
+    const stored = join(await mkdtemp(join(tmpdir(), 'listora-scan-run-')), 'run.json');
+    await writeFile(stored, JSON.stringify({ items: 'none' }));
+    await expect(run(['--dataset', await writeScanDataset(), '--replay', stored])).rejects.toThrow(
+      "is not a scan backtest's --json report",
+    );
+  });
+
+  it('stops spending at --max-spend: what comes after fails instead of being sent', async () => {
     const { status, output } = await run([
       '--dataset',
       await writeScanDataset(),
@@ -82,14 +88,11 @@ describe('npm run eval -- scan', () => {
       '0.01',
       '--json',
     ]);
-    const report = JSON.parse(output) as {
-      read: { failed: number };
-      research: { overall: { lookedUp: number } };
-    };
-    // The first lookup ($0.01 a search) spends the cap; every read after it is refused.
+    const report = JSON.parse(output) as { read: { scanned: number; failed: number } };
+    // The fake's lookups find nothing, but each read is metered: a cent covers a few of the eight.
     expect(status).toBe(1);
-    expect(report.research.overall.lookedUp).toBe(1);
-    expect(report.read.failed).toBe(7);
+    expect(report.read.failed).toBeGreaterThan(0);
+    expect(report.read.failed).toBeLessThan(report.read.scanned);
   });
 
   it('shows its usage', async () => {

@@ -1,5 +1,4 @@
 // `npm run eval -- scan`: the thrift-scan backtest (docs/features/thrift-scan.md, "Backtest").
-import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 
 import {
@@ -14,8 +13,15 @@ import { DEFAULT_SCAN_CALL_SETTINGS } from '@listora/sourcing';
 import { runScanBacktest } from './backtest.ts';
 import { loadScanDataset, type ScanDataset } from './dataset.ts';
 import { fakeScanFixtures } from './fake.ts';
-import { AiScanReader, ReplayScanReader, type ScanReader } from './readers.ts';
-import { AiScanResearcher, type ScanResearcher } from './research.ts';
+import {
+  AiScanReader,
+  AiScanResearcher,
+  loadRecordedRun,
+  RecordedScanReader,
+  RecordedScanResearcher,
+  type ScanReader,
+  type ScanResearcher,
+} from './readers.ts';
 import { formatScanReport } from './report.ts';
 
 const PROVIDERS = ['fake', 'anthropic', 'none'] as const;
@@ -32,12 +38,14 @@ Options:
                          the real API, needs ANTHROPIC_API_KEY, and spends real money
   --images <n>           photos per scan: 1 (the shot) or 2 (with a closer look) (default: 1)
   --worth-listing <usd>  the worth-listing amount in dollars (default: ${(DEFAULT_SCAN_CALL_SETTINGS.worthListingCents / 100).toFixed(2)})
+  --research             also look each read up on the web the way the scan does (anthropic:
+                         about $0.025 a lookup; fake: none found)
+  --replay <file>        answer the reads, and the research when it has them, from an earlier
+                         run's --json report instead of the AI: free, and the same answers, so
+                         a change to the call is measured against the same reads
   --limit <n>            only the first n items (caps the cost of a live run)
-  --research             look each read with a brand up on the web, as the scan does (on
-                         anthropic each lookup searches the web at about $0.01 a search)
-  --reads <report.json>  replay the reads of an earlier --json report instead of reading again
-                         (free; the provider then serves only the research)
-  --max-spend <usd>      stop spending at this many dollars of AI (default: AI_DAILY_BUDGET_USD)
+  --max-spend <usd>      stop the run's AI spend at this many dollars: what comes after fails
+                         instead of being sent (default: AI_DAILY_BUDGET_USD)
   --items                one line per item: its id, sale, payout, AI range, and calls (no titles)
   --json                 the full report as JSON (it includes the AI's reads)
   --help                 show this message
@@ -59,9 +67,9 @@ export async function scanCommand(
       images: { type: 'string', default: '1' },
       'worth-listing': { type: 'string' },
       limit: { type: 'string' },
-      research: { type: 'boolean', default: false },
-      reads: { type: 'string' },
       'max-spend': { type: 'string' },
+      research: { type: 'boolean', default: false },
+      replay: { type: 'string' },
       items: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
@@ -81,12 +89,13 @@ export async function scanCommand(
   }
   const images = Number(values.images);
   const worthListingCents = parseDollars(values['worth-listing'], '--worth-listing');
-  const limit = parseLimit(values.limit);
   const maxSpendCents = parseDollars(values['max-spend'], '--max-spend');
+  // One client serves the reads and the lookups, so its daily budget caps the whole run.
   const aiEnv: NodeJS.ProcessEnv =
     maxSpendCents === undefined
       ? env
       : { ...env, AI_DAILY_BUDGET_USD: (maxSpendCents / 100).toFixed(2) };
+  const limit = parseLimit(values.limit);
 
   const loaded = await loadScanDataset(values.dataset);
   const dataset: ScanDataset =
@@ -96,32 +105,10 @@ export async function scanCommand(
           ...loaded,
           manifest: { ...loaded.manifest, items: loaded.manifest.items.slice(0, limit) },
         };
-  const client = await createClient(provider, dataset, images, aiEnv);
-  const reader: ScanReader | undefined =
-    values.reads === undefined
-      ? client === undefined
-        ? undefined
-        : new AiScanReader({
-            id: provider,
-            description: `${client.description}, ${String(images)} image${images === 1 ? '' : 's'} per scan`,
-            client: client.client,
-            images,
-          })
-      : new ReplayScanReader(
-          JSON.parse(await readFile(values.reads, 'utf8')) as unknown,
-          values.reads,
-        );
-  if (values.research && (client === undefined || reader === undefined)) {
-    throw new ScanUsageError('--research needs a provider to search with (not none)');
-  }
-  const researcher: ScanResearcher | undefined =
-    values.research && client !== undefined
-      ? new AiScanResearcher({
-          id: provider,
-          description: client.description,
-          client: client.client,
-        })
-      : undefined;
+  const { reader, researcher } =
+    values.replay === undefined
+      ? await createReaders(provider, dataset, images, values.research, aiEnv)
+      : await replayReaders(values.replay);
   const report = await runScanBacktest(dataset, {
     ...(reader === undefined ? {} : { reader }),
     ...(researcher === undefined ? {} : { researcher }),
@@ -138,14 +125,24 @@ export async function scanCommand(
   return report.read !== null && report.read.failed > 0 ? 1 : 0;
 }
 
-/** The provider's client: one for the reads and the research, so one budget holds both. */
-async function createClient(
+async function replayReaders(
+  file: string,
+): Promise<{ reader: ScanReader; researcher: ScanResearcher | undefined }> {
+  const run = await loadRecordedRun(file);
+  return {
+    reader: new RecordedScanReader(run, file),
+    researcher: run.researcher === null ? undefined : new RecordedScanResearcher(run, file),
+  };
+}
+
+async function createReaders(
   provider: ScanProvider,
   dataset: ScanDataset,
   images: number,
+  research: boolean,
   env: NodeJS.ProcessEnv,
-): Promise<{ client: AiClient; description: string } | undefined> {
-  if (provider === 'none') return undefined;
+): Promise<{ reader: ScanReader | undefined; researcher: ScanResearcher | undefined }> {
+  if (provider === 'none') return { reader: undefined, researcher: undefined };
   let client: AiClient;
   let description: string;
   if (provider === 'fake') {
@@ -162,7 +159,20 @@ async function createClient(
     client = createAiClient(config, { usageStore: new InMemoryUsageStore() });
     description = `Anthropic API: ${config.models.standard} (standard tier)`;
   }
-  return { client, description };
+  const reader = new AiScanReader({
+    id: provider,
+    description: `${description}, ${String(images)} image${images === 1 ? '' : 's'} per scan`,
+    client,
+    images,
+  });
+  const researcher = research
+    ? new AiScanResearcher({
+        id: provider,
+        description: `${description}, web search`,
+        client,
+      })
+    : undefined;
+  return { reader, researcher };
 }
 
 function parseDollars(raw: string | undefined, option: string): number | undefined {

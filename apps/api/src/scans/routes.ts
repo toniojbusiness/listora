@@ -21,7 +21,7 @@ import { itemView } from '../items/views.ts';
 import type { ListingViewContext } from '../listings/views.ts';
 import { assertThriftScanOn, countScan, findRun, lockRun } from '../sourcing-runs/repository.ts';
 
-import { assessScan } from './assess.ts';
+import { assessScan, scanSales, snappedRead } from './assess.ts';
 import {
   answerComparison,
   comparisonAnswerErrors,
@@ -110,13 +110,14 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
     } catch (error) {
       throw scanFailure(error, now);
     }
-    const read = outcome.scan;
+    const sales = await scanSales(db, tenant, now);
+    const { read, snappedFrom } = snappedRead(outcome.scan, sales);
 
     const gate = await loadFeatureGate(db, tenant.accountId);
     const planned = deps.marketComparisons
       ? await planComparisons(db, tenant, read, gate, now)
       : [];
-    const detail = await assessScan(db, tenant, read, undefined, now, planned);
+    const detail = await assessScan(db, tenant, read, undefined, now, planned, sales);
     const readMs = Math.round(performance.now() - started);
     let row = await insertScan(db, tenant, {
       runId: run.id,
@@ -146,6 +147,7 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         basis: row.basis,
         readMs,
         aiAttempts: outcome.attempts,
+        ...(snappedFrom === undefined ? {} : { brandSnapped: true }),
         comparisons: planned.map((comparison) => `${comparison.marketplace}:${comparison.status}`),
       },
       'scan read',

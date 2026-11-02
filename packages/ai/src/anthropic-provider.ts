@@ -3,6 +3,7 @@ import { transformJSONSchema } from '@anthropic-ai/sdk/lib/transform-json-schema
 import { z } from 'zod';
 
 import { AiProviderError, type AiErrorCode } from './errors.ts';
+import { thinkingOffFor } from './models.ts';
 import type { AiProvider, ProviderRequest, ProviderResponse } from './provider.ts';
 import type { TokenUsage } from './types.ts';
 
@@ -28,7 +29,8 @@ export interface AnthropicProviderOptions {
  *   schema; constrained decoding guarantees it parses, and with `strictEnums` that every
  *   string enum holds) and the tier's `effort`, or, for an output with `enforcement:
  *   'prompt'`, the JSON schema as system-prompt instructions;
- * - thinking turned off for a call that asks for `thinking: 'off'`;
+ * - thinking turned off for a call that asks for `thinking: 'off'`, the way its model takes it
+ *   (`thinkingOffFor`), or left adaptive on a model whose thinking cannot be turned off;
  * - the photos as base64 image blocks, then the per-request text;
  * - a cache breakpoint on the system prompt, so the stable prefix (system prompt and the
  *   structured-output instructions) is billed at the cache-read price on repeat calls.
@@ -69,6 +71,14 @@ export class AnthropicProvider implements AiProvider {
   }
 }
 
+/** The request's thinking setting for a call that turns thinking off on `model`. */
+function thinkingOffParams(model: string): { thinking?: Anthropic.ThinkingConfigParam } {
+  const off = thinkingOffFor(model);
+  if (off === 'disabled') return { thinking: { type: 'disabled' } };
+  if (off === 'between_tools') return { thinking: { type: 'between_tools' } };
+  return {};
+}
+
 export function buildParams(
   request: ProviderRequest<unknown>,
 ): Anthropic.MessageCreateParamsNonStreaming {
@@ -105,7 +115,7 @@ export function buildParams(
         ],
       },
     ],
-    ...(request.thinking === 'off' ? { thinking: { type: 'disabled' } } : {}),
+    ...(request.thinking === 'off' ? thinkingOffParams(request.model) : {}),
     ...(request.webSearch === undefined
       ? {}
       : {

@@ -5,7 +5,6 @@ import type {
   OwnHistoryScores,
   ScanBacktestReport,
 } from './backtest.ts';
-import type { ResearchGroupScores, ResearchScores } from './research.ts';
 
 /**
  * Renders the backtest for the terminal. Only counts and money: no title, brand, or photo of
@@ -49,18 +48,33 @@ export function formatScanReport(
     );
   }
 
-  if (report.researcher !== null && report.research !== null) {
-    lines.push(
-      `Web research: ${report.researcher.id}: ${report.researcher.description}`,
-      ...researchLines(report.research),
-      '',
-    );
-  }
-
   lines.push("Own history (leave-one-out: each item against the set's other sales):");
   for (const scores of report.ownHistory)
     lines.push(...ownHistoryLines(scores, report.dataset.items));
   lines.push('');
+
+  if (report.prices.length > 0) {
+    lines.push(
+      "Prices against the sale (before: as the AI and the web gave them; after: the read's brand",
+      "snapped to the seller's own and the prices scaled by the other items' sale-to-asking ratio):",
+    );
+    lines.push(
+      ...table([
+        ['group', 'variant', 'items', 'AI estimate', 'web asks', 'own sales', 'the call'],
+        ...report.prices.map((scores) => [
+          scores.group,
+          scores.variant,
+          String(scores.items),
+          priceCell(scores.aiEstimate),
+          priceCell(scores.webAsks),
+          priceCell(scores.ownSales),
+          priceCell(scores.call),
+        ]),
+      ]),
+      '  each: sale inside the range / priced, median error (bias)',
+      '',
+    );
+  }
 
   lines.push(`The call at worth listing ${money(settings.worthListingCents)}:`);
   lines.push(...table([callHeader(), ...report.calls.map(callRow)]));
@@ -88,55 +102,10 @@ export function formatScanReport(
   return `${lines.join('\n')}\n`;
 }
 
-function researchLines(scores: ResearchScores): string[] {
-  return [
-    `  cost ${dollars(scores.costMicrosPerLookup)}/lookup, ${dollars(scores.costMicrosTotal)} total; ` +
-      `${scores.searchesPerLookup === null ? '-' : scores.searchesPerLookup.toFixed(1)} searches/lookup; ` +
-      `latency p50 ${seconds(scores.latencyP50Ms)}`,
-    ...table([
-      [
-        'group',
-        'items',
-        'looked up',
-        'failed',
-        'retail',
-        'range',
-        'above retail',
-        'sale in range',
-        'median error (bias)',
-      ],
-      ...[scores.overall, ...scores.byCategory].map(researchRow),
-    ]),
-  ];
-}
-
-function researchRow(scores: ResearchGroupScores): string[] {
-  const { estimate } = scores;
-  return [
-    scores.group,
-    String(scores.items),
-    String(scores.lookedUp),
-    String(scores.failed),
-    share(scores.retailFound, scores.lookedUp),
-    share(scores.rangeFound, scores.lookedUp),
-    String(scores.aboveRetail),
-    ...rangeCells(estimate),
-  ];
-}
-
-function rangeCells(estimate: EstimateScores): string[] {
-  return estimate.priced === 0
-    ? ['-', '-']
-    : [
-        share(estimate.saleInRange, estimate.priced),
-        `${percent(estimate.medianAbsError)} (${signedPercent(estimate.medianError)})`,
-      ];
-}
-
 function ownHistoryLines(scores: OwnHistoryScores, items: number): string[] {
   const { byLevel } = scores;
   return [
-    `  ${scores.identity} identity: a range for ${share(
+    `  ${scores.variant}: a range for ${share(
       byLevel.brand_and_category + byLevel.brand + byLevel.category,
       items,
     )} (brand and category ${String(byLevel.brand_and_category)}, brand ` +
@@ -147,13 +116,13 @@ function ownHistoryLines(scores: OwnHistoryScores, items: number): string[] {
 }
 
 function callHeader(): string[] {
-  return ['identity', 'buy', 'your call', 'skip', 'buy held', 'skip held', 'high/med/low'];
+  return ['variant', 'buy', 'your call', 'skip', 'buy held', 'skip held', 'high/med/low'];
 }
 
 function callRow(scores: CallScores): string[] {
   const { counts, byConfidence } = scores;
   return [
-    scores.identity,
+    scores.variant,
     String(counts.buy),
     String(counts.your_call),
     String(counts.skip),
@@ -183,6 +152,16 @@ function estimate(scores: EstimateScores, range: string): string {
   return (
     `sale price inside the ${range} ${share(scores.saleInRange, scores.priced)}; ` +
     `median error ${percent(scores.medianAbsError)} (bias ${signedPercent(scores.medianError)})`
+  );
+}
+
+/** "8/14 57% 31% (+4%)": the sale inside the range of those priced, then the error and bias. */
+function priceCell(scores: EstimateScores): string {
+  if (scores.priced === 0) return '-';
+  return (
+    `${String(scores.saleInRange)}/${String(scores.priced)} ` +
+    `${percent(scores.saleInRange / scores.priced)} ${percent(scores.medianAbsError)} ` +
+    `(${signedPercent(scores.medianError)})`
   );
 }
 

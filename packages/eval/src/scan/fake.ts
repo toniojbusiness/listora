@@ -12,11 +12,12 @@ import {
 } from '@listora/analysis';
 
 import { scanImages, type ScanDataset, type ScanDatasetItem } from './dataset.ts';
-import { researchKeyHash } from './research.ts';
+import { researchKeyHash } from './readers.ts';
 
 /**
  * Fixtures for `--provider fake`: each item's scan answer from the set's own labels (its brand
- * and category) with a price guess from its asking price, never its sale price. Like the tag
+ * and category) with a price guess from its asking price, never its sale price, and its web
+ * research (`--research`): web asking prices of one to two times its asking price. Like the tag
  * eval's fake, it measures the plumbing (images, schema, metering, scoring), not a model.
  */
 export async function fakeScanFixtures(
@@ -30,37 +31,14 @@ export async function fakeScanFixtures(
       description: `${item.id}: the set's labels`,
       outputs: { [SCAN_OUTPUT_NAME]: fakeScanAnswer(item) },
     };
+    const research = fakeResearchAnswer(item);
     fixtures[researchKeyHash(item)] = {
-      description: `${item.id}: invented web pages from its asking price`,
-      outputs: { [SCAN_RESEARCH_OUTPUT_NAME]: fakeResearchAnswer(item) },
-      webSources: [{ url: fakeResalePage(item), title: 'invented resale page' }],
-      usage: { webSearches: 1 },
+      description: `${item.id}: web asking prices from the set's asking price`,
+      outputs: { [SCAN_RESEARCH_OUTPUT_NAME]: research },
+      webSources: research.resale.sourceUrls.map((url) => ({ url, title: 'Invented listing' })),
     };
   }
   return inMemoryFixtures(fixtures);
-}
-
-/** An invented resale marketplace page for an item, which only the fake answer cites. */
-function fakeResalePage(item: ScanDatasetItem): string {
-  return `https://poshmark.com/listing/invented-${item.id}`;
-}
-
-/** The fake web research: what the item asked, as if a resale marketplace's page said so. */
-export function fakeResearchAnswer(item: ScanDatasetItem): ScanResearchAnswer {
-  const asking = item.askingPriceCents ?? 0;
-  return {
-    retail: { lowCents: 0, highCents: 0, sourceUrls: [], models: [] },
-    resale:
-      asking === 0
-        ? { lowCents: 0, highCents: 0, sourceUrls: [] }
-        : {
-            lowCents: Math.round(asking * 0.8),
-            highCents: Math.round(asking * 1.2),
-            sourceUrls: [fakeResalePage(item)],
-          },
-    reputation: 'average',
-    summary: '',
-  };
 }
 
 export function fakeScanAnswer(item: ScanDatasetItem): ScanAnswer {
@@ -89,5 +67,23 @@ export function fakeScanAnswer(item: ScanDatasetItem): ScanAnswer {
     style: '',
     searchWords: '',
     flags: { visibleDamage: false, lotOrBundle: false, counterfeitProne: false },
+  };
+}
+
+/** The web's asking prices as one to two times the item's asking price, on one invented page. */
+export function fakeResearchAnswer(item: ScanDatasetItem): ScanResearchAnswer {
+  const asking = item.askingPriceCents ?? 0;
+  return {
+    retail: { lowCents: 0, highCents: 0, sourceUrls: [], models: [] },
+    resale:
+      asking === 0
+        ? { lowCents: 0, highCents: 0, sourceUrls: [] }
+        : {
+            lowCents: asking,
+            highCents: asking * 2,
+            sourceUrls: [`https://www.depop.com/products/invented-${item.id}/`],
+          },
+    reputation: 'unknown',
+    summary: '',
   };
 }

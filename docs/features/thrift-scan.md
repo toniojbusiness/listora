@@ -26,6 +26,8 @@ Code:
 - `packages/sourcing` (`@listora/sourcing`): the pure rules, with no I/O. `quartiles`, `brandKey`
   (how two brands compare), `ownHistoryComparisons` (the seller's own sales like the item),
   `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS` and `decideCall` (the rule both calls share),
+  `priceCalibration` (`calibration.ts`, the AI estimate and the web's asks scaled to the
+  seller's sales), `snapBrand` (a near miss of an own brand),
   `ownHistoryByMarketplace` (the price screen's), `sizeBucket`, `buildSourcingKit`,
   `offlineScanCall` (the call with no signal) with its golden cases (`offline-call.cases.ts`),
   `unsoldLikeIt`, and `buildSourcingInsights` ("What sells for you", `insights.ts`).
@@ -63,11 +65,14 @@ checkout ([hauls.md](hauls.md)).
 
 1. **The range.** The seller's own matching sales, from the low to the high quartile, when at
    least 3 match (`minComparisons`); otherwise what at least 5 close matches sold for on eBay
-   (`market_sold`, "eBay" below); otherwise what the web says it resells for; otherwise the AI
-   estimate's low to high, labeled "AI estimate - not based on sold listings". Own sales match at the tightest level that has 3:
+   (`market_sold`, "eBay" below); otherwise what the web's used listings ask; otherwise the AI
+   estimate's low to high, labeled "AI estimate - not based on sold listings". The web's asks
+   and the AI estimate are first scaled to what the seller's own items sell for
+   ([Calibrated to the seller's sales](#calibrated-to-the-sellers-sales)). Own sales match at the tightest level that has 3:
    the same brand and category, then the same brand, then the same category (`MATCH_LEVELS`).
    Brands compare by `brandKey` ("Abercrombie & Fitch" and "Abercrombie", "Levi's" and "LEVI"
-   are one brand; "American Eagle" and "American Apparel" are two).
+   are one brand; "American Eagle" and "American Apparel" are two), after a near miss of one of
+   the seller's own brands is snapped to it ([Brand snap](#brand-snap)).
 2. **The payouts.** Each end of the range less the marketplace's estimated fees
    (`feeEstimator` in `@listora/pricing`, calibrated by the seller's actual fees when there are
    enough).
@@ -87,6 +92,50 @@ checkout ([hauls.md](hauls.md)).
 "Sold listings on eBay: 9 like it in the last 14 days", or the AI estimate's label). Ranges are quartiles, never one price, and "sold" appears only next
 to real sold data (a unit test checks the call's wording with `claimsSoldData`).
 
+## Calibrated to the seller's sales
+
+The AI estimate and the web's asking prices both run above what items really sell for: on the
+backtest (below) the AI's middle was 26% over the sale and the web's asks more than twice it.
+So before either holds a range, the call scales it by what the seller's own items went for
+against what their listings asked (`priceCalibration` in `@listora/sourcing`, `calibration.ts`):
+
+- **The ratio.** The median, over the seller's sales whose prices the call models (not eBay's),
+  of each sale price over the asking price it sold from: the sold listing's price, else the
+  item's list price. Each sale's ratio is held to 30%-100%, so a bundle or a typo'd ask never
+  moves it far. It is weighed against a **default of 75%** (what buyers' offers usually come to)
+  as if the default were 5 more sales, so a seller with no history gets 75% and their own ratio
+  takes over as their sales grow. It is computed per account, at each call, from that account's
+  own sales: no seller's numbers live anywhere else.
+- **The AI estimate of a named brand** is scaled by the ratio once: the AI prices a named brand
+  like its listings ask (35% over the sale on the backtest), but not an item it could not name
+  (7%), whose estimate stands.
+- **The web's asks** are scaled by the ratio twice: other sellers' asks run as far above what
+  the seller's own items list for as those listings run above what they sell for (the web's
+  asks were 2.2 times the sale; the household's ratio squared is 0.56).
+- **What it never touches:** the seller's own sales, a marketplace's sold listings, and the
+  ranking (own sales, then sold listings, then the web, then the AI estimate). The retail cap
+  and the hold to what close matches ask apply after the scaling.
+- **On the card.** The AI estimate shows scaled, under its label; the research's own line still
+  shows the web's asks as they came ("Asks $30-$50 on poshmark.com"). A range from the web says
+  it is asks: "Web info - not sold listings: asks on poshmark.com, scaled to your sales". A
+  `calibrated` signal says what was scaled and by what: "Scaled to your sales · Your items went
+  for 75% of what they asked (64 sales); the AI estimate and the web's asking prices are scaled
+  to it" (with no sales: "Items usually go for about 75% of what they ask; ...").
+- **By category** was measured and not taken: one ratio per category group (drawn toward the
+  seller's overall ratio) gave the AI estimate a median error of 38% against 35% for one ratio
+  overall, since a category's few sales move its ratio more than its items differ.
+
+### Brand snap
+
+A read brand that nearly spells one of the seller's own sold brands is snapped to it when the
+scan is read (`snapBrand` in `@listora/sourcing`, `snappedRead` in `apps/api/src/scans`), so the
+card, the own sales, the web research, and a kept item all name the brand the household sells:
+"Wrenfeld" (an invented brand) becomes Wrenfield when the household sold Wrenfield. Only when
+unambiguous: the read does not already match one of them (`brandKey`), its key is at least 5
+letters, and exactly one of the seller's brands is within 2 edits and 1 in 5 letters of it. Only the seller's own
+brands are candidates, so a different brand of a similar spelling they never sold is left as
+read. The scan stores the snapped read; its log line says `brandSnapped`.
+
 ## The backtest (`npm run eval -- scan`)
 
 ```sh
@@ -94,28 +143,33 @@ npm run eval -- scan --dataset <dir>                         # fake AI: plumbing
 npm run eval -- scan --dataset <dir> --provider none         # own sales only, no AI
 npm run eval -- scan --dataset <dir> --provider anthropic    # the real read; ANTHROPIC_API_KEY
 npm run eval -- scan --dataset <dir> --provider anthropic --images 2 --worth-listing 10
-npm run eval -- scan --dataset <dir> --provider anthropic --images 2 --json > reads.json
-npm run eval -- scan --dataset <dir> --provider anthropic --reads reads.json --research --max-spend 1.00
+npm run eval -- scan --dataset <dir> --provider anthropic --research --json > run.json  # with the web lookup
+npm run eval -- scan --dataset <dir> --replay run.json       # the same answers again, free
+npm run eval -- scan --dataset <dir> --provider anthropic --research --max-spend 1.00  # capped
 ```
+
+`--research` looks each read up on the web the way the scan does (`researchScanItem`, asked
+about the read by `scanResearchSubject`, the same as `researchFor`), about $0.025 a lookup.
+`--replay` answers the reads, and the research when the file has them, from an earlier run's
+`--json` report, so a change to the call or the calibration is measured on the same model
+answers without paying for them again.
 
 For each sold item it makes the scan's read from the item's photos, compares the item with the
 set's other sales (leave-one-out), makes the call, and scores all three against what the item
-really sold for. Two call variants run: `ai`, the scan's own read (the call at the store), and
-`labels`, the set's labeled brand and category with full confidence and no AI estimate (the best
-an own-history-only call could do). A sweep repeats the call at worth-listing amounts from $5 to
+really sold for. Three call variants run: `ai`, the scan's own read with the AI estimate and the
+web's asks as they came (the call before the calibration); `calibrated`, the same read with the
+brand snapped and the prices scaled (the call at the store today), each item's snap and ratio
+from the set's other items only, so an item never calibrates itself; and `labels`, the set's
+labeled brand and category with full confidence and no AI estimate (the best an
+own-history-only call could do). With a read, a price table scores the AI estimate, the web's
+asks, the own sales' quartiles, and the call's range, before and after, overall and by the
+labeled category's group. A sweep repeats the call at worth-listing amounts from $5 to
 $20. The report holds counts and money only, no title or brand, so a private set's report can be
 shared; `--items` adds one line per item (its id, sale, payout, and calls) and `--json` the full
 report, including the AI's reads.
 
-`--research` also looks each read with a brand up on the web, as the card does once it has been on
-screen ([Web info](#web-info), the production `researchScanItem`), feeds its retail price and
-resale range into the `ai` call as `assessScan` does, and scores the web's resale range against
-the sale price, overall and by the items' labeled top category: how often it was found, the sale
-inside it, its median error, and how often its middle is above the retail price found. A lookup
-costs about $0.025 in searches and tokens, so `--reads` replays the reads of an earlier `--json`
-report at no cost (a change after the read is then measured on the very same reads), and
-`--max-spend` stops the run's AI spend at a dollar amount: what comes after it fails instead of
-being sent, and is counted as failed.
+`--max-spend <usd>` caps a live run's AI spend (the reads and the lookups together): what comes
+after the cap fails instead of being sent, and is counted as failed.
 
 Every item in a set sold, so the backtest measures how well the call judges value, never
 whether an item would sell at all, and a Skip "holds" only when the item paid out less than the
@@ -217,6 +271,48 @@ What it set and found:
 - The call reached high confidence for no item: 64 sales spread over many brands rarely give 5
   of one brand and category.
 
+### Results, 2026-11-02: the calibration
+
+The same 64 sales, read again by today's prompt (`claude-haiku-5-5`, one photo, all 64 read) and
+looked up on the web (42 with a brand, 40 with a resale range), $1.03; the numbers below
+replay those answers (`--replay`). Each cell: the sale inside the range / priced, the median
+error, and the bias.
+
+| Group (items)     |        | AI estimate       | Web asks            | The call's range  |
+| ----------------- | ------ | ----------------- | ------------------- | ----------------- |
+| All (64)          | before | 34/64, 41% (+26%) | 19/40, 115% (+115%) | 32/64, 48% (+32%) |
+|                   | after  | 40/64, 34% (+1%)  | 23/40, 38% (+21%)   | 36/64, 45% (+22%) |
+| Bottoms (24)      | before | 14/24, 37% (+30%) | 9/17, 130% (+130%)  | 15/24, 31% (+22%) |
+|                   | after  | 17/24, 30% (+10%) | 10/17, 38% (+29%)   | 16/24, 29% (+15%) |
+| of them jeans (8) | before | 3/8, 68% (+68%)   | 4/8, 154% (+154%)   | 4/8, 27% (+22%)   |
+|                   | after  | 6/8, 26% (+26%)   | 6/8, 43% (+43%)     | 4/8, 27% (+22%)   |
+| Tops (34)         | before | 16/34, 43% (+10%) | 10/18, 80% (+80%)   | 16/34, 62% (+36%) |
+|                   | after  | 18/34, 42% (-12%) | 11/18, 27% (+1%)    | 17/34, 52% (+13%) |
+| Outerwear (3)     | before | 2/3, 56% (+56%)   | 0/3, 224% (+224%)   | 0/3, 224% (+224%) |
+|                   | after  | 3/3, 17% (+17%)   | 2/3, 82% (+82%)     | 2/3, 82% (+82%)   |
+| Dresses (2)       | before | 1/2, 194% (+194%) | 0/1, 483% (+483%)   | 1/2, 265% (+265%) |
+|                   | after  | 1/2, 138% (+138%) | 0/1, 228% (+228%)   | 1/2, 137% (+137%) |
+| Shoes (1)         | before | 1/1, 10% (+10%)   | 0/1, 40% (+40%)     | 0/1, 40% (+40%)   |
+|                   | after  | 1/1, 18% (-18%)   | 0/1, 21% (-21%)     | 0/1, 21% (-21%)   |
+
+- Every group's call range held the sale as often or more, at a lower or equal error. The own
+  sales' quartiles are unchanged (44% inside, 44% error): nothing scales them.
+- At $8 worth listing the call made 10 Buys (9 held) against 11 (9 held), and 2 Skips, both
+  held, against none.
+- **Scaling every AI estimate** instead of only a named brand's: the AI estimate 37/64, 35%
+  error, but the call's range back to 32/64, since the unnamed items' estimates, which rest
+  calls more often, were not high to begin with. **The web's asks scaled once**: 64% error.
+- **The brand snap changed no item here, and is kept.** Each near miss of a brand name on this
+  set (one on these reads, one on an earlier one) is the only sale of its brand, so with the
+  item left out there is nothing to snap to: leave-one-out cannot show its benefit, which comes
+  once the household has sold a brand before. It is kept because it is tightly bounded (one own
+  brand within 2 edits, keys of 5 letters or more) and snapped none of 192 reads (three runs) to
+  a wrong brand.
+- **With two photos** (the shot and its closer look, reads only, $0.028): the AI estimate went
+  from 29/64 inside, 50% error (+37%) to 39/64, 35% (+12%), and the call's range from 29/64, 48%
+  (+27%) to 34/64, 41% (+15%), better or equal in every group. No brand snapped there either.
+- The split by a named brand was found on this set; re-check it on the next one.
+
 ### Web research: sold prices instead of asks, 2026-11-02 (not shipped)
 
 Today's lookup finds the retail price and what listings ask, and the asks run about double what
@@ -225,7 +321,8 @@ Poshmark, Mercari, Grailed, and price guides; each comparable with its price, so
 condition, and page; asks set aside once two sales were found; an expected price weighted to
 recent sales; the retail price kept apart and never a cap) was measured with `--research` on 30
 of the household's sales with a branded read (the same 2-photo reads replayed for every run;
-`claude-haiku-5-5`, at most 3 searches, an item's own sale left out of its comparables):
+`claude-haiku-5-5`, at most 3 searches, an item's own sale left out of its comparables), before
+the calibration above, so every range is unscaled:
 
 |                                       | Today (asks) | Sold, asks from the listings | Sold, else typical asks |
 | ------------------------------------- | ------------ | ---------------------------- | ----------------------- |
@@ -289,7 +386,10 @@ connection to Listora.
   bottom holds every card of the run; tapping one shows it again, so an item put back can still
   be kept until the run ends, and a kept one shows "Kept as a draft" with **Close**.
 - **Shoot the tag** (or **Shoot the tag?**, when the AI could not read the brand or was unsure): the next shot is a
-  close-up of the tag; the item is read again with both images (`replacesScanId`).
+  close-up of the tag. The card steps aside while the tag is framed, so the camera is clear, with
+  "Shoot the tag up close" and **Cancel** over it; the shot brings the same card back, read again
+  with both images (`replacesScanId`), its button now **Retake the tag**. Cancel brings the card
+  back unchanged.
 - **Hold the mic** to add a note ("medium, small stain"), turned into text on the iPhone. Said
   before a shot, it rides along with that shot's read; said after, the item is read again once
   with it (about $0.0004).
@@ -541,6 +641,17 @@ build; the server's applies with a deploy.
   empty item name read as "Unidentified item"), and in `@listora/ai`, `anthropic-provider.test.ts`
   (thinking off only when asked; `outputJsonSchema` the SDK helper's schema without
   `strictEnums` and with every enum kept with it) and `client.test.ts`.
+- The calibration and the brand snap: `calibration.test.ts` (the default, the draw toward it,
+  the median, each ratio held to its range, the scaling), `call.test.ts` (the AI estimate of a
+  named brand scaled once and shown scaled, the web's asks twice and said to be asks, a Buy on
+  raw asks turned into Your call, own sales never moved, the retail cap after the scaling, the
+  signal's wording), `brand.test.ts` (`snapBrand`: a near miss in the spelling used most; a
+  match, a short name, a far one, or one near two brands left alone), `scans.int.test.ts` (the
+  ratio from the sold listing's price, else the item's, eBay's sales left out, and the scaled
+  AI estimate and web range on the card; "Wrenfeld" stored and shown as Wrenfield,
+  "Wrenford" left alone), and the backtest's `backtest.test.ts` and `command.test.ts` (the
+  ratio and the snap from the other items only, the price table, `--research`, and `--replay`
+  answering the same report again).
 - `@listora/sourcing` (`scanOwnHistory`, the signals, `salesTrend`, the research keys),
   `@listora/pricing` (`scanResearchLinks`, `scanLabelViolations`), the retention rules, and the
   app feature gate.
@@ -565,7 +676,8 @@ build; the server's applies with a deploy.
   `@listora/sourcing` (the sums, the left-out scans, the wording); iPhone `ScanCheckoutTests.swift`
   (the run's place, the checkout's kept scans, the iPhone's date, the miles, the run ended after,
   a failure retried as the same checkout, the summary's words); `ThriftScanUITests` starts a run
-  at a place and checks it out on the local stack.
+  at a place and checks it out on the local stack, and shoots a tag: the card out of the way while
+  it is framed, back unchanged on Cancel and read with the tag after the shot.
 - iPhone: `ScanDecisionTests.swift` (Keep and Put back closing the card at once, the line's
   words while the draft is saved and after, a failed Keep tried again from the tray, Put back
   while reading, Close on a kept card, the camera-ready measurement); `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
@@ -803,7 +915,7 @@ the rest go only to items the AI prices at $25 or more at the high end
 - `apps/api/src/scans/comparisons.int.test.ts`: eBay's read handed out, the call on its sold
   listings with the pace and the cache, asking prices alone, no match, the hour saved for
   pricier items.
-- iPhone: `ScanTests.swift` (eBay's row under its sold label).
+- iPhone: `ScanComparisonRowTests.swift` (eBay's row under its sold label).
 
 **The phone needs a new app build** for eBay's comparisons. Live test: the captain on his phone at
 a store, logged out, eBay only, in Test mode (the gate stays off for sellers). It decides whether
@@ -813,6 +925,112 @@ a check on the phone pauses eBay's comparisons for the day ("eBay prices paused 
 **Fixed with it.** A read in which nothing matched used to send `level: null`, which the API
 refused, so the card said "Couldn't check Depop"; the phone now leaves the level out, and the row
 says "Not enough similar listings".
+
+## Mercari (M3)
+
+Mercari's row is the card's second market sold prices: what close matches sold for on Mercari,
+and how fast its latest sales came. Its comparisons are behind their own gate (`market_comps` on
+Mercari, [verified-features.md](verified-features.md)), hidden from sellers until the captain's
+live test.
+
+### What Mercari shows a visitor
+
+Listora's model of the page (no recording yet, "Tests" below): the search page
+(`/search/?keyword=<words>`) has Mercari's own status filter, "Sold" (`itemStatuses=2`) and "On
+sale" (`itemStatuses=1`), and its "Newest" sort (`sortBy=2`). Each result is Mercari's product
+card (`ItemContainer`), the same card its listing pages show under "More from this seller", read
+on a real page on 2026-10-27: the item's brand (`data-brand`), size (`data-size`), whether it is
+on sale (`data-is-on-sale`), name (`ItemName`), and price (`ProductThumbItemPrice`, the price
+before a drop struck through after it). **The cards show no dates.** Mercari's server-drawn pages
+keep the data they were drawn from in `window.__NEXT_DATA__` (its Apollo cache,
+`props.pageProps.serverState`: an item's `updated` and `lastSoldAt` in seconds, read on its
+listing page), so where the search page carries its results there, a sold card's sale day and the
+search's own count come from it; where it does not (its results drawn in the browser), the read
+has sold prices without dates and no count.
+
+### The read
+
+1. **The query.** As for eBay (`comparisonQuery`): the brand and an item type are needed; the
+   words are the brand, the model or line, and the type. Mercari's cards name no category, so a
+   match is held to the name's words (`productTypes` empty).
+2. **The phone reads it** (`listoraPhone.compare`, `comps/mercari.ts`): the sold page (newest
+   first), then the for-sale page, each one page load of the URL Mercari's own filter and sort
+   make, through the same session rules as every automated read
+   (`mercari/pages/search-page.ts`). It waits for the cards, which Mercari's scripts may draw
+   after the document. Of each card only the brand, size, on-sale flag, name, and price are read,
+   and its item id only to join it to the page's data; the id never leaves the phone.
+3. **What is never counted.** Cards in Mercari's carousels (`FeedContainer`, other items than
+   the search's), lots and bundles, cards of the other kind (an item on sale among the sold
+   results), and cards without a name or a price Listora can read.
+4. **Matching** (`marketStats`): the card's brand (`data-brand`, by `brandKey`) or, on a card
+   without one, the name's words; and the type in the name; the levels add the model in the name
+   and the card's size (`S (4-6)` is `S` and `4-6`). Sold listings choose the level, outliers are
+   left out, as for Depop and eBay.
+5. **Only numbers leave the phone**: the level, the sold and asking quartiles (the sold window
+   only where the sales are dated: the API takes no `null` for it), the counts read, the
+   for-sale search's count, and the recent pace (`soldTotal`, below).
+
+### On the card
+
+- **The row**: "Mercari: sold $20-$28, 7 like it in the last 21 days" under "Sold listings on
+  Mercari" (`marketSoldLabel`), from 3 sold close matches; undated, "Mercari: sold $20-$28, 7 like
+  it". Without sold ones, asking prices as Depop's.
+- **The trend read** (`latestSoldPace`): Mercari's sold search reaches back years and counts no
+  window, so its pace is how many of the latest sold results read (`stats.read.sold`, newest
+  first) sold in the last 30 days (`soldTotal`, `soldLately` on the phone;
+  `COMPARISON_SOLD_WINDOW_DAYS.mercari`). "Sells fast on Mercari" from two in three
+  (`LATEST_SOLD_FAST`), "Slow on Mercari" at a quarter or less (`LATEST_SOLD_SLOW`), from 5 sold
+  read (`MIN_LATEST_SOLD`), with what it rests on ("Sold listings on Mercari: 24 of the latest 30
+  sold in the last 30 days"). Without dates it says so ("Mercari gave no dates for its latest
+  sales") and moves nothing. Starting thresholds, to tune in the live test.
+- **In the call**: as eBay's, Mercari's sold close matches are the range when the household's
+  own sales are too few (`market_sold`); a slow Mercari keeps a call from high confidence; a fast
+  one never raises it.
+
+### Account risk
+
+As for Depop and eBay ("Account risk" above): no account in the read (the app's own
+non-persistent web view, never the seller's), phone only, Mercari's own origins only
+(`www.mercari.com`, `mercari.com`), stop at the first check (Cloudflare's "Just a moment..." page
+and Turnstile, a 403, Mercari's sign-in page), the 24-hour cache, the pauses, images and media
+blocked, and the warm-up (Mercari's home page). **Budgets**: 20 reads an hour and 100 a day per
+account (each read loads two pages), fewer than eBay's since Mercari showed human checks to
+automated sessions before (2026-10-27); once 12 of the hour's are used, the rest go only to items
+the AI prices at $25 or more at the high end (`COMPARISON_LIMITS.mercari.saveForPricier`).
+
+### Tests
+
+- `@listora/sourcing` `pace.test.ts` (`latestSoldPace`: fast, steady, slow, no dates, too few,
+  never more lately than read, no "sold" without numbers).
+- `packages/automation`: `mercari/pages/search-page.test.ts` (the URLs, the cards, what is never
+  counted, prices, sizes, the page's data), `comps/mercari.int.test.ts` (the lane on the phone's
+  page backend against a stand-in search: the match and count, the carousel, lots and cards of
+  the other kind, the sale days, the count and the pace from the page's data, a page without its
+  data, no results, the warm-up, Cloudflare's check, a sign-in page, an unknown page). **No
+  recorded real page yet**: recording Mercari's public search logged out (2026-11-02, from a
+  headless Chrome with a fresh profile, through `market-pace.sh mercari`) met a bot check on its
+  first page load, and it was not tried again. The search page's selectors and its data are
+  Listora's model until the captain's live test reads the real one; a page that differs fails
+  the read ("Couldn't check Mercari"), a page without its data reads prices without dates, and
+  neither counts anything wrong.
+- `apps/api/src/scans/comparisons.int.test.ts`: Mercari's read handed out, the call on its sold
+  listings with the pace and the cache, a slow Mercari, an undated read, the hour saved for
+  pricier items.
+- iPhone: `ScanComparisonRowTests.swift` (Mercari's row under its sold label, with its pace).
+
+**The phone needs a new app build** for Mercari's comparisons (the runtime bundle and the lane's
+origins). Live test: the captain on his phone at a store, logged out, Mercari only, in Test mode
+(the gate stays off for sellers). It decides whether Mercari lets a logged-out iPhone read its
+search at all (the Mac's recorder met Mercari's bot check, and a check on the phone pauses
+Mercari's comparisons for the day), and whether the search page carries its results' dates.
+
+**Fixed with it.**
+
+- An eBay row of asking prices only, where eBay gave no count of its sold search, said "eBay gave
+  no count of sold listings", which the label guard refuses on a row without sold listings, so
+  the whole scan answer failed; it now says "eBay gave no count of its sales".
+- A read whose sold listings had no dates sent `windowDays: null`, which the API refuses; the
+  phone now leaves the window out.
 
 ## Upgrading drafts (M6)
 
@@ -1113,16 +1331,20 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
 - **Days to sell** show only in "What sells for you", and only from sales Listora listed: an
   imported listing's `listed_at` is when Listora read it, not when the seller listed it. Reading
   the marketplace's own listing date at import would give the rest a day count.
-- **Scale the AI estimate** by the seller's own sale-to-estimate ratio once Listora has enough
-  of both for an account.
+- **Calibrate by the scans themselves** once an account has enough kept and sold scans: the
+  ratio of what they sold for to the AI estimate and the web's asks on the same items. On the
+  backtest that ratio worked about as well as the sale-to-asking one (34% and 39% error), and it
+  measures each source directly.
+- **The offline call** (`OfflineScanCall` on the iPhone) has no AI estimate and no brand snap;
+  snapping a tag's brand to the kit's brands would help it the same way.
 - **Re-run the backtest** as sales accumulate, and on shots taken at a store (M2), before showing
   the call to sellers.
 - **M2 live test** (the captain, Test mode, a real store, 30 or more scans): the speed targets
   above on cellular, then `thrift_scan` into `VERIFIED_APP_FEATURES` with its evidence.
 - **M3 live test** (the captain, Test mode, the captain's iPhone at a store): Depop's comparison
   row within 4 s of the shutter, the budgets and the pause tuned on evidence, then
-  `market_comps` on Depop into `VERIFIED_FEATURES`. eBay sold, Poshmark, and Mercari readers
-  follow, each its own PR and gate.
+  `market_comps` on Depop into `VERIFIED_FEATURES`. The eBay and Mercari readers are built, each
+  behind its own gate and live test; Poshmark's follows as its own PR and gate.
 - **M4 live test** (the captain's own trip, Test mode): check a run out at the register and
   compare the haul's shares and the summary with the receipt.
 - **Mileage** from checkout is also the trip's mileage expense, priced in Reports at the year's

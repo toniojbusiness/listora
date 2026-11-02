@@ -12,6 +12,11 @@ export interface HistorySale {
   readonly category: string | null;
   /** What the buyer paid for the item. */
   readonly salePriceCents: number;
+  /**
+   * What its listing asked when it sold, for the price calibration (`priceCalibration`); null or
+   * absent where unknown.
+   */
+  readonly askingPriceCents?: number | null | undefined;
   /** When it sold, for the trend; absent where unknown. */
   readonly soldAt?: Date | undefined;
 }

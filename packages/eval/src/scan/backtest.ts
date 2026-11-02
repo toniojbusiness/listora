@@ -5,9 +5,12 @@ import {
   type FeeCalibration,
 } from '@listora/pricing';
 import {
+  calibratedWebAsks,
   DEFAULT_SCAN_CALL_SETTINGS,
   MATCH_LEVELS,
   brandKey,
+  priceCalibration,
+  snapBrand,
   medianCents,
   ownHistoryComparisons,
   scanCall,
@@ -16,6 +19,7 @@ import {
   type HistorySale,
   type MatchLevel,
   type OwnHistoryComparisons,
+  type PriceCalibration,
   type ScanCall,
   type ScanCallInput,
   type ScanCallKind,
@@ -25,22 +29,23 @@ import {
 import type { ThriftScan } from '@listora/analysis';
 
 import type { ScanDataset, ScanDatasetItem } from './dataset.ts';
-import type { ScanRead, ScanReader } from './readers.ts';
-import {
-  researchCallInput,
-  researchScores,
-  type ResearchRun,
-  type ResearchScores,
-  type ScanResearcher,
-} from './research.ts';
+import type { ResearchRead, ScanRead, ScanReader, ScanResearcher } from './readers.ts';
 
 /**
- * Where a call variant's identity comes from: `ai`, the scan's own read (the real call at the
- * store); `labels`, the set's labels with full confidence and no AI estimate (the best an
- * own-history-only call could do, offline too).
+ * The call's variants: `ai`, the scan's own read as the call took it before the calibration
+ * (the AI estimate and the web's asks as they came); `calibrated`, the same read with its brand
+ * snapped to one of the seller's own (`snapBrand`) and the AI estimate and the web's asks scaled
+ * by the seller's sale-to-asking ratio (`priceCalibration`), the call at the store today;
+ * `labels`, the set's labels with full confidence and no AI estimate (the best an
+ * own-history-only call could do, offline too). Each item's snap and calibration come from the
+ * set's other items only (leave-one-out), so an item never calibrates itself.
  */
-export const IDENTITY_SOURCES = ['ai', 'labels'] as const;
-export type IdentitySource = (typeof IDENTITY_SOURCES)[number];
+export const CALL_VARIANTS = ['ai', 'calibrated', 'labels'] as const;
+export type CallVariant = (typeof CALL_VARIANTS)[number];
+
+/** The variants whose prices are scored side by side: before and after the calibration. */
+export const PRICE_VARIANTS = ['ai', 'calibrated'] as const;
+export type PriceVariant = (typeof PRICE_VARIANTS)[number];
 
 /** The worth-listing amounts the sweep tries, $5 to $20. */
 export const DEFAULT_WORTH_SWEEP_CENTS = [500, 800, 1_000, 1_200, 1_500, 2_000];
@@ -48,10 +53,7 @@ export const DEFAULT_WORTH_SWEEP_CENTS = [500, 800, 1_000, 1_200, 1_500, 2_000];
 export interface ScanBacktestOptions {
   /** The AI read; without one only the `labels` variant runs. */
   readonly reader?: ScanReader;
-  /**
-   * The web research after each read with a brand, as the scan asks it once a card is on
-   * screen; its retail price and resale range then feed the `ai` call, as on the card.
-   */
+  /** The web research after each read (with a reader only); without one the call has no web info. */
   readonly researcher?: ScanResearcher;
   readonly settings?: ScanCallSettings;
   readonly worthSweepCents?: readonly number[];
@@ -63,12 +65,17 @@ export interface ItemResult {
   /** What the seller got: the sale price less the actual fees, or the estimated ones. */
   readonly payoutCents: number;
   readonly read: ScanRead | undefined;
-  readonly research?: ResearchRun | undefined;
-  readonly calls: Partial<Record<IdentitySource, VariantResult>>;
+  /** The web research of the read, when one ran and the read had a brand. */
+  readonly research?: ResearchRead | undefined;
+  readonly calls: Partial<Record<CallVariant, VariantResult>>;
 }
 
 export interface VariantResult {
   readonly identity: ScanIdentity;
+  /** The brand as the AI read it, when the variant snapped it to one of the seller's own. */
+  readonly snappedFrom?: string;
+  /** The seller's sale-to-asking ratio the variant scaled the AI estimate and web asks by. */
+  readonly calibration?: PriceCalibration;
   readonly ownHistory: OwnHistoryComparisons | undefined;
   readonly call: ScanCall;
 }
@@ -104,7 +111,7 @@ export interface EstimateScores {
 }
 
 export interface OwnHistoryScores {
-  readonly identity: IdentitySource;
+  readonly variant: CallVariant;
   /** Items whose match had at least the minimum comparisons, by level, and the rest. */
   readonly byLevel: Readonly<Record<MatchLevel, number>>;
   readonly thin: number;
@@ -114,7 +121,7 @@ export interface OwnHistoryScores {
 }
 
 export interface CallScores {
-  readonly identity: IdentitySource;
+  readonly variant: CallVariant;
   readonly worthListingCents: number;
   readonly counts: Readonly<Record<ScanCallKind, number>>;
   readonly byConfidence: Readonly<Record<CallConfidence, number>>;
@@ -122,6 +129,22 @@ export interface CallScores {
   /** Buys that really paid out the worth-listing amount, and Skips that really paid less. */
   readonly buyHeld: number;
   readonly skipHeld: number;
+}
+
+/** The prices of one variant against what the items sold for, in one category group. */
+export interface PriceScores {
+  readonly variant: PriceVariant;
+  /** `all`, or the labeled category's group (`clothing/bottoms`), or `unlabeled`. */
+  readonly group: string;
+  readonly items: number;
+  /** The AI estimate as the card shows it. */
+  readonly aiEstimate: EstimateScores;
+  /** The web's asking prices (the research's range), as the call weighs them. */
+  readonly webAsks: EstimateScores;
+  /** The household's own sales like it, low to high quartile (3 or more). */
+  readonly ownSales: EstimateScores;
+  /** The range the call rests on, whatever its basis; its middle is the midpoint. */
+  readonly call: EstimateScores;
 }
 
 export interface ScanBacktestReport {
@@ -136,11 +159,12 @@ export interface ScanBacktestReport {
     readonly worthShare: readonly { worthListingCents: number; items: number }[];
   };
   readonly reader: { readonly id: string; readonly description: string } | null;
+  readonly researcher: { readonly id: string; readonly description: string } | null;
   readonly settings: ScanCallSettings;
   readonly read: ReadScores | null;
-  readonly researcher: { readonly id: string; readonly description: string } | null;
-  readonly research: ResearchScores | null;
   readonly ownHistory: readonly OwnHistoryScores[];
+  /** Every price the card shows, before and after the calibration, overall and by category. */
+  readonly prices: readonly PriceScores[];
   readonly calls: readonly CallScores[];
   readonly sweep: readonly CallScores[];
   readonly items: readonly ItemResult[];
@@ -169,11 +193,14 @@ export async function runScanBacktest(
     brand: item.brand,
     category: item.category,
     salePriceCents: item.salePriceCents,
+    askingPriceCents: item.askingPriceCents,
   }));
 
-  const sources: readonly IdentitySource[] =
-    options.reader === undefined ? ['labels'] : IDENTITY_SOURCES;
+  const variants: readonly CallVariant[] =
+    options.reader === undefined ? ['labels'] : CALL_VARIANTS;
   const results: ItemResult[] = [];
+  // Each variant's call input, kept to make the call again at each worth-listing amount.
+  const inputs = new Map<string, Partial<Record<CallVariant, ScanCallInput>>>();
   for (const item of items) {
     const read =
       options.reader === undefined ? undefined : await options.reader.read(dataset, item);
@@ -182,10 +209,14 @@ export async function runScanBacktest(
         ? undefined
         : await options.researcher.research(item, read.scan);
     const others = history.filter((sale) => sale.id !== item.id);
-    const calls: Partial<Record<IdentitySource, VariantResult>> = {};
-    for (const source of sources) {
-      calls[source] = variant(source, item, read, research, others, settings, fees);
+    const calls: Partial<Record<CallVariant, VariantResult>> = {};
+    const itemInputs: Partial<Record<CallVariant, ScanCallInput>> = {};
+    for (const name of variants) {
+      const made = variant(name, item, read, research, others, settings, fees);
+      calls[name] = made.result;
+      itemInputs[name] = made.input;
     }
+    inputs.set(item.id, itemInputs);
     results.push({
       id: item.id,
       salePriceCents: item.salePriceCents,
@@ -213,32 +244,25 @@ export async function runScanBacktest(
       options.reader === undefined
         ? null
         : { id: options.reader.id, description: options.reader.description },
-    settings,
-    read: options.reader === undefined ? null : readScores(items, results),
     researcher:
-      options.researcher === undefined
+      options.researcher === undefined || options.reader === undefined
         ? null
         : { id: options.researcher.id, description: options.researcher.description },
-    research: options.researcher === undefined ? null : researchScores(items, results),
-    ownHistory: sources.map((source) => ownHistoryScores(source, results, settings)),
-    calls: sources.map((source) => callScores(source, results, settings.worthListingCents)),
-    sweep: sources.flatMap((source) =>
+    settings,
+    read: options.reader === undefined ? null : readScores(items, results),
+    ownHistory: variants.map((name) => ownHistoryScores(name, results, settings)),
+    prices: options.reader === undefined ? [] : priceScores(items, results, settings),
+    calls: variants.map((name) => callScores(name, results, settings.worthListingCents)),
+    sweep: variants.flatMap((name) =>
       sweepAmounts.map((worthListingCents) => {
         const swept = { ...settings, worthListingCents };
         const recalled = results.map((result) => {
-          const current = result.calls[source];
-          if (current === undefined) return result;
-          const input = callInput(
-            source,
-            result.read,
-            result.research,
-            current.ownHistory,
-            fees,
-            current.identity,
-          );
-          return { ...result, calls: { [source]: { ...current, call: scanCall(input, swept) } } };
+          const current = result.calls[name];
+          const input = inputs.get(result.id)?.[name];
+          if (current === undefined || input === undefined) return result;
+          return { ...result, calls: { [name]: { ...current, call: scanCall(input, swept) } } };
         });
-        return callScores(source, recalled, worthListingCents);
+        return callScores(name, recalled, worthListingCents);
       }),
     ),
     items: results,
@@ -246,49 +270,98 @@ export async function runScanBacktest(
 }
 
 function variant(
-  source: IdentitySource,
+  name: CallVariant,
   item: ScanDatasetItem,
   read: ScanRead | undefined,
-  research: ResearchRun | undefined,
+  research: ResearchRead | undefined,
   others: readonly HistorySale[],
   settings: ScanCallSettings,
   fees: (priceCents: number) => number,
-): VariantResult {
+): { result: VariantResult; input: ScanCallInput } {
   const scan = read?.ok === true ? read.scan : undefined;
+  const snapped =
+    name === 'calibrated'
+      ? snapBrand(
+          scan?.brand ?? null,
+          others.map((sale) => sale.brand),
+        )
+      : undefined;
   const identity: ScanIdentity =
-    source === 'labels'
+    name === 'labels'
       ? { brand: item.brand, category: item.category }
-      : { brand: scan?.brand ?? null, category: scan?.category ?? null };
+      : { brand: snapped?.brand ?? scan?.brand ?? null, category: scan?.category ?? null };
   const ownHistory = ownHistoryComparisons(identity, others, {
     minComparisons: settings.minComparisons,
   });
+  const calibration = name === 'calibrated' ? priceCalibration(others) : undefined;
+  const input = callInput(name, scan, research, ownHistory, fees, identity, calibration);
   return {
-    identity,
-    ownHistory,
-    call: scanCall(callInput(source, read, research, ownHistory, fees, identity), settings),
+    result: {
+      identity,
+      ...(snapped === undefined ? {} : { snappedFrom: snapped.readAs }),
+      ...(calibration === undefined ? {} : { calibration }),
+      ownHistory,
+      call: scanCall(input, settings),
+    },
+    input,
   };
 }
 
+/**
+ * The call's input as the scan builds it (`assessScan` in the API): the read, the household's
+ * own sales like it, and the research's retail price and web asking prices; a price tag's
+ * retail price comes first.
+ */
 function callInput(
-  source: IdentitySource,
-  read: ScanRead | undefined,
-  research: ResearchRun | undefined,
+  name: CallVariant,
+  scan: ThriftScan | undefined,
+  research: ResearchRead | undefined,
   ownHistory: OwnHistoryComparisons | undefined,
   fees: (priceCents: number) => number,
   identity: ScanIdentity,
+  calibration: PriceCalibration | undefined,
 ): ScanCallInput {
-  const scan: ThriftScan | undefined = read?.ok === true ? read.scan : undefined;
-  if (source === 'labels') {
+  if (name === 'labels') {
     const known = identity.brand !== null || identity.category !== null;
     return { identityConfidence: known ? 1 : 0, ownHistory, flags: NO_FLAGS, fees };
   }
+  const found = research?.ok === true ? research.research : undefined;
+  const retail =
+    scan?.retailPriceCents !== null && scan?.retailPriceCents !== undefined
+      ? {
+          lowCents: scan.retailPriceCents,
+          highCents: scan.retailPriceCents,
+          from: 'tag' as const,
+        }
+      : found?.retail
+        ? {
+            lowCents: found.retail.lowCents,
+            highCents: found.retail.highCents,
+            from: 'web' as const,
+            site: found.retail.sources[0]?.site,
+            models: found.retail.models,
+          }
+        : undefined;
   return {
     identityConfidence: scan?.identityConfidence ?? 0,
     ownHistory,
     aiEstimate: scan?.aiEstimate ?? undefined,
     flags: scan?.flags ?? NO_FLAGS,
     fees,
-    ...(scan === undefined ? {} : researchCallInput(scan, research)),
+    ...(calibration === undefined ? {} : { calibration }),
+    namedBrand: identity.brand !== null,
+    ...(retail === undefined ? {} : { retail }),
+    ...(found?.resale
+      ? {
+          web: {
+            lowCents: found.resale.lowCents,
+            highCents: found.resale.highCents,
+            sites: found.resale.sources.map((source) => source.site),
+            reputation: found.reputation,
+          },
+        }
+      : {}),
+    newWithTags: scan?.condition === 'new_with_tags',
   };
 }
 
@@ -367,7 +440,7 @@ function readScores(items: readonly ScanDatasetItem[], results: readonly ItemRes
 }
 
 function ownHistoryScores(
-  source: IdentitySource,
+  source: CallVariant,
   results: readonly ItemResult[],
   settings: ScanCallSettings,
 ): OwnHistoryScores {
@@ -393,11 +466,11 @@ function ownHistoryScores(
       ranges.push({ range: { lowCents, midCents, highCents }, saleCents: result.salePriceCents });
     }
   }
-  return { identity: source, byLevel, thin, none, estimate: estimateScores(ranges) };
+  return { variant: source, byLevel, thin, none, estimate: estimateScores(ranges) };
 }
 
 function callScores(
-  source: IdentitySource,
+  source: CallVariant,
   results: readonly ItemResult[],
   worthListingCents: number,
 ): CallScores {
@@ -422,10 +495,82 @@ function callScores(
     if (call.call === 'buy' && worth) buyHeld += 1;
     if (call.call === 'skip' && !worth) skipHeld += 1;
   }
-  return { identity: source, worthListingCents, counts, byConfidence, byBasis, buyHeld, skipHeld };
+  return { variant: source, worthListingCents, counts, byConfidence, byBasis, buyHeld, skipHeld };
 }
 
-export function estimateScores(
+interface Scored {
+  readonly range: { lowCents: number; midCents: number; highCents: number };
+  readonly saleCents: number;
+}
+
+/**
+ * Every price the card shows, before (`ai`) and after (`calibrated`) the calibration, against
+ * what each item sold for: overall, then by the labeled category's group.
+ */
+function priceScores(
+  items: readonly ScanDatasetItem[],
+  results: readonly ItemResult[],
+  settings: ScanCallSettings,
+): PriceScores[] {
+  const groupOf = new Map(items.map((item) => [item.id, categoryGroup(item.category)]));
+  const groups = ['all', ...[...new Set(groupOf.values())].sort()];
+  return PRICE_VARIANTS.flatMap((name) =>
+    groups.map((group) => {
+      const inGroup = results.filter(
+        (result) => group === 'all' || groupOf.get(result.id) === group,
+      );
+      const ai: Scored[] = [];
+      const web: Scored[] = [];
+      const own: Scored[] = [];
+      const call: Scored[] = [];
+      for (const result of inGroup) {
+        const made = result.calls[name];
+        if (made === undefined) continue;
+        const saleCents = result.salePriceCents;
+        const scan = result.read?.ok === true ? result.read.scan : undefined;
+        const estimate = name === 'ai' ? scan?.aiEstimate : made.call.aiEstimate;
+        if (estimate !== undefined && estimate !== null) ai.push({ range: estimate, saleCents });
+        const resale = result.research?.ok === true ? result.research.research.resale : null;
+        if (resale !== null) {
+          const asks =
+            made.calibration === undefined ? resale : calibratedWebAsks(resale, made.calibration);
+          web.push({ range: withMid(asks), saleCents });
+        }
+        const found = made.ownHistory;
+        if (found !== undefined && found.prices.count >= settings.minComparisons) {
+          const { lowCents, medianCents: midCents, highCents } = found.prices;
+          own.push({ range: { lowCents, midCents, highCents }, saleCents });
+        }
+        if (made.call.range !== undefined)
+          call.push({ range: withMid(made.call.range), saleCents });
+      }
+      return {
+        variant: name,
+        group,
+        items: inGroup.length,
+        aiEstimate: estimateScores(ai),
+        webAsks: estimateScores(web),
+        ownSales: estimateScores(own),
+        call: estimateScores(call),
+      };
+    }),
+  );
+}
+
+/** A category's group: its path less the last step (`clothing/bottoms`), or `unlabeled`. */
+function categoryGroup(category: string | null): string {
+  return category === null ? 'unlabeled' : topOf(category);
+}
+
+function withMid(range: { lowCents: number; highCents: number }) {
+  return {
+    lowCents: range.lowCents,
+    midCents: Math.round((range.lowCents + range.highCents) / 2),
+    highCents: range.highCents,
+  };
+}
+
+function estimateScores(
   ranges: readonly {
     range: { lowCents: number; midCents: number; highCents: number };
     saleCents: number;
@@ -442,7 +587,7 @@ export function estimateScores(
   };
 }
 
-export function topOf(category: string): string {
+function topOf(category: string): string {
   return category.slice(0, category.lastIndexOf('/'));
 }
 
@@ -451,7 +596,7 @@ function median(values: readonly number[]): number | null {
 }
 
 /** The `q` percentile, linear between the two nearest values; null for no values. */
-export function percentile(values: readonly number[], q: number): number | null {
+function percentile(values: readonly number[], q: number): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const position = (sorted.length - 1) * q;

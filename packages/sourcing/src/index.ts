@@ -1,4 +1,19 @@
-export { brandKey } from './brand.ts';
+export {
+  brandKey,
+  SNAP_MAX_EDIT_SHARE,
+  SNAP_MAX_EDITS,
+  SNAP_MIN_KEY_LENGTH,
+  snapBrand,
+} from './brand.ts';
+export type { SnappedBrand } from './brand.ts';
+export {
+  calibratedAiEstimate,
+  calibratedWebAsks,
+  calibrationPercent,
+  DEFAULT_PRICE_CALIBRATION_SETTINGS,
+  priceCalibration,
+} from './calibration.ts';
+export type { PriceCalibration, PriceCalibrationSettings, PriceRange } from './calibration.ts';
 export {
   CALL_BASES,
   CALL_CONFIDENCES,
@@ -93,7 +108,15 @@ export {
   marketStats,
   withoutOutliers,
 } from './market.ts';
-export { marketSoldPace, SELL_THROUGH_FAST, SELL_THROUGH_SLOW } from './pace.ts';
+export {
+  LATEST_SOLD_FAST,
+  LATEST_SOLD_SLOW,
+  latestSoldPace,
+  marketSoldPace,
+  MIN_LATEST_SOLD,
+  SELL_THROUGH_FAST,
+  SELL_THROUGH_SLOW,
+} from './pace.ts';
 export type {
   MarketDemand,
   MarketDemandRead,

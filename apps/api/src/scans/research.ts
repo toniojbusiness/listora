@@ -6,7 +6,12 @@
  * era) for 30 days, and an item whose model the read could not pin is looked up afresh every
  * time. A brand's facts (how well it resells) are kept by the brand alone for 7 days.
  */
-import { researchScanItem, type ScanResearch, type ThriftScan } from '@listora/analysis';
+import {
+  researchScanItem,
+  scanResearchSubject,
+  type ScanResearch,
+  type ThriftScan,
+} from '@listora/analysis';
 import type { AiClient } from '@listora/ai';
 import type { DbExecutor, JsonObject } from '@listora/db';
 import { sha256Hex } from '@listora/shared';
@@ -39,7 +44,8 @@ export async function researchFor(
 ): Promise<ResearchResult> {
   const itemKey = itemResearchKey(read);
   const brandKey = brandResearchKey(read.brand);
-  if (brandKey === undefined || read.brand === null) {
+  const subject = scanResearchSubject(read);
+  if (brandKey === undefined || subject === undefined) {
     return { stored: { status: 'no_brand', cached: false }, searches: 0, costMicros: 0 };
   }
   const since = (days: number) => new Date(now.getTime() - days * DAY_MS);
@@ -69,14 +75,7 @@ export async function researchFor(
     // The fake provider's fixtures key the answer by the exact model, or by the brand and the
     // item's words when the model is not known.
     keyHash: sha256Hex(itemKey ?? `${brandKey}|${read.category ?? ''}|${read.item.toLowerCase()}`),
-    brand: read.brand,
-    item: read.item,
-    ...(read.category === null ? {} : { category: read.category }),
-    ...(read.line === null ? {} : { line: read.line }),
-    ...(read.styleNumber === null ? {} : { styleNumber: read.styleNumber }),
-    ...(read.era === null ? {} : { era: read.era }),
-    ...(read.material === null ? {} : { material: read.material }),
-    ...(read.style === null ? {} : { style: read.style }),
+    ...subject,
   });
   const { reputation, ...facts } = outcome.research;
   const spent = { model: outcome.model, costMicros: outcome.costMicros };
