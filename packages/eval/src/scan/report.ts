@@ -55,12 +55,23 @@ export function formatScanReport(
 
   if (report.prices.length > 0) {
     lines.push(
-      "Prices against the sale (before: as the AI and the web gave them; after: the read's brand",
-      "snapped to the seller's own and the prices scaled by the other items' sale-to-asking ratio):",
+      "Prices against the sale (ai: as the AI and the web gave them; calibrated: the read's brand",
+      "snapped to the seller's own and the prices scaled by the other items' sale-to-asking ratio;",
+      "anchored: a known retail price at the other items' resale-to-retail ratio, before the web;",
+      'anchored_default: the same at the default ratio):',
     );
     lines.push(
       ...table([
-        ['group', 'variant', 'items', 'AI estimate', 'web asks', 'own sales', 'the call'],
+        [
+          'group',
+          'variant',
+          'items',
+          'AI estimate',
+          'web asks',
+          'own sales',
+          'retail anchor',
+          'the call',
+        ],
         ...report.prices.map((scores) => [
           scores.group,
           scores.variant,
@@ -68,10 +79,28 @@ export function formatScanReport(
           priceCell(scores.aiEstimate),
           priceCell(scores.webAsks),
           priceCell(scores.ownSales),
+          priceCell(scores.retailAnchor),
           priceCell(scores.call),
         ]),
       ]),
       '  each: sale inside the range / priced, median error (bias)',
+      '',
+    );
+  }
+
+  if (report.retailRatios.length > 0) {
+    lines.push(
+      'Resale to retail (sale price over the retail price the read or the web found):',
+      ...table([
+        ['group', 'items', 'low quartile', 'median', 'high quartile'],
+        ...report.retailRatios.map((scores) => [
+          scores.group,
+          String(scores.items),
+          percent(scores.low),
+          percent(scores.median),
+          percent(scores.high),
+        ]),
+      ]),
       '',
     );
   }
