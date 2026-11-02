@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { brandKey } from './brand.ts';
+import { brandKey, snapBrand } from './brand.ts';
 
 describe('brandKey', () => {
   it.each([
@@ -28,5 +28,35 @@ describe('brandKey', () => {
     expect(brandKey(null)).toBeUndefined();
     expect(brandKey(undefined)).toBeUndefined();
     expect(brandKey(' & ')).toBeUndefined();
+  });
+});
+
+describe('snapBrand', () => {
+  const own = ['Fernhill', 'Fernhill', 'FERNHILL', 'Quillonade', 'Marrow & Pike', 'Ostra', null];
+
+  it('snaps a near miss to the one own brand it nearly spells, in the spelling used most', () => {
+    expect(snapBrand('Fernhil', own)).toEqual({ brand: 'Fernhill', readAs: 'Fernhil' });
+    expect(snapBrand('Quillonda', own)).toEqual({ brand: 'Quillonade', readAs: 'Quillonda' });
+    expect(snapBrand('Marow', own)).toEqual({ brand: 'Marrow & Pike', readAs: 'Marow' });
+  });
+
+  it('leaves a read that already matches an own brand, or none, as it is', () => {
+    expect(snapBrand('FERNHILL', own)).toBeUndefined();
+    expect(snapBrand('Marrow and Pike', own)).toBeUndefined();
+    expect(snapBrand(null, own)).toBeUndefined();
+    expect(snapBrand('Fernhil', [])).toBeUndefined();
+  });
+
+  it('never snaps a short name, a far one, or one that is near two own brands', () => {
+    // "Ostr" and "Ostra" are a letter apart, but four-letter names are too easily another brand.
+    expect(snapBrand('Ostr', own)).toBeUndefined();
+    expect(snapBrand('Ferngully', own)).toBeUndefined();
+    expect(snapBrand('Brightun', ['Brighton', 'Brightan'])).toBeUndefined();
+    expect(snapBrand('Brightun', ['Brighton'])).toEqual({ brand: 'Brighton', readAs: 'Brightun' });
+  });
+
+  it('holds a long name to two edits', () => {
+    expect(snapBrand('Quillonadexx', own)).toEqual({ brand: 'Quillonade', readAs: 'Quillonadexx' });
+    expect(snapBrand('Quillonadexxx', own)).toBeUndefined();
   });
 });

@@ -50,3 +50,89 @@ export function brandKey(brand: string | null | undefined): string | undefined {
   if (first === undefined) return undefined;
   return SHARED_LEADING_WORDS.has(first) && second !== undefined ? `${first} ${second}` : first;
 }
+
+/** Shortest brand key a near miss may be snapped from: short names are too easily another brand. */
+export const SNAP_MIN_KEY_LENGTH = 5;
+/** Most letters a near miss may differ by (inserted, dropped, changed, or two swapped). */
+export const SNAP_MAX_EDITS = 2;
+/** Most edits for a key's length: 2 in 10 ("Wrenfeld" for "Wrenfield"), 1 in 5 to 9. */
+export const SNAP_MAX_EDIT_SHARE = 0.2;
+
+/** A read brand moved to one of the seller's own, and what it was read as. */
+export interface SnappedBrand {
+  readonly brand: string;
+  readonly readAs: string;
+}
+
+/**
+ * The read brand snapped to the one brand of the seller's own sales it nearly spells
+ * (docs/features/thrift-scan.md, "The seller's own sales"): "Wrenfeld" to "Wrenfield" when
+ * the seller sold Wrenfield. Undefined, leaving the read as it is, when the read already
+ * matches one of them (`brandKey`), its key is shorter than `SNAP_MIN_KEY_LENGTH`, or no brand,
+ * or more than one, is within `SNAP_MAX_EDITS` edits and `SNAP_MAX_EDIT_SHARE` of the longer
+ * key's length. A different brand of a similar spelling the seller has never sold is left
+ * alone, since only the seller's own brands are candidates.
+ */
+export function snapBrand(
+  read: string | null,
+  ownBrands: Iterable<string | null>,
+): SnappedBrand | undefined {
+  const key = brandKey(read);
+  if (read === null || key === undefined || key.length < SNAP_MIN_KEY_LENGTH) return undefined;
+  // The seller's spelling of each brand: the one written most often.
+  const spellings = new Map<string, Map<string, number>>();
+  for (const brand of ownBrands) {
+    const own = brandKey(brand);
+    if (brand === null || own === undefined) continue;
+    const counts = spellings.get(own) ?? new Map<string, number>();
+    counts.set(brand, (counts.get(brand) ?? 0) + 1);
+    spellings.set(own, counts);
+  }
+  if (spellings.has(key)) return undefined;
+  const near = [...spellings.keys()].filter((own) => {
+    if (own.length < SNAP_MIN_KEY_LENGTH) return false;
+    const allowed = Math.min(
+      SNAP_MAX_EDITS,
+      Math.floor(Math.max(own.length, key.length) * SNAP_MAX_EDIT_SHARE),
+    );
+    return allowed > 0 && editDistance(key, own, allowed) <= allowed;
+  });
+  const [only] = near;
+  if (only === undefined || near.length > 1) return undefined;
+  const counts = spellings.get(only);
+  if (counts === undefined) return undefined;
+  const [brand] =
+    [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? [];
+  return brand === undefined ? undefined : { brand, readAs: read };
+}
+
+/**
+ * Edits between two strings (insert, drop, change, or swap two neighbors), or `limit + 1` once
+ * it is sure to be more than `limit`.
+ */
+function editDistance(a: string, b: string, limit: number): number {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let before: number[] = [];
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let value = Math.min(
+        (previous[j] ?? 0) + 1,
+        (current[j - 1] ?? 0) + 1,
+        (previous[j - 1] ?? 0) + cost,
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        value = Math.min(value, (before[j - 2] ?? 0) + 1);
+      }
+      current.push(value);
+      best = Math.min(best, value);
+    }
+    if (best > limit) return limit + 1;
+    before = previous;
+    previous = current;
+  }
+  return previous[b.length] ?? limit + 1;
+}

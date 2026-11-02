@@ -822,7 +822,11 @@ ScanIdentity:
       description: How sure the AI is of the brand and item together.
 ScanAiEstimate:
   type: object
-  description: The AI's guess of what a buyer would pay on Depop; never sold data.
+  description: |
+    The AI's guess of what a buyer would pay on Depop; never sold data. For a read that named a
+    brand it is scaled by what the household's own items went for against what they asked (the
+    call's `calibrated` signal says so), since the AI prices a named brand like its listings ask.
+    Scans made before the calibration show the AI's own numbers.
   required: [label, low, mid, high]
   properties:
     label:
@@ -995,8 +999,10 @@ KnownScanSignalKind:
     own sales of items like it coming faster or slower. `style`: the AI's read of the style.
     `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
     household's recent sales against the marketplace's supply. `unsold`: the household already
-    has items like it in inventory, not sold (it never moves the call).
-  enum: [retail, new_with_tags, web_resale, trend, style, asking, demand, unsold]
+    has items like it in inventory, not sold (it never moves the call). `calibrated`: the AI
+    estimate and the web's asking prices were scaled by what the household's own items went for
+    against what they asked.
+  enum: [retail, new_with_tags, web_resale, trend, style, asking, demand, unsold, calibrated]
 ScanRetail:
   type: object
   description: |

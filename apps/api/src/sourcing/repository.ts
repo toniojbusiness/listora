@@ -60,6 +60,15 @@ export async function ownSales(
       'inventory_item.size_label',
       'sale_item.sale_price_cents',
       'sale.sold_at',
+      // What the item asked when it sold: the sold listing's price, else the item's list price.
+      (eb) =>
+        eb
+          .selectFrom('marketplace_listing as sold_listing')
+          .select('sold_listing.price_cents')
+          .whereRef('sold_listing.account_id', '=', 'sale_item.account_id')
+          .whereRef('sold_listing.id', '=', 'sale_item.listing_id')
+          .as('listing_price_cents'),
+      'inventory_item.list_price_cents',
       // The item's first listing through Listora before the sale: one whose create succeeded.
       // An imported listing's `listed_at` is when Listora read it, so it never counts.
       (eb) =>
@@ -93,6 +102,7 @@ export async function ownSales(
     category: row.category,
     sizeLabel: row.size_label,
     salePriceCents: row.sale_price_cents,
+    askingPriceCents: row.listing_price_cents ?? row.list_price_cents,
     soldAt: row.sold_at,
     listedAt: row.listed_at,
   }));

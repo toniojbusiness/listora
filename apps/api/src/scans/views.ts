@@ -87,19 +87,21 @@ export function scanView(row: ItemScanRow): ItemScan {
   };
   const research =
     row.research === null ? undefined : researchView(row.research as unknown as StoredResearch);
+  // Scaled to the household's sales when the call scaled it; the read's own on older scans.
+  const estimate = read.aiEstimate === null ? null : (detail.aiEstimate ?? read.aiEstimate);
   return {
     id: row.id,
     runId: row.run_id,
     createdAt: row.created_at.toISOString(),
     identity,
-    ...(read.aiEstimate === null
+    ...(estimate === null
       ? {}
       : {
           aiEstimate: {
             label: AI_ESTIMATE_LABEL,
-            low: usd(read.aiEstimate.lowCents),
-            mid: usd(read.aiEstimate.midCents),
-            high: usd(read.aiEstimate.highCents),
+            low: usd(estimate.lowCents),
+            mid: usd(estimate.midCents),
+            high: usd(estimate.highCents),
           },
         }),
     flags: read.flags,
