@@ -79,6 +79,22 @@ describe('npm run eval -- scan', () => {
     );
   });
 
+  it('stops spending at --max-spend: what comes after fails instead of being sent', async () => {
+    const { status, output } = await run([
+      '--dataset',
+      await writeScanDataset(),
+      '--research',
+      '--max-spend',
+      '0.01',
+      '--json',
+    ]);
+    const report = JSON.parse(output) as { read: { scanned: number; failed: number } };
+    // The fake's lookups find nothing, but each read is metered: a cent covers a few of the eight.
+    expect(status).toBe(1);
+    expect(report.read.failed).toBeGreaterThan(0);
+    expect(report.read.failed).toBeLessThan(report.read.scanned);
+  });
+
   it('shows its usage', async () => {
     expect((await run(['--help'])).output).toBe(SCAN_USAGE);
   });
@@ -89,6 +105,7 @@ describe('npm run eval -- scan', () => {
     [['--dataset', 'x', '--images', '3'], '--images must be 1 or 2'],
     [['--dataset', 'x', '--worth-listing', '$8'], '--worth-listing must be dollars'],
     [['--dataset', 'x', '--limit', '0'], '--limit must be a whole number'],
+    [['--dataset', 'x', '--max-spend', 'lots'], '--max-spend must be dollars'],
   ])('refuses %j', async (argv, message) => {
     const error = await run(argv).then(
       () => undefined,
