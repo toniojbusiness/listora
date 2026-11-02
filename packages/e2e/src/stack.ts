@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +8,7 @@ import { FakeDepopSite } from '@listora/automation';
 import type { Db } from '@listora/db';
 import { createMigratedDatabase } from '@listora/db/testing';
 import { FakeEbay } from '@listora/marketplaces';
-import { startNodeProcess, type StartedProcess } from '@listora/testing';
+import { startNodeProcess, startOnFreePort, type StartedProcess } from '@listora/testing';
 
 import { startStackControl, type FullStackControl } from './control.ts';
 import {
@@ -105,15 +104,6 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
   };
 
   try {
-    const port = await freePort();
-    const apiUrl = `http://127.0.0.1:${String(port)}`;
-    // Local storage serves photos over http, which only a development fake eBay accepts.
-    const fakeEbay = await FakeEbay.start({
-      allowHttpPictures: true,
-      allowHttpNotificationEndpoints: true,
-      consentRedirect: { acceptUrl: `${apiUrl}/v1/connections/ebay/callback` },
-    });
-    closers.push(() => fakeEbay.close());
     // Depop runs on the phone (docs/features/phone-execution.md): the app's phone runtime acts
     // on this fake Depop site in the simulator, through the stack's API.
     const fakeDepop = await FakeDepopSite.start();
@@ -121,7 +111,7 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
     const fakes = marketplaces === 'all' ? await startMarketplaceFakes() : undefined;
     if (fakes !== undefined) closers.push(() => fakes.close());
     const tokenKey = randomBytes(32);
-    const shared = {
+    const environment = (fakeEbay: FakeEbay, apiUrl: string) => ({
       PATH: process.env['PATH'],
       DATABASE_URL: database.scratch.url,
       // A CI runner busy with the simulator can take longer than the 5 s default to open a
@@ -149,24 +139,45 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       MARKET_COMPARISONS: 'off',
       TOKEN_ENCRYPTION_KEY: tokenKey.toString('base64'),
       ...(fakes === undefined ? {} : { ...fakes.env, ...ebayNotificationEnv(apiUrl) }),
-    };
-
-    const api = startNodeProcess(API_ENTRY, {
-      ...shared,
-      API_HOST: '127.0.0.1',
-      API_PORT: String(port),
-      AUTH_DRIVER: 'dev',
-      AUTH_DEV_SECRET: randomBytes(32).toString('base64'),
-      // UI tests drive the app far faster than a person, all from one address.
-      API_RATE_LIMIT_PER_ADDRESS: '1000000',
-      API_RATE_LIMIT_PUBLIC_PER_ADDRESS: '1000000',
-      API_RATE_LIMIT_PER_ACCOUNT: '1000000',
     });
+
+    // The API must know its own URL before it listens (stored photos and eBay's callbacks point
+    // at it), so it cannot take port 0; a port another test takes first starts it again.
+    const { apiUrl, fakeEbay, shared, api } = await startOnFreePort(async (port) => {
+      const apiUrl = `http://127.0.0.1:${String(port)}`;
+      // Local storage serves photos over http, which only a development fake eBay accepts.
+      const fakeEbay = await FakeEbay.start({
+        allowHttpPictures: true,
+        allowHttpNotificationEndpoints: true,
+        consentRedirect: { acceptUrl: `${apiUrl}/v1/connections/ebay/callback` },
+      });
+      const shared = environment(fakeEbay, apiUrl);
+      const api = startNodeProcess(API_ENTRY, {
+        ...shared,
+        API_HOST: '127.0.0.1',
+        API_PORT: String(port),
+        AUTH_DRIVER: 'dev',
+        AUTH_DEV_SECRET: randomBytes(32).toString('base64'),
+        // UI tests drive the app far faster than a person, all from one address.
+        API_RATE_LIMIT_PER_ADDRESS: '1000000',
+        API_RATE_LIMIT_PUBLIC_PER_ADDRESS: '1000000',
+        API_RATE_LIMIT_PER_ACCOUNT: '1000000',
+      });
+      try {
+        await api.waitForLog(
+          (line) =>
+            typeof line['msg'] === 'string' && line['msg'].startsWith('Server listening at '),
+          startTimeoutMs,
+        );
+      } catch (error) {
+        await api.stop();
+        await fakeEbay.close();
+        throw error;
+      }
+      return { apiUrl, fakeEbay, shared, api };
+    });
+    closers.push(() => fakeEbay.close());
     processes.push({ name: 'api', process: api });
-    await api.waitForLog(
-      (line) => typeof line['msg'] === 'string' && line['msg'].startsWith('Server listening at '),
-      startTimeoutMs,
-    );
 
     // Signed in first, so the account exists for the connections the worker reads at start.
     const accessToken = await signIn(api, apiUrl, E2E_EMAIL);
@@ -276,21 +287,6 @@ async function signIn(api: StartedProcess, apiUrl: string, email: string): Promi
   }
   const { accessToken } = (await session.json()) as { accessToken: string };
   return accessToken;
-}
-
-/** A TCP port nothing listens on right now. */
-async function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      server.close(() => {
-        if (address !== null && typeof address === 'object') resolve(address.port);
-        else reject(new Error('no port assigned'));
-      });
-    });
-  });
 }
 
 async function writeLogs(
