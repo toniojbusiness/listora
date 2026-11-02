@@ -34,6 +34,14 @@ struct ScanCardActions: View {
         .padding(.top, Spacing.xxs)
     }
 
+    /// Once a tag close-up is read with the item, the button offers to take it again.
+    private var tagLabel: String {
+        if entry.tagJPEG != nil {
+            return "Retake the tag"
+        }
+        return wantsTag ? "Shoot the tag?" : "Shoot the tag"
+    }
+
     private var isDeciding: Bool {
         switch entry.decision {
         case .open, .keepFailed: true
@@ -45,13 +53,13 @@ struct ScanCardActions: View {
     private var tools: some View {
         HStack(spacing: Spacing.xs) {
             Button(action: onTag) {
-                Label(wantsTag ? "Shoot the tag?" : "Shoot the tag", systemImage: "tag")
+                Label(tagLabel, systemImage: entry.tagJPEG == nil ? "tag" : "tag.fill")
             }
             .font(Typography.footnote)
             .buttonStyle(.plain)
             .foregroundStyle(wantsTag ? Palette.brand : Palette.textSecondary)
             .frame(minHeight: Layout.minimumTapTarget)
-            .accessibilityHint("The next shot is a close-up of this item's tag, read with it.")
+            .accessibilityHint("The card steps aside for a close-up of this item's tag, then comes back read with it.")
             .accessibilityIdentifier("scan.tag")
             Spacer(minLength: 0)
             if let link {

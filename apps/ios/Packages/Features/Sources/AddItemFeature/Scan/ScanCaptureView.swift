@@ -7,7 +7,8 @@ import SwiftUI
 /// as a draft and Put back passes on it; either one closes the card, back to the camera for the
 /// next shot, with a brief line saying what happened. Shooting the next item without choosing
 /// puts the last one back. Hold the
-/// mic to add a note, tap Tag to shoot the tag close-up. Done closes the camera and keeps the
+/// mic to add a note, tap Shoot the tag for the tag close-up: the card steps aside while it is
+/// framed and comes back with the tag's read. Done closes the camera and keeps the
 /// run; Finish offers the register's checkout, or ending the run without buying.
 struct ScanCaptureView: View {
     let run: ScanRunModel
@@ -60,7 +61,10 @@ struct ScanCaptureView: View {
                 topBar
                 Spacer(minLength: Spacing.md)
                 prompts
-                if let entry = run.current {
+                // While the seller frames the tag close-up the card steps aside, so the camera is
+                // clear; it comes back with the tag's read once the shot is taken, or unchanged on
+                // Cancel.
+                if let entry = run.current, run.tagShotFor == nil {
                     ScanCardView(
                         entry: entry,
                         onKeep: { Task { await run.keepAndContinue(entry.id) } },
@@ -99,6 +103,7 @@ struct ScanCaptureView: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .foregroundStyle(Palette.onMedia)
         .motion(Motion.snappy, value: run.currentID)
+        .motion(Motion.snappy, value: run.tagShotFor)
         .motion(Motion.snappy, value: run.confirmation)
         .measuresInteraction(meter, session: run.meterSession)
         .task {
@@ -191,16 +196,7 @@ struct ScanCaptureView: View {
     @ViewBuilder
     private var prompts: some View {
         if run.tagShotFor != nil {
-            HStack(spacing: Spacing.sm) {
-                Label("Shoot the tag up close", systemImage: "tag.fill").font(Typography.emphasis)
-                Spacer(minLength: Spacing.xs)
-                Button("Cancel") { run.cancelTagShot() }
-                    .buttonStyle(.listora(.secondary, size: .compact))
-                    .fixedSize()
-            }
-            .cardStyle(padding: Spacing.sm)
-            .padding(.horizontal, Spacing.md)
-            .transition(.rise)
+            ScanTagPrompt { run.cancelTagShot() }
         } else if run.current != nil, let line = run.confirmationLine, line.tone == .failed {
             // A Keep that failed after the next card came up: said above it until it goes.
             ScanConfirmationView(line: line)
@@ -278,6 +274,29 @@ struct ScanCaptureView: View {
         withAnimation(.easeOut(duration: 0.25)) {
             isFlashing = false
         }
+    }
+}
+
+/// Over the clear camera while the seller frames the tag close-up, with Cancel to bring the
+/// card back without one.
+private struct ScanTagPrompt: View {
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Label("Shoot the tag up close", systemImage: "tag.fill")
+                .font(Typography.emphasis)
+                .accessibilityIdentifier("scanCamera.tagPrompt")
+            Spacer(minLength: Spacing.xs)
+            Button("Cancel", action: onCancel)
+                .buttonStyle(.listora(.secondary, size: .compact))
+                .fixedSize()
+                .accessibilityHint("Brings the item's card back without a tag shot.")
+                .accessibilityIdentifier("scanCamera.cancelTag")
+        }
+        .cardStyle(padding: Spacing.sm)
+        .padding(.horizontal, Spacing.md)
+        .transition(.rise)
     }
 }
 
