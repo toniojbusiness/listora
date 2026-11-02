@@ -69,7 +69,7 @@ describe('startOnFreePort', () => {
       calls += 1;
       if (calls === 1) {
         throw new Error(
-          'process exited before the expected log line; stderr:\nError: listen EADDRINUSE: address already in use 127.0.0.1:33835',
+          'process exited before the expected log line; stdout (0 lines):\nstderr:\nError: listen EADDRINUSE: address already in use 127.0.0.1:33835',
         );
       }
       return 'started';

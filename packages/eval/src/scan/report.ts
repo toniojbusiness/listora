@@ -1,9 +1,11 @@
-import type {
-  CallScores,
-  EstimateScores,
-  ItemResult,
-  OwnHistoryScores,
-  ScanBacktestReport,
+import {
+  NEAR_REALISTIC,
+  type CallScores,
+  type EstimateScores,
+  type ItemResult,
+  type OwnHistoryScores,
+  type ScanBacktestReport,
+  type ThreePriceScores,
 } from './backtest.ts';
 
 /**
@@ -72,6 +74,26 @@ export function formatScanReport(
         ]),
       ]),
       '  each: sale inside the range / priced, median error (bias)',
+      '',
+    );
+    lines.push(
+      "The card's three prices against the sale (list at, realistic sale, fast sale):",
+      ...table([
+        [
+          'group',
+          'variant',
+          'priced',
+          'fast to list',
+          'under fast',
+          'over list',
+          'near realistic',
+          'realistic error',
+        ],
+        ...report.prices.map((scores) =>
+          threePriceRow(scores.group, scores.variant, scores.threePrices),
+        ),
+      ]),
+      `  near realistic: within ${percent(NEAR_REALISTIC)} of the sale; realistic error: median (bias)`,
       '',
     );
   }
@@ -163,6 +185,21 @@ function priceCell(scores: EstimateScores): string {
     `${percent(scores.saleInRange / scores.priced)} ${percent(scores.medianAbsError)} ` +
     `(${signedPercent(scores.medianError)})`
   );
+}
+
+function threePriceRow(group: string, variant: string, scores: ThreePriceScores): string[] {
+  const of = (part: number) =>
+    scores.priced === 0 ? '-' : `${String(part)} ${percent(part / scores.priced)}`;
+  return [
+    group,
+    variant,
+    String(scores.priced),
+    of(scores.saleInBand),
+    of(scores.saleBelowFast),
+    of(scores.saleAboveList),
+    of(scores.saleNearRealistic),
+    `${percent(scores.medianAbsError)} (${signedPercent(scores.medianError)})`,
+  ];
 }
 
 function share(part: number, whole: number): string {

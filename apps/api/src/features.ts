@@ -58,6 +58,8 @@ export interface ApiRouteContext extends RouteDependencies {
   itemChanges: KeyedSignals | undefined;
   /** Whether scans hand the iPhone marketplace comparison reads (`MARKET_COMPARISONS`). */
   marketComparisons: boolean;
+  /** How long a scan's prices wait for what they rest on; `PRICE_WAIT_MS` without it. */
+  scanPriceWaitMs?: number;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

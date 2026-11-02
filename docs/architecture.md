@@ -183,7 +183,8 @@ packages/
   sourcing/     Thrift-scan rules with no I/O: price quartiles, own-sales comparisons (the
                 scan's and the price screen's per marketplace), the marketplace comparisons'
                 matching and demand (also bundled for the phone), the sourcing kit's groups, the
-                Buy / Your call / Skip call and its defaults (@listora/sourcing)
+                Buy / Your call / Skip call (Grab, Maybe, Leave on the card), its why, and its
+                defaults (@listora/sourcing)
   eval/         Synthetic tag corpus (corpus/), the eval harness CLI, and the thrift-scan
                 backtest (scan/) (@listora/eval)
   e2e/          Local end-to-end stack: the API and worker with fakes on a scratch database and
@@ -263,8 +264,9 @@ src/
                  the price screen's own history (docs/features/thrift-scan.md)
   sourcing-runs/ Thrift scan runs: a trip to a store, started, ended, and checked out into a
                  haul, and the run's summary with its estimated profit
-  scans/         The thrift scan: an item's read and call at the store, Keep, and the
-                 marketplace comparisons the iPhone reads (docs/features/thrift-scan.md)
+  scans/         The thrift scan: an item's read at the store, its prices and call held until
+                 the web research and the comparisons are in, Keep, and the marketplace
+                 comparisons the iPhone reads (docs/features/thrift-scan.md)
   storage-locations/ Storage bins: making, renaming, and deleting bins, and putting items in
                  and taking them out (docs/features/storage-bins.md)
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce

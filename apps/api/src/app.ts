@@ -83,6 +83,8 @@ export interface AppDependencies extends HealthDependencies {
    * default, off for stacks whose app must never read a real marketplace (the UI tests).
    */
   marketComparisons?: boolean;
+  /** How long a scan's prices wait for what they rest on (default `PRICE_WAIT_MS`, 15 s). */
+  scanPriceWaitMs?: number;
   /** The clock upload sessions expire by. */
   now?: () => Date;
   /**
@@ -177,6 +179,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     phone: deps.phone,
     itemChanges: deps.itemChanges,
     marketComparisons: deps.marketComparisons ?? true,
+    ...(deps.scanPriceWaitMs === undefined ? {} : { scanPriceWaitMs: deps.scanPriceWaitMs }),
     now,
   };
   // Each feature folder's routes (features.ts), so a new feature never edits this file.

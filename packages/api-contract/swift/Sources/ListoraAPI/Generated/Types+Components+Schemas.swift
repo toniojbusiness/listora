@@ -17676,7 +17676,10 @@ extension Components {
         }
         /// One item scanned at the store: what it is, the household's own sales like it, the AI's
         /// estimate, and the call. Every price is a range with its source; "sold" appears only next
-        /// to the seller's own sales.
+        /// to the seller's own sales. The prices and the call wait for what they rest on (`pricing`):
+        /// while `pricing.status` is `checking`, the scan says what the item is and holds every price
+        /// (no `aiEstimate`, `retail`, `research`, or `ownSales`, comparisons without their numbers)
+        /// and its call is `checking`.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ItemScan`.
@@ -17708,6 +17711,16 @@ extension Components {
             public var ownSales: [Components.Schemas.ScanOwnSales]
             /// - Remark: Generated from `#/components/schemas/ItemScan/call`.
             public var call: Components.Schemas.ScanCall
+            /// - Remark: Generated from `#/components/schemas/ItemScan/pricing`.
+            public var pricing: Components.Schemas.ScanPricing?
+            /// What the prices rest on, in short plain lines, once they are in: the household's own
+            /// sales like it, sold listings elsewhere (only with real sold data), what listings ask now
+            /// (said to be asks), the original retail price, the brand's pulse, and any source that
+            /// could not be checked. Every line comes from the scan's own data. Empty while checking.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemScan/realityCheck`.
+            public var realityCheck: [Components.Schemas.ScanRealityLine]?
             /// The words a buyer would search to find items like it.
             ///
             /// - Remark: Generated from `#/components/schemas/ItemScan/searchWords`.
@@ -17745,6 +17758,8 @@ extension Components {
             ///   - research:
             ///   - ownSales: The household's own sales of items like it, per marketplace in `KnownMarketplace`
             ///   - call:
+            ///   - pricing:
+            ///   - realityCheck: What the prices rest on, in short plain lines, once they are in: the household's own
             ///   - searchWords: The words a buyer would search to find items like it.
             ///   - comparisons: Each marketplace's comparisons, in `KnownMarketplace` order, where they are on for the
             ///   - researchLinks: Searches the seller opens in their own browser to look at prices themselves, Depop
@@ -17762,6 +17777,8 @@ extension Components {
                 research: Components.Schemas.ScanResearch? = nil,
                 ownSales: [Components.Schemas.ScanOwnSales],
                 call: Components.Schemas.ScanCall,
+                pricing: Components.Schemas.ScanPricing? = nil,
+                realityCheck: [Components.Schemas.ScanRealityLine]? = nil,
                 searchWords: Swift.String,
                 comparisons: [Components.Schemas.ScanComparison]? = nil,
                 researchLinks: [Components.Schemas.ResearchLink],
@@ -17779,6 +17796,8 @@ extension Components {
                 self.research = research
                 self.ownSales = ownSales
                 self.call = call
+                self.pricing = pricing
+                self.realityCheck = realityCheck
                 self.searchWords = searchWords
                 self.comparisons = comparisons
                 self.researchLinks = researchLinks
@@ -17797,6 +17816,8 @@ extension Components {
                 case research
                 case ownSales
                 case call
+                case pricing
+                case realityCheck
                 case searchWords
                 case comparisons
                 case researchLinks
@@ -17834,6 +17855,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ScanIdentity/era`.
             public var era: Swift.String?
+            /// The main material, as the tag or the item shows it ("wool"), when sure.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanIdentity/material`.
+            public var material: Swift.String?
             /// A style or era buyers search by ("Y2K", "gorpcore"), the AI's read.
             ///
             /// - Remark: Generated from `#/components/schemas/ScanIdentity/style`.
@@ -17854,6 +17879,7 @@ extension Components {
             ///   - model: The exact model or line ("501"), only when printed or unmistakable.
             ///   - styleNumber:
             ///   - era: "current", or "vintage 1990s", where that changes what the item is.
+            ///   - material: The main material, as the tag or the item shows it ("wool"), when sure.
             ///   - style: A style or era buyers search by ("Y2K", "gorpcore"), the AI's read.
             ///   - confidence: How sure the AI is of the brand and item together.
             public init(
@@ -17866,6 +17892,7 @@ extension Components {
                 model: Swift.String? = nil,
                 styleNumber: Swift.String? = nil,
                 era: Swift.String? = nil,
+                material: Swift.String? = nil,
                 style: Swift.String? = nil,
                 confidence: Components.Schemas.Confidence
             ) {
@@ -17878,6 +17905,7 @@ extension Components {
                 self.model = model
                 self.styleNumber = styleNumber
                 self.era = era
+                self.material = material
                 self.style = style
                 self.confidence = confidence
             }
@@ -17891,6 +17919,7 @@ extension Components {
                 case model
                 case styleNumber
                 case era
+                case material
                 case style
                 case confidence
             }
@@ -18768,10 +18797,18 @@ extension Components {
         public struct ScanCall: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ScanCall/call`.
             public var call: Components.Schemas.ScanCallKind
-            /// The call as shown ("Buy", "Your call", "Skip").
+            /// The call as the card's headline says it: "Grab" (`buy`), "Maybe" (`your_call`),
+            /// "Leave" (`skip`), or "Checking prices" while the prices wait (`checking`).
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ScanCall/label`.
             public var label: Swift.String
+            /// The headline's one-line why, from the payouts against the worth-listing amount and any
+            /// flag ("Even its low end pays out $11 after fees, over your $8"). Absent while checking.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanCall/why`.
+            public var why: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ScanCall/confidence`.
             public var confidence: Components.Schemas.ScanConfidence
             /// - Remark: Generated from `#/components/schemas/ScanCall/basis`.
@@ -18804,8 +18841,12 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ScanCall/worthListing`.
             public var worthListing: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanCall/prices`.
+            public var prices: Components.Schemas.ScanPrices?
             /// What else the call weighed, each with what it rests on: the retail price, new with
             /// tags, how the brand resells on the web, the household's own sales trend, the style.
+            /// The first is the three `prices` (kind `prices`) when there are any, for a client built
+            /// before `prices`; a client that shows `prices` leaves that signal out.
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ScanCall/signals`.
@@ -18814,7 +18855,8 @@ extension Components {
             ///
             /// - Parameters:
             ///   - call:
-            ///   - label: The call as shown ("Buy", "Your call", "Skip").
+            ///   - label: The call as the card's headline says it: "Grab" (`buy`), "Maybe" (`your_call`),
+            ///   - why: The headline's one-line why, from the payouts against the worth-listing amount and any
             ///   - confidence:
             ///   - basis:
             ///   - basedOn: What the call rests on, as the seller reads it ("Your 5 sales like it").
@@ -18824,10 +18866,12 @@ extension Components {
             ///   - optimisticPayout: What the range's high end pays out after fees, an estimate.
             ///   - payoutMarketplace: The marketplace whose fees the payouts are after.
             ///   - worthListing: The least payout worth buying for.
+            ///   - prices:
             ///   - signals: What else the call weighed, each with what it rests on: the retail price, new with
             public init(
                 call: Components.Schemas.ScanCallKind,
                 label: Swift.String,
+                why: Swift.String? = nil,
                 confidence: Components.Schemas.ScanConfidence,
                 basis: Components.Schemas.ScanBasis,
                 basedOn: Swift.String,
@@ -18837,10 +18881,12 @@ extension Components {
                 optimisticPayout: Components.Schemas.Money? = nil,
                 payoutMarketplace: Components.Schemas.Marketplace? = nil,
                 worthListing: Components.Schemas.Money,
+                prices: Components.Schemas.ScanPrices? = nil,
                 signals: [Components.Schemas.ScanSignal]
             ) {
                 self.call = call
                 self.label = label
+                self.why = why
                 self.confidence = confidence
                 self.basis = basis
                 self.basedOn = basedOn
@@ -18850,11 +18896,13 @@ extension Components {
                 self.optimisticPayout = optimisticPayout
                 self.payoutMarketplace = payoutMarketplace
                 self.worthListing = worthListing
+                self.prices = prices
                 self.signals = signals
             }
             public enum CodingKeys: String, CodingKey {
                 case call
                 case label
+                case why
                 case confidence
                 case basis
                 case basedOn
@@ -18864,6 +18912,7 @@ extension Components {
                 case optimisticPayout
                 case payoutMarketplace
                 case worthListing
+                case prices
                 case signals
             }
         }
@@ -18916,13 +18965,304 @@ extension Components {
                 ])
             }
         }
-        /// `buy`, `your_call` (the seller decides), or `skip`.
+        /// `buy`, `your_call` (the seller decides), or `skip`; `checking` while the prices wait for
+        /// what they rest on (`ItemScan.pricing`), with no range, payouts, or prices, and its
+        /// `confidence` the read's (how sure the identification is).
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanCallKind`.
         @frozen public enum KnownScanCallKind: String, Codable, Hashable, Sendable, CaseIterable {
             case buy = "buy"
             case yourCall = "your_call"
             case skip = "skip"
+            case checking = "checking"
+        }
+        /// Whether the scan's prices and call are in (docs/features/thrift-scan.md, "Prices after the
+        /// facts"). They wait for the household's own sales, the web research with the brand's pulse,
+        /// and each marketplace comparison that is on, up to about 15 seconds after the read
+        /// (`waitUntil`); then they show from what came back, naming what is `missing`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanPricing`.
+        public struct ScanPricing: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanPricing/status`.
+            public var status: Components.Schemas.ScanPricingStatus
+            /// The card's quiet progress line while checking ("Checking prices: the web, Depop"), or
+            /// what the prices rest on once ready.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanPricing/label`.
+            public var label: Swift.String
+            /// The sources still being checked, while `checking`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanPricing/waitingOn`.
+            public var waitingOn: [Components.Schemas.ScanPricingSource]?
+            /// The sources the prices could not wait for or check, once `ready`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanPricing/missing`.
+            public var missing: [Components.Schemas.ScanMissingSource]?
+            /// When the prices stop waiting and show from what came back.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanPricing/waitUntil`.
+            public var waitUntil: Components.Schemas.Timestamp?
+            /// Creates a new `ScanPricing`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - label: The card's quiet progress line while checking ("Checking prices: the web, Depop"), or
+            ///   - waitingOn: The sources still being checked, while `checking`.
+            ///   - missing: The sources the prices could not wait for or check, once `ready`.
+            ///   - waitUntil: When the prices stop waiting and show from what came back.
+            public init(
+                status: Components.Schemas.ScanPricingStatus,
+                label: Swift.String,
+                waitingOn: [Components.Schemas.ScanPricingSource]? = nil,
+                missing: [Components.Schemas.ScanMissingSource]? = nil,
+                waitUntil: Components.Schemas.Timestamp? = nil
+            ) {
+                self.status = status
+                self.label = label
+                self.waitingOn = waitingOn
+                self.missing = missing
+                self.waitUntil = waitUntil
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case label
+                case waitingOn
+                case missing
+                case waitUntil
+            }
+        }
+        /// A `KnownScanPricingStatus`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanPricingStatus`.
+        public struct ScanPricingStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanPricingStatus/value1`.
+            public var value1: Components.Schemas.KnownScanPricingStatus?
+            /// - Remark: Generated from `#/components/schemas/ScanPricingStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanPricingStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanPricingStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `checking` while the prices wait; `ready` once they show.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanPricingStatus`.
+        @frozen public enum KnownScanPricingStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case checking = "checking"
+            case ready = "ready"
+        }
+        /// A `KnownScanPricingSource`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanPricingSource`.
+        public struct ScanPricingSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanPricingSource/value1`.
+            public var value1: Components.Schemas.KnownScanPricingSource?
+            /// - Remark: Generated from `#/components/schemas/ScanPricingSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanPricingSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanPricingSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `web`: the web research and the brand pulse; a marketplace: its comparisons.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanPricingSource`.
+        @frozen public enum KnownScanPricingSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case web = "web"
+            case ebay = "ebay"
+            case depop = "depop"
+            case poshmark = "poshmark"
+            case mercari = "mercari"
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanMissingSource`.
+        public struct ScanMissingSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanMissingSource/source`.
+            public var source: Components.Schemas.ScanPricingSource
+            /// As the card says it: "Couldn't check the web in time", "Couldn't check Depop", "Depop
+            /// prices paused today".
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanMissingSource/label`.
+            public var label: Swift.String
+            /// Creates a new `ScanMissingSource`.
+            ///
+            /// - Parameters:
+            ///   - source:
+            ///   - label: As the card says it: "Couldn't check the web in time", "Couldn't check Depop", "Depop
+            public init(
+                source: Components.Schemas.ScanPricingSource,
+                label: Swift.String
+            ) {
+                self.source = source
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case source
+                case label
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ScanRealityLine`.
+        public struct ScanRealityLine: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanRealityLine/kind`.
+            public var kind: Components.Schemas.ScanRealityKind
+            /// - Remark: Generated from `#/components/schemas/ScanRealityLine/text`.
+            public var text: Swift.String
+            /// Creates a new `ScanRealityLine`.
+            ///
+            /// - Parameters:
+            ///   - kind:
+            ///   - text:
+            public init(
+                kind: Components.Schemas.ScanRealityKind,
+                text: Swift.String
+            ) {
+                self.kind = kind
+                self.text = text
+            }
+            public enum CodingKeys: String, CodingKey {
+                case kind
+                case text
+            }
+        }
+        /// A `KnownScanRealityKind`, or one added after this client was built (shown by its text).
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanRealityKind`.
+        public struct ScanRealityKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanRealityKind/value1`.
+            public var value1: Components.Schemas.KnownScanRealityKind?
+            /// - Remark: Generated from `#/components/schemas/ScanRealityKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ScanRealityKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownScanRealityKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `own_sales`: the household's own sales like it. `market_sold`: a marketplace's sold
+        /// listings of close matches. `asking`: what listings like it ask now (never sold prices). `retail`: the
+        /// original retail price. `web`: what the web's listings ask (never sold prices).
+        /// `brand_pulse`: what the wider web says of the brand. `missing`: a source not checked.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownScanRealityKind`.
+        @frozen public enum KnownScanRealityKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case ownSales = "own_sales"
+            case marketSold = "market_sold"
+            case asking = "asking"
+            case retail = "retail"
+            case web = "web"
+            case brandPulse = "brand_pulse"
+            case missing = "missing"
         }
         /// A `KnownScanConfidence`, or one added after this client was built.
         ///
@@ -19186,6 +19526,8 @@ extension Components {
                 ])
             }
         }
+        /// `missing`: a source the prices could not wait for or could not check (the web, a
+        /// marketplace), named so the seller knows what the prices lack.
         /// `retail`: the original retail price, off a tag or from the web. `new_with_tags`: the tags
         /// are still on. `web_resale`: how the brand resells, by web pages. `trend`: the household's
         /// own sales of items like it coming faster or slower. `style`: the AI's read of the style.
@@ -19195,7 +19537,8 @@ extension Components {
         /// the wider web says of the brand (in demand, steady, or slow, with why and what asks more),
         /// by web pages (it never moves the call). `calibrated`: the AI
         /// estimate and the web's asking prices were scaled by what the household's own items went for
-        /// against what they asked.
+        /// against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
+        /// built before them.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
@@ -19210,6 +19553,8 @@ extension Components {
             case demand = "demand"
             case unsold = "unsold"
             case calibrated = "calibrated"
+            case prices = "prices"
+            case missing = "missing"
         }
         /// The item's original retail price, with where it came from: one model's price (`low` equals
         /// `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -20002,6 +20347,50 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case itemIds
+            }
+        }
+        /// The card's three prices, from the range the call rests on (no further lookup): what to list
+        /// at, leaving room for offers (the realistic sale over what the household's items go for
+        /// against what they ask); the realistic sale, the middle of the range; and the fast sale, its
+        /// low end. Rounded to prices a seller would type. Estimates, never sold prices; absent with
+        /// no range.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanPrices`.
+        public struct ScanPrices: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/listAt`.
+            public var listAt: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/realisticSale`.
+            public var realisticSale: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/fastSale`.
+            public var fastSale: Components.Schemas.Money
+            /// Where the three come from, as the seller reads it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/basedOn`.
+            public var basedOn: Swift.String
+            /// Creates a new `ScanPrices`.
+            ///
+            /// - Parameters:
+            ///   - listAt:
+            ///   - realisticSale:
+            ///   - fastSale:
+            ///   - basedOn: Where the three come from, as the seller reads it.
+            public init(
+                listAt: Components.Schemas.Money,
+                realisticSale: Components.Schemas.Money,
+                fastSale: Components.Schemas.Money,
+                basedOn: Swift.String
+            ) {
+                self.listAt = listAt
+                self.realisticSale = realisticSale
+                self.fastSale = fastSale
+                self.basedOn = basedOn
+            }
+            public enum CodingKeys: String, CodingKey {
+                case listAt
+                case realisticSale
+                case fastSale
+                case basedOn
             }
         }
     }

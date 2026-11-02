@@ -398,6 +398,13 @@ export interface TestApiOptions {
   signUp?: SignUpPolicy;
   /** Request limits per address and account (default: none, as tests send many requests). */
   rateLimits?: RateLimits;
+  /** How long a scan's prices wait for what they rest on (default: 15 s, as deployed). */
+  scanPriceWaitMs?: number;
+  /**
+   * Whether scans hand out marketplace comparison reads (default: on, as deployed). Off where
+   * no phone answers them, so a scan's prices never wait for one.
+   */
+  marketComparisons?: boolean;
 }
 
 export interface TestApi {
@@ -538,6 +545,10 @@ export async function createTestApi(
     ...(options.ebayWebhook === undefined ? {} : { ebayWebhook: options.ebayWebhook }),
     ...(options.saleEmails === undefined ? {} : { saleEmails: options.saleEmails }),
     ...(options.rateLimits === undefined ? {} : { rateLimits: options.rateLimits }),
+    ...(options.scanPriceWaitMs === undefined ? {} : { scanPriceWaitMs: options.scanPriceWaitMs }),
+    ...(options.marketComparisons === undefined
+      ? {}
+      : { marketComparisons: options.marketComparisons }),
     storage,
     photoJobs,
     ai,

@@ -54,6 +54,32 @@ describe('scanLabelViolations', () => {
     expect(scanLabelViolations(scan())).toEqual([]);
   });
 
+  it("lets the reality check say sold only of the household's own sales and sold listings", () => {
+    const ownSale = {
+      marketplace: 'depop' as const,
+      label: 'Your Band Merch sales on Depop (last 365 days)',
+      soldCount: 3,
+      low: usd(1000),
+      median: usd(1200),
+      high: usd(1500),
+      displayOnly: false,
+    };
+    const own = { kind: 'own_sales', text: 'You sold 3 like it on Depop: $10-$15' } as const;
+    expect(scanLabelViolations(scan({ ownSales: [ownSale], realityCheck: [own] }))).toEqual([]);
+    expect(scanLabelViolations(scan({ realityCheck: [own] }))).toEqual([
+      'realityCheck[0] names own sales the scan has none of',
+      'realityCheck[0].text mentions sold data: "You sold 3 like it on Depop: $10-$15"',
+    ]);
+    // Sold listings need a comparison of them, under their label; any other line never says sold.
+    const sold = { kind: 'market_sold', text: `${marketSoldLabel('eBay')}: $18-$30` } as const;
+    expect(scanLabelViolations(scan({ realityCheck: [sold] }))).toEqual([
+      'realityCheck[0] is "Sold listings on eBay: $18-$30" for sold listings',
+    ]);
+    expect(
+      scanLabelViolations(scan({ realityCheck: [{ kind: 'asking', text: 'Sold fast on Depop' }] })),
+    ).toEqual(['realityCheck[0].text mentions sold data: "Sold fast on Depop"']);
+  });
+
   it('refuses an AI estimate that is not labeled one, or a call that claims sales', () => {
     const base = scan();
     const estimate = { label: 'Estimated', low: usd(1), mid: usd(2), high: usd(3) };

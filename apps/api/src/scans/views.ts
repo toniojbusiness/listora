@@ -3,28 +3,33 @@
  * the labeled AI estimate, and the call, rebuilt from the stored row so a scan reads the same
  * every time.
  */
-import type { ItemScan, ScanCall, ScanOwnSales } from '@listora/api-contract';
+import type { ItemScan, ScanOwnSales } from '@listora/api-contract';
 import { WEB_INFO_LABEL, type ThriftScan } from '@listora/analysis';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { AI_ESTIMATE_LABEL, OWN_SALES_MAY_MODEL_PRICES, scanResearchLinks } from '@listora/pricing';
-import type { ScanCall as RuleCall, ScanOwnHistory } from '@listora/sourcing';
+import { pricesSignal, type ScanCall as RuleCall, type ScanOwnHistory } from '@listora/sourcing';
 import { assertNever } from '@listora/shared';
 
 import { ownHistoryLabel } from '../sourcing/own-history.ts';
+import { realityCheck } from './card.ts';
 import { comparisonView } from './comparisons.ts';
+import { heldView, PRICE_WAIT_MS, pricingView, scanPricing } from './pricing.ts';
 import type { ItemScanRow, ScanCallDetail, StoredResearch } from './repository.ts';
 
 const usd = (amountCents: number) => ({ amountCents, currency: 'USD' as const });
 
-/** The call as the seller reads it. */
+/**
+ * The call as the card's headline says it, the way a friend at the bins would: Grab (`buy`),
+ * Maybe (`your_call`, the seller decides), Leave (`skip`).
+ */
 export function callLabel(call: RuleCall['call']): string {
   switch (call) {
     case 'buy':
-      return 'Buy';
+      return 'Grab';
     case 'your_call':
-      return 'Your call';
+      return 'Maybe';
     case 'skip':
-      return 'Skip';
+      return 'Leave';
     default:
       return assertNever(call);
   }
@@ -40,12 +45,13 @@ export function callDetail(input: {
   readonly worthListingCents: number;
 }): ScanCallDetail {
   const { rule, history, range } = input;
-  const call: ScanCall = {
+  const call: ScanCallDetail['call'] = {
     call: rule.call,
     label: callLabel(rule.call),
     confidence: rule.confidence,
     basis: rule.basis,
     basedOn: rule.basedOn,
+    why: rule.why,
     ...(range === undefined ? {} : { low: usd(range.lowCents), high: usd(range.highCents) }),
     ...(rule.conservativePayoutCents === undefined
       ? {}
@@ -55,7 +61,21 @@ export function callDetail(input: {
       : { optimisticPayout: usd(rule.optimisticPayoutCents) }),
     ...(range === undefined ? {} : { payoutMarketplace: history.payoutMarketplace }),
     worthListing: usd(input.worthListingCents),
-    signals: rule.signals.map((signal) => ({ ...signal })),
+    ...(rule.prices === undefined
+      ? {}
+      : {
+          prices: {
+            listAt: usd(rule.prices.listAtCents),
+            realisticSale: usd(rule.prices.realisticCents),
+            fastSale: usd(rule.prices.fastCents),
+            basedOn: rule.prices.basedOn,
+          },
+        }),
+    // The three prices lead the signals too, so an app built before `prices` shows them.
+    signals: [
+      ...(rule.prices === undefined ? [] : [pricesSignal(rule.prices)]),
+      ...rule.signals.map((signal) => ({ ...signal })),
+    ],
   };
   const ownSales: ScanOwnSales[] = history.byMarketplace.map(({ marketplace, level, prices }) => ({
     marketplace,
@@ -82,11 +102,16 @@ export function scanView(row: ItemScanRow): ItemScan {
     ...(read.line === null ? {} : { model: read.line }),
     ...(read.styleNumber === null ? {} : { styleNumber: read.styleNumber }),
     ...(read.era === null ? {} : { era: read.era }),
+    ...(read.material === null ? {} : { material: read.material.slice(0, 60) }),
     ...(read.style === null ? {} : { style: read.style }),
     confidence: read.identityConfidence,
   };
+  const stored = row.research as unknown as StoredResearch | null;
+  // A failed lookup shows nothing: the prices name the web as missing (`scanPricing`).
   const research =
-    row.research === null ? undefined : researchView(row.research as unknown as StoredResearch);
+    stored === null || stored.status === 'failed'
+      ? undefined
+      : researchView({ ...stored, status: stored.status });
   // Scaled to the household's sales when the call scaled it; the read's own on older scans.
   const estimate = read.aiEstimate === null ? null : (detail.aiEstimate ?? read.aiEstimate);
   return {
@@ -124,7 +149,37 @@ export function scanView(row: ItemScanRow): ItemScan {
   };
 }
 
-function researchView(stored: StoredResearch): NonNullable<ItemScan['research']> {
+/**
+ * The scan as the API answers it at `now`: while its prices wait for what they rest on, held
+ * (`heldView`); once they are in, with what they rest on (`pricing`, `realityCheck`) and, for a
+ * client built before those, each missing source as a signal.
+ */
+export function scanAnswer(row: ItemScanRow, now: Date, waitMs: number = PRICE_WAIT_MS): ItemScan {
+  const view = scanView(row);
+  const pricing = scanPricing(row, now, waitMs);
+  if (pricing.status === 'checking') return heldView(view, pricing);
+  const stored = row.research as unknown as StoredResearch | null;
+  return {
+    ...view,
+    call: {
+      ...view.call,
+      signals: [
+        ...view.call.signals,
+        ...pricing.missing.map((source) => ({
+          kind: 'missing' as const,
+          label: source.label.slice(0, 60),
+          basedOn: 'The prices rest on what did come back, never on this',
+        })),
+      ].slice(0, 16),
+    },
+    pricing: pricingView(pricing),
+    realityCheck: realityCheck(view, stored?.research?.brandPulse, pricing),
+  };
+}
+
+function researchView(
+  stored: StoredResearch & { readonly status: Exclude<StoredResearch['status'], 'failed'> },
+): NonNullable<ItemScan['research']> {
   const found = stored.research;
   return {
     status: stored.status,

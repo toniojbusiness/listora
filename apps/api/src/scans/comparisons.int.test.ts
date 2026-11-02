@@ -84,6 +84,23 @@ const POSHMARK_READ = {
   ms: 3100,
 };
 
+/**
+ * What the phone answers for a Mercari read: seven close matches sold for $20 to $28, the oldest
+ * 21 days before; 24 of the 30 latest sold results read sold in the last 30 days; and Mercari's
+ * own count of the search for sale.
+ */
+const MERCARI_READ = {
+  outcome: 'read' as const,
+  stats: {
+    level: 'model' as const,
+    sold: { count: 7, lowCents: 2000, medianCents: 2400, highCents: 2800, windowDays: 21 },
+    read: { sold: 30, forSale: 30 },
+  },
+  forSaleTotal: 1400,
+  soldTotal: 24,
+  ms: 3100,
+};
+
 describe('the thrift scan marketplace comparisons (real Postgres)', () => {
   let api: TestApi;
   let token: string;
@@ -154,6 +171,12 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     return row;
   }
 
+  function mercariOf(scan: Awaited<ReturnType<typeof scanOf>>) {
+    const row = scan.comparisons?.find((one) => one.marketplace === 'mercari');
+    if (row === undefined) throw new Error('the scan has no Mercari comparison');
+    return row;
+  }
+
   async function answerRead(scanId: string, comparisonId: string, body: unknown, as = token) {
     return api.call('saveScanComparison', {
       token: as,
@@ -162,7 +185,26 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     });
   }
 
-  async function reads(marketplace: 'depop' | 'ebay' | 'poshmark' = 'depop') {
+  /**
+   * The phone's answer to one read, and the scan once its prices are in: the other reads the
+   * phone still has are answered as failed (as the app answers a read it can't make), and the
+   * web research (which these items have no fixture for, so it fails) comes back.
+   */
+  async function answerAndPrice(scanId: string, comparisonId: string, body: unknown) {
+    const answered = await answerRead(scanId, comparisonId, body);
+    expect(answered.status).toBe(200);
+    for (const other of answered.body.comparisons ?? []) {
+      if (other.read === undefined) continue;
+      const failed = await answerRead(scanId, other.read.id, { outcome: 'failed', ms: 0 });
+      expect(failed.status).toBe(200);
+    }
+    const priced = await api.call('researchScan', { token, params: { scanId } });
+    expect(priced.status).toBe(200);
+    expect(priced.body.pricing?.status).toBe('ready');
+    return priced;
+  }
+
+  async function reads(marketplace: 'depop' | 'ebay' | 'poshmark' | 'mercari' = 'depop') {
     return api.db
       .selectFrom('market_comparison')
       .selectAll()
@@ -203,8 +245,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const scan = await scanOf(answer());
     const read = depopOf(scan).read;
     if (read === undefined) throw new Error('no read');
-    const answered = await answerRead(scan.id, read.id, READ);
-    expect(answered.status).toBe(200);
+    const answered = await answerAndPrice(scan.id, read.id, READ);
     const depop = depopOf(answered.body);
     expect(depop).toEqual({
       marketplace: 'depop',
@@ -315,8 +356,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const scan = await scanOf(answer({ line: '501', sizeLabel: '32x30' }));
     const read = ebayOf(scan).read;
     if (read === undefined) throw new Error('no read');
-    const answered = await answerRead(scan.id, read.id, EBAY_READ);
-    expect(answered.status).toBe(200);
+    const answered = await answerAndPrice(scan.id, read.id, EBAY_READ);
     const ebay = ebayOf(answered.body);
     expect(ebay).toEqual({
       marketplace: 'ebay',
@@ -365,8 +405,18 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const again = await scanOf(
       answer({ line: '501', sizeLabel: '32x30', condition: 'new_without_tags' }),
     );
-    expect(ebayOf(again)).toMatchObject({ status: 'read', cached: true, sold: { count: 9 } });
-    expect(again.call).toMatchObject({ basis: 'market_sold' });
+    // Held while the web research runs, with no price but the count of what is for sale.
+    expect(ebayOf(again)).toEqual({
+      marketplace: 'ebay',
+      status: 'read',
+      label: 'Checked eBay',
+      supply: 320,
+      cached: true,
+    });
+    const pricedAgain = (await api.call('researchScan', { token, params: { scanId: again.id } }))
+      .body;
+    expect(ebayOf(pricedAgain)).toMatchObject({ status: 'read', cached: true, sold: { count: 9 } });
+    expect(pricedAgain.call).toMatchObject({ basis: 'market_sold' });
   });
 
   it('shows eBay asking prices alone when no close match sold, and says when none match', async () => {
@@ -374,7 +424,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const read = ebayOf(scan).read;
     if (read === undefined) throw new Error('no read');
     const { level, forSale } = EBAY_READ.stats;
-    const answered = await answerRead(scan.id, read.id, {
+    const answered = await answerAndPrice(scan.id, read.id, {
       ...EBAY_READ,
       stats: { level, forSale, read: { sold: 12, forSale: 40 } },
     });
@@ -402,6 +452,25 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     });
   });
 
+  it('says nothing of sold data where eBay gave no count, on a row of asking prices', async () => {
+    const scan = await scanOf(answer({ line: '511' }));
+    const read = ebayOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    const { level, forSale } = EBAY_READ.stats;
+    const answered = await answerAndPrice(scan.id, read.id, {
+      outcome: 'read',
+      stats: { level, forSale, read: { sold: 0, forSale: 40 } },
+      forSaleTotal: 320,
+      ms: 2000,
+    });
+    // The label guard holds the whole answer: a row of asking prices never says "sold".
+    expect(answered.status).toBe(200);
+    expect(ebayOf(answered.body).demand).toEqual({
+      demand: 'unknown',
+      basedOn: 'eBay gave no count of its sales',
+    });
+  });
+
   it("hands the phone a read of Poshmark by brand, Poshmark's department and category, model, and size", async () => {
     const scan = await scanOf(answer());
     expect(poshmarkOf(scan)).toMatchObject({ status: 'checking', label: 'Checking Poshmark...' });
@@ -423,8 +492,8 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     const scan = await scanOf(answer());
     const read = poshmarkOf(scan).read;
     if (read === undefined) throw new Error('no read');
-    const answered = await answerRead(scan.id, read.id, POSHMARK_READ);
-    expect(answered.status).toBe(200);
+    const answered = await answerAndPrice(scan.id, read.id, POSHMARK_READ);
+    const pace = 'Sold listings on Poshmark: 44 like it in the last 42 days; 97,581 for sale now';
     expect(poshmarkOf(answered.body)).toEqual({
       marketplace: 'poshmark',
       status: 'read',
@@ -446,11 +515,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
       },
       supply: 97_581,
       cached: false,
-      demand: {
-        demand: 'strong',
-        label: 'Sells fast on Poshmark',
-        basedOn: 'Sold listings on Poshmark: 44 like it in the last 42 days; 97,581 for sale now',
-      },
+      demand: { demand: 'strong', label: 'Sells fast on Poshmark', basedOn: pace },
     });
     // No sales of the household's own like it: the call rests on Poshmark's sold listings.
     expect(answered.body.call).toMatchObject({
@@ -462,19 +527,27 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     expect(answered.body.call.signals).toContainEqual({
       kind: 'demand',
       label: 'Sells fast on Poshmark',
-      basedOn: 'Sold listings on Poshmark: 44 like it in the last 42 days; 97,581 for sale now',
+      basedOn: pace,
     });
     const [row] = await reads('poshmark');
     expect(row).toMatchObject({ status: 'read', for_sale_total: 97_581, sold_total: null });
+    // The same search again is answered from the read, its pace included.
     const again = await scanOf(answer({ condition: 'new_without_tags' }));
-    expect(poshmarkOf(again)).toMatchObject({ status: 'read', cached: true, sold: { count: 44 } });
+    const pricedAgain = (await api.call('researchScan', { token, params: { scanId: again.id } }))
+      .body;
+    expect(poshmarkOf(pricedAgain)).toMatchObject({
+      status: 'read',
+      cached: true,
+      sold: { count: 44 },
+      demand: { demand: 'strong' },
+    });
   });
 
   it('calls Poshmark slow when few close matches sold lately while many are for sale', async () => {
     const scan = await scanOf(answer());
     const read = poshmarkOf(scan).read;
     if (read === undefined) throw new Error('no read');
-    const answered = await answerRead(scan.id, read.id, {
+    const answered = await answerAndPrice(scan.id, read.id, {
       ...POSHMARK_READ,
       stats: {
         ...POSHMARK_READ.stats,
@@ -489,6 +562,133 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     // Too few sold to rest the call on, and a slow search keeps it from high confidence.
     expect(answered.body.call.basis).not.toBe('market_sold');
     expect(answered.body.call.confidence).not.toBe('high');
+  });
+
+  it('hands the phone a read of Mercari by brand and type words, the model, and the size', async () => {
+    const scan = await scanOf(answer());
+    const mercari = mercariOf(scan);
+    expect(mercari).toMatchObject({ status: 'checking', label: 'Checking Mercari...' });
+    expect(mercari.read?.input).toMatchObject({
+      version: 1,
+      marketplace: 'mercari',
+      query: {
+        words: 'levis 501 jeans',
+        brand: "Levi's",
+        model: '501',
+        sizeLabel: '28',
+        // Mercari's cards name no category: a listing's name must name the type.
+        productTypes: [],
+        typeWords: ['jeans'],
+      },
+    });
+    const [row] = await reads('mercari');
+    expect(row).toMatchObject({ status: 'pending', scan_id: scan.id, marketplace: 'mercari' });
+  });
+
+  it("rests the call on Mercari's sold listings, with how many of its latest sales were lately", async () => {
+    const scan = await scanOf(answer({ line: '501', sizeLabel: '32' }));
+    const read = mercariOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    const answered = await answerAndPrice(scan.id, read.id, MERCARI_READ);
+    const pace = 'Sold listings on Mercari: 24 of the latest 30 sold in the last 30 days';
+    expect(mercariOf(answered.body)).toEqual({
+      marketplace: 'mercari',
+      status: 'read',
+      label: 'Mercari: sold $20-$28, 7 like it in the last 21 days',
+      sold: {
+        count: 7,
+        low: { amountCents: 2000, currency: 'USD' },
+        median: { amountCents: 2400, currency: 'USD' },
+        high: { amountCents: 2800, currency: 'USD' },
+        windowDays: 21,
+        label: marketSoldLabel('Mercari'),
+      },
+      supply: 1400,
+      cached: false,
+      demand: { demand: 'strong', label: 'Sells fast on Mercari', basedOn: pace },
+    });
+    // No sales of the household's own like it: the call rests on Mercari's sold listings.
+    expect(answered.body.call).toMatchObject({
+      call: 'buy',
+      basis: 'market_sold',
+      basedOn: 'Sold listings on Mercari: 7 like it in the last 21 days',
+      low: { amountCents: 2000 },
+      high: { amountCents: 2800 },
+    });
+    expect(answered.body.call.signals).toContainEqual({
+      kind: 'demand',
+      label: 'Sells fast on Mercari',
+      basedOn: pace,
+    });
+    const [row] = await reads('mercari');
+    expect(row).toMatchObject({ status: 'read', for_sale_total: 1400, sold_total: 24 });
+    // The same search again is answered from the read, its pace included.
+    const again = await scanOf(
+      answer({ line: '501', sizeLabel: '32', condition: 'pre_owned_excellent' }),
+    );
+    const pricedAgain = (await api.call('researchScan', { token, params: { scanId: again.id } }))
+      .body;
+    expect(mercariOf(pricedAgain)).toMatchObject({
+      status: 'read',
+      cached: true,
+      sold: { count: 7 },
+      demand: { demand: 'strong' },
+    });
+  });
+
+  it('keeps a slow Mercari from a high-confidence call, and says nothing without its dates', async () => {
+    const slow = await scanOf(answer({ line: '501', sizeLabel: '30' }));
+    const slowRead = mercariOf(slow).read;
+    if (slowRead === undefined) throw new Error('no read');
+    const answered = await answerAndPrice(slow.id, slowRead.id, { ...MERCARI_READ, soldTotal: 3 });
+    expect(mercariOf(answered.body).demand).toEqual({
+      demand: 'crowded',
+      label: 'Slow on Mercari',
+      basedOn: 'Sold listings on Mercari: 3 of the latest 30 sold in the last 30 days',
+    });
+    expect(answered.body.call.confidence).not.toBe('high');
+
+    // A page that dated none of its sales: the sold prices still show, the pace says why not.
+    const undated = await scanOf(answer({ line: '505' }));
+    const undatedRead = mercariOf(undated).read;
+    if (undatedRead === undefined) throw new Error('no read');
+    const plain = await answerAndPrice(undated.id, undatedRead.id, {
+      outcome: 'read',
+      stats: {
+        ...MERCARI_READ.stats,
+        sold: { count: 7, lowCents: 2000, medianCents: 2400, highCents: 2800 },
+      },
+      ms: 2900,
+    });
+    expect(plain.status).toBe(200);
+    expect(mercariOf(plain.body)).toMatchObject({
+      status: 'read',
+      label: 'Mercari: sold $20-$28, 7 like it',
+      demand: { demand: 'unknown', basedOn: 'Mercari gave no dates for its latest sales' },
+    });
+  });
+
+  it("saves the last of Mercari's hour for items the AI prices at $25 or more", async () => {
+    const { after } = COMPARISON_LIMITS.mercari.saveForPricier ?? { after: 0 };
+    await api.db
+      .insertInto('market_comparison')
+      .values(
+        Array.from({ length: after }, (_, index) => ({
+          account_id: tenant.accountId,
+          marketplace: 'mercari' as const,
+          query_key: index.toString(16).padStart(64, '0'),
+          query: { words: 'x' } as never,
+          created_at: new Date(api.clock.now - 60_000),
+        })),
+      )
+      .execute();
+    const cheap = answer({ priceEstimate: { lowCents: 800, midCents: 1200, highCents: 1800 } });
+    expect(mercariOf(await scanOf(cheap))).toEqual({
+      marketplace: 'mercari',
+      status: 'limit',
+      label: 'Not checked: Mercari limit for this hour',
+    });
+    expect(mercariOf(await scanOf(answer())).status).toBe('checking');
   });
 
   it("saves the last of eBay's hour for items the AI prices at $25 or more", async () => {

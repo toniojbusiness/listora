@@ -809,6 +809,7 @@ const COLUMNS = {
     'research_ms',
     'created_at',
     'updated_at',
+    'research_started_at',
   ],
   scan_research: ['account_id', 'kind', 'key', 'research', 'model', 'cost_micros', 'created_at'],
   market_comparison: [

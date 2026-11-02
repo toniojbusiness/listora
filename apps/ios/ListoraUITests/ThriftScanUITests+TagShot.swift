@@ -40,7 +40,8 @@ extension ThriftScanUITests {
         XCTAssertTrue(card.waitForExistence(timeout: 5), "the card comes back after the tag shot")
         XCTAssertTrue(app.buttons["scan.tag"].waitForExistence(timeout: 20))
         XCTAssertTrue(waitForLabel(of: app.buttons["scan.tag"], prefix: "Retake the tag", timeout: 20))
-        XCTAssertTrue(element("scan.call").exists)
+        // The read with the tag waits for its own prices again, then shows its verdict.
+        XCTAssertTrue(element("scan.call").waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["scan.title"].label, title)
         XCTAssertFalse(element("scanCamera.tagPrompt").exists)
         XCTAssertTrue(element("scanCamera.summary").label.hasPrefix("1 scanned"), element("scanCamera.summary").label)

@@ -42,6 +42,11 @@ export interface ResearchResult {
 
 type ItemFacts = Omit<ScanResearch, 'reputation' | 'brandPulse'>;
 
+/** Whether the read is looked up on the web at all: it needs a brand and an item to ask about. */
+export function researchWanted(read: ThriftScan): boolean {
+  return brandResearchKey(read.brand) !== undefined && scanResearchSubject(read) !== undefined;
+}
+
 export async function researchFor(
   db: DbExecutor,
   ai: AiClient,

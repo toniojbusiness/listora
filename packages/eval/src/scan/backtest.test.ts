@@ -185,6 +185,29 @@ describe('runScanBacktest calibrated', () => {
     expect(formatScanReport(report)).toContain('Prices against the sale');
   });
 
+  it("scores the card's three prices against each sale", async () => {
+    const dataset = await loadScanDataset(await writeScanDataset());
+    const report = await runScanBacktest(dataset, { reader: await fakeReader(dataset), settings });
+    for (const scores of report.prices) {
+      const three = scores.threePrices;
+      // Every item with a range gets the three prices, and each sale lands somewhere.
+      expect(three.priced).toBe(scores.call.priced);
+      expect(three.saleInBand + three.saleBelowFast + three.saleAboveList).toBe(three.priced);
+      expect(three.saleNearRealistic).toBeLessThanOrEqual(three.priced);
+    }
+    const all = report.prices.find(
+      (scores) => scores.variant === 'calibrated' && scores.group === 'all',
+    );
+    expect(all?.threePrices.priced).toBeGreaterThan(0);
+    for (const entry of report.items) {
+      const prices = entry.calls.calibrated?.call.prices;
+      if (prices === undefined) continue;
+      expect(prices.fastCents).toBeLessThanOrEqual(prices.realisticCents);
+      expect(prices.realisticCents).toBeLessThanOrEqual(prices.listAtCents);
+    }
+    expect(formatScanReport(report)).toContain("The card's three prices against the sale");
+  });
+
   it("snaps a near miss to a brand of the other items' sales, never to the item's own", async () => {
     const dataset = await loadScanDataset(await writeScanDataset());
     const misread = misreading(await fakeReader(dataset));

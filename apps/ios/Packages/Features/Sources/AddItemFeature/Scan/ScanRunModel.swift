@@ -19,8 +19,6 @@ struct ScanRunDependencies {
     var kit: @MainActor () -> SourcingKit? = { nil }
     let saveDraft: ScanDraftSaver
     var now: () -> Date = Date.init
-    /// How long a card is on screen before its web research is asked for.
-    var researchDwell: Duration = ScanRunModel.defaultResearchDwell
 }
 
 /// One sourcing run at the store (docs/features/thrift-scan.md): every shot is read at once and
@@ -84,11 +82,6 @@ final class ScanRunModel {
     /// The longest the tag text reading may hold up a read; past it the read goes without.
     static let tagReadDeadline: Duration = .milliseconds(400)
     static let tagCloseUpReadDeadline: Duration = .milliseconds(900)
-    /// How long a card is on screen before its item is looked up on the web. At the bins most
-    /// items are skipped within a second or two of their card, by shooting the next one; a
-    /// lookup costs about $0.02, so only a card the seller is still looking at gets one. A card
-    /// picked again in the tray is looked up at once.
-    nonisolated static let defaultResearchDwell: Duration = .seconds(2)
 
     /// A new run, at the place the seller named (nil: none).
     init(dependencies: ScanRunDependencies, directory: URL, place: String? = nil) {
@@ -124,7 +117,6 @@ final class ScanRunModel {
         comparisons: (any MarketComparisons)? = nil,
         comparing marketplaces: [String] = [],
         now: @escaping () -> Date = Date.init,
-        researchDwell: Duration = ScanRunModel.defaultResearchDwell,
     ) {
         self.init(
             dependencies: ScanRunDependencies(
@@ -132,7 +124,6 @@ final class ScanRunModel {
                 tagReader: tagReader,
                 saveDraft: saveDraft,
                 now: now,
-                researchDwell: researchDwell,
             ),
             directory: directory,
             place: place,
@@ -149,10 +140,6 @@ final class ScanRunModel {
 
     var service: any ScanService {
         dependencies.service
-    }
-
-    var researchDwell: Duration {
-        dependencies.researchDwell
     }
 
     /// The ``InteractionMeter`` session of the run's camera.
@@ -261,7 +248,7 @@ final class ScanRunModel {
         }
     }
 
-    /// Shows the entry's card (a tap in the tray), looked up on the web now if it was not yet.
+    /// Shows the entry's card (a tap in the tray), its prices asked for again if they never came.
     func select(_ entryID: String) {
         guard let entry = entries.first(where: { $0.id == entryID }) else { return }
         tagShotFor = nil

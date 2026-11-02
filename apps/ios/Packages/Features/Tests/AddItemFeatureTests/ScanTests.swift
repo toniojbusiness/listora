@@ -17,7 +17,7 @@ struct ScanCardTests {
         #expect(card.title == "Lululemon black high-rise leggings")
         #expect(card.subtitle == "Size 6 · Pre-owned good")
         #expect(card.call == .buy)
-        #expect(card.callLabel == "Buy")
+        #expect(card.callLabel == "Grab")
         #expect(card.confidence == "Medium confidence")
         #expect(card.basedOn == "Your 3 sales like it")
         #expect(card.range == "$25-$29")
@@ -28,6 +28,48 @@ struct ScanCardTests {
         #expect(card.flags == ["Often faked: check it's real"])
         #expect(card.links.first?.label == "Search Depop")
         #expect(!card.wantsTag)
+    }
+
+    @Test
+    func `shows list at, realistic sale, and fast sale instead of the range, and not again as a signal`() throws {
+        var json = itemScanJSON()
+        var call = json["call"] as? [String: Any] ?? [:]
+        call["prices"] = [
+            "listAt": dollarsJSON(3500), "realisticSale": dollarsJSON(2800), "fastSale": dollarsJSON(2500),
+            "basedOn": Self.pricesBasedOn,
+        ]
+        call["signals"] = [
+            ["kind": "prices", "label": Self.pricesLabel, "basedOn": "Likely sale is..."],
+            ["kind": "style", "label": "Y2K", "basedOn": "The AI's read of the style, not sales data"],
+        ]
+        json["call"] = call
+        let card = try ScanCard(decodeScan(json))
+        #expect(card.prices == .init(
+            listAt: "$35", realistic: "$28", fast: "$25",
+            basedOn: Self.pricesBasedOn,
+        ))
+        #expect(card.listedSignals.map(\.kind) == ["style"])
+        #expect(card.range == "$25-$29")
+    }
+
+    private static let pricesLabel = "List at $35 · Likely sale $28 · Fast sale $25"
+    private static let pricesBasedOn =
+        "Likely sale is the middle of your sales like it, fast sale its low end; list at leaves room for offers"
+
+    private func dollarsJSON(_ cents: Int) -> [String: Any] {
+        ["amountCents": cents, "currency": "USD"]
+    }
+
+    @Test
+    func `keeps the range, and any prices signal, from a server without the three prices`() throws {
+        var json = itemScanJSON()
+        var call = json["call"] as? [String: Any] ?? [:]
+        call["signals"] = [["kind": "prices", "label": Self.pricesLabel, "basedOn": "x"]]
+        json["call"] = call
+        let card = try ScanCard(decodeScan(json))
+        #expect(card.prices == nil)
+        #expect(card.range == "$25-$29")
+        #expect(card.listedSignals.map(\.kind) == ["prices"])
     }
 
     @Test
@@ -77,7 +119,6 @@ struct ScanRunModelTests {
         _ service: FakeScanService,
         saver: Saver = Saver(),
         tagReader: any TagReader = FakeTagReader(),
-        researchDwell: Duration = .zero,
         comparisons: FakeComparisons? = nil,
     ) -> ScanRunModel {
         ScanRunModel(
@@ -90,7 +131,6 @@ struct ScanRunModelTests {
             },
             comparisons: comparisons,
             comparing: comparisons == nil ? [] : ["depop"],
-            researchDwell: researchDwell,
         )
     }
 

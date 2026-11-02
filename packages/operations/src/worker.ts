@@ -20,6 +20,7 @@ import type { AdapterLookup } from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';
 
 import { runOperationStep, type StepDependencies } from './executor.ts';
+import { createJobQueuePool } from './job-fetch.ts';
 import {
   AUTOMATION_OPERATION_TASK,
   isOperationJobPayload,
@@ -304,10 +305,12 @@ async function startRunner(
     ]),
   );
 
+  // Its own pool, whose job fetch looks at listing queues only for its own jobs (job-fetch.ts).
+  const pgPool = createJobQueuePool(options.connectionString, options.logger, fatal);
   let runner;
   try {
     runner = await run({
-      connectionString: options.connectionString,
+      pgPool,
       schema: JOB_QUEUE_SCHEMA,
       concurrency: options.concurrency,
       pollInterval: options.pollIntervalMs,
@@ -319,6 +322,7 @@ async function startRunner(
       preset: { worker: { localQueue: { size: LOCAL_QUEUE_SIZE } } },
     });
   } catch (error) {
+    await pgPool.end();
     await liveness.close();
     throw error;
   }
@@ -339,6 +343,7 @@ async function startRunner(
   } catch (error) {
     stopped = true;
     await runner.stop();
+    await pgPool.end();
     await liveness.close();
     throw error;
   }
@@ -349,7 +354,11 @@ async function startRunner(
       try {
         await runner.stop();
       } finally {
-        await liveness.close();
+        try {
+          await pgPool.end();
+        } finally {
+          await liveness.close();
+        }
       }
     },
   };
