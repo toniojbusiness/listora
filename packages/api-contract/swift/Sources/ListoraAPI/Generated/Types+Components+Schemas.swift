@@ -18800,8 +18800,12 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ScanCall/worthListing`.
             public var worthListing: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanCall/prices`.
+            public var prices: Components.Schemas.ScanPrices?
             /// What else the call weighed, each with what it rests on: the retail price, new with
             /// tags, how the brand resells on the web, the household's own sales trend, the style.
+            /// The first is the three `prices` (kind `prices`) when there are any, for a client built
+            /// before `prices`; a client that shows `prices` leaves that signal out.
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ScanCall/signals`.
@@ -18820,6 +18824,7 @@ extension Components {
             ///   - optimisticPayout: What the range's high end pays out after fees, an estimate.
             ///   - payoutMarketplace: The marketplace whose fees the payouts are after.
             ///   - worthListing: The least payout worth buying for.
+            ///   - prices:
             ///   - signals: What else the call weighed, each with what it rests on: the retail price, new with
             public init(
                 call: Components.Schemas.ScanCallKind,
@@ -18833,6 +18838,7 @@ extension Components {
                 optimisticPayout: Components.Schemas.Money? = nil,
                 payoutMarketplace: Components.Schemas.Marketplace? = nil,
                 worthListing: Components.Schemas.Money,
+                prices: Components.Schemas.ScanPrices? = nil,
                 signals: [Components.Schemas.ScanSignal]
             ) {
                 self.call = call
@@ -18846,6 +18852,7 @@ extension Components {
                 self.optimisticPayout = optimisticPayout
                 self.payoutMarketplace = payoutMarketplace
                 self.worthListing = worthListing
+                self.prices = prices
                 self.signals = signals
             }
             public enum CodingKeys: String, CodingKey {
@@ -18860,6 +18867,7 @@ extension Components {
                 case optimisticPayout
                 case payoutMarketplace
                 case worthListing
+                case prices
                 case signals
             }
         }
@@ -19188,7 +19196,8 @@ extension Components {
         /// household's recent sales against the marketplace's supply. `unsold`: the household already
         /// has items like it in inventory, not sold (it never moves the call). `calibrated`: the AI
         /// estimate and the web's asking prices were scaled by what the household's own items went for
-        /// against what they asked.
+        /// against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
+        /// built before them.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
@@ -19202,6 +19211,7 @@ extension Components {
             case demand = "demand"
             case unsold = "unsold"
             case calibrated = "calibrated"
+            case prices = "prices"
         }
         /// The item's original retail price, with where it came from: one model's price (`low` equals
         /// `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -19994,6 +20004,50 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case itemIds
+            }
+        }
+        /// The card's three prices, from the range the call rests on (no further lookup): what to list
+        /// at, leaving room for offers (the realistic sale over what the household's items go for
+        /// against what they ask); the realistic sale, the middle of the range; and the fast sale, its
+        /// low end. Rounded to prices a seller would type. Estimates, never sold prices; absent with
+        /// no range.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanPrices`.
+        public struct ScanPrices: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/listAt`.
+            public var listAt: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/realisticSale`.
+            public var realisticSale: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/fastSale`.
+            public var fastSale: Components.Schemas.Money
+            /// Where the three come from, as the seller reads it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanPrices/basedOn`.
+            public var basedOn: Swift.String
+            /// Creates a new `ScanPrices`.
+            ///
+            /// - Parameters:
+            ///   - listAt:
+            ///   - realisticSale:
+            ///   - fastSale:
+            ///   - basedOn: Where the three come from, as the seller reads it.
+            public init(
+                listAt: Components.Schemas.Money,
+                realisticSale: Components.Schemas.Money,
+                fastSale: Components.Schemas.Money,
+                basedOn: Swift.String
+            ) {
+                self.listAt = listAt
+                self.realisticSale = realisticSale
+                self.fastSale = fastSale
+                self.basedOn = basedOn
+            }
+            public enum CodingKeys: String, CodingKey {
+                case listAt
+                case realisticSale
+                case fastSale
+                case basedOn
             }
         }
     }

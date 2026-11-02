@@ -917,14 +917,38 @@ ScanCall:
     worthListing:
       $ref: './common.yaml#/Money'
       description: The least payout worth buying for.
+    prices:
+      $ref: '#/ScanPrices'
     signals:
       type: array
       description: |
         What else the call weighed, each with what it rests on: the retail price, new with
         tags, how the brand resells on the web, the household's own sales trend, the style.
-      maxItems: 10
+        The first is the three `prices` (kind `prices`) when there are any, for a client built
+        before `prices`; a client that shows `prices` leaves that signal out.
+      maxItems: 16
       items:
         $ref: '#/ScanSignal'
+ScanPrices:
+  type: object
+  description: |
+    The card's three prices, from the range the call rests on (no further lookup): what to list
+    at, leaving room for offers (the realistic sale over what the household's items go for
+    against what they ask); the realistic sale, the middle of the range; and the fast sale, its
+    low end. Rounded to prices a seller would type. Estimates, never sold prices; absent with
+    no range.
+  required: [listAt, realisticSale, fastSale, basedOn]
+  properties:
+    listAt:
+      $ref: './common.yaml#/Money'
+    realisticSale:
+      $ref: './common.yaml#/Money'
+    fastSale:
+      $ref: './common.yaml#/Money'
+    basedOn:
+      type: string
+      maxLength: 200
+      description: Where the three come from, as the seller reads it.
 ScanCallKind:
   description: A `KnownScanCallKind`, or one added after this client was built (shown by `label`).
   anyOf:
@@ -1001,8 +1025,10 @@ KnownScanSignalKind:
     household's recent sales against the marketplace's supply. `unsold`: the household already
     has items like it in inventory, not sold (it never moves the call). `calibrated`: the AI
     estimate and the web's asking prices were scaled by what the household's own items went for
-    against what they asked.
-  enum: [retail, new_with_tags, web_resale, trend, style, asking, demand, unsold, calibrated]
+    against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
+    built before them.
+  enum:
+    [retail, new_with_tags, web_resale, trend, style, asking, demand, unsold, calibrated, prices]
 ScanRetail:
   type: object
   description: |

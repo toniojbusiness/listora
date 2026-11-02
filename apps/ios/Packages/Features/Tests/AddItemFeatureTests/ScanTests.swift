@@ -31,6 +31,44 @@ struct ScanCardTests {
     }
 
     @Test
+    func `shows list at, realistic sale, and fast sale instead of the range, and not again as a signal`() throws {
+        var json = itemScanJSON()
+        var call = json["call"] as? [String: Any] ?? [:]
+        call["prices"] = [
+            "listAt": dollarsJSON(3500), "realisticSale": dollarsJSON(2800), "fastSale": dollarsJSON(2500),
+            "basedOn": "Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers",
+        ]
+        call["signals"] = [
+            ["kind": "prices", "label": "List at $35 · Realistic sale $28 · Fast sale $25", "basedOn": "Realistic is..."],
+            ["kind": "style", "label": "Y2K", "basedOn": "The AI's read of the style, not sales data"],
+        ]
+        json["call"] = call
+        let card = try ScanCard(decodeScan(json))
+        #expect(card.prices == .init(
+            listAt: "$35", realistic: "$28", fast: "$25",
+            basedOn: "Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers",
+        ))
+        #expect(card.listedSignals.map(\.kind) == ["style"])
+        #expect(card.range == "$25-$29")
+    }
+
+    private func dollarsJSON(_ cents: Int) -> [String: Any] {
+        ["amountCents": cents, "currency": "USD"]
+    }
+
+    @Test
+    func `keeps the range, and any prices signal, from a server without the three prices`() throws {
+        var json = itemScanJSON()
+        var call = json["call"] as? [String: Any] ?? [:]
+        call["signals"] = [["kind": "prices", "label": "List at $35 · Realistic sale $28 · Fast sale $25", "basedOn": "x"]]
+        json["call"] = call
+        let card = try ScanCard(decodeScan(json))
+        #expect(card.prices == nil)
+        #expect(card.range == "$25-$29")
+        #expect(card.listedSignals.map(\.kind) == ["prices"])
+    }
+
+    @Test
     func `is felt without looking: two taps for Buy, a long buzz for Skip, nothing for Your call`() throws {
         #expect(try ScanCard(decodeScan(itemScanJSON(call: "buy"))).haptic == .doubleTap)
         #expect(try ScanCard(decodeScan(itemScanJSON(call: "skip"))).haptic == .longBuzz)

@@ -39,10 +39,17 @@ final class ThriftScanUITests: XCTestCase {
         // The web's $15-$25 is what listings ask, shown as asks; the card's range is those asks
         // scaled to what the household's items sell for, which depends on the stack's sales.
         XCTAssertTrue(element("scan.webInfo").label.contains("Asks $15-$25"), element("scan.webInfo").label)
-        let range = app.staticTexts["scan.range"].label
-        let ends = range.split(separator: "-").compactMap { Int($0.trimmingCharacters(in: .init(charactersIn: "$"))) }
-        XCTAssertEqual(ends.count, 2, range)
-        XCTAssertLessThan(ends.last ?? 25, 25, "the range is scaled below the web's asks: \(range)")
+        // The three prices (list at, realistic sale, fast sale) stand in for the range: in order,
+        // and the realistic sale below the web's asks.
+        let prices = element("scan.prices").label
+        let amounts = prices.split(separator: "$").dropFirst()
+            .compactMap { Int($0.prefix { $0.isNumber }) }
+        XCTAssertEqual(amounts.count, 3, prices)
+        XCTAssertTrue(prices.hasPrefix("List at"), prices)
+        XCTAssertGreaterThanOrEqual(amounts.first ?? 0, amounts.dropFirst().first ?? 0, prices)
+        XCTAssertGreaterThanOrEqual(amounts.dropFirst().first ?? 0, amounts.last ?? 0, prices)
+        XCTAssertLessThan(amounts.dropFirst().first ?? 25, 25, "the realistic sale is scaled below the web's asks: \(prices)")
+        XCTAssertFalse(app.staticTexts["scan.range"].exists, "the three prices replace the range")
         let scaled = app.descendants(matching: .any).matching(identifier: "scan.signal")
             .matching(NSPredicate(format: "label BEGINSWITH %@", "Scaled to your sales")).firstMatch
         XCTAssertTrue(scaled.exists, "the card says the prices were scaled to the household's sales")

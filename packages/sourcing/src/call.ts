@@ -6,12 +6,14 @@ import {
 } from '@listora/pricing';
 
 import {
+  DEFAULT_PRICE_CALIBRATION_SETTINGS,
   calibratedAiEstimate,
   calibratedWebAsks,
   calibrationPercent,
   type PriceCalibration,
 } from './calibration.ts';
 import type { MarketDemand, MarketMatchLevel } from './market.ts';
+import { scanPrices, type ScanPrices } from './prices.ts';
 
 import type { OwnHistoryComparisons } from './own-history.ts';
 import type { UnsoldLikeIt } from './unsold.ts';
@@ -95,6 +97,7 @@ export const SCAN_SIGNAL_KINDS = [
   'asking',
   'demand',
   'calibrated',
+  'prices',
 ] as const;
 export type ScanSignalKind = (typeof SCAN_SIGNAL_KINDS)[number];
 
@@ -199,6 +202,11 @@ export interface MarketCallInput {
   };
 }
 
+/** The card's three prices, with where they come from as the seller reads it. */
+export interface ScanCallPrices extends ScanPrices {
+  readonly basedOn: string;
+}
+
 export interface ScanCall {
   readonly call: ScanCallKind;
   readonly confidence: CallConfidence;
@@ -216,6 +224,8 @@ export interface ScanCall {
     readonly midCents: number;
     readonly highCents: number;
   };
+  /** List at, realistic sale, and fast sale, from the range (`scanPrices`); absent with no range. */
+  readonly prices?: ScanCallPrices;
   /** The retail tag, new with tags, the trend, and the style, when there is something to say. */
   readonly signals: readonly ScanSignal[];
 }
@@ -274,13 +284,12 @@ export function scanCall(
               lowCents: aiEstimate.lowCents,
               highCents: aiEstimate.highCents,
             };
-  if (
-    range !== undefined &&
-    useHistory &&
-    input.newWithTags === true &&
-    settings.newWithTagsBump > 0
-  ) {
-    const bump = 1 + settings.newWithTagsBump;
+  const tagsBump =
+    range !== undefined && useHistory && input.newWithTags === true && settings.newWithTagsBump > 0
+      ? 1 + settings.newWithTagsBump
+      : 1;
+  if (range !== undefined && tagsBump !== 1) {
+    const bump = tagsBump;
     range = {
       lowCents: Math.round(range.lowCents * bump),
       highCents: Math.round(range.highCents * bump),
@@ -409,6 +418,16 @@ export function scanCall(
     { conservativePayoutCents, optimisticPayoutCents, confidence, flagged },
     settings,
   );
+  const expected =
+    basis === 'own_history' && history
+      ? Math.round(history.prices.medianCents * tagsBump)
+      : basis === 'ai_estimate' && aiEstimate
+        ? aiEstimate.midCents
+        : (range.lowCents + range.highCents) / 2;
+  const prices = {
+    ...scanPrices(range, expected, calibration),
+    basedOn: pricesBasedOn(basis, calibration),
+  };
   return {
     call,
     confidence,
@@ -416,6 +435,7 @@ export function scanCall(
     range,
     conservativePayoutCents,
     optimisticPayoutCents,
+    prices,
     basedOn:
       basis === 'own_history' && history
         ? yourSales(history.prices.count)
@@ -450,6 +470,42 @@ export function decideCall(
     !range.flagged
     ? 'buy'
     : 'your_call';
+}
+
+/**
+ * Where the three prices come from, as the seller reads it: the realistic sale is the middle of
+ * what the call rests on, the fast sale its low end, and the list price leaves room for offers.
+ * Never says "sold": the three are estimates, whatever the range rests on.
+ */
+function pricesBasedOn(basis: CallBasis, calibration: PriceCalibration | undefined): string {
+  const middle =
+    basis === 'own_history'
+      ? 'the middle of your sales like it'
+      : basis === 'market_sold'
+        ? "the middle of the marketplace's prices"
+        : basis === 'web_info'
+          ? "the middle of the web's asks, scaled to your sales"
+          : 'the middle of the AI estimate';
+  const share = calibrationPercent(
+    calibration?.saleToAsking ?? DEFAULT_PRICE_CALIBRATION_SETTINGS.defaultSaleToAsking,
+  );
+  const room =
+    calibration !== undefined && calibration.sales > 0
+      ? `your items went for ${share} of what they asked`
+      : `items usually go for about ${share} of what they ask`;
+  return `Realistic is ${middle}, fast its low end; list at leaves room for offers (${room})`;
+}
+
+/**
+ * The three prices as a signal, for a card built before they had a place of their own (it
+ * lists signals by their label): "List at $35 · Realistic sale $25 · Fast sale $18".
+ */
+export function pricesSignal(prices: ScanCallPrices): ScanSignal {
+  return {
+    kind: 'prices',
+    label: `List at ${dollars(prices.listAtCents)} · Realistic sale ${dollars(prices.realisticCents)} · Fast sale ${dollars(prices.fastCents)}`,
+    basedOn: prices.basedOn,
+  };
 }
 
 /** The web's asks a range rests on: "asks on poshmark.com, scaled to your sales". */

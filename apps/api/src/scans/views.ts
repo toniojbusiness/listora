@@ -7,7 +7,7 @@ import type { ItemScan, ScanCall, ScanOwnSales } from '@listora/api-contract';
 import { WEB_INFO_LABEL, type ThriftScan } from '@listora/analysis';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { AI_ESTIMATE_LABEL, OWN_SALES_MAY_MODEL_PRICES, scanResearchLinks } from '@listora/pricing';
-import type { ScanCall as RuleCall, ScanOwnHistory } from '@listora/sourcing';
+import { pricesSignal, type ScanCall as RuleCall, type ScanOwnHistory } from '@listora/sourcing';
 import { assertNever } from '@listora/shared';
 
 import { ownHistoryLabel } from '../sourcing/own-history.ts';
@@ -55,7 +55,21 @@ export function callDetail(input: {
       : { optimisticPayout: usd(rule.optimisticPayoutCents) }),
     ...(range === undefined ? {} : { payoutMarketplace: history.payoutMarketplace }),
     worthListing: usd(input.worthListingCents),
-    signals: rule.signals.map((signal) => ({ ...signal })),
+    ...(rule.prices === undefined
+      ? {}
+      : {
+          prices: {
+            listAt: usd(rule.prices.listAtCents),
+            realisticSale: usd(rule.prices.realisticCents),
+            fastSale: usd(rule.prices.fastCents),
+            basedOn: rule.prices.basedOn,
+          },
+        }),
+    // The three prices lead the signals too, so an app built before `prices` shows them.
+    signals: [
+      ...(rule.prices === undefined ? [] : [pricesSignal(rule.prices)]),
+      ...rule.signals.map((signal) => ({ ...signal })),
+    ],
   };
   const ownSales: ScanOwnSales[] = history.byMarketplace.map(({ marketplace, level, prices }) => ({
     marketplace,

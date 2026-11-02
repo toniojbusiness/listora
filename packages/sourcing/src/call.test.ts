@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_SCAN_CALL_SETTINGS,
+  pricesSignal,
   scanCall,
   type ScanCallInput,
   type ScanCallSettings,
@@ -197,6 +198,13 @@ describe('scanCall', () => {
       conservativePayoutCents: 1_080,
       optimisticPayoutCents: 1_800,
       basedOn: 'Your 5 sales like it',
+      prices: {
+        listAtCents: 2_500,
+        realisticCents: 1_600,
+        fastCents: 1_200,
+        basedOn:
+          'Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers (items usually go for about 75% of what they ask)',
+      },
       signals: [],
     });
   });
@@ -249,6 +257,13 @@ describe('scanCall', () => {
       optimisticPayoutCents: 2_700,
       basedOn: AI_ESTIMATE_LABEL,
       aiEstimate,
+      prices: {
+        listAtCents: 3_000,
+        realisticCents: 2_000,
+        fastCents: 1_500,
+        basedOn:
+          'Realistic is the middle of the AI estimate, fast its low end; list at leaves room for offers (items usually go for about 75% of what they ask)',
+      },
       signals: [],
     });
     const low = { lowCents: 300, midCents: 500, highCents: 800 };
@@ -517,5 +532,126 @@ describe("scanCall calibrated to the seller's sales", () => {
     expect(call.range).toEqual({ lowCents: 2_000, highCents: 4_000 });
     expect(call.aiEstimate).toEqual(aiEstimate);
     expect(call.signals).toEqual([]);
+  });
+});
+
+describe('scanCall three prices', () => {
+  const own = (calibration?: { saleToAsking: number; sales: number }) =>
+    scanCall(
+      input({
+        ownHistory: history(2_000, 4_000),
+        ...(calibration === undefined ? {} : { calibration }),
+      }),
+      settings,
+    );
+
+  it("lists at the realistic sale over the seller's own sale-to-asking ratio", () => {
+    // Median $30; at 60% the list price is $50, at the 75% default $40.
+    expect(own({ saleToAsking: 0.6, sales: 40 }).prices).toMatchObject({
+      listAtCents: 5_000,
+      realisticCents: 3_000,
+      fastCents: 2_000,
+    });
+    expect(own({ saleToAsking: 0.6, sales: 40 }).prices?.basedOn).toContain(
+      'your items went for 60% of what they asked',
+    );
+    expect(own().prices).toMatchObject({ listAtCents: 4_000, realisticCents: 3_000 });
+    expect(own({ saleToAsking: 0.75, sales: 0 }).prices?.basedOn).toContain(
+      'items usually go for about 75% of what they ask',
+    );
+  });
+
+  it('never changes the call, its range, or its payouts', () => {
+    expect(own({ saleToAsking: 0.5, sales: 10 })).toMatchObject({
+      call: 'buy',
+      range: { lowCents: 2_000, highCents: 4_000 },
+      conservativePayoutCents: 1_800,
+      optimisticPayoutCents: 3_600,
+    });
+  });
+
+  it("takes the realistic sale from the middle of the web's scaled asks", () => {
+    const call = scanCall(
+      input({
+        web: {
+          lowCents: 4_000,
+          highCents: 8_000,
+          sites: ['a.example', 'b.example'],
+          reputation: 'average',
+        },
+        calibration: { saleToAsking: 0.5, sales: 20 },
+      }),
+      settings,
+    );
+    // Asks $40-$80 scaled by 0.25: $10-$20, middle $15, listed at $30.
+    expect(call.range).toEqual({ lowCents: 1_000, highCents: 2_000 });
+    expect(call.prices).toMatchObject({
+      listAtCents: 3_000,
+      realisticCents: 1_500,
+      fastCents: 1_000,
+    });
+    expect(call.prices?.basedOn).toContain("the middle of the web's asks, scaled to your sales");
+  });
+
+  it('raises the realistic sale with the range for tags still on', () => {
+    const call = scanCall(
+      input({ ownHistory: history(2_000, 4_000), newWithTags: true }),
+      settings,
+    );
+    // Median $30 plus 15% is $34.50, a $35 realistic sale; the low end $23 a $20 fast sale.
+    expect(call.prices).toMatchObject({ realisticCents: 3_500, fastCents: 2_000 });
+  });
+
+  it('keeps the realistic sale inside a range held to the retail price', () => {
+    const call = scanCall(
+      input({
+        aiEstimate: { lowCents: 3_000, midCents: 5_000, highCents: 8_000 },
+        retail: { lowCents: 4_000, highCents: 4_000, from: 'tag' },
+      }),
+      settings,
+    );
+    expect(call.range).toEqual({ lowCents: 3_000, highCents: 4_000 });
+    expect(call.prices).toMatchObject({ realisticCents: 4_000, fastCents: 3_000 });
+  });
+
+  it('has no prices without a range', () => {
+    expect(scanCall(input({}), settings).prices).toBeUndefined();
+  });
+
+  it('never says "sold", whatever the call rests on', () => {
+    const calls = [
+      own(),
+      scanCall(
+        input({ aiEstimate: { lowCents: 1_000, midCents: 1_500, highCents: 2_000 } }),
+        settings,
+      ),
+      scanCall(
+        input({
+          markets: [
+            {
+              marketplace: 'eBay',
+              sold: { count: 9, lowCents: 1_800, highCents: 3_000, windowDays: 14, level: 'model' },
+            },
+          ],
+        }),
+        settings,
+      ),
+    ];
+    for (const { prices } of calls) {
+      if (prices === undefined) throw new Error('expected the three prices');
+      expect(claimsSoldData(prices.basedOn)).toBe(false);
+      expect(claimsSoldData(pricesSignal(prices).label)).toBe(false);
+    }
+  });
+
+  it('shows as a signal for a card built before them', () => {
+    const prices = own({ saleToAsking: 0.6, sales: 40 }).prices;
+    if (prices === undefined) throw new Error('expected the three prices');
+    expect(pricesSignal(prices)).toEqual({
+      kind: 'prices',
+      label: 'List at $50 · Realistic sale $30 · Fast sale $20',
+      basedOn: prices.basedOn,
+    });
+    expect(pricesSignal({ ...prices, listAtCents: 120_000 }).label.length).toBeLessThanOrEqual(60);
   });
 });
