@@ -8079,9 +8079,12 @@ export interface components {
             payoutMarketplace?: components["schemas"]["Marketplace"];
             /** @description The least payout worth buying for. */
             worthListing: components["schemas"]["Money"];
+            prices?: components["schemas"]["ScanPrices"];
             /**
              * @description What else the call weighed, each with what it rests on: the retail price, new with
              *     tags, how the brand resells on the web, the household's own sales trend, the style.
+             *     The first is the three `prices` (kind `prices`) when there are any, for a client built
+             *     before `prices`; a client that shows `prices` leaves that signal out.
              */
             signals: components["schemas"]["ScanSignal"][];
         };
@@ -8132,10 +8135,11 @@ export interface components {
          *     household's recent sales against the marketplace's supply. `unsold`: the household already
          *     has items like it in inventory, not sold (it never moves the call). `calibrated`: the AI
          *     estimate and the web's asking prices were scaled by what the household's own items went for
-         *     against what they asked.
+         *     against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
+         *     built before them.
          * @enum {string}
          */
-        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style" | "asking" | "demand" | "unsold" | "calibrated";
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "trend" | "style" | "asking" | "demand" | "unsold" | "calibrated" | "prices";
         /**
          * @description The item's original retail price, with where it came from: one model's price (`low` equals
          *     `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -8305,6 +8309,20 @@ export interface components {
              *     entry.
              */
             itemIds: components["schemas"]["Id"][];
+        };
+        /**
+         * @description The card's three prices, from the range the call rests on (no further lookup): what to list
+         *     at, leaving room for offers (the realistic sale over what the household's items go for
+         *     against what they ask); the realistic sale, the middle of the range; and the fast sale, its
+         *     low end. Rounded to prices a seller would type. Estimates, never sold prices; absent with
+         *     no range.
+         */
+        ScanPrices: {
+            listAt: components["schemas"]["Money"];
+            realisticSale: components["schemas"]["Money"];
+            fastSale: components["schemas"]["Money"];
+            /** @description Where the three come from, as the seller reads it. */
+            basedOn: string;
         };
     };
     responses: {
@@ -8954,6 +8972,7 @@ export type StorageLocationReplace = components['schemas']['StorageLocationRepla
 export type StorageLocationItem = components['schemas']['StorageLocationItem'];
 export type StorageLocationDetail = components['schemas']['StorageLocationDetail'];
 export type StorageLocationItemsAdd = components['schemas']['StorageLocationItemsAdd'];
+export type ScanPrices = components['schemas']['ScanPrices'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -14112,7 +14131,7 @@ export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "market_sold", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
-export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "asking", "demand", "unsold", "calibrated"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "trend", "style", "asking", "demand", "unsold", "calibrated", "prices"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
 export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
 export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];

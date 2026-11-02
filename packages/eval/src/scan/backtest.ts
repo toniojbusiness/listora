@@ -21,6 +21,7 @@ import {
   type OwnHistoryComparisons,
   type PriceCalibration,
   type ScanCall,
+  type ScanPrices,
   type ScanCallInput,
   type ScanCallKind,
   type ScanCallSettings,
@@ -145,7 +146,28 @@ export interface PriceScores {
   readonly ownSales: EstimateScores;
   /** The range the call rests on, whatever its basis; its middle is the midpoint. */
   readonly call: EstimateScores;
+  /** The card's three prices: list at, realistic sale, and fast sale. */
+  readonly threePrices: ThreePriceScores;
 }
+
+/** How the card's three prices compare with what the items really sold for. */
+export interface ThreePriceScores {
+  /** Items that got the three prices. */
+  readonly priced: number;
+  /** Of those, sale prices from the fast sale to the list price (inclusive). */
+  readonly saleInBand: number;
+  /** Sale prices under the fast sale, and over the list price. */
+  readonly saleBelowFast: number;
+  readonly saleAboveList: number;
+  /** Sale prices within `NEAR_REALISTIC` of the realistic sale. */
+  readonly saleNearRealistic: number;
+  /** The median of |realistic - sale| / sale, and of the signed error (its bias). */
+  readonly medianAbsError: number | null;
+  readonly medianError: number | null;
+}
+
+/** How close to the realistic sale a sale must be to count as near it: within 25% of the sale. */
+export const NEAR_REALISTIC = 0.25;
 
 export interface ScanBacktestReport {
   readonly dataset: {
@@ -523,6 +545,7 @@ function priceScores(
       const web: Scored[] = [];
       const own: Scored[] = [];
       const call: Scored[] = [];
+      const three: { prices: ScanPrices; saleCents: number }[] = [];
       for (const result of inGroup) {
         const made = result.calls[name];
         if (made === undefined) continue;
@@ -543,6 +566,7 @@ function priceScores(
         }
         if (made.call.range !== undefined)
           call.push({ range: withMid(made.call.range), saleCents });
+        if (made.call.prices !== undefined) three.push({ prices: made.call.prices, saleCents });
       }
       return {
         variant: name,
@@ -552,9 +576,29 @@ function priceScores(
         webAsks: estimateScores(web),
         ownSales: estimateScores(own),
         call: estimateScores(call),
+        threePrices: threePriceScores(three),
       };
     }),
   );
+}
+
+function threePriceScores(
+  priced: readonly { prices: ScanPrices; saleCents: number }[],
+): ThreePriceScores {
+  const errors = priced.map(
+    ({ prices, saleCents }) => (prices.realisticCents - saleCents) / saleCents,
+  );
+  return {
+    priced: priced.length,
+    saleInBand: priced.filter(
+      ({ prices, saleCents }) => saleCents >= prices.fastCents && saleCents <= prices.listAtCents,
+    ).length,
+    saleBelowFast: priced.filter(({ prices, saleCents }) => saleCents < prices.fastCents).length,
+    saleAboveList: priced.filter(({ prices, saleCents }) => saleCents > prices.listAtCents).length,
+    saleNearRealistic: errors.filter((error) => Math.abs(error) <= NEAR_REALISTIC).length,
+    medianAbsError: median(errors.map((error) => Math.abs(error))),
+    medianError: median(errors),
+  };
 }
 
 /** A category's group: its path less the last step (`clothing/bottoms`), or `unlabeled`. */

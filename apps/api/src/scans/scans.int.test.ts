@@ -722,11 +722,23 @@ describe('the thrift scan (real Postgres)', () => {
         low: usd(1_773),
         high: usd(2_955),
       });
+      // The three prices from that range: the middle ($23.64) a $25 realistic sale, the low
+      // end ($17.73) a $17 fast sale, and the list price $25 over 0.76875 ($30.75), raised to $35.
+      expect(body.call.prices).toEqual({
+        listAt: usd(3_500),
+        realisticSale: usd(2_500),
+        fastSale: usd(1_700),
+        basedOn:
+          "Realistic is the middle of the web's asks, scaled to your sales, fast its low end; list at leaves room for offers (your items went for 77% of what they asked)",
+      });
+      // They lead the signals too, for an app built before them.
       expect(body.call.signals.map((signal) => signal.kind)).toEqual([
+        'prices',
         'retail',
         'web_resale',
         'calibrated',
       ]);
+      expect(body.call.signals[0]?.label).toBe('List at $35 · Realistic sale $25 · Fast sale $17');
       expect(body.call.signals.at(-1)?.basedOn).toBe(
         "Your items went for 77% of what they asked (3 sales); the AI estimate and the web's asking prices are scaled to it",
       );
@@ -846,6 +858,7 @@ describe('the thrift scan (real Postgres)', () => {
     });
     expect(body.identity.style).toBe('Y2K');
     expect(body.call.signals.map((signal) => [signal.kind, signal.label])).toEqual([
+      ['prices', 'List at $35 · Realistic sale $25 · Fast sale $18'],
       ['retail', 'Retail $68 on the tag'],
       ['style', 'Y2K'],
       ['calibrated', 'Scaled to your sales'],

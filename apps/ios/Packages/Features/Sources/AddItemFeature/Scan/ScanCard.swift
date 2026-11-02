@@ -49,6 +49,15 @@ struct ScanCard: Equatable, Sendable {
         let found: Bool
     }
 
+    /// The three prices, in whole dollars: list at (room for offers), realistic sale, fast sale.
+    struct Prices: Equatable, Sendable {
+        let listAt: String
+        let realistic: String
+        let fast: String
+        /// Where they come from, as the seller reads it.
+        let basedOn: String
+    }
+
     struct Link: Equatable, Sendable {
         let label: String
         let url: URL
@@ -66,6 +75,8 @@ struct ScanCard: Equatable, Sendable {
     let basedOn: String
     /// The range the call rests on, "$25-$29", and what it pays out after fees.
     let range: String?
+    /// List at, realistic sale, and fast sale, shown instead of the range when the server sends them.
+    let prices: Prices?
     let payout: String?
     let ownSales: [OwnSales]
     /// The AI's estimate, "$24-$40", always shown with ``aiEstimateLabel``.
@@ -109,13 +120,8 @@ struct ScanCard: Equatable, Sendable {
         }
         basedOn = scan.call.basedOn
         range = Self.range(scan.call.low, scan.call.high)
-        if let low = scan.call.conservativePayout, let high = scan.call.optimisticPayout {
-            let marketplace = scan.call.payoutMarketplace.map(Self.marketplaceName) ?? ""
-            let after = marketplace.isEmpty ? "after fees" : "after \(marketplace) fees"
-            payout = "You'd get about \(Self.range(low, high) ?? "") \(after)"
-        } else {
-            payout = nil
-        }
+        prices = scan.call.prices.map(Self.prices)
+        payout = Self.payout(scan.call)
         ownSales = scan.ownSales.map(Self.ownSales)
         aiEstimate = scan.aiEstimate.flatMap { Self.range($0.low, $0.high) }
         aiEstimateLabel = scan.aiEstimate?.label
@@ -130,6 +136,23 @@ struct ScanCard: Equatable, Sendable {
         signals = scan.call.signals.map(Self.signal)
         web = scan.research.map(Self.webInfo)
         comparisons = (scan.comparisons ?? []).map(Self.comparison)
+    }
+
+    static func prices(_ prices: Components.Schemas.ScanPrices) -> Prices {
+        Prices(
+            listAt: dollars(prices.listAt),
+            realistic: dollars(prices.realisticSale),
+            fast: dollars(prices.fastSale),
+            basedOn: prices.basedOn,
+        )
+    }
+
+    /// "You'd get about $22-$26 after Depop fees", or nil without both payouts.
+    static func payout(_ call: Components.Schemas.ScanCall) -> String? {
+        guard let low = call.conservativePayout, let high = call.optimisticPayout else { return nil }
+        let marketplace = call.payoutMarketplace.map(marketplaceName) ?? ""
+        let after = marketplace.isEmpty ? "after fees" : "after \(marketplace) fees"
+        return "You'd get about \(range(low, high) ?? "") \(after)"
     }
 
     static func signal(_ signal: Components.Schemas.ScanSignal) -> Signal {
@@ -158,9 +181,11 @@ struct ScanCard: Equatable, Sendable {
     }
 
     /// The signals the card lists on their own: asking prices and the demand show with their
-    /// marketplace's comparison row instead.
+    /// marketplace's comparison row instead, and the three prices (sent as a signal too, for
+    /// builds before them) show in their own row.
     var listedSignals: [Signal] {
-        comparisons.isEmpty ? signals : signals.filter { $0.kind != "asking" && $0.kind != "demand" }
+        let listed = signals.filter { $0.kind != "prices" || prices == nil }
+        return comparisons.isEmpty ? listed : listed.filter { $0.kind != "asking" && $0.kind != "demand" }
     }
 
     /// The card with a marketplace's read shown as not gone through (its answer never reached

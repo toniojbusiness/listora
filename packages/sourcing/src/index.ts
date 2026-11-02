@@ -14,17 +14,21 @@ export {
   priceCalibration,
 } from './calibration.ts';
 export type { PriceCalibration, PriceCalibrationSettings, PriceRange } from './calibration.ts';
+export { friendlyPrice, scanPrices } from './prices.ts';
+export type { ScanPrices } from './prices.ts';
 export {
   CALL_BASES,
   CALL_CONFIDENCES,
   DEFAULT_SCAN_CALL_SETTINGS,
   decideCall,
   SCAN_CALLS,
+  pricesSignal,
   SCAN_SIGNAL_KINDS,
   scanCall,
   soldPace,
 } from './call.ts';
 export type {
+  ScanCallPrices,
   CallBasis,
   CallConfidence,
   MarketCallInput,

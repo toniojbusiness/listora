@@ -153,7 +153,13 @@ struct ScanCardView: View {
 
     @ViewBuilder
     private func priceLines(_ card: ScanCard) -> some View {
-        if let range = card.range {
+        if let prices = card.prices {
+            ScanThreePrices(prices: prices)
+            Text(card.basedOn)
+                .font(Typography.footnote)
+                .foregroundStyle(Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if let range = card.range {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                 Text(range).font(Typography.price).accessibilityIdentifier("scan.range")
                 Text(card.basedOn).font(Typography.footnote).foregroundStyle(Palette.textSecondary)
@@ -173,7 +179,9 @@ struct ScanCardView: View {
             ComparisonLine(comparison: comparison)
         }
         // Shown under its label whenever it is there, even when own sales lead the call.
-        if let estimate = card.aiEstimate, let label = card.aiEstimateLabel, card.range != estimate {
+        if let estimate = card.aiEstimate, let label = card.aiEstimateLabel,
+           card.prices != nil || card.range != estimate
+        {
             Text("\(estimate) · \(label)")
                 .font(Typography.caption)
                 .foregroundStyle(Palette.textSecondary)
@@ -222,6 +230,38 @@ struct ScanCardView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel("\(signal.label), \(signal.basedOn)")
                 .accessibilityIdentifier("scan.signal")
+        }
+    }
+}
+
+/// The card's three prices side by side, like ChatGPT's answer at the bins: what to list at
+/// (room for offers), what it realistically sells for, and what it goes for fast. The realistic
+/// sale leads; all three are estimates, so none of them says "sold".
+private struct ScanThreePrices: View {
+    let prices: ScanCard.Prices
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.md) {
+            column("List at", prices.listAt, emphasized: false)
+            column("Realistic", prices.realistic, emphasized: true)
+            column("Fast sale", prices.fast, emphasized: false)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "List at \(prices.listAt), realistic sale \(prices.realistic), fast sale \(prices.fast). \(prices.basedOn)",
+        )
+        .accessibilityIdentifier("scan.prices")
+    }
+
+    private func column(_ label: String, _ price: String, emphasized: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(price)
+                .font(Typography.price)
+                .foregroundStyle(emphasized ? Palette.textPrimary : Palette.textSecondary)
+            Text(label)
+                .font(Typography.caption)
+                .foregroundStyle(Palette.textSecondary)
         }
     }
 }

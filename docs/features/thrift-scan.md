@@ -27,7 +27,8 @@ Code:
   (how two brands compare), `ownHistoryComparisons` (the seller's own sales like the item),
   `scanCall` with `DEFAULT_SCAN_CALL_SETTINGS` and `decideCall` (the rule both calls share),
   `priceCalibration` (`calibration.ts`, the AI estimate and the web's asks scaled to the
-  seller's sales), `snapBrand` (a near miss of an own brand),
+  seller's sales), `snapBrand` (a near miss of an own brand), `scanPrices` (`prices.ts`, the
+  card's list at, realistic sale, and fast sale),
   `ownHistoryByMarketplace` (the price screen's), `sizeBucket`, `buildSourcingKit`,
   `offlineScanCall` (the call with no signal) with its golden cases (`offline-call.cases.ts`),
   `unsoldLikeIt`, and `buildSourcingInsights` ("What sells for you", `insights.ts`).
@@ -92,6 +93,53 @@ checkout ([hauls.md](hauls.md)).
 "Sold listings on eBay: 9 like it in the last 14 days", or the AI estimate's label). Ranges are quartiles, never one price, and "sold" appears only next
 to real sold data (a unit test checks the call's wording with `claimsSoldData`).
 
+## Three prices
+
+The card answers the way a reseller asks a chatbot at the bins ("List: $65-$75, Realistic sale:
+$40-$55, Fast sale: $30-$40"), with three prices instead of one range (`scanPrices` in
+`@listora/sourcing`, `prices.ts`; `ScanCall.prices` in the API):
+
+- **Realistic sale**: what the item is expected to sell for, the middle of what the call rests
+  on: the median of the seller's own sales like it (raised with the range for tags still on), the
+  AI estimate's middle, or the midpoint of eBay's sold quartiles or of the web's scaled asks;
+  held inside the range (a range held to the retail price or to close matches' asks holds it too).
+- **Fast sale**: the range's low end, what it would likely go for quickly.
+- **List at**: the asking price that leaves room for offers: the realistic sale over the seller's
+  own sale-to-asking ratio ([Calibrated to the seller's sales](#calibrated-to-the-sellers-sales);
+  75% with no sales of their own), and never under the range's high end, since listing under what
+  items like it go for leaves money behind.
+- **Friendly prices.** Whole dollars under $20, $5 steps under $100, then $10 steps; the fast sale
+  rounds down and the list price up, so the three never cross.
+- **Fast.** All three come from what the call already has: no AI call, web search, or wait is
+  added to the first read or to the web lookup, and they follow the call when the research or a
+  marketplace's comparisons make it again.
+- **The call is untouched.** Buy / Your call / Skip, its confidence, its range, and its payouts
+  are as before; the three prices are shown next to it, never fed into it. They are estimates, so
+  their wording never says "sold" (a unit test checks it with `claimsSoldData`).
+- **On the card.** The iPhone's card shows the three side by side, the realistic sale leading,
+  instead of the range ("scan.prices"). The server also sends them as the call's first signal
+  (`prices`: "List at $35 · Realistic sale $25 · Fast sale $17", with where they come from), so
+  an app built before them lists them with its other signals; a build that shows them leaves that
+  signal out. The instant read with no signal (`offlineScanCall`) still shows its range.
+
+**Backtest, 2026-11-02** (`npm run eval -- scan --replay`, the stored one-photo reads with the web
+lookup and the two-photo reads, no new AI spend; the household's 64 Depop sales, leave-one-out,
+the call as it is today, `calibrated`). "Fast to list": the sale price from the fast sale to the
+list price; "near realistic": within 25% of the sale.
+
+| Reads                          | Fast to list | Under fast | Over list | Near realistic | Realistic error (bias) |
+| ------------------------------ | ------------ | ---------- | --------- | -------------- | ---------------------- |
+| One photo, with the web lookup | 41/64 (64%)  | 12 (19%)   | 11 (17%)  | 25/64 (39%)    | 36% (0%)               |
+| Two photos, reads only         | 37/64 (58%)  | 13 (20%)   | 14 (22%)  | 25/64 (39%)    | 37% (+5%)              |
+
+By category (one photo): bottoms 18/24 fast to list, 12 near realistic, 23% error; tops 19/34,
+11, 48%; outerwear 2/3; dresses 1/2; shoes 1/1. The call's old single range held 36/64 of the
+sales on the same reads, so the band from fast sale to list price holds 5 more while its middle,
+the realistic sale, carries no bias. The calls did not change (10 Buys, 9 held; 2 Skips, both
+held). Measured and not taken: the list price from the ratio alone, without the range's high end
+as a floor (35/64 fast to list, 17 over the list price); a fast sale at the realistic sale times
+the ratio when under the low end (no change).
+
 ## Calibrated to the seller's sales
 
 The AI estimate and the web's asking prices both run above what items really sell for: on the
@@ -152,6 +200,10 @@ about the read by `scanResearchSubject`, the same as `researchFor`), about $0.02
 `--replay` answers the reads, and the research when the file has them, from an earlier run's
 `--json` report, so a change to the call or the calibration is measured on the same model
 answers without paying for them again.
+
+The report also scores the card's three prices ([Three prices](#three-prices)): how many
+sale prices land from the fast sale to the list price, under the fast sale, over the list price,
+and within 25% of the realistic sale (`NEAR_REALISTIC`), and the realistic sale's median error.
 
 For each sold item it makes the scan's read from the item's photos, compares the item with the
 set's other sales (leave-one-out), makes the call, and scores all three against what the item
@@ -323,8 +375,10 @@ connection to Listora.
   once and the camera is ready for the next item while it runs.
 - **The card** rises over the bottom of the live viewfinder (Hang Tag: a tag lying on its side,
   the call stamped on it): the call (**Buy**, **Your call**, **Skip**) with its confidence word,
-  what the item is, the price range the call rests on in the tag's print with what it rests on
-  ("Your 3 sales like it", or "AI estimate - not based on sold listings"), the payout after the
+  what the item is, the three prices in the tag's print (**List at**, **Realistic**, **Fast
+  sale**, [Three prices](#three-prices); the range the call rests on with a server or build
+  without them) with what they rest on ("Your 3 sales like it", or "AI estimate - not based on
+  sold listings"), the payout after the
   marketplace's fees, the household's own sales per marketplace, the AI estimate under its
   label, any flag, **Shoot the tag** and **Search Depop** (the marketplace's own search, opened
   in the browser for the seller to look; Listora never loads it) on a small line, and the
