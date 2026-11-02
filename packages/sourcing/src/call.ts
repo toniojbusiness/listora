@@ -91,6 +91,7 @@ export const SCAN_SIGNAL_KINDS = [
   'retail',
   'new_with_tags',
   'web_resale',
+  'brand_pulse',
   'trend',
   'style',
   'unsold',
@@ -156,6 +157,19 @@ export interface ScanCallInput {
         readonly highCents: number;
         readonly sites: readonly string[];
         readonly reputation: 'strong' | 'average' | 'weak' | 'unknown';
+      }
+    | undefined;
+  /**
+   * What the wider web says of the brand (the brand pulse): in demand, steady, or slow, with
+   * why, what asks more, and the sites. A signal only; it never moves the call (the backtest
+   * found no call it would have made hold more often, thrift-scan.md "Brand pulse").
+   */
+  readonly brandPulse?:
+    | {
+        readonly verdict: 'in_demand' | 'steady' | 'slow';
+        readonly reason: string;
+        readonly premium?: string | undefined;
+        readonly sites: readonly string[];
       }
     | undefined;
   /** The tags are still on (the read's condition is `new_with_tags`). */
@@ -367,6 +381,7 @@ export function scanCall(
       basedOn: `${WEB_INFO_LABEL}: ${web.sites.join(', ')}`,
     });
   }
+  if (input.brandPulse !== undefined) signals.push(brandPulseSignal(input.brandPulse));
   const trend = input.trend;
   if (trend?.label !== undefined) {
     signals.push({ kind: 'trend', label: trend.label, basedOn: trend.basedOn });
@@ -621,4 +636,36 @@ function payout(priceCents: number, fees: (priceCents: number) => number): numbe
 
 function yourSales(count: number): string {
   return count === 1 ? 'Your 1 sale like it' : `Your ${String(count)} sales like it`;
+}
+
+/** The signal's label and what it rests on fit the card (60 and 200 characters). */
+const PULSE_VERDICT_WORDS = { in_demand: 'in demand', steady: 'steady', slow: 'slow' } as const;
+const MAX_SIGNAL_BASED_ON = 200;
+
+/**
+ * "Brand pulse: in demand", resting on "Web info - not sold listings: Y2K coverage has it
+ * trending. Asks more: vintage 90s pieces. (vogue.com, reddit.com)". When it would not fit, the
+ * last sites give way first, then what asks more, so it keeps its reason and a site.
+ */
+export function brandPulseSignal(pulse: NonNullable<ScanCallInput['brandPulse']>): ScanSignal {
+  const reason = /[.!?]$/.test(pulse.reason) ? pulse.reason : `${pulse.reason}.`;
+  const premium =
+    pulse.premium === undefined || pulse.premium === ''
+      ? undefined
+      : `Asks more: ${pulse.premium.replace(/[.]$/, '')}.`;
+  const siteLists = pulse.sites.map((_, index) => pulse.sites.slice(0, pulse.sites.length - index));
+  const texts = [
+    ...siteLists.map((sites) => [reason, premium, `(${sites.join(', ')})`]),
+    ...siteLists.map((sites) => [reason, `(${sites.join(', ')})`]),
+    [reason, premium],
+    [reason],
+  ].map((parts) => `${WEB_INFO_LABEL}: ${parts.filter((part) => part !== undefined).join(' ')}`);
+  const basedOn =
+    texts.find((text) => text.length <= MAX_SIGNAL_BASED_ON) ??
+    `${(texts.at(-1) ?? '').slice(0, MAX_SIGNAL_BASED_ON - 1)}…`;
+  return {
+    kind: 'brand_pulse',
+    label: `Brand pulse: ${PULSE_VERDICT_WORDS[pulse.verdict]}`,
+    basedOn,
+  };
 }
