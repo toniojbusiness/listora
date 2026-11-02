@@ -1,4 +1,5 @@
 // `npm run eval -- scan`: the thrift-scan backtest (docs/features/thrift-scan.md, "Backtest").
+import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 
 import {
@@ -13,7 +14,8 @@ import { DEFAULT_SCAN_CALL_SETTINGS } from '@listora/sourcing';
 import { runScanBacktest } from './backtest.ts';
 import { loadScanDataset, type ScanDataset } from './dataset.ts';
 import { fakeScanFixtures } from './fake.ts';
-import { AiScanReader, type ScanReader } from './readers.ts';
+import { AiScanReader, ReplayScanReader, type ScanReader } from './readers.ts';
+import { AiScanResearcher, type ScanResearcher } from './research.ts';
 import { formatScanReport } from './report.ts';
 
 const PROVIDERS = ['fake', 'anthropic', 'none'] as const;
@@ -31,6 +33,11 @@ Options:
   --images <n>           photos per scan: 1 (the shot) or 2 (with a closer look) (default: 1)
   --worth-listing <usd>  the worth-listing amount in dollars (default: ${(DEFAULT_SCAN_CALL_SETTINGS.worthListingCents / 100).toFixed(2)})
   --limit <n>            only the first n items (caps the cost of a live run)
+  --research             look each read with a brand up on the web, as the scan does (on
+                         anthropic each lookup searches the web at about $0.01 a search)
+  --reads <report.json>  replay the reads of an earlier --json report instead of reading again
+                         (free; the provider then serves only the research)
+  --max-spend <usd>      stop spending at this many dollars of AI (default: AI_DAILY_BUDGET_USD)
   --items                one line per item: its id, sale, payout, AI range, and calls (no titles)
   --json                 the full report as JSON (it includes the AI's reads)
   --help                 show this message
@@ -52,6 +59,9 @@ export async function scanCommand(
       images: { type: 'string', default: '1' },
       'worth-listing': { type: 'string' },
       limit: { type: 'string' },
+      research: { type: 'boolean', default: false },
+      reads: { type: 'string' },
+      'max-spend': { type: 'string' },
       items: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
@@ -70,8 +80,13 @@ export async function scanCommand(
     throw new ScanUsageError('--images must be 1 or 2');
   }
   const images = Number(values.images);
-  const worthListingCents = parseDollars(values['worth-listing']);
+  const worthListingCents = parseDollars(values['worth-listing'], '--worth-listing');
   const limit = parseLimit(values.limit);
+  const maxSpendCents = parseDollars(values['max-spend'], '--max-spend');
+  const aiEnv: NodeJS.ProcessEnv =
+    maxSpendCents === undefined
+      ? env
+      : { ...env, AI_DAILY_BUDGET_USD: (maxSpendCents / 100).toFixed(2) };
 
   const loaded = await loadScanDataset(values.dataset);
   const dataset: ScanDataset =
@@ -81,9 +96,35 @@ export async function scanCommand(
           ...loaded,
           manifest: { ...loaded.manifest, items: loaded.manifest.items.slice(0, limit) },
         };
-  const reader = await createReader(provider, dataset, images, env);
+  const client = await createClient(provider, dataset, images, aiEnv);
+  const reader: ScanReader | undefined =
+    values.reads === undefined
+      ? client === undefined
+        ? undefined
+        : new AiScanReader({
+            id: provider,
+            description: `${client.description}, ${String(images)} image${images === 1 ? '' : 's'} per scan`,
+            client: client.client,
+            images,
+          })
+      : new ReplayScanReader(
+          JSON.parse(await readFile(values.reads, 'utf8')) as unknown,
+          values.reads,
+        );
+  if (values.research && (client === undefined || reader === undefined)) {
+    throw new ScanUsageError('--research needs a provider to search with (not none)');
+  }
+  const researcher: ScanResearcher | undefined =
+    values.research && client !== undefined
+      ? new AiScanResearcher({
+          id: provider,
+          description: client.description,
+          client: client.client,
+        })
+      : undefined;
   const report = await runScanBacktest(dataset, {
     ...(reader === undefined ? {} : { reader }),
+    ...(researcher === undefined ? {} : { researcher }),
     settings: {
       ...DEFAULT_SCAN_CALL_SETTINGS,
       ...(worthListingCents === undefined ? {} : { worthListingCents }),
@@ -97,12 +138,13 @@ export async function scanCommand(
   return report.read !== null && report.read.failed > 0 ? 1 : 0;
 }
 
-async function createReader(
+/** The provider's client: one for the reads and the research, so one budget holds both. */
+async function createClient(
   provider: ScanProvider,
   dataset: ScanDataset,
   images: number,
   env: NodeJS.ProcessEnv,
-): Promise<ScanReader | undefined> {
+): Promise<{ client: AiClient; description: string } | undefined> {
   if (provider === 'none') return undefined;
   let client: AiClient;
   let description: string;
@@ -120,18 +162,13 @@ async function createReader(
     client = createAiClient(config, { usageStore: new InMemoryUsageStore() });
     description = `Anthropic API: ${config.models.standard} (standard tier)`;
   }
-  return new AiScanReader({
-    id: provider,
-    description: `${description}, ${String(images)} image${images === 1 ? '' : 's'} per scan`,
-    client,
-    images,
-  });
+  return { client, description };
 }
 
-function parseDollars(raw: string | undefined): number | undefined {
+function parseDollars(raw: string | undefined, option: string): number | undefined {
   if (raw === undefined) return undefined;
   if (!/^\d{1,4}(\.\d{1,2})?$/.test(raw)) {
-    throw new ScanUsageError('--worth-listing must be dollars, for example 12 or 12.50');
+    throw new ScanUsageError(`${option} must be dollars, for example 12 or 12.50`);
   }
   return Math.round(Number(raw) * 100);
 }

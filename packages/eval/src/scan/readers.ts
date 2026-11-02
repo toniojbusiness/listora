@@ -69,3 +69,55 @@ export class AiScanReader implements ScanReader {
     }
   }
 }
+
+/**
+ * Replays the reads of an earlier run's report (`--json`), at no cost, so a change after the
+ * read (the web research, the call) is measured on the very same reads. A report from before a
+ * read field existed reads it as unknown (null); an item the report lacks fails to read.
+ */
+export class ReplayScanReader implements ScanReader {
+  readonly id = 'replay';
+  readonly description: string;
+  readonly #reads: ReadonlyMap<string, ScanRead>;
+
+  constructor(report: unknown, from: string) {
+    const items = (report as { items?: unknown }).items;
+    if (!Array.isArray(items)) throw new TypeError(`${from} is not a scan backtest report`);
+    const reads = new Map<string, ScanRead>();
+    for (const entry of items as { id?: unknown; read?: unknown }[]) {
+      if (typeof entry.id !== 'string' || typeof entry.read !== 'object' || entry.read === null) {
+        continue;
+      }
+      const read = entry.read as ScanRead;
+      reads.set(
+        entry.id,
+        read.ok ? { ...read, scan: { ...REPLAYED_DEFAULTS, ...read.scan }, costMicros: 0 } : read,
+      );
+    }
+    this.#reads = reads;
+    this.description = `the reads replayed from ${from} (no cost)`;
+  }
+
+  read(_dataset: ScanDataset, item: ScanDatasetItem): Promise<ScanRead> {
+    return Promise.resolve(
+      this.#reads.get(item.id) ?? {
+        ok: false,
+        message: 'not in the replayed report',
+        costMicros: 0,
+        latencyMs: 0,
+      },
+    );
+  }
+}
+
+const REPLAYED_DEFAULTS: Pick<
+  ThriftScan,
+  'line' | 'styleNumber' | 'era' | 'material' | 'retailPriceCents' | 'style'
+> = {
+  line: null,
+  styleNumber: null,
+  era: null,
+  material: null,
+  retailPriceCents: null,
+  style: null,
+};

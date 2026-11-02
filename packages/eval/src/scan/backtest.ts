@@ -17,6 +17,7 @@ import {
   type MatchLevel,
   type OwnHistoryComparisons,
   type ScanCall,
+  type ScanCallInput,
   type ScanCallKind,
   type ScanCallSettings,
   type ScanIdentity,
@@ -25,6 +26,13 @@ import type { ThriftScan } from '@listora/analysis';
 
 import type { ScanDataset, ScanDatasetItem } from './dataset.ts';
 import type { ScanRead, ScanReader } from './readers.ts';
+import {
+  researchCallInput,
+  researchScores,
+  type ResearchRun,
+  type ResearchScores,
+  type ScanResearcher,
+} from './research.ts';
 
 /**
  * Where a call variant's identity comes from: `ai`, the scan's own read (the real call at the
@@ -40,6 +48,11 @@ export const DEFAULT_WORTH_SWEEP_CENTS = [500, 800, 1_000, 1_200, 1_500, 2_000];
 export interface ScanBacktestOptions {
   /** The AI read; without one only the `labels` variant runs. */
   readonly reader?: ScanReader;
+  /**
+   * The web research after each read with a brand, as the scan asks it once a card is on
+   * screen; its retail price and resale range then feed the `ai` call, as on the card.
+   */
+  readonly researcher?: ScanResearcher;
   readonly settings?: ScanCallSettings;
   readonly worthSweepCents?: readonly number[];
 }
@@ -50,6 +63,7 @@ export interface ItemResult {
   /** What the seller got: the sale price less the actual fees, or the estimated ones. */
   readonly payoutCents: number;
   readonly read: ScanRead | undefined;
+  readonly research?: ResearchRun | undefined;
   readonly calls: Partial<Record<IdentitySource, VariantResult>>;
 }
 
@@ -124,6 +138,8 @@ export interface ScanBacktestReport {
   readonly reader: { readonly id: string; readonly description: string } | null;
   readonly settings: ScanCallSettings;
   readonly read: ReadScores | null;
+  readonly researcher: { readonly id: string; readonly description: string } | null;
+  readonly research: ResearchScores | null;
   readonly ownHistory: readonly OwnHistoryScores[];
   readonly calls: readonly CallScores[];
   readonly sweep: readonly CallScores[];
@@ -161,16 +177,21 @@ export async function runScanBacktest(
   for (const item of items) {
     const read =
       options.reader === undefined ? undefined : await options.reader.read(dataset, item);
+    const research =
+      options.researcher === undefined || read?.ok !== true
+        ? undefined
+        : await options.researcher.research(item, read.scan);
     const others = history.filter((sale) => sale.id !== item.id);
     const calls: Partial<Record<IdentitySource, VariantResult>> = {};
     for (const source of sources) {
-      calls[source] = variant(source, item, read, others, settings, fees);
+      calls[source] = variant(source, item, read, research, others, settings, fees);
     }
     results.push({
       id: item.id,
       salePriceCents: item.salePriceCents,
       payoutCents: payoutOf(item),
       read,
+      ...(research === undefined ? {} : { research }),
       calls,
     });
   }
@@ -194,6 +215,11 @@ export async function runScanBacktest(
         : { id: options.reader.id, description: options.reader.description },
     settings,
     read: options.reader === undefined ? null : readScores(items, results),
+    researcher:
+      options.researcher === undefined
+        ? null
+        : { id: options.researcher.id, description: options.researcher.description },
+    research: options.researcher === undefined ? null : researchScores(items, results),
     ownHistory: sources.map((source) => ownHistoryScores(source, results, settings)),
     calls: sources.map((source) => callScores(source, results, settings.worthListingCents)),
     sweep: sources.flatMap((source) =>
@@ -202,7 +228,14 @@ export async function runScanBacktest(
         const recalled = results.map((result) => {
           const current = result.calls[source];
           if (current === undefined) return result;
-          const input = callInput(source, result.read, current.ownHistory, fees, current.identity);
+          const input = callInput(
+            source,
+            result.read,
+            result.research,
+            current.ownHistory,
+            fees,
+            current.identity,
+          );
           return { ...result, calls: { [source]: { ...current, call: scanCall(input, swept) } } };
         });
         return callScores(source, recalled, worthListingCents);
@@ -216,6 +249,7 @@ function variant(
   source: IdentitySource,
   item: ScanDatasetItem,
   read: ScanRead | undefined,
+  research: ResearchRun | undefined,
   others: readonly HistorySale[],
   settings: ScanCallSettings,
   fees: (priceCents: number) => number,
@@ -231,17 +265,18 @@ function variant(
   return {
     identity,
     ownHistory,
-    call: scanCall(callInput(source, read, ownHistory, fees, identity), settings),
+    call: scanCall(callInput(source, read, research, ownHistory, fees, identity), settings),
   };
 }
 
 function callInput(
   source: IdentitySource,
   read: ScanRead | undefined,
+  research: ResearchRun | undefined,
   ownHistory: OwnHistoryComparisons | undefined,
   fees: (priceCents: number) => number,
   identity: ScanIdentity,
-) {
+): ScanCallInput {
   const scan: ThriftScan | undefined = read?.ok === true ? read.scan : undefined;
   if (source === 'labels') {
     const known = identity.brand !== null || identity.category !== null;
@@ -253,6 +288,7 @@ function callInput(
     aiEstimate: scan?.aiEstimate ?? undefined,
     flags: scan?.flags ?? NO_FLAGS,
     fees,
+    ...(scan === undefined ? {} : researchCallInput(scan, research)),
   };
 }
 
@@ -389,7 +425,7 @@ function callScores(
   return { identity: source, worthListingCents, counts, byConfidence, byBasis, buyHeld, skipHeld };
 }
 
-function estimateScores(
+export function estimateScores(
   ranges: readonly {
     range: { lowCents: number; midCents: number; highCents: number };
     saleCents: number;
@@ -406,7 +442,7 @@ function estimateScores(
   };
 }
 
-function topOf(category: string): string {
+export function topOf(category: string): string {
   return category.slice(0, category.lastIndexOf('/'));
 }
 
@@ -415,7 +451,7 @@ function median(values: readonly number[]): number | null {
 }
 
 /** The `q` percentile, linear between the two nearest values; null for no values. */
-function percentile(values: readonly number[], q: number): number | null {
+export function percentile(values: readonly number[], q: number): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const position = (sorted.length - 1) * q;

@@ -5,6 +5,7 @@ import type {
   OwnHistoryScores,
   ScanBacktestReport,
 } from './backtest.ts';
+import type { ResearchGroupScores, ResearchScores } from './research.ts';
 
 /**
  * Renders the backtest for the terminal. Only counts and money: no title, brand, or photo of
@@ -48,6 +49,14 @@ export function formatScanReport(
     );
   }
 
+  if (report.researcher !== null && report.research !== null) {
+    lines.push(
+      `Web research: ${report.researcher.id}: ${report.researcher.description}`,
+      ...researchLines(report.research),
+      '',
+    );
+  }
+
   lines.push("Own history (leave-one-out: each item against the set's other sales):");
   for (const scores of report.ownHistory)
     lines.push(...ownHistoryLines(scores, report.dataset.items));
@@ -77,6 +86,51 @@ export function formatScanReport(
     for (const item of report.items) lines.push(itemLine(item));
   }
   return `${lines.join('\n')}\n`;
+}
+
+function researchLines(scores: ResearchScores): string[] {
+  return [
+    `  cost ${dollars(scores.costMicrosPerLookup)}/lookup, ${dollars(scores.costMicrosTotal)} total; ` +
+      `${scores.searchesPerLookup === null ? '-' : scores.searchesPerLookup.toFixed(1)} searches/lookup; ` +
+      `latency p50 ${seconds(scores.latencyP50Ms)}`,
+    ...table([
+      [
+        'group',
+        'items',
+        'looked up',
+        'failed',
+        'retail',
+        'range',
+        'above retail',
+        'sale in range',
+        'median error (bias)',
+      ],
+      ...[scores.overall, ...scores.byCategory].map(researchRow),
+    ]),
+  ];
+}
+
+function researchRow(scores: ResearchGroupScores): string[] {
+  const { estimate } = scores;
+  return [
+    scores.group,
+    String(scores.items),
+    String(scores.lookedUp),
+    String(scores.failed),
+    share(scores.retailFound, scores.lookedUp),
+    share(scores.rangeFound, scores.lookedUp),
+    String(scores.aboveRetail),
+    ...rangeCells(estimate),
+  ];
+}
+
+function rangeCells(estimate: EstimateScores): string[] {
+  return estimate.priced === 0
+    ? ['-', '-']
+    : [
+        share(estimate.saleInRange, estimate.priced),
+        `${percent(estimate.medianAbsError)} (${signedPercent(estimate.medianError)})`,
+      ];
 }
 
 function ownHistoryLines(scores: OwnHistoryScores, items: number): string[] {

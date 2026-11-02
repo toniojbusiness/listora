@@ -7,15 +7,30 @@ import { loadScanDataset, type ScanDataset } from './dataset.ts';
 import { fakeScanFixtures } from './fake.ts';
 import { AiScanReader, type ScanReader } from './readers.ts';
 import { formatScanReport } from './report.ts';
+import { AiScanResearcher, type ScanResearcher } from './research.ts';
 import { INVENTED_ITEMS, writeScanDataset } from './test-support.ts';
 
 const settings = { ...DEFAULT_SCAN_CALL_SETTINGS, worthListingCents: 800 };
 
-async function fakeReader(dataset: ScanDataset, images = 1): Promise<ScanReader> {
-  const client = createAiClient(loadAiConfig({ AI_PROVIDER: 'fake' }), {
+async function fakeClient(dataset: ScanDataset, images = 1) {
+  return createAiClient(loadAiConfig({ AI_PROVIDER: 'fake' }), {
     usageStore: new InMemoryUsageStore(),
     provider: new FakeAiProvider({ fixtures: await fakeScanFixtures(dataset, images) }),
   });
+}
+
+async function fakeResearcher(dataset: ScanDataset): Promise<ScanResearcher> {
+  let clock = 0;
+  return new AiScanResearcher({
+    id: 'fake',
+    description: 'fake',
+    client: await fakeClient(dataset),
+    now: () => (clock += 1_000),
+  });
+}
+
+async function fakeReader(dataset: ScanDataset, images = 1): Promise<ScanReader> {
+  const client = await fakeClient(dataset, images);
   let clock = 0;
   return new AiScanReader({
     id: 'fake',
@@ -114,6 +129,70 @@ describe('runScanBacktest', () => {
   });
 });
 
+describe('runScanBacktest with the web research', () => {
+  it('looks up each read with a brand and scores its range against the sales, by category', async () => {
+    const dataset = await loadScanDataset(await writeScanDataset());
+    const report = await runScanBacktest(dataset, {
+      reader: await fakeReader(dataset),
+      researcher: await fakeResearcher(dataset),
+      settings,
+    });
+    expect(report.researcher).toEqual({ id: 'fake', description: 'fake' });
+    // The fake's web range is 80% to 120% of the $20 ask: four of the jeans sold inside it,
+    // neither blouse; the unbranded item asks nothing.
+    expect(report.research?.overall).toMatchObject({
+      group: 'all',
+      items: 8,
+      lookedUp: 7,
+      failed: 0,
+      rangeFound: 7,
+      estimate: { priced: 7, saleInRange: 4 },
+    });
+    expect(
+      report.research?.byCategory.map((group) => [
+        group.group,
+        group.lookedUp,
+        group.estimate.saleInRange,
+      ]),
+    ).toEqual([
+      ['clothing/bottoms', 5, 4],
+      ['clothing/tops', 2, 0],
+      ['unlabeled', 0, 0],
+    ]);
+    expect(report.research?.searchesPerLookup).toBe(1);
+    expect(report.research?.latencyP50Ms).toBe(1_000);
+    expect(report.items.find((entry) => entry.id === 'c1')?.research).toEqual({
+      ok: false,
+      skipped: 'no_brand',
+    });
+    // With too few of its own sales, the blouse's call rests on the web's range, as on the card.
+    expect(report.items.find((entry) => entry.id === 'b1')?.calls.ai?.call).toMatchObject({
+      basis: 'web_info',
+      range: { lowCents: 1_600, highCents: 2_400 },
+    });
+    expect(report.calls[1]?.byBasis.web_info).toBe(0);
+  });
+
+  it('counts a failed lookup and its cost, and calls the item without it', async () => {
+    const dataset = await loadScanDataset(await writeScanDataset());
+    const failing: ScanResearcher = {
+      id: 'failing',
+      description: 'always fails',
+      research: () => Promise.resolve({ ok: false, message: 'boom', costMicros: 9, latencyMs: 4 }),
+    };
+    const report = await runScanBacktest(dataset, {
+      reader: await fakeReader(dataset),
+      researcher: failing,
+      settings,
+    });
+    expect(report.research?.overall).toMatchObject({ lookedUp: 8, failed: 8, rangeFound: 0 });
+    expect(report.research?.costMicrosTotal).toBe(72);
+    expect(report.items.find((entry) => entry.id === 'b1')?.calls.ai?.call.basis).toBe(
+      'ai_estimate',
+    );
+  });
+});
+
 describe('formatScanReport', () => {
   it('prints counts and money but no title or brand', async () => {
     const dataset = await loadScanDataset(await writeScanDataset());
@@ -123,8 +202,26 @@ describe('formatScanReport', () => {
     });
     const text = formatScanReport(report, { items: true });
     expect(text).toContain('Scan backtest: 8 sold items (an invented test set)');
+    expect(text).not.toContain('Web research');
     expect(text).toContain('brand: named 7/7 (100%) of labeled, agreed 7/7 (100%)');
     expect(text).toContain('  a1: sold $14.00');
+    for (const entry of INVENTED_ITEMS) {
+      expect(text).not.toContain(entry.title);
+      if (entry.brand !== null) expect(text).not.toContain(entry.brand);
+    }
+  });
+
+  it('prints the web research by category, still without a title or brand', async () => {
+    const dataset = await loadScanDataset(await writeScanDataset());
+    const report = await runScanBacktest(dataset, {
+      reader: await fakeReader(dataset),
+      researcher: await fakeResearcher(dataset),
+      settings,
+    });
+    const text = formatScanReport(report, { items: true });
+    expect(text).toContain('Web research: fake: fake');
+    expect(text).toMatch(/all\s+8\s+7\s+0\s+0\/7 \(0%\)\s+7\/7 \(100%\)\s+0\s+4\/7 \(57%\)/);
+    expect(text).toMatch(/clothing\/tops\s+2\s+2/);
     for (const entry of INVENTED_ITEMS) {
       expect(text).not.toContain(entry.title);
       if (entry.brand !== null) expect(text).not.toContain(entry.brand);

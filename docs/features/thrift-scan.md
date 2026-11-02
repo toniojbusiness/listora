@@ -94,6 +94,8 @@ npm run eval -- scan --dataset <dir>                         # fake AI: plumbing
 npm run eval -- scan --dataset <dir> --provider none         # own sales only, no AI
 npm run eval -- scan --dataset <dir> --provider anthropic    # the real read; ANTHROPIC_API_KEY
 npm run eval -- scan --dataset <dir> --provider anthropic --images 2 --worth-listing 10
+npm run eval -- scan --dataset <dir> --provider anthropic --images 2 --json > reads.json
+npm run eval -- scan --dataset <dir> --provider anthropic --reads reads.json --research --max-spend 1.00
 ```
 
 For each sold item it makes the scan's read from the item's photos, compares the item with the
@@ -104,6 +106,16 @@ an own-history-only call could do). A sweep repeats the call at worth-listing am
 $20. The report holds counts and money only, no title or brand, so a private set's report can be
 shared; `--items` adds one line per item (its id, sale, payout, and calls) and `--json` the full
 report, including the AI's reads.
+
+`--research` also looks each read with a brand up on the web, as the card does once it has been on
+screen ([Web info](#web-info), the production `researchScanItem`), feeds its retail price and
+resale range into the `ai` call as `assessScan` does, and scores the web's resale range against
+the sale price, overall and by the items' labeled top category: how often it was found, the sale
+inside it, its median error, and how often its middle is above the retail price found. A lookup
+costs about $0.025 in searches and tokens, so `--reads` replays the reads of an earlier `--json`
+report at no cost (a change after the read is then measured on the very same reads), and
+`--max-spend` stops the run's AI spend at a dollar amount: what comes after it fails instead of
+being sent, and is counted as failed.
 
 Every item in a set sold, so the backtest measures how well the call judges value, never
 whether an item would sell at all, and a Skip "holds" only when the item paid out less than the
@@ -204,6 +216,41 @@ What it set and found:
   backtest's payouts use the calibrated table.
 - The call reached high confidence for no item: 64 sales spread over many brands rarely give 5
   of one brand and category.
+
+### Web research: sold prices instead of asks, 2026-11-02 (not shipped)
+
+Today's lookup finds the retail price and what listings ask, and the asks run about double what
+items sell for. A lookup that searched for the item's **sold** listings instead (eBay sold,
+Poshmark, Mercari, Grailed, and price guides; each comparable with its price, sold date,
+condition, and page; asks set aside once two sales were found; an expected price weighted to
+recent sales; the retail price kept apart and never a cap) was measured with `--research` on 30
+of the household's sales with a branded read (the same 2-photo reads replayed for every run;
+`claude-haiku-5-5`, at most 3 searches, an item's own sale left out of its comparables):
+
+|                                       | Today (asks) | Sold, asks from the listings | Sold, else typical asks |
+| ------------------------------------- | ------------ | ---------------------------- | ----------------------- |
+| Cost per lookup / p50                 | $0.025 / 9 s | $0.032 / 13 s                | $0.035 / 16 s           |
+| Retail price found                    | 20 of 30     | 19                           | 22                      |
+| Two or more sales found               | -            | 6 of 30                      | 7 of 30                 |
+| Sale inside the range, all            | 8/29 (28%)   | 4/28 (14%)                   | 7/29 (24%)              |
+| Median error (bias), all              | 100% (+100%) | 144% (+144%)                 | 92% (+92%)              |
+| Bottoms: inside, median error         | 3/11, 87%    | 3/12, 140%                   | 5/12, 86%               |
+| Tops: inside, median error            | 4/14, 65%    | 1/12, 138%                   | 2/13, 80%               |
+| Where sales were found: inside, error | -            | 4/6, 31%                     | 2/7, 65%                |
+
+What it found, and why it was not shipped:
+
+- **Sold listings are found for few of these items**: two or more for about one in five (one
+  sale for about half). These are mall brands at a $10 to $15 price point, and the searches
+  mostly return listings still for sale.
+- **Where sales were found they beat the asks once (4 of 6 inside, 31% error) and not the next
+  time (2 of 7, 65%)**: the same items' sales differed run to run, so on 30 items it is noise.
+- **Overall it did not beat today** on both measures (24% inside against 28%, at 40% more cost
+  and 7 s more), so by the rule it ships only if it does, the lookup stays as it is.
+- **Every range ran above what this household sells for**, sold listings included (bias equal
+  to the error): the web's market for these brands, eBay's sold listings among them, pays more
+  than this seller's Depop buyers. That gap is per seller, which is what calibrating a range by
+  the seller's own sale-to-ask ratio addresses, not a better web search.
 
 ## The scan at the store (M2)
 

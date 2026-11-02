@@ -4,9 +4,15 @@ import {
   type FakeFixture,
   type FixtureSource,
 } from '@listora/ai';
-import { SCAN_OUTPUT_NAME, type ScanAnswer } from '@listora/analysis';
+import {
+  SCAN_OUTPUT_NAME,
+  SCAN_RESEARCH_OUTPUT_NAME,
+  type ScanAnswer,
+  type ScanResearchAnswer,
+} from '@listora/analysis';
 
 import { scanImages, type ScanDataset, type ScanDatasetItem } from './dataset.ts';
+import { researchKeyHash } from './research.ts';
 
 /**
  * Fixtures for `--provider fake`: each item's scan answer from the set's own labels (its brand
@@ -24,8 +30,37 @@ export async function fakeScanFixtures(
       description: `${item.id}: the set's labels`,
       outputs: { [SCAN_OUTPUT_NAME]: fakeScanAnswer(item) },
     };
+    fixtures[researchKeyHash(item)] = {
+      description: `${item.id}: invented web pages from its asking price`,
+      outputs: { [SCAN_RESEARCH_OUTPUT_NAME]: fakeResearchAnswer(item) },
+      webSources: [{ url: fakeResalePage(item), title: 'invented resale page' }],
+      usage: { webSearches: 1 },
+    };
   }
   return inMemoryFixtures(fixtures);
+}
+
+/** An invented resale marketplace page for an item, which only the fake answer cites. */
+function fakeResalePage(item: ScanDatasetItem): string {
+  return `https://poshmark.com/listing/invented-${item.id}`;
+}
+
+/** The fake web research: what the item asked, as if a resale marketplace's page said so. */
+export function fakeResearchAnswer(item: ScanDatasetItem): ScanResearchAnswer {
+  const asking = item.askingPriceCents ?? 0;
+  return {
+    retail: { lowCents: 0, highCents: 0, sourceUrls: [], models: [] },
+    resale:
+      asking === 0
+        ? { lowCents: 0, highCents: 0, sourceUrls: [] }
+        : {
+            lowCents: Math.round(asking * 0.8),
+            highCents: Math.round(asking * 1.2),
+            sourceUrls: [fakeResalePage(item)],
+          },
+    reputation: 'average',
+    summary: '',
+  };
 }
 
 export function fakeScanAnswer(item: ScanDatasetItem): ScanAnswer {
