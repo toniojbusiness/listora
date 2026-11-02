@@ -36,6 +36,8 @@ const PRODUCT_TYPES: Readonly<
   depop: (category, department) => depopProductTypes(category, department),
   // eBay's results name no category: its listings are matched by their titles' words.
   ebay: () => [],
+  // Nor do Mercari's cards: they name the brand and the size, and the type is in the name.
+  mercari: () => [],
 };
 
 /** The query for one marketplace, or `null` without a brand or an item type. */

@@ -875,7 +875,7 @@ the rest go only to items the AI prices at $25 or more at the high end
 - `apps/api/src/scans/comparisons.int.test.ts`: eBay's read handed out, the call on its sold
   listings with the pace and the cache, asking prices alone, no match, the hour saved for
   pricier items.
-- iPhone: `ScanTests.swift` (eBay's row under its sold label).
+- iPhone: `ScanComparisonRowTests.swift` (eBay's row under its sold label).
 
 **The phone needs a new app build** for eBay's comparisons. Live test: the captain on his phone at
 a store, logged out, eBay only, in Test mode (the gate stays off for sellers). It decides whether
@@ -885,6 +885,112 @@ a check on the phone pauses eBay's comparisons for the day ("eBay prices paused 
 **Fixed with it.** A read in which nothing matched used to send `level: null`, which the API
 refused, so the card said "Couldn't check Depop"; the phone now leaves the level out, and the row
 says "Not enough similar listings".
+
+## Mercari (M3)
+
+Mercari's row is the card's second market sold prices: what close matches sold for on Mercari,
+and how fast its latest sales came. Its comparisons are behind their own gate (`market_comps` on
+Mercari, [verified-features.md](verified-features.md)), hidden from sellers until the captain's
+live test.
+
+### What Mercari shows a visitor
+
+Listora's model of the page (no recording yet, "Tests" below): the search page
+(`/search/?keyword=<words>`) has Mercari's own status filter, "Sold" (`itemStatuses=2`) and "On
+sale" (`itemStatuses=1`), and its "Newest" sort (`sortBy=2`). Each result is Mercari's product
+card (`ItemContainer`), the same card its listing pages show under "More from this seller", read
+on a real page on 2026-10-27: the item's brand (`data-brand`), size (`data-size`), whether it is
+on sale (`data-is-on-sale`), name (`ItemName`), and price (`ProductThumbItemPrice`, the price
+before a drop struck through after it). **The cards show no dates.** Mercari's server-drawn pages
+keep the data they were drawn from in `window.__NEXT_DATA__` (its Apollo cache,
+`props.pageProps.serverState`: an item's `updated` and `lastSoldAt` in seconds, read on its
+listing page), so where the search page carries its results there, a sold card's sale day and the
+search's own count come from it; where it does not (its results drawn in the browser), the read
+has sold prices without dates and no count.
+
+### The read
+
+1. **The query.** As for eBay (`comparisonQuery`): the brand and an item type are needed; the
+   words are the brand, the model or line, and the type. Mercari's cards name no category, so a
+   match is held to the name's words (`productTypes` empty).
+2. **The phone reads it** (`listoraPhone.compare`, `comps/mercari.ts`): the sold page (newest
+   first), then the for-sale page, each one page load of the URL Mercari's own filter and sort
+   make, through the same session rules as every automated read
+   (`mercari/pages/search-page.ts`). It waits for the cards, which Mercari's scripts may draw
+   after the document. Of each card only the brand, size, on-sale flag, name, and price are read,
+   and its item id only to join it to the page's data; the id never leaves the phone.
+3. **What is never counted.** Cards in Mercari's carousels (`FeedContainer`, other items than
+   the search's), lots and bundles, cards of the other kind (an item on sale among the sold
+   results), and cards without a name or a price Listora can read.
+4. **Matching** (`marketStats`): the card's brand (`data-brand`, by `brandKey`) or, on a card
+   without one, the name's words; and the type in the name; the levels add the model in the name
+   and the card's size (`S (4-6)` is `S` and `4-6`). Sold listings choose the level, outliers are
+   left out, as for Depop and eBay.
+5. **Only numbers leave the phone**: the level, the sold and asking quartiles (the sold window
+   only where the sales are dated: the API takes no `null` for it), the counts read, the
+   for-sale search's count, and the recent pace (`soldTotal`, below).
+
+### On the card
+
+- **The row**: "Mercari: sold $20-$28, 7 like it in the last 21 days" under "Sold listings on
+  Mercari" (`marketSoldLabel`), from 3 sold close matches; undated, "Mercari: sold $20-$28, 7 like
+  it". Without sold ones, asking prices as Depop's.
+- **The trend read** (`latestSoldPace`): Mercari's sold search reaches back years and counts no
+  window, so its pace is how many of the latest sold results read (`stats.read.sold`, newest
+  first) sold in the last 30 days (`soldTotal`, `soldLately` on the phone;
+  `COMPARISON_SOLD_WINDOW_DAYS.mercari`). "Sells fast on Mercari" from two in three
+  (`LATEST_SOLD_FAST`), "Slow on Mercari" at a quarter or less (`LATEST_SOLD_SLOW`), from 5 sold
+  read (`MIN_LATEST_SOLD`), with what it rests on ("Sold listings on Mercari: 24 of the latest 30
+  sold in the last 30 days"). Without dates it says so ("Mercari gave no dates for its latest
+  sales") and moves nothing. Starting thresholds, to tune in the live test.
+- **In the call**: as eBay's, Mercari's sold close matches are the range when the household's
+  own sales are too few (`market_sold`); a slow Mercari keeps a call from high confidence; a fast
+  one never raises it.
+
+### Account risk
+
+As for Depop and eBay ("Account risk" above): no account in the read (the app's own
+non-persistent web view, never the seller's), phone only, Mercari's own origins only
+(`www.mercari.com`, `mercari.com`), stop at the first check (Cloudflare's "Just a moment..." page
+and Turnstile, a 403, Mercari's sign-in page), the 24-hour cache, the pauses, images and media
+blocked, and the warm-up (Mercari's home page). **Budgets**: 20 reads an hour and 100 a day per
+account (each read loads two pages), fewer than eBay's since Mercari showed human checks to
+automated sessions before (2026-10-27); once 12 of the hour's are used, the rest go only to items
+the AI prices at $25 or more at the high end (`COMPARISON_LIMITS.mercari.saveForPricier`).
+
+### Tests
+
+- `@listora/sourcing` `pace.test.ts` (`latestSoldPace`: fast, steady, slow, no dates, too few,
+  never more lately than read, no "sold" without numbers).
+- `packages/automation`: `mercari/pages/search-page.test.ts` (the URLs, the cards, what is never
+  counted, prices, sizes, the page's data), `comps/mercari.int.test.ts` (the lane on the phone's
+  page backend against a stand-in search: the match and count, the carousel, lots and cards of
+  the other kind, the sale days, the count and the pace from the page's data, a page without its
+  data, no results, the warm-up, Cloudflare's check, a sign-in page, an unknown page). **No
+  recorded real page yet**: recording Mercari's public search logged out (2026-11-02, from a
+  headless Chrome with a fresh profile, through `market-pace.sh mercari`) met a bot check on its
+  first page load, and it was not tried again. The search page's selectors and its data are
+  Listora's model until the captain's live test reads the real one; a page that differs fails
+  the read ("Couldn't check Mercari"), a page without its data reads prices without dates, and
+  neither counts anything wrong.
+- `apps/api/src/scans/comparisons.int.test.ts`: Mercari's read handed out, the call on its sold
+  listings with the pace and the cache, a slow Mercari, an undated read, the hour saved for
+  pricier items.
+- iPhone: `ScanComparisonRowTests.swift` (Mercari's row under its sold label, with its pace).
+
+**The phone needs a new app build** for Mercari's comparisons (the runtime bundle and the lane's
+origins). Live test: the captain on his phone at a store, logged out, Mercari only, in Test mode
+(the gate stays off for sellers). It decides whether Mercari lets a logged-out iPhone read its
+search at all (the Mac's recorder met Mercari's bot check, and a check on the phone pauses
+Mercari's comparisons for the day), and whether the search page carries its results' dates.
+
+**Fixed with it.**
+
+- An eBay row of asking prices only, where eBay gave no count of its sold search, said "eBay gave
+  no count of sold listings", which the label guard refuses on a row without sold listings, so
+  the whole scan answer failed; it now says "eBay gave no count of its sales".
+- A read whose sold listings had no dates sent `windowDays: null`, which the API refuses; the
+  phone now leaves the window out.
 
 ## Upgrading drafts (M6)
 
@@ -1197,8 +1303,8 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   above on cellular, then `thrift_scan` into `VERIFIED_APP_FEATURES` with its evidence.
 - **M3 live test** (the captain, Test mode, the captain's iPhone at a store): Depop's comparison
   row within 4 s of the shutter, the budgets and the pause tuned on evidence, then
-  `market_comps` on Depop into `VERIFIED_FEATURES`. eBay sold, Poshmark, and Mercari readers
-  follow, each its own PR and gate.
+  `market_comps` on Depop into `VERIFIED_FEATURES`. The eBay and Mercari readers are built, each
+  behind its own gate and live test; Poshmark's follows as its own PR and gate.
 - **M4 live test** (the captain's own trip, Test mode): check a run out at the register and
   compare the haul's shares and the summary with the receipt.
 - **Mileage** from checkout is also the trip's mileage expense, priced in Reports at the year's
