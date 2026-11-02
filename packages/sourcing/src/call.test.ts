@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   brandPulseSignal,
+  callWhy,
   DEFAULT_SCAN_CALL_SETTINGS,
   pricesSignal,
   scanCall,
@@ -204,8 +205,9 @@ describe('scanCall', () => {
         realisticCents: 1_600,
         fastCents: 1_200,
         basedOn:
-          'Realistic is the middle of your sales like it, fast its low end; list at leaves room for offers (items usually go for about 75% of what they ask)',
+          'Likely sale is the middle of your sales like it, fast sale its low end; list at leaves room for offers (items usually go for about 75% of what they ask)',
       },
+      why: 'Even its low end pays out $11 after fees, over your $10',
       signals: [],
     });
   });
@@ -263,8 +265,9 @@ describe('scanCall', () => {
         realisticCents: 2_000,
         fastCents: 1_500,
         basedOn:
-          'Realistic is the middle of the AI estimate, fast its low end; list at leaves room for offers (items usually go for about 75% of what they ask)',
+          'Likely sale is the middle of the AI estimate, fast sale its low end; list at leaves room for offers (items usually go for about 75% of what they ask)',
       },
+      why: 'Pays out $14-$27 after fees, but on little to go on',
       signals: [],
     });
     const low = { lowCents: 300, midCents: 500, highCents: 800 };
@@ -277,6 +280,7 @@ describe('scanCall', () => {
       confidence: 'low',
       basis: 'none',
       basedOn: 'Not enough to go on',
+      why: 'Not enough to price it: no sales like it, web prices, or AI estimate',
       signals: [],
     });
   });
@@ -711,9 +715,54 @@ describe('scanCall three prices', () => {
     if (prices === undefined) throw new Error('expected the three prices');
     expect(pricesSignal(prices)).toEqual({
       kind: 'prices',
-      label: 'List at $50 · Realistic sale $30 · Fast sale $20',
+      label: 'List at $50 · Likely sale $30 · Fast sale $20',
       basedOn: prices.basedOn,
     });
     expect(pricesSignal({ ...prices, listAtCents: 120_000 }).label.length).toBeLessThanOrEqual(60);
+  });
+});
+
+describe('callWhy', () => {
+  const flags = { visibleDamage: false, lotOrBundle: false, counterfeitProne: false };
+  const worth = { worthListingCents: 800 };
+  const payouts = (
+    low: number,
+    high: number,
+    confidence: 'high' | 'medium' | 'low' = 'medium',
+  ) => ({
+    conservativePayoutCents: low,
+    optimisticPayoutCents: high,
+    confidence,
+  });
+
+  it('says why a Grab, a Leave, and a Maybe, in one line without "sold"', () => {
+    const whys = [
+      callWhy('buy', payouts(1_100, 1_800), flags, worth),
+      callWhy('skip', payouts(300, 640), flags, worth),
+      callWhy('your_call', payouts(500, 1_200), flags, worth),
+      callWhy('your_call', payouts(900, 1_500, 'low'), flags, worth),
+      callWhy('your_call', payouts(900, 1_500), { ...flags, visibleDamage: true }, worth),
+      callWhy('your_call', payouts(900, 1_500), { ...flags, counterfeitProne: true }, worth),
+      callWhy('your_call', payouts(900, 1_500), { ...flags, lotOrBundle: true }, worth),
+    ];
+    expect(whys).toEqual([
+      'Even its low end pays out $11 after fees, over your $8',
+      'Pays out $6 at most after fees, under your $8',
+      'Pays out $5-$12 after fees: it may or may not clear your $8',
+      'Pays out $9-$15 after fees, but on little to go on',
+      'Pays out $9-$15 after fees, but it shows damage',
+      "Pays out $9-$15 after fees, but often faked: check it's real",
+      "Pays out $9-$15 after fees, but it's a lot or bundle",
+    ]);
+    for (const why of whys) {
+      expect(claimsSoldData(why)).toBe(false);
+      expect(why.length).toBeLessThanOrEqual(140);
+    }
+  });
+
+  it('says one amount when both ends pay out the same, and never a negative payout', () => {
+    expect(callWhy('your_call', payouts(-50, -50), flags, worth)).toBe(
+      'Pays out $0 after fees: it may or may not clear your $8',
+    );
   });
 });

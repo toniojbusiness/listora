@@ -157,6 +157,20 @@ export function scanLabelViolations(scan: ItemScan): string[] {
   if (scan.research?.summary !== undefined && claimsSoldData(scan.research.summary)) {
     violations.push(`research.summary mentions sold data: "${scan.research.summary}"`);
   }
+  // The reality check's lines of the household's own sales say "sold" only with such sales, and
+  // a line of a marketplace's sold listings only under their label, with a comparison of them.
+  const realityLines = scan.realityCheck ?? [];
+  for (const [index, line] of realityLines.entries()) {
+    if (line.kind === 'own_sales' && scan.ownSales.length === 0) {
+      violations.push(`realityCheck[${String(index)}] names own sales the scan has none of`);
+    }
+    if (
+      line.kind === 'market_sold' &&
+      (soldComparisons.length === 0 || !line.text.startsWith(MARKET_SOLD_LABEL_PREFIX))
+    ) {
+      violations.push(`realityCheck[${String(index)}] is "${line.text}" for sold listings`);
+    }
+  }
   const exempt = new Set<unknown>([
     scan.identity,
     scan.aiEstimate,
@@ -164,6 +178,7 @@ export function scanLabelViolations(scan: ItemScan): string[] {
     ...scan.ownSales,
     ...scan.researchLinks,
     ...soldComparisons,
+    ...realityLines.filter((line) => line.kind === 'own_sales' && scan.ownSales.length > 0),
   ]);
   for (const { path, text } of strings(scan, '', exempt)) {
     if (path === 'searchWords') continue;

@@ -22,6 +22,7 @@ export {
   DEFAULT_SCAN_CALL_SETTINGS,
   decideCall,
   SCAN_CALLS,
+  callWhy,
   pricesSignal,
   SCAN_SIGNAL_KINDS,
   scanCall,

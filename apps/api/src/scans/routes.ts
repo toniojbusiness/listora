@@ -1,17 +1,12 @@
 import type { ItemScan } from '@listora/api-contract';
 import { AiGuardError, type AiClient } from '@listora/ai';
-import {
-  ScanFailedError,
-  scanItem,
-  ScanResearchFailedError,
-  type ThriftScan,
-} from '@listora/analysis';
+import { ScanFailedError, scanItem, type ThriftScan } from '@listora/analysis';
 import { inTransaction } from '@listora/db';
 import { isFeatureOn, loadFeatureGate } from '@listora/marketplaces';
 import { scanLabelViolations } from '@listora/pricing';
 import { assertNever, photoSetHash } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { aiGuardApiError } from '../analyses/guards.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
@@ -30,19 +25,21 @@ import {
 } from './comparisons.ts';
 import { decodeScanImages } from './images.ts';
 import { keepAsItem } from './keep.ts';
+import { PRICE_WAIT_MS } from './pricing.ts';
 import {
   findScan,
   insertScan,
   lockScan,
   markReplaced,
   saveDetail,
-  saveResearch,
   scansSince,
   type ScanCallDetail,
   type StoredResearch,
 } from './repository.ts';
-import { researchFor } from './research.ts';
-import { scanView } from './views.ts';
+import { researchWanted } from './research.ts';
+import { ScanResearchRunner } from './research-runner.ts';
+import { waitForPrices } from './wait.ts';
+import { scanAnswer } from './views.ts';
 
 export interface ScanRouteDependencies extends RouteDependencies {
   ai: AiClient;
@@ -52,6 +49,8 @@ export interface ScanRouteDependencies extends RouteDependencies {
   connections: ListingViewContext;
   /** Whether scans hand the iPhone marketplace comparison reads (`MARKET_COMPARISONS`). */
   marketComparisons: boolean;
+  /** How long a scan's prices wait for what they rest on (`PRICE_WAIT_MS`; tests shorten it). */
+  scanPriceWaitMs?: number | undefined;
   now: () => Date;
 }
 
@@ -70,6 +69,35 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * marketplace: every price comes from Listora's own records or the AI.
  */
 export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependencies): void {
+  const waitMs = deps.scanPriceWaitMs ?? PRICE_WAIT_MS;
+  const researcher = new ScanResearchRunner({
+    db: deps.db,
+    ai: deps.ai,
+    logger: app.log,
+    now: deps.now,
+  });
+  // The prices' wait is real seconds since the row's own database timestamps (`created_at`,
+  // `research_started_at`), so it runs on the real clock, never the requests' (`deps.now`).
+  const realNow = (): Date => new Date();
+  const answer = (row: Parameters<typeof scanAnswer>[0]) =>
+    checked(scanAnswer(row, realNow(), waitMs));
+  // Work that must see the request's change committed (an idempotent POST commits after its
+  // handler): the scan's web research, and the wake of a wait for its prices.
+  const afterCommit = new WeakMap<FastifyRequest, () => Promise<void>>();
+  app.addHook('onResponse', async (request) => {
+    const after = afterCommit.get(request);
+    if (after === undefined) return;
+    afterCommit.delete(request);
+    try {
+      await after();
+    } catch (error) {
+      request.log.error({ err: error }, 'scan work after the answer failed');
+    }
+  });
+  app.addHook('onClose', async () => {
+    await researcher.drain();
+  });
+
   contractRoute(app, deps, 'createScan', async ({ tenant, db, body, request }) => {
     const started = performance.now();
     const now = deps.now();
@@ -138,7 +166,13 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
     await countScan(db, tenant, run.id, 'scanned');
     if (body.replacesScanId !== undefined) await markReplaced(db, tenant, body.replacesScanId);
 
-    const view = checked(scanView(row));
+    const view = answer(row);
+    // The web research starts as soon as the scan is stored, so its prices wait as little as
+    // they can; nothing is looked up for a read without a brand.
+    if (researchWanted(read)) {
+      const scanId = row.id;
+      afterCommit.set(request, () => researcher.start(tenant, scanId));
+    }
     request.log.info(
       {
         scanId: row.id,
@@ -149,58 +183,39 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         aiAttempts: outcome.attempts,
         ...(snappedFrom === undefined ? {} : { brandSnapped: true }),
         comparisons: planned.map((comparison) => `${comparison.marketplace}:${comparison.status}`),
+        pricing: view.pricing?.status,
       },
       'scan read',
     );
     return { status: 201, body: view };
   });
 
+  // The scan once its prices are in: starts the web research if it is not running (it starts
+  // with the read; this asks again after a failure, or for a scan read before a restart), then
+  // waits for the research and the comparisons, up to the prices' wait.
   contractRoute(app, deps, 'researchScan', async ({ tenant, db, params, request }) => {
-    const started = performance.now();
-    const now = deps.now();
     await assertThriftScanOn(db, tenant);
     const scan = await findScan(db, tenant, params.scanId);
     if (!scan) throw notFound('Scan');
-    if (scan.research !== null) return { status: 200, body: checked(scanView(scan)) };
-    const read = scan.read as unknown as ThriftScan;
-    let found;
+    if (researchWanted(scan.read as unknown as ThriftScan)) await researcher.start(tenant, scan.id);
+    // The wait ends when the app gives up on it (its connection closes).
+    const gone = new AbortController();
+    const abort = (): void => {
+      gone.abort();
+    };
+    const socket = request.raw.socket;
+    socket.once('close', abort);
     try {
-      found = await researchFor(db, deps.ai, tenant, read, now);
-    } catch (error) {
-      throw scanFailure(error, now);
+      const row = await waitForPrices(deps.db, researcher.changes, tenant, scan.id, {
+        now: realNow,
+        waitMs,
+        signal: gone.signal,
+      });
+      if (!row) throw notFound('Scan');
+      return { status: 200, body: answer(row) };
+    } finally {
+      socket.off('close', abort);
     }
-    const researchMs = Math.round(performance.now() - started);
-    // Made again under the scan's lock, with the comparisons as they are now: a comparison the
-    // phone answered while the research ran is kept.
-    const row = await inTransaction(db, async (trx) => {
-      const current = await lockScan(trx, tenant, scan.id);
-      if (!current) throw notFound('Scan');
-      const stored = current.call_detail as unknown as ScanCallDetail;
-      const detail = await assessScan(
-        trx,
-        tenant,
-        read,
-        found.stored.research,
-        now,
-        stored.comparisons ?? [],
-      );
-      return saveResearch(trx, tenant, scan.id, found.stored, detail, researchMs);
-    });
-    request.log.info(
-      {
-        scanId: row.id,
-        status: found.stored.status,
-        cached: found.stored.cached,
-        pulse: found.pulse,
-        researchMs,
-        searches: found.searches,
-        costMicros: found.costMicros,
-        call: row.call,
-        basis: row.basis,
-      },
-      'scan researched',
-    );
-    return { status: 200, body: checked(scanView(row)) };
   });
 
   contractRoute(app, deps, 'saveScanComparison', async ({ tenant, db, params, body, request }) =>
@@ -229,7 +244,7 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         now,
       );
       if (answered === null) throw notFound('Comparison');
-      if (!answered.changed) return { status: 200, body: checked(scanView(scan)) };
+      if (!answered.changed) return { status: 200, body: answer(scan) };
       const research = (scan.research as unknown as StoredResearch | null)?.research;
       const detail = await assessScan(
         trx,
@@ -240,6 +255,11 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         answered.comparisons,
       );
       const row = await saveDetail(trx, tenant, scan.id, detail);
+      // A wait for the scan's prices looks again once this answer is committed.
+      afterCommit.set(request, () => {
+        researcher.changed(scan.id);
+        return Promise.resolve();
+      });
       request.log.info(
         {
           scanId: row.id,
@@ -254,7 +274,7 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         },
         'scan comparison answered',
       );
-      return { status: 200, body: checked(scanView(row)) };
+      return { status: 200, body: answer(row) };
     }),
   );
 
@@ -305,8 +325,7 @@ function checked(view: ItemScan): ItemScan {
 function scanFailure(failure: unknown, now: Date): unknown {
   // A guard that refused the call arrives as the scan failure's cause.
   const error =
-    (failure instanceof ScanFailedError || failure instanceof ScanResearchFailedError) &&
-    failure.cause instanceof AiGuardError
+    failure instanceof ScanFailedError && failure.cause instanceof AiGuardError
       ? failure.cause
       : failure;
   if (error instanceof AiGuardError) {
@@ -334,11 +353,6 @@ function scanFailure(failure: unknown, now: Date): unknown {
   }
   if (error instanceof ScanFailedError) {
     return new ApiError('service_unavailable', "Couldn't read this one. Try again.", {
-      cause: error,
-    });
-  }
-  if (error instanceof ScanResearchFailedError) {
-    return new ApiError('service_unavailable', "Couldn't look it up on the web just now.", {
       cause: error,
     });
   }

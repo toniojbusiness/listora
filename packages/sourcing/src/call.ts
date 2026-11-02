@@ -99,6 +99,7 @@ export const SCAN_SIGNAL_KINDS = [
   'demand',
   'calibrated',
   'prices',
+  'missing',
 ] as const;
 export type ScanSignalKind = (typeof SCAN_SIGNAL_KINDS)[number];
 
@@ -232,6 +233,11 @@ export interface ScanCall {
   readonly optimisticPayoutCents?: number;
   /** What the call is based on, as the seller reads it. */
   readonly basedOn: string;
+  /**
+   * The headline's one-line why (`callWhy`): what the range pays out against the worth-listing
+   * amount, a flag, or how little there is to go on.
+   */
+  readonly why: string;
   /** The AI estimate as the card shows it: scaled by the calibration when there is one. */
   readonly aiEstimate?: {
     readonly lowCents: number;
@@ -406,6 +412,7 @@ export function scanCall(
       confidence: 'low',
       basis: 'none',
       basedOn: 'Not enough to go on',
+      why: 'Not enough to price it: no sales like it, web prices, or AI estimate',
       ...shownEstimate,
       signals,
     };
@@ -431,6 +438,12 @@ export function scanCall(
     input.flags.visibleDamage || input.flags.lotOrBundle || input.flags.counterfeitProne;
   const call = decideCall(
     { conservativePayoutCents, optimisticPayoutCents, confidence, flagged },
+    settings,
+  );
+  const why = callWhy(
+    call,
+    { conservativePayoutCents, optimisticPayoutCents, confidence },
+    input.flags,
     settings,
   );
   const expected =
@@ -459,9 +472,47 @@ export function scanCall(
           : basis === 'web_info' && web
             ? `${WEB_INFO_LABEL}: ${webBasis(web.sites, calibration !== undefined)}`
             : AI_ESTIMATE_LABEL,
+    why,
     ...shownEstimate,
     signals,
   };
+}
+
+/**
+ * The headline's one-line why, from the payouts after fees against the worth-listing amount:
+ * a Grab pays out enough even at the range's low end; a Leave not even at its high end; a Maybe
+ * says what holds it back (a flag, little to go on, or a range across the amount). Never says
+ * "sold": the payouts are estimates whatever the range rests on.
+ */
+export function callWhy(
+  call: ScanCallKind,
+  payouts: {
+    readonly conservativePayoutCents: number;
+    readonly optimisticPayoutCents: number;
+    readonly confidence: CallConfidence;
+  },
+  flags: ScanFlags,
+  settings: Pick<ScanCallSettings, 'worthListingCents'>,
+): string {
+  const low = dollars(Math.max(0, payouts.conservativePayoutCents));
+  const high = dollars(Math.max(0, payouts.optimisticPayoutCents));
+  const worth = dollars(settings.worthListingCents);
+  const range = low === high ? low : `${low}-${high}`;
+  switch (call) {
+    case 'buy':
+      return `Even its low end pays out ${low} after fees, over your ${worth}`;
+    case 'skip':
+      return `Pays out ${high} at most after fees, under your ${worth}`;
+    case 'your_call':
+      if (flags.counterfeitProne)
+        return `Pays out ${range} after fees, but often faked: check it's real`;
+      if (flags.visibleDamage) return `Pays out ${range} after fees, but it shows damage`;
+      if (flags.lotOrBundle) return `Pays out ${range} after fees, but it's a lot or bundle`;
+      if (payouts.conservativePayoutCents >= settings.worthListingCents) {
+        return `Pays out ${range} after fees, but on little to go on`;
+      }
+      return `Pays out ${range} after fees: it may or may not clear your ${worth}`;
+  }
 }
 
 /**
@@ -508,17 +559,17 @@ function pricesBasedOn(basis: CallBasis, calibration: PriceCalibration | undefin
     calibration !== undefined && calibration.sales > 0
       ? `your items went for ${share} of what they asked`
       : `items usually go for about ${share} of what they ask`;
-  return `Realistic is ${middle}, fast its low end; list at leaves room for offers (${room})`;
+  return `Likely sale is ${middle}, fast sale its low end; list at leaves room for offers (${room})`;
 }
 
 /**
  * The three prices as a signal, for a card built before they had a place of their own (it
- * lists signals by their label): "List at $35 · Realistic sale $25 · Fast sale $18".
+ * lists signals by their label): "List at $35 · Likely sale $25 · Fast sale $18".
  */
 export function pricesSignal(prices: ScanCallPrices): ScanSignal {
   return {
     kind: 'prices',
-    label: `List at ${dollars(prices.listAtCents)} · Realistic sale ${dollars(prices.realisticCents)} · Fast sale ${dollars(prices.fastCents)}`,
+    label: `List at ${dollars(prices.listAtCents)} · Likely sale ${dollars(prices.realisticCents)} · Fast sale ${dollars(prices.fastCents)}`,
     basedOn: prices.basedOn,
   };
 }
