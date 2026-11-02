@@ -19191,7 +19191,9 @@ extension Components {
         /// own sales of items like it coming faster or slower. `style`: the AI's read of the style.
         /// `asking`: what similar listings ask on a marketplace (never sold prices). `demand`: the
         /// household's recent sales against the marketplace's supply. `unsold`: the household already
-        /// has items like it in inventory, not sold (it never moves the call). `calibrated`: the AI
+        /// has items like it in inventory, not sold (it never moves the call). `brand_pulse`: what
+        /// the wider web says of the brand (in demand, steady, or slow, with why and what asks more),
+        /// by web pages (it never moves the call). `calibrated`: the AI
         /// estimate and the web's asking prices were scaled by what the household's own items went for
         /// against what they asked.
         ///
@@ -19201,6 +19203,7 @@ extension Components {
             case retail = "retail"
             case newWithTags = "new_with_tags"
             case webResale = "web_resale"
+            case brandPulse = "brand_pulse"
             case trend = "trend"
             case style = "style"
             case asking = "asking"

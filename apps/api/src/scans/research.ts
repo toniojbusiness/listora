@@ -4,11 +4,16 @@
  * every category, so an item's facts (its retail price, what it resells for) are reused only
  * for the same exact model (`itemResearchKey`: the model or style number, the item type, the
  * era) for 30 days, and an item whose model the read could not pin is looked up afresh every
- * time. A brand's facts (how well it resells) are kept by the brand alone for 7 days.
+ * time. A brand's facts (how well it resells) are kept by the brand alone for 7 days, and so is
+ * its pulse on the wider web (`researchBrandPulse`: in demand, steady, or slow), looked up beside
+ * the item's facts so it adds no wait, and at most once a week a brand.
  */
 import {
+  BrandPulseFailedError,
+  researchBrandPulse,
   researchScanItem,
   scanResearchSubject,
+  type BrandPulse,
   type ScanResearch,
   type ThriftScan,
 } from '@listora/analysis';
@@ -31,9 +36,11 @@ export interface ResearchResult {
   /** Searches and cost of this request: none from the cache. */
   readonly searches: number;
   readonly costMicros: number;
+  /** The brand's pulse: kept from before, asked of the web this time, or failed (asked again next time). */
+  readonly pulse?: 'kept' | 'asked' | 'failed';
 }
 
-type ItemFacts = Omit<ScanResearch, 'reputation'>;
+type ItemFacts = Omit<ScanResearch, 'reputation' | 'brandPulse'>;
 
 export async function researchFor(
   db: DbExecutor,
@@ -54,29 +61,48 @@ export async function researchFor(
       ? undefined
       : ((await cachedResearch(db, tenant, 'item', itemKey, since(ITEM_RESEARCH_CACHE_DAYS))) as
           ItemFacts | undefined);
+  // The brand's pulse runs beside the item's facts, never after them, and never fails them.
+  const pulse = brandPulseFor(
+    db,
+    ai,
+    tenant,
+    subject.brand,
+    brandKey,
+    since(BRAND_RESEARCH_CACHE_DAYS),
+  );
   if (item !== undefined) {
-    const brand = (await cachedResearch(
-      db,
-      tenant,
-      'brand',
-      brandKey,
-      since(BRAND_RESEARCH_CACHE_DAYS),
-    )) as Pick<ScanResearch, 'reputation'> | undefined;
-    const research: ScanResearch = { ...item, reputation: brand?.reputation ?? 'unknown' };
+    const [brand, pulsed] = await Promise.all([
+      cachedResearch(db, tenant, 'brand', brandKey, since(BRAND_RESEARCH_CACHE_DAYS)) as Promise<
+        Pick<ScanResearch, 'reputation'> | undefined
+      >,
+      pulse,
+    ]);
+    const research: ScanResearch = {
+      ...item,
+      reputation: brand?.reputation ?? 'unknown',
+      ...withPulse(pulsed),
+    };
     return {
+      // `cached` is the item's facts': the pulse says its own in `pulse`.
       stored: { status: statusOf(research), research, cached: true },
-      searches: 0,
-      costMicros: 0,
+      searches: pulsed.searches,
+      costMicros: pulsed.costMicros,
+      pulse: pulseStatus(pulsed),
     };
   }
-  const outcome = await researchScanItem(ai, {
-    accountId: tenant.accountId,
-    userId: tenant.userId,
-    // The fake provider's fixtures key the answer by the exact model, or by the brand and the
-    // item's words when the model is not known.
-    keyHash: sha256Hex(itemKey ?? `${brandKey}|${read.category ?? ''}|${read.item.toLowerCase()}`),
-    ...subject,
-  });
+  const [outcome, pulsed] = await Promise.all([
+    researchScanItem(ai, {
+      accountId: tenant.accountId,
+      userId: tenant.userId,
+      // The fake provider's fixtures key the answer by the exact model, or by the brand and the
+      // item's words when the model is not known.
+      keyHash: sha256Hex(
+        itemKey ?? `${brandKey}|${read.category ?? ''}|${read.item.toLowerCase()}`,
+      ),
+      ...subject,
+    }),
+    pulse,
+  ]);
   const { reputation, ...facts } = outcome.research;
   const spent = { model: outcome.model, costMicros: outcome.costMicros };
   if (itemKey !== undefined) {
@@ -95,11 +121,78 @@ export async function researchFor(
       ...spent,
     });
   }
+  const research: ScanResearch = { ...outcome.research, ...withPulse(pulsed) };
   return {
-    stored: { status: statusOf(outcome.research), research: outcome.research, cached: false },
-    searches: outcome.searches,
-    costMicros: outcome.costMicros,
+    stored: { status: statusOf(research), research, cached: false },
+    searches: outcome.searches + pulsed.searches,
+    costMicros: outcome.costMicros + pulsed.costMicros,
+    pulse: pulseStatus(pulsed),
   };
+}
+
+interface PulseResult {
+  /** Undefined when the lookup failed: the card then shows no pulse, and the next scan asks again. */
+  readonly pulse: BrandPulse | undefined;
+  /** The web was asked this time, rather than the pulse kept from before. */
+  readonly asked: boolean;
+  readonly searches: number;
+  readonly costMicros: number;
+}
+
+/**
+ * The brand's pulse kept since `since`, or looked up and kept: a pulse that found nothing is
+ * kept too, so an obscure brand costs one search a week, not one a scan. A failed lookup is
+ * kept nowhere and never fails the research it runs beside; what it cost is still counted.
+ */
+async function brandPulseFor(
+  db: DbExecutor,
+  ai: AiClient,
+  tenant: Tenant,
+  brand: string,
+  brandKey: string,
+  since: Date,
+): Promise<PulseResult> {
+  const cached = (await cachedResearch(db, tenant, 'brand_pulse', brandKey, since)) as
+    BrandPulse | undefined;
+  if (cached !== undefined) return { pulse: cached, asked: false, searches: 0, costMicros: 0 };
+  try {
+    const outcome = await researchBrandPulse(ai, {
+      accountId: tenant.accountId,
+      userId: tenant.userId,
+      keyHash: sha256Hex(`brand_pulse|${brandKey}`),
+      brand,
+    });
+    await cacheResearch(db, tenant, {
+      kind: 'brand_pulse',
+      key: brandKey,
+      research: outcome.pulse as unknown as JsonObject,
+      model: outcome.model,
+      costMicros: outcome.costMicros,
+    });
+    return {
+      pulse: outcome.pulse,
+      asked: true,
+      searches: outcome.searches,
+      costMicros: outcome.costMicros,
+    };
+  } catch (error) {
+    if (error instanceof BrandPulseFailedError) {
+      return { pulse: undefined, asked: true, searches: 0, costMicros: error.costMicros };
+    }
+    throw error;
+  }
+}
+
+/** The pulse to show: only one that says something. */
+function withPulse(result: PulseResult): Pick<ScanResearch, 'brandPulse'> {
+  return result.pulse === undefined || result.pulse.verdict === 'unknown'
+    ? {}
+    : { brandPulse: result.pulse };
+}
+
+function pulseStatus(result: PulseResult): NonNullable<ResearchResult['pulse']> {
+  if (!result.asked) return 'kept';
+  return result.pulse === undefined ? 'failed' : 'asked';
 }
 
 function statusOf(research: ScanResearch): StoredResearch['status'] {
