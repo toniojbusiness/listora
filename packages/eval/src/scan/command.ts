@@ -44,6 +44,8 @@ Options:
                          run's --json report instead of the AI: free, and the same answers, so
                          a change to the call is measured against the same reads
   --limit <n>            only the first n items (caps the cost of a live run)
+  --max-spend <usd>      stop the run's AI spend at this many dollars: what comes after fails
+                         instead of being sent (default: AI_DAILY_BUDGET_USD)
   --items                one line per item: its id, sale, payout, AI range, and calls (no titles)
   --json                 the full report as JSON (it includes the AI's reads)
   --help                 show this message
@@ -65,6 +67,7 @@ export async function scanCommand(
       images: { type: 'string', default: '1' },
       'worth-listing': { type: 'string' },
       limit: { type: 'string' },
+      'max-spend': { type: 'string' },
       research: { type: 'boolean', default: false },
       replay: { type: 'string' },
       items: { type: 'boolean', default: false },
@@ -85,7 +88,13 @@ export async function scanCommand(
     throw new ScanUsageError('--images must be 1 or 2');
   }
   const images = Number(values.images);
-  const worthListingCents = parseDollars(values['worth-listing']);
+  const worthListingCents = parseDollars(values['worth-listing'], '--worth-listing');
+  const maxSpendCents = parseDollars(values['max-spend'], '--max-spend');
+  // One client serves the reads and the lookups, so its daily budget caps the whole run.
+  const aiEnv: NodeJS.ProcessEnv =
+    maxSpendCents === undefined
+      ? env
+      : { ...env, AI_DAILY_BUDGET_USD: (maxSpendCents / 100).toFixed(2) };
   const limit = parseLimit(values.limit);
 
   const loaded = await loadScanDataset(values.dataset);
@@ -98,7 +107,7 @@ export async function scanCommand(
         };
   const { reader, researcher } =
     values.replay === undefined
-      ? await createReaders(provider, dataset, images, values.research, env)
+      ? await createReaders(provider, dataset, images, values.research, aiEnv)
       : await replayReaders(values.replay);
   const report = await runScanBacktest(dataset, {
     ...(reader === undefined ? {} : { reader }),
@@ -166,10 +175,10 @@ async function createReaders(
   return { reader, researcher };
 }
 
-function parseDollars(raw: string | undefined): number | undefined {
+function parseDollars(raw: string | undefined, option: string): number | undefined {
   if (raw === undefined) return undefined;
   if (!/^\d{1,4}(\.\d{1,2})?$/.test(raw)) {
-    throw new ScanUsageError('--worth-listing must be dollars, for example 12 or 12.50');
+    throw new ScanUsageError(`${option} must be dollars, for example 12 or 12.50`);
   }
   return Math.round(Number(raw) * 100);
 }

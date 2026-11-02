@@ -7,6 +7,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
+  brandPulseSignal,
   DEFAULT_SCAN_CALL_SETTINGS,
   pricesSignal,
   scanCall,
@@ -532,6 +533,67 @@ describe("scanCall calibrated to the seller's sales", () => {
     expect(call.range).toEqual({ lowCents: 2_000, highCents: 4_000 });
     expect(call.aiEstimate).toEqual(aiEstimate);
     expect(call.signals).toEqual([]);
+  });
+});
+
+describe('the brand pulse', () => {
+  const pulse = {
+    verdict: 'in_demand' as const,
+    reason: 'Fashion coverage has its 90s windbreakers trending again',
+    premium: 'Vintage 90s pieces',
+    sites: ['fashion-weekly.example', 'reddit.com'],
+  };
+
+  it('is a signal under its own label, on web info, with what asks more and the sites', () => {
+    const call = scanCall(
+      input({ brandPulse: pulse, ownHistory: history(1_200, 2_000) }),
+      settings,
+    );
+    expect(call.signals).toEqual([
+      {
+        kind: 'brand_pulse',
+        label: 'Brand pulse: in demand',
+        basedOn:
+          'Web info - not sold listings: Fashion coverage has its 90s windbreakers trending again. ' +
+          'Asks more: Vintage 90s pieces. (fashion-weekly.example, reddit.com)',
+      },
+    ]);
+    expect(claimsSoldData(call.signals[0]?.label ?? '')).toBe(false);
+  });
+
+  it('never moves the call, whatever its verdict', () => {
+    for (const ownHistory of [history(400, 700), history(1_200, 2_000), history(2_500, 4_000)]) {
+      const without = scanCall(input({ ownHistory }), settings);
+      for (const verdict of ['in_demand', 'steady', 'slow'] as const) {
+        const withPulse = scanCall(
+          input({ ownHistory, brandPulse: { ...pulse, verdict } }),
+          settings,
+        );
+        expect({ ...withPulse, signals: [] }).toEqual({ ...without, signals: [] });
+      }
+    }
+    expect(
+      scanCall(input({ brandPulse: { ...pulse, verdict: 'slow' } }), settings).signals,
+    ).toEqual([expect.objectContaining({ label: 'Brand pulse: slow' })]);
+  });
+
+  it('fits the card: what asks more, then the last sites, give way to the reason', () => {
+    const long = {
+      ...pulse,
+      reason: 'Collectors on the forums keep asking for the old logo pieces and the early runs now',
+      premium: 'The 1990s made-in-USA line and the early artist runs',
+      sites: ['fashion-weekly.example', 'collectors-forum.example', 'resale-report.example'],
+    };
+    const signal = brandPulseSignal(long);
+    expect(signal.basedOn.length).toBeLessThanOrEqual(200);
+    expect(signal.basedOn).toContain(long.reason);
+    expect(signal.basedOn).toContain('(fashion-weekly.example');
+    expect(signal.basedOn).not.toContain('Asks more');
+    expect(brandPulseSignal({ ...pulse, premium: undefined }).basedOn).toBe(
+      'Web info - not sold listings: Fashion coverage has its 90s windbreakers trending again. ' +
+        '(fashion-weekly.example, reddit.com)',
+    );
+    expect(brandPulseSignal({ ...pulse, verdict: 'steady' }).label).toBe('Brand pulse: steady');
   });
 });
 
