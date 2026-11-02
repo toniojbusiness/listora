@@ -298,10 +298,12 @@ error, and the bias.
 - **Scaling every AI estimate** instead of only a named brand's: the AI estimate 37/64, 35%
   error, but the call's range back to 32/64, since the unnamed items' estimates, which rest
   calls more often, were not high to begin with. **The web's asks scaled once**: 64% error.
-- **The brand snap changed no item here**: each near miss of a brand name on this set (one on these reads, one
-  on an earlier one) is the only sale of its brand, so with the item
-  left out there is nothing to snap to; and it snapped none of 192 reads (three runs) to a wrong
-  brand. Its effect shows at the store, where the household has sold the brand before.
+- **The brand snap changed no item here, and is kept.** Each near miss of a brand name on this
+  set (one on these reads, one on an earlier one) is the only sale of its brand, so with the
+  item left out there is nothing to snap to: leave-one-out cannot show its benefit, which comes
+  once the household has sold a brand before. It is kept because it is tightly bounded (one own
+  brand within 2 edits, keys of 5 letters or more) and snapped none of 192 reads (three runs) to
+  a wrong brand.
 - **With two photos** (the shot and its closer look, reads only, $0.028): the AI estimate went
   from 29/64 inside, 50% error (+37%) to 39/64, 35% (+12%), and the call's range from 29/64, 48%
   (+27%) to 34/64, 41% (+15%), better or equal in every group. No brand snapped there either.
