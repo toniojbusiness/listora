@@ -155,14 +155,17 @@ answers without paying for them again.
 
 For each sold item it makes the scan's read from the item's photos, compares the item with the
 set's other sales (leave-one-out), makes the call, and scores all three against what the item
-really sold for. Three call variants run: `ai`, the scan's own read with the AI estimate and the
+really sold for. Five call variants run: `ai`, the scan's own read with the AI estimate and the
 web's asks as they came (the call before the calibration); `calibrated`, the same read with the
 brand snapped and the prices scaled (the call at the store today), each item's snap and ratio
-from the set's other items only, so an item never calibrates itself; and `labels`, the set's
-labeled brand and category with full confidence and no AI estimate (the best an
-own-history-only call could do). With a read, a price table scores the AI estimate, the web's
-asks, the own sales' quartiles, and the call's range, before and after, overall and by the
-labeled category's group. A sweep repeats the call at worth-listing amounts from $5 to
+from the set's other items only, so an item never calibrates itself; `anchored` and
+`anchored_default`, the same with a known retail price holding the range at a resale-to-retail
+ratio, measured and not shipped ([The retail anchor](#the-retail-anchor-measured-not-shipped));
+and `labels`, the set's labeled brand and category with full confidence and no AI estimate (the
+best an own-history-only call could do). With a read, a price table scores the AI estimate, the
+web's asks, the own sales' quartiles, the retail anchor, and the call's range, for each variant,
+overall, on the items with a retail price (`with retail`), and by the labeled category's group;
+and a table gives the items' sale prices as a share of their retail price, by category group. A sweep repeats the call at worth-listing amounts from $5 to
 $20. The report holds counts and money only, no title or brand, so a private set's report can be
 shared; `--items` adds one line per item (its id, sale, payout, and calls) and `--json` the full
 report, including the AI's reads.
@@ -308,6 +311,84 @@ error, and the bias.
   from 29/64 inside, 50% error (+37%) to 39/64, 35% (+12%), and the call's range from 29/64, 48%
   (+27%) to 34/64, 41% (+15%), better or equal in every group. No brand snapped there either.
 - The split by a named brand was found on this set; re-check it on the next one.
+
+### The retail anchor: measured, not shipped
+
+Resold items usually go for at least 40% under their original retail price, unless they are
+vintage or trending. The idea: when the read or the web finds an item's retail price, estimate
+its resale as that price times a resale-to-retail ratio, and let that hold the range after the
+own sales and a marketplace's sold listings but before the web's asks and the AI estimate. The
+card would say "Retail $68, resale about $15-$25, from typical resale of 25-35% of retail for
+your sales".
+
+The backtest made that call (`anchoredCall` in `packages/eval/src/scan/retail-anchor.ts`)
+beside today's, on the same stored reads and lookups as the calibration (`--replay`, no new AI
+spend):
+
+- **The ratio** (`resaleRatio`) is the low and high quartile of each sale's price over its
+  retail price. Each sale's ratio is held to 2%-100%. Each end is drawn toward a default of
+  20%-60% weighted as 5 sales, and neither end goes above 60%. The middle of a retail range
+  across models is used. `anchored` takes the ratio from the set's other items, leave-one-out;
+  `anchored_default` takes the default alone, as a seller with no sales of a known retail price
+  would get.
+- **Not anchored:** a vintage read (its era or style says vintage), or an item whose
+  marketplace's sold listings go above retail. Then retail neither holds nor caps the range.
+- **Confidence:** medium only with a sure read and a ratio from 3 or more of the seller's own
+  sales, otherwise low, never high.
+
+**What the household's items resold for against retail.** The 33 items whose read or lookup
+found a retail price (no brands or titles; the set is private):
+
+| Group     | Items | Low quartile | Median | High quartile |
+| --------- | ----- | ------------ | ------ | ------------- |
+| All       | 33    | 11%          | 21%    | 30%           |
+| Bottoms   | 16    | 13%          | 20%    | 29%           |
+| Tops      | 15    | 11%          | 25%    | 33%           |
+| Outerwear | 1     | 8%           | 8%     | 8%            |
+| Shoes     | 1     | 21%          | 21%    | 21%           |
+
+So these mall brands resold for about 80% under retail, far past the rule of thumb. One item
+went for 1.4 times its retail price and was not read as vintage.
+
+**Results.** Each cell: the sale inside the range / priced, the median error, and the bias.
+
+| Group (items)                      | Today (`calibrated`) | Anchored, the seller's ratio | Anchored, the default ratio |
+| ---------------------------------- | -------------------- | ---------------------------- | --------------------------- |
+| The call's range, all (64)         | 36/64, 45% (+22%)    | 38/64, 45% (+27%)            | 37/64, 50% (+35%)           |
+| Bottoms (24)                       | 16/24, 29% (+15%)    | 16/24, 29% (+15%)            | 15/24, 31% (+22%)           |
+| Tops (34)                          | 17/34, 52% (+13%)    | 18/34, 53% (+18%)            | 18/34, 54% (+37%)           |
+| Shoes (1)                          | 0/1, 21% (-21%)      | 1/1, 8% (+8%)                | 1/1, 88% (+88%)             |
+| Outerwear (3), dresses (2)         | unchanged            | unchanged                    | unchanged                   |
+| The call's range, with retail (30) | 13/30, 45% (+15%)    | 15/30, 45% (+15%)            | 14/30, 56% (+39%)           |
+
+On the same 30 items with a retail price (not vintage), as price sources:
+
+| Source                            | Inside, error (bias) |
+| --------------------------------- | -------------------- |
+| AI estimate, calibrated           | 18/30, 34% (-2%)     |
+| Web asks, calibrated              | 15/30, 36% (+16%)    |
+| Retail anchor, the seller's ratio | 17/30, 48% (-5%)     |
+| Retail anchor, the default ratio  | 15/30, 69% (+65%)    |
+
+- **The calls at $8 worth listing:** today 10 Buys (9 held) and 2 Skips (both held). With the
+  seller's ratio, 10 Buys (9 held) and 1 Skip (held): one correct Skip became Your call. With
+  the default ratio, 10 Buys (9 held) and no Skips. Across the $5 to $20 sweep, the seller's
+  ratio traded calls both ways. At $5 it made 13 Buys (12 held) against 11 (all held). At $12
+  it made 10 Skips (6 held) against 13 (7 held). Elsewhere its calls held as often or less.
+- **Why it lost.** The anchor took over only 9 of the 64 calls: items with a retail price but
+  fewer than 3 own sales like them. Every one of those also had web asks, which the calibration
+  had already scaled close to the sale. Sale over retail varied too much for the ratio to beat
+  them: 4% to 143% on this set, with a quartile range of 11%-30%, so a range from it is wide.
+  The calibrated AI estimate also came closer than the anchor on the same items.
+- **By category** (each category group's own ratio, drawn toward the seller's, from 3 or more
+  sales; a one-off script on the same run): 37/64 inside against 38/64 for one ratio, at the
+  same 45% error.
+- **The default** (20%-60%) runs high for this household, whose items resold for about 21% of
+  retail: +65% bias as a price.
+- **Not shipped**, by the rule that a change ships only if it beats today: the call is
+  unchanged. The anchor's backtest variants and the ratio table stay, so it can be measured
+  again on the next set. That set should have more items that have a retail price but no web
+  asks and no own sales, the case the anchor is for, which this set barely has.
 
 ## The scan at the store (M2)
 
@@ -1185,6 +1266,10 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   ratio of what they sold for to the AI estimate and the web's asks on the same items. On the
   backtest that ratio worked about as well as the sale-to-asking one (34% and 39% error), and it
   measures each source directly.
+- **The retail anchor** (measured, not shipped, [above](#the-retail-anchor-measured-not-shipped)):
+  re-measure it on a set with more items that have a retail price but no web asks and too few
+  own sales. At runtime its ratio would come from the account's kept scans whose items sold
+  (`item_scan.item_id`, the retail in `call_detail`), which for most accounts is none today.
 - **The offline call** (`OfflineScanCall` on the iPhone) has no AI estimate and no brand snap;
   snapping a tag's brand to the kit's brands would help it the same way.
 - **Re-run the backtest** as sales accumulate, and on shots taken at a store (M2), before showing

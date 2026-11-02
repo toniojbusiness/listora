@@ -80,7 +80,14 @@ describe('runScanBacktest', () => {
         worthListingCents: 800,
         counts: { buy: 5, your_call: 3, skip: 0 },
         byConfidence: { high: 0, medium: 5, low: 3 },
-        byBasis: { own_history: 5, market_sold: 0, web_info: 0, ai_estimate: 0, none: 3 },
+        byBasis: {
+          own_history: 5,
+          market_sold: 0,
+          retail: 0,
+          web_info: 0,
+          ai_estimate: 0,
+          none: 3,
+        },
         buyHeld: 5,
         skipHeld: 0,
       },
@@ -106,7 +113,13 @@ describe('runScanBacktest', () => {
       latencyP50Ms: 100,
     });
     expect(report.read?.costMicrosPerScan).toBeGreaterThan(0);
-    expect(report.calls.map((scores) => scores.variant)).toEqual(['ai', 'calibrated', 'labels']);
+    expect(report.calls.map((scores) => scores.variant)).toEqual([
+      'ai',
+      'calibrated',
+      'anchored',
+      'anchored_default',
+      'labels',
+    ]);
     // The blouses' own sales are too few, so the AI estimate decides, at low confidence.
     const blouse = report.items.find((entry) => entry.id === 'b1')?.calls.ai?.call;
     expect(blouse).toMatchObject({ basis: 'ai_estimate', confidence: 'low', call: 'your_call' });
@@ -174,14 +187,30 @@ describe('runScanBacktest calibrated', () => {
     );
     expect(report.prices.map((scores) => `${scores.variant} ${scores.group}`)).toEqual([
       'ai all',
+      'ai with retail',
       'ai clothing/bottoms',
       'ai clothing/tops',
       'ai unlabeled',
       'calibrated all',
+      'calibrated with retail',
       'calibrated clothing/bottoms',
       'calibrated clothing/tops',
       'calibrated unlabeled',
+      'anchored all',
+      'anchored with retail',
+      'anchored clothing/bottoms',
+      'anchored clothing/tops',
+      'anchored unlabeled',
+      'anchored_default all',
+      'anchored_default with retail',
+      'anchored_default clothing/bottoms',
+      'anchored_default clothing/tops',
+      'anchored_default unlabeled',
     ]);
+    // The fake web finds no retail price: no anchor, and the anchored calls are today's.
+    expect(all('anchored')?.retailAnchor.priced).toBe(0);
+    expect(report.retailRatios).toEqual([]);
+    expect(a1?.calls.anchored?.call).toEqual(a1?.calls.calibrated?.call);
     expect(formatScanReport(report)).toContain('Prices against the sale');
   });
 
@@ -213,6 +242,75 @@ describe('runScanBacktest calibrated', () => {
     const q1 = single.items.find((entry) => entry.id === 'q1');
     expect(q1?.calls.calibrated?.identity.brand).toBe('Quilon');
     expect(q1?.calls.calibrated?.snappedFrom).toBeUndefined();
+  });
+});
+
+/** The fake web's answer with a retail price of `retail` times each item's asking price. */
+function retailResearcher(inner: ScanResearcher, retail: number): ScanResearcher {
+  return {
+    id: 'retail',
+    description: 'the fake web with a retail price',
+    research: async (entry, scan) => {
+      const found = await inner.research(entry, scan);
+      if (found?.ok !== true || entry.askingPriceCents === null) return found;
+      const price = Math.round(entry.askingPriceCents * retail);
+      return {
+        ...found,
+        research: {
+          ...found.research,
+          retail: { lowCents: price, highCents: price, sources: [], models: [] },
+        },
+      };
+    },
+  };
+}
+
+describe('runScanBacktest anchored', () => {
+  it("holds a known retail price at the other items' resale-to-retail ratio ahead of the web", async () => {
+    const dataset = await loadScanDataset(await writeScanDataset());
+    const report = await runScanBacktest(dataset, {
+      reader: await fakeReader(dataset),
+      // Retail $80 for every item asking $20: the jeans sold at 17.5%-27.5% of it.
+      researcher: retailResearcher(await fakeResearcher(dataset), 4),
+      settings,
+    });
+    // b1's own sales are too few, so today the web's asks hold its range; anchored, its retail.
+    const b1 = report.items.find((entry) => entry.id === 'b1');
+    expect(b1?.calls.calibrated?.call.basis).toBe('web_info');
+    expect(b1?.calls.anchored?.call.basis).toBe('retail');
+    expect(b1?.calls.anchored_default?.call.basis).toBe('retail');
+    // Its ratio rests on the six other items with a retail price, never its own sale.
+    expect(b1?.calls.anchored?.resaleRatio?.sales).toBe(6);
+    expect(b1?.calls.anchored_default?.resaleRatio).toEqual({ low: 0.2, high: 0.6, sales: 0 });
+    // At the default 20%-60% of $80: $16-$48.
+    expect(b1?.calls.anchored_default?.call.range).toEqual({ lowCents: 1_600, highCents: 4_800 });
+    // The jeans rest on their own sales either way.
+    const a1 = report.items.find((entry) => entry.id === 'a1');
+    expect(a1?.calls.anchored?.call).toEqual(a1?.calls.calibrated?.call);
+
+    const all = (variant: string) =>
+      report.prices.find((scores) => scores.variant === variant && scores.group === 'all');
+    expect(all('anchored')?.retailAnchor.priced).toBe(7);
+    expect(all('calibrated')?.retailAnchor.priced).toBe(0);
+    // Every source on the items with a retail price, the anchor's own.
+    const withRetail = report.prices.find(
+      (scores) => scores.variant === 'anchored' && scores.group === 'with retail',
+    );
+    expect(withRetail).toMatchObject({
+      items: 7,
+      retailAnchor: { priced: 7 },
+      webAsks: { priced: 7 },
+    });
+    expect(report.retailRatios.map((scores) => [scores.group, scores.items])).toEqual([
+      ['all', 7],
+      ['clothing/bottoms', 5],
+      ['clothing/tops', 2],
+    ]);
+    // The jeans' $14-$22 over $80.
+    expect(report.retailRatios[1]).toMatchObject({ low: 0.2, median: 0.225, high: 0.25 });
+    const text = formatScanReport(report);
+    expect(text).toContain('Resale to retail');
+    expect(text).toContain('anchored_default');
   });
 });
 
