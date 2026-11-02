@@ -346,7 +346,10 @@ connection to Listora.
   bottom holds every card of the run; tapping one shows it again, so an item put back can still
   be kept until the run ends, and a kept one shows "Kept as a draft" with **Close**.
 - **Shoot the tag** (or **Shoot the tag?**, when the AI could not read the brand or was unsure): the next shot is a
-  close-up of the tag; the item is read again with both images (`replacesScanId`).
+  close-up of the tag. The card steps aside while the tag is framed, so the camera is clear, with
+  "Shoot the tag up close" and **Cancel** over it; the shot brings the same card back, read again
+  with both images (`replacesScanId`), its button now **Retake the tag**. Cancel brings the card
+  back unchanged.
 - **Hold the mic** to add a note ("medium, small stain"), turned into text on the iPhone. Said
   before a shot, it rides along with that shot's read; said after, the item is read again once
   with it (about $0.0004).
@@ -633,7 +636,8 @@ build; the server's applies with a deploy.
   `@listora/sourcing` (the sums, the left-out scans, the wording); iPhone `ScanCheckoutTests.swift`
   (the run's place, the checkout's kept scans, the iPhone's date, the miles, the run ended after,
   a failure retried as the same checkout, the summary's words); `ThriftScanUITests` starts a run
-  at a place and checks it out on the local stack.
+  at a place and checks it out on the local stack, and shoots a tag: the card out of the way while
+  it is framed, back unchanged on Cancel and read with the tag after the shot.
 - iPhone: `ScanDecisionTests.swift` (Keep and Put back closing the card at once, the line's
   words while the draft is saved and after, a failed Keep tried again from the tray, Put back
   while reading, Close on a kept card, the camera-ready measurement); `ScanTests.swift` (the card's words and haptics, the measurements, the run: one server
