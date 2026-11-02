@@ -7870,8 +7870,8 @@ export interface components {
          *     where the scan read them) in the marketplace's public search, read on the seller's iPhone in
          *     a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
          *     asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
-         *     the sold side; eBay shows its sold listings, so its row has what close matches sold for
-         *     (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
+         *     the sold side; eBay and Mercari show their sold listings, so their rows have what close
+         *     matches sold for (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
          *     `saveScanComparison`.
          */
         ScanComparison: {
@@ -7926,8 +7926,8 @@ export interface components {
             label: string;
         };
         /**
-         * @description What similar listings sold for in a marketplace's public search (eBay's): other sellers'
-         *     real sales, never the household's own.
+         * @description What similar listings sold for in a marketplace's public search (eBay's, Mercari's): other
+         *     sellers' real sales, never the household's own.
          */
         ScanSoldPrices: {
             /** Format: int32 */
@@ -7938,15 +7938,16 @@ export interface components {
             high: components["schemas"]["Money"];
             /**
              * Format: int32
-             * @description How many days back the oldest of them sold.
+             * @description How many days back the oldest of them sold, where the marketplace dates them.
              */
             windowDays?: number;
             /** @description Shown with them, always ("Sold listings on eBay"). */
             label: string;
         };
         /**
-         * @description How the item sells against the competition: on a marketplace that shows sold listings
-         *     (eBay), how many its search sold lately against how many it has for sale now; elsewhere the
+         * @description How the item sells against the competition: on a marketplace that shows sold listings, its
+         *     own sold pace (eBay: how many its search sold lately against how many it has for sale now;
+         *     Mercari: how many of its latest sales were in the last 30 days); elsewhere the
          *     household's own recent sales like it against what the marketplace has for sale now. `label`
          *     only when the numbers say so.
          */
@@ -7974,8 +7975,9 @@ export interface components {
             forSaleTotal?: number;
             /**
              * Format: int32
-             * @description Sold listings in the whole sold search, as the marketplace counts them, where it shows a
-             *     visitor sold listings (eBay's last 90 days).
+             * @description Sold listings in the marketplace's sold window, where it shows a visitor sold listings:
+             *     eBay's whole sold search over its last 90 days, as eBay counts them; Mercari's latest
+             *     sold results read (`stats.read.sold`) that sold in the last 30 days.
              */
             soldTotal?: number;
             /** Format: int32 */
@@ -8017,7 +8019,12 @@ export interface components {
              */
             windowDays?: number;
         };
-        /** @description The AI's guess of what a buyer would pay on Depop; never sold data. */
+        /**
+         * @description The AI's guess of what a buyer would pay on Depop; never sold data. For a read that named a
+         *     brand it is scaled by what the household's own items went for against what they asked (the
+         *     call's `calibrated` signal says so), since the AI prices a named brand like its listings ask.
+         *     Scans made before the calibration show the AI's own numbers.
+         */
         ScanAiEstimate: {
             /** @description Shown with it, always ("AI estimate - not based on sold listings"). */
             label: string;
@@ -8093,10 +8100,10 @@ export interface components {
         ScanBasis: components["schemas"]["KnownScanBasis"];
         /**
          * @description `own_history`: the household's own sales like it. `market_sold`: what close matches sold for
-         *     in a marketplace's public search (eBay's sold listings, `comparisons`), when the household's
-         *     own sales are too few. `web_info`: what web pages say such items resell for (the research,
-         *     with its sites), never a high-confidence call. `ai_estimate`: the AI's estimate alone, never
-         *     a high-confidence Buy. `none`: nothing to go on.
+         *     in a marketplace's public search (eBay's or Mercari's sold listings, `comparisons`), when the
+         *     household's own sales are too few. `web_info`: what web pages say such items resell for (the
+         *     research, with its sites), never a high-confidence call. `ai_estimate`: the AI's estimate
+         *     alone, never a high-confidence Buy. `none`: nothing to go on.
          * @enum {string}
          */
         KnownScanBasis: "own_history" | "market_sold" | "web_info" | "ai_estimate" | "none";
@@ -8125,10 +8132,12 @@ export interface components {
          *     household's recent sales against the marketplace's supply. `unsold`: the household already
          *     has items like it in inventory, not sold (it never moves the call). `brand_pulse`: what
          *     the wider web says of the brand (in demand, steady, or slow, with why and what asks more),
-         *     by web pages (it never moves the call).
+         *     by web pages (it never moves the call). `calibrated`: the AI
+         *     estimate and the web's asking prices were scaled by what the household's own items went for
+         *     against what they asked.
          * @enum {string}
          */
-        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "brand_pulse" | "trend" | "style" | "asking" | "demand" | "unsold";
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "brand_pulse" | "trend" | "style" | "asking" | "demand" | "unsold" | "calibrated";
         /**
          * @description The item's original retail price, with where it came from: one model's price (`low` equals
          *     `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -14105,7 +14114,7 @@ export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "market_sold", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
-export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "brand_pulse", "trend", "style", "asking", "demand", "unsold"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "brand_pulse", "trend", "style", "asking", "demand", "unsold", "calibrated"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
 export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
 export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];

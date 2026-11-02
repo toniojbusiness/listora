@@ -12,6 +12,7 @@ import {
   BrandPulseFailedError,
   researchBrandPulse,
   researchScanItem,
+  scanResearchSubject,
   type BrandPulse,
   type ScanResearch,
   type ThriftScan,
@@ -50,7 +51,8 @@ export async function researchFor(
 ): Promise<ResearchResult> {
   const itemKey = itemResearchKey(read);
   const brandKey = brandResearchKey(read.brand);
-  if (brandKey === undefined || read.brand === null) {
+  const subject = scanResearchSubject(read);
+  if (brandKey === undefined || subject === undefined) {
     return { stored: { status: 'no_brand', cached: false }, searches: 0, costMicros: 0 };
   }
   const since = (days: number) => new Date(now.getTime() - days * DAY_MS);
@@ -64,7 +66,7 @@ export async function researchFor(
     db,
     ai,
     tenant,
-    read.brand,
+    subject.brand,
     brandKey,
     since(BRAND_RESEARCH_CACHE_DAYS),
   );
@@ -97,14 +99,7 @@ export async function researchFor(
       keyHash: sha256Hex(
         itemKey ?? `${brandKey}|${read.category ?? ''}|${read.item.toLowerCase()}`,
       ),
-      brand: read.brand,
-      item: read.item,
-      ...(read.category === null ? {} : { category: read.category }),
-      ...(read.line === null ? {} : { line: read.line }),
-      ...(read.styleNumber === null ? {} : { styleNumber: read.styleNumber }),
-      ...(read.era === null ? {} : { era: read.era }),
-      ...(read.material === null ? {} : { material: read.material }),
-      ...(read.style === null ? {} : { style: read.style }),
+      ...subject,
     }),
     pulse,
   ]);

@@ -5,6 +5,12 @@ import {
   WEB_INFO_LABEL,
 } from '@listora/pricing';
 
+import {
+  calibratedAiEstimate,
+  calibratedWebAsks,
+  calibrationPercent,
+  type PriceCalibration,
+} from './calibration.ts';
 import type { MarketDemand, MarketMatchLevel } from './market.ts';
 
 import type { OwnHistoryComparisons } from './own-history.ts';
@@ -89,6 +95,7 @@ export const SCAN_SIGNAL_KINDS = [
   'unsold',
   'asking',
   'demand',
+  'calibrated',
 ] as const;
 export type ScanSignalKind = (typeof SCAN_SIGNAL_KINDS)[number];
 
@@ -110,7 +117,18 @@ export interface ScanCallInput {
   /** How sure the identification is, 0 to 1. */
   readonly identityConfidence: number;
   readonly ownHistory?: OwnHistoryComparisons | undefined;
-  /** The AI's price guess in cents; never called sold data. */
+  /**
+   * What the seller's items sell for against their asking price (`priceCalibration`): the web's
+   * asking prices are scaled by its square, and the AI estimate of a named brand by it, before
+   * either holds a range. Without one both are taken as they are.
+   */
+  readonly calibration?: PriceCalibration | undefined;
+  /**
+   * The read named a brand. The AI prices a named brand like that brand's listings ask (on the
+   * backtest, 35% over the sale against 7% without one), so only then is its estimate scaled.
+   */
+  readonly namedBrand?: boolean | undefined;
+  /** The AI's price guess in cents, as the AI gave it; never called sold data. */
   readonly aiEstimate?:
     | { readonly lowCents: number; readonly midCents: number; readonly highCents: number }
     | undefined;
@@ -129,7 +147,7 @@ export interface ScanCallInput {
         readonly models?: readonly string[] | undefined;
       }
     | undefined;
-  /** What the web says such items resell for, with the sites it comes from (web research). */
+  /** What the web's used listings of such items ask, with the sites (web research): asking prices. */
   readonly web?:
     | {
         readonly lowCents: number;
@@ -206,6 +224,12 @@ export interface ScanCall {
   readonly optimisticPayoutCents?: number;
   /** What the call is based on, as the seller reads it. */
   readonly basedOn: string;
+  /** The AI estimate as the card shows it: scaled by the calibration when there is one. */
+  readonly aiEstimate?: {
+    readonly lowCents: number;
+    readonly midCents: number;
+    readonly highCents: number;
+  };
   /** The retail tag, new with tags, the trend, and the style, when there is something to say. */
   readonly signals: readonly ScanSignal[];
 }
@@ -225,10 +249,19 @@ export function scanCall(
 ): ScanCall {
   const history = input.ownHistory;
   const useHistory = history !== undefined && history.prices.count >= settings.minComparisons;
-  const web =
+  const calibration = input.calibration;
+  const estimateCalibration = input.namedBrand === true ? calibration : undefined;
+  const scaleEstimate = input.aiEstimate !== undefined && estimateCalibration !== undefined;
+  const aiEstimate =
+    input.aiEstimate === undefined || estimateCalibration === undefined
+      ? input.aiEstimate
+      : calibratedAiEstimate(input.aiEstimate, estimateCalibration);
+  const asks =
     input.web !== undefined && input.web.highCents > 0 && input.web.sites.length > 0
       ? input.web
       : undefined;
+  const web =
+    asks !== undefined && calibration !== undefined ? calibratedWebAsks(asks, calibration) : asks;
   const markets = input.markets ?? [];
   const soldMarket = markets.find(
     (market) => market.sold !== undefined && market.sold.count >= settings.minMarketSold,
@@ -240,7 +273,7 @@ export function scanCall(
       ? 'market_sold'
       : web
         ? 'web_info'
-        : input.aiEstimate
+        : aiEstimate
           ? 'ai_estimate'
           : 'none';
   const signals: ScanSignal[] = [];
@@ -251,9 +284,9 @@ export function scanCall(
         ? { lowCents: sold.lowCents, highCents: sold.highCents }
         : basis === 'web_info' && web
           ? { lowCents: web.lowCents, highCents: web.highCents }
-          : input.aiEstimate && {
-              lowCents: input.aiEstimate.lowCents,
-              highCents: input.aiEstimate.highCents,
+          : aiEstimate && {
+              lowCents: aiEstimate.lowCents,
+              highCents: aiEstimate.highCents,
             };
   if (
     range !== undefined &&
@@ -354,12 +387,17 @@ export function scanCall(
   if (input.unsold !== undefined && input.unsold.count > 0) {
     signals.push(unsoldSignal(input.unsold));
   }
+  if (calibration !== undefined && (scaleEstimate || web !== undefined)) {
+    signals.push(calibrationSignal(calibration, scaleEstimate, web !== undefined));
+  }
+  const shownEstimate = aiEstimate === undefined ? {} : { aiEstimate };
   if (range === undefined) {
     return {
       call: 'your_call',
       confidence: 'low',
       basis: 'none',
       basedOn: 'Not enough to go on',
+      ...shownEstimate,
       signals,
     };
   }
@@ -399,8 +437,9 @@ export function scanCall(
         : basis === 'market_sold' && soldMarket && sold
           ? `${marketSoldLabel(soldMarket.marketplace)}: ${soldPace(sold.count, sold.windowDays)}`
           : basis === 'web_info' && web
-            ? `${WEB_INFO_LABEL}: ${web.sites.join(', ')}`
+            ? `${WEB_INFO_LABEL}: ${webBasis(web.sites, calibration !== undefined)}`
             : AI_ESTIMATE_LABEL,
+    ...shownEstimate,
     signals,
   };
 }
@@ -426,6 +465,36 @@ export function decideCall(
     !range.flagged
     ? 'buy'
     : 'your_call';
+}
+
+/** The web's asks a range rests on: "asks on poshmark.com, scaled to your sales". */
+function webBasis(sites: readonly string[], calibrated: boolean): string {
+  return `asks on ${sites.join(', ')}${calibrated ? ', scaled to your sales' : ''}`;
+}
+
+/** Says what the AI estimate and the web's asking prices were scaled by, and why. */
+function calibrationSignal(
+  calibration: PriceCalibration,
+  estimate: boolean,
+  asks: boolean,
+): ScanSignal {
+  const what =
+    estimate && asks
+      ? "the AI estimate and the web's asking prices are"
+      : estimate
+        ? 'the AI estimate is'
+        : "the web's asking prices are";
+  const share = calibrationPercent(calibration.saleToAsking);
+  return {
+    kind: 'calibrated',
+    label: 'Scaled to your sales',
+    basedOn:
+      calibration.sales === 0
+        ? `Items usually go for about ${share} of what they ask; ${what} scaled to it`
+        : `Your items went for ${share} of what they asked (${String(calibration.sales)} ${
+            calibration.sales === 1 ? 'sale' : 'sales'
+          }); ${what} scaled to it`,
+  };
 }
 
 function unsoldSignal(unsold: UnsoldLikeIt): ScanSignal {

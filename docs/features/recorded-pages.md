@@ -53,10 +53,11 @@ signed in (the recorder refuses one that holds any). `npm run recordings:record 
 page without touching a seller's shop (through `market-pace.sh`, like every session). A search
 names other sellers in its slugs and their towns, which the plan's `identity` adds to the words
 redacted; the entry runs with its own profile (`profile`, the comparison read's), through the
-phone's page backend, where comparisons run. eBay's public search has no recording: eBay
-showed a bot check to the recorder's first logged-out page load on 2026-10-31, so its reader is
-tested on a stand-in page until a recording can be made ([thrift-scan.md](thrift-scan.md),
-"eBay").
+phone's page backend, where comparisons run. eBay's and Mercari's public searches have no
+recording: each showed a bot check to the recorder's first logged-out page load (eBay on
+2026-10-31, Mercari on 2026-11-02, from a headless Chrome with a fresh profile), so their readers
+are tested on stand-in pages until a recording can be made ([thrift-scan.md](thrift-scan.md),
+"eBay" and "Mercari"), and Mercari's plan gets its `search` entry with its first recording.
 
 **It changes nothing on the marketplace.** Read entries run as reads, which refuse form input and
 any step that changes something. Form entries fill a form exactly as a create does, but without

@@ -9,12 +9,16 @@ import type { ScanRetail, ScanTrend } from '@listora/api-contract';
 import type { BrandPulse, ScanResearch, ThriftScan } from '@listora/analysis';
 import type { DbExecutor } from '@listora/db';
 import { loadFeatureGate } from '@listora/marketplaces';
+import { OWN_SALES_MAY_MODEL_PRICES } from '@listora/pricing';
 import {
   DEFAULT_SCAN_CALL_SETTINGS,
+  priceCalibration,
   salesTrend,
   scanCall,
   scanOwnHistory,
+  snapBrand,
   unsoldLikeIt,
+  type OwnSale,
   type ScanCallInput,
 } from '@listora/sourcing';
 
@@ -34,10 +38,11 @@ export async function assessScan(
   research: ScanResearch | undefined,
   now: Date,
   comparisons: readonly StoredComparison[] = [],
+  /** The household's own sales (`scanSales`), when the caller already has them. */
+  loadedSales?: readonly OwnSale[],
 ): Promise<ScanCallDetail> {
-  const gate = await loadFeatureGate(db, tenant.accountId);
   const [sales, unsold] = await Promise.all([
-    ownSales(db, tenant, ownSalesMarketplaces(gate), now),
+    loadedSales ?? scanSales(db, tenant, now),
     unsoldItems(db, tenant),
   ]);
   const history = scanOwnHistory(read, sales);
@@ -61,6 +66,12 @@ export async function assessScan(
     aiEstimate: read.aiEstimate ?? undefined,
     flags: read.flags,
     fees,
+    // What the household's items sold for against what they asked, from the sales whose prices
+    // the call models: the AI estimate and the web's asks are scaled by it.
+    calibration: priceCalibration(
+      sales.filter((sale) => OWN_SALES_MAY_MODEL_PRICES[sale.marketplace]),
+    ),
+    namedBrand: read.brand !== null,
     retail:
       retail === undefined
         ? undefined
@@ -99,7 +110,32 @@ export async function assessScan(
     ...(trend === undefined || trend.direction === 'unknown' ? {} : { trend: trendView(trend) }),
     ...(retail === undefined ? {} : { retail }),
     ...(comparisons.length === 0 ? {} : { comparisons: [...comparisons], recentOwnSales }),
+    ...(rule.aiEstimate === undefined ? {} : { aiEstimate: rule.aiEstimate }),
   };
+}
+
+/** The household's own sales the scan weighs: those of the marketplaces whose sales are real. */
+export async function scanSales(db: DbExecutor, tenant: Tenant, now: Date): Promise<OwnSale[]> {
+  const gate = await loadFeatureGate(db, tenant.accountId);
+  return ownSales(db, tenant, ownSalesMarketplaces(gate), now);
+}
+
+/**
+ * The read with its brand snapped to the one of the household's sold brands it nearly spells
+ * (`snapBrand`: "Wrenfeld" for Wrenfield), so the card, the own sales, the web research, and a
+ * kept item all name the brand the household sells. Unchanged when no single brand is that close.
+ */
+export function snappedRead(
+  read: ThriftScan,
+  sales: readonly OwnSale[],
+): { read: ThriftScan; snappedFrom?: string } {
+  const snapped = snapBrand(
+    read.brand,
+    sales.map((sale) => sale.brand),
+  );
+  return snapped === undefined
+    ? { read }
+    : { read: { ...read, brand: snapped.brand }, snappedFrom: snapped.readAs };
 }
 
 /** The brand's pulse as the call shows it: only one with a verdict. */

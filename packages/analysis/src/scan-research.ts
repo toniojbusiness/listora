@@ -9,6 +9,7 @@
 import { AiCallError, type AiClient, type OutputSchema, type WebSource } from '@listora/ai';
 import { z } from 'zod';
 
+import type { ThriftScan } from './scan.ts';
 import {
   clipped,
   dedupeSites,
@@ -135,6 +136,30 @@ Rules:
 - summary: one plain sentence naming the sites, for example "Patagonia's site lists the Synchilla at $139; used ones ask $40-$70 on Poshmark and eBay."
 
 Answer last, after your searches, with the JSON object only.`;
+
+/** What a research asks about an item: the read's brand, item, and what tells it from the brand's others. */
+export type ScanResearchSubject = Omit<
+  ScanResearchInput,
+  'accountId' | 'userId' | 'keyHash' | 'signal'
+>;
+
+/**
+ * What the research asks about a scan's read, the same at the store and in the backtest;
+ * undefined for a read with no brand, which is never looked up.
+ */
+export function scanResearchSubject(read: ThriftScan): ScanResearchSubject | undefined {
+  if (read.brand === null) return undefined;
+  return {
+    brand: read.brand,
+    item: read.item,
+    ...(read.category === null ? {} : { category: read.category }),
+    ...(read.line === null ? {} : { line: read.line }),
+    ...(read.styleNumber === null ? {} : { styleNumber: read.styleNumber }),
+    ...(read.era === null ? {} : { era: read.era }),
+    ...(read.material === null ? {} : { material: read.material }),
+    ...(read.style === null ? {} : { style: read.style }),
+  };
+}
 
 export interface ScanResearchInput {
   readonly accountId: string;

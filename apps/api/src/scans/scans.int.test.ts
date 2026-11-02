@@ -114,9 +114,30 @@ describe('the thrift scan (real Postgres)', () => {
     });
   }
 
-  /** A sold item of the owner: a one-item sale on `marketplace`, three days back. */
-  async function sell(marketplace: Marketplace, details: Record<string, unknown>, cents: number) {
+  /**
+   * A sold item of the owner: a one-item sale on `marketplace`, three days back, sold from a
+   * listing asking `asking.listingCents` or, without a listing, at the item's `asking.listCents`.
+   */
+  async function sell(
+    marketplace: Marketplace,
+    details: Record<string, unknown>,
+    cents: number,
+    asking: { listingCents?: number; listCents?: number } = {},
+  ) {
     const item = await api.call('createItem', { token, body: { details } });
+    const listing =
+      asking.listingCents === undefined
+        ? undefined
+        : await api.db
+            .insertInto('marketplace_listing')
+            .values({
+              account_id: tenant.accountId,
+              item_id: item.body.id,
+              marketplace,
+              price_cents: asking.listingCents,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
     const sale = await api.db
       .insertInto('sale')
       .values({
@@ -135,11 +156,15 @@ describe('the thrift scan (real Postgres)', () => {
         marketplace,
         item_id: item.body.id,
         sale_price_cents: cents,
+        ...(listing === undefined ? {} : { listing_id: listing.id }),
       })
       .execute();
     await api.db
       .updateTable('inventory_item')
-      .set({ status: 'sold' })
+      .set({
+        status: 'sold',
+        ...(asking.listCents === undefined ? {} : { list_price_cents: asking.listCents }),
+      })
       .where('id', '=', item.body.id)
       .execute();
   }
@@ -191,12 +216,24 @@ describe('the thrift scan (real Postgres)', () => {
   });
 
   it("calls an item from the household's own sales, labels the AI estimate, and keeps no image", async () => {
-    await sell('depop', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 2200);
-    await sell('depop', { title: 'Align', brand: 'LULULEMON', category: LEGGINGS }, 2800);
-    await sell('mercari', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 3000);
-    // eBay's own sales show but never feed the call.
-    await sell('ebay', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 9000);
-    await sell('ebay', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 9900);
+    // Each went for 80% of what it asked: two from their listing's price, one from the item's.
+    await sell('depop', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 2200, {
+      listingCents: 2750,
+    });
+    await sell('depop', { title: 'Align', brand: 'LULULEMON', category: LEGGINGS }, 2800, {
+      listingCents: 3500,
+      listCents: 9999,
+    });
+    await sell('mercari', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 3000, {
+      listCents: 3750,
+    });
+    // eBay's own sales show but never feed the call, nor the calibration.
+    await sell('ebay', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 9000, {
+      listingCents: 9000,
+    });
+    await sell('ebay', { title: 'Align', brand: 'Lululemon', category: LEGGINGS }, 9900, {
+      listingCents: 9900,
+    });
     const run = await startRun();
     const image = await scanImage(answer());
     const response = await scan(run.id, image.base64, {
@@ -215,11 +252,19 @@ describe('the thrift scan (real Postgres)', () => {
       condition: 'pre_owned_good',
       confidence: 0.9,
     });
+    // The AI's $24-$32-$40 for a named brand, scaled by the household's 80% drawn toward the
+    // default 75% as if it were 5 more sales: (3 * 0.8 + 5 * 0.75) / 8 = 0.76875.
     expect(body.aiEstimate).toEqual({
       label: AI_ESTIMATE_LABEL,
-      low: usd(2400),
-      mid: usd(3200),
-      high: usd(4000),
+      low: usd(1845),
+      mid: usd(2460),
+      high: usd(3075),
+    });
+    expect(body.call.signals).toContainEqual({
+      kind: 'calibrated',
+      label: 'Scaled to your sales',
+      basedOn:
+        'Your items went for 77% of what they asked (3 sales); the AI estimate is scaled to it',
     });
     // Three sales on Depop and Mercari; the Depop fee table's payout of the low quartile.
     expect(body.call).toMatchObject({
@@ -276,6 +321,35 @@ describe('the thrift scan (real Postgres)', () => {
       .where('id', '=', run.id)
       .executeTakeFirstOrThrow();
     expect(after).toEqual({ scan_count: 1, kept_count: 0 });
+  });
+
+  it("snaps a near miss of a brand to the household's own, and leaves another brand alone", async () => {
+    await sell(
+      'depop',
+      { title: 'Baggy', brand: 'Wrenfield', category: 'clothing/bottoms/jeans' },
+      1000,
+    );
+    const run = await startRun();
+    const near = await scan(
+      run.id,
+      (await scanImage(answer({ brand: 'Wrenfeld', category: 'clothing/bottoms/jeans' }))).base64,
+    );
+    expect(near.status).toBe(201);
+    expect(near.body.identity.brand).toBe('Wrenfield');
+    // One sale of the brand is too few for the card's own-sales line.
+    expect(near.body.ownSales).toEqual([]);
+    const row = await api.db
+      .selectFrom('item_scan')
+      .select('read')
+      .where('id', '=', near.body.id)
+      .executeTakeFirstOrThrow();
+    expect((row.read as { brand: string }).brand).toBe('Wrenfield');
+    // "Wrenford" is three letters from it: another brand, kept as read.
+    const far = await scan(
+      run.id,
+      (await scanImage(answer({ brand: 'Wrenford', category: 'clothing/bottoms/jeans' }))).base64,
+    );
+    expect(far.body.identity.brand).toBe('Wrenford');
   });
 
   it("warns of the household's unsold items like it, without moving the call", async () => {
@@ -644,11 +718,22 @@ describe('the thrift scan (real Postgres)', () => {
         basis: 'web_info',
         confidence: 'medium',
         call: 'buy',
-        basedOn: `${WEB_INFO_LABEL}: poshmark.com, ebay.com`,
-        low: usd(3_000),
-        high: usd(5_000),
+        // The web's $30-$50 asks, scaled twice by the 0.76875 of the household's three Depop and
+        // Mercari sales so far (above), and said to be asks.
+        basedOn: `${WEB_INFO_LABEL}: asks on poshmark.com, ebay.com, scaled to your sales`,
+        low: usd(1_773),
+        high: usd(2_955),
       });
-      expect(body.call.signals.map((signal) => signal.kind)).toEqual(['retail', 'web_resale']);
+      expect(body.call.signals.map((signal) => signal.kind)).toEqual([
+        'retail',
+        'web_resale',
+        'calibrated',
+      ]);
+      expect(body.call.signals.at(-1)?.basedOn).toBe(
+        "Your items went for 77% of what they asked (3 sales); the AI estimate and the web's asking prices are scaled to it",
+      );
+      // The research's own range is shown as it came: what the web's listings ask.
+      expect(body.research?.resale).toMatchObject({ low: usd(3_000), high: usd(5_000) });
       expect((await researchCalls()).slice(before)).toEqual([2]);
       // Asked again, the scan answers as it is.
       const again = await api.call('researchScan', { token, params: { scanId: scanned.id } });
@@ -757,17 +842,16 @@ describe('the thrift scan (real Postgres)', () => {
         const body = await researched(item);
         // The call is the web info's, as it would be without the pulse.
         expect(body.call).toMatchObject({ basis: 'web_info', call: 'buy', confidence: 'medium' });
-        expect(body.call.signals).toEqual([
-          expect.objectContaining({ kind: 'retail' }),
-          expect.objectContaining({ kind: 'web_resale' }),
-          {
-            kind: 'brand_pulse',
-            label: 'Brand pulse: in demand',
-            basedOn:
-              `${WEB_INFO_LABEL}: Denim coverage has vintage straight jeans trending again. ` +
-              'Asks more: Vintage 90s pieces. (fashion-weekly.example, reddit.com)',
-          },
-        ]);
+        expect(body.call.signals.map((signal) => signal.kind)).toEqual(
+          expect.arrayContaining(['retail', 'web_resale', 'brand_pulse']),
+        );
+        expect(body.call.signals.find((signal) => signal.kind === 'brand_pulse')).toEqual({
+          kind: 'brand_pulse',
+          label: 'Brand pulse: in demand',
+          basedOn:
+            `${WEB_INFO_LABEL}: Denim coverage has vintage straight jeans trending again. ` +
+            'Asks more: Vintage 90s pieces. (fashion-weekly.example, reddit.com)',
+        });
         expect((await pulseCalls()).slice(before)).toEqual([
           { outcome: 'succeeded', web_searches: 1 },
         ]);
@@ -914,8 +998,10 @@ describe('the thrift scan (real Postgres)', () => {
     expect(body.call.signals.map((signal) => [signal.kind, signal.label])).toEqual([
       ['retail', 'Retail $68 on the tag'],
       ['style', 'Y2K'],
+      ['calibrated', 'Scaled to your sales'],
     ]);
-    // The AI estimate ($24-$40) is under the tag's $68, so it stands.
-    expect(body.call.high).toEqual(usd(4000));
+    // The AI estimate ($24-$40, scaled by the household's 0.76875 to $18-$31) is under the
+    // tag's $68, so it stands.
+    expect(body.call.high).toEqual(usd(3075));
   });
 });

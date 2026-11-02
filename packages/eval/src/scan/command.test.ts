@@ -1,7 +1,18 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { scanCommand, ScanUsageError, SCAN_USAGE } from './command.ts';
 import { writeScanDataset } from './test-support.ts';
+
+interface ReportShape {
+  reader: { description: string } | null;
+  researcher: { id: string } | null;
+  items: { id: string; research?: unknown }[];
+  prices: unknown[];
+}
 
 async function run(argv: readonly string[]): Promise<{ status: number; output: string }> {
   let output = '';
@@ -35,6 +46,37 @@ describe('npm run eval -- scan', () => {
     const report = JSON.parse(output) as { read: unknown; settings: { worthListingCents: number } };
     expect(report.read).toBeNull();
     expect(report.settings.worthListingCents).toBe(1_250);
+  });
+
+  it('looks each read up on the web, and answers again from the stored report for free', async () => {
+    const dir = await writeScanDataset();
+    const first = await run(['--dataset', dir, '--research', '--json']);
+    const stored = join(await mkdtemp(join(tmpdir(), 'listora-scan-run-')), 'run.json');
+    await writeFile(stored, first.output);
+    const recorded = JSON.parse(first.output) as ReportShape;
+    expect(recorded.researcher?.id).toBe('fake');
+    expect(recorded.items.filter((entry) => entry.research !== undefined)).toHaveLength(7);
+
+    const replayed = await run(['--dataset', dir, '--replay', stored, '--json']);
+    const again = JSON.parse(replayed.output) as ReportShape;
+    expect(again.reader?.description).toContain('stored answers from run.json');
+    expect(again.items).toEqual(recorded.items);
+    expect(again.prices).toEqual(recorded.prices);
+    // A stored run with no web research replays its reads alone.
+    const plain = await run(['--dataset', dir, '--json']);
+    await writeFile(stored, plain.output);
+    const readsOnly = JSON.parse(
+      (await run(['--dataset', dir, '--replay', stored, '--json'])).output,
+    ) as ReportShape;
+    expect(readsOnly.researcher).toBeNull();
+  });
+
+  it('refuses a replay file that is not a report', async () => {
+    const stored = join(await mkdtemp(join(tmpdir(), 'listora-scan-run-')), 'run.json');
+    await writeFile(stored, JSON.stringify({ items: 'none' }));
+    await expect(run(['--dataset', await writeScanDataset(), '--replay', stored])).rejects.toThrow(
+      "is not a scan backtest's --json report",
+    );
   });
 
   it('shows its usage', async () => {

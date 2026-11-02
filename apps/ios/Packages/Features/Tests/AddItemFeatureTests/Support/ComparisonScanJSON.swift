@@ -1,0 +1,53 @@
+import Foundation
+
+/// The scan's answer with eBay's comparison read: what close matches sold for, the call resting
+/// on them, and eBay's sold pace.
+func ebaySoldScanJSON(id: String) -> [String: Any] {
+    var scan = itemScanJSON(id: id, call: "buy", basis: "market_sold")
+    let pace = "Sold listings on eBay: 410 in the last 90 days; 320 for sale now"
+    scan["comparisons"] = [[
+        "marketplace": "ebay", "status": "read",
+        "label": "eBay: sold $18-$30, 9 like it in the last 14 days",
+        "asking": [
+            "count": 4, "low": usd(2500), "median": usd(2900), "high": usd(3500),
+            "label": "Asking prices - not sold listings",
+        ],
+        "sold": [
+            "count": 9, "low": usd(1800), "median": usd(2400), "high": usd(3000), "windowDays": 14,
+            "label": "Sold listings on eBay",
+        ],
+        "supply": 320,
+        "demand": ["demand": "strong", "label": "Sells fast on eBay", "basedOn": pace],
+    ]]
+    var call = scan["call"] as? [String: Any] ?? [:]
+    call["basedOn"] = "Sold listings on eBay: 9 like it in the last 14 days"
+    call["signals"] = [["kind": "demand", "label": "Sells fast on eBay", "basedOn": pace]]
+    scan["call"] = call
+    return scan
+}
+
+/// The scan's answer with Mercari's comparison read: what close matches sold for, and how many
+/// of Mercari's latest sales were in the last 30 days.
+func mercariSoldScanJSON(id: String) -> [String: Any] {
+    var scan = itemScanJSON(id: id, call: "buy", basis: "market_sold")
+    let pace = "Sold listings on Mercari: 24 of the latest 30 sold in the last 30 days"
+    scan["comparisons"] = [[
+        "marketplace": "mercari", "status": "read",
+        "label": "Mercari: sold $20-$28, 7 like it in the last 21 days",
+        "sold": [
+            "count": 7, "low": usd(2000), "median": usd(2400), "high": usd(2800), "windowDays": 21,
+            "label": "Sold listings on Mercari",
+        ],
+        "supply": 1400,
+        "demand": ["demand": "strong", "label": "Sells fast on Mercari", "basedOn": pace],
+    ]]
+    var call = scan["call"] as? [String: Any] ?? [:]
+    call["basedOn"] = "Sold listings on Mercari: 7 like it in the last 21 days"
+    call["signals"] = [["kind": "demand", "label": "Sells fast on Mercari", "basedOn": pace]]
+    scan["call"] = call
+    return scan
+}
+
+private func usd(_ cents: Int) -> [String: Any] {
+    ["amountCents": cents, "currency": "USD"]
+}
