@@ -191,6 +191,7 @@ export function registerScanRoutes(app: FastifyInstance, deps: ScanRouteDependen
         scanId: row.id,
         status: found.stored.status,
         cached: found.stored.cached,
+        pulse: found.pulse,
         researchMs,
         searches: found.searches,
         costMicros: found.costMicros,

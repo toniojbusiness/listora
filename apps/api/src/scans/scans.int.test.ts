@@ -1,5 +1,6 @@
 import { jsonb, type Marketplace } from '@listora/db';
 import {
+  BRAND_PULSE_OUTPUT_NAME,
   SCAN_OUTPUT_NAME,
   SCAN_RESEARCH_OUTPUT_NAME,
   WEB_INFO_LABEL as ANALYSIS_WEB_INFO,
@@ -13,6 +14,7 @@ import {
 } from '@listora/pricing';
 import { brandKey, itemResearchKey } from '@listora/sourcing';
 import { photoSetHash, sha256Hex } from '@listora/shared';
+import { sql } from 'kysely';
 import sharp from 'sharp';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -776,6 +778,154 @@ describe('the thrift scan (real Postgres)', () => {
         expect(body.retail?.label).toBe('Retail about $69');
       }
       expect((await researchCalls()).length).toBe(calls + 2);
+    });
+
+    describe('the brand pulse', () => {
+      const PULSE_PAGES = [
+        { url: 'https://www.fashion-weekly.example/denim-revival/', title: 'The denim revival' },
+        { url: 'https://www.reddit.com/r/thriftstorehauls/comments/xyz/levis/', title: 'Finds' },
+      ];
+      const inDemand = {
+        verdict: 'in_demand',
+        reason: 'Denim coverage has vintage straight jeans trending again.',
+        premium: 'Vintage 90s pieces',
+        sourceUrls: PULSE_PAGES.map((page) => page.url),
+      };
+
+      /** The fake web's pulse for a brand, keyed as the research keys it; absent, it fails. */
+      function pulse(brand: string, answer: Record<string, unknown> | undefined) {
+        const hash = sha256Hex(`brand_pulse|${brandKey(brand) ?? ''}`);
+        if (answer === undefined) {
+          Reflect.deleteProperty(api.aiControls.fixtures, hash);
+          return;
+        }
+        api.aiControls.fixtures[hash] = {
+          outputs: { [BRAND_PULSE_OUTPUT_NAME]: answer },
+          webSources: PULSE_PAGES,
+          usage: { webSearches: 1 },
+        };
+      }
+
+      async function pulseCalls(): Promise<{ outcome: string; web_searches: number }[]> {
+        return api.db
+          .selectFrom('ai_usage_event')
+          .select(['outcome', 'web_searches'])
+          .where('account_id', '=', tenant.accountId)
+          .where('purpose', '=', 'thrift_scan_brand_pulse')
+          .orderBy('created_at')
+          .execute();
+      }
+
+      async function forgetBrand(brand: string) {
+        await api.db
+          .deleteFrom('scan_research')
+          .where('account_id', '=', tenant.accountId)
+          .where('kind', '=', 'brand_pulse')
+          .where('key', '=', brandKey(brand) ?? '')
+          .execute();
+      }
+
+      async function researched(item: Record<string, unknown>) {
+        const run = await startRun();
+        const scanned = (await scan(run.id, (await scanImage(item)).base64)).body;
+        const response = await api.call('researchScan', { token, params: { scanId: scanned.id } });
+        expect(response.status).toBe(200);
+        return response.body;
+      }
+
+      it('asks the wider web of the brand beside the item, shows it under its own label, and never moves the call', async () => {
+        await forgetBrand("Levi's");
+        const item = read({ line: '501', era: 'vintage 1990s' });
+        web(item, found);
+        pulse("Levi's", inDemand);
+        const before = (await pulseCalls()).length;
+        const body = await researched(item);
+        // The call is the web info's, as it would be without the pulse.
+        expect(body.call).toMatchObject({ basis: 'web_info', call: 'buy', confidence: 'medium' });
+        expect(body.call.signals.map((signal) => signal.kind)).toEqual(
+          expect.arrayContaining(['retail', 'web_resale', 'brand_pulse']),
+        );
+        expect(body.call.signals.find((signal) => signal.kind === 'brand_pulse')).toEqual({
+          kind: 'brand_pulse',
+          label: 'Brand pulse: in demand',
+          basedOn:
+            `${WEB_INFO_LABEL}: Denim coverage has vintage straight jeans trending again. ` +
+            'Asks more: Vintage 90s pieces. (fashion-weekly.example, reddit.com)',
+        });
+        expect((await pulseCalls()).slice(before)).toEqual([
+          { outcome: 'succeeded', web_searches: 1 },
+        ]);
+        const stored = await api.db
+          .selectFrom('item_scan')
+          .select('research')
+          .where('id', '=', body.id)
+          .executeTakeFirstOrThrow();
+        expect(stored.research).toMatchObject({
+          research: { brandPulse: { verdict: 'in_demand', premium: 'Vintage 90s pieces' } },
+        });
+      });
+
+      it('is kept a week by the brand alone, so another item of the brand costs no search', async () => {
+        await forgetBrand("Levi's");
+        pulse("Levi's", inDemand);
+        const first = read({ line: '550', era: '' });
+        web(first, found);
+        await researched(first);
+        const calls = (await pulseCalls()).length;
+
+        // Another model, and the same model again from the item cache: the pulse is kept.
+        const other = read({ line: '517', era: '', category: JEANS });
+        web(other, found);
+        for (const again of [other, read({ line: '550', era: '', item: 'blue 550 jeans' })]) {
+          const body = await researched(again);
+          expect(body.call.signals.map((signal) => signal.label)).toContain(
+            'Brand pulse: in demand',
+          );
+        }
+        expect((await pulseCalls()).length).toBe(calls);
+
+        // A week on, the brand is asked again.
+        await sql`update scan_research set created_at = now() - interval '8 days'
+          where account_id = ${tenant.accountId} and kind = 'brand_pulse'`.execute(api.db);
+        await researched(read({ line: '550', era: '', item: 'black 550 jeans' }));
+        expect((await pulseCalls()).length).toBe(calls + 1);
+      });
+
+      it('shows nothing when the pages say too little, and keeps that a week too', async () => {
+        await forgetBrand("Levi's");
+        pulse("Levi's", { ...inDemand, verdict: 'unknown', reason: '', premium: '' });
+        const item = read({ line: '569', era: '' });
+        web(item, found);
+        const before = (await pulseCalls()).length;
+        const body = await researched(item);
+        expect(body.call.signals.map((signal) => signal.kind)).not.toContain('brand_pulse');
+        await researched(read({ line: '569', era: '', item: 'grey 569 jeans' }));
+        expect((await pulseCalls()).length).toBe(before + 1);
+      });
+
+      it('failing never fails the research, and is asked again on the next scan', async () => {
+        await forgetBrand("Levi's");
+        pulse("Levi's", undefined);
+        const item = read({ line: '511', era: '' });
+        web(item, found);
+        const before = (await pulseCalls()).length;
+        const body = await researched(item);
+        expect(body.research?.status).toBe('found');
+        expect(body.call.basis).toBe('web_info');
+        expect(body.call.signals.map((signal) => signal.kind)).not.toContain('brand_pulse');
+
+        pulse("Levi's", inDemand);
+        // The item's facts come from the cache; the brand is asked again.
+        const again = await researched(read({ line: '511', era: '', item: 'blue 511 jeans' }));
+        expect(again.research?.cached).toBe(true);
+        expect(again.call.signals.map((signal) => signal.label)).toContain(
+          'Brand pulse: in demand',
+        );
+        expect((await pulseCalls()).slice(before).map((call) => call.outcome)).toEqual([
+          'failed',
+          'succeeded',
+        ]);
+      });
     });
 
     it('looks an item of unknown model up afresh every time, its retail a range across the likely models', async () => {
