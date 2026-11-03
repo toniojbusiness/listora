@@ -83,19 +83,10 @@ struct ScanCardActions: View {
     private var answers: some View {
         switch entry.decision {
         case .open, .keepFailed:
-            HStack(spacing: Spacing.xs) {
-                Button(action: onPutBack) {
-                    Label("Put back", systemImage: "arrow.uturn.backward")
-                }
-                .buttonStyle(.listora(.secondary, size: .large))
-                .accessibilityHint("Passes on this item and goes back to the camera.")
-                .accessibilityIdentifier("scan.putBack")
-                Button(action: onKeep) {
-                    Label("Keep", systemImage: "plus")
-                }
-                .buttonStyle(.listora(.primary, size: .large))
-                .accessibilityHint("Saves it as a draft and goes back to the camera.")
-                .accessibilityIdentifier("scan.keep")
+            // Their icons go before their words do, at a large text size on a small iPhone.
+            ViewThatFits(in: .horizontal) {
+                decide(.titleAndIcon)
+                decide(.titleOnly)
             }
         case .keeping, .kept, .keepWhenRead:
             HStack(spacing: Spacing.xs) {
@@ -112,6 +103,24 @@ struct ScanCardActions: View {
 }
 
 extension ScanCardActions {
+    private func decide(_ style: some LabelStyle) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Button(action: onPutBack) {
+                Label("Put back", systemImage: "arrow.uturn.backward").fixedSize()
+            }
+            .buttonStyle(.listora(.secondary, size: .large))
+            .accessibilityHint("Passes on this item and goes back to the camera.")
+            .accessibilityIdentifier("scan.putBack")
+            Button(action: onKeep) {
+                Label("Keep", systemImage: "plus").fixedSize()
+            }
+            .buttonStyle(.listora(.primary, size: .large))
+            .accessibilityHint("Saves it as a draft and goes back to the camera.")
+            .accessibilityIdentifier("scan.keep")
+        }
+        .labelStyle(style)
+    }
+
     /// What a card opened again from the tray says once its item was kept.
     @ViewBuilder
     private var keptLabel: some View {

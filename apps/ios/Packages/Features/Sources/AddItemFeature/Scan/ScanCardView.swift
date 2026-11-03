@@ -7,7 +7,8 @@ import UIKit
 /// why, what the item is, the three prices, and a short reality check of what they rest on.
 /// While the prices wait for what they rest on, what the item is and a quiet "Checking prices"
 /// line. Its answers are Keep and Put back (`ScanCardActions`), there the whole time; shooting
-/// the next item puts this one back too.
+/// the next item puts this one back too. A card with more than fits scrolls what is above its
+/// answers (`ScanCardScroll`), top first, so it never runs past the screen.
 struct ScanCardView: View {
     let entry: ScanEntry
     let onKeep: () -> Void
@@ -71,21 +72,23 @@ struct ScanCardView: View {
     /// No signal: the instant read from the household's own sales, while the read waits.
     private var waiting: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            if let instant = entry.instant.map(OfflineScanCard.init) {
-                ScanInstantRead(instant: instant, number: entry.number)
-            } else {
-                Text("Item \(entry.number)").font(Typography.headline)
-                Text("No brand you've sold is on the tag.")
-                    .font(Typography.footnote)
+            ScanCardScroll {
+                if let instant = entry.instant.map(OfflineScanCard.init) {
+                    ScanInstantRead(instant: instant, number: entry.number)
+                } else {
+                    Text("Item \(entry.number)").font(Typography.headline)
+                    Text("No brand you've sold is on the tag.")
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.textSecondary)
+                }
+                warnings
+                Label("No signal: read when you have it", systemImage: "wifi.slash")
+                    .font(Typography.caption)
                     .foregroundStyle(Palette.textSecondary)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("No signal: read when you have it")
+                    .accessibilityIdentifier("scan.waiting")
             }
-            warnings
-            Label("No signal: read when you have it", systemImage: "wifi.slash")
-                .font(Typography.caption)
-                .foregroundStyle(Palette.textSecondary)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("No signal: read when you have it")
-                .accessibilityIdentifier("scan.waiting")
             ScanCardActions(
                 entry: entry,
                 wantsTag: entry.instant == nil,
@@ -109,29 +112,33 @@ struct ScanCardView: View {
 
     private func read(_ card: ScanCard) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            if card.pricesPending {
-                checkingHeader(card)
-            } else {
-                verdict(card)
-            }
-            identity(card)
-            if !card.pricesPending {
-                prices(card)
-                realityCheck(card)
-            }
-            if !card.flags.isEmpty {
-                Label(card.flags.joined(separator: " · "), systemImage: "exclamationmark.triangle")
-                    .font(Typography.footnote)
-                    .foregroundStyle(Palette.warning)
-            }
-            warnings
-            if entry.readLate {
-                Label("Read when you had signal", systemImage: "clock.arrow.circlepath")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Read when you had signal")
-                    .accessibilityIdentifier("scan.readLate")
+            ScanCardScroll {
+                if card.pricesPending {
+                    checkingHeader(card)
+                } else {
+                    verdict(card)
+                }
+                identity(card)
+                if !card.pricesPending {
+                    prices(card)
+                    realityCheck(card)
+                }
+                if !card.flags.isEmpty {
+                    Label(card.flags.joined(separator: " · "), systemImage: "exclamationmark.triangle")
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("scan.flags")
+                }
+                warnings
+                if entry.readLate {
+                    Label("Read when you had signal", systemImage: "clock.arrow.circlepath")
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Read when you had signal")
+                        .accessibilityIdentifier("scan.readLate")
+                }
             }
             ScanCardActions(
                 entry: entry,

@@ -27,6 +27,9 @@ struct ScanCaptureView: View {
     @State private var isConfirmingEnd = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The live viewfinder left showing between the top bar and the tallest card.
+    private static let viewfinderBand = Spacing.xxxl
+
     init(
         camera: any CameraSource,
         run: ScanRunModel,
@@ -59,7 +62,8 @@ struct ScanCaptureView: View {
                 .allowsHitTesting(false)
             VStack(spacing: Spacing.xs) {
                 topBar
-                Spacer(minLength: Spacing.md)
+                // A band of live viewfinder always shows above the card, however long it is.
+                Spacer(minLength: Self.viewfinderBand)
                 prompts
                 // While the seller frames the tag close-up the card steps aside, so the camera is
                 // clear; it comes back with the tag's read once the shot is taken, or unchanged on
@@ -76,6 +80,9 @@ struct ScanCaptureView: View {
                     )
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.horizontal, Spacing.md)
+                    // The card takes the room the camera's controls and that band leave, and no
+                    // more: a longer one scrolls inside it (`ScanCardScroll`).
+                    .layoutPriority(1)
                     .transition(.riseThenClear)
                     .id(entry.id)
                     .onDisappear { run.cardClosed(entry.id) }

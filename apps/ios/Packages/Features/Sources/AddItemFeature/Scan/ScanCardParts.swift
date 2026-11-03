@@ -12,6 +12,8 @@ struct ScanVerdictStamp: View {
             .font(Typography.title)
             .textCase(.uppercase)
             .tracking(1.6)
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(ink)
             .padding(.horizontal, Spacing.xs)
             .padding(.vertical, 2)
@@ -82,5 +84,41 @@ struct ScanThreePrices: View {
                 .font(Typography.caption)
                 .foregroundStyle(Palette.textSecondary)
         }
+    }
+}
+
+/// What a card says above its answers: as it is while it fits, and once there is more than the
+/// room the camera leaves it (a long reality check, a large text size, a small iPhone), scrolling
+/// inside the card from its top, the verdict and the prices first, with its scroll bar flashed so
+/// the seller sees there is more. The answers below it stay put.
+struct ScanCardScroll<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            details
+            ScrollView {
+                details.padding(.bottom, Spacing.sm)
+            }
+            // The line cut by the card's edge fades out instead of ending mid-word.
+            .mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Spacing.sm)
+                }
+            }
+            .scrollIndicators(.visible)
+            .scrollIndicatorsFlash(onAppear: true)
+            .scrollBounceBehavior(.basedOnSize)
+            .accessibilityIdentifier("scan.content")
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -40,6 +40,8 @@ final class StubAPIServer: @unchecked Sendable {
     var inviteeVerified = false
     var newInviteCreated = false
     var joinedRevoked = false
+    /// What `POST /v1/scans` answers (StubAPIServer+Scans.swift).
+    var scanAnswer = ScanAnswer.fullRealityCheck
 
     /// What `GET /v1/today` answers.
     enum TodayState: Sendable {
@@ -179,6 +181,7 @@ final class StubAPIServer: @unchecked Sendable {
                 ?? respondToDescriptionStyle(method: request.method, path: path, body: request.body)
                 ?? respondToInvites(method: request.method, path: path, body: request.body)
                 ?? respondToDevSignIn(request, path: path)
+                ?? respondToScans(method: request.method, path: path)
                 ?? Self.http(
                     status: "404 Not Found",
                     body: #"{"error":{"code":"not_found","message":"No stub for this request.","retryable":false,"#

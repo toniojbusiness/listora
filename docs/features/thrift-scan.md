@@ -214,6 +214,13 @@ sweater ... Verdict: KEEP IT"):
   and the comparison rows give way to the reality check (a server without it shows the call's
   signals instead). Flags, the duplicate warning, Shoot the tag, Search Depop, **Put back**, and
   **Keep** are as before, and usable the whole time the prices wait.
+- It always fits the screen. The card takes the room the camera's controls leave, keeping a band
+  of live viewfinder above it. When it holds more than fits (a long reality check, a large text
+  size, a small iPhone), what sits above its answers scrolls inside the card. It opens at the top
+  (the verdict, then the prices), flashes its scroll bar, and fades the line cut at its edge.
+  Shoot the tag, Search Depop, **Put back**, and **Keep** stay pinned at its bottom, and the
+  shutter stays below it. When their words would not fit, the answers drop their icons rather
+  than truncate.
 
 ## Calibrated to the seller's sales
 
@@ -914,7 +921,11 @@ build; the server's applies with a deploy.
   to end on the local stack with the fake camera and the fake AI's scan and web research
   (`FakeAI/default.json`), and with no signal (`LISTORA_SCAN_NO_SIGNAL=1`, debug builds): a
   shot waits unread, Keep marks it, and the next launch with signal reads it and saves its
-  draft.
+  draft. `ThriftScanCardFitUITests`, against the stub's invented scan with every part filled
+  (`StubAPIServer+Scans.swift`) at a large text size, checks the card from both a server with
+  the reality check and one without it (the call's signals). The card stays on the screen and
+  opens at its top, its last line scrolls into view inside it, and Keep, Put back, the shutter,
+  and Done stay reachable.
 
 **The phone needs a new app build** for Scan mode, and again for the run's place, checkout, and
 summary (M4).
