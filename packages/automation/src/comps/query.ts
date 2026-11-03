@@ -8,6 +8,8 @@
 import { createHash } from 'node:crypto';
 
 import { mapDepopCategory } from '../depop/categories.ts';
+import { mapPoshmarkCatalog } from '../poshmark/catalog.ts';
+import { poshmarkProductType } from '../poshmark/pages/search-page.ts';
 import type { ComparisonMarketplace, ComparisonQuery } from './types.ts';
 
 /** What the scan read, as far as a comparison needs it. */
@@ -36,6 +38,7 @@ const PRODUCT_TYPES: Readonly<
   depop: (category, department) => depopProductTypes(category, department),
   // eBay's results name no category: its listings are matched by their titles' words.
   ebay: () => [],
+  poshmark: (category, department) => poshmarkProductTypes(category, department),
   // Nor do Mercari's cards: they name the brand and the size, and the type is in the name.
   mercari: () => [],
 };
@@ -97,6 +100,17 @@ function depopProductTypes(category: string, department: string | null): string[
   for (const one of departments) {
     const mapped = mapDepopCategory(category, one);
     if (mapped !== null) types.add(mapped.ids[2]);
+  }
+  return [...types];
+}
+
+/** Poshmark's department and category for the item (`Women/Jeans`), in either department. */
+function poshmarkProductTypes(category: string, department: string | null): string[] {
+  const departments = department === null ? ANY_DEPARTMENT : [department];
+  const types = new Set<string>();
+  for (const one of departments) {
+    const mapped = mapPoshmarkCatalog(category, one);
+    if (mapped !== null) types.add(poshmarkProductType(mapped.department, mapped.category));
   }
   return [...types];
 }

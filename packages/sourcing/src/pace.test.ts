@@ -1,7 +1,7 @@
 import { claimsSoldData, MARKET_SOLD_LABEL_PREFIX } from '@listora/pricing';
 import { describe, expect, it } from 'vitest';
 
-import { latestSoldPace, marketSoldPace } from './pace.ts';
+import { latestSoldPace, marketRecentSoldPace, marketSoldPace } from './pace.ts';
 
 describe('marketSoldPace', () => {
   it("reads a search's sold count against its supply: fast, steady, or slow", () => {
@@ -72,5 +72,52 @@ describe('latestSoldPace', () => {
     expect(latestSoldPace(40, 30, 30, 'Mercari').basedOn).toBe(
       'Sold listings on Mercari: 30 of the latest 30 sold in the last 30 days',
     );
+  });
+});
+
+describe('marketRecentSoldPace', () => {
+  const pace = (soldCount: number, windowDays: number | null, forSaleCount = 6) =>
+    marketRecentSoldPace({ soldCount, windowDays, forSaleCount, forSaleTotal: 97_581 }, 'Poshmark');
+
+  it('reads how many close matches sold a month: fast, steady, or slow', () => {
+    expect(pace(14, 42)).toEqual({
+      demand: 'strong',
+      label: 'Sells fast on Poshmark',
+      basedOn: 'Sold listings on Poshmark: 14 like it in the last 42 days; 97,581 for sale now',
+    });
+    expect(pace(5, 60)).toEqual({
+      demand: 'steady',
+      basedOn: 'Sold listings on Poshmark: 5 like it in the last 60 days; 97,581 for sale now',
+    });
+    expect(pace(2, 88)).toMatchObject({ demand: 'crowded', label: 'Slow on Poshmark' });
+    expect(pace(0, null)).toEqual({
+      demand: 'crowded',
+      label: 'Slow on Poshmark',
+      basedOn: 'Sold listings on Poshmark: none like it in the last 30 days; 97,581 for sale now',
+    });
+  });
+
+  it('never reads a burst of a few days as more than a month of them', () => {
+    expect(pace(7, 3)).toMatchObject({
+      demand: 'steady',
+      basedOn: expect.stringContaining('7 like it in the last 30 days') as string,
+    });
+    expect(pace(8, 3).demand).toBe('strong');
+  });
+
+  it('calls few sales slow only while close matches are for sale', () => {
+    expect(pace(0, null, 2).demand).toBe('steady');
+    expect(
+      marketRecentSoldPace(
+        { soldCount: 3, windowDays: 40, forSaleCount: 0, forSaleTotal: null },
+        'Poshmark',
+      ).basedOn,
+    ).toBe('Sold listings on Poshmark: 3 like it in the last 40 days');
+  });
+
+  it('words sold data only under the sold listings label', () => {
+    const { basedOn } = pace(14, 42);
+    expect(claimsSoldData(basedOn)).toBe(true);
+    expect(basedOn.startsWith(MARKET_SOLD_LABEL_PREFIX)).toBe(true);
   });
 });

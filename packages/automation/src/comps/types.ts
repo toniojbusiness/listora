@@ -10,18 +10,31 @@ import type { MarketMatchLevel, MarketStats } from '@listora/sourcing/market';
 import type { PacingSettings } from '../profiles.ts';
 
 /** The marketplaces with a comparison reader, in the order the card shows them. */
-export const COMPARISON_MARKETPLACES = ['depop', 'ebay', 'mercari'] as const;
+export const COMPARISON_MARKETPLACES = ['depop', 'ebay', 'poshmark', 'mercari'] as const;
 export type ComparisonMarketplace = (typeof COMPARISON_MARKETPLACES)[number];
 
 /**
- * Where a marketplace shows a visitor sold listings at all (Depop shows none), the window its
- * count of sold listings (`soldTotal`) covers: eBay's whole sold search, its last 90 days; and
- * Mercari's latest sold results read, those that sold in the last 30 days (Mercari's sold search
- * reaches back much further and gives no count of a window, so its pace is how many of the
- * latest sold sold lately, out of `stats.read.sold`).
+ * Where a marketplace shows a visitor sold listings at all (Depop shows none), how many days
+ * back its sold comparisons reach: eBay's whole sold search, its last 90 days, the window its
+ * count of sold listings (`soldTotal`) covers; Poshmark's sold search shows every sale it ever
+ * had, so its reader counts only those of the last 90 days; and Mercari's latest sold results
+ * read, those that sold in the last 30 days (its sold search reaches back much further and gives
+ * no count of a window, so its pace is how many of the latest sold sold lately, out of
+ * `stats.read.sold`).
  */
 export const COMPARISON_SOLD_WINDOW_DAYS: Readonly<Partial<Record<ComparisonMarketplace, number>>> =
-  { ebay: 90, mercari: 30 };
+  { ebay: 90, poshmark: 90, mercari: 30 };
+
+/**
+ * How a marketplace that shows sold listings tells how fast items like it sell (the trend
+ * read): `search_count`, its sold search's own count over the sold window against its count for
+ * sale (eBay's); `sold_dates`, the days its close matches sold (Poshmark's, whose sold search
+ * counts every sale it ever had, so only the dates say how recent they are); `latest_sold`, how
+ * many of its latest sales were in the window (Mercari's).
+ */
+export const COMPARISON_SOLD_PACE: Readonly<
+  Partial<Record<ComparisonMarketplace, 'search_count' | 'sold_dates' | 'latest_sold'>>
+> = { ebay: 'search_count', poshmark: 'sold_dates', mercari: 'latest_sold' };
 
 /** The version of `ComparisonInput` and `ComparisonOutput`; change it with either. */
 export const COMPARISON_VERSION = 1;
@@ -92,7 +105,8 @@ export type ComparisonOutput =
       /**
        * Sold listings in the marketplace's sold window (`COMPARISON_SOLD_WINDOW_DAYS`), where it
        * shows a visitor sold ones: eBay's whole sold search over its 90 days, Mercari's latest
-       * sold read that sold in the last 30 days; absent where it shows none (Depop).
+       * sold read that sold in the last 30 days; absent where it shows none (Depop) or counts
+       * every sale it ever had (Poshmark).
        */
       readonly soldTotal?: number | null;
       readonly ms: number;

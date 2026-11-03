@@ -9,7 +9,7 @@ extension AddItemModel {
     }
 
     /// The marketplaces with a comparison reader on this iPhone, in the card's order.
-    static let comparedMarketplaces = ["depop", "ebay", "mercari"]
+    static let comparedMarketplaces = ["depop", "ebay", "poshmark", "mercari"]
 
     /// The run going on, or a new one at the place the seller named (nil: none).
     func startScanRun(in environment: AddItemEnvironment, place: String? = nil) -> ScanRunModel? {

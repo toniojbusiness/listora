@@ -172,16 +172,31 @@ const REPLAY_STYLE = [
 ].join('');
 
 /**
+ * Sets a data global the script read, by its name or its dotted path into one
+ * (`PageDriver.pageData`), making the objects on the way.
+ */
+const SET_GLOBAL =
+  "function __listoraData(path,value){const keys=path.split('.');let at=window;" +
+  'for(const key of keys.slice(0,-1)){if(at[key]===null||typeof at[key]!=="object")at[key]={};at=at[key];}' +
+  'at[keys[keys.length-1]]=value;}';
+
+/**
  * The document a replay serves for a state: its recorded lines, the replay's style rule, and a
- * script of the replay's own that sets the data globals the script read on the page.
+ * script of the replay's own that sets the data globals the script read on the page (each by
+ * the name or the path it was read by).
  */
 export function replayDocument(lines: readonly string[], data: Record<string, unknown>): string {
-  const globals = Object.entries(data)
-    .map(
-      ([name, value]) =>
-        `window[${JSON.stringify(name)}]=${JSON.stringify(value).replaceAll('<', '\\u003c')};`,
-    )
-    .join('');
+  const entries = Object.entries(data);
+  const globals =
+    entries.length === 0
+      ? ''
+      : SET_GLOBAL +
+        entries
+          .map(
+            ([name, value]) =>
+              `__listoraData(${JSON.stringify(name)},${JSON.stringify(value).replaceAll('<', '\\u003c')});`,
+          )
+          .join('');
   const head =
     `<meta charset="utf-8"><style>${REPLAY_STYLE}</style>` +
     (globals === '' ? '' : `<script>${globals}</script>`);

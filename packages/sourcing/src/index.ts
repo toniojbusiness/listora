@@ -117,10 +117,15 @@ export {
   LATEST_SOLD_FAST,
   LATEST_SOLD_SLOW,
   latestSoldPace,
+  marketRecentSoldPace,
   marketSoldPace,
   MIN_LATEST_SOLD,
+  RECENT_PACE_DAYS,
+  RECENT_SOLD_FAST,
+  RECENT_SOLD_SLOW,
   SELL_THROUGH_FAST,
   SELL_THROUGH_SLOW,
+  type RecentSoldInput,
 } from './pace.ts';
 export type {
   MarketDemand,

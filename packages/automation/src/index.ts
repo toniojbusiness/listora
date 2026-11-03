@@ -328,6 +328,7 @@ export { comparisonProfile } from './comps/run.ts';
 export {
   COMPARISON_MARKETPLACES,
   COMPARISON_OUTCOMES,
+  COMPARISON_SOLD_PACE,
   COMPARISON_SOLD_WINDOW_DAYS,
   COMPARISON_VERSION,
 } from './comps/types.ts';

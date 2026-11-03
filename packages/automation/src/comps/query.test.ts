@@ -23,6 +23,18 @@ describe('comparisonQuery', () => {
     });
   });
 
+  it("matches Poshmark's department and category, in either department when unsure", () => {
+    expect(comparisonQuery('poshmark', jeans)).toMatchObject({
+      words: 'levis 501 jeans',
+      productTypes: ['Women/Jeans'],
+      typeWords: ['jeans'],
+    });
+    expect(comparisonQuery('poshmark', { ...jeans, department: null })?.productTypes).toEqual([
+      'Women/Jeans',
+      'Men/Jeans',
+    ]);
+  });
+
   it('never searches a brand alone: no query without a brand or a category', () => {
     expect(comparisonQuery('depop', { ...jeans, brand: null })).toBeNull();
     expect(comparisonQuery('depop', { ...jeans, brand: '  ' })).toBeNull();

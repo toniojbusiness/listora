@@ -29,7 +29,7 @@ export type CallConfidence = (typeof CALL_CONFIDENCES)[number];
 
 /**
  * Where the range the call rests on came from: the household's own sales, a marketplace's sold
- * listings (its public search, eBay's), the web, or the AI estimate.
+ * listings (its public search, eBay's, Poshmark's, or Mercari's), the web, or the AI estimate.
  */
 export const CALL_BASES = [
   'own_history',
@@ -183,9 +183,9 @@ export interface ScanCallInput {
   readonly unsold?: UnsoldLikeIt | undefined;
   /**
    * Each marketplace's comparisons (its public search, read logged out), Depop first: what close
-   * matches for sale ask, what they sold for where the marketplace shows sold listings (eBay),
-   * and the demand. A marketplace's sold listings are the range when the household's own sales
-   * are too few; a demand from a marketplace's sold pace that reads slow keeps a call from high
+   * matches for sale ask, what they sold for where the marketplace shows sold listings (eBay,
+   * Poshmark, Mercari), and the demand. A marketplace's sold listings are the range when the
+   * household's own sales are too few; a demand from a marketplace's sold pace that reads slow keeps a call from high
    * confidence, and any other demand is a signal only.
    */
   readonly markets?: readonly MarketCallInput[] | undefined;

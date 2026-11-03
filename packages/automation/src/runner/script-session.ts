@@ -73,6 +73,21 @@ export class PageBackendError extends Error {
 }
 
 /**
+ * How a backend reads `pageData` in the page's own script world, given `name`: the global, or
+ * the value at a dotted path into it (`__INITIAL_STATE__.$_search.gridData`), serialized by the
+ * page as JSON; `null` when there is none. The iPhone app's web view runs the same read
+ * (MarketplacePage.swift).
+ */
+export function readPageData(name: string): string | null {
+  let value: unknown = globalThis;
+  for (const key of name.split('.')) {
+    if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return null;
+    value = (value as Record<string, unknown>)[key];
+  }
+  return value === undefined ? null : JSON.stringify(value);
+}
+
+/**
  * A page's data as a backend's `pageData` reads it: the JSON its global serializes to (the page
  * serializes it, so only JSON values cross), or `null` when the page has none.
  */
@@ -131,7 +146,8 @@ export interface PageBackend {
   value(selector: string): Promise<string | null>;
   /**
    * The page's global `name` as JSON (`null` when it has none), read in the page's own script
-   * world, the only place a page's own data lives.
+   * world, the only place a page's own data lives; `name` may be a dotted path into it
+   * (`PageDriver.pageData`, `PAGE_DATA_READ`).
    */
   pageData(name: string): Promise<unknown>;
   /** Evaluates `inspectionScript`'s source in the page. */

@@ -265,7 +265,7 @@ struct ScanCard: Equatable, Sendable {
 
 /// One marketplace's comparisons: listings like it in its public search, read logged out.
 /// Depop's are asking prices, always shown under their label; never sold prices. eBay's and
-/// Mercari's are what close matches sold for, under theirs ("Sold listings on eBay").
+/// Poshmark's are what close matches sold for, under theirs ("Sold listings on eBay").
 struct ScanComparisonLine: Equatable, Sendable {
     enum Status: Equatable, Sendable {
         case checking

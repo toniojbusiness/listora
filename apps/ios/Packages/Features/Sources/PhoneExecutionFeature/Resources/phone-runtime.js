@@ -7762,7 +7762,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	];
 	/** Fewest listings (sold, else for sale) a level needs before a looser one is tried. */
 	const MIN_MARKET_MATCHES = 5;
-	const DAY_MS$1 = 864e5;
+	const DAY_MS$2 = 864e5;
 	/** The words of a text, lowercase, accents and punctuation dropped. */
 	function words(text) {
 		return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/['’]/g, "").split(/[^\p{L}\p{N}]+/u).filter((word) => word !== "");
@@ -7850,7 +7850,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const sold = chosen.filter((listing) => listing.sold);
 		const soldPrices = quartiles(withoutOutliers(sold.map((listing) => listing.priceCents)));
 		const forSalePrices = quartiles(withoutOutliers(chosen.filter((listing) => !listing.sold).map((listing) => listing.priceCents)));
-		const ages = sold.flatMap((listing) => listing.at === null ? [] : [Math.max(0, (now.getTime() - listing.at.getTime()) / DAY_MS$1)]);
+		const ages = sold.flatMap((listing) => listing.at === null ? [] : [Math.max(0, (now.getTime() - listing.at.getTime()) / DAY_MS$2)]);
 		const dated = ages.length === sold.length && sold.length > 0;
 		return {
 			level,
@@ -7925,7 +7925,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* item's own, without shipping). Only those are read: never the seller (the slug names them),
 	* the photos, or the location.
 	*/
-	const PAGE$14 = "search";
+	const PAGE$15 = "search";
 	/** Statuses of a product that sold, as Depop names them (page-data.ts). */
 	const SOLD_STATUSES = /* @__PURE__ */ new Set([
 		"STATUS_SOLD",
@@ -7973,18 +7973,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readDepopSearch(page, site, words) {
 		if (!page.url().startsWith(`${site.origin}/`)) await page.goto(depopSearchPageUrl(site));
 		const answer = await page.apiGet(depopSearchApiUrl(site, words));
-		if (answer.status !== 200) throw changed$2(PAGE$14, `answered ${String(answer.status)}`);
+		if (answer.status !== 200) throw changed$2(PAGE$15, `answered ${String(answer.status)}`);
 		return depopSearchFromAnswer(answer.body);
 	}
 	/** The search's products and count, out of its API answer. */
 	function depopSearchFromAnswer(body) {
 		const read = searchAnswerSchema.safeParse(body);
-		if (!read.success) throw changed$2(PAGE$14, "answered with results Listora does not know");
+		if (!read.success) throw changed$2(PAGE$15, "answered with results Listora does not know");
 		const listings = [];
 		for (const entry of read.data.objects) {
 			const product = searchProductSchema.safeParse(entry);
-			if (!product.success) throw changed$2(PAGE$14, "shows a product Listora does not know");
-			const listing = listingOf$2(product.data);
+			if (!product.success) throw changed$2(PAGE$15, "shows a product Listora does not know");
+			const listing = listingOf$3(product.data);
 			if (listing !== null) listings.push(listing);
 		}
 		return {
@@ -7992,11 +7992,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			total: read.data.meta.total_count ?? null
 		};
 	}
-	function listingOf$2(product) {
+	function listingOf$3(product) {
 		if (product.pricing.currency_name !== "USD") return null;
 		const sold = SOLD_STATUSES.has(product.status);
 		if (!sold && !ON_SALE_STATUSES.has(product.status)) return null;
-		const priceCents = cents$3(product.pricing.current_price.price_breakdown.price.amount);
+		const priceCents = cents$4(product.pricing.current_price.price_breakdown.price.amount);
 		if (priceCents === null) return null;
 		return {
 			priceCents,
@@ -8009,7 +8009,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 	/** A US dollar amount (`"18.00"`) in cents, or null for one Listora can't read. */
-	function cents$3(value) {
+	function cents$4(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
 		if (match?.[1] === void 0) return null;
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
@@ -8135,7 +8135,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/ebay/pages/search-page.ts
-	const PAGE$13 = "search results";
+	const PAGE$14 = "search results";
 	/**
 	* The results page, in eBay's current card layout (`s-card`) and its earlier one (`s-item`),
 	* which eBay still serves to some visitors.
@@ -8180,15 +8180,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				total: 0,
 				shown: 0
 			};
-			throw changed$1(PAGE$13, `has no results (${EBAY_SEARCH_PAGE.results})`);
+			throw changed$1(PAGE$14, `has no results (${EBAY_SEARCH_PAGE.results})`);
 		}
 		const classes = await page.attributes(EBAY_SEARCH_PAGE.parts, "class");
 		const texts = await page.texts(EBAY_SEARCH_PAGE.parts);
-		if (classes.length !== texts.length) throw changed$1(PAGE$13, "changed while it was read");
+		if (classes.length !== texts.length) throw changed$1(PAGE$14, "changed while it was read");
 		const results = groupResults(classes, texts);
 		return {
 			listings: results.flatMap((result) => {
-				const listing = listingOf$1(result, kind);
+				const listing = listingOf$2(result, kind);
 				return listing === null ? [] : [listing];
 			}),
 			total: resultCount(await page.text(EBAY_SEARCH_PAGE.count)),
@@ -8232,17 +8232,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return "other";
 	}
 	/** Words that make a result many items, or no item at all. */
-	const LOT$1 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	const LOT$2 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
 	/** What eBay adds to a title for screen readers and new listings. */
 	const TITLE_NOISE = [/^new listing\s*/i, /\s*opens in a new window or tab\s*$/i];
 	/** eBay's placeholder result that is no listing. */
 	const PLACEHOLDER_TITLES = /* @__PURE__ */ new Set(["shop on ebay"]);
 	/** A result as a listing; `null` for one the comparisons must not count. */
-	function listingOf$1(result, kind) {
+	function listingOf$2(result, kind) {
 		let title = (result.title ?? "").replace(/\s+/g, " ").trim();
 		for (const noise of TITLE_NOISE) title = title.replace(noise, "");
 		if (title === "" || PLACEHOLDER_TITLES.has(title.toLowerCase())) return null;
-		if (LOT$1.test(title)) return null;
+		if (LOT$2.test(title)) return null;
 		const priceCents = parsePrice$1((result.price ?? "").replace(/\s+/g, " "));
 		if (priceCents === null) return null;
 		const sold = kind === "sold";
@@ -8348,6 +8348,418 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				soldTotal: sold.total
 			};
 		};
+	}
+
+// src/poshmark/pages/state.ts
+/**
+	* The data Poshmark's pages are rendered from. Every page embeds it as one inline script,
+	* `window.__INITIAL_STATE__={...}` (read 2026-10-24), with the same listing records the site's
+	* own API returns: ids, statuses, prices as decimal strings, and change times. Reads use it
+	* rather than the visible text: it holds exact values (a price, a status code, a timestamp) where
+	* the page shows formatted ones, and its keys change far less often than its markup.
+	*
+	* That script removes itself from the page as soon as it ran (`document.currentScript` is taken
+	* out, read 2026-10-26), so by the time a page is ready its data is only in the page's global
+	* `window.__INITIAL_STATE__`, which `pageData` reads.
+	*
+	* Every shape is checked; a page whose data no longer has what Listora reads throws
+	* `PageChangedError`, so the step goes to the user instead of reading a wrong value.
+	*/
+	/** The page global Poshmark's pages keep their data in. */
+	const STATE_GLOBAL = "__INITIAL_STATE__";
+	/** The page's embedded data; `page` names the page in errors ("the listing page"). */
+	async function readPageState(driver, page) {
+		const state = await driver.pageData(STATE_GLOBAL);
+		if (state === null || typeof state !== "object" || Array.isArray(state)) throw new PageChangedError(`Poshmark's ${page} no longer embeds the data Listora reads`);
+		return state;
+	}
+	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
+	function expectShape$1(schema, value, page) {
+		const parsed = schema.safeParse(value);
+		if (parsed.success) return parsed.data;
+		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
+		throw new PageChangedError(`Poshmark's ${page} no longer has the ${path === "" ? "data" : path} Listora reads`);
+	}
+	const money$1 = object({
+		val: string(),
+		currency_code: string()
+	});
+	/** One listing, as listing and closet pages embed it. */
+	const listingRecordSchema = object({
+		id: string(),
+		title: string(),
+		description: string(),
+		/** `published` for a listing on the site. */
+		status: string(),
+		status_changed_at: string().optional(),
+		created_at: string(),
+		updated_at: string(),
+		price_amount: money$1,
+		inventory: object({
+			/** `available`, `not_for_sale`, `sold_out`, or `reserved` (a buyer is checking out). */
+			status: string(),
+			status_changed_at: string().optional()
+		}).loose(),
+		creator_username: string().optional(),
+		cover_shot: unknown().optional(),
+		pictures: unknown().optional(),
+		brand: unknown().optional(),
+		size: unknown().optional(),
+		condition: unknown().optional(),
+		department: unknown().optional(),
+		category_v2: unknown().optional(),
+		category_features: unknown().optional(),
+		catalog: unknown().optional()
+	});
+	/**
+	* Who is logged in, on every page, as Poshmark's own app reads it (its store getters, read in its
+	* public bundles 2026-10-26): `auth.isUserLoggedIn`, `auth.identity` the user's id (`null`
+	* signed out), and the handle closets are addressed by in `userCookies.userInfo`, its
+	* `username` or else its `dh` (display handle); signed out, `userCookies` has no `userInfo`.
+	*/
+	const authSchema = object({
+		auth: object({
+			isUserLoggedIn: boolean(),
+			identity: unknown()
+		}),
+		userCookies: object({ userInfo: object({
+			username: string().optional(),
+			dh: string().optional()
+		}).nullable().optional() }).optional()
+	});
+	const INVENTORY_STATUSES = {
+		available: "active",
+		reserved: "active",
+		not_for_sale: "ended",
+		sold_out: "sold"
+	};
+	/** A listing record as a read-back: Listora's status, a cents price, and a revision. */
+	function remoteListing(record, site, page) {
+		const status = INVENTORY_STATUSES[record.inventory.status];
+		if (status === void 0) throw new PageChangedError(`Poshmark's ${page} shows a listing status Listora doesn't know`);
+		if (record.price_amount.currency_code !== "USD") throw new PageChangedError(`Poshmark's ${page} shows a price that is not in US dollars`);
+		return {
+			found: true,
+			externalListingId: record.id,
+			externalUrl: site.listing(record.id),
+			status,
+			title: record.title,
+			description: record.description,
+			priceCents: cents$3(record.price_amount.val, page),
+			currency: "USD",
+			revision: revision$1(record, page),
+			refreshedAt: refreshedAt(record, page)
+		};
+	}
+	/**
+	* When the listing last showed as fresh: its `updated_at`, which a share to followers moves, as
+	* the fake Poshmark mirrors (docs/features/listing-refresh.md has what is not yet proven on the
+	* real site). Poshmark keeps it to the second.
+	*/
+	function refreshedAt(record, page) {
+		const time = Date.parse(record.updated_at);
+		if (!Number.isFinite(time)) throw new PageChangedError(`Poshmark's ${page} shows a change time Listora can't read`);
+		return new Date(time).toISOString();
+	}
+	/**
+	* The listing's revision: its newest change time in milliseconds. Poshmark keeps `updated_at`
+	* for edits and `status_changed_at` (the listing's and its inventory's) for availability
+	* changes, each to the second. Listora's own changes to one seller's listings are always more
+	* than a second apart (every change is its own browser session, and sessions are at least two
+	* seconds apart, `PACING_FLOOR`), so each one has a newer revision.
+	*/
+	function revision$1(record, page) {
+		const times = [
+			record.updated_at,
+			record.status_changed_at,
+			record.inventory.status_changed_at
+		].flatMap((value) => value === void 0 ? [] : [Date.parse(value)]);
+		const newest = Math.max(...times);
+		if (!Number.isSafeInteger(newest) || newest < 0) throw new PageChangedError(`Poshmark's ${page} shows a change time Listora can't read`);
+		return newest;
+	}
+	/** `"39.0"` → 3900. */
+	function cents$3(value, page) {
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+		if (match?.[1] === void 0) throw new PageChangedError(`Poshmark's ${page} shows a price Listora can't read`);
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+	}
+
+// src/poshmark/pages/search-page.ts
+/**
+	* Poshmark's public search (`/search?query=<words>`), as any logged-out visitor's browser reads
+	* it (docs/features/thrift-scan.md, "Poshmark"): the comparison read's sold search (the page's
+	* own "Sold items" filter, `availability=sold_out`) and its for-sale search (the page as it
+	* opens, which shows listings available now). Each is one page load of the URL the search box
+	* and that filter make; nothing else is sent.
+	*
+	* Both pages are rendered from the data they embed (`window.__INITIAL_STATE__`, read live on
+	* 2026-11-02 in a fresh browser context with no cookies): the search's first 48 results in
+	* `$_search.gridData.data`, the same listing records closet pages embed (state.ts), and the
+	* search's own count in `$_search.gridData.total_listing_count`. Only those two are read, by
+	* their path, not the whole page's data (several megabytes of filters). Of each result only its
+	* title, brand, department and category, sizes, price, and (sold) the day it sold are used:
+	* never the seller, the photos, the comments, or the likes.
+	*
+	* Poshmark dates a sold listing by its inventory's last change (`inventory.status_changed_at`,
+	* the change to `sold_out`). A listing of many sizes or quantities (a boutique's, `multi_item`),
+	* lots and bundles, and prices not in US dollars are never counted.
+	*/
+	const PAGE$13 = "search";
+	/** Where the search's results and count are in the page's data (`PageDriver.pageData`). */
+	const POSHMARK_SEARCH_DATA = {
+		results: "__INITIAL_STATE__.$_search.gridData.data",
+		total: "__INITIAL_STATE__.$_search.gridData.total_listing_count"
+	};
+	const money = object({
+		val: string(),
+		currency_code: string()
+	});
+	const display$1 = object({ display: string() }).loose();
+	/** One result, as far as a comparison reads it; Poshmark's other fields are left alone. */
+	const searchListingSchema = object({
+		title: string(),
+		brand: string().nullish(),
+		price_amount: money,
+		size: string().nullish(),
+		inventory: object({
+			/** `available`, `reserved` (a buyer is checking out), `sold_out`, `not_for_sale`. */
+			status: string(),
+			status_changed_at: string().optional(),
+			multi_item: boolean().optional(),
+			size_quantities: array(object({ size_obj: display$1.optional() }).loose()).optional()
+		}).loose(),
+		department: display$1.nullish(),
+		category_v2: display$1.nullish()
+	}).loose();
+	/** The search's results page URL, as the search box and its sold filter make it. */
+	function poshmarkSearchUrl(site, words, kind) {
+		const url = new URL(`${site.origin}/search`);
+		url.searchParams.set("query", words.trim());
+		url.searchParams.set("type", "listings");
+		url.searchParams.set("src", "dir");
+		if (kind === "sold") url.searchParams.set("availability", "sold_out");
+		return url.href;
+	}
+	/** Loads the search's results page and reads it. */
+	async function readPoshmarkSearch(page, site, words, kind) {
+		await page.goto(poshmarkSearchUrl(site, words, kind));
+		return poshmarkSearchFromData(await page.pageData(POSHMARK_SEARCH_DATA.results), await page.pageData(POSHMARK_SEARCH_DATA.total), kind);
+	}
+	/** The search's listings and count, out of the page's data. */
+	function poshmarkSearchFromData(results, total, kind) {
+		const records = expectShape$1(array(unknown()), results, PAGE$13);
+		const listings = [];
+		for (const record of records) {
+			const listing = listingOf$1(expectShape$1(searchListingSchema, record, PAGE$13), kind);
+			if (listing !== null) listings.push(listing);
+		}
+		const count = number().int().min(0).safeParse(total);
+		return {
+			listings,
+			total: count.success ? count.data : null,
+			shown: records.length
+		};
+	}
+	/** Words that make a result many items. */
+	const LOT$1 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	/** A result as a listing; `null` for one the comparisons must not count. */
+	function listingOf$1(record, kind) {
+		const sold = kind === "sold";
+		const status = record.inventory.status;
+		if (sold ? status !== "sold_out" : status !== "available" && status !== "reserved") return null;
+		if (record.inventory.multi_item === true) return null;
+		if (record.price_amount.currency_code !== "USD") return null;
+		const priceCents = cents$2(record.price_amount.val);
+		if (priceCents === null || priceCents === 0) return null;
+		const title = record.title.replace(/\s+/g, " ").trim();
+		if (title === "" || LOT$1.test(title)) return null;
+		const at = sold ? soldAt(record.inventory.status_changed_at) : null;
+		if (sold && at === null) return null;
+		return {
+			priceCents,
+			sold,
+			brand: record.brand ?? "",
+			productType: productTypeOf(record),
+			sizes: sizesOf(record),
+			text: title,
+			at
+		};
+	}
+	/**
+	* A listing's product type as the comparison query names Poshmark's (comps/query.ts): its
+	* department and category (`Women/Jeans`), or `null` without both.
+	*/
+	function productTypeOf(record) {
+		const department = record.department?.display.trim() ?? "";
+		const category = record.category_v2?.display.trim() ?? "";
+		return department === "" || category === "" ? null : poshmarkProductType(department, category);
+	}
+	/** The product type a Poshmark department and category make (`Women/Jeans`). */
+	function poshmarkProductType(department, category) {
+		return `${department}/${category}`;
+	}
+	/** The sizes a listing names: its own (`28`) and each of its sizes as the page shows them. */
+	function sizesOf(record) {
+		const sizes = /* @__PURE__ */ new Set();
+		if (record.size !== void 0 && record.size !== null && record.size.trim() !== "") sizes.add(record.size.trim());
+		for (const quantity of record.inventory.size_quantities ?? []) {
+			const shown = quantity.size_obj?.display.trim() ?? "";
+			if (shown !== "") sizes.add(shown);
+		}
+		return [...sizes];
+	}
+	/** When a sold listing sold: its inventory's last change (ISO with an offset); null without. */
+	function soldAt(value) {
+		if (value === void 0) return null;
+		const time = Date.parse(value);
+		return Number.isFinite(time) ? new Date(time) : null;
+	}
+	/** A US dollar amount (`"34.0"`) in cents, or null for one Listora can't read. */
+	function cents$2(value) {
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim());
+		if (match?.[1] === void 0) return null;
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+	}
+
+// src/poshmark/site.ts
+/**
+	* Poshmark's web addresses the automation adapter opens (checked logged out on 2026-10-24: the
+	* listing form and the edit form send a browser without a session to `/login`, and closets are
+	* public). Every URL is built on the site's origin, `https://poshmark.com` in production and the
+	* fake Poshmark's in development and tests.
+	*/
+	/** Poshmark's listing ids: 24 hexadecimal characters, the end of every listing URL. */
+	const LISTING_ID = /^[0-9a-f]{24}$/;
+	function isListingId(value) {
+		return LISTING_ID.test(value);
+	}
+	/** The listing id at the end of a listing page's path (`/listing/<title>-<id>`), if any. */
+	function listingIdFromPath(path) {
+		return /^\/listing\/(?:.*-)?([0-9a-f]{24})\/?$/.exec(path)?.[1] ?? null;
+	}
+	var PoshmarkSite = class {
+		origin;
+		constructor(origin) {
+			this.origin = new URL(origin).origin;
+		}
+		/** The listing form: requires a logged-in seller. */
+		createListing() {
+			return `${this.origin}/create-listing`;
+		}
+		/** A listing's edit form: requires its seller. */
+		editListing(id) {
+			return `${this.origin}/edit-listing/${encodeURIComponent(id)}`;
+		}
+		/** A listing's public page; Poshmark reads the id at the end of the path. */
+		listing(id) {
+			return `${this.origin}/listing/${encodeURIComponent(id)}`;
+		}
+		/** The seller's sales (`/order/sales`, which opens the Seller Hub's sales list). */
+		sales() {
+			return `${this.origin}/order/sales`;
+		}
+		/** One sale's order page: requires its seller. */
+		sale(orderId) {
+			return `${this.origin}/order/sales/${encodeURIComponent(orderId)}`;
+		}
+		/** The seller's active offers ("Active Offers"), as a buyer and as the seller. */
+		offers() {
+			return `${this.origin}/offers/my_offers`;
+		}
+		/** One offer's page, where the seller answers it. */
+		offer(offerId) {
+			return `${this.origin}/offers/${encodeURIComponent(offerId)}`;
+		}
+		/** A seller's closet page. */
+		closet(username, query) {
+			const url = new URL(`${this.origin}/closet/${encodeURIComponent(username)}`);
+			url.searchParams.set("availability", query.availability);
+			if (query.newestFirst === true) url.searchParams.set("sort_by", "added_desc");
+			if (query.query !== void 0) url.searchParams.set("query", query.query);
+			if (query.maxId !== void 0) url.searchParams.set("max_id", query.maxId);
+			return url.href;
+		}
+	};
+
+// src/comps/types.ts
+/**
+	* Where a marketplace shows a visitor sold listings at all (Depop shows none), how many days
+	* back its sold comparisons reach: eBay's whole sold search, its last 90 days, the window its
+	* count of sold listings (`soldTotal`) covers; Poshmark's sold search shows every sale it ever
+	* had, so its reader counts only those of the last 90 days; and Mercari's latest sold results
+	* read, those that sold in the last 30 days (its sold search reaches back much further and gives
+	* no count of a window, so its pace is how many of the latest sold sold lately, out of
+	* `stats.read.sold`).
+	*/
+	const COMPARISON_SOLD_WINDOW_DAYS = {
+		ebay: 90,
+		poshmark: 90,
+		mercari: 30
+	};
+	/** `MarketStats` as the phone sends them. */
+	function comparisonStats(stats) {
+		const { level, sold, ...rest } = stats;
+		const sent = sold === void 0 ? rest : {
+			...rest,
+			sold: soldSent(sold)
+		};
+		return level === null ? sent : {
+			...sent,
+			level
+		};
+	}
+	function soldSent({ windowDays, ...prices }) {
+		return windowDays === null ? prices : {
+			...prices,
+			windowDays
+		};
+	}
+
+// src/comps/poshmark.ts
+/**
+	* Poshmark's comparison reader (docs/features/thrift-scan.md, "Poshmark"): the item's public
+	* search on Poshmark, read in a web view that holds no session, twice: its sold listings (the
+	* search's own "Sold items" filter), each dated by the day it sold, and its listings for sale
+	* now. Both are matched to the item (its brand, and Poshmark's department and category for its
+	* type, then the model in the title and the size) and reduced to counts and quartiles
+	* (`marketStats`). Only listings sold in the last `COMPARISON_SOLD_WINDOW_DAYS.poshmark` days
+	* are counted: an older sale says little of today's price. Nothing in it signs in, likes,
+	* shares, follows, or offers anything: it only loads the results pages any visitor's browser
+	* loads.
+	*/
+	const DAY_MS$1 = 864e5;
+	/** The warm-up: Poshmark's home page, loaded once while the seller walks to the bins. */
+	function poshmarkWarmUpScript(siteUrl) {
+		const site = new PoshmarkSite(siteUrl);
+		return (step) => step("open Poshmark", { mutates: false }, async (page) => {
+			await page.goto(`${site.origin}/`);
+			return "warm";
+		});
+	}
+	/** One comparison read: the item's sold and for-sale searches, matched and counted. */
+	function poshmarkComparisonScript(siteUrl, query, now) {
+		const site = new PoshmarkSite(siteUrl);
+		return async (step) => {
+			const sold = await step("search Poshmark sold listings", { mutates: false }, (page) => readPoshmarkSearch(page, site, query.words, "sold"));
+			const forSale = await step("search Poshmark listings for sale", { mutates: false }, (page) => readPoshmarkSearch(page, site, query.words, "for_sale"));
+			return {
+				stats: marketStats([...recentlySold(sold.listings, now), ...forSale.listings], {
+					brand: query.brand,
+					productTypes: query.productTypes,
+					typeWords: query.typeWords,
+					model: query.model,
+					sizeLabel: query.sizeLabel
+				}, now),
+				forSaleTotal: forSale.total
+			};
+		};
+	}
+	/** The sold listings of the sold window (`COMPARISON_SOLD_WINDOW_DAYS.poshmark`). */
+	function recentlySold(listings, now) {
+		const days = COMPARISON_SOLD_WINDOW_DAYS.poshmark ?? 0;
+		const since = now.getTime() - days * DAY_MS$1;
+		return listings.filter((listing) => listing.at !== null && listing.at.getTime() >= since);
 	}
 
 // src/mercari/pages/common.ts
@@ -8589,37 +9001,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return [...sizes];
 	}
 
-// src/comps/types.ts
-/**
-	* Where a marketplace shows a visitor sold listings at all (Depop shows none), the window its
-	* count of sold listings (`soldTotal`) covers: eBay's whole sold search, its last 90 days; and
-	* Mercari's latest sold results read, those that sold in the last 30 days (Mercari's sold search
-	* reaches back much further and gives no count of a window, so its pace is how many of the
-	* latest sold sold lately, out of `stats.read.sold`).
-	*/
-	const COMPARISON_SOLD_WINDOW_DAYS = {
-		ebay: 90,
-		mercari: 30
-	};
-	/** `MarketStats` as the phone sends them. */
-	function comparisonStats(stats) {
-		const { level, sold, ...rest } = stats;
-		const sent = sold === void 0 ? rest : {
-			...rest,
-			sold: soldSent(sold)
-		};
-		return level === null ? sent : {
-			...sent,
-			level
-		};
-	}
-	function soldSent({ windowDays, ...prices }) {
-		return windowDays === null ? prices : {
-			...prices,
-			windowDays
-		};
-	}
-
 // src/comps/mercari.ts
 /**
 	* Mercari's comparison reader (docs/features/thrift-scan.md, "Mercari"): the item's public
@@ -8689,6 +9070,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const SITES = {
 		depop: "https://www.depop.com",
 		ebay: "https://www.ebay.com",
+		poshmark: "https://poshmark.com",
 		mercari: "https://www.mercari.com"
 	};
 	/** Each marketplace's read and warm-up. */
@@ -8700,6 +9082,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		ebay: {
 			read: (siteUrl, input) => ebayComparisonScript(siteUrl, input.query, new Date(input.now)),
 			warmUp: ebayWarmUpScript
+		},
+		poshmark: {
+			read: (siteUrl, input) => poshmarkComparisonScript(siteUrl, input.query, new Date(input.now)),
+			warmUp: poshmarkWarmUpScript
 		},
 		mercari: {
 			read: (siteUrl, input) => mercariComparisonScript(siteUrl, input.query, new Date(input.now)),
@@ -9338,7 +9724,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* so the step goes to the user instead of reading a wrong value.
 	*/
 	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
-	function expectShape$1(schema, value, page) {
+	function expectShape(schema, value, page) {
 		const parsed = schema.safeParse(value);
 		if (parsed.success) return parsed.data;
 		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
@@ -9400,8 +9786,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: dollars$1(record.price, page),
 				currency: "USD",
-				revision: revision$1(record.dateUpdated, page),
-				refreshedAt: new Date(revision$1(record.dateUpdated, page)).toISOString()
+				revision: revision(record.dateUpdated, page),
+				refreshedAt: new Date(revision(record.dateUpdated, page)).toISOString()
 			},
 			sku
 		};
@@ -9416,7 +9802,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* change is its own browser session, and sessions are at least two seconds apart,
 	* `PACING_FLOOR`), so each one has a newer revision.
 	*/
-	function revision$1(value, page) {
+	function revision(value, page) {
 		const time = Date.parse(value);
 		if (!Number.isSafeInteger(time) || time < 0) throw new PageChangedError(`Depop's ${page} shows a change time Listora can't read`);
 		return time;
@@ -9494,12 +9880,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE$2 });
 		if (answer.status === 404) return null;
 		if (answer.status !== 200) throw changed$2(API$2, `answered ${String(answer.status)} for a product`);
-		const product = expectShape$1(editListingSchema, answer.body, API$2);
+		const product = expectShape(editListingSchema, answer.body, API$2);
 		const status = STATUSES$2[product.status];
 		if (status === void 0) throw changed$2(API$2, "shows a product status Listora does not know");
 		if (product.pricing.currency_name !== "USD") throw changed$2(API$2, "shows a price that is not in US dollars");
 		const key = product.pricing.final_price_key ?? "original_price";
-		const price = expectShape$1(priceSchema, product.pricing[key], API$2).price_breakdown.price.amount;
+		const price = expectShape(priceSchema, product.pricing[key], API$2).price_breakdown.price.amount;
 		const { description, sku } = listingCopy(product.description);
 		return {
 			record: answer.body,
@@ -9510,10 +9896,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				status,
 				title: null,
 				description,
-				priceCents: cents$2(price),
+				priceCents: cents$1(price),
 				currency: "USD",
-				revision: revision$1(product.updated_at, API$2),
-				refreshedAt: new Date(revision$1(product.updated_at, API$2)).toISOString()
+				revision: revision(product.updated_at, API$2),
+				refreshedAt: new Date(revision(product.updated_at, API$2)).toISOString()
 			},
 			sku
 		};
@@ -9531,10 +9917,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		});
 		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$2 });
 		if (answer.status !== 200) throw changed$2(API$2, `answered ${String(answer.status)} for the seller's listings`);
-		const feed = expectShape$1(feedSchema, answer.body, API$2);
+		const feed = expectShape(feedSchema, answer.body, API$2);
 		return {
 			products: feed.products.map((entry) => {
-				const read = productRead(expectShape$1(productRecordSchema$1, entry, API$2), site, API$2);
+				const read = productRead(expectShape(productRecordSchema$1, entry, API$2), site, API$2);
 				return {
 					state: read.listing,
 					sku: read.sku,
@@ -9545,7 +9931,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 	/** A US dollar amount (`"18.00"`) in cents. */
-	function cents$2(value) {
+	function cents$1(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
 		if (match?.[1] === void 0) throw changed$2(API$2, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
@@ -9910,7 +10296,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let status;
 		let text;
 		if (records.length > 0) {
-			const product = expectShape$1(productRecordSchema, records[0], PAGE$11);
+			const product = expectShape(productRecordSchema, records[0], PAGE$11);
 			status = STATUSES$1[product.status];
 			if (status === void 0) throw changed$2(PAGE$11, "shows a product status Listora does not know");
 			text = product.description;
@@ -9953,10 +10339,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		});
 		if (own === void 0) {
 			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$11, "offers a different product");
-			expectShape$1(structuredDataSchema, blocks[0], PAGE$11);
+			expectShape(structuredDataSchema, blocks[0], PAGE$11);
 			throw changed$2(PAGE$11, "has none of the product data Listora reads");
 		}
-		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$11);
+		const { offers, description } = expectShape(structuredDataSchema, own, PAGE$11);
 		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$11, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
 		if (match?.[1] === void 0) throw changed$2(PAGE$11, "shows a price Listora can't read");
@@ -10056,7 +10442,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (cursor !== null) query.set("after", cursor);
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
 		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for the receipts`);
-		const shown = expectShape$1(receiptsSchema, answer.body, API$1);
+		const shown = expectShape(receiptsSchema, answer.body, API$1);
 		const receipts = shown.objects.map((receipt) => readReceipt(receipt, site));
 		const next = shown.page_info.has_more ? shown.page_info.last ?? null : null;
 		if (shown.page_info.has_more && next === null) throw changed$2(API$1, "has more receipts but no cursor");
@@ -10069,10 +10455,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function readReceiptLines(page, site, purchaseId) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/${encodeURIComponent(purchaseId)}/`, { bearerCookie: TOKEN_COOKIE$1 });
 		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for a receipt`);
-		const shown = expectShape$1(receiptDetailSchema, answer.body, API$1);
+		const shown = expectShape(receiptDetailSchema, answer.body, API$1);
 		return new Map(shown.lines.map((line) => [line.product_id, {
 			slug: line.slug ?? null,
-			priceCents: cents$1(line.product_amount)
+			priceCents: cents(line.product_amount)
 		}]));
 	}
 	/**
@@ -10080,14 +10466,14 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* know throws `PageChangedError`.
 	*/
 	function readReceipt(value, site = depopSite(DEPOP_SITE_URL)) {
-		const receipt = expectShape$1(receiptSchema, value, API$1);
+		const receipt = expectShape(receiptSchema, value, API$1);
 		if (receipt.currency !== "USD") throw changed$2(API$1, "shows a sale that is not in US dollars");
 		return {
 			purchaseId: String(receipt.purchase_id),
 			soldAt: new Date(receipt.sold_timestamp),
 			state: receiptState(receipt.status),
-			itemsCents: cents$1(receipt.items_amount),
-			sellerCents: receipt.seller_amount === void 0 || receipt.seller_amount === null ? null : cents$1(receipt.seller_amount),
+			itemsCents: cents(receipt.items_amount),
+			sellerCents: receipt.seller_amount === void 0 || receipt.seller_amount === null ? null : cents(receipt.seller_amount),
 			isBundle: receipt.is_bundle,
 			lines: receipt.line_items.map((line) => ({
 				productId: line.product_id,
@@ -10178,7 +10564,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return value !== void 0 && value !== null && value.trim() !== "";
 	}
 	/** A dollar amount (`"18.00"`) in cents. */
-	function cents$1(value) {
+	function cents(value) {
 		const [dollars = "0", fraction = ""] = value.split(".");
 		return Number(dollars) * 100 + Number(fraction.padEnd(2, "0"));
 	}
@@ -10647,7 +11033,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function apiPage(page, url, schema, list) {
 		const answer = await page.apiGet(url, { bearerCookie: TOKEN_COOKIE });
 		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for offers`);
-		return expectShape$1(schema, answer.body, `${API} for ${list}`);
+		return expectShape(schema, answer.body, `${API} for ${list}`);
 	}
 	function nextPage(shown) {
 		const last = shown.page_info.last;
@@ -13047,141 +13433,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		};
 	}
 
-// src/poshmark/pages/state.ts
-/**
-	* The data Poshmark's pages are rendered from. Every page embeds it as one inline script,
-	* `window.__INITIAL_STATE__={...}` (read 2026-10-24), with the same listing records the site's
-	* own API returns: ids, statuses, prices as decimal strings, and change times. Reads use it
-	* rather than the visible text: it holds exact values (a price, a status code, a timestamp) where
-	* the page shows formatted ones, and its keys change far less often than its markup.
-	*
-	* That script removes itself from the page as soon as it ran (`document.currentScript` is taken
-	* out, read 2026-10-26), so by the time a page is ready its data is only in the page's global
-	* `window.__INITIAL_STATE__`, which `pageData` reads.
-	*
-	* Every shape is checked; a page whose data no longer has what Listora reads throws
-	* `PageChangedError`, so the step goes to the user instead of reading a wrong value.
-	*/
-	/** The page global Poshmark's pages keep their data in. */
-	const STATE_GLOBAL = "__INITIAL_STATE__";
-	/** The page's embedded data; `page` names the page in errors ("the listing page"). */
-	async function readPageState(driver, page) {
-		const state = await driver.pageData(STATE_GLOBAL);
-		if (state === null || typeof state !== "object" || Array.isArray(state)) throw new PageChangedError(`Poshmark's ${page} no longer embeds the data Listora reads`);
-		return state;
-	}
-	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
-	function expectShape(schema, value, page) {
-		const parsed = schema.safeParse(value);
-		if (parsed.success) return parsed.data;
-		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
-		throw new PageChangedError(`Poshmark's ${page} no longer has the ${path === "" ? "data" : path} Listora reads`);
-	}
-	const money = object({
-		val: string(),
-		currency_code: string()
-	});
-	/** One listing, as listing and closet pages embed it. */
-	const listingRecordSchema = object({
-		id: string(),
-		title: string(),
-		description: string(),
-		/** `published` for a listing on the site. */
-		status: string(),
-		status_changed_at: string().optional(),
-		created_at: string(),
-		updated_at: string(),
-		price_amount: money,
-		inventory: object({
-			/** `available`, `not_for_sale`, `sold_out`, or `reserved` (a buyer is checking out). */
-			status: string(),
-			status_changed_at: string().optional()
-		}).loose(),
-		creator_username: string().optional(),
-		cover_shot: unknown().optional(),
-		pictures: unknown().optional(),
-		brand: unknown().optional(),
-		size: unknown().optional(),
-		condition: unknown().optional(),
-		department: unknown().optional(),
-		category_v2: unknown().optional(),
-		category_features: unknown().optional(),
-		catalog: unknown().optional()
-	});
-	/**
-	* Who is logged in, on every page, as Poshmark's own app reads it (its store getters, read in its
-	* public bundles 2026-10-26): `auth.isUserLoggedIn`, `auth.identity` the user's id (`null`
-	* signed out), and the handle closets are addressed by in `userCookies.userInfo`, its
-	* `username` or else its `dh` (display handle); signed out, `userCookies` has no `userInfo`.
-	*/
-	const authSchema = object({
-		auth: object({
-			isUserLoggedIn: boolean(),
-			identity: unknown()
-		}),
-		userCookies: object({ userInfo: object({
-			username: string().optional(),
-			dh: string().optional()
-		}).nullable().optional() }).optional()
-	});
-	const INVENTORY_STATUSES = {
-		available: "active",
-		reserved: "active",
-		not_for_sale: "ended",
-		sold_out: "sold"
-	};
-	/** A listing record as a read-back: Listora's status, a cents price, and a revision. */
-	function remoteListing(record, site, page) {
-		const status = INVENTORY_STATUSES[record.inventory.status];
-		if (status === void 0) throw new PageChangedError(`Poshmark's ${page} shows a listing status Listora doesn't know`);
-		if (record.price_amount.currency_code !== "USD") throw new PageChangedError(`Poshmark's ${page} shows a price that is not in US dollars`);
-		return {
-			found: true,
-			externalListingId: record.id,
-			externalUrl: site.listing(record.id),
-			status,
-			title: record.title,
-			description: record.description,
-			priceCents: cents(record.price_amount.val, page),
-			currency: "USD",
-			revision: revision(record, page),
-			refreshedAt: refreshedAt(record, page)
-		};
-	}
-	/**
-	* When the listing last showed as fresh: its `updated_at`, which a share to followers moves, as
-	* the fake Poshmark mirrors (docs/features/listing-refresh.md has what is not yet proven on the
-	* real site). Poshmark keeps it to the second.
-	*/
-	function refreshedAt(record, page) {
-		const time = Date.parse(record.updated_at);
-		if (!Number.isFinite(time)) throw new PageChangedError(`Poshmark's ${page} shows a change time Listora can't read`);
-		return new Date(time).toISOString();
-	}
-	/**
-	* The listing's revision: its newest change time in milliseconds. Poshmark keeps `updated_at`
-	* for edits and `status_changed_at` (the listing's and its inventory's) for availability
-	* changes, each to the second. Listora's own changes to one seller's listings are always more
-	* than a second apart (every change is its own browser session, and sessions are at least two
-	* seconds apart, `PACING_FLOOR`), so each one has a newer revision.
-	*/
-	function revision(record, page) {
-		const times = [
-			record.updated_at,
-			record.status_changed_at,
-			record.inventory.status_changed_at
-		].flatMap((value) => value === void 0 ? [] : [Date.parse(value)]);
-		const newest = Math.max(...times);
-		if (!Number.isSafeInteger(newest) || newest < 0) throw new PageChangedError(`Poshmark's ${page} shows a change time Listora can't read`);
-		return newest;
-	}
-	/** `"39.0"` → 3900. */
-	function cents(value, page) {
-		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-		if (match?.[1] === void 0) throw new PageChangedError(`Poshmark's ${page} shows a price Listora can't read`);
-		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
-	}
-
 // src/poshmark/pages/account.ts
 /**
 	* Which seller the session belongs to. Closet pages are addressed by the seller's username, which
@@ -13194,7 +13445,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** Opens the listing form and returns the logged-in seller's username. */
 	async function loggedInSeller(page, site) {
 		await page.goto(site.createListing());
-		const { auth, userCookies } = expectShape(authSchema, await readPageState(page, PAGE$4), PAGE$4);
+		const { auth, userCookies } = expectShape$1(authSchema, await readPageState(page, PAGE$4), PAGE$4);
 		const info = userCookies?.userInfo;
 		const username = info?.username !== void 0 && info.username !== "" ? info.username : info?.dh;
 		if (!auth.isUserLoggedIn || username === void 0 || username === "") throw new PageChangedError(`Poshmark's ${PAGE$4} no longer says which seller is logged in`);
@@ -13221,7 +13472,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** One closet page: its listings, and the cursor of the next page (`null` at the end). */
 	async function readClosetPage(page, site, username, query) {
 		await page.goto(site.closet(username, query));
-		const { data, more } = expectShape(closetSchema, await readPageState(page, PAGE$3), PAGE$3).$_closet.listingsPostData;
+		const { data, more } = expectShape$1(closetSchema, await readPageState(page, PAGE$3), PAGE$3).$_closet.listingsPostData;
 		const next = more?.next_max_id;
 		return {
 			listings: data,
@@ -13613,66 +13864,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		return text.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
 	}
 
-// src/poshmark/site.ts
-/**
-	* Poshmark's web addresses the automation adapter opens (checked logged out on 2026-10-24: the
-	* listing form and the edit form send a browser without a session to `/login`, and closets are
-	* public). Every URL is built on the site's origin, `https://poshmark.com` in production and the
-	* fake Poshmark's in development and tests.
-	*/
-	/** Poshmark's listing ids: 24 hexadecimal characters, the end of every listing URL. */
-	const LISTING_ID = /^[0-9a-f]{24}$/;
-	function isListingId(value) {
-		return LISTING_ID.test(value);
-	}
-	/** The listing id at the end of a listing page's path (`/listing/<title>-<id>`), if any. */
-	function listingIdFromPath(path) {
-		return /^\/listing\/(?:.*-)?([0-9a-f]{24})\/?$/.exec(path)?.[1] ?? null;
-	}
-	var PoshmarkSite = class {
-		origin;
-		constructor(origin) {
-			this.origin = new URL(origin).origin;
-		}
-		/** The listing form: requires a logged-in seller. */
-		createListing() {
-			return `${this.origin}/create-listing`;
-		}
-		/** A listing's edit form: requires its seller. */
-		editListing(id) {
-			return `${this.origin}/edit-listing/${encodeURIComponent(id)}`;
-		}
-		/** A listing's public page; Poshmark reads the id at the end of the path. */
-		listing(id) {
-			return `${this.origin}/listing/${encodeURIComponent(id)}`;
-		}
-		/** The seller's sales (`/order/sales`, which opens the Seller Hub's sales list). */
-		sales() {
-			return `${this.origin}/order/sales`;
-		}
-		/** One sale's order page: requires its seller. */
-		sale(orderId) {
-			return `${this.origin}/order/sales/${encodeURIComponent(orderId)}`;
-		}
-		/** The seller's active offers ("Active Offers"), as a buyer and as the seller. */
-		offers() {
-			return `${this.origin}/offers/my_offers`;
-		}
-		/** One offer's page, where the seller answers it. */
-		offer(offerId) {
-			return `${this.origin}/offers/${encodeURIComponent(offerId)}`;
-		}
-		/** A seller's closet page. */
-		closet(username, query) {
-			const url = new URL(`${this.origin}/closet/${encodeURIComponent(username)}`);
-			url.searchParams.set("availability", query.availability);
-			if (query.newestFirst === true) url.searchParams.set("sort_by", "added_desc");
-			if (query.query !== void 0) url.searchParams.set("query", query.query);
-			if (query.maxId !== void 0) url.searchParams.set("max_id", query.maxId);
-			return url.href;
-		}
-	};
-
 // src/poshmark/pages/listing-page.ts
 /**
 	* A listing's public page (`/listing/<title>-<id>`): the read-back of every change. It reads the
@@ -13728,7 +13919,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const missing = page.status() === 404;
 		let details;
 		try {
-			details = expectShape(listingPageSchema, await readPageState(page, PAGE$2), PAGE$2).$_listing_details.listingDetails;
+			details = expectShape$1(listingPageSchema, await readPageState(page, PAGE$2), PAGE$2).$_listing_details.listingDetails;
 		} catch (error) {
 			if (missing && error instanceof PageChangedError) return { type: "none" };
 			throw error;
@@ -13808,7 +13999,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** The seller's sales the list shows, newest first. */
 	async function readSales(page, site) {
 		await page.goto(site.sales());
-		return expectShape(salesSchema, await readPageState(page, PAGE$1), PAGE$1).$_order_list.userSales.data.sales_summary.map((order) => saleOf(order, PAGE$1));
+		return expectShape$1(salesSchema, await readPageState(page, PAGE$1), PAGE$1).$_order_list.userSales.data.sales_summary.map((order) => saleOf(order, PAGE$1));
 	}
 	/** One order's page: its label and buyer's first name, as the order list may not show them. */
 	async function readSale(page, site, orderId) {
@@ -13865,7 +14056,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	async function readOffers(page, site) {
 		await page.goto(site.offers());
 		await page.waitFor(OFFERS_SECTION, "attached");
-		const story = expectShape(offersSchema, await readPageState(page, PAGE), PAGE).$_order_activity.orderActivity.activeOffers.find((entry) => entry.story_type === SALE_OFFERS_STORY);
+		const story = expectShape$1(offersSchema, await readPageState(page, PAGE), PAGE).$_order_activity.orderActivity.activeOffers.find((entry) => entry.story_type === SALE_OFFERS_STORY);
 		if (story === void 0) throw new PageChangedError(`Poshmark's ${PAGE} has no offers on your listings`);
 		if (story.content.type === NO_OFFERS) return [];
 		return story.content.data.map((record) => {
@@ -14153,7 +14344,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				} : {
 					type: "applied",
 					externalListingId: id,
-					revision: revision(record, "listing page")
+					revision: revision$1(record, "listing page")
 				};
 			});
 		}
@@ -14204,7 +14395,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (shown.type === "listing" || shown.type === "reviewing") return {
 					type: "applied",
 					externalListingId: id,
-					revision: revision(shown.record, "listing page")
+					revision: revision$1(shown.record, "listing page")
 				};
 				if (shown.type === "hidden") return {
 					type: "applied",
@@ -14405,7 +14596,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 						items: [{
 							externalListingId: listing.id,
 							title: listing.title,
-							priceCents: cents(listing.price_amount.val, "closet page"),
+							priceCents: cents$3(listing.price_amount.val, "closet page"),
 							currency: "USD",
 							...soldListing(listing)
 						}]

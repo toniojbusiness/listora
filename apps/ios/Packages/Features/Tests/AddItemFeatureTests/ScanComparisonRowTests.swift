@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import AddItemFeature
 
-/// A marketplace's comparison row on the card where it shows sold listings (eBay, Mercari):
+/// A marketplace's comparison row on the card where it shows sold listings (eBay, Poshmark, Mercari):
 /// what close matches sold for under its sold label, and its own sold pace.
 @MainActor
 @Suite(.timeLimit(.minutes(1)))
@@ -35,5 +35,21 @@ struct ScanComparisonRowTests {
         #expect(mercari.demandBasedOn == "Sold listings on Mercari: 24 of the latest 30 sold in the last 30 days")
         #expect(card.listedSignals.isEmpty)
         #expect(card.basedOn == "Sold listings on Mercari: 7 like it in the last 21 days")
+    }
+
+    @Test
+    func `shows Poshmark's sold listings under their label, with its recent sold pace`() throws {
+        let card = try ScanCard(decodeScan(poshmarkSoldScanJSON(id: "scan-1")))
+        let poshmark = try #require(card.comparisons.first)
+        #expect(poshmark.marketplace == "Poshmark")
+        #expect(poshmark.status == .read)
+        #expect(poshmark.label == "Poshmark: sold $18-$34, 44 like it in the last 42 days")
+        #expect(poshmark.soldLabel == "Sold listings on Poshmark")
+        #expect(poshmark.demand == "Sells fast on Poshmark")
+        #expect(
+            poshmark.demandBasedOn == "Sold listings on Poshmark: 44 like it in the last 42 days; 97,581 for sale now",
+        )
+        #expect(card.listedSignals.isEmpty)
+        #expect(card.basedOn == "Sold listings on Poshmark: 44 like it in the last 42 days")
     }
 }
