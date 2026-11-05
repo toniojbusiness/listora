@@ -188,8 +188,8 @@ listings of the shop the connection held (audit M3, [security.md](security.md#au
 
 - **Which seller.** The session check's health script returns the signed-in seller's handle,
   trimmed and lower-cased (`sellerIdentity`): Depop's username from the header's Likes link
-  (`/<username>/likes/`), Poshmark's username from its page data, Vinted's login from the header's
-  own profile link (`/member/<id>-<login>`), the fake site's account. Mercari
+  (`/<username>/likes/`), Poshmark's username from its page data, Vinted's login from its web API's
+  member signed in (`/api/v2/users/current`), the fake site's account. Mercari
   (its account page shows only a display name, neither unique nor fixed) and eBay (Seller Hub is
   not read for it yet) return `null`: the seller stays unknown, never guessed. On the phone, an
   older runtime returns nothing, which the server reads as unknown too.

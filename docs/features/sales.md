@@ -29,7 +29,7 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
 
 - **The first check reads the whole history**: every sold order the marketplace's pages show,
   up to each adapter's history limit (Depop 600 sales, Poshmark 1,200, Mercari 25 pages and 60
-  listing pages per tab), handed to the sale intake like any order. Later checks read the
+  listing pages per tab, Vinted 10 pages of 20 orders and 150 order reads for each of in progress and completed), handed to the sale intake like any order. Later checks read the
   orders since the last. Migration `20261028095905_sales_history` made every existing
   connection's next check a full read, and a full read hands over again, once, an order an
   earlier check dropped (`history:order:<id>`, before sold items existed). An app built before

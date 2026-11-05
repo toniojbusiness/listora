@@ -3,8 +3,9 @@
  * seller's iPhone, so its check is the bundled Vinted scripts in the phone's page backend, in
  * headless Chromium standing in for the app's web view, on the fake Vinted site. It reads the
  * member as the browser runner does, and stops at Vinted's checks for the seller to complete.
- * Vinted has no listing scripts yet, so it has no conformance suite of its own
- * (conformance-<marketplace>).
+ * The import's listings read and the sales history's orders read (M4) run there the same way,
+ * from Vinted's web API with the session's own cookies. Vinted has no listing scripts yet, so it
+ * has no conformance suite of its own (conformance-<marketplace>).
  */
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -48,6 +49,68 @@ describe('Vinted session check on the phone', () => {
       status: 'degraded',
       code: 'stopped_for_check',
     });
+  });
+
+  it('reads the listings for sale for an import, and the sold orders for the history', async () => {
+    site.items = [
+      {
+        id: '8101',
+        title: 'Invented denim jacket',
+        description: 'An invented jacket.',
+        priceCents: 4200,
+        state: 'active',
+        brand: 'Invented Co',
+        size: 'M',
+        condition: 'Good',
+        catalogId: 1,
+        colors: ['Black'],
+        photos: ['vinted-phone-8101'],
+      },
+      {
+        id: '8102',
+        title: 'Invented sold tee',
+        description: 'An invented tee.',
+        priceCents: 1500,
+        state: 'sold',
+        brand: null,
+        size: null,
+        condition: null,
+        catalogId: null,
+        colors: [],
+        photos: [],
+      },
+    ];
+    site.orders = [
+      {
+        id: '9801',
+        paidAt: new Date('2026-10-31T12:00:00.000Z'),
+        state: 'completed',
+        itemIds: ['8102'],
+        priceCents: 1400,
+        title: 'Invented sold tee',
+      },
+    ];
+    const phone = adapter(site.url);
+    const page = await phone.listListings(null, ctx());
+    expect(page).toMatchObject({
+      next: null,
+      listings: [
+        {
+          externalListingId: '8101',
+          status: 'active',
+          priceCents: 4200,
+          details: { condition: 'pre_owned_good', colors: ['black'] },
+        },
+      ],
+    });
+    const orders = await phone.listOrdersSince(null, ctx());
+    expect(orders).toMatchObject([
+      {
+        externalOrderId: '9801',
+        shipped: true,
+        items: [{ externalListingId: '8102', priceCents: 1400 }],
+      },
+    ]);
   });
 
   it('cannot check a site that does not answer, and keeps the session', async () => {

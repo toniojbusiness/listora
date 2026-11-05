@@ -2,31 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { inspectPage, type PageSignals } from '../safety/challenges.ts';
 import { automationProfile } from '../profiles.ts';
-import { memberFromPath } from './site.ts';
-
-describe('Vinted member paths', () => {
-  it('reads the member id and the login after it', () => {
-    expect(memberFromPath('/member/123456-janes.closet')).toEqual({
-      id: '123456',
-      login: 'janes.closet',
-    });
-    expect(memberFromPath('/member/123456-shop%20%C3%B1/')).toEqual({
-      id: '123456',
-      login: 'shop ñ',
-    });
-  });
-
-  it('has no login for a link with only the id, or a slug that does not decode', () => {
-    expect(memberFromPath('/member/123456')).toEqual({ id: '123456', login: null });
-    expect(memberFromPath('/member/123456-%E0%A4%A')).toEqual({ id: '123456', login: null });
-  });
-
-  it('is no member for the sign-in chooser and other paths', () => {
-    expect(memberFromPath('/member/signup/select_type')).toBeNull();
-    expect(memberFromPath('/member/123/items')).toBeNull();
-    expect(memberFromPath('/items/123-shirt')).toBeNull();
-  });
-});
 
 describe('the Vinted profile', () => {
   const profile = automationProfile('vinted');
@@ -48,7 +23,8 @@ describe('the Vinted profile', () => {
       cloudAllowed: false,
       origins: ['https://www.vinted.com', 'https://vinted.com'],
       cookieDomains: ['vinted.com'],
-      apiOrigins: [],
+      // Its web API is on its own origin (the listings and orders reads, M4).
+      apiOrigins: ['https://www.vinted.com'],
       loginUrl: 'https://www.vinted.com/member/signup/select_type',
       emailsSignInLinks: false,
     });
