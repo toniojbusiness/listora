@@ -52,7 +52,8 @@ extension ThriftScanUITests {
 
         // Keep works as before.
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(element("scan.confirmation").waitForExistence(timeout: 2))
+        expect(confirmationLine(), saying: ["Kept · 1 in this run", "Keeping item 1"])
         XCTAssertFalse(card.exists)
+        XCTAssertTrue(waitForTheKeep(of: 1, summary: "1 scanned · 1 kept"))
     }
 }

@@ -54,6 +54,33 @@ extension ThriftScanUITests {
         return false
     }
 
+    /// What the brief line over the camera says, read in one snapshot whenever it is there within
+    /// `seconds`, or nil when it came and went first. It stands for 2 s once its action settled
+    /// (`ScanConfirmation.shownFor`), and on a loaded CI runner a tap and one query take longer
+    /// than that (PR #244's first run), so reading it twice (it exists, then its label) can miss it.
+    func confirmationLine(within seconds: TimeInterval = 3) -> String? {
+        let line = element("scan.confirmation")
+        let deadline = Date().addingTimeInterval(seconds)
+        repeat {
+            if let snapshot = try? line.snapshot() {
+                return snapshot.label
+            }
+        } while Date() < deadline
+        return nil
+    }
+
+    /// The line says one of `words` when it could be read; when it was gone first, that is
+    /// recorded, and what stays on screen (the camera's summary, the tray) proves the action.
+    func expect(
+        _ said: String?, saying words: [String], file: StaticString = #filePath, line: UInt = #line,
+    ) {
+        guard let said else {
+            print("The line over the camera came and went before the test could read it.")
+            return
+        }
+        XCTAssertTrue(words.contains { said.contains($0) }, said, file: file, line: line)
+    }
+
     /// Waits up to ``readDeadline`` for `condition`, checked about every second.
     private func waitUntil(_ condition: @escaping () -> Bool) -> Bool {
         let predicate = NSPredicate { _, _ in condition() }

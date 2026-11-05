@@ -81,13 +81,11 @@ final class ThriftScanUITests: XCTestCase {
         let keepTapped = Date()
         app.buttons["scan.keep"].tap()
         // The line stands where the card was for 2 s once the draft is saved: looked for first.
-        let confirmation = element("scan.confirmation")
-        XCTAssertTrue(confirmation.waitForExistence(timeout: 2), "a line says the item is kept")
+        let said = confirmationLine()
         let cameraReady = Date().timeIntervalSince(keepTapped)
         XCTAssertFalse(card.exists, "Keep closes the card")
         XCTAssertTrue(shutter.isHittable)
-        let said = confirmation.label
-        XCTAssertTrue(said.contains("Kept · 1 in this run") || said.contains("Keeping item 1"), said)
+        expect(said, saying: ["Kept · 1 in this run", "Keeping item 1"])
         attachScreenshot("kept")
         record("Keep to the camera clear, by the test (tap and polling included): \(Int(cameraReady * 1000)) ms")
         XCTAssertTrue(waitForTheKeep(of: 1, summary: "1 scanned · 1 kept"))
@@ -100,9 +98,9 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertEqual(element("scanCamera.summary").label, "2 scanned · 1 kept")
         attachScreenshot("second item")
         app.buttons["scan.putBack"].tap()
-        XCTAssertTrue(confirmation.waitForExistence(timeout: 2), "a line says the item was put back")
-        XCTAssertTrue(confirmation.label.contains("Put back · 1 kept this run"), confirmation.label)
+        expect(confirmationLine(), saying: ["Put back · 1 kept this run"])
         XCTAssertFalse(card.exists, "Put back closes the card")
+        XCTAssertEqual(element("scanCamera.summary").label, "2 scanned · 1 kept")
         attachScreenshot("put back")
 
         // The tray holds both; the kept one opens with Close, back to the camera.
@@ -227,9 +225,7 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(waiting.label.contains("No signal"), "the card says: \(waiting.label)")
         // Keep closes the card back to the camera; the line says it is saved once it's read.
         app.buttons["scan.keep"].tap()
-        let confirmation = element("scan.confirmation")
-        XCTAssertTrue(confirmation.waitForExistence(timeout: 2))
-        XCTAssertTrue(confirmation.label.contains("Kept · saved once it's read"), confirmation.label)
+        expect(confirmationLine(), saying: ["Kept · saved once it's read"])
         XCTAssertEqual(element("scanCamera.summary").label, "1 scanned · 1 kept · 1 waiting")
         attachScreenshot("waiting for signal")
         app.buttons["scanCamera.done"].tap()
