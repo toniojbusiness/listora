@@ -49,9 +49,19 @@ export function nextCode(newestFirst: readonly string[]): string {
     const match = SERIES.exec(code);
     if (match?.[1] === prefix) highest = Math.max(highest, Number(match[2]));
   }
-  for (let number = highest + 1; ; number += 1) {
+  return firstFree(taken, prefix, width, highest + 1) ?? firstFree(taken, 'B-', 1, 1) ?? FIRST_CODE;
+}
+
+/** The first code of the series from `start` that no bin has, while one still fits. */
+function firstFree(
+  taken: ReadonlySet<string>,
+  prefix: string,
+  width: number,
+  start: number,
+): string | undefined {
+  for (let number = start; ; number += 1) {
     const candidate = `${prefix}${String(number).padStart(width, '0')}`;
-    if (candidate.length > MAX_CODE_LENGTH) return FIRST_CODE;
+    if (candidate.length > MAX_CODE_LENGTH) return undefined;
     if (!taken.has(candidate)) return candidate;
   }
 }
