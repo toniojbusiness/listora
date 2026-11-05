@@ -5,7 +5,8 @@
  */
 import { comparisonProfile } from '../comps/run.ts';
 import type { ComparisonQuery } from '../comps/types.ts';
-import { VINTED_COMPARISON_PROFILE, vintedComparisonScript } from '../comps/vinted.ts';
+import { vintedComparisonScript } from '../comps/vinted.ts';
+import { automationProfile } from '../profiles.ts';
 import type { RecordingPlan } from '../recordings/plan.ts';
 import { VINTED_SITE_URL } from './site.ts';
 
@@ -23,7 +24,7 @@ const SEARCH_NOW = new Date('2026-11-05T00:00:00Z');
 
 export const vintedRecordingPlan: RecordingPlan = {
   marketplace: 'vinted',
-  profile: VINTED_COMPARISON_PROFILE,
+  profile: automationProfile('vinted'),
   stepTimeoutMs: 30_000,
   sessionGapMs: 10 * 60_000,
   entries: [
@@ -34,7 +35,7 @@ export const vintedRecordingPlan: RecordingPlan = {
       page: 'search',
       mode: 'read',
       session: 'logged_out',
-      profile: comparisonProfile('vinted', { pacing: VINTED_COMPARISON_PROFILE.readOnlyPacing }),
+      profile: comparisonProfile('vinted', { pacing: automationProfile('vinted').readOnlyPacing }),
       script: () => vintedComparisonScript(VINTED_SITE_URL, SEARCH_QUERY, SEARCH_NOW),
     },
   ],

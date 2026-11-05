@@ -17,13 +17,13 @@
  */
 import type { ScanComparison, ScanComparisonAnswer } from '@listora/api-contract';
 import {
+  automationProfile,
   COMPARISON_MARKETPLACES,
   COMPARISON_SOLD_PACE,
   COMPARISON_SOLD_WINDOW_DAYS,
   COMPARISON_VERSION,
   comparisonQuery,
   comparisonQueryKey,
-  comparisonSiteProfile,
   type ComparisonInput,
   type ComparisonMarketplace,
   type ComparisonStats,
@@ -189,7 +189,7 @@ export async function planComparisons(
       });
       continue;
     }
-    const profile = comparisonSiteProfile(marketplace);
+    const profile = automationProfile(marketplace);
     planned.push({
       marketplace,
       status: 'checking',

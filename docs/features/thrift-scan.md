@@ -1519,8 +1519,8 @@ cache, the pauses, images and media blocked, and the warm-up (Vinted's home page
 30 reads an hour and 150 a day per account (each read loads one page, but Vinted's pages run
 DataDome's and Cloudflare's bot detection); once 20 of the hour's are used, the rest go only to
 items the AI prices at $25 or more at the high end (`COMPARISON_LIMITS.vinted.saveForPricier`).
-Until Vinted's automation profile joins (Vinted M3), its comparisons start from a profile of
-their own (`VINTED_COMPARISON_PROFILE`, `comparisonSiteProfile`).
+The read starts from Vinted's automation profile (`automationProfile('vinted')`): its origins,
+checks, and its read-only pace (0.6 to 1.5 s before each action).
 
 ### Data
 

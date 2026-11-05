@@ -350,6 +350,101 @@
 		"[data-testid=\"UserName\"]"
 	];
 
+// src/vinted/site.ts
+/**
+	* Vinted US. Member pages are `/member/<id>-<login>`; the seller's own settings are under
+	* `/settings/`.
+	*/
+	const VINTED_SITE_URL = "https://www.vinted.com";
+	/**
+	* Vinted's sign-in page, which the app opens to link the seller's account: its "Sign up | Log
+	* in" chooser, which goes back to the home page once the seller signed in.
+	*/
+	const VINTED_LOGIN_PATH = "/member/signup/select_type";
+	/** Paths on Vinted's site, relative to its origin. */
+	const VINTED_PATHS = { 
+	/** The seller's own profile settings: only a signed-in member sees it. */
+account: "/settings/profile" };
+	/** A member page's path: `/member/<numeric id>` with the member's login after a dash. */
+	const MEMBER_PATH = /^\/member\/(\d{1,20})(?:-([^/?#]+))?\/?$/;
+	/**
+	* The member a profile link names: Vinted's numeric member id and the login in its slug (`null`
+	* when the link carries none), else `null` for any other path (a page under `/member/` that is
+	* not a member, such as the sign-in chooser).
+	*/
+	function memberFromPath(path) {
+		const match = MEMBER_PATH.exec(path);
+		if (match?.[1] === void 0) return null;
+		const slug = match[2];
+		let login = null;
+		if (slug !== void 0) try {
+			login = decodeURIComponent(slug);
+		} catch {
+			login = null;
+		}
+		return {
+			id: match[1],
+			login
+		};
+	}
+	/**
+	* Vinted's pace: the gentler pre-2026-10-28 pace before every action (0.45 to 1.1 s) and 5 to
+	* 20 seconds between sessions, slower than the other marketplaces. Vinted's terms say it uses
+	* automated tools to find accounts that break its rules, and Vinted is the newest marketplace
+	* with no live run behind it yet, so its first runs go at a careful seller's pace.
+	* `AUTOMATION_VINTED_PACE_MS` can still change it within the floor (settings.ts).
+	*/
+	const VINTED_PACING = {
+		actionDelayMs: [450, 1100],
+		keystrokeDelayMs: [45, 130],
+		sessionGapMs: [5e3, 2e4]
+	};
+	/**
+	* A read-only Vinted connection (an account Listora only reads) reads gentler still: 0.6 to 1.5
+	* seconds before each action, as every read-only connection keeps a slower pace than its
+	* marketplace's own (docs/features/read-only.md).
+	*/
+	const VINTED_READ_ONLY_PACING = {
+		...VINTED_PACING,
+		actionDelayMs: [600, 1500]
+	};
+	/**
+	* Half the runs the other marketplaces get (`DEFAULT_LIMITS`), well inside what one seller does
+	* by hand.
+	*/
+	const VINTED_LIMITS = {
+		runsPerHour: 15,
+		runsPerDay: 100
+	};
+	/**
+	* Vinted's own signs of a page automation must stop at, on top of the generic ones
+	* (safety/challenges.ts, which already know DataDome's challenge frames on
+	* `captcha-delivery.com`, Cloudflare's interstitial, a 403, and the wording of
+	* verification-code steps).
+	*/
+	const VINTED_CHALLENGE_SIGNS = {
+		loginPaths: [/^\/member\/(signup|login|general\/login)(\/|$)/i, /^\/(login|log-in|signin|sign-in|sign_in|signup|sign-up)(\/|$)/i],
+		verificationPaths: [
+			/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i,
+			/^\/member\/(verification|verify|two_factor|2fa)(\/|$)/i,
+			/^\/(identity|id-verification|kyc)(\/|$)/i
+		],
+		botCheckPaths: [],
+		challengeSelectors: ["#ddChallengeContainer", "iframe[src*=\"captcha-delivery.com\"]"]
+	};
+	/**
+	* Parts of Vinted's pages a failure screenshot blacks out besides every form field: buyers'
+	* names and addresses on orders, messages in conversations, and the member's own details on
+	* their settings pages.
+	*/
+	const VINTED_PRIVATE_SELECTORS = [
+		"[data-testid*=\"address\" i]",
+		"[data-testid*=\"conversation\" i]",
+		"[data-testid*=\"message\" i]",
+		"[data-testid*=\"user-info\" i]",
+		"[data-testid*=\"profile\" i]"
+	];
+
 // src/profiles.ts
 /**
 	* The pace of a practiced seller: 0.3 s before each action (the floor, `PACING_FLOOR`; the
@@ -441,6 +536,21 @@
 			privateSelectors: EBAY_PRIVATE_SELECTORS,
 			runsOn: "cloud",
 			cloudAllowed: true
+		},
+		vinted: {
+			marketplace: "vinted",
+			origins: [VINTED_SITE_URL, "https://vinted.com"],
+			cookieDomains: ["vinted.com"],
+			apiOrigins: [],
+			loginUrl: `${VINTED_SITE_URL}${VINTED_LOGIN_PATH}`,
+			emailsSignInLinks: false,
+			pacing: VINTED_PACING,
+			readOnlyPacing: VINTED_READ_ONLY_PACING,
+			limits: VINTED_LIMITS,
+			challenges: VINTED_CHALLENGE_SIGNS,
+			privateSelectors: VINTED_PRIVATE_SELECTORS,
+			runsOn: "phone",
+			cloudAllowed: false
 		}
 	};
 	/** The built-in profile of a marketplace; settings.ts applies the configured pacing and limits. */
@@ -7869,34 +7979,34 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* (Depop, or the fake Depop site in development and tests), and the failure every page module
 	* throws for a page that is not as it expects.
 	*/
-	function absolute$2(site, path) {
+	function absolute$3(site, path) {
 		return `${site.origin}${path}`;
 	}
 	/** A product's page: the listing's `externalUrl`. */
 	function productUrl(site, slug) {
-		return absolute$2(site, DEPOP_PATHS.product(slug));
+		return absolute$3(site, DEPOP_PATHS.product(slug));
 	}
 	/**
 	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
 	* page has `selector`.
 	*/
 	async function expectElement$2(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed$3(pageName, `has no ${what} (${selector})`);
+		if (!await page.exists(selector)) throw changed$4(pageName, `has no ${what} (${selector})`);
 	}
 	/**
 	* Waits, within the step's time, for `selector` on a page that Depop's own scripts draw after
 	* its document is ready, and throws `PageChangedError` naming the part when it never comes. A
 	* check the page shows instead still stops the run as one: the page driver throws it again.
 	*/
-	async function awaitElement$1(page, selector, pageName, what) {
+	async function awaitElement$2(page, selector, pageName, what) {
 		try {
 			await page.waitFor(selector, "attached");
 		} catch {
-			if (!await page.exists(selector)) throw changed$3(pageName, `has no ${what} (${selector})`);
+			if (!await page.exists(selector)) throw changed$4(pageName, `has no ${what} (${selector})`);
 		}
 	}
 	/** The failure for a Depop page that is not as the script expects. */
-	function changed$3(pageName, problem) {
+	function changed$4(pageName, problem) {
 		return new PageChangedError(`Depop's ${pageName} ${problem}.`);
 	}
 	/**
@@ -7973,17 +8083,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readDepopSearch(page, site, words) {
 		if (!page.url().startsWith(`${site.origin}/`)) await page.goto(depopSearchPageUrl(site));
 		const answer = await page.apiGet(depopSearchApiUrl(site, words));
-		if (answer.status !== 200) throw changed$3(PAGE$16, `answered ${String(answer.status)}`);
+		if (answer.status !== 200) throw changed$4(PAGE$16, `answered ${String(answer.status)}`);
 		return depopSearchFromAnswer(answer.body);
 	}
 	/** The search's products and count, out of its API answer. */
 	function depopSearchFromAnswer(body) {
 		const read = searchAnswerSchema.safeParse(body);
-		if (!read.success) throw changed$3(PAGE$16, "answered with results Listora does not know");
+		if (!read.success) throw changed$4(PAGE$16, "answered with results Listora does not know");
 		const listings = [];
 		for (const entry of read.data.objects) {
 			const product = searchProductSchema.safeParse(entry);
-			if (!product.success) throw changed$3(PAGE$16, "shows a product Listora does not know");
+			if (!product.success) throw changed$4(PAGE$16, "shows a product Listora does not know");
 			const listing = listingOf$4(product.data);
 			if (listing !== null) listings.push(listing);
 		}
@@ -8062,22 +8172,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* or the fake eBay site in development and tests), eBay's price and time formats, and the
 	* failure every page module throws for a page that is not as it expects.
 	*/
-	function absolute$1(site, path) {
+	function absolute$2(site, path) {
 		return `${site.origin}${path}`;
 	}
 	/** A listing's page: the listing's `externalUrl`. */
 	function itemUrl$1(site, itemId) {
-		return absolute$1(site, EBAY_PATHS.item(itemId));
+		return absolute$2(site, EBAY_PATHS.item(itemId));
 	}
 	/**
 	* Throws `PageChangedError` naming the page and the part of it that is missing, unless the
 	* page has `selector`.
 	*/
 	async function expectElement$1(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
+		if (!await page.exists(selector)) throw changed$3(pageName, `has no ${what} (${selector})`);
 	}
 	/** The failure for an eBay page that is not as the script expects. */
-	function changed$2(pageName, problem) {
+	function changed$3(pageName, problem) {
 		return new PageChangedError(`eBay's ${pageName} ${problem}.`);
 	}
 	/** A US dollar price as eBay shows it (`US $45.00`, `$1,045.00`) in cents; `null` otherwise. */
@@ -8169,7 +8279,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			query.set("LH_Complete", "1");
 			query.set("_sop", "13");
 		}
-		return absolute$1(site, `/sch/i.html?${query.toString()}`);
+		return absolute$2(site, `/sch/i.html?${query.toString()}`);
 	}
 	/** Loads the search's results page and reads it. */
 	async function readEbaySearch(page, site, words, kind) {
@@ -8180,11 +8290,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				total: 0,
 				shown: 0
 			};
-			throw changed$2(PAGE$15, `has no results (${EBAY_SEARCH_PAGE.results})`);
+			throw changed$3(PAGE$15, `has no results (${EBAY_SEARCH_PAGE.results})`);
 		}
 		const classes = await page.attributes(EBAY_SEARCH_PAGE.parts, "class");
 		const texts = await page.texts(EBAY_SEARCH_PAGE.parts);
-		if (classes.length !== texts.length) throw changed$2(PAGE$15, "changed while it was read");
+		if (classes.length !== texts.length) throw changed$3(PAGE$15, "changed while it was read");
 		const results = groupResults(classes, texts);
 		return {
 			listings: results.flatMap((result) => {
@@ -8768,7 +8878,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* (Mercari, or the fake Mercari site in development and tests), Mercari's price format, and
 	* the failure every page module throws for a page that is not as it expects.
 	*/
-	function absolute(site, path) {
+	function absolute$1(site, path) {
 		return `${site.origin}${path}`;
 	}
 	/**
@@ -8776,7 +8886,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* page has `selector`.
 	*/
 	async function expectElement(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed$1(pageName, `has no ${what} (${selector})`);
+		if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
 	}
 	/**
 	* Waits, within the step's time, for `selector` on a page that Mercari's own scripts draw after
@@ -8784,11 +8894,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* read 2026-10-26), and throws `PageChangedError` naming the part when it never comes. A check
 	* the page shows instead still stops the run as one: the page driver throws it again.
 	*/
-	async function awaitElement(page, selector, pageName, what) {
+	async function awaitElement$1(page, selector, pageName, what) {
 		try {
 			await page.waitFor(selector, "attached");
 		} catch {
-			if (!await page.exists(selector)) throw changed$1(pageName, `has no ${what} (${selector})`);
+			if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
 		}
 	}
 	/**
@@ -8801,7 +8911,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await page.waitFor("body", "attached");
 	}
 	/** The failure for a Mercari page that is not as the script expects. */
-	function changed$1(pageName, problem) {
+	function changed$2(pageName, problem) {
 		return new PageChangedError(`Mercari's ${pageName} ${problem}.`);
 	}
 	/** Cents from a price as Mercari shows it: `$45`, `$1,250`, or `$45.00`. `null` otherwise. */
@@ -8850,7 +8960,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			itemStatuses: ITEM_STATUSES[kind]
 		});
 		if (kind === "sold") query.set("sortBy", NEWEST);
-		return absolute(site, `/search/?${query.toString()}`);
+		return absolute$1(site, `/search/?${query.toString()}`);
 	}
 	/** Loads the search page, waits for its results, and reads them. */
 	async function readMercariSearch(page, site, words, kind) {
@@ -8858,7 +8968,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		try {
 			await page.waitFor(MERCARI_SEARCH_PAGE.ready, "attached");
 		} catch {
-			if (!await page.exists(MERCARI_SEARCH_PAGE.ready)) throw changed$1(PAGE$13, `has no results (${MERCARI_SEARCH_PAGE.card})`);
+			if (!await page.exists(MERCARI_SEARCH_PAGE.ready)) throw changed$2(PAGE$13, `has no results (${MERCARI_SEARCH_PAGE.card})`);
 		}
 		if (!await page.exists(MERCARI_SEARCH_PAGE.card)) return {
 			listings: [],
@@ -8879,7 +8989,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			sizes.length,
 			onSale.length,
 			texts.length
-		])).size !== 1) throw changed$1(PAGE$13, "changed while it was read");
+		])).size !== 1) throw changed$2(PAGE$13, "changed while it was read");
 		const cards = groupCards$1(roles, {
 			ids,
 			brands,
@@ -9092,7 +9202,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					total: 0,
 					shown: 0
 				};
-				throw changed(`has no results (${CARD})`);
+				throw changed$1(`has no results (${CARD})`);
 			}
 		}
 		const parts = VINTED_SEARCH_PAGE.parts;
@@ -9103,7 +9213,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			roles.length,
 			titles.length,
 			texts.length
-		])).size !== 1) throw changed("changed while it was read");
+		])).size !== 1) throw changed$1("changed while it was read");
 		const cards = groupCards(roles, {
 			titles,
 			texts
@@ -9227,27 +9337,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return null;
 	}
 	/** The failure for a Vinted page that is not as the read expects. */
-	function changed(problem) {
+	function changed$1(problem) {
 		return new PageChangedError(`Vinted's ${PAGE$12} ${problem}.`);
 	}
-
-// src/vinted/site.ts
-/** Vinted US. Listings are `/items/<id>-<title>`; the public search is `/catalog`. */
-	const VINTED_SITE_URL = "https://www.vinted.com";
-	/** Vinted's own origins: a page never loads the main frame anywhere else. */
-	const VINTED_ORIGINS = ["https://www.vinted.com", "https://vinted.com"];
-	/**
-	* Vinted's own signs of a page automation must stop at, on top of the generic ones
-	* (safety/challenges.ts, which already know Cloudflare's "Just a moment..." page and its
-	* Turnstile, DataDome's CAPTCHA frames from captcha-delivery.com, a 403, and the wording of
-	* verification-code steps): its sign-in and sign-up pages under `/member/`.
-	*/
-	const VINTED_CHALLENGE_SIGNS = {
-		loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in|signup|sign-up|register)(\/|$)/i, /^\/member\/(login|signup|sign_up|register|session)(\/|$)/i],
-		verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i, /^\/member\/(verification|verify|two_factor|2fa)(\/|$)/i],
-		botCheckPaths: [],
-		challengeSelectors: []
-	};
 
 // src/comps/vinted.ts
 /**
@@ -9259,27 +9351,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* Nothing in it signs in, favourites, offers, or buys anything: it only loads the search page any
 	* visitor's browser loads.
 	*/
-	/**
-	* Vinted's profile for its logged-out reads, until its automation profile joins `profiles.ts`
-	* (docs/features/vinted.md, M3): its own origins and checks, the read-only pace, and the phone
-	* as where it runs. `comparisonProfile` (run.ts) takes from it what every comparison takes from
-	* a marketplace's profile; nothing signs in with it.
-	*/
-	const VINTED_COMPARISON_PROFILE = {
-		marketplace: "vinted",
-		origins: [...VINTED_ORIGINS],
-		cookieDomains: [],
-		apiOrigins: [],
-		loginUrl: `${VINTED_SITE_URL}/member/signup/select_type`,
-		emailsSignInLinks: false,
-		pacing: DEFAULT_PACING,
-		readOnlyPacing: READ_ONLY_PACING,
-		limits: DEFAULT_LIMITS,
-		challenges: VINTED_CHALLENGE_SIGNS,
-		privateSelectors: [],
-		runsOn: "phone",
-		cloudAllowed: false
-	};
 	/** Vinted's site for comparison reads: its own origin only. */
 	function vintedComparisonSite(siteUrl) {
 		return { origin: new URL(siteUrl).origin };
@@ -9353,19 +9424,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 	};
 	/**
-	* The marketplace's own profile, as its comparisons start from it: its automation profile, or
-	* Vinted's comparison-only one until Vinted's automation profile joins (docs/features/vinted.md).
-	*/
-	function comparisonSiteProfile(marketplace) {
-		return marketplace === "vinted" ? VINTED_COMPARISON_PROFILE : automationProfile(marketplace);
-	}
-	/**
 	* The marketplace's profile for a logged-out read: its own origins and checks, its site's
 	* origin as the only API it may read, no cookie domains (a read never holds a cookie), and the
 	* phone as where it runs (comparisons never run in the cloud).
 	*/
 	function comparisonProfile(marketplace, input, siteUrl = SITES[marketplace]) {
-		const builtIn = comparisonSiteProfile(marketplace);
+		const builtIn = automationProfile(marketplace);
 		const origin = new URL(siteUrl).origin;
 		const origins = builtIn.origins.includes(origin) ? builtIn.origins : [origin];
 		return {
@@ -9425,7 +9489,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const siteUrl = options.siteUrl ?? SITES[input.marketplace];
 		const result = await runRead({
 			marketplace: input.marketplace,
-			pacing: input.pacing ?? comparisonSiteProfile(input.marketplace).readOnlyPacing,
+			pacing: input.pacing ?? automationProfile(input.marketplace).readOnlyPacing,
 			stepTimeoutMs: input.stepTimeoutMs ?? WARM_UP_STEP_MS,
 			callTimeoutMs: input.callTimeoutMs ?? WARM_UP_CALL_MS
 		}, host, READERS[input.marketplace].warmUp(siteUrl), siteUrl, options);
@@ -9637,21 +9701,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const FORM$2 = "listing form";
 	/** Opens the sell page's empty form. */
 	async function openSellForm$1(page, site) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.sell));
-		await awaitElement$1(page, LISTING_FORM$2.form, "sell page", FORM$2);
+		await page.goto(absolute$3(site, DEPOP_PATHS.sell));
+		await awaitElement$2(page, LISTING_FORM$2.form, "sell page", FORM$2);
 	}
 	/**
 	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
 	* in the order given; `null` leaves the listing's photos as they are (an edit).
 	*/
 	async function fillListing$3(page, payload, sku, photos) {
-		await awaitElement$1(page, LISTING_FORM$2.form, FORM$2, FORM$2);
+		await awaitElement$2(page, LISTING_FORM$2.form, FORM$2, FORM$2);
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		let brand = await fillPicks(page, payload);
 		await fillPrice$2(page, payload.price.amountCents);
 		await noBoost(page);
 		if (photos !== null) {
-			await awaitElement$1(page, LISTING_FORM$2.photos, FORM$2, "photo input");
+			await awaitElement$2(page, LISTING_FORM$2.photos, FORM$2, "photo input");
 			await page.upload(LISTING_FORM$2.photos, photos);
 			await photosAdded(page, photos.length);
 			await lookAgain$1(page, PHOTO_FILL_MS);
@@ -9668,7 +9732,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function photosAdded(page, count) {
 		if (!await appears$2(page, `${LISTING_FORM$2.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS)) {
 			const shown = await page.count(LISTING_FORM$2.photoPreview);
-			throw changed$3(FORM$2, `shows ${String(shown)} of ${String(count)} photos as added`);
+			throw changed$4(FORM$2, `shows ${String(shown)} of ${String(count)} photos as added`);
 		}
 	}
 	/** The category and every picker the payload fills; the brand the form then shows. */
@@ -9713,8 +9777,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function expectPicked(page, payload, brand) {
 		const missing = await mismatch(page, payload, brand);
-		if (missing !== null) throw changed$3(FORM$2, `no longer shows ${missing}`);
-		if (await page.exists(LISTING_FORM$2.boost) && await checked(page)) throw changed$3(FORM$2, "keeps \"Boost your listing\" on");
+		if (missing !== null) throw changed$4(FORM$2, `no longer shows ${missing}`);
+		if (await page.exists(LISTING_FORM$2.boost) && await checked(page)) throw changed$4(FORM$2, "keeps \"Boost your listing\" on");
 	}
 	/**
 	* Picks exactly these values in one of the form's multi-value pickers (colours, material),
@@ -9724,18 +9788,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function pickAll(page, name, values) {
 		const box = combo(name);
-		if (!await page.exists(box.toggle)) throw changed$3(FORM$2, `has no ${name} picker`);
+		if (!await page.exists(box.toggle)) throw changed$4(FORM$2, `has no ${name} picker`);
 		for (const value of await pickedValues(page, name)) if (!values.includes(value)) await page.click(box.unpick(value));
 		for (const value of values) {
 			if ((await pickedValues(page, name)).includes(value)) continue;
 			if (!await page.exists(box.open)) await page.click(box.toggle);
-			await awaitElement$1(page, box.anyOption, FORM$2, `${name} options`);
-			if (!await page.exists(box.option(value))) throw changed$3(FORM$2, `offers no ${name} "${value}"`);
+			await awaitElement$2(page, box.anyOption, FORM$2, `${name} options`);
+			if (!await page.exists(box.option(value))) throw changed$4(FORM$2, `offers no ${name} "${value}"`);
 			await page.click(box.option(value));
 		}
 		if (await page.exists(box.open)) await page.click(box.toggle);
 		const picked = await pickedValues(page, name);
-		if (picked.length !== values.length || values.some((value) => !picked.includes(value))) throw changed$3(FORM$2, `shows ${name} "${picked.join(", ")}" after picking "${values.join(", ")}"`);
+		if (picked.length !== values.length || values.some((value) => !picked.includes(value))) throw changed$4(FORM$2, `shows ${name} "${picked.join(", ")}" after picking "${values.join(", ")}"`);
 	}
 	/** The values a multi-value picker shows as picked. */
 	async function pickedValues(page, name) {
@@ -9747,8 +9811,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function expectComplete(page) {
 		const invalid = await page.count(LISTING_FORM$2.invalid);
-		if (invalid > 0) throw changed$3(FORM$2, `marks ${String(invalid)} filled field(s) as needing a fix`);
-		if ((await messages(page)).length > 0) throw changed$3(FORM$2, "shows a message before posting");
+		if (invalid > 0) throw changed$4(FORM$2, `marks ${String(invalid)} filled field(s) as needing a fix`);
+		if ((await messages(page)).length > 0) throw changed$4(FORM$2, "shows a message before posting");
 	}
 	/**
 	* Checks the form has its Post (sell) or Save (edit) button, before the step that submits it
@@ -9797,7 +9861,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				type: "refused",
 				message: "Depop didn't take the listing: it marked a field as needing a fix."
 			};
-			if (Date.now() >= end) throw changed$3(FORM$2, "showed no product and no message after the submit");
+			if (Date.now() >= end) throw changed$4(FORM$2, "showed no product and no message after the submit");
 			await lookAgain$1(page, LOOK_EVERY_MS$3);
 		}
 	}
@@ -9831,15 +9895,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		for (const search of [type, category]) {
 			await page.fill(box.input, "");
 			await page.type(box.input, search);
-			await awaitElement$1(page, box.anyOption, FORM$2, "category options");
+			await awaitElement$2(page, box.anyOption, FORM$2, "category options");
 			const index = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) => text.replace(/\s+/g, " ").trim()).indexOf(group);
 			if (index < 0) continue;
 			const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll("\"", "\\\"")}")`;
-			if (await page.count(option) !== 1) throw changed$3(FORM$2, `has no one "${type}" in the category group "${group}"`);
+			if (await page.count(option) !== 1) throw changed$4(FORM$2, `has no one "${type}" in the category group "${group}"`);
 			await page.click(option);
 			return;
 		}
-		throw changed$3(FORM$2, `has no category group "${group}"`);
+		throw changed$4(FORM$2, `has no category group "${group}"`);
 	}
 	/** The category picker's groups and their headers ("Men > Tops"), in the same order. */
 	const CATEGORY_GROUPS = "ul#group-menu > div";
@@ -9864,7 +9928,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const box = combo(name);
 		await expectElement$2(page, box.toggle, FORM$2, `${what} picker`);
 		if (!await page.exists(box.open)) await page.click(box.toggle);
-		await awaitElement$1(page, box.anyOption, FORM$2, `${what} options`);
+		await awaitElement$2(page, box.anyOption, FORM$2, `${what} options`);
 		await expectElement$2(page, box.option(text), FORM$2, `${what} "${text}"`);
 		await page.click(box.option(text));
 	}
@@ -9872,12 +9936,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const SIZE_PICKER_MS = 1e4;
 	async function pickSize$1(page, size) {
 		const box = combo("variants");
-		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$3(FORM$2, `has no size picker (${box.toggle})`);
+		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$4(FORM$2, `has no size picker (${box.toggle})`);
 		if (!await page.exists(box.open)) await page.click(box.toggle);
-		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
+		await awaitElement$2(page, box.anyOption, FORM$2, "size options");
 		const offered = (await page.texts(box.anyOption)).map((option) => option.trim());
 		const label = offered.includes(size) ? size : offered.find((option) => sizeOptionMatches(option, size));
-		if (label === void 0) throw changed$3(FORM$2, `offers no size "${size}" for this category`);
+		if (label === void 0) throw changed$4(FORM$2, `offers no size "${size}" for this category`);
 		await page.click(box.option(label));
 	}
 	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
@@ -9888,7 +9952,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await expectElement$2(page, box.input, FORM$2, "brand search");
 		if (brand === null) return "";
 		await page.type(box.input, brand);
-		await awaitElement$1(page, box.anyOption, FORM$2, "brand suggestions");
+		await awaitElement$2(page, box.anyOption, FORM$2, "brand suggestions");
 		const suggestions = (await page.texts(box.anyOption)).map((suggestion) => suggestion.trim());
 		const own = brand.toLowerCase();
 		const longer = suggestions.filter((suggestion) => suggestion.toLowerCase().startsWith(`${own} `));
@@ -9921,7 +9985,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* page), or no form in time.
 	*/
 	async function openEditor$1(page, site, slug) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.edit(slug)));
+		await page.goto(absolute$3(site, DEPOP_PATHS.edit(slug)));
 		const end = Date.now() + FORM_MS;
 		for (;;) {
 			if (await page.exists(LISTING_FORM$2.form)) return "editing";
@@ -9931,7 +9995,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** Checks the product page has its Delete listing button, before the step that deletes. */
 	async function expectDelete(page) {
-		await awaitElement$1(page, EDIT_PAGE$1.delete, "product page", "Delete listing button");
+		await awaitElement$2(page, EDIT_PAGE$1.delete, "product page", "Delete listing button");
 	}
 	/**
 	* Deletes the listing the product page shows: Delete listing, then the dialog's own Delete
@@ -9939,9 +10003,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function deleteListing(page) {
 		await page.click(EDIT_PAGE$1.delete);
-		if (!await within(page, () => page.exists(EDIT_PAGE$1.confirm))) throw changed$3("product page", "shows no Delete listing dialog");
+		if (!await within(page, () => page.exists(EDIT_PAGE$1.confirm))) throw changed$4("product page", "shows no Delete listing dialog");
 		await page.click(EDIT_PAGE$1.confirm);
-		if (!await within(page, async () => !await page.exists(EDIT_PAGE$1.dialog))) throw changed$3("product page", "kept its Delete listing dialog open");
+		if (!await within(page, async () => !await page.exists(EDIT_PAGE$1.dialog))) throw changed$4("product page", "kept its Delete listing dialog open");
 	}
 	async function within(page, done) {
 		const end = Date.now() + DIALOG_MS;
@@ -9960,8 +10024,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** A username as Depop's paths carry it. */
 	const USERNAME_PATH = /^\/([A-Za-z0-9._-]+)\/likes\/?$/;
 	async function openHub(page, site) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
-		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
+		await page.goto(absolute$3(site, DEPOP_PATHS.hub));
+		await awaitElement$2(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
 	}
 	/**
 	* The username of the seller signed in on the open hub, or `null` when its header doesn't show
@@ -9972,7 +10036,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (href === null) return null;
 		let url;
 		try {
-			url = new URL(href, absolute$2(site, DEPOP_PATHS.hub));
+			url = new URL(href, absolute$3(site, DEPOP_PATHS.hub));
 		} catch {
 			return null;
 		}
@@ -10137,7 +10201,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Opens a Depop page first when the tab has none, so the read goes from Depop's own page. */
 	async function onDepop$1(page, site) {
 		if (page.url().startsWith(`${site.origin}/`)) return;
-		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
+		await page.goto(absolute$3(site, DEPOP_PATHS.hub));
 	}
 	/**
 	* The seller's own product, as the edit page loads it; `null` when Depop answers 404 (a product
@@ -10146,11 +10210,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readOwnProduct(page, site, slug) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE$2 });
 		if (answer.status === 404) return null;
-		if (answer.status !== 200) throw changed$3(API$2, `answered ${String(answer.status)} for a product`);
+		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for a product`);
 		const product = expectShape(editListingSchema, answer.body, API$2);
 		const status = STATUSES$2[product.status];
-		if (status === void 0) throw changed$3(API$2, "shows a product status Listora does not know");
-		if (product.pricing.currency_name !== "USD") throw changed$3(API$2, "shows a price that is not in US dollars");
+		if (status === void 0) throw changed$4(API$2, "shows a product status Listora does not know");
+		if (product.pricing.currency_name !== "USD") throw changed$4(API$2, "shows a price that is not in US dollars");
 		const key = product.pricing.final_price_key ?? "original_price";
 		const price = expectShape(priceSchema, product.pricing[key], API$2).price_breakdown.price.amount;
 		const { description, sku } = listingCopy(product.description);
@@ -10183,7 +10247,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			statusFilter: filter
 		});
 		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$2 });
-		if (answer.status !== 200) throw changed$3(API$2, `answered ${String(answer.status)} for the seller's listings`);
+		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for the seller's listings`);
 		const feed = expectShape(feedSchema, answer.body, API$2);
 		return {
 			products: feed.products.map((entry) => {
@@ -10200,7 +10264,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** A US dollar amount (`"18.00"`) in cents. */
 	function cents$1(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-		if (match?.[1] === void 0) throw changed$3(API$2, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$4(API$2, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 
@@ -10565,11 +10629,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (records.length > 0) {
 			const product = expectShape(productRecordSchema, records[0], PAGE$11);
 			status = STATUSES$1[product.status];
-			if (status === void 0) throw changed$3(PAGE$11, "shows a product status Listora does not know");
+			if (status === void 0) throw changed$4(PAGE$11, "shows a product status Listora does not know");
 			text = product.description;
 		} else {
 			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
-			if (status === void 0 || offer.description === void 0) throw changed$3(PAGE$11, "has none of the product data Listora reads");
+			if (status === void 0 || offer.description === void 0) throw changed$4(PAGE$11, "has none of the product data Listora reads");
 			text = offer.description;
 		}
 		const priceCents = offer.priceCents;
@@ -10599,20 +10663,20 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return [];
 			}
 		});
-		if (blocks.length === 0) throw changed$3(PAGE$11, "has no product data (structured data)");
+		if (blocks.length === 0) throw changed$4(PAGE$11, "has no product data (structured data)");
 		const own = blocks.find((block) => {
 			const read = structuredDataSchema.safeParse(block);
 			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
 		});
 		if (own === void 0) {
-			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$3(PAGE$11, "offers a different product");
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$4(PAGE$11, "offers a different product");
 			expectShape(structuredDataSchema, blocks[0], PAGE$11);
-			throw changed$3(PAGE$11, "has none of the product data Listora reads");
+			throw changed$4(PAGE$11, "has none of the product data Listora reads");
 		}
 		const { offers, description } = expectShape(structuredDataSchema, own, PAGE$11);
-		if (offers.priceCurrency !== "USD") throw changed$3(PAGE$11, "shows a price that is not in US dollars");
+		if (offers.priceCurrency !== "USD") throw changed$4(PAGE$11, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
-		if (match?.[1] === void 0) throw changed$3(PAGE$11, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$4(PAGE$11, "shows a price Listora can't read");
 		return {
 			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
 			...offers.availability === void 0 ? {} : { availability: offers.availability },
@@ -10708,11 +10772,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		});
 		if (cursor !== null) query.set("after", cursor);
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$3(API$1, `answered ${String(answer.status)} for the receipts`);
+		if (answer.status !== 200) throw changed$4(API$1, `answered ${String(answer.status)} for the receipts`);
 		const shown = expectShape(receiptsSchema, answer.body, API$1);
 		const receipts = shown.objects.map((receipt) => readReceipt(receipt, site));
 		const next = shown.page_info.has_more ? shown.page_info.last ?? null : null;
-		if (shown.page_info.has_more && next === null) throw changed$3(API$1, "has more receipts but no cursor");
+		if (shown.page_info.has_more && next === null) throw changed$4(API$1, "has more receipts but no cursor");
 		return {
 			receipts,
 			next
@@ -10721,7 +10785,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** What each line of a purchase sold for, and its product's slug, by product id. */
 	async function readReceiptLines(page, site, purchaseId) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/${encodeURIComponent(purchaseId)}/`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$3(API$1, `answered ${String(answer.status)} for a receipt`);
+		if (answer.status !== 200) throw changed$4(API$1, `answered ${String(answer.status)} for a receipt`);
 		const shown = expectShape(receiptDetailSchema, answer.body, API$1);
 		return new Map(shown.lines.map((line) => [line.product_id, {
 			slug: line.slug ?? null,
@@ -10734,7 +10798,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	*/
 	function readReceipt(value, site = depopSite(DEPOP_SITE_URL)) {
 		const receipt = expectShape(receiptSchema, value, API$1);
-		if (receipt.currency !== "USD") throw changed$3(API$1, "shows a sale that is not in US dollars");
+		if (receipt.currency !== "USD") throw changed$4(API$1, "shows a sale that is not in US dollars");
 		return {
 			purchaseId: String(receipt.purchase_id),
 			soldAt: new Date(receipt.sold_timestamp),
@@ -11216,7 +11280,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return {
 			name: "Depop",
 			selectors: DEFAULT_OFFER_PAGE,
-			url: (ref) => absolute$2(site, DEPOP_PATHS.offer(splitOfferId(ref.externalOfferId)?.offerId ?? ref.externalOfferId))
+			url: (ref) => absolute$3(site, DEPOP_PATHS.offer(splitOfferId(ref.externalOfferId)?.offerId ?? ref.externalOfferId))
 		};
 	}
 	/** Listora's id of a Depop offer: its product, its variant (if any), and the offer's own id. */
@@ -11245,7 +11309,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const shown = await apiPage(page, `${site.api}/presentation/api/v1/offers/me/products/${query}`, productsPageSchema, "products with offers");
 			for (const object of shown.objects) {
 				const [id] = texts([object["id"], object["product_id"]]);
-				if (id === void 0) throw changed$3(API, "lists a product with offers without its id");
+				if (id === void 0) throw changed$4(API, "lists a product with offers without its id");
 				products.push({
 					id,
 					slug: texts([object["slug"], object["product_slug"]])[0] ?? null,
@@ -11299,7 +11363,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	async function apiPage(page, url, schema, list) {
 		const answer = await page.apiGet(url, { bearerCookie: TOKEN_COOKIE });
-		if (answer.status !== 200) throw changed$3(API, `answered ${String(answer.status)} for offers`);
+		if (answer.status !== 200) throw changed$4(API, `answered ${String(answer.status)} for offers`);
 		return expectShape(schema, answer.body, `${API} for ${list}`);
 	}
 	function nextPage(shown) {
@@ -11310,15 +11374,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	function offerOf(record, product, site) {
 		const [offerId] = texts([record["offer_id"], record["id"]]);
 		const [statusText] = texts([record["offer_display_status"], record["status"]]);
-		if (offerId === void 0 || statusText === void 0) throw changed$3(API, "shows an offer Listora can't read");
+		if (offerId === void 0 || statusText === void 0) throw changed$4(API, "shows an offer Listora can't read");
 		const status = depopOfferStatus(statusText);
-		if (status === null) throw changed$3(API, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
+		if (status === null) throw changed$4(API, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
 		if (status === "not_the_sellers" || status === "inactive") return {
 			status,
 			offer: placeholder(offerId, product)
 		};
 		const amountCents = dollarsToCents(record["offer_value"] ?? record["value"]);
-		if (amountCents === null || amountCents <= 0) throw changed$3(API, "shows an offer without its amount");
+		if (amountCents === null || amountCents <= 0) throw changed$4(API, "shows an offer without its amount");
 		const offerer = record["offerer"] ?? record["buyer"] ?? record["user"];
 		const buyerName = typeof offerer === "object" && offerer !== null ? texts([offerer["username"]])[0] ?? null : texts([record["offerer_username"], record["username"]])[0] ?? null;
 		const expires = texts([record["expires_at"]])[0];
@@ -11334,7 +11398,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				turn: status === "pending" ? "seller" : "buyer",
 				madeAt: isoOrNull(texts([record["created_at"], record["created"]])[0]),
 				expiresAt: isoOrNull(expires),
-				url: absolute$2(site, DEPOP_PATHS.offers),
+				url: absolute$3(site, DEPOP_PATHS.offers),
 				listingCount: null,
 				shippingCents: null
 			}
@@ -11388,7 +11452,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const items = receipt.lines.map((line) => {
 				const product = products.get(line.productId);
 				const shown = prices?.get(line.productId);
-				if (prices !== null && shown === void 0) throw changed$3("receipts API", "shows a bundle without what one of its items sold for");
+				if (prices !== null && shown === void 0) throw changed$4("receipts API", "shows a bundle without what one of its items sold for");
 				const priceCents = shown?.priceCents ?? receipt.itemsCents;
 				return {
 					externalListingId: product?.state.externalListingId ?? shown?.slug ?? null,
@@ -11592,7 +11656,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			for (let read = 1;; read += 1) {
 				const shown = await readProduct(page, site, copy);
 				if (shown.state.found && shown.state.status === "active") return shown;
-				if (read >= 4) throw changed$3("product page", "doesn't show the new copy of the listing as on sale");
+				if (read >= 4) throw changed$4("product page", "doesn't show the new copy of the listing as on sale");
 				await new Promise((resolve) => setTimeout(resolve, COPY_READ_GAP_MS));
 			}
 		}
@@ -11613,7 +11677,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			}, (page) => deleteListing(page));
 			await step("check the old listing is gone", { mutates: false }, async (page) => {
 				const read = await readProduct(page, site, slug);
-				if (read.state.found && read.state.status === "active") throw changed$3("product page", "still shows the old listing on sale after deleting it");
+				if (read.state.found && read.state.status === "active") throw changed$4("product page", "still shows the old listing on sale after deleting it");
 			});
 		}
 		/** Opens the editor of a listing on sale; a result instead when it can't be edited. */
@@ -11625,7 +11689,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!shown.state.found) return shown.state.authoritative ? deleted() : notListed();
 			if (shown.state.status === "sold") return sold();
 			if (shown.state.status === "ended") return deleted();
-			throw changed$3("edit page", "shows no listing form for a listing on sale");
+			throw changed$4("edit page", "shows no listing form for a listing on sale");
 		}
 		return {
 			create: (op, step) => post(op, step),
@@ -11719,7 +11783,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					if (posted.type !== "applied") return posted;
 					copy = posted.externalListingId ?? null;
 				}
-				if (copy === null || copy === slug) throw changed$3("selling hub", "shows no new copy of the listing after posting it");
+				if (copy === null || copy === slug) throw changed$4("selling hub", "shows no new copy of the listing after posting it");
 				const fresh = await step("read the new listing", {
 					mutates: false,
 					timeScale: 2
@@ -11830,16 +11894,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const PAGE$10 = "active listings page";
 	/** Opens the page of active listings that starts at `offset` and reads its rows. */
 	async function readActiveListingsPage(page, site, offset) {
-		await page.goto(absolute$1(site, EBAY_PATHS.active(offset)));
-		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$2(PAGE$10, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
+		await page.goto(absolute$2(site, EBAY_PATHS.active(offset)));
+		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$3(PAGE$10, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(ACTIVE_LISTINGS_PAGE.row, "data-item-id");
 		const titles = await page.texts(ACTIVE_LISTINGS_PAGE.title);
 		const labels = await page.texts(ACTIVE_LISTINGS_PAGE.customLabel);
 		const prices = await page.texts(ACTIVE_LISTINGS_PAGE.price);
-		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$2(PAGE$10, "shows rows without a title, Custom label, or price");
+		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$3(PAGE$10, "shows rows without a title, Custom label, or price");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$2(PAGE$10, "shows a row without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$3(PAGE$10, "shows a row without an item number");
 				const label = labels[index] ?? "";
 				return {
 					itemId: id,
@@ -11876,13 +11940,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** Reads the listing page the browser shows now (after a form sent it there). */
 	async function readShownItem$1(page, site) {
 		const itemId = itemIdFromPath$1(new URL(page.url()).pathname);
-		if (itemId === null) throw changed$2(PAGE$9, "is not at a listing address");
+		if (itemId === null) throw changed$3(PAGE$9, "is not at a listing address");
 		await expectElement$1(page, ITEM_PAGE$1.root, PAGE$9, "listing details");
-		if (((await page.text(ITEM_PAGE$1.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$2(PAGE$9, "shows a different item number");
+		if (((await page.text(ITEM_PAGE$1.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$3(PAGE$9, "shows a different item number");
 		const title = await page.text(ITEM_PAGE$1.title);
-		if (title === null || title === "") throw changed$2(PAGE$9, "shows no title");
+		if (title === null || title === "") throw changed$3(PAGE$9, "shows no title");
 		const priceCents = parsePrice$2(await page.text(ITEM_PAGE$1.price));
-		if (priceCents === null) throw changed$2(PAGE$9, "shows no price Listora can read");
+		if (priceCents === null) throw changed$3(PAGE$9, "shows no price Listora can read");
 		const soldNotice = await page.text(ITEM_PAGE$1.sold);
 		const endedNotice = await page.text(ITEM_PAGE$1.ended);
 		const status = soldNotice !== null ? "sold" : endedNotice !== null ? "ended" : "active";
@@ -11894,7 +11958,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		]) {
 			if (shown === null) continue;
 			const time = ebayTimeIn(shown);
-			if (time === null) throw changed$2(PAGE$9, `shows a ${what} Listora can't read`);
+			if (time === null) throw changed$3(PAGE$9, `shows a ${what} Listora can't read`);
 			times.push(time.getTime());
 		}
 		return {
@@ -11920,7 +11984,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const PAGE$8 = "end listing page";
 	/** Opens the end page of a listing on sale. */
 	async function openEndPage(page, site, itemId) {
-		await page.goto(absolute$1(site, EBAY_PATHS.end(itemId)));
+		await page.goto(absolute$2(site, EBAY_PATHS.end(itemId)));
 		await expectElement$1(page, END_PAGE.form, PAGE$8, "end listing form");
 		await expectElement$1(page, END_PAGE.reason, PAGE$8, "reason \"The item is no longer available\"");
 		await page.check(END_PAGE.reason, true);
@@ -11959,7 +12023,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const FORM$1 = "listing form";
 	/** Opens the form for a new listing in its category. */
 	async function openNewListingForm(page, site, categoryId) {
-		await page.goto(absolute$1(site, EBAY_PATHS.form("AddItem", { categoryId })));
+		await page.goto(absolute$2(site, EBAY_PATHS.form("AddItem", { categoryId })));
 		await expectElement$1(page, LISTING_FORM$1.form, "listing form for a new listing", FORM$1);
 	}
 	/**
@@ -11967,7 +12031,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* showed something else (the listing's page, for a listing it can't revise or relist).
 	*/
 	async function openListingForm(page, site, mode, itemId, categoryId) {
-		await page.goto(absolute$1(site, EBAY_PATHS.form(mode, {
+		await page.goto(absolute$2(site, EBAY_PATHS.form(mode, {
 			itemId,
 			categoryId
 		})));
@@ -11981,7 +12045,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function fillListing$2(page, payload, sku, photos) {
 		await expectElement$1(page, LISTING_FORM$1.form, FORM$1, FORM$1);
 		if (payload.categoryId === null) throw new Error("a listing without a category passed validation");
-		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$2(FORM$1, `is not in category ${payload.categoryId}`);
+		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$3(FORM$1, `is not in category ${payload.categoryId}`);
 		if (photos !== null) {
 			await expectElement$1(page, LISTING_FORM$1.photos, FORM$1, "photo input");
 			await page.upload(LISTING_FORM$1.photos, photos);
@@ -11993,7 +12057,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await fillItemSpecifics(page, payload.itemSpecifics);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await expectElement$1(page, LISTING_FORM$1.condition, FORM$1, "condition list");
-		if (!(await page.attributes(`${LISTING_FORM$1.condition} option`, "value")).includes(String(payload.condition.id))) throw changed$2(FORM$1, `offers no condition "${payload.condition.label}" for this category`);
+		if (!(await page.attributes(`${LISTING_FORM$1.condition} option`, "value")).includes(String(payload.condition.id))) throw changed$3(FORM$1, `offers no condition "${payload.condition.label}" for this category`);
 		await page.select(LISTING_FORM$1.condition, String(payload.condition.id));
 		if (await page.exists(LISTING_FORM$1.conditionDescription)) await page.fill(LISTING_FORM$1.conditionDescription, payload.conditionDescription ?? "");
 		await expectElement$1(page, LISTING_FORM$1.description, FORM$1, "description editor");
@@ -12016,7 +12080,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			message
 		};
 		const itemId = itemIdFromPath$1(new URL(page.url()).pathname);
-		if (itemId === null) throw changed$2(FORM$1, "opened a page that is not a listing");
+		if (itemId === null) throw changed$3(FORM$1, "opened a page that is not a listing");
 		return {
 			type: "listed",
 			itemId
@@ -12041,7 +12105,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	*/
 	async function fillItemSpecifics(page, specifics) {
 		const fields = (await page.attributes(LISTING_FORM$1.itemSpecific, "data-name")).filter((name) => name !== null);
-		if (fields.length === 0) throw changed$2(FORM$1, `has no item specifics (${LISTING_FORM$1.itemSpecific})`);
+		if (fields.length === 0) throw changed$3(FORM$1, `has no item specifics (${LISTING_FORM$1.itemSpecific})`);
 		for (const specific of specifics) {
 			const value = specific.values.join(", ");
 			const field = fields.find((name) => name.toLowerCase() === specific.name.toLowerCase());
@@ -12062,7 +12126,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 // src/ebay/pages/overview-page.ts
 	const OVERVIEW_PAGE = { root: "[data-testid=\"seller-hub-overview\"]" };
 	async function openOverview(page, site) {
-		await page.goto(absolute$1(site, EBAY_PATHS.overview));
+		await page.goto(absolute$2(site, EBAY_PATHS.overview));
 		await expectElement$1(page, OVERVIEW_PAGE.root, "Seller Hub overview", "Seller Hub overview");
 	}
 
@@ -12078,22 +12142,22 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const PAGE$7 = "sold listings page";
 	/** Opens the page of sold listings that starts at `offset` and reads its rows. */
 	async function readSoldListingsPage(page, site, offset) {
-		await page.goto(absolute$1(site, EBAY_PATHS.sold(offset)));
-		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$2(PAGE$7, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
+		await page.goto(absolute$2(site, EBAY_PATHS.sold(offset)));
+		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$3(PAGE$7, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(SOLD_LISTINGS_PAGE.row, "data-item-id");
 		const orders = await page.texts(SOLD_LISTINGS_PAGE.order);
 		const prices = await page.texts(SOLD_LISTINGS_PAGE.price);
 		const dates = await page.texts(SOLD_LISTINGS_PAGE.soldAt);
-		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$2(PAGE$7, "shows sales without an order number, price, or date");
+		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$3(PAGE$7, "shows sales without an order number, price, or date");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$2(PAGE$7, "shows a sale without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$3(PAGE$7, "shows a sale without an item number");
 				const orderId = /\d{2}-\d{5}-\d{5}/.exec(orders[index] ?? "")?.[0];
-				if (orderId === void 0) throw changed$2(PAGE$7, "shows an order number Listora can't read");
+				if (orderId === void 0) throw changed$3(PAGE$7, "shows an order number Listora can't read");
 				const priceCents = parsePrice$2(prices[index] ?? null);
-				if (priceCents === null) throw changed$2(PAGE$7, "shows a price Listora can't read");
+				if (priceCents === null) throw changed$3(PAGE$7, "shows a price Listora can't read");
 				const soldAt = ebayTimeIn(dates[index] ?? null);
-				if (soldAt === null) throw changed$2(PAGE$7, "shows a sale time Listora can't read");
+				if (soldAt === null) throw changed$3(PAGE$7, "shows a sale time Listora can't read");
 				return {
 					orderId,
 					itemId: id,
@@ -12142,7 +12206,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const shown = await step("read the listing", { mutates: false }, (page) => readItem$1(page, site, itemId));
 			if (!shown.found || shown.status !== "active") return shown;
 			const form = await step("read the description", { mutates: false }, (page) => readListingForm(page, site, itemId));
-			if (form === null) throw changed$2("revise form", "shows no listing form for a listing on sale");
+			if (form === null) throw changed$3("revise form", "shows no listing form for a listing on sale");
 			return {
 				...shown,
 				description: descriptionText(form.descriptionHtml)
@@ -12185,7 +12249,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!shown.found) return notListed();
 			if (shown.status === "sold") return sold();
 			if (shown.status === "ended") return ended();
-			throw changed$2("revise form", "shows no listing form for a listing on sale");
+			throw changed$3("revise form", "shows no listing form for a listing on sale");
 		}
 		return {
 			create: async (op, step) => {
@@ -12252,7 +12316,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				const found = await earlier(op, step);
 				if (found !== null) return found;
-				if (await step("open the relist form", { mutates: false }, (page) => openListingForm(page, site, "RelistItem", itemId, payload.categoryId)) === "not_editable") throw changed$2("relist form", "shows no listing form for an ended listing");
+				if (await step("open the relist form", { mutates: false }, (page) => openListingForm(page, site, "RelistItem", itemId, payload.categoryId)) === "not_editable") throw changed$3("relist form", "shows no listing form for an ended listing");
 				await step("fill in the listing", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
 				return step("list it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
@@ -12544,22 +12608,22 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 
 // src/mercari/pages/account-page.ts
-	const ACCOUNT_PAGE = {
+	const ACCOUNT_PAGE$1 = {
 		ownAccount: "[data-testid=\"EditProfileButton\"]",
 		/** The link to the seller's done sales (read 2026-10-26: not `/mypage/listings/sold/`). */
 		sales: "a[data-testid=\"Sales\"]"
 	};
-	async function openAccount(page, site) {
-		await page.goto(absolute(site, MERCARI_PATHS.account));
-		await awaitElement(page, ACCOUNT_PAGE.ownAccount, "account page", "edit profile button");
+	async function openAccount$1(page, site) {
+		await page.goto(absolute$1(site, MERCARI_PATHS.account));
+		await awaitElement$1(page, ACCOUNT_PAGE$1.ownAccount, "account page", "edit profile button");
 	}
 	/** The path of the seller's done-sales tab, as the account page's Sales link gives it. */
 	async function salesTabPath(page, site) {
-		await openAccount(page, site);
-		await awaitElement(page, ACCOUNT_PAGE.sales, "account page", "sales link");
-		const href = await page.attribute(ACCOUNT_PAGE.sales, "href");
+		await openAccount$1(page, site);
+		await awaitElement$1(page, ACCOUNT_PAGE$1.sales, "account page", "sales link");
+		const href = await page.attribute(ACCOUNT_PAGE$1.sales, "href");
 		const path = href === null ? null : new URL(href, site.origin).pathname;
-		if (path === null || !/^\/mypage\/listings\/[a-z_]+\/$/.test(path)) throw changed$1("account page", "has a sales link Listora does not understand");
+		if (path === null || !/^\/mypage\/listings\/[a-z_]+\/$/.test(path)) throw changed$2("account page", "has a sales link Listora does not understand");
 		return path;
 	}
 
@@ -12684,8 +12748,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* verify their account before they can list.
 	*/
 	async function openSellForm(page, site) {
-		await page.goto(absolute(site, MERCARI_PATHS.sell));
-		await awaitElement(page, `${LISTING_FORM.form}, ${VERIFICATION_DIALOG}`, "sell page", FORM);
+		await page.goto(absolute$1(site, MERCARI_PATHS.sell));
+		await awaitElement$1(page, `${LISTING_FORM.form}, ${VERIFICATION_DIALOG}`, "sell page", FORM);
 		return await page.exists("[data-testid=\"VerificationExceptionDialog\"]") ? "verification_required" : "form";
 	}
 	/**
@@ -12728,7 +12792,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (!await off() && await appears$1(page, LISTING_FORM.smartPricingTurnOff, 2e3)) await page.click(LISTING_FORM.smartPricingTurnOff);
 		const end = Date.now() + APPEAR_MS;
 		while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "ON") {
-			if (Date.now() >= end) throw changed$1(FORM, "kept Smart Pricing on");
+			if (Date.now() >= end) throw changed$2(FORM, "kept Smart Pricing on");
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 		}
 	}
@@ -12743,7 +12807,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await page.click(LISTING_FORM.category);
 		for (const [level, name] of path.entries()) {
 			const row = LISTING_FORM.categoryRow(name);
-			if (!await appears$1(page, row)) throw changed$1(FORM, `offers no category level ${String(level + 1)} "${name}"`);
+			if (!await appears$1(page, row)) throw changed$2(FORM, `offers no category level ${String(level + 1)} "${name}"`);
 			await page.click(row);
 		}
 		const whole = LISTING_FORM.categoryRow(`All ${path.at(-1) ?? ""}`);
@@ -12757,7 +12821,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!await page.exists(LISTING_FORM.anyCategoryRow)) break;
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 		}
-		if (await shown() !== path.join(" > ")) throw changed$1(FORM, "shows a different category than picked");
+		if (await shown() !== path.join(" > ")) throw changed$2(FORM, "shows a different category than picked");
 	}
 	/**
 	* Picks the item's brand, or Mercari's "No brand / Not sure" when Mercari doesn't list it or the
@@ -12776,7 +12840,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			for (const search of searches) if (await pickBrandOption(page, search, brand)) return;
 		}
 		if (await pickBrandChip(page, (name) => name === LISTING_FORM.noBrand)) return;
-		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed$1(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
+		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed$2(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
 	}
 	/** Ticks the suggested brand chip whose name passes `wanted` (kept when already ticked). */
 	async function pickBrandChip(page, wanted) {
@@ -12824,15 +12888,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await page.click(LISTING_FORM.size);
 		if (!await appears$1(page, LISTING_FORM.sizeOption, 4e3)) {
 			await page.click(LISTING_FORM.size);
-			if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed$1(FORM, "shows no sizes");
+			if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed$2(FORM, "shows no sizes");
 		}
 		const offered = await page.texts(LISTING_FORM.sizeOption);
 		const spaced = (text) => text.replace(/\s+/g, " ").trim();
 		const label = offered.find((option) => spaced(option) === spaced(size));
-		if (label === void 0) throw changed$1(FORM, `offers no size "${size}" for this category`);
+		if (label === void 0) throw changed$2(FORM, `offers no size "${size}" for this category`);
 		if (set !== null) {
 			const inSet = `${LISTING_FORM.sizeOption}[aria-label="${quote$1(`${set} ${spaced(label)}`)}"]`;
-			if (!await page.exists(inSet)) throw changed$1(FORM, `offers no size "${size}" in its ${set} sizes`);
+			if (!await page.exists(inSet)) throw changed$2(FORM, `offers no size "${size}" in its ${set} sizes`);
 			await page.click(inSet);
 			return;
 		}
@@ -12845,11 +12909,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function chooseShipping(page) {
 		await expectElement(page, LISTING_FORM.prepaidLabel, FORM, "prepaid label shipping");
 		await page.click(LISTING_FORM.prepaidLabel);
-		if (!await appears$1(page, LISTING_FORM.freeShipping)) throw changed$1(FORM, "asks nothing about free shipping for the prepaid label");
+		if (!await appears$1(page, LISTING_FORM.freeShipping)) throw changed$2(FORM, "asks nothing about free shipping for the prepaid label");
 		const label = await page.attribute(LISTING_FORM.shippingClass, "value");
-		if (label === null || label.trim() === "") throw changed$1(FORM, "recommends no shipping label");
+		if (label === null || label.trim() === "") throw changed$2(FORM, "recommends no shipping label");
 		await page.click(LISTING_FORM.freeShipping);
-		if (!await appears$1(page, LISTING_FORM.freeShippingNo)) throw changed$1(FORM, "offers no way to turn free shipping off");
+		if (!await appears$1(page, LISTING_FORM.freeShippingNo)) throw changed$2(FORM, "offers no way to turn free shipping off");
 		await page.click(LISTING_FORM.freeShippingNo);
 	}
 	/** Whether `selector` is on the page within a moment (Mercari's scripts draw it). */
@@ -12928,7 +12992,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				type: "listed",
 				itemId: null
 			};
-			if (Date.now() >= end) throw changed$1(FORM, "showed no listing and no message after the submit");
+			if (Date.now() >= end) throw changed$2(FORM, "showed no listing and no message after the submit");
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 			await page.waitFor("body", "attached");
 		}
@@ -12947,7 +13011,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* answered with an error (a listing it removed).
 	*/
 	async function openEditor(page, site, id) {
-		await page.goto(absolute(site, MERCARI_PATHS.edit(id)));
+		await page.goto(absolute$1(site, MERCARI_PATHS.edit(id)));
 		const status = page.status();
 		if (status !== null && status >= 400) return "not_editable";
 		const end = Date.now() + DRAW_MS;
@@ -12966,7 +13030,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const shown = (await page.text(EDIT_PAGE.toggle))?.trim();
 		if (shown === "Deactivate") return "active";
 		if (shown === "Activate") return "inactive";
-		throw changed$1(PAGE$6, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
+		throw changed$2(PAGE$6, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
 	}
 	/** Deactivates the listing the editor shows, and waits for Mercari to take it. */
 	async function deactivate(page) {
@@ -12982,11 +13046,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* know: nothing is clicked.
 	*/
 	async function toggled(page, label) {
-		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed$1(PAGE$6, `has no ${label} button (${EDIT_PAGE.toggle})`);
+		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed$2(PAGE$6, `has no ${label} button (${EDIT_PAGE.toggle})`);
 		await page.click(EDIT_PAGE.toggle);
 		const end = Date.now() + DRAW_MS;
 		while (onEditPage(page)) {
-			if (Date.now() >= end) throw changed$1(PAGE$6, `stayed open after ${label}`);
+			if (Date.now() >= end) throw changed$2(PAGE$6, `stayed open after ${label}`);
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
 	}
@@ -13024,7 +13088,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		data: "script#__NEXT_DATA__"
 	};
 	function itemUrl(site, id) {
-		return absolute(site, MERCARI_PATHS.item(id));
+		return absolute$1(site, MERCARI_PATHS.item(id));
 	}
 	/** Opens the listing's page and reads it. */
 	async function readItem(page, site, id) {
@@ -13087,17 +13151,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	*/
 	async function readShownItem(page, site) {
 		const id = itemIdFromPath(new URL(page.url()).pathname);
-		if (id === null) throw changed$1("listing page", "is not at a listing address");
+		if (id === null) throw changed$2("listing page", "is not at a listing address");
 		const text = await page.text(ITEM_PAGE.data);
-		if (text === null) throw changed$1("listing page", "embeds none of the data Listora reads");
+		if (text === null) throw changed$2("listing page", "embeds none of the data Listora reads");
 		let data;
 		try {
 			data = JSON.parse(text);
 		} catch {
-			throw changed$1("listing page", "embeds data Listora can't parse");
+			throw changed$2("listing page", "embeds data Listora can't parse");
 		}
 		const parsed = object({ props: object({ pageProps: object({ serverState: record(string(), unknown()) }) }) }).safeParse(data);
-		if (!parsed.success) throw changed$1("listing page", "has none of the listing data Listora reads");
+		if (!parsed.success) throw changed$2("listing page", "has none of the listing data Listora reads");
 		const raw = parsed.data.props.pageProps.serverState[`ItemDetail:${id}`];
 		if (raw === void 0 || raw === null) return {
 			state: {
@@ -13108,9 +13172,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			soldAt: null
 		};
 		const record$1 = itemRecordSchema.safeParse(raw);
-		if (!record$1.success) throw changed$1("listing page", "shows the listing without what Listora reads");
+		if (!record$1.success) throw changed$2("listing page", "shows the listing without what Listora reads");
 		const status = STATUSES[record$1.data.status];
-		if (status === void 0) throw changed$1("listing page", "shows a status Listora does not know");
+		if (status === void 0) throw changed$2("listing page", "shows a status Listora does not know");
 		const { description, sku } = splitSkuLine(record$1.data.description);
 		return {
 			state: {
@@ -13272,10 +13336,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 	/** Opens one page of a tab and reads its rows. */
 	async function readListingsPage(page, site, tab, pageNumber, path) {
-		const url = path === void 0 ? absolute(site, MERCARI_PATHS.listings(tab, pageNumber)) : absolute(site, pageNumber > 1 ? `${path}?page=${String(pageNumber)}` : path);
+		const url = path === void 0 ? absolute$1(site, MERCARI_PATHS.listings(tab, pageNumber)) : absolute$1(site, pageNumber > 1 ? `${path}?page=${String(pageNumber)}` : path);
 		await page.goto(url);
 		const name = `${tab.replace("_", " ")} listings page`;
-		await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, "listing list");
+		await awaitElement$1(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, "listing list");
 		const end = Date.now() + ROWS_MS;
 		for (;;) {
 			if (await page.exists(LISTINGS_PAGE.empty)) return {
@@ -13288,7 +13352,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				page.count(LISTINGS_PAGE.photoLink)
 			]);
 			if (shown > 0 && Math.max(named, photos) === shown) break;
-			if (Date.now() >= end) throw changed$1(name, shown === 0 ? "shows no rows" : "has rows that link to no listing");
+			if (Date.now() >= end) throw changed$2(name, shown === 0 ? "shows no rows" : "has rows that link to no listing");
 			await lookAgain(page, 500);
 		}
 		const sold = tab === "in_progress" || tab === "sold";
@@ -13301,7 +13365,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			page.texts(LISTINGS_PAGE.headings)
 		]);
 		const links = named.length > 0 ? named : await page.attributes(LISTINGS_PAGE.photoLink, "href");
-		if (links.length !== shownRows) throw changed$1(name, "has rows that link to no listing");
+		if (links.length !== shownRows) throw changed$2(name, "has rows that link to no listing");
 		const titled = titles.length === links.length;
 		const priced = prices.length === links.length;
 		const updatedColumn = headings.findIndex((heading) => heading.trim() === "Updated");
@@ -13309,9 +13373,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		return {
 			rows: links.map((href, index) => {
 				const id = href === null ? null : itemIdFromPath(new URL(href, site.origin).pathname);
-				if (id === null) throw changed$1(name, "has a row that links to no listing");
+				if (id === null) throw changed$2(name, "has a row that links to no listing");
 				const soldAt = sold && soldAts.length === links.length ? new Date(soldAts[index] ?? "") : null;
-				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed$1(name, "has a sold row whose sold time Listora cannot read");
+				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed$2(name, "has a sold row whose sold time Listora cannot read");
 				return {
 					id,
 					title: titled ? titles[index] ?? "" : "",
@@ -13335,7 +13399,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** "Tracking number 9400 1118 ..." or "Tracking #: 1Z...": the number after the word. */
 	const TRACKING_LINE = /tracking(?:\s*(?:number|no\.?|#))?\s*[:#]?\s*([A-Z0-9][A-Z0-9 -]{8,48}[A-Z0-9])/i;
 	function orderUrl(site, itemId) {
-		return absolute(site, `/transaction/order_status/${encodeURIComponent(itemId)}/`);
+		return absolute$1(site, `/transaction/order_status/${encodeURIComponent(itemId)}/`);
 	}
 	/** Opens the order page of the item's sale and reads its buyer and label. */
 	async function readOrder(page, site, itemId) {
@@ -13345,7 +13409,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			buyerName: null,
 			trackingNumber: null
 		};
-		await awaitElement(page, ORDER_PAGE.summary, PAGE$5, "order summary");
+		await awaitElement$1(page, ORDER_PAGE.summary, PAGE$5, "order summary");
 		const buyer = (await page.text(ORDER_PAGE.buyer))?.trim() ?? null;
 		const shipping = await page.texts(ORDER_PAGE.shipping);
 		return {
@@ -13434,7 +13498,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
 			if (!shown.state.found) return notListed();
 			if (shown.state.status === "sold") return sold();
-			throw changed$1("edit page", "shows no listing form for a listing that has not sold");
+			throw changed$2("edit page", "shows no listing form for a listing that has not sold");
 		}
 		/**
 		* The edit page an end or relist acts on, and whether it shows the listing active or inactive,
@@ -13529,7 +13593,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (shown === "inactive") return { type: "applied" };
 				if (!shown.state.found) return notListed();
 				if (shown.state.status !== "active") return { type: "applied" };
-				throw changed$1("edit page", "shows no listing form for an active listing");
+				throw changed$2("edit page", "shows no listing form for an active listing");
 			},
 			relist: async (op, step) => {
 				const id = op.listing.externalListingId;
@@ -13552,7 +13616,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					type: "applied",
 					externalListingId: id
 				};
-				throw changed$1("edit page", "shows no listing form for a listing that has not sold");
+				throw changed$2("edit page", "shows no listing form for a listing that has not sold");
 			},
 			refresh: async (op, step) => {
 				const id = op.listing.externalListingId;
@@ -13578,7 +13642,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				};
 			},
 			health: async (step) => {
-				await step("open your account", { mutates: false }, (page) => openAccount(page, site));
+				await step("open your account", { mutates: false }, (page) => openAccount$1(page, site));
 				return null;
 			},
 			orders: async (since, step) => {
@@ -13697,6 +13761,79 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				sku: null
 			},
 			fromList: true
+		};
+	}
+
+// src/vinted/pages/common.ts
+/**
+	* What every Vinted page module shares: absolute URLs on the site the adapter runs against
+	* (Vinted, or the fake Vinted site in development and tests), and the failure every page module
+	* throws for a page that is not as it expects.
+	*/
+	function absolute(site, path) {
+		return `${site.origin}${path}`;
+	}
+	/**
+	* Waits, within the step's time, for `selector` on a page that Vinted's own scripts may draw
+	* after its document is ready, and throws `PageChangedError` naming the part when it never
+	* comes. A check the page shows instead still stops the run as one: the page driver throws it
+	* again.
+	*/
+	async function awaitElement(page, selector, pageName, what) {
+		try {
+			await page.waitFor(selector, "attached");
+		} catch {
+			if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
+		}
+	}
+	/** The failure for a Vinted page that is not as the script expects. */
+	function changed(pageName, problem) {
+		return new PageChangedError(`Vinted's ${pageName} ${problem}.`);
+	}
+
+// src/vinted/pages/account-page.ts
+	const ACCOUNT_PAGE = { 
+	/** The signed-in member's own profile link, in the header's user menu. */
+ownProfile: "header [data-testid=\"user-menu\"] a[href^=\"/member/\"]" };
+	/** Opens the seller's profile settings and waits for the header's own-profile link. */
+	async function openAccount(page, site) {
+		await page.goto(absolute(site, VINTED_PATHS.account));
+		await awaitElement(page, ACCOUNT_PAGE.ownProfile, "profile settings", "link to your profile");
+	}
+	/**
+	* The login of the member signed in on the open settings page, or `null` when its header doesn't
+	* show one Listora can read (no login in the link, or links to more than one member): the seller
+	* then stays unknown, never a guess
+	* (docs/features/marketplace-linking.md#the-shop-a-connection-holds).
+	*/
+	async function signedInMember(page, site) {
+		const hrefs = await page.attributes(ACCOUNT_PAGE.ownProfile, "href");
+		const logins = /* @__PURE__ */ new Set();
+		for (const href of hrefs) {
+			if (href === null) return null;
+			let path;
+			try {
+				path = new URL(href, absolute(site, VINTED_PATHS.account)).pathname;
+			} catch {
+				return null;
+			}
+			const login = memberFromPath(path)?.login ?? null;
+			if (login === null) return null;
+			logins.add(login.toLowerCase());
+		}
+		const [login, ...others] = logins;
+		return login === void 0 || others.length > 0 ? null : login;
+	}
+
+// src/vinted/scripts.ts
+	function createVintedScripts(options) {
+		const { site } = options;
+		return {
+			read: () => Promise.reject(new PageChangedError("Listora doesn't read Vinted listings yet.")),
+			health: (step) => step("open your profile settings", { mutates: false }, async (page) => {
+				await openAccount(page, site);
+				return sellerIdentity(await signedInMember(page, site));
+			})
 		};
 	}
 
@@ -15111,6 +15248,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					site: new PoshmarkSite(origin),
 					photos
 				});
+				return (call, step) => runScriptCall(scripts, call, step);
+			}
+			case "vinted": {
+				const scripts = createVintedScripts({ site: { origin } });
 				return (call, step) => runScriptCall(scripts, call, step);
 			}
 			case "fake_site": {

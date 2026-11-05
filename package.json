@@ -40,6 +40,7 @@
     "dev:fake-mercari": "npm run fake-mercari --workspace @listora/automation",
     "dev:fake-depop-site": "npm run fake-depop-site --workspace @listora/automation",
     "dev:fake-ebay-site": "npm run fake-ebay-site --workspace @listora/automation",
+    "dev:fake-vinted-site": "npm run fake-vinted-site --workspace @listora/automation",
     "phone:bundle": "npm run phone:bundle --workspace @listora/automation",
     "recordings:record": "npm run recordings:record --workspace @listora/automation --",
     "db:migrate": "npm run migrate --workspace @listora/db --",

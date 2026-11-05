@@ -99,7 +99,7 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
 }
 
 /** The script sets: one per automation adapter (the fake site's stands in for any marketplace). */
-export const SCRIPT_SETS = ['poshmark', 'mercari', 'depop', 'ebay', 'fake_site'] as const;
+export const SCRIPT_SETS = ['poshmark', 'mercari', 'depop', 'ebay', 'vinted', 'fake_site'] as const;
 export type ScriptSetName = (typeof SCRIPT_SETS)[number];
 
 /** Whose scripts a call runs, and the site they drive. */

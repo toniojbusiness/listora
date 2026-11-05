@@ -1,9 +1,12 @@
 # Linking marketplaces from the iPhone
 
-Poshmark, Mercari, Depop (until its partner API), and eBay (until its API is connected,
-[ebay-automation.md](ebay-automation.md)) are automated in the seller's own session (decision D1,
-[automation.md](automation.md)): Poshmark, Mercari, and Depop by the iPhone app that linked them,
-eBay by the cloud browser runner ([phone-execution.md](phone-execution.md)).
+Poshmark, Mercari, Depop (until its partner API), eBay (until its API is connected,
+[ebay-automation.md](ebay-automation.md)), and Vinted ([vinted.md](vinted.md)) are automated in
+the seller's own session (decision D1, [automation.md](automation.md)): Poshmark, Mercari, Depop,
+and Vinted by the iPhone app that linked them, eBay by the cloud browser runner
+([phone-execution.md](phone-execution.md)). Vinted's linking has not passed live yet, so Link
+accounts lists it only in the owner's Test mode or once the account linked it, and only its
+session check is automated so far.
 The seller links each one from the app: **Settings > Link accounts**. This page describes that
 flow end to end.
 
@@ -109,11 +112,11 @@ does not read sessions from the marketplaces' own iPhone apps.
 `packages/api-contract/paths/connections.yaml` (tag `connections`; schemas in
 `components/schemas/marketplace-sessions.yaml`):
 
-| Operation                 | Route                                         | What it does                                    |
-| ------------------------- | --------------------------------------------- | ----------------------------------------------- |
-| `listMarketplaceSessions` | `GET /v1/marketplace-sessions`                | Poshmark, Mercari, Depop, and eBay, with status |
-| `getMarketplaceSession`   | `GET /v1/marketplace-sessions/{marketplace}`  | One of them                                     |
-| `linkMarketplaceSession`  | `POST /v1/marketplace-sessions/{marketplace}` | Stores the session and starts its check (`201`) |
+| Operation                 | Route                                         | What it does                                            |
+| ------------------------- | --------------------------------------------- | ------------------------------------------------------- |
+| `listMarketplaceSessions` | `GET /v1/marketplace-sessions`                | Poshmark, Mercari, Depop, eBay, and Vinted, with status |
+| `getMarketplaceSession`   | `GET /v1/marketplace-sessions/{marketplace}`  | One of them                                             |
+| `linkMarketplaceSession`  | `POST /v1/marketplace-sessions/{marketplace}` | Stores the session and starts its check (`201`)         |
 
 `linkMarketplaceSession` (`apps/api/src/marketplace-sessions/`) calls `linkAutomationSession`
 (`@listora/automation`) in the request's idempotent transaction. The session vault encrypts the
@@ -185,7 +188,8 @@ listings of the shop the connection held (audit M3, [security.md](security.md#au
 
 - **Which seller.** The session check's health script returns the signed-in seller's handle,
   trimmed and lower-cased (`sellerIdentity`): Depop's username from the header's Likes link
-  (`/<username>/likes/`), Poshmark's username from its page data, the fake site's account. Mercari
+  (`/<username>/likes/`), Poshmark's username from its page data, Vinted's login from the header's
+  own profile link (`/member/<id>-<login>`), the fake site's account. Mercari
   (its account page shows only a display name, neither unique nor fixed) and eBay (Seller Hub is
   not read for it yet) return `null`: the seller stays unknown, never guessed. On the phone, an
   older runtime returns nothing, which the server reads as unknown too.

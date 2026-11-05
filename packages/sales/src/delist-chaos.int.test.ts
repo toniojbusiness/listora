@@ -30,7 +30,6 @@ import {
   loadDepopConfig,
   loadEbayConfig,
   type AdapterLookup,
-  type AutomatedMarketplace,
   type ListingContent,
   type MarketplaceAdapter,
 } from '@listora/marketplaces';
@@ -183,7 +182,8 @@ describe('auto-delist chaos: an item listed on four marketplaces sells', () => {
   interface Listed {
     itemId: string;
     sku: string;
-    listings: Record<AutomatedMarketplace, string>;
+    /** The listing of each marketplace the item is listed on here (every one but Vinted). */
+    listings: Record<Exclude<Marketplace, 'vinted'>, string>;
     /** The marketplace's own ids of the API listings. */
     ebayItemId: string;
     depopSku: string;

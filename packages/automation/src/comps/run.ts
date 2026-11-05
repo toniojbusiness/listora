@@ -21,7 +21,7 @@ import { depopComparisonScript, depopWarmUpScript } from './depop.ts';
 import { ebayComparisonScript, ebayWarmUpScript } from './ebay.ts';
 import { poshmarkComparisonScript, poshmarkWarmUpScript } from './poshmark.ts';
 import { mercariComparisonScript, mercariWarmUpScript } from './mercari.ts';
-import { VINTED_COMPARISON_PROFILE, vintedComparisonScript, vintedWarmUpScript } from './vinted.ts';
+import { vintedComparisonScript, vintedWarmUpScript } from './vinted.ts';
 import {
   comparisonStats,
   COMPARISON_VERSION,
@@ -78,14 +78,6 @@ const READERS: Readonly<
   },
 };
 
-/**
- * The marketplace's own profile, as its comparisons start from it: its automation profile, or
- * Vinted's comparison-only one until Vinted's automation profile joins (docs/features/vinted.md).
- */
-export function comparisonSiteProfile(marketplace: ComparisonMarketplace): AutomationProfile {
-  return marketplace === 'vinted' ? VINTED_COMPARISON_PROFILE : automationProfile(marketplace);
-}
-
 export interface ComparisonRunOptions {
   pacing?: PacingOptions;
   /** The site a test reads instead of the marketplace's own. */
@@ -103,7 +95,7 @@ export function comparisonProfile(
   input: Pick<ComparisonInput, 'pacing'>,
   siteUrl: string = SITES[marketplace],
 ): AutomationProfile {
-  const builtIn = comparisonSiteProfile(marketplace);
+  const builtIn = automationProfile(marketplace);
   const origin = new URL(siteUrl).origin;
   const origins = builtIn.origins.includes(origin) ? builtIn.origins : [origin];
   return {
@@ -175,7 +167,7 @@ export async function warmUpComparisons(
   const siteUrl = options.siteUrl ?? SITES[input.marketplace];
   const read = {
     marketplace: input.marketplace,
-    pacing: input.pacing ?? comparisonSiteProfile(input.marketplace).readOnlyPacing,
+    pacing: input.pacing ?? automationProfile(input.marketplace).readOnlyPacing,
     stepTimeoutMs: input.stepTimeoutMs ?? WARM_UP_STEP_MS,
     callTimeoutMs: input.callTimeoutMs ?? WARM_UP_CALL_MS,
   };

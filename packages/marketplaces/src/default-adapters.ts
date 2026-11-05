@@ -43,18 +43,19 @@ export interface MarketplaceAdaptersConfig {
 
 /**
  * The marketplaces browser automation can serve: every one (decision D1, revised 2026-10-24),
- * eBay and Depop only until their APIs are connected. Vinted joins once its automation profile
- * exists (milestone M3 of docs/features/vinted.md); until then it is assisted only.
+ * eBay and Depop only until their APIs are connected.
  */
-export type AutomatedMarketplace = Exclude<Marketplace, 'vinted'>;
+export type AutomatedMarketplace = Marketplace;
 
 /**
  * The marketplace adapters Listora runs with (docs/features/marketplaces.md): the worker runs
  * operations with them, the browser runner its automated steps, and the API reads each
  * marketplace's capabilities from them, so every process routes an operation to the same mode.
  *
- * - Vinted is assisted only (docs/features/vinted.md) until its automation adapter exists and
- *   passes live; a linked Vinted session will then serve it the way it serves Poshmark's.
+ * - Vinted is assisted (docs/features/vinted.md): its automation adapter has only the session
+ *   check so far (Vinted plan M3), which the session checks ask it for directly, so every
+ *   Vinted step stays the seller's task even on a linked session. Once its listing scripts pass
+ *   live (M5), a linked Vinted session gets them the way a linked Poshmark session does.
  * - Poshmark, Mercari, and Depop are assisted (every step is a user task that only the user's
  *   confirmation finishes) until a seller links a browser session, when their automation
  *   adapter serves them (decision D1). Poshmark's drives poshmark.com (the fake Poshmark with

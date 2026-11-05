@@ -68,6 +68,12 @@ export interface AutomationSettings {
    * `fakeSiteUrl` for eBay).
    */
   readonly fakeEbaySiteUrl: string | undefined;
+  /**
+   * Development and tests only: the fake Vinted site (`npm run dev:fake-vinted-site`), which the
+   * Vinted automation adapter then drives instead of vinted.com (it takes precedence over
+   * `fakeSiteUrl` for Vinted).
+   */
+  readonly fakeVintedSiteUrl: string | undefined;
 }
 
 export class AutomationConfigError extends Error {
@@ -105,6 +111,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
   const fakeMercariSiteUrl = localUrl(issues, env, 'FAKE_MERCARI_SITE_URL');
   const fakeDepopSiteUrl = localUrl(issues, env, 'FAKE_DEPOP_SITE_URL');
   const fakeEbaySiteUrl = localUrl(issues, env, 'FAKE_EBAY_SITE_URL');
+  const fakeVintedSiteUrl = localUrl(issues, env, 'FAKE_VINTED_SITE_URL');
 
   const profiles = Object.fromEntries(
     AUTOMATED_MARKETPLACES.map((marketplace) => {
@@ -160,6 +167,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         mercari: fakeMercariSiteUrl,
         depop: fakeDepopSiteUrl,
         ebay: fakeEbaySiteUrl,
+        vinted: fakeVintedSiteUrl,
       }[marketplace];
       const standIn = ownFake ?? fakeSiteUrl;
       return [marketplace, standIn === undefined ? profile : standInProfile(profile, standIn)];
@@ -201,6 +209,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
     fakeMercariSiteUrl,
     fakeDepopSiteUrl,
     fakeEbaySiteUrl,
+    fakeVintedSiteUrl,
   };
 }
 

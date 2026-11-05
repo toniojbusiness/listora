@@ -1,8 +1,9 @@
 /**
  * The automation adapters a process serves, per marketplace (decision D1). Poshmark, Mercari,
- * Depop, and eBay have their own adapters (poshmark/, mercari/, depop/, ebay/), which drive
- * poshmark.com, mercari.com, depop.com, and ebay.com, or their fakes with `FAKE_POSHMARK_URL`,
- * `FAKE_MERCARI_SITE_URL`, `FAKE_DEPOP_SITE_URL`, and `FAKE_EBAY_SITE_URL`. In development and
+ * Depop, eBay, and Vinted have their own adapters (poshmark/, mercari/, depop/, ebay/, vinted/),
+ * which drive poshmark.com, mercari.com, depop.com, ebay.com, and vinted.com, or their fakes with
+ * `FAKE_POSHMARK_URL`, `FAKE_MERCARI_SITE_URL`, `FAKE_DEPOP_SITE_URL`, `FAKE_EBAY_SITE_URL`, and
+ * `FAKE_VINTED_SITE_URL`. Vinted's has only the session check so far (Vinted plan M3). In development and
  * tests, `FAKE_AUTOMATION_SITE_URL` serves each marketplace without its own fake through the
  * fake site's adapter, so a development setup never drives a real marketplace. The Depop and
  * eBay automation adapters serve only sellers whose connection is a browser session: one that
@@ -22,6 +23,7 @@ import { createEbayAutomationAdapter } from './ebay/adapter.ts';
 import { createFakeSiteAdapter } from './fake-site/fake-site-adapter.ts';
 import { createPoshmarkAutomationAdapter } from './poshmark/adapter.ts';
 import { createMercariAutomationAdapter } from './mercari/adapter.ts';
+import { createVintedAutomationAdapter } from './vinted/adapter.ts';
 import { AUTOMATED_MARKETPLACES, type AutomatedMarketplace } from './profiles.ts';
 import type { AutomationSettings } from './settings.ts';
 
@@ -91,6 +93,15 @@ export function createAutomationAdapters(
       photos: deps.photos,
       logger: deps.logger,
       ...(settings.fakeEbaySiteUrl === undefined ? {} : { siteUrl: settings.fakeEbaySiteUrl }),
+    });
+  }
+  if (settings.fakeVintedSiteUrl !== undefined || siteUrl === undefined) {
+    // Only the session check so far (Vinted plan M3): Vinted's listings stay assisted.
+    adapters.vinted = createVintedAutomationAdapter({
+      profile: settings.profiles.vinted,
+      sessions: deps.sessions,
+      logger: deps.logger,
+      ...(settings.fakeVintedSiteUrl === undefined ? {} : { siteUrl: settings.fakeVintedSiteUrl }),
     });
   }
   return adapters;

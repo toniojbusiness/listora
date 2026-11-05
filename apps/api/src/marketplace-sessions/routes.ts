@@ -28,6 +28,7 @@ import {
 } from '@listora/connections';
 import type { DbExecutor, Marketplace } from '@listora/db';
 import { ImportRefusedError, startListingImport } from '@listora/imports';
+import { isLinkingOn, loadFeatureGate, type FeatureGate } from '@listora/marketplaces';
 import { assertNever } from '@listora/shared';
 import type { FastifyInstance } from 'fastify';
 
@@ -59,11 +60,14 @@ export function registerMarketplaceSessionRoutes(
 ): void {
   contractRoute(app, deps, 'listMarketplaceSessions', async ({ tenant, db }) => {
     const rows = await sessionRows(db, tenant, deps.profiles, AUTOMATED_MARKETPLACES);
+    const gate = await loadFeatureGate(db, tenant.accountId);
     const now = deps.now();
     return {
       status: 200,
       body: {
-        data: AUTOMATED_MARKETPLACES.map((marketplace) =>
+        data: AUTOMATED_MARKETPLACES.filter((marketplace) =>
+          linkable(rowFor(rows, marketplace), gate),
+        ).map((marketplace) =>
           marketplaceSessionView(rowFor(rows, marketplace), deps.profiles[marketplace], now),
         ),
       },
@@ -73,6 +77,9 @@ export function registerMarketplaceSessionRoutes(
   contractRoute(app, deps, 'getMarketplaceSession', async ({ tenant, db, params }) => {
     const marketplace = sessionMarketplace(params.marketplace);
     const rows = await sessionRows(db, tenant, deps.profiles, [marketplace]);
+    if (!linkable(rowFor(rows, marketplace), await loadFeatureGate(db, tenant.accountId))) {
+      throw notFound('Marketplace session');
+    }
     return {
       status: 200,
       body: marketplaceSessionView(
@@ -87,6 +94,10 @@ export function registerMarketplaceSessionRoutes(
     const marketplace = sessionMarketplace(params.marketplace);
     const profile = deps.profiles[marketplace];
     const name = marketplaceName(marketplace);
+    const linked = await sessionRows(db, tenant, deps.profiles, [marketplace]);
+    if (!linkable(rowFor(linked, marketplace), await loadFeatureGate(db, tenant.accountId))) {
+      throw notFound('Marketplace session');
+    }
     if (deps.vault === undefined) {
       throw new ApiError(
         'marketplace_action_unavailable',
@@ -168,6 +179,17 @@ async function importLinkedListings(
 function sessionMarketplace(marketplace: Marketplace): AutomatedMarketplace {
   if (!isAutomatedMarketplace(marketplace)) throw notFound('Marketplace session');
   return marketplace;
+}
+
+/**
+ * Whether the account sees the marketplace in Link accounts: its linking passed live, the
+ * account is in Test mode, or the account holds a session there already (so it can still be
+ * checked, relinked, and unlinked after Test mode is off). A marketplace whose linking has not
+ * passed live (Vinted, until its live link) is otherwise `404`, as if it were not linkable at all
+ * (docs/features/verified-features.md).
+ */
+function linkable(row: SessionRow, gate: FeatureGate): boolean {
+  return isLinkingOn(row.marketplace, gate) || row.connection?.mode === 'automation';
 }
 
 function sessionCookie(cookie: ContractSessionCookie): SessionCookie {
