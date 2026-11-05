@@ -28,7 +28,8 @@ final class ThriftScanUITests: XCTestCase {
         let shutter = app.buttons["camera.shutter"]
         XCTAssertTrue(shutter.waitForExistence(timeout: 10))
         shutter.tap()
-        XCTAssertTrue(app.staticTexts["scan.title"].waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForTheRead(of: 1))
+        XCTAssertTrue(app.staticTexts["scan.title"].waitForExistence(timeout: 5))
         let call = element("scan.call")
         XCTAssertTrue(call.waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["scan.title"].label, "Acme Outfitters blue button-up shirt")
@@ -89,12 +90,12 @@ final class ThriftScanUITests: XCTestCase {
         XCTAssertTrue(said.contains("Kept · 1 in this run") || said.contains("Keeping item 1"), said)
         attachScreenshot("kept")
         record("Keep to the camera clear, by the test (tap and polling included): \(Int(cameraReady * 1000)) ms")
-        XCTAssertTrue(waitForLabel(of: element("scanCamera.summary"), prefix: "1 scanned · 1 kept", timeout: 20))
+        XCTAssertTrue(waitForTheKeep(of: 1, summary: "1 scanned · 1 kept"))
 
         // The next shot shows its own card; Put back passes on it, back to the camera.
         shutter.tap()
-        XCTAssertTrue(app.staticTexts["Item 2"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.buttons["scan.keep"].waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForTheRead(of: 2))
+        XCTAssertTrue(app.staticTexts["Item 2"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["scan.putBack"].exists)
         XCTAssertEqual(element("scanCamera.summary").label, "2 scanned · 1 kept")
         attachScreenshot("second item")
@@ -156,9 +157,9 @@ final class ThriftScanUITests: XCTestCase {
         let shutter = app.buttons["camera.shutter"]
         XCTAssertTrue(shutter.waitForExistence(timeout: 10))
         shutter.tap()
-        XCTAssertTrue(app.buttons["scan.keep"].waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForTheRead(of: 1))
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(waitForLabel(of: element("scanCamera.summary"), prefix: "1 scanned · 1 kept", timeout: 20))
+        XCTAssertTrue(waitForTheKeep(of: 1, summary: "1 scanned · 1 kept"))
         app.buttons["scanCamera.done"].tap()
 
         // The kept draft is listed under its run, named by the scan, and needs its photos.
@@ -205,20 +206,6 @@ final class ThriftScanUITests: XCTestCase {
         app.buttons["batchSummary.done"].tap()
         // Approved, its draft is done on this iPhone.
         XCTAssertTrue(app.buttons["draft.row"].waitForNonExistence(timeout: 10))
-    }
-
-    func waitForLabel(of element: XCUIElement, prefix: String, timeout: TimeInterval = 10) -> Bool {
-        let predicate = NSPredicate(format: "label BEGINSWITH %@", prefix)
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
-    }
-
-    private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
-        let expectation = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "isEnabled == true"),
-            object: element,
-        )
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
     /// No signal at the bins (`LISTORA_SCAN_NO_SIGNAL`): the shot waits with no read, Keep marks it
