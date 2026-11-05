@@ -156,6 +156,7 @@ describe('recordings', () => {
             String.raw`>self.__next_f.push([1,"6:{\"username\":\"jdoe\",\"first_name\":\"Jane\"}"])</script`,
             '><img srcset="https://media.depop.com/b1/7128/P0.jpg 1x, https://media-photos.depop.com/b1/7128/P1.webp 2x"',
             `><input type="hidden" name="csrf" value="${'Zx9'.repeat(15)}"`,
+            '><p data-testid="product-item-id-10671028219--description-subtitle"',
             '>',
           ],
         },
@@ -219,6 +220,8 @@ describe('recordings', () => {
       );
       expect(lines).toContain('555-555-0100');
       expect(lines).toMatch(/name="csrf" value="REDACTED\d+"/);
+      // A long name of words and numbers (Vinted's test ids) is no token.
+      expect(lines).toContain('data-testid="product-item-id-10671028219--description-subtitle"');
       expect(redacted.states[0]?.url).toBe(
         'https://www.depop.com/redacteduser1/?session_token=REDACTED1',
       );

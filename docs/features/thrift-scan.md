@@ -1020,7 +1020,8 @@ The card gains a row per marketplace whose comparisons are on (`market_comps`, p
 [verified-features.md](verified-features.md)): what listings like the item ask in the
 marketplace's public search, read on the seller's iPhone within seconds of the read. The captain
 approved reading the public, logged-out search results from the seller's iPhone within budgets,
-stopping at any check (2026-10-31); eBay, Poshmark, and Mercari have their own readers (below).
+stopping at any check (2026-10-31); eBay, Poshmark, Mercari, and Vinted have their own readers
+(below).
 
 ### What Depop shows a visitor
 
@@ -1452,6 +1453,110 @@ Mercari's comparisons for the day), and whether the search page carries its resu
   the whole scan answer failed; it now says "eBay gave no count of its sales".
 - A read whose sold listings had no dates sent `windowDays: null`, which the API refuses; the
   phone now leaves the window out.
+
+## Vinted (Vinted M9)
+
+Vinted's row is like Depop's: what close matches ask in Vinted's public search, under the asking
+label, never sold prices. Its comparisons are behind their own gate (`market_comps` on Vinted,
+[verified-features.md](verified-features.md)), hidden from sellers until the captain's live test
+on the iPhone. The captain holds Vinted's written permission for these reads
+([vinted.md](vinted.md)).
+
+### What Vinted shows a visitor
+
+Read live on 2026-11-05 in a fresh browser context with no cookies, from a headless Chrome with a
+fresh profile, through `market-pace.sh vinted`, with no bot check: the search page
+(`/catalog?search_text=<words>`, the URL Vinted's own search bar and pagination links make) is
+drawn by Vinted's server with its first 96 results, the most relevant first, and the search's
+count above them ("500+ results."). The page's own scripts send no request for the results.
+Each result is Vinted's item box (`product-item-id-<id>`): its brand (`--description-title`), its
+size and condition (`--description-subtitle`, `W32 · Very good`), its price (`--price-text`, the
+seller's own, without the buyer's Vinted fee), and its title (the overlay link's `title`,
+`<title>, Brand: ..., Condition: ..., Size: ..., 18.00 $, 19.60 $`). **Vinted shows a visitor no
+sold listings**: its catalog lists only items for sale and has no sold filter. So:
+
+- **Vinted's numbers are asking prices** of close matches for sale, always under "Asking prices -
+  not sold listings" (`ASKING_PRICES_LABEL`, held by the label guard);
+- **the sold side is the household's own Vinted sales** (`ownSales`; they count once Vinted's
+  `sales_history` is on, and in Test mode);
+- **the trend read is the household's recent sold pace against Vinted's live supply**
+  (`marketDemand`), as Depop's. Vinted's "500+" counts as 500: at least that many.
+
+### The read
+
+1. **The query.** As for Mercari (`comparisonQuery`): the brand and an item type are needed; the
+   words are the brand, the model or line, and the type. Vinted's boxes name no category, so a
+   match is held to the title's words (`productTypes` empty).
+2. **The phone reads it** (`listoraPhone.compare`, `comps/vinted.ts`): one page load of the
+   search, through the same session rules as every automated read
+   (`vinted/pages/search-page.ts`). Of each box only the brand, the subtitle, the price, and the
+   overlay link's title are read; never the seller, the photos, the link, or the favourites.
+3. **What is never counted.** Boxes outside the search's grid (`grid-item`), lots and bundles,
+   and boxes without a title or a dollar price.
+4. **Matching** (`marketStats`): the box's brand (by `brandKey`) or, on a box without one, the
+   title's words; and the type in the title; the levels add the model in the title and the box's
+   size (`W32` is `W32` and `32`, `S / US 4-6` is `S`, `US 4-6`, and `4-6`; Vinted's `Other` is
+   none). Outliers are left out, as for Depop.
+5. **Only numbers leave the phone**: the level, the asking quartiles, the counts read, and the
+   search's count.
+
+### On the card
+
+- **The row**: "Vinted: asking $25-$30, 5 like it for sale" under the asking label, with the
+  demand ("Crowded on Vinted", with what it rests on: "Your 0 sales like it in the last 90 days;
+  500 for sale on Vinted now"). Without numbers, the same words as every marketplace's ("Not
+  enough similar listings on Vinted", "Vinted prices paused today", "Couldn't check Vinted").
+- **In the call**: as Depop's, close matches' asking prices hold the AI estimate's or the web's
+  range to their high quartile from 5 of them; the demand is a signal only.
+
+### Account risk
+
+As for Depop ("Account risk" above): no account in the read (the app's own non-persistent web
+view, never the seller's), phone only, Vinted's own origins only (`www.vinted.com`,
+`vinted.com`), stop at the first check (Cloudflare's "Just a moment..." page and Turnstile,
+DataDome's CAPTCHA, a 403, Vinted's sign-in and sign-up pages under `/member/`), the 24-hour
+cache, the pauses, images and media blocked, and the warm-up (Vinted's home page). **Budgets**:
+30 reads an hour and 150 a day per account (each read loads one page, but Vinted's pages run
+DataDome's and Cloudflare's bot detection); once 20 of the hour's are used, the rest go only to
+items the AI prices at $25 or more at the high end (`COMPARISON_LIMITS.vinted.saveForPricier`).
+Until Vinted's automation profile joins (Vinted M3), its comparisons start from a profile of
+their own (`VINTED_COMPARISON_PROFILE`, `comparisonSiteProfile`).
+
+### Data
+
+`market_comparison.marketplace` takes `vinted` (migration
+`20261105044911_vinted_comparisons`).
+
+### Tests
+
+- `packages/automation`: `vinted/pages/search-page.test.ts` (the URL, the boxes, titles, prices,
+  sizes, the count, lots), `comps/vinted.int.test.ts` (the lane on the phone's page backend
+  against a stand-in search of invented listings: the match and count, the box outside the grid,
+  lots, no count, no results, the warm-up, Cloudflare's check, DataDome's CAPTCHA, a sign-in
+  page, an unknown page), and the recorded real search (`vinted/recordings/search.json`, recorded
+  logged out with `npm run recordings:record -- vinted --logged-out`,
+  [recorded-pages.md](recorded-pages.md)).
+- `apps/api/src/scans/comparisons.int.test.ts`: Vinted's read handed out, its asking prices under
+  their label with the household's own Vinted sales as the sold side, the pause after a check,
+  and the gate off for sellers; `pricing.int.test.ts`: Vinted among the sources the prices wait
+  for.
+- iPhone: `ScanComparisonRowTests.swift` (Vinted's row under the asking label, never sold).
+
+**The phone needs a new app build** for Vinted's comparisons (the runtime bundle, the lane's
+origins, and Vinted among the compared marketplaces). Live test: the captain on his phone at a
+store, logged out, Vinted only, in Test mode (the gate stays off for sellers). It decides whether
+Vinted lets a logged-out iPhone read its search (DataDome runs on its pages; a check on the phone
+pauses Vinted's comparisons for the day).
+
+**Fixed with it.**
+
+- The scan's prices said each source it couldn't check in its own sentence, which with five
+  marketplaces ran past the label's 120 characters and was cut mid-word; they are now said
+  together ("Couldn't check eBay, Poshmark, Mercari, and Vinted."), and a sentence that does not
+  fit is left out whole.
+- Recordings took a long name of words and numbers (Vinted's test ids,
+  `product-item-id-<id>--description-subtitle`) for a token and redacted it, which broke the
+  replay; a run of only-letter and only-digit parts is no longer one.
 
 ## Upgrading drafts (M6)
 

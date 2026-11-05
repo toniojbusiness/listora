@@ -74,6 +74,25 @@ func poshmarkSoldScanJSON(id: String) -> [String: Any] {
     return scan
 }
 
+/// The scan's answer with Vinted's comparison read: Vinted shows a visitor no sold listings, so
+/// its row is close matches' asking prices under their label, and the demand the household's own
+/// sales against Vinted's supply.
+func vintedAskingScanJSON(id: String) -> [String: Any] {
+    var scan = itemScanJSON(id: id, call: "your_call", basis: "ai_estimate")
+    let demand = "Your 0 sales like it in the last 90 days; 500 for sale on Vinted now"
+    scan["comparisons"] = [[
+        "marketplace": "vinted", "status": "read",
+        "label": "Vinted: asking $25-$30, 5 like it for sale",
+        "asking": [
+            "count": 5, "low": usd(2500), "median": usd(2800), "high": usd(3000),
+            "label": "Asking prices - not sold listings",
+        ],
+        "supply": 500,
+        "demand": ["demand": "crowded", "label": "Crowded on Vinted", "basedOn": demand],
+    ]]
+    return scan
+}
+
 private func usd(_ cents: Int) -> [String: Any] {
     ["amountCents": cents, "currency": "USD"]
 }

@@ -99,8 +99,9 @@ describe('scanPricing', () => {
         { source: 'depop', label: "Couldn't check Depop in time" },
       ],
     });
+    // The sources it couldn't check in time are said together.
     expect(pricingView(pricing).label).toBe(
-      "Checked your sales. Couldn't check the web in time. Couldn't check Depop in time.",
+      "Checked your sales. Couldn't check the web and Depop in time.",
     );
   });
 

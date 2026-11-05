@@ -127,6 +127,47 @@ function listed(words: readonly string[]): string {
   return `${words.slice(0, -1).join(', ')}, and ${words.at(-1) ?? ''}`;
 }
 
+/**
+ * What is missing, in sentences: the sources Listora couldn't check said together ("Couldn't
+ * check eBay, Mercari, and Vinted."), as are those it couldn't check in time; the others each
+ * in its own.
+ */
+function missingSentences(missing: readonly MissingSource[]): string[] {
+  const groups = new Map<string, string[]>();
+  const sentences: (string | { readonly group: string })[] = [];
+  for (const source of missing) {
+    const match = /^Couldn't check (.+?)( in time)?$/.exec(source.label);
+    if (match?.[1] === undefined) {
+      sentences.push(`${source.label}.`);
+      continue;
+    }
+    const suffix = match[2] ?? '';
+    const names = groups.get(suffix);
+    if (names === undefined) {
+      groups.set(suffix, [match[1]]);
+      sentences.push({ group: suffix });
+    } else {
+      names.push(match[1]);
+    }
+  }
+  return sentences.map((sentence) =>
+    typeof sentence === 'string'
+      ? sentence
+      : `Couldn't check ${listed(groups.get(sentence.group) ?? [])}${sentence.group}.`,
+  );
+}
+
+/** The sentences that fit in `max` characters, whole: a sentence that does not fit is left out. */
+function withinLength(sentences: readonly string[], max: number): string {
+  let label = '';
+  for (const sentence of sentences) {
+    const next = label === '' ? sentence : `${label} ${sentence}`;
+    if (next.length > max) break;
+    label = next;
+  }
+  return label === '' ? (sentences[0] ?? '').slice(0, max) : label;
+}
+
 /** The pricing as the API answers it. */
 export function pricingView(pricing: ScanPricing): NonNullable<ItemScan['pricing']> {
   if (pricing.status === 'checking') {
@@ -140,9 +181,7 @@ export function pricingView(pricing: ScanPricing): NonNullable<ItemScan['pricing
   const checked = `Checked ${listed(pricing.checked)}.`;
   return {
     status: 'ready',
-    label: [checked, ...pricing.missing.map((source) => `${source.label}.`)]
-      .join(' ')
-      .slice(0, 120),
+    label: withinLength([checked, ...missingSentences(pricing.missing)], 120),
     ...(pricing.missing.length === 0
       ? {}
       : { missing: pricing.missing.map((source) => ({ ...source })) }),

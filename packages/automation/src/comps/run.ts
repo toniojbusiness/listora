@@ -21,6 +21,7 @@ import { depopComparisonScript, depopWarmUpScript } from './depop.ts';
 import { ebayComparisonScript, ebayWarmUpScript } from './ebay.ts';
 import { poshmarkComparisonScript, poshmarkWarmUpScript } from './poshmark.ts';
 import { mercariComparisonScript, mercariWarmUpScript } from './mercari.ts';
+import { VINTED_COMPARISON_PROFILE, vintedComparisonScript, vintedWarmUpScript } from './vinted.ts';
 import {
   comparisonStats,
   COMPARISON_VERSION,
@@ -35,6 +36,7 @@ const SITES: Readonly<Record<ComparisonMarketplace, string>> = {
   ebay: 'https://www.ebay.com',
   poshmark: 'https://poshmark.com',
   mercari: 'https://www.mercari.com',
+  vinted: 'https://www.vinted.com',
 };
 
 /** What a read found, whichever marketplace read it. */
@@ -70,7 +72,19 @@ const READERS: Readonly<
     read: (siteUrl, input) => mercariComparisonScript(siteUrl, input.query, new Date(input.now)),
     warmUp: mercariWarmUpScript,
   },
+  vinted: {
+    read: (siteUrl, input) => vintedComparisonScript(siteUrl, input.query, new Date(input.now)),
+    warmUp: vintedWarmUpScript,
+  },
 };
+
+/**
+ * The marketplace's own profile, as its comparisons start from it: its automation profile, or
+ * Vinted's comparison-only one until Vinted's automation profile joins (docs/features/vinted.md).
+ */
+export function comparisonSiteProfile(marketplace: ComparisonMarketplace): AutomationProfile {
+  return marketplace === 'vinted' ? VINTED_COMPARISON_PROFILE : automationProfile(marketplace);
+}
 
 export interface ComparisonRunOptions {
   pacing?: PacingOptions;
@@ -89,7 +103,7 @@ export function comparisonProfile(
   input: Pick<ComparisonInput, 'pacing'>,
   siteUrl: string = SITES[marketplace],
 ): AutomationProfile {
-  const builtIn = automationProfile(marketplace);
+  const builtIn = comparisonSiteProfile(marketplace);
   const origin = new URL(siteUrl).origin;
   const origins = builtIn.origins.includes(origin) ? builtIn.origins : [origin];
   return {
@@ -161,7 +175,7 @@ export async function warmUpComparisons(
   const siteUrl = options.siteUrl ?? SITES[input.marketplace];
   const read = {
     marketplace: input.marketplace,
-    pacing: input.pacing ?? automationProfile(input.marketplace).readOnlyPacing,
+    pacing: input.pacing ?? comparisonSiteProfile(input.marketplace).readOnlyPacing,
     stepTimeoutMs: input.stepTimeoutMs ?? WARM_UP_STEP_MS,
     callTimeoutMs: input.callTimeoutMs ?? WARM_UP_CALL_MS,
   };

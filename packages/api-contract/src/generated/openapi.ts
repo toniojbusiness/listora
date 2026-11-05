@@ -7945,9 +7945,9 @@ export interface components {
          * @description One marketplace's comparisons for the scanned item (docs/features/thrift-scan.md,
          *     "Marketplace comparisons"): listings of the same brand and item type (and the model and size
          *     where the scan read them) in the marketplace's public search, read on the seller's iPhone in
-         *     a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
-         *     asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
-         *     the sold side; eBay, Poshmark, and Mercari show their sold listings, so their rows have what
+         *     a web view that holds no account. Depop and Vinted show a visitor no sold listings, so their
+         *     prices are asking prices (`asking`), always labeled so, and the household's own sales
+         *     (`ownSales`) are the sold side; eBay, Poshmark, and Mercari show their sold listings, so their rows have what
          *     close matches sold for (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
          *     `saveScanComparison`.
          */
@@ -8233,7 +8233,7 @@ export interface components {
          * @description `web`: the web research and the brand pulse; a marketplace: its comparisons.
          * @enum {string}
          */
-        KnownScanPricingSource: "web" | "ebay" | "depop" | "poshmark" | "mercari";
+        KnownScanPricingSource: "web" | "ebay" | "depop" | "poshmark" | "mercari" | "vinted";
         ScanMissingSource: {
             source: components["schemas"]["ScanPricingSource"];
             /**
@@ -14358,7 +14358,7 @@ export const knownScanComparisonOutcomeValues: ReadonlyArray<FlattenedDeepRequir
 export const scanComparisonStatsLevelValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ScanComparisonStats"]["level"]> = ["model_and_size", "model", "type_and_size", "type"];
 export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanCallKind"]> = ["buy", "your_call", "skip", "checking"];
 export const knownScanPricingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanPricingStatus"]> = ["checking", "ready"];
-export const knownScanPricingSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanPricingSource"]> = ["web", "ebay", "depop", "poshmark", "mercari"];
+export const knownScanPricingSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanPricingSource"]> = ["web", "ebay", "depop", "poshmark", "mercari", "vinted"];
 export const knownScanRealityKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRealityKind"]> = ["own_sales", "market_sold", "asking", "retail", "web", "brand_pulse", "cost", "missing"];
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "market_sold", "web_info", "ai_estimate", "none"];

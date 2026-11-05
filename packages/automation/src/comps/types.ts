@@ -10,11 +10,11 @@ import type { MarketMatchLevel, MarketStats } from '@listora/sourcing/market';
 import type { PacingSettings } from '../profiles.ts';
 
 /** The marketplaces with a comparison reader, in the order the card shows them. */
-export const COMPARISON_MARKETPLACES = ['depop', 'ebay', 'poshmark', 'mercari'] as const;
+export const COMPARISON_MARKETPLACES = ['depop', 'ebay', 'poshmark', 'mercari', 'vinted'] as const;
 export type ComparisonMarketplace = (typeof COMPARISON_MARKETPLACES)[number];
 
 /**
- * Where a marketplace shows a visitor sold listings at all (Depop shows none), how many days
+ * Where a marketplace shows a visitor sold listings at all (Depop and Vinted show none), how many days
  * back its sold comparisons reach: eBay's whole sold search, its last 90 days, the window its
  * count of sold listings (`soldTotal`) covers; Poshmark's sold search shows every sale it ever
  * had, so its reader counts only those of the last 90 days; and Mercari's latest sold results
@@ -105,7 +105,7 @@ export type ComparisonOutput =
       /**
        * Sold listings in the marketplace's sold window (`COMPARISON_SOLD_WINDOW_DAYS`), where it
        * shows a visitor sold ones: eBay's whole sold search over its 90 days, Mercari's latest
-       * sold read that sold in the last 30 days; absent where it shows none (Depop) or counts
+       * sold read that sold in the last 30 days; absent where it shows none (Depop, Vinted) or counts
        * every sale it ever had (Poshmark).
        */
       readonly soldTotal?: number | null;

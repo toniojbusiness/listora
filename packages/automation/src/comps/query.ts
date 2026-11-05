@@ -41,6 +41,8 @@ const PRODUCT_TYPES: Readonly<
   poshmark: (category, department) => poshmarkProductTypes(category, department),
   // Nor do Mercari's cards: they name the brand and the size, and the type is in the name.
   mercari: () => [],
+  // Nor do Vinted's: they name the brand and the size, and the type is in the title.
+  vinted: () => [],
 };
 
 /** The query for one marketplace, or `null` without a brand or an item type. */

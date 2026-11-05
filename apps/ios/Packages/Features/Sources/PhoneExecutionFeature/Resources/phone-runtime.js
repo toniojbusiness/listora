@@ -7881,7 +7881,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* page has `selector`.
 	*/
 	async function expectElement$2(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
+		if (!await page.exists(selector)) throw changed$3(pageName, `has no ${what} (${selector})`);
 	}
 	/**
 	* Waits, within the step's time, for `selector` on a page that Depop's own scripts draw after
@@ -7892,11 +7892,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		try {
 			await page.waitFor(selector, "attached");
 		} catch {
-			if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
+			if (!await page.exists(selector)) throw changed$3(pageName, `has no ${what} (${selector})`);
 		}
 	}
 	/** The failure for a Depop page that is not as the script expects. */
-	function changed$2(pageName, problem) {
+	function changed$3(pageName, problem) {
 		return new PageChangedError(`Depop's ${pageName} ${problem}.`);
 	}
 	/**
@@ -7925,7 +7925,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* item's own, without shipping). Only those are read: never the seller (the slug names them),
 	* the photos, or the location.
 	*/
-	const PAGE$15 = "search";
+	const PAGE$16 = "search";
 	/** Statuses of a product that sold, as Depop names them (page-data.ts). */
 	const SOLD_STATUSES = /* @__PURE__ */ new Set([
 		"STATUS_SOLD",
@@ -7973,18 +7973,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readDepopSearch(page, site, words) {
 		if (!page.url().startsWith(`${site.origin}/`)) await page.goto(depopSearchPageUrl(site));
 		const answer = await page.apiGet(depopSearchApiUrl(site, words));
-		if (answer.status !== 200) throw changed$2(PAGE$15, `answered ${String(answer.status)}`);
+		if (answer.status !== 200) throw changed$3(PAGE$16, `answered ${String(answer.status)}`);
 		return depopSearchFromAnswer(answer.body);
 	}
 	/** The search's products and count, out of its API answer. */
 	function depopSearchFromAnswer(body) {
 		const read = searchAnswerSchema.safeParse(body);
-		if (!read.success) throw changed$2(PAGE$15, "answered with results Listora does not know");
+		if (!read.success) throw changed$3(PAGE$16, "answered with results Listora does not know");
 		const listings = [];
 		for (const entry of read.data.objects) {
 			const product = searchProductSchema.safeParse(entry);
-			if (!product.success) throw changed$2(PAGE$15, "shows a product Listora does not know");
-			const listing = listingOf$3(product.data);
+			if (!product.success) throw changed$3(PAGE$16, "shows a product Listora does not know");
+			const listing = listingOf$4(product.data);
 			if (listing !== null) listings.push(listing);
 		}
 		return {
@@ -7992,7 +7992,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			total: read.data.meta.total_count ?? null
 		};
 	}
-	function listingOf$3(product) {
+	function listingOf$4(product) {
 		if (product.pricing.currency_name !== "USD") return null;
 		const sold = SOLD_STATUSES.has(product.status);
 		if (!sold && !ON_SALE_STATUSES.has(product.status)) return null;
@@ -8074,14 +8074,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* page has `selector`.
 	*/
 	async function expectElement$1(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed$1(pageName, `has no ${what} (${selector})`);
+		if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
 	}
 	/** The failure for an eBay page that is not as the script expects. */
-	function changed$1(pageName, problem) {
+	function changed$2(pageName, problem) {
 		return new PageChangedError(`eBay's ${pageName} ${problem}.`);
 	}
 	/** A US dollar price as eBay shows it (`US $45.00`, `$1,045.00`) in cents; `null` otherwise. */
-	function parsePrice$1(text) {
+	function parsePrice$2(text) {
 		const match = /^(?:US\s*)?\$\s*(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?$/.exec(text?.trim() ?? "");
 		if (match?.[1] === void 0) return null;
 		return Number(match[1].replaceAll(",", "")) * 100 + Number(match[2] ?? "0");
@@ -8135,7 +8135,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/ebay/pages/search-page.ts
-	const PAGE$14 = "search results";
+	const PAGE$15 = "search results";
 	/**
 	* The results page, in eBay's current card layout (`s-card`) and its earlier one (`s-item`),
 	* which eBay still serves to some visitors.
@@ -8180,15 +8180,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				total: 0,
 				shown: 0
 			};
-			throw changed$1(PAGE$14, `has no results (${EBAY_SEARCH_PAGE.results})`);
+			throw changed$2(PAGE$15, `has no results (${EBAY_SEARCH_PAGE.results})`);
 		}
 		const classes = await page.attributes(EBAY_SEARCH_PAGE.parts, "class");
 		const texts = await page.texts(EBAY_SEARCH_PAGE.parts);
-		if (classes.length !== texts.length) throw changed$1(PAGE$14, "changed while it was read");
+		if (classes.length !== texts.length) throw changed$2(PAGE$15, "changed while it was read");
 		const results = groupResults(classes, texts);
 		return {
 			listings: results.flatMap((result) => {
-				const listing = listingOf$2(result, kind);
+				const listing = listingOf$3(result, kind);
 				return listing === null ? [] : [listing];
 			}),
 			total: resultCount(await page.text(EBAY_SEARCH_PAGE.count)),
@@ -8232,18 +8232,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return "other";
 	}
 	/** Words that make a result many items, or no item at all. */
-	const LOT$2 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	const LOT$3 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
 	/** What eBay adds to a title for screen readers and new listings. */
 	const TITLE_NOISE = [/^new listing\s*/i, /\s*opens in a new window or tab\s*$/i];
 	/** eBay's placeholder result that is no listing. */
 	const PLACEHOLDER_TITLES = /* @__PURE__ */ new Set(["shop on ebay"]);
 	/** A result as a listing; `null` for one the comparisons must not count. */
-	function listingOf$2(result, kind) {
+	function listingOf$3(result, kind) {
 		let title = (result.title ?? "").replace(/\s+/g, " ").trim();
 		for (const noise of TITLE_NOISE) title = title.replace(noise, "");
 		if (title === "" || PLACEHOLDER_TITLES.has(title.toLowerCase())) return null;
-		if (LOT$2.test(title)) return null;
-		const priceCents = parsePrice$1((result.price ?? "").replace(/\s+/g, " "));
+		if (LOT$3.test(title)) return null;
+		const priceCents = parsePrice$2((result.price ?? "").replace(/\s+/g, " "));
 		if (priceCents === null) return null;
 		const sold = kind === "sold";
 		if (sold && /best offer accepted/i.test(result.text)) return null;
@@ -8505,7 +8505,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the change to `sold_out`). A listing of many sizes or quantities (a boutique's, `multi_item`),
 	* lots and bundles, and prices not in US dollars are never counted.
 	*/
-	const PAGE$13 = "search";
+	const PAGE$14 = "search";
 	/** Where the search's results and count are in the page's data (`PageDriver.pageData`). */
 	const POSHMARK_SEARCH_DATA = {
 		results: "__INITIAL_STATE__.$_search.gridData.data",
@@ -8548,10 +8548,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The search's listings and count, out of the page's data. */
 	function poshmarkSearchFromData(results, total, kind) {
-		const records = expectShape$1(array(unknown()), results, PAGE$13);
+		const records = expectShape$1(array(unknown()), results, PAGE$14);
 		const listings = [];
 		for (const record of records) {
-			const listing = listingOf$1(expectShape$1(searchListingSchema, record, PAGE$13), kind);
+			const listing = listingOf$2(expectShape$1(searchListingSchema, record, PAGE$14), kind);
 			if (listing !== null) listings.push(listing);
 		}
 		const count = number().int().min(0).safeParse(total);
@@ -8562,9 +8562,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 	/** Words that make a result many items. */
-	const LOT$1 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	const LOT$2 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
 	/** A result as a listing; `null` for one the comparisons must not count. */
-	function listingOf$1(record, kind) {
+	function listingOf$2(record, kind) {
 		const sold = kind === "sold";
 		const status = record.inventory.status;
 		if (sold ? status !== "sold_out" : status !== "available" && status !== "reserved") return null;
@@ -8573,7 +8573,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const priceCents = cents$2(record.price_amount.val);
 		if (priceCents === null || priceCents === 0) return null;
 		const title = record.title.replace(/\s+/g, " ").trim();
-		if (title === "" || LOT$1.test(title)) return null;
+		if (title === "" || LOT$2.test(title)) return null;
 		const at = sold ? soldAt(record.inventory.status_changed_at) : null;
 		if (sold && at === null) return null;
 		return {
@@ -8684,7 +8684,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
 // src/comps/types.ts
 /**
-	* Where a marketplace shows a visitor sold listings at all (Depop shows none), how many days
+	* Where a marketplace shows a visitor sold listings at all (Depop and Vinted show none), how many days
 	* back its sold comparisons reach: eBay's whole sold search, its last 90 days, the window its
 	* count of sold listings (`soldTotal`) covers; Poshmark's sold search shows every sale it ever
 	* had, so its reader counts only those of the last 90 days; and Mercari's latest sold results
@@ -8776,7 +8776,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* page has `selector`.
 	*/
 	async function expectElement(page, selector, pageName, what) {
-		if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
+		if (!await page.exists(selector)) throw changed$1(pageName, `has no ${what} (${selector})`);
 	}
 	/**
 	* Waits, within the step's time, for `selector` on a page that Mercari's own scripts draw after
@@ -8788,7 +8788,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		try {
 			await page.waitFor(selector, "attached");
 		} catch {
-			if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
+			if (!await page.exists(selector)) throw changed$1(pageName, `has no ${what} (${selector})`);
 		}
 	}
 	/**
@@ -8801,11 +8801,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await page.waitFor("body", "attached");
 	}
 	/** The failure for a Mercari page that is not as the script expects. */
-	function changed(pageName, problem) {
+	function changed$1(pageName, problem) {
 		return new PageChangedError(`Mercari's ${pageName} ${problem}.`);
 	}
 	/** Cents from a price as Mercari shows it: `$45`, `$1,250`, or `$45.00`. `null` otherwise. */
-	function parsePrice(shown) {
+	function parsePrice$1(shown) {
 		const match = /^\$\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?$/.exec(shown?.trim() ?? "");
 		if (match?.[1] === void 0) return null;
 		const dollars = Number(match[1].replaceAll(",", ""));
@@ -8818,7 +8818,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/mercari/pages/search-page.ts
-	const PAGE$12 = "search results";
+	const PAGE$13 = "search results";
 	/** Mercari's own item status filter values (`itemStatuses`). */
 	const ITEM_STATUSES = {
 		sold: "2",
@@ -8827,20 +8827,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Mercari's "Newest" sort (`sortBy`), for the sold search: the latest sold first. */
 	const NEWEST = "2";
 	/** A card of the search's own results, not one in a carousel of other items. */
-	const CARD = "[data-testid=\"ItemContainer\"]:not([data-testid=\"FeedContainer\"] *)";
+	const CARD$1 = "[data-testid=\"ItemContainer\"]:not([data-testid=\"FeedContainer\"] *)";
 	const MERCARI_SEARCH_PAGE = {
 		/** The search's result cards, or the page's word that it found nothing. */
-		ready: `${CARD}, [data-testid="SearchResultsEmpty"], [data-testid="NoSearchResults"]`,
+		ready: `${CARD$1}, [data-testid="SearchResultsEmpty"], [data-testid="NoSearchResults"]`,
 		empty: "[data-testid=\"SearchResultsEmpty\"], [data-testid=\"NoSearchResults\"]",
-		card: CARD,
+		card: CARD$1,
 		/**
 		* One selector for every part read, so one read of their attributes and one of their texts
 		* come back in the page's order and line up: each card, then its name and price.
 		*/
 		parts: [
-			CARD,
-			`${CARD} [data-testid="ItemName"]`,
-			`${CARD} [data-testid="ProductThumbItemPrice"]`
+			CARD$1,
+			`${CARD$1} [data-testid="ItemName"]`,
+			`${CARD$1} [data-testid="ProductThumbItemPrice"]`
 		].join(", ")
 	};
 	/** The search page's URL, as the page's own status filter makes it. */
@@ -8858,7 +8858,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		try {
 			await page.waitFor(MERCARI_SEARCH_PAGE.ready, "attached");
 		} catch {
-			if (!await page.exists(MERCARI_SEARCH_PAGE.ready)) throw changed(PAGE$12, `has no results (${MERCARI_SEARCH_PAGE.card})`);
+			if (!await page.exists(MERCARI_SEARCH_PAGE.ready)) throw changed$1(PAGE$13, `has no results (${MERCARI_SEARCH_PAGE.card})`);
 		}
 		if (!await page.exists(MERCARI_SEARCH_PAGE.card)) return {
 			listings: [],
@@ -8879,8 +8879,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			sizes.length,
 			onSale.length,
 			texts.length
-		])).size !== 1) throw changed(PAGE$12, "changed while it was read");
-		const cards = groupCards(roles, {
+		])).size !== 1) throw changed$1(PAGE$13, "changed while it was read");
+		const cards = groupCards$1(roles, {
 			ids,
 			brands,
 			sizes,
@@ -8890,7 +8890,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const data = searchData(await page.pageData("__NEXT_DATA__"));
 		return {
 			listings: cards.flatMap((card) => {
-				const listing = listingOf(card, kind, data.times);
+				const listing = listingOf$1(card, kind, data.times);
 				return listing === null ? [] : [listing];
 			}),
 			total: data.count,
@@ -8939,7 +8939,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return new Date(value < 0xe8d4a51000 ? value * 1e3 : value);
 	}
 	/** The page's parts, in its order, into cards: each card's own name and first price. */
-	function groupCards(roles, values) {
+	function groupCards$1(roles, values) {
 		const cards = [];
 		for (const [index, role] of roles.entries()) {
 			if (role === "ItemContainer") {
@@ -8962,13 +8962,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return cards;
 	}
 	/** Words that make a listing many items. */
-	const LOT = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	const LOT$1 = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
 	/** A card as a listing; `null` for one the comparisons must not count. */
-	function listingOf(card, kind, times = /* @__PURE__ */ new Map()) {
+	function listingOf$1(card, kind, times = /* @__PURE__ */ new Map()) {
 		const sold = kind === "sold";
 		if (sold ? card.onSale === "true" : card.onSale === "false") return null;
 		const name = (card.name ?? "").replace(/\s+/g, " ").trim();
-		if (name === "" || LOT.test(name)) return null;
+		if (name === "" || LOT$1.test(name)) return null;
 		const priceCents = firstPrice(card.price);
 		if (priceCents === null) return null;
 		const brand = card.brand?.trim() ?? "";
@@ -8977,7 +8977,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			sold,
 			brand: brand === "" ? null : brand,
 			productType: null,
-			sizes: cardSizes(card.size),
+			sizes: cardSizes$1(card.size),
 			text: name,
 			at: sold && card.id !== null ? times.get(card.id) ?? null : null
 		};
@@ -8992,7 +8992,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return Number(match[1].replaceAll(",", "")) * 100 + Number(match[2] ?? "0");
 	}
 	/** A card's size as the comparisons match it: `S (4-6)` is `S`, and `4-6` too. */
-	function cardSizes(size) {
+	function cardSizes$1(size) {
 		const shown = size?.replace(/\s+/g, " ").trim() ?? "";
 		if (shown === "") return [];
 		const sizes = /* @__PURE__ */ new Set([shown]);
@@ -9055,6 +9055,261 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		};
 	}
 
+// src/vinted/pages/search-page.ts
+	const PAGE$12 = "search results";
+	/** An item box of the search's grid (its parts' test ids add `--<part>` to its own). */
+	const CARD = "[data-testid=\"grid-item\"] [data-testid^=\"product-item-id-\"]:not([data-testid*=\"--\"])";
+	/** The parts of an item box Listora reads, by the suffix of their test ids. */
+	const PARTS = [
+		"overlay-link",
+		"description-title",
+		"description-subtitle",
+		"price-text"
+	];
+	const VINTED_SEARCH_PAGE = {
+		card: CARD,
+		/**
+		* One selector for every part read, so one read of their test ids, one of their titles, and
+		* one of their texts come back in the page's order and line up: each box, then its parts.
+		*/
+		parts: [CARD, ...PARTS.map((part) => `${CARD} [data-testid$="--${part}"]`)].join(", "),
+		/** The line above the results with the search's count ("500+ results."). */
+		count: ".web_ui__Text__subtitle"
+	};
+	/** The search page's URL, as Vinted's own search bar and pagination links make it. */
+	function vintedSearchUrl(site, words) {
+		return `${site.origin}/catalog?search_text=${encodeURIComponent(words.trim())}`;
+	}
+	/** Loads the search page and reads its results. */
+	async function readVintedSearch(page, site, words) {
+		await page.goto(vintedSearchUrl(site, words));
+		try {
+			await page.waitFor(CARD, "attached");
+		} catch {
+			if (!await page.exists(CARD)) {
+				if (searchTotal(await page.texts(VINTED_SEARCH_PAGE.count)) === 0) return {
+					listings: [],
+					total: 0,
+					shown: 0
+				};
+				throw changed(`has no results (${CARD})`);
+			}
+		}
+		const parts = VINTED_SEARCH_PAGE.parts;
+		const roles = await page.attributes(parts, "data-testid");
+		const titles = await page.attributes(parts, "title");
+		const texts = await page.texts(parts);
+		if ((/* @__PURE__ */ new Set([
+			roles.length,
+			titles.length,
+			texts.length
+		])).size !== 1) throw changed("changed while it was read");
+		const cards = groupCards(roles, {
+			titles,
+			texts
+		});
+		return {
+			listings: cards.flatMap((card) => {
+				const listing = listingOf(card);
+				return listing === null ? [] : [listing];
+			}),
+			total: searchTotal(await page.texts(VINTED_SEARCH_PAGE.count)),
+			shown: cards.length
+		};
+	}
+	/** The page's parts, in its order, into boxes: each box's own first of each part. */
+	function groupCards(roles, values) {
+		const cards = [];
+		for (const [index, role] of roles.entries()) {
+			const part = partOf(role);
+			if (part === "card") {
+				cards.push({
+					label: null,
+					brand: null,
+					subtitle: null,
+					price: null
+				});
+				continue;
+			}
+			const current = cards.at(-1);
+			if (current === void 0 || part === null) continue;
+			const text = values.texts[index] ?? "";
+			switch (part) {
+				case "overlay-link":
+					current.label ??= values.titles[index] ?? null;
+					break;
+				case "description-title":
+					current.brand ??= text;
+					break;
+				case "description-subtitle":
+					current.subtitle ??= text;
+					break;
+				case "price-text": current.price ??= text;
+			}
+		}
+		return cards;
+	}
+	/** Which part a test id names: the box itself, one of `PARTS`, or another (`null`). */
+	function partOf(role) {
+		const match = /^product-item-id-\d+(?:--(.+))?$/.exec(role ?? "");
+		if (match === null) return null;
+		if (match[1] === void 0) return "card";
+		return PARTS.includes(match[1]) ? match[1] : null;
+	}
+	/** Words that make a listing many items. */
+	const LOT = /\b(lots?|bundles?|bulk|wholesale|bale)\b/i;
+	/** A box as a listing for sale; `null` for one the comparisons must not count. */
+	function listingOf(card) {
+		const title = cardTitle(card.label);
+		if (title === "" || LOT.test(title)) return null;
+		const priceCents = parsePrice(card.price);
+		if (priceCents === null) return null;
+		const brand = card.brand?.replace(/\s+/g, " ").trim() ?? "";
+		return {
+			priceCents,
+			sold: false,
+			brand: brand === "" ? null : brand,
+			productType: null,
+			sizes: cardSizes(card.subtitle),
+			text: title,
+			at: null
+		};
+	}
+	/**
+	* The listing's own title out of the overlay link's title, without the brand, condition, size,
+	* and prices Vinted adds after it (`Levis 501 90s, Brand: Levi's, Condition: Very good, Size: W28,
+	* 18.00 $, 19.60 $` is `Levis 501 90s`); empty when there is none.
+	*/
+	function cardTitle(label) {
+		let shown = (label ?? "").replace(/\s+/g, " ").trim();
+		const cut = [
+			", Brand: ",
+			", Condition: ",
+			", Size: "
+		].map((marker) => shown.lastIndexOf(marker)).find((index) => index > 0);
+		if (cut !== void 0) return shown.slice(0, cut).trim();
+		while (/, [\d.,]+ \$$/.test(shown)) shown = shown.replace(/, [\d.,]+ \$$/, "");
+		return shown.trim();
+	}
+	/** Cents from a price as Vinted shows it: `$18.00`, `$1,250.00`, or `$18`. `null` otherwise. */
+	function parsePrice(shown) {
+		const match = /^\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?$/.exec(shown?.trim() ?? "");
+		if (match?.[1] === void 0) return null;
+		return Number(match[1].replaceAll(",", "")) * 100 + Number(match[2] ?? "0");
+	}
+	/**
+	* A box's sizes as the comparisons match them, out of its subtitle (the size, then the
+	* condition, `·` between): `W32` is `W32` and `32`; `S / US 4-6` is `S`, `US 4-6`, and `4-6`;
+	* Vinted's `Other` and a subtitle with only the condition are none.
+	*/
+	function cardSizes(subtitle) {
+		const parts = (subtitle ?? "").split("·").map((part) => part.replace(/\s+/g, " ").trim()).filter((part) => part !== "");
+		if (parts.length < 2) return [];
+		const shown = parts.slice(0, -1).join(" · ");
+		if (/^other$/i.test(shown)) return [];
+		const sizes = /* @__PURE__ */ new Set([shown]);
+		for (const one of shown.split("/").map((part) => part.trim())) {
+			if (one === "") continue;
+			sizes.add(one);
+			const us = /^US\s+(.+)$/i.exec(one)?.[1];
+			if (us !== void 0) sizes.add(us.trim());
+		}
+		const waist = /^W(\d{2})$/i.exec(shown)?.[1];
+		if (waist !== void 0) sizes.add(waist);
+		return [...sizes];
+	}
+	/** The search's count out of the line above its results: `500+ results.` is 500; else `null`. */
+	function searchTotal(lines) {
+		for (const line of lines) {
+			const match = /^\s*(\d{1,3}(?:,\d{3})+|\d+)\+?\s+results?\b/i.exec(line);
+			if (match?.[1] !== void 0) return Number(match[1].replaceAll(",", ""));
+		}
+		return null;
+	}
+	/** The failure for a Vinted page that is not as the read expects. */
+	function changed(problem) {
+		return new PageChangedError(`Vinted's ${PAGE$12} ${problem}.`);
+	}
+
+// src/vinted/site.ts
+/** Vinted US. Listings are `/items/<id>-<title>`; the public search is `/catalog`. */
+	const VINTED_SITE_URL = "https://www.vinted.com";
+	/** Vinted's own origins: a page never loads the main frame anywhere else. */
+	const VINTED_ORIGINS = ["https://www.vinted.com", "https://vinted.com"];
+	/**
+	* Vinted's own signs of a page automation must stop at, on top of the generic ones
+	* (safety/challenges.ts, which already know Cloudflare's "Just a moment..." page and its
+	* Turnstile, DataDome's CAPTCHA frames from captcha-delivery.com, a 403, and the wording of
+	* verification-code steps): its sign-in and sign-up pages under `/member/`.
+	*/
+	const VINTED_CHALLENGE_SIGNS = {
+		loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in|signup|sign-up|register)(\/|$)/i, /^\/member\/(login|signup|sign_up|register|session)(\/|$)/i],
+		verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i, /^\/member\/(verification|verify|two_factor|2fa)(\/|$)/i],
+		botCheckPaths: [],
+		challengeSelectors: []
+	};
+
+// src/comps/vinted.ts
+/**
+	* Vinted's comparison reader (docs/features/thrift-scan.md, "Vinted"): the item's public search
+	* on Vinted, read in a web view that holds no session, one page load. Vinted shows a visitor no
+	* sold listings, so the read is of close matches' asking prices, as Depop's: matched to the item
+	* (the brand Vinted names, else the title's words, and the type in the title, then the model and
+	* the size) and reduced to counts and quartiles (`marketStats`), with the search's own count.
+	* Nothing in it signs in, favourites, offers, or buys anything: it only loads the search page any
+	* visitor's browser loads.
+	*/
+	/**
+	* Vinted's profile for its logged-out reads, until its automation profile joins `profiles.ts`
+	* (docs/features/vinted.md, M3): its own origins and checks, the read-only pace, and the phone
+	* as where it runs. `comparisonProfile` (run.ts) takes from it what every comparison takes from
+	* a marketplace's profile; nothing signs in with it.
+	*/
+	const VINTED_COMPARISON_PROFILE = {
+		marketplace: "vinted",
+		origins: [...VINTED_ORIGINS],
+		cookieDomains: [],
+		apiOrigins: [],
+		loginUrl: `${VINTED_SITE_URL}/member/signup/select_type`,
+		emailsSignInLinks: false,
+		pacing: DEFAULT_PACING,
+		readOnlyPacing: READ_ONLY_PACING,
+		limits: DEFAULT_LIMITS,
+		challenges: VINTED_CHALLENGE_SIGNS,
+		privateSelectors: [],
+		runsOn: "phone",
+		cloudAllowed: false
+	};
+	/** Vinted's site for comparison reads: its own origin only. */
+	function vintedComparisonSite(siteUrl) {
+		return { origin: new URL(siteUrl).origin };
+	}
+	/** The warm-up: Vinted's home page, loaded once while the seller walks to the bins. */
+	function vintedWarmUpScript(siteUrl) {
+		const site = vintedComparisonSite(siteUrl);
+		return (step) => step("open Vinted", { mutates: false }, async (page) => {
+			await page.goto(`${site.origin}/`);
+			return "warm";
+		});
+	}
+	/** One comparison read: the item's search, matched and counted. */
+	function vintedComparisonScript(siteUrl, query, now) {
+		const site = vintedComparisonSite(siteUrl);
+		return async (step) => {
+			const found = await step("search Vinted", { mutates: false }, (page) => readVintedSearch(page, site, query.words));
+			return {
+				stats: marketStats(found.listings, {
+					brand: query.brand,
+					productTypes: query.productTypes,
+					typeWords: query.typeWords,
+					model: query.model,
+					sizeLabel: query.sizeLabel
+				}, now),
+				forSaleTotal: found.total
+			};
+		};
+	}
+
 // src/comps/run.ts
 /**
 	* Runs a comparison read on the phone (docs/features/thrift-scan.md, "Marketplace
@@ -9071,7 +9326,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		depop: "https://www.depop.com",
 		ebay: "https://www.ebay.com",
 		poshmark: "https://poshmark.com",
-		mercari: "https://www.mercari.com"
+		mercari: "https://www.mercari.com",
+		vinted: "https://www.vinted.com"
 	};
 	/** Each marketplace's read and warm-up. */
 	const READERS = {
@@ -9090,15 +9346,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		mercari: {
 			read: (siteUrl, input) => mercariComparisonScript(siteUrl, input.query, new Date(input.now)),
 			warmUp: mercariWarmUpScript
+		},
+		vinted: {
+			read: (siteUrl, input) => vintedComparisonScript(siteUrl, input.query, new Date(input.now)),
+			warmUp: vintedWarmUpScript
 		}
 	};
+	/**
+	* The marketplace's own profile, as its comparisons start from it: its automation profile, or
+	* Vinted's comparison-only one until Vinted's automation profile joins (docs/features/vinted.md).
+	*/
+	function comparisonSiteProfile(marketplace) {
+		return marketplace === "vinted" ? VINTED_COMPARISON_PROFILE : automationProfile(marketplace);
+	}
 	/**
 	* The marketplace's profile for a logged-out read: its own origins and checks, its site's
 	* origin as the only API it may read, no cookie domains (a read never holds a cookie), and the
 	* phone as where it runs (comparisons never run in the cloud).
 	*/
 	function comparisonProfile(marketplace, input, siteUrl = SITES[marketplace]) {
-		const builtIn = automationProfile(marketplace);
+		const builtIn = comparisonSiteProfile(marketplace);
 		const origin = new URL(siteUrl).origin;
 		const origins = builtIn.origins.includes(origin) ? builtIn.origins : [origin];
 		return {
@@ -9158,7 +9425,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const siteUrl = options.siteUrl ?? SITES[input.marketplace];
 		const result = await runRead({
 			marketplace: input.marketplace,
-			pacing: input.pacing ?? automationProfile(input.marketplace).readOnlyPacing,
+			pacing: input.pacing ?? comparisonSiteProfile(input.marketplace).readOnlyPacing,
 			stepTimeoutMs: input.stepTimeoutMs ?? WARM_UP_STEP_MS,
 			callTimeoutMs: input.callTimeoutMs ?? WARM_UP_CALL_MS
 		}, host, READERS[input.marketplace].warmUp(siteUrl), siteUrl, options);
@@ -9401,7 +9668,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function photosAdded(page, count) {
 		if (!await appears$2(page, `${LISTING_FORM$2.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS)) {
 			const shown = await page.count(LISTING_FORM$2.photoPreview);
-			throw changed$2(FORM$2, `shows ${String(shown)} of ${String(count)} photos as added`);
+			throw changed$3(FORM$2, `shows ${String(shown)} of ${String(count)} photos as added`);
 		}
 	}
 	/** The category and every picker the payload fills; the brand the form then shows. */
@@ -9446,8 +9713,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function expectPicked(page, payload, brand) {
 		const missing = await mismatch(page, payload, brand);
-		if (missing !== null) throw changed$2(FORM$2, `no longer shows ${missing}`);
-		if (await page.exists(LISTING_FORM$2.boost) && await checked(page)) throw changed$2(FORM$2, "keeps \"Boost your listing\" on");
+		if (missing !== null) throw changed$3(FORM$2, `no longer shows ${missing}`);
+		if (await page.exists(LISTING_FORM$2.boost) && await checked(page)) throw changed$3(FORM$2, "keeps \"Boost your listing\" on");
 	}
 	/**
 	* Picks exactly these values in one of the form's multi-value pickers (colours, material),
@@ -9457,18 +9724,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function pickAll(page, name, values) {
 		const box = combo(name);
-		if (!await page.exists(box.toggle)) throw changed$2(FORM$2, `has no ${name} picker`);
+		if (!await page.exists(box.toggle)) throw changed$3(FORM$2, `has no ${name} picker`);
 		for (const value of await pickedValues(page, name)) if (!values.includes(value)) await page.click(box.unpick(value));
 		for (const value of values) {
 			if ((await pickedValues(page, name)).includes(value)) continue;
 			if (!await page.exists(box.open)) await page.click(box.toggle);
 			await awaitElement$1(page, box.anyOption, FORM$2, `${name} options`);
-			if (!await page.exists(box.option(value))) throw changed$2(FORM$2, `offers no ${name} "${value}"`);
+			if (!await page.exists(box.option(value))) throw changed$3(FORM$2, `offers no ${name} "${value}"`);
 			await page.click(box.option(value));
 		}
 		if (await page.exists(box.open)) await page.click(box.toggle);
 		const picked = await pickedValues(page, name);
-		if (picked.length !== values.length || values.some((value) => !picked.includes(value))) throw changed$2(FORM$2, `shows ${name} "${picked.join(", ")}" after picking "${values.join(", ")}"`);
+		if (picked.length !== values.length || values.some((value) => !picked.includes(value))) throw changed$3(FORM$2, `shows ${name} "${picked.join(", ")}" after picking "${values.join(", ")}"`);
 	}
 	/** The values a multi-value picker shows as picked. */
 	async function pickedValues(page, name) {
@@ -9480,8 +9747,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function expectComplete(page) {
 		const invalid = await page.count(LISTING_FORM$2.invalid);
-		if (invalid > 0) throw changed$2(FORM$2, `marks ${String(invalid)} filled field(s) as needing a fix`);
-		if ((await messages(page)).length > 0) throw changed$2(FORM$2, "shows a message before posting");
+		if (invalid > 0) throw changed$3(FORM$2, `marks ${String(invalid)} filled field(s) as needing a fix`);
+		if ((await messages(page)).length > 0) throw changed$3(FORM$2, "shows a message before posting");
 	}
 	/**
 	* Checks the form has its Post (sell) or Save (edit) button, before the step that submits it
@@ -9530,7 +9797,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				type: "refused",
 				message: "Depop didn't take the listing: it marked a field as needing a fix."
 			};
-			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
+			if (Date.now() >= end) throw changed$3(FORM$2, "showed no product and no message after the submit");
 			await lookAgain$1(page, LOOK_EVERY_MS$3);
 		}
 	}
@@ -9568,11 +9835,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const index = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) => text.replace(/\s+/g, " ").trim()).indexOf(group);
 			if (index < 0) continue;
 			const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll("\"", "\\\"")}")`;
-			if (await page.count(option) !== 1) throw changed$2(FORM$2, `has no one "${type}" in the category group "${group}"`);
+			if (await page.count(option) !== 1) throw changed$3(FORM$2, `has no one "${type}" in the category group "${group}"`);
 			await page.click(option);
 			return;
 		}
-		throw changed$2(FORM$2, `has no category group "${group}"`);
+		throw changed$3(FORM$2, `has no category group "${group}"`);
 	}
 	/** The category picker's groups and their headers ("Men > Tops"), in the same order. */
 	const CATEGORY_GROUPS = "ul#group-menu > div";
@@ -9605,12 +9872,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const SIZE_PICKER_MS = 1e4;
 	async function pickSize$1(page, size) {
 		const box = combo("variants");
-		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$2(FORM$2, `has no size picker (${box.toggle})`);
+		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$3(FORM$2, `has no size picker (${box.toggle})`);
 		if (!await page.exists(box.open)) await page.click(box.toggle);
 		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
 		const offered = (await page.texts(box.anyOption)).map((option) => option.trim());
 		const label = offered.includes(size) ? size : offered.find((option) => sizeOptionMatches(option, size));
-		if (label === void 0) throw changed$2(FORM$2, `offers no size "${size}" for this category`);
+		if (label === void 0) throw changed$3(FORM$2, `offers no size "${size}" for this category`);
 		await page.click(box.option(label));
 	}
 	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
@@ -9672,9 +9939,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function deleteListing(page) {
 		await page.click(EDIT_PAGE$1.delete);
-		if (!await within(page, () => page.exists(EDIT_PAGE$1.confirm))) throw changed$2("product page", "shows no Delete listing dialog");
+		if (!await within(page, () => page.exists(EDIT_PAGE$1.confirm))) throw changed$3("product page", "shows no Delete listing dialog");
 		await page.click(EDIT_PAGE$1.confirm);
-		if (!await within(page, async () => !await page.exists(EDIT_PAGE$1.dialog))) throw changed$2("product page", "kept its Delete listing dialog open");
+		if (!await within(page, async () => !await page.exists(EDIT_PAGE$1.dialog))) throw changed$3("product page", "kept its Delete listing dialog open");
 	}
 	async function within(page, done) {
 		const end = Date.now() + DIALOG_MS;
@@ -9879,11 +10146,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readOwnProduct(page, site, slug) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE$2 });
 		if (answer.status === 404) return null;
-		if (answer.status !== 200) throw changed$2(API$2, `answered ${String(answer.status)} for a product`);
+		if (answer.status !== 200) throw changed$3(API$2, `answered ${String(answer.status)} for a product`);
 		const product = expectShape(editListingSchema, answer.body, API$2);
 		const status = STATUSES$2[product.status];
-		if (status === void 0) throw changed$2(API$2, "shows a product status Listora does not know");
-		if (product.pricing.currency_name !== "USD") throw changed$2(API$2, "shows a price that is not in US dollars");
+		if (status === void 0) throw changed$3(API$2, "shows a product status Listora does not know");
+		if (product.pricing.currency_name !== "USD") throw changed$3(API$2, "shows a price that is not in US dollars");
 		const key = product.pricing.final_price_key ?? "original_price";
 		const price = expectShape(priceSchema, product.pricing[key], API$2).price_breakdown.price.amount;
 		const { description, sku } = listingCopy(product.description);
@@ -9916,7 +10183,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			statusFilter: filter
 		});
 		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$2 });
-		if (answer.status !== 200) throw changed$2(API$2, `answered ${String(answer.status)} for the seller's listings`);
+		if (answer.status !== 200) throw changed$3(API$2, `answered ${String(answer.status)} for the seller's listings`);
 		const feed = expectShape(feedSchema, answer.body, API$2);
 		return {
 			products: feed.products.map((entry) => {
@@ -9933,7 +10200,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** A US dollar amount (`"18.00"`) in cents. */
 	function cents$1(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-		if (match?.[1] === void 0) throw changed$2(API$2, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$3(API$2, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 
@@ -10298,11 +10565,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (records.length > 0) {
 			const product = expectShape(productRecordSchema, records[0], PAGE$11);
 			status = STATUSES$1[product.status];
-			if (status === void 0) throw changed$2(PAGE$11, "shows a product status Listora does not know");
+			if (status === void 0) throw changed$3(PAGE$11, "shows a product status Listora does not know");
 			text = product.description;
 		} else {
 			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
-			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$11, "has none of the product data Listora reads");
+			if (status === void 0 || offer.description === void 0) throw changed$3(PAGE$11, "has none of the product data Listora reads");
 			text = offer.description;
 		}
 		const priceCents = offer.priceCents;
@@ -10332,20 +10599,20 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return [];
 			}
 		});
-		if (blocks.length === 0) throw changed$2(PAGE$11, "has no product data (structured data)");
+		if (blocks.length === 0) throw changed$3(PAGE$11, "has no product data (structured data)");
 		const own = blocks.find((block) => {
 			const read = structuredDataSchema.safeParse(block);
 			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
 		});
 		if (own === void 0) {
-			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$11, "offers a different product");
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$3(PAGE$11, "offers a different product");
 			expectShape(structuredDataSchema, blocks[0], PAGE$11);
-			throw changed$2(PAGE$11, "has none of the product data Listora reads");
+			throw changed$3(PAGE$11, "has none of the product data Listora reads");
 		}
 		const { offers, description } = expectShape(structuredDataSchema, own, PAGE$11);
-		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$11, "shows a price that is not in US dollars");
+		if (offers.priceCurrency !== "USD") throw changed$3(PAGE$11, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
-		if (match?.[1] === void 0) throw changed$2(PAGE$11, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$3(PAGE$11, "shows a price Listora can't read");
 		return {
 			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
 			...offers.availability === void 0 ? {} : { availability: offers.availability },
@@ -10441,11 +10708,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		});
 		if (cursor !== null) query.set("after", cursor);
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for the receipts`);
+		if (answer.status !== 200) throw changed$3(API$1, `answered ${String(answer.status)} for the receipts`);
 		const shown = expectShape(receiptsSchema, answer.body, API$1);
 		const receipts = shown.objects.map((receipt) => readReceipt(receipt, site));
 		const next = shown.page_info.has_more ? shown.page_info.last ?? null : null;
-		if (shown.page_info.has_more && next === null) throw changed$2(API$1, "has more receipts but no cursor");
+		if (shown.page_info.has_more && next === null) throw changed$3(API$1, "has more receipts but no cursor");
 		return {
 			receipts,
 			next
@@ -10454,7 +10721,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** What each line of a purchase sold for, and its product's slug, by product id. */
 	async function readReceiptLines(page, site, purchaseId) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/${encodeURIComponent(purchaseId)}/`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$2(API$1, `answered ${String(answer.status)} for a receipt`);
+		if (answer.status !== 200) throw changed$3(API$1, `answered ${String(answer.status)} for a receipt`);
 		const shown = expectShape(receiptDetailSchema, answer.body, API$1);
 		return new Map(shown.lines.map((line) => [line.product_id, {
 			slug: line.slug ?? null,
@@ -10467,7 +10734,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	*/
 	function readReceipt(value, site = depopSite(DEPOP_SITE_URL)) {
 		const receipt = expectShape(receiptSchema, value, API$1);
-		if (receipt.currency !== "USD") throw changed$2(API$1, "shows a sale that is not in US dollars");
+		if (receipt.currency !== "USD") throw changed$3(API$1, "shows a sale that is not in US dollars");
 		return {
 			purchaseId: String(receipt.purchase_id),
 			soldAt: new Date(receipt.sold_timestamp),
@@ -10978,7 +11245,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const shown = await apiPage(page, `${site.api}/presentation/api/v1/offers/me/products/${query}`, productsPageSchema, "products with offers");
 			for (const object of shown.objects) {
 				const [id] = texts([object["id"], object["product_id"]]);
-				if (id === void 0) throw changed$2(API, "lists a product with offers without its id");
+				if (id === void 0) throw changed$3(API, "lists a product with offers without its id");
 				products.push({
 					id,
 					slug: texts([object["slug"], object["product_slug"]])[0] ?? null,
@@ -11032,7 +11299,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	async function apiPage(page, url, schema, list) {
 		const answer = await page.apiGet(url, { bearerCookie: TOKEN_COOKIE });
-		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for offers`);
+		if (answer.status !== 200) throw changed$3(API, `answered ${String(answer.status)} for offers`);
 		return expectShape(schema, answer.body, `${API} for ${list}`);
 	}
 	function nextPage(shown) {
@@ -11043,15 +11310,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	function offerOf(record, product, site) {
 		const [offerId] = texts([record["offer_id"], record["id"]]);
 		const [statusText] = texts([record["offer_display_status"], record["status"]]);
-		if (offerId === void 0 || statusText === void 0) throw changed$2(API, "shows an offer Listora can't read");
+		if (offerId === void 0 || statusText === void 0) throw changed$3(API, "shows an offer Listora can't read");
 		const status = depopOfferStatus(statusText);
-		if (status === null) throw changed$2(API, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
+		if (status === null) throw changed$3(API, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
 		if (status === "not_the_sellers" || status === "inactive") return {
 			status,
 			offer: placeholder(offerId, product)
 		};
 		const amountCents = dollarsToCents(record["offer_value"] ?? record["value"]);
-		if (amountCents === null || amountCents <= 0) throw changed$2(API, "shows an offer without its amount");
+		if (amountCents === null || amountCents <= 0) throw changed$3(API, "shows an offer without its amount");
 		const offerer = record["offerer"] ?? record["buyer"] ?? record["user"];
 		const buyerName = typeof offerer === "object" && offerer !== null ? texts([offerer["username"]])[0] ?? null : texts([record["offerer_username"], record["username"]])[0] ?? null;
 		const expires = texts([record["expires_at"]])[0];
@@ -11121,7 +11388,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const items = receipt.lines.map((line) => {
 				const product = products.get(line.productId);
 				const shown = prices?.get(line.productId);
-				if (prices !== null && shown === void 0) throw changed$2("receipts API", "shows a bundle without what one of its items sold for");
+				if (prices !== null && shown === void 0) throw changed$3("receipts API", "shows a bundle without what one of its items sold for");
 				const priceCents = shown?.priceCents ?? receipt.itemsCents;
 				return {
 					externalListingId: product?.state.externalListingId ?? shown?.slug ?? null,
@@ -11325,7 +11592,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			for (let read = 1;; read += 1) {
 				const shown = await readProduct(page, site, copy);
 				if (shown.state.found && shown.state.status === "active") return shown;
-				if (read >= 4) throw changed$2("product page", "doesn't show the new copy of the listing as on sale");
+				if (read >= 4) throw changed$3("product page", "doesn't show the new copy of the listing as on sale");
 				await new Promise((resolve) => setTimeout(resolve, COPY_READ_GAP_MS));
 			}
 		}
@@ -11346,7 +11613,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			}, (page) => deleteListing(page));
 			await step("check the old listing is gone", { mutates: false }, async (page) => {
 				const read = await readProduct(page, site, slug);
-				if (read.state.found && read.state.status === "active") throw changed$2("product page", "still shows the old listing on sale after deleting it");
+				if (read.state.found && read.state.status === "active") throw changed$3("product page", "still shows the old listing on sale after deleting it");
 			});
 		}
 		/** Opens the editor of a listing on sale; a result instead when it can't be edited. */
@@ -11358,7 +11625,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!shown.state.found) return shown.state.authoritative ? deleted() : notListed();
 			if (shown.state.status === "sold") return sold();
 			if (shown.state.status === "ended") return deleted();
-			throw changed$2("edit page", "shows no listing form for a listing on sale");
+			throw changed$3("edit page", "shows no listing form for a listing on sale");
 		}
 		return {
 			create: (op, step) => post(op, step),
@@ -11452,7 +11719,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					if (posted.type !== "applied") return posted;
 					copy = posted.externalListingId ?? null;
 				}
-				if (copy === null || copy === slug) throw changed$2("selling hub", "shows no new copy of the listing after posting it");
+				if (copy === null || copy === slug) throw changed$3("selling hub", "shows no new copy of the listing after posting it");
 				const fresh = await step("read the new listing", {
 					mutates: false,
 					timeScale: 2
@@ -11564,21 +11831,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** Opens the page of active listings that starts at `offset` and reads its rows. */
 	async function readActiveListingsPage(page, site, offset) {
 		await page.goto(absolute$1(site, EBAY_PATHS.active(offset)));
-		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$1(PAGE$10, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
+		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$2(PAGE$10, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(ACTIVE_LISTINGS_PAGE.row, "data-item-id");
 		const titles = await page.texts(ACTIVE_LISTINGS_PAGE.title);
 		const labels = await page.texts(ACTIVE_LISTINGS_PAGE.customLabel);
 		const prices = await page.texts(ACTIVE_LISTINGS_PAGE.price);
-		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$1(PAGE$10, "shows rows without a title, Custom label, or price");
+		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$2(PAGE$10, "shows rows without a title, Custom label, or price");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$1(PAGE$10, "shows a row without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$2(PAGE$10, "shows a row without an item number");
 				const label = labels[index] ?? "";
 				return {
 					itemId: id,
 					title: titles[index] ?? "",
 					sku: label === "" || label === "--" ? null : label,
-					priceCents: parsePrice$1(prices[index] ?? null)
+					priceCents: parsePrice$2(prices[index] ?? null)
 				};
 			}),
 			hasMore: await page.exists(ACTIVE_LISTINGS_PAGE.next)
@@ -11609,13 +11876,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** Reads the listing page the browser shows now (after a form sent it there). */
 	async function readShownItem$1(page, site) {
 		const itemId = itemIdFromPath$1(new URL(page.url()).pathname);
-		if (itemId === null) throw changed$1(PAGE$9, "is not at a listing address");
+		if (itemId === null) throw changed$2(PAGE$9, "is not at a listing address");
 		await expectElement$1(page, ITEM_PAGE$1.root, PAGE$9, "listing details");
-		if (((await page.text(ITEM_PAGE$1.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$1(PAGE$9, "shows a different item number");
+		if (((await page.text(ITEM_PAGE$1.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$2(PAGE$9, "shows a different item number");
 		const title = await page.text(ITEM_PAGE$1.title);
-		if (title === null || title === "") throw changed$1(PAGE$9, "shows no title");
-		const priceCents = parsePrice$1(await page.text(ITEM_PAGE$1.price));
-		if (priceCents === null) throw changed$1(PAGE$9, "shows no price Listora can read");
+		if (title === null || title === "") throw changed$2(PAGE$9, "shows no title");
+		const priceCents = parsePrice$2(await page.text(ITEM_PAGE$1.price));
+		if (priceCents === null) throw changed$2(PAGE$9, "shows no price Listora can read");
 		const soldNotice = await page.text(ITEM_PAGE$1.sold);
 		const endedNotice = await page.text(ITEM_PAGE$1.ended);
 		const status = soldNotice !== null ? "sold" : endedNotice !== null ? "ended" : "active";
@@ -11627,7 +11894,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		]) {
 			if (shown === null) continue;
 			const time = ebayTimeIn(shown);
-			if (time === null) throw changed$1(PAGE$9, `shows a ${what} Listora can't read`);
+			if (time === null) throw changed$2(PAGE$9, `shows a ${what} Listora can't read`);
 			times.push(time.getTime());
 		}
 		return {
@@ -11714,7 +11981,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function fillListing$2(page, payload, sku, photos) {
 		await expectElement$1(page, LISTING_FORM$1.form, FORM$1, FORM$1);
 		if (payload.categoryId === null) throw new Error("a listing without a category passed validation");
-		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$1(FORM$1, `is not in category ${payload.categoryId}`);
+		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$2(FORM$1, `is not in category ${payload.categoryId}`);
 		if (photos !== null) {
 			await expectElement$1(page, LISTING_FORM$1.photos, FORM$1, "photo input");
 			await page.upload(LISTING_FORM$1.photos, photos);
@@ -11726,7 +11993,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await fillItemSpecifics(page, payload.itemSpecifics);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await expectElement$1(page, LISTING_FORM$1.condition, FORM$1, "condition list");
-		if (!(await page.attributes(`${LISTING_FORM$1.condition} option`, "value")).includes(String(payload.condition.id))) throw changed$1(FORM$1, `offers no condition "${payload.condition.label}" for this category`);
+		if (!(await page.attributes(`${LISTING_FORM$1.condition} option`, "value")).includes(String(payload.condition.id))) throw changed$2(FORM$1, `offers no condition "${payload.condition.label}" for this category`);
 		await page.select(LISTING_FORM$1.condition, String(payload.condition.id));
 		if (await page.exists(LISTING_FORM$1.conditionDescription)) await page.fill(LISTING_FORM$1.conditionDescription, payload.conditionDescription ?? "");
 		await expectElement$1(page, LISTING_FORM$1.description, FORM$1, "description editor");
@@ -11749,7 +12016,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			message
 		};
 		const itemId = itemIdFromPath$1(new URL(page.url()).pathname);
-		if (itemId === null) throw changed$1(FORM$1, "opened a page that is not a listing");
+		if (itemId === null) throw changed$2(FORM$1, "opened a page that is not a listing");
 		return {
 			type: "listed",
 			itemId
@@ -11774,7 +12041,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	*/
 	async function fillItemSpecifics(page, specifics) {
 		const fields = (await page.attributes(LISTING_FORM$1.itemSpecific, "data-name")).filter((name) => name !== null);
-		if (fields.length === 0) throw changed$1(FORM$1, `has no item specifics (${LISTING_FORM$1.itemSpecific})`);
+		if (fields.length === 0) throw changed$2(FORM$1, `has no item specifics (${LISTING_FORM$1.itemSpecific})`);
 		for (const specific of specifics) {
 			const value = specific.values.join(", ");
 			const field = fields.find((name) => name.toLowerCase() === specific.name.toLowerCase());
@@ -11812,21 +12079,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** Opens the page of sold listings that starts at `offset` and reads its rows. */
 	async function readSoldListingsPage(page, site, offset) {
 		await page.goto(absolute$1(site, EBAY_PATHS.sold(offset)));
-		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$1(PAGE$7, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
+		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$2(PAGE$7, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(SOLD_LISTINGS_PAGE.row, "data-item-id");
 		const orders = await page.texts(SOLD_LISTINGS_PAGE.order);
 		const prices = await page.texts(SOLD_LISTINGS_PAGE.price);
 		const dates = await page.texts(SOLD_LISTINGS_PAGE.soldAt);
-		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$1(PAGE$7, "shows sales without an order number, price, or date");
+		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$2(PAGE$7, "shows sales without an order number, price, or date");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$1(PAGE$7, "shows a sale without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$2(PAGE$7, "shows a sale without an item number");
 				const orderId = /\d{2}-\d{5}-\d{5}/.exec(orders[index] ?? "")?.[0];
-				if (orderId === void 0) throw changed$1(PAGE$7, "shows an order number Listora can't read");
-				const priceCents = parsePrice$1(prices[index] ?? null);
-				if (priceCents === null) throw changed$1(PAGE$7, "shows a price Listora can't read");
+				if (orderId === void 0) throw changed$2(PAGE$7, "shows an order number Listora can't read");
+				const priceCents = parsePrice$2(prices[index] ?? null);
+				if (priceCents === null) throw changed$2(PAGE$7, "shows a price Listora can't read");
 				const soldAt = ebayTimeIn(dates[index] ?? null);
-				if (soldAt === null) throw changed$1(PAGE$7, "shows a sale time Listora can't read");
+				if (soldAt === null) throw changed$2(PAGE$7, "shows a sale time Listora can't read");
 				return {
 					orderId,
 					itemId: id,
@@ -11875,7 +12142,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const shown = await step("read the listing", { mutates: false }, (page) => readItem$1(page, site, itemId));
 			if (!shown.found || shown.status !== "active") return shown;
 			const form = await step("read the description", { mutates: false }, (page) => readListingForm(page, site, itemId));
-			if (form === null) throw changed$1("revise form", "shows no listing form for a listing on sale");
+			if (form === null) throw changed$2("revise form", "shows no listing form for a listing on sale");
 			return {
 				...shown,
 				description: descriptionText(form.descriptionHtml)
@@ -11918,7 +12185,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!shown.found) return notListed();
 			if (shown.status === "sold") return sold();
 			if (shown.status === "ended") return ended();
-			throw changed$1("revise form", "shows no listing form for a listing on sale");
+			throw changed$2("revise form", "shows no listing form for a listing on sale");
 		}
 		return {
 			create: async (op, step) => {
@@ -11985,7 +12252,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				const found = await earlier(op, step);
 				if (found !== null) return found;
-				if (await step("open the relist form", { mutates: false }, (page) => openListingForm(page, site, "RelistItem", itemId, payload.categoryId)) === "not_editable") throw changed$1("relist form", "shows no listing form for an ended listing");
+				if (await step("open the relist form", { mutates: false }, (page) => openListingForm(page, site, "RelistItem", itemId, payload.categoryId)) === "not_editable") throw changed$2("relist form", "shows no listing form for an ended listing");
 				await step("fill in the listing", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
 				return step("list it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
@@ -12292,7 +12559,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await awaitElement(page, ACCOUNT_PAGE.sales, "account page", "sales link");
 		const href = await page.attribute(ACCOUNT_PAGE.sales, "href");
 		const path = href === null ? null : new URL(href, site.origin).pathname;
-		if (path === null || !/^\/mypage\/listings\/[a-z_]+\/$/.test(path)) throw changed("account page", "has a sales link Listora does not understand");
+		if (path === null || !/^\/mypage\/listings\/[a-z_]+\/$/.test(path)) throw changed$1("account page", "has a sales link Listora does not understand");
 		return path;
 	}
 
@@ -12461,7 +12728,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (!await off() && await appears$1(page, LISTING_FORM.smartPricingTurnOff, 2e3)) await page.click(LISTING_FORM.smartPricingTurnOff);
 		const end = Date.now() + APPEAR_MS;
 		while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "ON") {
-			if (Date.now() >= end) throw changed(FORM, "kept Smart Pricing on");
+			if (Date.now() >= end) throw changed$1(FORM, "kept Smart Pricing on");
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 		}
 	}
@@ -12476,7 +12743,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await page.click(LISTING_FORM.category);
 		for (const [level, name] of path.entries()) {
 			const row = LISTING_FORM.categoryRow(name);
-			if (!await appears$1(page, row)) throw changed(FORM, `offers no category level ${String(level + 1)} "${name}"`);
+			if (!await appears$1(page, row)) throw changed$1(FORM, `offers no category level ${String(level + 1)} "${name}"`);
 			await page.click(row);
 		}
 		const whole = LISTING_FORM.categoryRow(`All ${path.at(-1) ?? ""}`);
@@ -12490,7 +12757,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (!await page.exists(LISTING_FORM.anyCategoryRow)) break;
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 		}
-		if (await shown() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
+		if (await shown() !== path.join(" > ")) throw changed$1(FORM, "shows a different category than picked");
 	}
 	/**
 	* Picks the item's brand, or Mercari's "No brand / Not sure" when Mercari doesn't list it or the
@@ -12509,7 +12776,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			for (const search of searches) if (await pickBrandOption(page, search, brand)) return;
 		}
 		if (await pickBrandChip(page, (name) => name === LISTING_FORM.noBrand)) return;
-		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
+		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed$1(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
 	}
 	/** Ticks the suggested brand chip whose name passes `wanted` (kept when already ticked). */
 	async function pickBrandChip(page, wanted) {
@@ -12557,15 +12824,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await page.click(LISTING_FORM.size);
 		if (!await appears$1(page, LISTING_FORM.sizeOption, 4e3)) {
 			await page.click(LISTING_FORM.size);
-			if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed(FORM, "shows no sizes");
+			if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed$1(FORM, "shows no sizes");
 		}
 		const offered = await page.texts(LISTING_FORM.sizeOption);
 		const spaced = (text) => text.replace(/\s+/g, " ").trim();
 		const label = offered.find((option) => spaced(option) === spaced(size));
-		if (label === void 0) throw changed(FORM, `offers no size "${size}" for this category`);
+		if (label === void 0) throw changed$1(FORM, `offers no size "${size}" for this category`);
 		if (set !== null) {
 			const inSet = `${LISTING_FORM.sizeOption}[aria-label="${quote$1(`${set} ${spaced(label)}`)}"]`;
-			if (!await page.exists(inSet)) throw changed(FORM, `offers no size "${size}" in its ${set} sizes`);
+			if (!await page.exists(inSet)) throw changed$1(FORM, `offers no size "${size}" in its ${set} sizes`);
 			await page.click(inSet);
 			return;
 		}
@@ -12578,11 +12845,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	async function chooseShipping(page) {
 		await expectElement(page, LISTING_FORM.prepaidLabel, FORM, "prepaid label shipping");
 		await page.click(LISTING_FORM.prepaidLabel);
-		if (!await appears$1(page, LISTING_FORM.freeShipping)) throw changed(FORM, "asks nothing about free shipping for the prepaid label");
+		if (!await appears$1(page, LISTING_FORM.freeShipping)) throw changed$1(FORM, "asks nothing about free shipping for the prepaid label");
 		const label = await page.attribute(LISTING_FORM.shippingClass, "value");
-		if (label === null || label.trim() === "") throw changed(FORM, "recommends no shipping label");
+		if (label === null || label.trim() === "") throw changed$1(FORM, "recommends no shipping label");
 		await page.click(LISTING_FORM.freeShipping);
-		if (!await appears$1(page, LISTING_FORM.freeShippingNo)) throw changed(FORM, "offers no way to turn free shipping off");
+		if (!await appears$1(page, LISTING_FORM.freeShippingNo)) throw changed$1(FORM, "offers no way to turn free shipping off");
 		await page.click(LISTING_FORM.freeShippingNo);
 	}
 	/** Whether `selector` is on the page within a moment (Mercari's scripts draw it). */
@@ -12661,7 +12928,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				type: "listed",
 				itemId: null
 			};
-			if (Date.now() >= end) throw changed(FORM, "showed no listing and no message after the submit");
+			if (Date.now() >= end) throw changed$1(FORM, "showed no listing and no message after the submit");
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
 			await page.waitFor("body", "attached");
 		}
@@ -12699,7 +12966,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const shown = (await page.text(EDIT_PAGE.toggle))?.trim();
 		if (shown === "Deactivate") return "active";
 		if (shown === "Activate") return "inactive";
-		throw changed(PAGE$6, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
+		throw changed$1(PAGE$6, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
 	}
 	/** Deactivates the listing the editor shows, and waits for Mercari to take it. */
 	async function deactivate(page) {
@@ -12715,11 +12982,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* know: nothing is clicked.
 	*/
 	async function toggled(page, label) {
-		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed(PAGE$6, `has no ${label} button (${EDIT_PAGE.toggle})`);
+		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed$1(PAGE$6, `has no ${label} button (${EDIT_PAGE.toggle})`);
 		await page.click(EDIT_PAGE.toggle);
 		const end = Date.now() + DRAW_MS;
 		while (onEditPage(page)) {
-			if (Date.now() >= end) throw changed(PAGE$6, `stayed open after ${label}`);
+			if (Date.now() >= end) throw changed$1(PAGE$6, `stayed open after ${label}`);
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
 	}
@@ -12820,17 +13087,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	*/
 	async function readShownItem(page, site) {
 		const id = itemIdFromPath(new URL(page.url()).pathname);
-		if (id === null) throw changed("listing page", "is not at a listing address");
+		if (id === null) throw changed$1("listing page", "is not at a listing address");
 		const text = await page.text(ITEM_PAGE.data);
-		if (text === null) throw changed("listing page", "embeds none of the data Listora reads");
+		if (text === null) throw changed$1("listing page", "embeds none of the data Listora reads");
 		let data;
 		try {
 			data = JSON.parse(text);
 		} catch {
-			throw changed("listing page", "embeds data Listora can't parse");
+			throw changed$1("listing page", "embeds data Listora can't parse");
 		}
 		const parsed = object({ props: object({ pageProps: object({ serverState: record(string(), unknown()) }) }) }).safeParse(data);
-		if (!parsed.success) throw changed("listing page", "has none of the listing data Listora reads");
+		if (!parsed.success) throw changed$1("listing page", "has none of the listing data Listora reads");
 		const raw = parsed.data.props.pageProps.serverState[`ItemDetail:${id}`];
 		if (raw === void 0 || raw === null) return {
 			state: {
@@ -12841,9 +13108,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			soldAt: null
 		};
 		const record$1 = itemRecordSchema.safeParse(raw);
-		if (!record$1.success) throw changed("listing page", "shows the listing without what Listora reads");
+		if (!record$1.success) throw changed$1("listing page", "shows the listing without what Listora reads");
 		const status = STATUSES[record$1.data.status];
-		if (status === void 0) throw changed("listing page", "shows a status Listora does not know");
+		if (status === void 0) throw changed$1("listing page", "shows a status Listora does not know");
 		const { description, sku } = splitSkuLine(record$1.data.description);
 		return {
 			state: {
@@ -13021,7 +13288,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				page.count(LISTINGS_PAGE.photoLink)
 			]);
 			if (shown > 0 && Math.max(named, photos) === shown) break;
-			if (Date.now() >= end) throw changed(name, shown === 0 ? "shows no rows" : "has rows that link to no listing");
+			if (Date.now() >= end) throw changed$1(name, shown === 0 ? "shows no rows" : "has rows that link to no listing");
 			await lookAgain(page, 500);
 		}
 		const sold = tab === "in_progress" || tab === "sold";
@@ -13034,7 +13301,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			page.texts(LISTINGS_PAGE.headings)
 		]);
 		const links = named.length > 0 ? named : await page.attributes(LISTINGS_PAGE.photoLink, "href");
-		if (links.length !== shownRows) throw changed(name, "has rows that link to no listing");
+		if (links.length !== shownRows) throw changed$1(name, "has rows that link to no listing");
 		const titled = titles.length === links.length;
 		const priced = prices.length === links.length;
 		const updatedColumn = headings.findIndex((heading) => heading.trim() === "Updated");
@@ -13042,13 +13309,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		return {
 			rows: links.map((href, index) => {
 				const id = href === null ? null : itemIdFromPath(new URL(href, site.origin).pathname);
-				if (id === null) throw changed(name, "has a row that links to no listing");
+				if (id === null) throw changed$1(name, "has a row that links to no listing");
 				const soldAt = sold && soldAts.length === links.length ? new Date(soldAts[index] ?? "") : null;
-				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed(name, "has a sold row whose sold time Listora cannot read");
+				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed$1(name, "has a sold row whose sold time Listora cannot read");
 				return {
 					id,
 					title: titled ? titles[index] ?? "" : "",
-					priceCents: priced ? parsePrice(prices[index] ?? null) : null,
+					priceCents: priced ? parsePrice$1(prices[index] ?? null) : null,
 					soldAt,
 					changedBy: updated.length === links.length ? latestEndOfDay(updated[index] ?? "") : null
 				};
@@ -13167,7 +13434,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
 			if (!shown.state.found) return notListed();
 			if (shown.state.status === "sold") return sold();
-			throw changed("edit page", "shows no listing form for a listing that has not sold");
+			throw changed$1("edit page", "shows no listing form for a listing that has not sold");
 		}
 		/**
 		* The edit page an end or relist acts on, and whether it shows the listing active or inactive,
@@ -13262,7 +13529,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (shown === "inactive") return { type: "applied" };
 				if (!shown.state.found) return notListed();
 				if (shown.state.status !== "active") return { type: "applied" };
-				throw changed("edit page", "shows no listing form for an active listing");
+				throw changed$1("edit page", "shows no listing form for an active listing");
 			},
 			relist: async (op, step) => {
 				const id = op.listing.externalListingId;
@@ -13285,7 +13552,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					type: "applied",
 					externalListingId: id
 				};
-				throw changed("edit page", "shows no listing form for a listing that has not sold");
+				throw changed$1("edit page", "shows no listing form for a listing that has not sold");
 			},
 			refresh: async (op, step) => {
 				const id = op.listing.externalListingId;

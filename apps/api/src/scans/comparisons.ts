@@ -7,9 +7,9 @@
  * showed a check (24 hours) or asked to slow down (an hour), or this hour's or day's reads are
  * used up. The phone answers with counts and quartiles only (`saveScanComparison`).
  *
- * Depop shows a visitor no sold listings, so its numbers are what close matches ask, labeled as
- * asking prices; the household's own sales are the sold side, and the demand is their recent
- * pace against Depop's live supply. eBay, Poshmark, and Mercari show their sold listings, so their
+ * Depop and Vinted show a visitor no sold listings, so their numbers are what close matches ask,
+ * labeled as asking prices; the household's own sales are the sold side, and the demand is their
+ * recent pace against the marketplace's live supply. eBay, Poshmark, and Mercari show their sold listings, so their
  * numbers are also what close matches sold for (the call's range when the household's own sales
  * are too few); eBay's demand is its search's sold pace against its supply, Poshmark's its close
  * matches' sold dates (its sold search counts every sale it ever had), and Mercari's how many of
@@ -17,13 +17,13 @@
  */
 import type { ScanComparison, ScanComparisonAnswer } from '@listora/api-contract';
 import {
-  automationProfile,
   COMPARISON_MARKETPLACES,
   COMPARISON_SOLD_PACE,
   COMPARISON_SOLD_WINDOW_DAYS,
   COMPARISON_VERSION,
   comparisonQuery,
   comparisonQueryKey,
+  comparisonSiteProfile,
   type ComparisonInput,
   type ComparisonMarketplace,
   type ComparisonStats,
@@ -59,13 +59,16 @@ export interface ComparisonLimits {
 /**
  * Reads each marketplace's comparisons may make for an account, per hour and per day: starting
  * points to tune in the live test, not proven safe limits (the plan's section 3.3). An eBay or
- * a Poshmark read loads two results pages (its sold and its for-sale search).
+ * a Poshmark read loads two results pages (its sold and its for-sale search). A Vinted read loads
+ * one, but Vinted's pages run DataDome's and Cloudflare's bot detection, so its reads are as few
+ * as eBay's.
  */
 export const COMPARISON_LIMITS: Readonly<Record<ComparisonMarketplace, ComparisonLimits>> = {
   depop: { perHour: 60, perDay: 300 },
   ebay: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
   poshmark: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
   mercari: { perHour: 20, perDay: 100, saveForPricier: { after: 12, minEstimateCents: 2_500 } },
+  vinted: { perHour: 30, perDay: 150, saveForPricier: { after: 20, minEstimateCents: 2_500 } },
 };
 
 /** A read of the same search answers for this long. */
@@ -186,7 +189,7 @@ export async function planComparisons(
       });
       continue;
     }
-    const profile = automationProfile(marketplace);
+    const profile = comparisonSiteProfile(marketplace);
     planned.push({
       marketplace,
       status: 'checking',

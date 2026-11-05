@@ -201,7 +201,7 @@ describe('a scan’s prices wait for what they rest on (real Postgres)', () => {
     const scan = await scanOf(item);
     expect(scan.pricing).toMatchObject({
       status: 'checking',
-      waitingOn: ['web', 'depop', 'ebay', 'poshmark', 'mercari'],
+      waitingOn: ['web', 'depop', 'ebay', 'poshmark', 'mercari', 'vinted'],
     });
 
     // Depop answers while the others are out: its row says it was checked, with no prices.
@@ -216,19 +216,22 @@ describe('a scan’s prices wait for what they rest on (real Postgres)', () => {
     });
     expect(afterDepop.call.prices).toBeUndefined();
 
-    // eBay, Poshmark, and Mercari could not be read; the web came back: the prices are in.
+    // eBay, Poshmark, Mercari, and Vinted could not be read; the web came back: the prices are
+    // in, the ones not read said together.
     await answerRead(scan.id, comparison(scan, 'ebay'), { outcome: 'failed', ms: 4 });
     await answerRead(scan.id, comparison(scan, 'poshmark'), { outcome: 'failed', ms: 4 });
     await answerRead(scan.id, comparison(scan, 'mercari'), { outcome: 'failed', ms: 4 });
+    await answerRead(scan.id, comparison(scan, 'vinted'), { outcome: 'failed', ms: 4 });
     const body = await priced(scan.id);
     expect(body.pricing).toEqual({
       status: 'ready',
       label:
-        "Checked your sales, the web, and Depop. Couldn't check eBay. Couldn't check Poshmark. Couldn't check Mercari.",
+        "Checked your sales, the web, and Depop. Couldn't check eBay, Poshmark, Mercari, and Vinted.",
       missing: [
         { source: 'ebay', label: "Couldn't check eBay" },
         { source: 'poshmark', label: "Couldn't check Poshmark" },
         { source: 'mercari', label: "Couldn't check Mercari" },
+        { source: 'vinted', label: "Couldn't check Vinted" },
       ],
       waitUntil: expect.any(String) as string,
     });
@@ -240,6 +243,7 @@ describe('a scan’s prices wait for what they rest on (real Postgres)', () => {
       'web',
       'retail',
       'cost',
+      'missing',
       'missing',
       'missing',
       'missing',
@@ -260,8 +264,12 @@ describe('a scan’s prices wait for what they rest on (real Postgres)', () => {
       { source: 'ebay', label: "Couldn't check eBay in time" },
       { source: 'poshmark', label: "Couldn't check Poshmark in time" },
       { source: 'mercari', label: "Couldn't check Mercari in time" },
+      { source: 'vinted', label: "Couldn't check Vinted in time" },
     ]);
-    expect(body.call.signals.filter((signal) => signal.kind === 'missing')).toHaveLength(4);
+    expect(body.pricing?.label).toBe(
+      "Checked your sales and the web. Couldn't check Depop, eBay, Poshmark, Mercari, and Vinted in time.",
+    );
+    expect(body.call.signals.filter((signal) => signal.kind === 'missing')).toHaveLength(5);
     // The same item with no comparisons on makes the same call: a missing source adds nothing.
     const alongside = answer({ line: 'Pier' });
     web(alongside, plain.api);
