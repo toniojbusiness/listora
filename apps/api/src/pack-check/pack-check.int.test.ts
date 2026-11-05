@@ -26,6 +26,9 @@ describe('pack check (real Postgres)', () => {
     await api.close();
   });
 
+  /** Each order's shelf gets its own code; a random one collided (23505) once in CI. */
+  let shelves = 0;
+
   /** A sold item with a ready cover photo, on its shelf, in an order that still needs packing. */
   async function order(options: {
     title: string;
@@ -43,7 +46,7 @@ describe('pack check (real Postgres)', () => {
       .insertInto('storage_location')
       .values({
         account_id: accountId,
-        code: `S-${String(Math.floor(Math.random() * 1e6))}`,
+        code: `S-${String((shelves += 1))}`,
         label: 'Shelf',
       })
       .returning(['id'])
