@@ -48,6 +48,46 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     });
     expect(adapters.capabilities('ebay', null)?.verifyRead).toBe('api');
     expect(adapters.capabilities('ebay', api)?.verifyRead).toBe('api');
+    // Never Vinted's listing steps: the fake site serves only its session check.
+    expect(adapters.capabilities('vinted', automated)).toMatchObject({
+      connect: 'session',
+      create: 'assisted',
+      delist: 'assisted',
+      saleDetection: ['email', 'manual'],
+    });
+  });
+
+  it("reads a linked Vinted's listings and sold orders, and keeps every listing step assisted", () => {
+    const production = createMarketplaceAdapters({
+      fakeMarketplaceUrl: undefined,
+      ebay: undefined,
+      depop: undefined,
+      automation: createAutomationAdapters({
+        settings: loadAutomationSettings({}),
+        sessions: NoBrowserSessions,
+        photos: new HttpPhotoSource(),
+        logger: createLogger({ service: 'test', level: 'silent' }),
+      }),
+    });
+    const linked = production.get('vinted');
+    expect(linked !== undefined && 'listListings' in linked).toBe(true);
+    expect(linked !== undefined && 'listOrdersSince' in linked).toBe(true);
+    expect(production.capabilities('vinted', automated)).toMatchObject({
+      connect: 'session',
+      create: 'assisted',
+      updatePrice: 'assisted',
+      updateDetails: 'assisted',
+      delist: 'assisted',
+      relist: 'assisted',
+      refresh: 'none',
+      saleDetection: ['poll', 'email', 'manual'],
+    });
+    // Without a linked session, Vinted is assisted and reads nothing.
+    expect(production.capabilities('vinted', null)).toMatchObject({
+      create: 'assisted',
+      verifyRead: 'user_confirm',
+      saleDetection: ['manual'],
+    });
   });
 
   it('automates Poshmark on poshmark.com in production, and never a real site in development', () => {

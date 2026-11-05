@@ -352,8 +352,7 @@
 
 // src/vinted/site.ts
 /**
-	* Vinted US. Member pages are `/member/<id>-<login>`; the seller's own settings are under
-	* `/settings/`.
+	* Vinted US. Member pages are `/member/<id>`; the seller's own settings are under `/settings/`.
 	*/
 	const VINTED_SITE_URL = "https://www.vinted.com";
 	/**
@@ -365,28 +364,30 @@
 	const VINTED_PATHS = { 
 	/** The seller's own profile settings: only a signed-in member sees it. */
 account: "/settings/profile" };
-	/** A member page's path: `/member/<numeric id>` with the member's login after a dash. */
-	const MEMBER_PATH = /^\/member\/(\d{1,20})(?:-([^/?#]+))?\/?$/;
 	/**
-	* The member a profile link names: Vinted's numeric member id and the login in its slug (`null`
-	* when the link carries none), else `null` for any other path (a page under `/member/` that is
-	* not a member, such as the sign-in chooser).
+	* The reads Vinted's own pages make from its same-origin web API (`/api/v2/`), which the session
+	* check and the listings and orders reads make the same way (`pages/api.ts`). The current
+	* member, the wardrobe, and the sold orders answered on the test account (2026-11-05); the item
+	* and transaction reads are modeled until the mapping (Vinted plan M2) records them.
 	*/
-	function memberFromPath(path) {
-		const match = MEMBER_PATH.exec(path);
-		if (match?.[1] === void 0) return null;
-		const slug = match[2];
-		let login = null;
-		if (slug !== void 0) try {
-			login = decodeURIComponent(slug);
-		} catch {
-			login = null;
-		}
-		return {
-			id: match[1],
-			login
-		};
+	const VINTED_API_PATHS = {
+		/** The member signed in: their `id` and `login` (read on the test account, 2026-11-05). */
+		currentUser: "/api/v2/users/current",
+		/** A member's wardrobe: their listings, a page at a time. */
+		wardrobe: (memberId) => `/api/v2/wardrobe/${encodeURIComponent(memberId)}/items`,
+		/** One item, with its description, photos, and details. */
+		item: (id) => `/api/v2/items/${encodeURIComponent(id)}`,
+		/** The signed-in member's own orders (`type=sold`: the ones they sold). */
+		myOrders: "/api/v2/my_orders",
+		/** One transaction (an order): its items, price, and status. */
+		transaction: (id) => `/api/v2/transactions/${encodeURIComponent(id)}`
+	};
+	/** An item's page path: `/items/<numeric id>`, a slug of its title after a dash. */
+	function itemPath(id) {
+		return `/items/${id}`;
 	}
+	/** Vinted's ids (items, members, transactions) are numbers. */
+	const VINTED_ID = /^\d{1,20}$/;
 	/**
 	* Vinted's pace: the gentler pre-2026-10-28 pace before every action (0.45 to 1.1 s) and 5 to
 	* 20 seconds between sessions, slower than the other marketplaces. Vinted's terms say it uses
@@ -430,7 +431,8 @@ account: "/settings/profile" };
 			/^\/(identity|id-verification|kyc)(\/|$)/i
 		],
 		botCheckPaths: [],
-		challengeSelectors: ["#ddChallengeContainer", "iframe[src*=\"captcha-delivery.com\"]"]
+		challengeSelectors: ["#ddChallengeContainer", "iframe[src*=\"captcha-delivery.com\"]"],
+		apiVerificationCodes: ["user_verification_required"]
 	};
 	/**
 	* Parts of Vinted's pages a failure screenshot blacks out besides every form field: buyers'
@@ -541,7 +543,7 @@ account: "/settings/profile" };
 			marketplace: "vinted",
 			origins: [VINTED_SITE_URL, "https://vinted.com"],
 			cookieDomains: ["vinted.com"],
-			apiOrigins: [],
+			apiOrigins: [VINTED_SITE_URL],
 			loginUrl: `${VINTED_SITE_URL}${VINTED_LOGIN_PATH}`,
 			emailsSignInLinks: false,
 			pacing: VINTED_PACING,
@@ -6942,7 +6944,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* bearer token when one is named, returning only the status, `Retry-After`, and the body's text.
 	* Source text, so each host evaluates the same script in its own page.
 	*/
-	function apiGetScript(url, bearerCookie) {
+	function apiGetScript(url, bearerCookie, pageCookies = false) {
 		return `(async () => {
     const name = ${JSON.stringify(bearerCookie)};
     const headers = { accept: 'application/json' };
@@ -6952,7 +6954,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     let response;
     try {
-      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: ${pageCookies ? "'same-origin'" : "'omit'"} });
     } catch (error) {
       return { status: null, failed: String(error) };
     }
@@ -6977,6 +6979,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			text: typeof read.text === "string" ? read.text : null,
 			retryAfterSeconds: read.retryAfter !== null && Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : null
 		};
+	}
+	/**
+	* Whether an API answer is DataDome's for a blocked call: `{ "url": "https://geo.captcha-delivery.com/..." }`,
+	* its challenge for the visitor to complete in a page, which automation never does.
+	*/
+	/** Whether an API's error answer names one of the profile's verification steps. */
+	function verificationAsked(body, profile) {
+		const codes = profile.challenges.apiVerificationCodes ?? [];
+		if (codes.length === 0 || body === null || typeof body !== "object") return false;
+		const code = body["message_code"];
+		return typeof code === "string" && codes.includes(code);
+	}
+	function isDataDomeAnswer(body) {
+		if (body === null || typeof body !== "object") return false;
+		const url = body["url"];
+		if (typeof url !== "string" || !URL.canParse(url)) return false;
+		const host = new URL(url).hostname;
+		return host === "captcha-delivery.com" || host.endsWith(".captcha-delivery.com");
 	}
 	function jsonOrNull(text) {
 		if (text === null) return null;
@@ -7122,7 +7142,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			let read;
 			for (let failedFetches = 0, serverErrors = 0;;) {
 				await this.#session.pacing.wait("action", this.#signal);
-				const answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
+				const answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null, options.pageCookies === true)));
 				this.#active();
 				if (fetchFailed(answer)) {
 					failedFetches += 1;
@@ -7150,6 +7170,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				type: "challenge",
 				kind: "bot_check",
 				sign: "api"
+			});
+			if (status === 403 && isDataDomeAnswer(body)) this.#session.stopFor({
+				type: "challenge",
+				kind: "captcha",
+				sign: "api datadome"
+			});
+			if (status >= 400 && status < 500 && verificationAsked(body, this.#session.profile)) this.#session.stopFor({
+				type: "challenge",
+				kind: "login_challenge",
+				sign: "api verification"
 			});
 			return {
 				status,
@@ -8176,7 +8206,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return `${site.origin}${path}`;
 	}
 	/** A listing's page: the listing's `externalUrl`. */
-	function itemUrl$1(site, itemId) {
+	function itemUrl$2(site, itemId) {
 		return absolute$2(site, EBAY_PATHS.item(itemId));
 	}
 	/**
@@ -8484,7 +8514,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return state;
 	}
 	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
-	function expectShape$1(schema, value, page) {
+	function expectShape$2(schema, value, page) {
 		const parsed = schema.safeParse(value);
 		if (parsed.success) return parsed.data;
 		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
@@ -8658,10 +8688,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The search's listings and count, out of the page's data. */
 	function poshmarkSearchFromData(results, total, kind) {
-		const records = expectShape$1(array(unknown()), results, PAGE$14);
+		const records = expectShape$2(array(unknown()), results, PAGE$14);
 		const listings = [];
 		for (const record of records) {
-			const listing = listingOf$2(expectShape$1(searchListingSchema, record, PAGE$14), kind);
+			const listing = listingOf$2(expectShape$2(searchListingSchema, record, PAGE$14), kind);
 			if (listing !== null) listings.push(listing);
 		}
 		const count = number().int().min(0).safeParse(total);
@@ -10055,7 +10085,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* so the step goes to the user instead of reading a wrong value.
 	*/
 	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
-	function expectShape(schema, value, page) {
+	function expectShape$1(schema, value, page) {
 		const parsed = schema.safeParse(value);
 		if (parsed.success) return parsed.data;
 		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
@@ -10167,7 +10197,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	/** The cookie Depop's pages send as their bearer token. */
 	const TOKEN_COOKIE$2 = "access_token";
-	const API$2 = "web API";
+	const API$3 = "web API";
 	/** One page of the seller's own listings. */
 	const PAGE_SIZE$1 = 24;
 	const amount$1 = object({ amount: string() });
@@ -10181,7 +10211,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			final_price_key: string().optional()
 		}).catchall(unknown())
 	});
-	const priceSchema = object({ price_breakdown: object({ price: amount$1 }) });
+	const priceSchema$1 = object({ price_breakdown: object({ price: amount$1 }) });
 	const feedSchema = object({
 		meta: object({
 			cursor: string().nullable(),
@@ -10210,13 +10240,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readOwnProduct(page, site, slug) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE$2 });
 		if (answer.status === 404) return null;
-		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for a product`);
-		const product = expectShape(editListingSchema, answer.body, API$2);
+		if (answer.status !== 200) throw changed$4(API$3, `answered ${String(answer.status)} for a product`);
+		const product = expectShape$1(editListingSchema, answer.body, API$3);
 		const status = STATUSES$2[product.status];
-		if (status === void 0) throw changed$4(API$2, "shows a product status Listora does not know");
-		if (product.pricing.currency_name !== "USD") throw changed$4(API$2, "shows a price that is not in US dollars");
+		if (status === void 0) throw changed$4(API$3, "shows a product status Listora does not know");
+		if (product.pricing.currency_name !== "USD") throw changed$4(API$3, "shows a price that is not in US dollars");
 		const key = product.pricing.final_price_key ?? "original_price";
-		const price = expectShape(priceSchema, product.pricing[key], API$2).price_breakdown.price.amount;
+		const price = expectShape$1(priceSchema$1, product.pricing[key], API$3).price_breakdown.price.amount;
 		const { description, sku } = listingCopy(product.description);
 		return {
 			record: answer.body,
@@ -10229,8 +10259,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: cents$1(price),
 				currency: "USD",
-				revision: revision(product.updated_at, API$2),
-				refreshedAt: new Date(revision(product.updated_at, API$2)).toISOString()
+				revision: revision(product.updated_at, API$3),
+				refreshedAt: new Date(revision(product.updated_at, API$3)).toISOString()
 			},
 			sku
 		};
@@ -10247,11 +10277,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			statusFilter: filter
 		});
 		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$2 });
-		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for the seller's listings`);
-		const feed = expectShape(feedSchema, answer.body, API$2);
+		if (answer.status !== 200) throw changed$4(API$3, `answered ${String(answer.status)} for the seller's listings`);
+		const feed = expectShape$1(feedSchema, answer.body, API$3);
 		return {
 			products: feed.products.map((entry) => {
-				const read = productRead(expectShape(productRecordSchema$1, entry, API$2), site, API$2);
+				const read = productRead(expectShape$1(productRecordSchema$1, entry, API$3), site, API$3);
 				return {
 					state: read.listing,
 					sku: read.sku,
@@ -10264,7 +10294,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** A US dollar amount (`"18.00"`) in cents. */
 	function cents$1(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-		if (match?.[1] === void 0) throw changed$4(API$2, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$4(API$3, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 
@@ -10273,7 +10303,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* Depop's conditions in Listora's terms, never claiming more than the listing does: Depop's
 	* "Brand new" says nothing about tags.
 	*/
-	const CONDITIONS$2 = {
+	const CONDITIONS$3 = {
 		brand_new: "new_without_tags",
 		used_like_new: "pre_owned_excellent",
 		used_excellent: "pre_owned_excellent",
@@ -10281,7 +10311,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		used_fair: "pre_owned_fair"
 	};
 	/** Depop's colour ids (taxonomy.json `colour`) in Listora's terms; khaki has none. */
-	const COLOURS = {
+	const COLOURS$1 = {
 		black: "black",
 		grey: "gray",
 		white: "white",
@@ -10319,18 +10349,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Depop's brand slug for a listing without a brand, which it shows as "Other". */
 	const UNBRANDED = "unbranded";
 	/** The details of a listing from its edit data and its record in the list of listings. */
-	function listingDetails$2(edit, listed, sku) {
+	function listingDetails$3(edit, listed, sku) {
 		const categoryPath = strings(edit["categories"] ?? edit["category"]).slice(0, 3);
 		const ids = categoryIds(edit, categoryPath);
-		const condition = text$2(edit["condition"]);
+		const condition = text$4(edit["condition"]);
 		return {
-			photoUrls: photoUrls$2(edit["pictures"] ?? edit["pictures_data"] ?? listed["pictures"] ?? listed["preview"]),
-			brand: brand(edit),
+			photoUrls: photoUrls$3(edit["pictures"] ?? edit["pictures_data"] ?? listed["pictures"] ?? listed["preview"]),
+			brand: brand$1(edit),
 			size: strings(listed["sizes"])[0] ?? named$1(edit["size"]) ?? strings(edit["sizes"]).at(0) ?? variantSize(edit["variants"]) ?? null,
-			condition: condition === null ? null : CONDITIONS$2[condition] ?? null,
+			condition: condition === null ? null : CONDITIONS$3[condition] ?? null,
 			categoryRef: ids ?? (categoryPath.length > 0 ? categoryPath.join(" > ") : null),
 			categoryPath,
-			colors: colours(edit["colour"] ?? edit["colours"]),
+			colors: colours$1(edit["colour"] ?? edit["colours"]),
 			originalPriceCents: originalPrice(edit["pricing"]),
 			sku
 		};
@@ -10342,10 +10372,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* server checks it against Depop's taxonomy (`importedCategory`), which the phone doesn't carry.
 	*/
 	function categoryIds(edit, shown) {
-		const type = text$2(edit["product_type"]);
-		const group = text$2(edit["group"]);
+		const type = text$4(edit["product_type"]);
+		const group = text$4(edit["group"]);
 		if (type === null || group === null) return null;
-		const gender = text$2(edit["gender"])?.toLowerCase();
+		const gender = text$4(edit["gender"])?.toLowerCase();
 		const department = edit["is_kids"] === true ? "kidswear" : (gender === void 0 ? void 0 : GENDERS[gender]) ?? DEPARTMENT_NAMES[(shown[0] ?? "").toLowerCase()];
 		return department === void 0 ? null : [
 			department,
@@ -10354,14 +10384,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		].join("/");
 	}
 	/** The brand's name as the listing shows it, before Depop's slug of it; "Other" is none. */
-	function brand(edit) {
-		if ((typeof edit["brand"] === "string" ? text$2(edit["brand"]) : null)?.toLowerCase() === UNBRANDED) return null;
-		return text$2(edit["brand_name"]) ?? text$2(edit["brandName"]) ?? named$1(edit["brand"]);
+	function brand$1(edit) {
+		if ((typeof edit["brand"] === "string" ? text$4(edit["brand"]) : null)?.toLowerCase() === UNBRANDED) return null;
+		return text$4(edit["brand_name"]) ?? text$4(edit["brandName"]) ?? named$1(edit["brand"]);
 	}
 	/** The listing's colours that Listora's vocabulary has, in Depop's order, each once. */
-	function colours(value) {
+	function colours$1(value) {
 		const known = strings(value).flatMap((colour) => {
-			const color = COLOURS[colour.toLowerCase()];
+			const color = COLOURS$1[colour.toLowerCase()];
 			return color === void 0 ? [] : [color];
 		});
 		return [...new Set(known)];
@@ -10373,7 +10403,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	function originalPrice(pricing) {
 		if (pricing === null || typeof pricing !== "object") return null;
 		const record = pricing;
-		const key = text$2(record["final_price_key"]) ?? "original_price";
+		const key = text$4(record["final_price_key"]) ?? "original_price";
 		if (key === "original_price") return null;
 		const original = amountCents(record["original_price"]);
 		const final = amountCents(record[key]);
@@ -10392,7 +10422,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 	/** Each picture's widest https image, in order. */
-	function photoUrls$2(pictures) {
+	function photoUrls$3(pictures) {
 		if (!Array.isArray(pictures)) return [];
 		const urls = pictures.flatMap((picture) => {
 			const best = widest(picture);
@@ -10435,15 +10465,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** A name as Depop gives it: a string, or an object with its `name`. */
 	function named$1(value) {
-		if (typeof value === "string") return text$2(value);
+		if (typeof value === "string") return text$4(value);
 		if (value !== null && typeof value === "object") {
 			const record = value;
-			return text$2(record["name"]) ?? text$2(record["label"]) ?? text$2(record["display"]);
+			return text$4(record["name"]) ?? text$4(record["label"]) ?? text$4(record["display"]);
 		}
 		return null;
 	}
 	function strings(value) {
-		if (typeof value === "string") return text$2(value) === null ? [] : [value.trim()];
+		if (typeof value === "string") return text$4(value) === null ? [] : [value.trim()];
 		if (!Array.isArray(value)) return [];
 		return value.flatMap((entry) => {
 			const name = named$1(entry);
@@ -10455,9 +10485,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const first = Array.isArray(variants) ? variants[0] : variants !== null && typeof variants === "object" ? Object.values(variants)[0] : void 0;
 		if (first === null || typeof first !== "object") return null;
 		const record = first;
-		return named$1(record["size"]) ?? text$2(record["size_name"]) ?? null;
+		return named$1(record["size"]) ?? text$4(record["size_name"]) ?? null;
 	}
-	function text$2(value) {
+	function text$4(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
@@ -10627,7 +10657,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let status;
 		let text;
 		if (records.length > 0) {
-			const product = expectShape(productRecordSchema, records[0], PAGE$11);
+			const product = expectShape$1(productRecordSchema, records[0], PAGE$11);
 			status = STATUSES$1[product.status];
 			if (status === void 0) throw changed$4(PAGE$11, "shows a product status Listora does not know");
 			text = product.description;
@@ -10670,10 +10700,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		});
 		if (own === void 0) {
 			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$4(PAGE$11, "offers a different product");
-			expectShape(structuredDataSchema, blocks[0], PAGE$11);
+			expectShape$1(structuredDataSchema, blocks[0], PAGE$11);
 			throw changed$4(PAGE$11, "has none of the product data Listora reads");
 		}
-		const { offers, description } = expectShape(structuredDataSchema, own, PAGE$11);
+		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$11);
 		if (offers.priceCurrency !== "USD") throw changed$4(PAGE$11, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
 		if (match?.[1] === void 0) throw changed$4(PAGE$11, "shows a price Listora can't read");
@@ -10703,7 +10733,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* is read: no name, address, or message is kept. Only reads.
 	*/
 	const TOKEN_COOKIE$1 = "access_token";
-	const API$1 = "receipts API";
+	const API$2 = "receipts API";
 	const PAGE_SIZE = 24;
 	/** A dollar amount as the receipts show it (`"18.00"`). */
 	const amount = string().regex(/^\d+(\.\d{1,2})?$/);
@@ -10772,11 +10802,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		});
 		if (cursor !== null) query.set("after", cursor);
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$4(API$1, `answered ${String(answer.status)} for the receipts`);
-		const shown = expectShape(receiptsSchema, answer.body, API$1);
+		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for the receipts`);
+		const shown = expectShape$1(receiptsSchema, answer.body, API$2);
 		const receipts = shown.objects.map((receipt) => readReceipt(receipt, site));
 		const next = shown.page_info.has_more ? shown.page_info.last ?? null : null;
-		if (shown.page_info.has_more && next === null) throw changed$4(API$1, "has more receipts but no cursor");
+		if (shown.page_info.has_more && next === null) throw changed$4(API$2, "has more receipts but no cursor");
 		return {
 			receipts,
 			next
@@ -10785,8 +10815,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** What each line of a purchase sold for, and its product's slug, by product id. */
 	async function readReceiptLines(page, site, purchaseId) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/${encodeURIComponent(purchaseId)}/`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$4(API$1, `answered ${String(answer.status)} for a receipt`);
-		const shown = expectShape(receiptDetailSchema, answer.body, API$1);
+		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for a receipt`);
+		const shown = expectShape$1(receiptDetailSchema, answer.body, API$2);
 		return new Map(shown.lines.map((line) => [line.product_id, {
 			slug: line.slug ?? null,
 			priceCents: cents(line.product_amount)
@@ -10797,8 +10827,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* know throws `PageChangedError`.
 	*/
 	function readReceipt(value, site = depopSite(DEPOP_SITE_URL)) {
-		const receipt = expectShape(receiptSchema, value, API$1);
-		if (receipt.currency !== "USD") throw changed$4(API$1, "shows a sale that is not in US dollars");
+		const receipt = expectShape$1(receiptSchema, value, API$2);
+		if (receipt.currency !== "USD") throw changed$4(API$2, "shows a sale that is not in US dollars");
 		return {
 			purchaseId: String(receipt.purchase_id),
 			soldAt: new Date(receipt.sold_timestamp),
@@ -11193,7 +11223,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* her; a status Listora doesn't know stops the read (`PageChangedError`), so a buyer's offer is
 	* never missed or guessed. Only reads.
 	*/
-	const API = "web API";
+	const API$1 = "web API";
 	/** The cookie Depop's pages send as their bearer token. */
 	const TOKEN_COOKIE = "access_token";
 	/** Pages of products and of one product's offers a read follows at most. */
@@ -11309,7 +11339,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const shown = await apiPage(page, `${site.api}/presentation/api/v1/offers/me/products/${query}`, productsPageSchema, "products with offers");
 			for (const object of shown.objects) {
 				const [id] = texts([object["id"], object["product_id"]]);
-				if (id === void 0) throw changed$4(API, "lists a product with offers without its id");
+				if (id === void 0) throw changed$4(API$1, "lists a product with offers without its id");
 				products.push({
 					id,
 					slug: texts([object["slug"], object["product_slug"]])[0] ?? null,
@@ -11363,8 +11393,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	async function apiPage(page, url, schema, list) {
 		const answer = await page.apiGet(url, { bearerCookie: TOKEN_COOKIE });
-		if (answer.status !== 200) throw changed$4(API, `answered ${String(answer.status)} for offers`);
-		return expectShape(schema, answer.body, `${API} for ${list}`);
+		if (answer.status !== 200) throw changed$4(API$1, `answered ${String(answer.status)} for offers`);
+		return expectShape$1(schema, answer.body, `${API$1} for ${list}`);
 	}
 	function nextPage(shown) {
 		const last = shown.page_info.last;
@@ -11374,15 +11404,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	function offerOf(record, product, site) {
 		const [offerId] = texts([record["offer_id"], record["id"]]);
 		const [statusText] = texts([record["offer_display_status"], record["status"]]);
-		if (offerId === void 0 || statusText === void 0) throw changed$4(API, "shows an offer Listora can't read");
+		if (offerId === void 0 || statusText === void 0) throw changed$4(API$1, "shows an offer Listora can't read");
 		const status = depopOfferStatus(statusText);
-		if (status === null) throw changed$4(API, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
+		if (status === null) throw changed$4(API$1, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
 		if (status === "not_the_sellers" || status === "inactive") return {
 			status,
 			offer: placeholder(offerId, product)
 		};
 		const amountCents = dollarsToCents(record["offer_value"] ?? record["value"]);
-		if (amountCents === null || amountCents <= 0) throw changed$4(API, "shows an offer without its amount");
+		if (amountCents === null || amountCents <= 0) throw changed$4(API$1, "shows an offer without its amount");
 		const offerer = record["offerer"] ?? record["buyer"] ?? record["user"];
 		const buyerName = typeof offerer === "object" && offerer !== null ? texts([offerer["username"]])[0] ?? null : texts([record["offerer_username"], record["username"]])[0] ?? null;
 		const expires = texts([record["expires_at"]])[0];
@@ -11531,7 +11561,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	function soldListing(product) {
 		return {
 			...product.state,
-			details: listingDetails$2({}, product.record, product.sku)
+			details: listingDetails$3({}, product.record, product.sku)
 		};
 	}
 	/** A line's title: the first line of its text, within the title limit. */
@@ -11847,7 +11877,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					if (held.has(slug)) {
 						listings.push({
 							...product.state,
-							details: listingDetails$2(product.record, product.record, product.sku),
+							details: listingDetails$3(product.record, product.record, product.sku),
 							fromList: true
 						});
 						continue;
@@ -11856,7 +11886,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					if (own?.state.status !== "active") continue;
 					listings.push({
 						...own.state,
-						details: listingDetails$2(own.record, product.record, own.sku ?? product.sku)
+						details: listingDetails$3(own.record, product.record, own.sku ?? product.sku)
 					});
 				}
 				return {
@@ -11929,8 +11959,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	};
 	const PAGE$9 = "listing page";
 	/** Opens the listing's page and reads it. */
-	async function readItem$1(page, site, itemId) {
-		await page.goto(itemUrl$1(site, itemId));
+	async function readItem$2(page, site, itemId) {
+		await page.goto(itemUrl$2(site, itemId));
 		if (page.status() === 404 || await page.exists(ITEM_PAGE$1.notFound)) return {
 			found: false,
 			authoritative: false
@@ -11964,7 +11994,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return {
 			found: true,
 			externalListingId: itemId,
-			externalUrl: itemUrl$1(site, itemId),
+			externalUrl: itemUrl$2(site, itemId),
 			status,
 			title,
 			description: null,
@@ -12203,7 +12233,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		});
 		/** Reads a listing by its item number, with the description of one on sale. */
 		async function readById(step, itemId) {
-			const shown = await step("read the listing", { mutates: false }, (page) => readItem$1(page, site, itemId));
+			const shown = await step("read the listing", { mutates: false }, (page) => readItem$2(page, site, itemId));
 			if (!shown.found || shown.status !== "active") return shown;
 			const form = await step("read the description", { mutates: false }, (page) => readListingForm(page, site, itemId));
 			if (form === null) throw changed$3("revise form", "shows no listing form for a listing on sale");
@@ -12245,7 +12275,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const itemId = op.listing.externalListingId;
 			if (itemId === null) return notListed();
 			if (await step("open the revise form", { mutates: false }, (page) => openListingForm(page, site, "ReviseItem", itemId, categoryId)) === "editing") return { itemId };
-			const shown = await step("open the listing", { mutates: false }, (page) => readItem$1(page, site, itemId));
+			const shown = await step("open the listing", { mutates: false }, (page) => readItem$2(page, site, itemId));
 			if (!shown.found) return notListed();
 			if (shown.status === "sold") return sold();
 			if (shown.status === "ended") return ended();
@@ -12294,7 +12324,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			end: async (op, step) => {
 				const itemId = op.listing.externalListingId;
 				if (itemId === null) return notListed();
-				const shown = await step("open the listing", { mutates: false }, (page) => readItem$1(page, site, itemId));
+				const shown = await step("open the listing", { mutates: false }, (page) => readItem$2(page, site, itemId));
 				if (!shown.found) return notListed();
 				if (shown.status !== "active") return { type: "applied" };
 				await step("open the end page", { mutates: false }, (page) => openEndPage(page, site, itemId));
@@ -12308,7 +12338,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				if (payload === null) throw new Error("a relist has a payload");
 				const itemId = op.listing.externalListingId;
 				if (itemId === null) return notListed();
-				const shown = await step("open the listing", { mutates: false }, (page) => readItem$1(page, site, itemId));
+				const shown = await step("open the listing", { mutates: false }, (page) => readItem$2(page, site, itemId));
 				if (!shown.found) return notListed();
 				if (shown.status === "active") return {
 					type: "applied",
@@ -12366,7 +12396,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					listings: shown.rows.map((row) => ({
 						found: true,
 						externalListingId: row.itemId,
-						externalUrl: itemUrl$1(site, row.itemId),
+						externalUrl: itemUrl$2(site, row.itemId),
 						status: "active",
 						title: row.title,
 						description: null,
@@ -13087,12 +13117,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		notFound: "[data-testid=\"NotFound\"]",
 		data: "script#__NEXT_DATA__"
 	};
-	function itemUrl(site, id) {
+	function itemUrl$1(site, id) {
 		return absolute$1(site, MERCARI_PATHS.item(id));
 	}
 	/** Opens the listing's page and reads it. */
-	async function readItem(page, site, id) {
-		await page.goto(itemUrl(site, id));
+	async function readItem$1(page, site, id) {
+		await page.goto(itemUrl$1(site, id));
 		if (page.status() === 410) {
 			const shown = await page.exists(ITEM_PAGE.data) ? await readShownItem(page, site) : null;
 			return shown?.state.found === true ? shown : {
@@ -13180,7 +13210,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			state: {
 				found: true,
 				externalListingId: id,
-				externalUrl: itemUrl(site, id),
+				externalUrl: itemUrl$1(site, id),
 				status,
 				title: record$1.data.name,
 				description,
@@ -13201,22 +13231,22 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* Mercari's conditions in Listora's terms (conditions.ts has their ids), never claiming more
 	* than the listing does: Like new is not new.
 	*/
-	const CONDITIONS$1 = {
+	const CONDITIONS$2 = {
 		1: "new_with_tags",
 		2: "pre_owned_excellent",
 		3: "pre_owned_good",
 		4: "pre_owned_fair",
 		5: "pre_owned_fair"
 	};
-	function listingDetails$1(shown, records, sku) {
+	function listingDetails$2(shown, records, sku) {
 		const record = resolved(shown, records, 0);
 		const categoryPath = categoryNames(record);
 		const condition = conditionId(record);
 		return {
-			photoUrls: photoUrls$1(record["photos"] ?? record["photoUrls"]),
-			brand: named(record["brand"]) ?? text$1(record["brandName"]),
+			photoUrls: photoUrls$2(record["photos"] ?? record["photoUrls"]),
+			brand: named(record["brand"]) ?? text$3(record["brandName"]),
 			size: named(record["itemSize"]) ?? named(record["size"]),
-			condition: condition === null ? null : CONDITIONS$1[condition] ?? null,
+			condition: condition === null ? null : CONDITIONS$2[condition] ?? null,
 			categoryRef: categoryPath.length >= 2 ? categoryPath.join(" > ") : null,
 			categoryPath,
 			colors: [],
@@ -13224,7 +13254,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			sku
 		};
 	}
-	function photoUrls$1(photos) {
+	function photoUrls$2(photos) {
 		if (!Array.isArray(photos)) return [];
 		const urls = photos.flatMap((photo) => {
 			if (typeof photo === "string") return isImageUrl(photo) ? [photo] : [];
@@ -13246,7 +13276,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const name = named(level);
 			return name === null ? [] : [name];
 		});
-		const title = text$1(record["categoryTitle"]);
+		const title = text$3(record["categoryTitle"]);
 		return title === null ? [] : title.split(">").map((name) => name.trim()).filter((name) => name !== "");
 	}
 	/** Mercari's condition names, for a condition record that gives its name but not its id. */
@@ -13262,7 +13292,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		if (condition !== null && typeof condition === "object") {
 			const { id, name } = condition;
 			const number = typeof id === "number" ? id : typeof id === "string" ? Number(id) : NaN;
-			if (Number.isInteger(number) && CONDITIONS$1[number] !== void 0) return number;
+			if (Number.isInteger(number) && CONDITIONS$2[number] !== void 0) return number;
 			if (typeof name === "string") return CONDITION_NAMES[name.trim().toLowerCase()] ?? null;
 		}
 		return typeof record["conditionId"] === "number" ? record["conditionId"] : null;
@@ -13280,14 +13310,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		return /^https?:\/\/[^/\s]+\/\S+$/.test(value);
 	}
 	function named(value) {
-		if (typeof value === "string") return text$1(value);
+		if (typeof value === "string") return text$3(value);
 		if (value !== null && typeof value === "object") {
 			const record = value;
-			return text$1(record["name"]) ?? text$1(record["displayName"]);
+			return text$3(record["name"]) ?? text$3(record["displayName"]);
 		}
 		return null;
 	}
-	function text$1(value) {
+	function text$3(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
@@ -13470,7 +13500,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const titled = title === void 0 ? [] : recent.rows.filter((row) => row.title === title);
 			const candidates = titled.length > 0 ? titled : recent.rows.slice(0, 8);
 			for (const row of candidates) {
-				const read = await step("look for the SKU", { mutates: false }, (page) => readItem(page, site, row.id));
+				const read = await step("look for the SKU", { mutates: false }, (page) => readItem$1(page, site, row.id));
 				if (read.state.found && read.sku === sku) return read;
 			}
 			return null;
@@ -13495,7 +13525,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
 			if (await step("open the editor", { mutates: false }, (page) => openEditor(page, site, id)) === "editing") return { id };
-			const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
+			const shown = await step("open the listing", { mutates: false }, (page) => readItem$1(page, site, id));
 			if (!shown.state.found) return notListed();
 			if (shown.state.status === "sold") return sold();
 			throw changed$2("edit page", "shows no listing form for a listing that has not sold");
@@ -13509,7 +13539,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function onEditor(step, id) {
 			const shown = await step("open the editor", { mutates: false }, async (page) => await openEditor(page, site, id) === "editing" ? editorShows(page) : null);
 			if (shown !== null) return shown;
-			return step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
+			return step("open the listing", { mutates: false }, (page) => readItem$1(page, site, id));
 		}
 		/** Posts a new listing from the payload (List, or a relist of a listing Mercari removed). */
 		async function createListing(op, step) {
@@ -13635,7 +13665,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			},
 			read: async (ref, step) => {
 				const id = ref.externalListingId;
-				if (id !== null) return (await step("read the listing", { mutates: false }, (page) => readItem(page, site, id))).state;
+				if (id !== null) return (await step("read the listing", { mutates: false }, (page) => readItem$1(page, site, id))).state;
 				return (await findBySku(step, listingSku(ref)))?.state ?? {
 					found: false,
 					authoritative: false
@@ -13661,14 +13691,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 							if (soldAt === null || priceCents === null) {
 								if (reads === maxReads) break tab;
 								reads += 1;
-								const read = await step("read the sale", { mutates: false }, (page) => readItem(page, site, row.id));
+								const read = await step("read the sale", { mutates: false }, (page) => readItem$1(page, site, row.id));
 								soldAt ??= read.soldAt;
 								if (read.state.found) {
 									priceCents ??= read.state.priceCents;
 									title ||= read.state.title ?? "";
 									listing = {
 										...read.state,
-										details: listingDetails$1(read.record ?? {}, read.records ?? {}, read.sku)
+										details: listingDetails$2(read.record ?? {}, read.records ?? {}, read.sku)
 									};
 								}
 							}
@@ -13718,11 +13748,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 						listings.push(heldListing(site, row));
 						continue;
 					}
-					const read = await step("read a listing", { mutates: false }, (page) => readItem(page, site, row.id));
+					const read = await step("read a listing", { mutates: false }, (page) => readItem$1(page, site, row.id));
 					if (!read.state.found || read.state.status !== "active") continue;
 					listings.push({
 						...read.state,
-						details: listingDetails$1(read.record ?? {}, read.records ?? {}, read.sku)
+						details: listingDetails$2(read.record ?? {}, read.records ?? {}, read.sku)
 					});
 				}
 				return {
@@ -13741,7 +13771,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		return {
 			found: true,
 			externalListingId: row.id,
-			externalUrl: itemUrl(site, row.id),
+			externalUrl: itemUrl$1(site, row.id),
 			status: "active",
 			title: row.title === "" ? null : row.title,
 			description: null,
@@ -13792,49 +13822,478 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 
 // src/vinted/pages/account-page.ts
+/**
+	* The seller's profile settings (`/settings/profile`), which only a signed-in member sees: the
+	* health check opens it to show the session works, and asks Vinted's web API which member it is
+	* signed in as. A session Vinted rejected lands on its sign-up and sign-in chooser instead, which
+	* the runner's safety rules stop at.
+	*
+	* Read on the test account's signed-in session (2026-11-05): every page Vinted draws for a
+	* member has the user menu's button in its header (`user-menu-button`), and the menu's profile
+	* link, drawn only once the button is pressed, is `/member/<id>` with no login after it. So the
+	* member comes from the web API the pages read it from: `GET /api/v2/users/current`, the
+	* member's `id` and `login`.
+	*/
 	const ACCOUNT_PAGE = { 
-	/** The signed-in member's own profile link, in the header's user menu. */
-ownProfile: "header [data-testid=\"user-menu\"] a[href^=\"/member/\"]" };
-	/** Opens the seller's profile settings and waits for the header's own-profile link. */
+	/** The user menu's button in the header, which only a signed-in member's pages draw. */
+userMenu: "header [data-testid=\"user-menu-button\"]" };
+	const currentUserSchema = object({ user: object({
+		id: union([number().int().nonnegative(), string().regex(VINTED_ID)]).transform(String),
+		login: string().nullish()
+	}).catchall(unknown()) });
+	/** Opens the seller's profile settings and waits for the header's user menu. */
 	async function openAccount(page, site) {
 		await page.goto(absolute(site, VINTED_PATHS.account));
-		await awaitElement(page, ACCOUNT_PAGE.ownProfile, "profile settings", "link to your profile");
+		await awaitElement(page, ACCOUNT_PAGE.userMenu, "profile settings", "user menu");
 	}
 	/**
-	* The login of the member signed in on the open settings page, or `null` when its header doesn't
-	* show one Listora can read (no login in the link, or links to more than one member): the seller
-	* then stays unknown, never a guess
-	* (docs/features/marketplace-linking.md#the-shop-a-connection-holds).
+	* The member signed in, as Vinted's web API answers from an open Vinted page. Throws
+	* `PageChangedError` for an answer Listora doesn't know, so no read goes on without knowing whose
+	* account it reads.
+	*/
+	async function currentMember(page, site) {
+		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.currentUser), { pageCookies: true });
+		if (answer.status !== 200) throw changed("web API", `answered ${String(answer.status)} for the member signed in`);
+		const parsed = currentUserSchema.safeParse(answer.body);
+		if (!parsed.success) throw changed("web API", "doesn't show which member is signed in");
+		const login = parsed.data.user.login?.trim().toLowerCase() ?? "";
+		return {
+			id: parsed.data.user.id,
+			login: login === "" ? null : login
+		};
+	}
+	/**
+	* The login of the member signed in, or `null` when Vinted shows none: the seller then stays
+	* unknown, never a guess (docs/features/marketplace-linking.md#the-shop-a-connection-holds).
 	*/
 	async function signedInMember(page, site) {
-		const hrefs = await page.attributes(ACCOUNT_PAGE.ownProfile, "href");
-		const logins = /* @__PURE__ */ new Set();
-		for (const href of hrefs) {
-			if (href === null) return null;
-			let path;
-			try {
-				path = new URL(href, absolute(site, VINTED_PATHS.account)).pathname;
-			} catch {
-				return null;
+		return (await currentMember(page, site)).login;
+	}
+
+// src/vinted/pages/api.ts
+/**
+	* The reads Vinted's own pages make from its same-origin web API (`/api/v2/`), made the same way,
+	* from a Vinted page with the session's own cookies (`PageDriver.apiGet`, `pageCookies`): the listings and
+	* orders reads (docs/features/vinted.md, "Listing import and sales history").
+	*
+	* - `GET /api/v2/wardrobe/<member id>/items?page=<n>&per_page=96&order=newest_first`: the
+	*   member's wardrobe, newest first, with `pagination.total_pages`; each item with its `id`,
+	*   `title`, `price`, its state (`is_closed` once it sold, `is_hidden`, `is_draft`,
+	*   `is_reserved`), its `photos`, `brand_title`, `size_title`, and condition (`status`).
+	* - `GET /api/v2/items/<id>`: one item as its page loads it, with its whole `description`, its
+	*   `catalog_id`, and its colours (`color1`, `color2`).
+	* - `GET /api/v2/my_orders?type=sold&status=<in_progress|completed>&page=<n>&per_page=20`: the
+	*   member's sold orders, newest first: each with its `transaction_id`, `date` (when the buyer
+	*   paid), `title`, and `price`. Canceled orders are never asked for.
+	* - `GET /api/v2/transactions/<id>`: one order, with the items that sold in it (`items`, or one
+	*   `item`): a bundle sells several in one order.
+	*
+	* Read on the test account's signed-in session (2026-11-05, read-only): the wardrobe answers in
+	* this shape (`items`, `pagination` with `current_page` and `total_pages`), and the sold orders
+	* answer "Member verification required" (400, `user_verification_required`, a check the profile
+	* names) until the member verified their account. The item and transaction reads, and the
+	* records' fields, are modeled until the mapping (Vinted plan M2) records them. Every shape is
+	* read leniently (a detail it lacks is left out), and one Listora doesn't know at all throws
+	* `PageChangedError`, as a page does. Only reads.
+	*/
+	const API = "web API";
+	/** Vinted's pages sign their API reads in with the session's cookies alone. */
+	const SIGNED_IN = { pageCookies: true };
+	/** Wardrobe items a page asks for (Vinted's own wardrobe pages ask for 96). */
+	const WARDROBE_PAGE_SIZE = 96;
+	/** Sold orders a page asks for. */
+	const ORDERS_PAGE_SIZE = 20;
+	const id = union([number().int().nonnegative(), string().regex(VINTED_ID)]).transform(String);
+	/** A price, as `{ amount: "18.0", currency_code: "USD" }` or as `"18.0"` beside `currency`. */
+	const priceSchema = union([
+		object({
+			amount: union([string(), number()]),
+			currency_code: string().optional()
+		}),
+		string(),
+		number()
+	]);
+	const itemSchema = object({
+		id,
+		title: string().optional(),
+		description: string().nullish(),
+		price: priceSchema.optional(),
+		currency: string().optional(),
+		is_closed: boolean().optional(),
+		is_hidden: boolean().optional(),
+		is_draft: boolean().optional(),
+		is_reserved: boolean().optional()
+	}).catchall(unknown());
+	const paginationSchema = object({
+		current_page: number().int(),
+		total_pages: number().int()
+	}).catchall(unknown());
+	const wardrobeSchema = object({
+		items: array(unknown()),
+		pagination: paginationSchema
+	});
+	const orderSchema = object({
+		transaction_id: id,
+		date: string(),
+		title: string().nullish(),
+		price: priceSchema.optional()
+	}).catchall(unknown());
+	const ordersSchema = object({
+		my_orders: array(unknown()),
+		pagination: paginationSchema
+	});
+	const transactionSchema = object({ transaction: object({
+		id,
+		items: array(unknown()).optional(),
+		item: unknown().optional()
+	}).catchall(unknown()) });
+	/** One page of the member's wardrobe, newest first, and whether another follows. */
+	async function readWardrobePage(page, site, memberId, number) {
+		const query = new URLSearchParams({
+			page: String(number),
+			per_page: String(96),
+			order: "newest_first"
+		});
+		const answer = await page.apiGet(`${absolute(site, VINTED_API_PATHS.wardrobe(memberId))}?${query.toString()}`, SIGNED_IN);
+		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for your wardrobe`);
+		const wardrobe = expectShape(wardrobeSchema, answer.body, "wardrobe");
+		return {
+			items: wardrobe.items.map((entry) => vintedItem(expectShape(itemSchema, entry, "item"), site)),
+			hasNext: hasNext(wardrobe.pagination, wardrobe.items.length)
+		};
+	}
+	/** One item as its page loads it; `null` when Vinted answers 404 (an item it deleted). */
+	async function readItem(page, site, itemId) {
+		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.item(itemId)), SIGNED_IN);
+		if (answer.status === 404) return null;
+		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for an item`);
+		const { item } = expectShape(object({ item: unknown() }), answer.body, "item");
+		return vintedItem(expectShape(itemSchema, item, "item"), site);
+	}
+	/** The member's sold orders in one state, one page of them, newest first. */
+	async function readSoldOrders(page, site, status, number) {
+		const query = new URLSearchParams({
+			type: "sold",
+			status,
+			page: String(number),
+			per_page: String(20)
+		});
+		const answer = await page.apiGet(`${absolute(site, VINTED_API_PATHS.myOrders)}?${query.toString()}`, SIGNED_IN);
+		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for your sold orders`);
+		const shown = expectShape(ordersSchema, answer.body, "sold orders");
+		return {
+			orders: shown.my_orders.map((entry) => expectShape(orderSchema, entry, "order")),
+			hasNext: hasNext(shown.pagination, shown.my_orders.length)
+		};
+	}
+	/** The items that sold in one order (several for a bundle); `null` when Vinted answers 404. */
+	async function readTransactionItems(page, site, transactionId) {
+		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.transaction(transactionId)), SIGNED_IN);
+		if (answer.status === 404) return null;
+		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for an order`);
+		const { transaction } = expectShape(transactionSchema, answer.body, "order");
+		return (transaction.items ?? (transaction.item === void 0 ? [] : [transaction.item])).map((entry) => vintedItem(expectShape(itemSchema, entry, "item"), site));
+	}
+	/** A Vinted amount in US dollars (`"18.0"`, `"1250.50"`, `18`) in cents. */
+	function priceCents(price, currency) {
+		if (price === void 0) throw changed(API, "shows an item without a price");
+		const amount = typeof price === "object" ? price.amount : price;
+		if (((typeof price === "object" ? price.currency_code : void 0) ?? currency ?? "USD") !== "USD") throw changed(API, "shows a price that is not in US dollars");
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(amount).trim());
+		if (match?.[1] === void 0) throw changed(API, "shows a price Listora can't read");
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+	}
+	/** When a sold order was paid for; throws for a time Listora can't read. */
+	function orderTime(order) {
+		const at = new Date(order.date);
+		if (Number.isNaN(at.getTime())) throw changed(API, "shows an order time Listora can't read");
+		return at;
+	}
+	/** The item's listing URL on the site: `/items/<id>`, which Vinted sends on to its slug. */
+	function itemUrl(site, itemId) {
+		return absolute(site, itemPath(itemId));
+	}
+	function vintedItem(record, site) {
+		const { description, sku } = splitSkuLine(record.description ?? "");
+		if (record.is_draft === true) return {
+			state: null,
+			sku,
+			record
+		};
+		return {
+			record,
+			sku,
+			state: {
+				found: true,
+				externalListingId: record.id,
+				externalUrl: itemUrl(site, record.id),
+				status: record.is_closed === true ? "sold" : record.is_hidden === true ? "ended" : "active",
+				title: text$2(record.title),
+				description: record.description === void 0 || record.description === null ? null : description,
+				priceCents: priceCents(record.price, record.currency),
+				currency: "USD",
+				revision: null,
+				refreshedAt: null
 			}
-			const login = memberFromPath(path)?.login ?? null;
-			if (login === null) return null;
-			logins.add(login.toLowerCase());
-		}
-		const [login, ...others] = logins;
-		return login === void 0 || others.length > 0 ? null : login;
+		};
+	}
+	/** Another page follows while this one showed any and is not the last one Vinted counts. */
+	function hasNext(pagination, shown) {
+		return shown > 0 && pagination.current_page < pagination.total_pages;
+	}
+	function expectShape(schema, value, what) {
+		const parsed = schema.safeParse(value);
+		if (!parsed.success) throw changed(API, `shows ${what} data Listora doesn't know`);
+		return parsed.data;
+	}
+	function text$2(value) {
+		return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+	}
+
+// src/vinted/pages/listing-details.ts
+/**
+	* What an import takes from a Vinted item record (docs/features/imports.md), as the web API's
+	* wardrobe and item reads give it (`api.ts`, modeled until the mapping, Vinted plan M2):
+	*
+	* - photos: `photos`, each with its `full_size_url` (else `url`), on Vinted's image CDN, in the
+	*   listing's order (the first is its cover);
+	* - `brand_title` (Vinted's "No brand" is none), `size_title`, and the condition, as `status`
+	*   (its label, `Very good`) or `status_id`;
+	* - the category as Vinted's `catalog_id`, which Listora reads into its own categories once the
+	*   taxonomy snapshot exists (M2): until then an imported item has no category, and the seller
+	*   adds it;
+	* - the colours, `color1` and `color2` (or `colors[].title`), in Listora's terms.
+	*
+	* Every detail is optional: a record without one imports without it.
+	*/
+	/**
+	* Vinted's conditions in Listora's terms, by label and by id, never claiming more than the
+	* listing does: "Very good" is pre-owned, not new.
+	*/
+	const CONDITIONS$1 = {
+		"new with tags": "new_with_tags",
+		"new without tags": "new_without_tags",
+		"very good": "pre_owned_excellent",
+		good: "pre_owned_good",
+		satisfactory: "pre_owned_fair"
+	};
+	const CONDITION_IDS = {
+		"6": "new_with_tags",
+		"1": "new_without_tags",
+		"2": "pre_owned_excellent",
+		"3": "pre_owned_good",
+		"4": "pre_owned_fair"
+	};
+	/** Vinted's colour names in Listora's terms (packages/analysis `COLORS`); the rest have none. */
+	const COLOURS = {
+		black: "black",
+		grey: "gray",
+		gray: "gray",
+		white: "white",
+		cream: "cream",
+		beige: "beige",
+		brown: "brown",
+		red: "red",
+		burgundy: "red",
+		pink: "pink",
+		rose: "pink",
+		orange: "orange",
+		yellow: "yellow",
+		mustard: "yellow",
+		green: "green",
+		"dark green": "green",
+		mint: "green",
+		blue: "blue",
+		"light blue": "blue",
+		turquoise: "blue",
+		navy: "navy",
+		purple: "purple",
+		lilac: "purple",
+		gold: "gold",
+		silver: "silver",
+		multi: "multicolor",
+		multicolour: "multicolor",
+		multicolor: "multicolor"
+	};
+	/** Vinted's brand for an item without one. */
+	const NO_BRAND = /^(no brand|other|unbranded)$/i;
+	const photo = object({
+		full_size_url: string().optional(),
+		url: string().optional()
+	});
+	function listingDetails$1(record, sku) {
+		const catalog = record["catalog_id"];
+		return {
+			photoUrls: photoUrls$1(record["photos"]),
+			brand: brand(record),
+			size: text$1(record["size_title"]),
+			condition: condition(record),
+			categoryRef: typeof catalog === "number" && Number.isSafeInteger(catalog) || typeof catalog === "string" && /^\d+$/.test(catalog) ? String(catalog) : null,
+			categoryPath: [],
+			colors: colours(record),
+			originalPriceCents: null,
+			sku
+		};
+	}
+	function photoUrls$1(value) {
+		const photos = array(unknown()).safeParse(value);
+		if (!photos.success) return [];
+		const urls = photos.data.flatMap((entry) => {
+			const shown = photo.safeParse(entry);
+			const url = shown.success ? shown.data.full_size_url ?? shown.data.url : void 0;
+			return url !== void 0 && /^https?:\/\//.test(url) ? [url] : [];
+		});
+		return [...new Set(urls)].slice(0, 16);
+	}
+	function brand(record) {
+		const dto = record["brand_dto"];
+		const shown = text$1(record["brand_title"]) ?? (dto !== null && typeof dto === "object" ? text$1(dto["title"]) : null);
+		return shown === null || NO_BRAND.test(shown) ? null : shown;
+	}
+	function condition(record) {
+		const label = text$1(record["status"])?.toLowerCase();
+		const byLabel = label === void 0 ? void 0 : CONDITIONS$1[label];
+		if (byLabel !== void 0) return byLabel;
+		const statusId = record["status_id"];
+		return typeof statusId === "number" || typeof statusId === "string" ? CONDITION_IDS[String(statusId)] ?? null : null;
+	}
+	/** The item's colours that Listora's vocabulary has, in Vinted's order, each once. */
+	function colours(record) {
+		const named = [record["color1"], record["color2"]].flatMap((value) => {
+			const shown = text$1(value);
+			return shown === null ? [] : [shown];
+		});
+		const listed = array(object({ title: string() })).safeParse(record["colors"]);
+		const known = (named.length > 0 ? named : listed.success ? listed.data.map((c) => c.title) : []).flatMap((name) => {
+			const color = COLOURS[name.trim().toLowerCase()];
+			return color === void 0 ? [] : [color];
+		});
+		return [...new Set(known)];
+	}
+	function text$1(value) {
+		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
 // src/vinted/scripts.ts
+/** Sold-order pages (20 each) a sale check reads per state, and the orders whose items it reads. */
+	const ORDER_LIMITS = {
+		pages: 2,
+		reads: 20
+	};
+	/** What the sales history (a check with no `since`) reads at most: 200 orders per state. */
+	const HISTORY_ORDER_LIMITS = {
+		pages: 10,
+		reads: 150
+	};
+	/** The states of sold orders read, and the step that reads each. Canceled ones never are. */
+	const ORDER_STATES = [{
+		status: "in_progress",
+		step: "read your sales in progress"
+	}, {
+		status: "completed",
+		step: "read your completed sales"
+	}];
 	function createVintedScripts(options) {
 		const { site } = options;
+		/** Opens the seller's settings, a Vinted page the web API reads go from. */
+		const openSettings = (step) => step("open your profile settings", { mutates: false }, (page) => openAccount(page, site));
 		return {
-			read: () => Promise.reject(new PageChangedError("Listora doesn't read Vinted listings yet.")),
+			read: () => Promise.reject(new PageChangedError("Listora doesn't read Vinted listings back yet.")),
 			health: (step) => step("open your profile settings", { mutates: false }, async (page) => {
 				await openAccount(page, site);
 				return sellerIdentity(await signedInMember(page, site));
-			})
+			}),
+			listings: async (cursor, step, held) => {
+				const number = cursor === null ? 1 : Number(cursor);
+				if (!Number.isSafeInteger(number) || number < 1) throw new Error(`a Vinted listings cursor is a page number, not ${String(cursor)}`);
+				const memberId = await step("find your wardrobe", { mutates: false }, async (page) => {
+					await openAccount(page, site);
+					return (await currentMember(page, site)).id;
+				});
+				const shown = await step("read your listings for sale", { mutates: false }, (page) => readWardrobePage(page, site, memberId, number));
+				const listings = [];
+				for (const listed of shown.items) {
+					if (listed.state?.status !== "active") continue;
+					const { externalListingId } = listed.state;
+					if (held.has(externalListingId)) {
+						listings.push({
+							...listedListing(listed),
+							fromList: true
+						});
+						continue;
+					}
+					const read = await step("read a listing", { mutates: false }, (page) => readItem(page, site, externalListingId));
+					if (read?.state?.status !== "active") continue;
+					listings.push(listedListing(read));
+				}
+				return {
+					listings,
+					next: shown.hasNext ? String(number + 1) : null
+				};
+			},
+			orders: async (since, step) => {
+				await openSettings(step);
+				const limits = since === null ? HISTORY_ORDER_LIMITS : ORDER_LIMITS;
+				const orders = [];
+				for (const state of ORDER_STATES) {
+					let reads = 0;
+					state: for (let number = 1; number <= limits.pages; number += 1) {
+						const shown = await step(state.step, { mutates: false }, (page) => readSoldOrders(page, site, state.status, number));
+						for (const order of shown.orders) {
+							const soldAt = orderTime(order);
+							if (since !== null && soldAt < since) break state;
+							if (reads === limits.reads) break state;
+							reads += 1;
+							const items = await step("read the order", { mutates: false }, (page) => readTransactionItems(page, site, order.transaction_id));
+							if (items === null) continue;
+							orders.push({
+								externalOrderId: order.transaction_id,
+								soldAt,
+								...state.status === "completed" ? { shipped: true } : {},
+								items: orderItems(order, items)
+							});
+						}
+						if (!shown.hasNext) break;
+					}
+				}
+				return orders;
+			}
 		};
+	}
+	/** An item for sale as an import takes it, with its details. */
+	function listedListing(item) {
+		if (item.state === null) throw new Error("a draft is not a listing");
+		return {
+			...item.state,
+			details: listingDetails$1(item.record, item.sku)
+		};
+	}
+	/**
+	* The order's items: each that sold in it, at its own price (a bundle's), or the order's price
+	* when it sold one; the order's own title and price when its read showed no item.
+	*/
+	function orderItems(order, items) {
+		if (items.length === 0) return [{
+			externalListingId: null,
+			title: order.title ?? null,
+			priceCents: priceCents(order.price, void 0),
+			currency: "USD"
+		}];
+		return items.flatMap((item) => {
+			if (item.state === null) return [];
+			const listing = {
+				...item.state,
+				status: "sold",
+				details: listingDetails$1(item.record, item.sku)
+			};
+			return [{
+				externalListingId: item.state.externalListingId,
+				title: item.state.title ?? order.title ?? null,
+				priceCents: items.length === 1 && order.price !== void 0 ? priceCents(order.price, void 0) : item.state.priceCents ?? 0,
+				currency: "USD",
+				listing
+			}];
+		});
 	}
 
 // src/poshmark/pages/account.ts
@@ -13849,7 +14308,7 @@ ownProfile: "header [data-testid=\"user-menu\"] a[href^=\"/member/\"]" };
 	/** Opens the listing form and returns the logged-in seller's username. */
 	async function loggedInSeller(page, site) {
 		await page.goto(site.createListing());
-		const { auth, userCookies } = expectShape$1(authSchema, await readPageState(page, PAGE$4), PAGE$4);
+		const { auth, userCookies } = expectShape$2(authSchema, await readPageState(page, PAGE$4), PAGE$4);
 		const info = userCookies?.userInfo;
 		const username = info?.username !== void 0 && info.username !== "" ? info.username : info?.dh;
 		if (!auth.isUserLoggedIn || username === void 0 || username === "") throw new PageChangedError(`Poshmark's ${PAGE$4} no longer says which seller is logged in`);
@@ -13876,7 +14335,7 @@ ownProfile: "header [data-testid=\"user-menu\"] a[href^=\"/member/\"]" };
 	/** One closet page: its listings, and the cursor of the next page (`null` at the end). */
 	async function readClosetPage(page, site, username, query) {
 		await page.goto(site.closet(username, query));
-		const { data, more } = expectShape$1(closetSchema, await readPageState(page, PAGE$3), PAGE$3).$_closet.listingsPostData;
+		const { data, more } = expectShape$2(closetSchema, await readPageState(page, PAGE$3), PAGE$3).$_closet.listingsPostData;
 		const next = more?.next_max_id;
 		return {
 			listings: data,
@@ -14323,7 +14782,7 @@ ownProfile: "header [data-testid=\"user-menu\"] a[href^=\"/member/\"]" };
 		const missing = page.status() === 404;
 		let details;
 		try {
-			details = expectShape$1(listingPageSchema, await readPageState(page, PAGE$2), PAGE$2).$_listing_details.listingDetails;
+			details = expectShape$2(listingPageSchema, await readPageState(page, PAGE$2), PAGE$2).$_listing_details.listingDetails;
 		} catch (error) {
 			if (missing && error instanceof PageChangedError) return { type: "none" };
 			throw error;
@@ -14403,7 +14862,7 @@ ownProfile: "header [data-testid=\"user-menu\"] a[href^=\"/member/\"]" };
 	/** The seller's sales the list shows, newest first. */
 	async function readSales(page, site) {
 		await page.goto(site.sales());
-		return expectShape$1(salesSchema, await readPageState(page, PAGE$1), PAGE$1).$_order_list.userSales.data.sales_summary.map((order) => saleOf(order, PAGE$1));
+		return expectShape$2(salesSchema, await readPageState(page, PAGE$1), PAGE$1).$_order_list.userSales.data.sales_summary.map((order) => saleOf(order, PAGE$1));
 	}
 	/** One order's page: its label and buyer's first name, as the order list may not show them. */
 	async function readSale(page, site, orderId) {
@@ -14460,7 +14919,7 @@ ownProfile: "header [data-testid=\"user-menu\"] a[href^=\"/member/\"]" };
 	async function readOffers(page, site) {
 		await page.goto(site.offers());
 		await page.waitFor(OFFERS_SECTION, "attached");
-		const story = expectShape$1(offersSchema, await readPageState(page, PAGE), PAGE).$_order_activity.orderActivity.activeOffers.find((entry) => entry.story_type === SALE_OFFERS_STORY);
+		const story = expectShape$2(offersSchema, await readPageState(page, PAGE), PAGE).$_order_activity.orderActivity.activeOffers.find((entry) => entry.story_type === SALE_OFFERS_STORY);
 		if (story === void 0) throw new PageChangedError(`Poshmark's ${PAGE} has no offers on your listings`);
 		if (story.content.type === NO_OFFERS) return [];
 		return story.content.data.map((record) => {

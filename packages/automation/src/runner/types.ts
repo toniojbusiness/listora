@@ -79,6 +79,12 @@ export interface PageDriver {
 export interface ApiGetOptions {
   /** The site's cookie whose value goes in the `Authorization: Bearer` header. */
   bearerCookie?: string;
+  /**
+   * Send the session's cookies with a read of the page's own origin, as the site's own pages do
+   * when its API is signed in by cookies alone (Vinted's). Never to another origin: the browser
+   * sends them only to the page's own (`credentials: 'same-origin'`).
+   */
+  pageCookies?: boolean;
 }
 
 /** A marketplace web API's answer to `PageDriver.apiGet`. */

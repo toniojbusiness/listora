@@ -1,6 +1,6 @@
 # Importing existing listings
 
-A seller who already sells on Depop, Poshmark, or Mercari brings those listings into Listora in
+A seller who already sells on Depop, Poshmark, Mercari, or Vinted brings those listings into Listora in
 one tap: each listing for sale becomes an inventory item that is already listed there (photos,
 title, description, price, category, size, brand, condition, and the listing's id and URL), the
 same item listed on several marketplaces becomes one item with several listings, and **List on
@@ -21,7 +21,8 @@ sold item made the same way when Listora had no listing for it ([sales.md](sales
 | `ImportFeature` (iOS)                                            | Settings > Import your listings, and the questions screen             |
 
 Imports are offered only from marketplaces whose imports passed live (Depop and Mercari today,
-[verified-features.md](verified-features.md)). Starting one elsewhere is refused.
+[verified-features.md](verified-features.md)); Vinted's is built and offered only in Test mode until
+its live import. Starting one elsewhere is refused.
 
 ## How it works
 
@@ -51,6 +52,11 @@ Imports are offered only from marketplaces whose imports passed live (Depop and 
    - **Mercari**: the active listings tab, then each listing's page, whose data (an Apollo cache:
      `ItemDetail` and the records its `__ref`s name) holds its photos, brand, size, condition,
      and category path (read on the captain's account, 2026-10-27).
+   - **Vinted**: the seller's wardrobe from Vinted's web API (96 a page, newest first; the member
+     from `/api/v2/users/current`), then each listing for sale's own item read for its
+     description, `catalog_id`, and colours. A listing the seller hid, a draft, and a sold one
+     are not for sale; one reserved for a buyer is. Until Vinted's taxonomy snapshot exists (M2),
+     an imported item has no category ([vinted.md](vinted.md)).
      Every read is a GET; nothing is typed or submitted. A page's listings are kept as the import's
      entries (each listing once), the worker is asked to settle them, and the next page is asked
      for until the marketplace has no more (at most 100 pages).
@@ -127,7 +133,8 @@ its photos, and matches it no more), or `skip`.
 
 ## In the app
 
-Settings > **Import your listings** (`ImportFeature`): each of Depop, Poshmark, and Mercari with
+Settings > **Import your listings** (`ImportFeature`): each of Depop, Poshmark, Mercari, and Vinted
+(each where it is on) with
 why an import can't start (not linked, one under way), its newest import in the server's words
 ("Reading your Depop listings on your iPhone... 48 so far", "Importing 12 of 42", then "Imported
 42 from Depop, 3 need you"), why it stopped early, and **Answer 3 questions**. Starting runs this
@@ -137,7 +144,7 @@ for the marketplaces the item is not on yet ([inventory.md](inventory.md)).
 
 ## Local development
 
-Nothing to configure. The fake Depop, Poshmark, and Mercari sites list a seller's listings with
+Nothing to configure. The fake Depop, Poshmark, Mercari, and Vinted sites list a seller's listings with
 their photos on their own image CDN (`/media/<name>.jpg`, a distinct real JPEG per name,
 `fake-photos.ts`), and the worker fetches photos over plain http from them when a fake
 marketplace is configured.

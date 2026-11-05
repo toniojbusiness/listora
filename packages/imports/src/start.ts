@@ -26,6 +26,7 @@ export const IMPORT_MARKETPLACES = [
   'depop',
   'poshmark',
   'mercari',
+  'vinted',
 ] as const satisfies readonly Marketplace[];
 
 /**

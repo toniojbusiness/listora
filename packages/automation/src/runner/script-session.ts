@@ -557,7 +557,11 @@ const API_BODY_LIMIT = 4_000_000;
  * bearer token when one is named, returning only the status, `Retry-After`, and the body's text.
  * Source text, so each host evaluates the same script in its own page.
  */
-export function apiGetScript(url: string, bearerCookie: string | null): string {
+export function apiGetScript(
+  url: string,
+  bearerCookie: string | null,
+  pageCookies = false,
+): string {
   return `(async () => {
     const name = ${JSON.stringify(bearerCookie)};
     const headers = { accept: 'application/json' };
@@ -567,7 +571,7 @@ export function apiGetScript(url: string, bearerCookie: string | null): string {
     }
     let response;
     try {
-      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+      response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: ${pageCookies ? "'same-origin'" : "'omit'"} });
     } catch (error) {
       return { status: null, failed: String(error) };
     }
@@ -605,6 +609,26 @@ function apiAnswer(answer: unknown): {
         ? retryAfter
         : null,
   };
+}
+
+/**
+ * Whether an API answer is DataDome's for a blocked call: `{ "url": "https://geo.captcha-delivery.com/..." }`,
+ * its challenge for the visitor to complete in a page, which automation never does.
+ */
+/** Whether an API's error answer names one of the profile's verification steps. */
+function verificationAsked(body: unknown, profile: AutomationProfile): boolean {
+  const codes = profile.challenges.apiVerificationCodes ?? [];
+  if (codes.length === 0 || body === null || typeof body !== 'object') return false;
+  const code = (body as Record<string, unknown>)['message_code'];
+  return typeof code === 'string' && codes.includes(code);
+}
+
+export function isDataDomeAnswer(body: unknown): boolean {
+  if (body === null || typeof body !== 'object') return false;
+  const url = (body as Record<string, unknown>)['url'];
+  if (typeof url !== 'string' || !URL.canParse(url)) return false;
+  const host = new URL(url).hostname;
+  return host === 'captcha-delivery.com' || host.endsWith('.captcha-delivery.com');
 }
 
 function jsonOrNull(text: string | null): unknown {
@@ -785,7 +809,9 @@ class Driver implements PageDriver {
       // A read the page's own scripts would make, paced like the actions around it.
       await this.#session.pacing.wait('action', this.#signal);
       const answer = await this.#query((backend) =>
-        backend.read(apiGetScript(target.href, options.bearerCookie ?? null)),
+        backend.read(
+          apiGetScript(target.href, options.bearerCookie ?? null, options.pageCookies === true),
+        ),
       );
       this.#active();
       // A request the page couldn't make (seen right after a Depop Post, 2026-10-27, while the
@@ -820,6 +846,18 @@ class Driver implements PageDriver {
     // A bot check answers an API call with its own page, not the API's JSON.
     if (status === 403 && body === null) {
       this.#session.stopFor({ type: 'challenge', kind: 'bot_check', sign: 'api' });
+    }
+    // DataDome answers an API call it blocks with JSON naming its challenge page (Vinted).
+    if (status === 403 && isDataDomeAnswer(body)) {
+      this.#session.stopFor({ type: 'challenge', kind: 'captcha', sign: 'api datadome' });
+    }
+    // The marketplace wants the member to verify themselves before it answers (Vinted).
+    if (status >= 400 && status < 500 && verificationAsked(body, this.#session.profile)) {
+      this.#session.stopFor({
+        type: 'challenge',
+        kind: 'login_challenge',
+        sign: 'api verification',
+      });
     }
     return { status, body };
   }
