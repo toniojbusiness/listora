@@ -14,6 +14,7 @@ extension ThriftScanUITests {
         XCTAssertTrue(shutter.waitForExistence(timeout: 10))
         shutter.tap()
         let card = element("scan.card")
+        XCTAssertTrue(waitForTheRead(of: 1))
         XCTAssertTrue(element("scan.call").waitForExistence(timeout: 20))
         let title = app.staticTexts["scan.title"].label
         XCTAssertTrue(app.buttons["scan.tag"].label.hasPrefix("Shoot the tag"), app.buttons["scan.tag"].label)
@@ -38,8 +39,10 @@ extension ThriftScanUITests {
         XCTAssertTrue(card.waitForNonExistence(timeout: 3))
         shutter.tap()
         XCTAssertTrue(card.waitForExistence(timeout: 5), "the card comes back after the tag shot")
-        XCTAssertTrue(app.buttons["scan.tag"].waitForExistence(timeout: 20))
-        XCTAssertTrue(waitForLabel(of: app.buttons["scan.tag"], prefix: "Retake the tag", timeout: 20))
+        // The card's tools, "Retake the tag" among them, come back only once the read with the tag
+        // landed: it waits as long as a read may take.
+        let retake = app.buttons["scan.tag"]
+        XCTAssertTrue(waitForLabel(of: retake, prefix: "Retake the tag", timeout: Self.readDeadline), retake.label)
         // The read with the tag waits for its own prices again, then shows its verdict.
         XCTAssertTrue(element("scan.call").waitForExistence(timeout: 20))
         XCTAssertEqual(app.staticTexts["scan.title"].label, title)
@@ -49,7 +52,8 @@ extension ThriftScanUITests {
 
         // Keep works as before.
         app.buttons["scan.keep"].tap()
-        XCTAssertTrue(element("scan.confirmation").waitForExistence(timeout: 2))
+        expect(confirmationLine(), saying: ["Kept · 1 in this run", "Keeping item 1"])
         XCTAssertFalse(card.exists)
+        XCTAssertTrue(waitForTheKeep(of: 1, summary: "1 scanned · 1 kept"))
     }
 }
