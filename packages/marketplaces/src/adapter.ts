@@ -178,6 +178,13 @@ export interface ConnectionRef {
    * (docs/features/marketplace-linking.md#the-shop-a-connection-holds).
    */
   sellerId?: string | null;
+  /**
+   * Whether the account's listing steps on this marketplace may be automated on the connection
+   * (`isListingAutomationOn`: they passed live, or the account is in Test mode). A marketplace
+   * whose automated listing steps have not passed live (`LISTING_AUTOMATION_NOT_VERIFIED`)
+   * serves them assisted unless this is `true`; every other marketplace ignores it.
+   */
+  listingAutomation?: boolean;
 }
 
 export interface AdapterContext {
@@ -245,8 +252,11 @@ export type RemoteListingState =
    * id), never for an answer that could be a listing not visible yet (a plain 404 from an
    * eventually consistent API), a search that came back empty, a timeout, an auth error, or any
    * other unclear answer. An end or mark-sold counts an authoritative absence as "cannot be live".
+   * `inReview`: the seller's listing is there, but the marketplace holds it back while it reviews
+   * it (Vinted reviews every new upload, usually for a minute, sometimes for days): not live, and
+   * never gone, so a create is read again later and never sent twice.
    */
-  | { found: false; authoritative: boolean }
+  | { found: false; authoritative: boolean; inReview?: true }
   | {
       found: true;
       externalListingId: string;

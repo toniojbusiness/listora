@@ -62,6 +62,11 @@ const itemSchema = z
     is_hidden: z.boolean().optional(),
     is_draft: z.boolean().optional(),
     is_reserved: z.boolean().optional(),
+    // Vinted's review of a new upload (modeled until the mapping records an item under review):
+    // the item is still being processed, or not yet visible to buyers though its seller didn't
+    // hide it.
+    is_processing: z.boolean().optional(),
+    is_visible: z.union([z.boolean(), z.number()]).optional(),
   })
   .catchall(z.unknown());
 export type VintedItemRecord = z.infer<typeof itemSchema>;
@@ -94,6 +99,11 @@ const transactionSchema = z.object({
 export interface VintedItem {
   /** `null` for a draft, which is not a listing. */
   state: RemoteListing | null;
+  /**
+   * Vinted is reviewing it (a new upload, usually for a minute, sometimes for days): its seller
+   * has it, buyers don't see it yet, and Vinted won't let it be hidden or deleted meanwhile.
+   */
+  inReview: boolean;
   sku: string | null;
   record: VintedItemRecord;
 }
@@ -209,10 +219,15 @@ export function itemUrl(site: VintedSite, itemId: string): string {
 
 function vintedItem(record: VintedItemRecord, site: VintedSite): VintedItem {
   const { description, sku } = splitSkuLine(record.description ?? '');
-  if (record.is_draft === true) return { state: null, sku, record };
+  if (record.is_draft === true) return { state: null, inReview: false, sku, record };
+  const open = record.is_closed !== true && record.is_hidden !== true;
+  const inReview =
+    open &&
+    (record.is_processing === true || record.is_visible === false || record.is_visible === 0);
   return {
     record,
     sku,
+    inReview,
     state: {
       found: true,
       externalListingId: record.id,

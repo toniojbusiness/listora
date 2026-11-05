@@ -12,7 +12,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import type { AdapterContext } from '@listora/marketplaces';
 
 import { automationProfile } from '../profiles.ts';
-import { QUICK_PACING, silentLogger } from '../test-support.ts';
+import { QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
 import { createVintedAutomationAdapter } from '../vinted/adapter.ts';
 import { FakeVintedSite } from '../vinted/fake/fake-vinted-site.ts';
 import { phoneSessions, sites, suiteSessions } from './conformance-support.ts';
@@ -28,6 +28,7 @@ const adapter = (siteUrl: string) =>
     siteUrl,
     profile: { ...automationProfile('vinted'), pacing: QUICK_PACING },
     sessions: track(phoneSessions(issuer, 'vinted', siteUrl, 3_000)),
+    photos: stubPhotos,
     logger: silentLogger,
   });
 

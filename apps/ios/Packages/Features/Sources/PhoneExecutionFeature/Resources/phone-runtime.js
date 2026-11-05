@@ -279,7 +279,7 @@
 		sold: (offset) => `/sh/lst/sold${offset > 0 ? `?offset=${String(offset)}` : ""}`
 	};
 	/** The item number in a path that opens a listing (`/itm/1234567890`), else `null`. */
-	function itemIdFromPath$1(path) {
+	function itemIdFromPath$2(path) {
 		const id = /^\/itm\/(?:[^/]+\/)?(\d+)\/?$/.exec(path)?.[1];
 		return id !== void 0 && EBAY_ITEM_ID.test(id) ? id : null;
 	}
@@ -318,7 +318,7 @@
 		listings: (tab, page) => `/mypage/listings/${tab}/${page > 1 ? `?page=${String(page)}` : ""}`
 	};
 	/** The item id in a path that opens a listing (`/us/item/m123.../`), else `null`. */
-	function itemIdFromPath(path) {
+	function itemIdFromPath$1(path) {
 		const id = /^\/us\/item\/([^/]+)\/?$/.exec(path)?.[1];
 		if (id === void 0) return null;
 		const decoded = decodeURIComponent(id);
@@ -361,9 +361,17 @@
 	*/
 	const VINTED_LOGIN_PATH = "/member/signup/select_type";
 	/** Paths on Vinted's site, relative to its origin. */
-	const VINTED_PATHS = { 
-	/** The seller's own profile settings: only a signed-in member sees it. */
-account: "/settings/profile" };
+	const VINTED_PATHS = {
+		/** The seller's own profile settings: only a signed-in member sees it. */
+		account: "/settings/profile",
+		/**
+		* The upload form ("Sell an item | Vinted"), which posts a new listing: read on the test
+		* account (2026-11-05, Vinted plan M2's read of the bare form, nothing typed or sent).
+		*/
+		upload: "/items/new",
+		/** A listing's edit form: the upload form, filled with the listing (modeled). */
+		edit: (id) => `/items/${encodeURIComponent(id)}/edit`
+	};
 	/**
 	* The reads Vinted's own pages make from its same-origin web API (`/api/v2/`), which the session
 	* check and the listings and orders reads make the same way (`pages/api.ts`). The current
@@ -385,6 +393,10 @@ account: "/settings/profile" };
 	/** An item's page path: `/items/<numeric id>`, a slug of its title after a dash. */
 	function itemPath(id) {
 		return `/items/${id}`;
+	}
+	/** The item id of an item page's path (`/items/<id>` or `/items/<id>-<slug>`), else `null`. */
+	function itemIdFromPath(path) {
+		return /^\/items\/(\d{1,20})(?:-[^/]*)?\/?$/.exec(path)?.[1] ?? null;
 	}
 	/** Vinted's ids (items, members, transactions) are numbers. */
 	const VINTED_ID = /^\d{1,20}$/;
@@ -413,7 +425,7 @@ account: "/settings/profile" };
 	* Half the runs the other marketplaces get (`DEFAULT_LIMITS`), well inside what one seller does
 	* by hand.
 	*/
-	const VINTED_LIMITS = {
+	const VINTED_LIMITS$1 = {
 		runsPerHour: 15,
 		runsPerDay: 100
 	};
@@ -426,6 +438,7 @@ account: "/settings/profile" };
 	const VINTED_CHALLENGE_SIGNS = {
 		loginPaths: [/^\/member\/(signup|login|general\/login)(\/|$)/i, /^\/(login|log-in|signin|sign-in|sign_in|signup|sign-up)(\/|$)/i],
 		verificationPaths: [
+			/^\/users\/verification(\/|$)/i,
 			/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i,
 			/^\/member\/(verification|verify|two_factor|2fa)(\/|$)/i,
 			/^\/(identity|id-verification|kyc)(\/|$)/i
@@ -548,7 +561,7 @@ account: "/settings/profile" };
 			emailsSignInLinks: false,
 			pacing: VINTED_PACING,
 			readOnlyPacing: VINTED_READ_ONLY_PACING,
-			limits: VINTED_LIMITS,
+			limits: VINTED_LIMITS$1,
 			challenges: VINTED_CHALLENGE_SIGNS,
 			privateSelectors: VINTED_PRIVATE_SELECTORS,
 			runsOn: "phone",
@@ -7809,7 +7822,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the ignored words left out, then the first word (two when the first is a shared leading
 	* word). It is a match key for the seller's own sales, not a display name.
 	*/
-	function brandKey$1(brand) {
+	function brandKey$2(brand) {
 		if (brand === null || brand === void 0) return void 0;
 		const [first, second] = brand.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/&/g, " and ").replace(/['’]/g, "").split(/[^\p{L}\p{N}]+/u).filter((word) => word !== "").map((word) => word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word).filter((word) => !IGNORED_WORDS.has(word));
 		if (first === void 0) return void 0;
@@ -7920,11 +7933,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** Whether the words name the brand whose key is `key` ("Levi's 501" names Levi's). */
 	function namesBrand(text, key) {
-		return text.some((_, start) => brandKey$1(text.slice(start, start + 2).join(" ")) === key);
+		return text.some((_, start) => brandKey$2(text.slice(start, start + 2).join(" ")) === key);
 	}
 	/** The listings of the item's brand and type, and whether each is its model and its size. */
 	function matched(listings, target) {
-		const brand = brandKey$1(target.brand);
+		const brand = brandKey$2(target.brand);
 		if (brand === void 0) return [];
 		const types = new Set(target.productTypes);
 		const typeStems = new Set(target.typeWords.flatMap(words).map(stem));
@@ -7934,7 +7947,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		for (const listing of listings) {
 			if (!Number.isSafeInteger(listing.priceCents) || listing.priceCents <= 0) continue;
 			const text = words(listing.text);
-			if (listing.brand === null ? !namesBrand(text, brand) : brandKey$1(listing.brand) !== brand) continue;
+			if (listing.brand === null ? !namesBrand(text, brand) : brandKey$2(listing.brand) !== brand) continue;
 			if (!(listing.productType !== null && types.size > 0 ? types.has(listing.productType) : text.some((word) => typeStems.has(stem(word))))) continue;
 			out.push({
 				listing,
@@ -8044,7 +8057,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the run) and learns its address anew, which the page's own scripts may have changed without
 	* loading a page (Depop opens a new listing that way).
 	*/
-	async function lookAgain$1(page, ms) {
+	async function lookAgain$2(page, ms) {
 		await new Promise((resolve) => setTimeout(resolve, ms));
 		await page.waitFor("body", "attached");
 	}
@@ -8065,7 +8078,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* item's own, without shipping). Only those are read: never the seller (the slug names them),
 	* the photos, or the location.
 	*/
-	const PAGE$16 = "search";
+	const PAGE$17 = "search";
 	/** Statuses of a product that sold, as Depop names them (page-data.ts). */
 	const SOLD_STATUSES = /* @__PURE__ */ new Set([
 		"STATUS_SOLD",
@@ -8113,17 +8126,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readDepopSearch(page, site, words) {
 		if (!page.url().startsWith(`${site.origin}/`)) await page.goto(depopSearchPageUrl(site));
 		const answer = await page.apiGet(depopSearchApiUrl(site, words));
-		if (answer.status !== 200) throw changed$4(PAGE$16, `answered ${String(answer.status)}`);
+		if (answer.status !== 200) throw changed$4(PAGE$17, `answered ${String(answer.status)}`);
 		return depopSearchFromAnswer(answer.body);
 	}
 	/** The search's products and count, out of its API answer. */
 	function depopSearchFromAnswer(body) {
 		const read = searchAnswerSchema.safeParse(body);
-		if (!read.success) throw changed$4(PAGE$16, "answered with results Listora does not know");
+		if (!read.success) throw changed$4(PAGE$17, "answered with results Listora does not know");
 		const listings = [];
 		for (const entry of read.data.objects) {
 			const product = searchProductSchema.safeParse(entry);
-			if (!product.success) throw changed$4(PAGE$16, "shows a product Listora does not know");
+			if (!product.success) throw changed$4(PAGE$17, "shows a product Listora does not know");
 			const listing = listingOf$4(product.data);
 			if (listing !== null) listings.push(listing);
 		}
@@ -8275,7 +8288,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/ebay/pages/search-page.ts
-	const PAGE$15 = "search results";
+	const PAGE$16 = "search results";
 	/**
 	* The results page, in eBay's current card layout (`s-card`) and its earlier one (`s-item`),
 	* which eBay still serves to some visitors.
@@ -8320,11 +8333,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				total: 0,
 				shown: 0
 			};
-			throw changed$3(PAGE$15, `has no results (${EBAY_SEARCH_PAGE.results})`);
+			throw changed$3(PAGE$16, `has no results (${EBAY_SEARCH_PAGE.results})`);
 		}
 		const classes = await page.attributes(EBAY_SEARCH_PAGE.parts, "class");
 		const texts = await page.texts(EBAY_SEARCH_PAGE.parts);
-		if (classes.length !== texts.length) throw changed$3(PAGE$15, "changed while it was read");
+		if (classes.length !== texts.length) throw changed$3(PAGE$16, "changed while it was read");
 		const results = groupResults(classes, texts);
 		return {
 			listings: results.flatMap((result) => {
@@ -8645,7 +8658,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the change to `sold_out`). A listing of many sizes or quantities (a boutique's, `multi_item`),
 	* lots and bundles, and prices not in US dollars are never counted.
 	*/
-	const PAGE$14 = "search";
+	const PAGE$15 = "search";
 	/** Where the search's results and count are in the page's data (`PageDriver.pageData`). */
 	const POSHMARK_SEARCH_DATA = {
 		results: "__INITIAL_STATE__.$_search.gridData.data",
@@ -8688,10 +8701,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The search's listings and count, out of the page's data. */
 	function poshmarkSearchFromData(results, total, kind) {
-		const records = expectShape$2(array(unknown()), results, PAGE$14);
+		const records = expectShape$2(array(unknown()), results, PAGE$15);
 		const listings = [];
 		for (const record of records) {
-			const listing = listingOf$2(expectShape$2(searchListingSchema, record, PAGE$14), kind);
+			const listing = listingOf$2(expectShape$2(searchListingSchema, record, PAGE$15), kind);
 			if (listing !== null) listings.push(listing);
 		}
 		const count = number().int().min(0).safeParse(total);
@@ -8936,7 +8949,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the run) and learns its address anew, which Mercari's own scripts change without loading a
 	* page.
 	*/
-	async function lookAgain(page, ms) {
+	async function lookAgain$1(page, ms) {
 		await new Promise((resolve) => setTimeout(resolve, ms));
 		await page.waitFor("body", "attached");
 	}
@@ -8953,12 +8966,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return dollars * 100 + cents;
 	}
 	/** Whole dollars for Mercari's price field (prices are validated to be whole dollars). */
-	function priceField(cents) {
+	function priceField$1(cents) {
 		return String(Math.floor(cents / 100));
 	}
 
 // src/mercari/pages/search-page.ts
-	const PAGE$13 = "search results";
+	const PAGE$14 = "search results";
 	/** Mercari's own item status filter values (`itemStatuses`). */
 	const ITEM_STATUSES = {
 		sold: "2",
@@ -8998,7 +9011,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		try {
 			await page.waitFor(MERCARI_SEARCH_PAGE.ready, "attached");
 		} catch {
-			if (!await page.exists(MERCARI_SEARCH_PAGE.ready)) throw changed$2(PAGE$13, `has no results (${MERCARI_SEARCH_PAGE.card})`);
+			if (!await page.exists(MERCARI_SEARCH_PAGE.ready)) throw changed$2(PAGE$14, `has no results (${MERCARI_SEARCH_PAGE.card})`);
 		}
 		if (!await page.exists(MERCARI_SEARCH_PAGE.card)) return {
 			listings: [],
@@ -9019,7 +9032,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			sizes.length,
 			onSale.length,
 			texts.length
-		])).size !== 1) throw changed$2(PAGE$13, "changed while it was read");
+		])).size !== 1) throw changed$2(PAGE$14, "changed while it was read");
 		const cards = groupCards$1(roles, {
 			ids,
 			brands,
@@ -9196,7 +9209,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/vinted/pages/search-page.ts
-	const PAGE$12 = "search results";
+	const PAGE$13 = "search results";
 	/** An item box of the search's grid (its parts' test ids add `--<part>` to its own). */
 	const CARD = "[data-testid=\"grid-item\"] [data-testid^=\"product-item-id-\"]:not([data-testid*=\"--\"])";
 	/** The parts of an item box Listora reads, by the suffix of their test ids. */
@@ -9368,7 +9381,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The failure for a Vinted page that is not as the read expects. */
 	function changed$1(problem) {
-		return new PageChangedError(`Vinted's ${PAGE$12} ${problem}.`);
+		return new PageChangedError(`Vinted's ${PAGE$13} ${problem}.`);
 	}
 
 // src/comps/vinted.ts
@@ -9708,8 +9721,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Depop's Done page after a post: under the sell page's path, with one more segment. */
 	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
-	const ANSWER_MS$1 = 45e3;
-	const LOOK_EVERY_MS$3 = 150;
+	const ANSWER_MS$2 = 45e3;
+	const LOOK_EVERY_MS$4 = 150;
 	/**
 	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
 	* its options while closed and shows them through a style variable (`--display: block`), so
@@ -9728,27 +9741,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			unpick: (text) => `div:has(> input[id="${name}-input"]) button[aria-label="Remove ${text.replaceAll("\"", "\\\"")}"]`
 		};
 	}
-	const FORM$2 = "listing form";
+	const FORM$3 = "listing form";
 	/** Opens the sell page's empty form. */
 	async function openSellForm$1(page, site) {
 		await page.goto(absolute$3(site, DEPOP_PATHS.sell));
-		await awaitElement$2(page, LISTING_FORM$2.form, "sell page", FORM$2);
+		await awaitElement$2(page, LISTING_FORM$2.form, "sell page", FORM$3);
 	}
 	/**
 	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
 	* in the order given; `null` leaves the listing's photos as they are (an edit).
 	*/
 	async function fillListing$3(page, payload, sku, photos) {
-		await awaitElement$2(page, LISTING_FORM$2.form, FORM$2, FORM$2);
+		await awaitElement$2(page, LISTING_FORM$2.form, FORM$3, FORM$3);
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		let brand = await fillPicks(page, payload);
-		await fillPrice$2(page, payload.price.amountCents);
+		await fillPrice$3(page, payload.price.amountCents);
 		await noBoost(page);
 		if (photos !== null) {
-			await awaitElement$2(page, LISTING_FORM$2.photos, FORM$2, "photo input");
+			await awaitElement$2(page, LISTING_FORM$2.photos, FORM$3, "photo input");
 			await page.upload(LISTING_FORM$2.photos, photos);
 			await photosAdded(page, photos.length);
-			await lookAgain$1(page, PHOTO_FILL_MS);
+			await lookAgain$2(page, PHOTO_FILL_MS);
 			if (await mismatch(page, payload, brand) !== null) brand = await fillPicks(page, payload);
 		}
 		await expectPicked(page, payload, brand);
@@ -9757,20 +9770,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** How long Depop gets to fill in item info from the photos once they are added. */
 	const PHOTO_FILL_MS = 1500;
 	/** How long Depop gets to take the photos (it uploads them to its image server first). */
-	const PHOTOS_MS = 3e4;
+	const PHOTOS_MS$1 = 3e4;
 	/** Waits until Depop shows every photo as added: Post refuses a form whose photos are still going. */
 	async function photosAdded(page, count) {
-		if (!await appears$2(page, `${LISTING_FORM$2.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS)) {
+		if (!await appears$3(page, `${LISTING_FORM$2.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS$1)) {
 			const shown = await page.count(LISTING_FORM$2.photoPreview);
-			throw changed$4(FORM$2, `shows ${String(shown)} of ${String(count)} photos as added`);
+			throw changed$4(FORM$3, `shows ${String(shown)} of ${String(count)} photos as added`);
 		}
 	}
 	/** The category and every picker the payload fills; the brand the form then shows. */
 	async function fillPicks(page, payload) {
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		await pickCategory$1(page, payload.category);
-		if (payload.size !== null) await pickSize$1(page, payload.size);
-		const brand = await pickBrand$1(page, payload.brand);
+		await pickCategory$2(page, payload.category);
+		if (payload.size !== null) await pickSize$2(page, payload.size);
+		const brand = await pickBrand$2(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await pick$1(page, "condition", payload.condition.label, `condition "${payload.condition.label}"`);
 		for (const detail of payload.details ?? []) await pickAll(page, detail.field, detail.values);
@@ -9807,8 +9820,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function expectPicked(page, payload, brand) {
 		const missing = await mismatch(page, payload, brand);
-		if (missing !== null) throw changed$4(FORM$2, `no longer shows ${missing}`);
-		if (await page.exists(LISTING_FORM$2.boost) && await checked(page)) throw changed$4(FORM$2, "keeps \"Boost your listing\" on");
+		if (missing !== null) throw changed$4(FORM$3, `no longer shows ${missing}`);
+		if (await page.exists(LISTING_FORM$2.boost) && await checked(page)) throw changed$4(FORM$3, "keeps \"Boost your listing\" on");
 	}
 	/**
 	* Picks exactly these values in one of the form's multi-value pickers (colours, material),
@@ -9818,18 +9831,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function pickAll(page, name, values) {
 		const box = combo(name);
-		if (!await page.exists(box.toggle)) throw changed$4(FORM$2, `has no ${name} picker`);
+		if (!await page.exists(box.toggle)) throw changed$4(FORM$3, `has no ${name} picker`);
 		for (const value of await pickedValues(page, name)) if (!values.includes(value)) await page.click(box.unpick(value));
 		for (const value of values) {
 			if ((await pickedValues(page, name)).includes(value)) continue;
 			if (!await page.exists(box.open)) await page.click(box.toggle);
-			await awaitElement$2(page, box.anyOption, FORM$2, `${name} options`);
-			if (!await page.exists(box.option(value))) throw changed$4(FORM$2, `offers no ${name} "${value}"`);
+			await awaitElement$2(page, box.anyOption, FORM$3, `${name} options`);
+			if (!await page.exists(box.option(value))) throw changed$4(FORM$3, `offers no ${name} "${value}"`);
 			await page.click(box.option(value));
 		}
 		if (await page.exists(box.open)) await page.click(box.toggle);
 		const picked = await pickedValues(page, name);
-		if (picked.length !== values.length || values.some((value) => !picked.includes(value))) throw changed$4(FORM$2, `shows ${name} "${picked.join(", ")}" after picking "${values.join(", ")}"`);
+		if (picked.length !== values.length || values.some((value) => !picked.includes(value))) throw changed$4(FORM$3, `shows ${name} "${picked.join(", ")}" after picking "${values.join(", ")}"`);
 	}
 	/** The values a multi-value picker shows as picked. */
 	async function pickedValues(page, name) {
@@ -9841,19 +9854,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function expectComplete(page) {
 		const invalid = await page.count(LISTING_FORM$2.invalid);
-		if (invalid > 0) throw changed$4(FORM$2, `marks ${String(invalid)} filled field(s) as needing a fix`);
-		if ((await messages(page)).length > 0) throw changed$4(FORM$2, "shows a message before posting");
+		if (invalid > 0) throw changed$4(FORM$3, `marks ${String(invalid)} filled field(s) as needing a fix`);
+		if ((await messages(page)).length > 0) throw changed$4(FORM$3, "shows a message before posting");
 	}
 	/**
 	* Checks the form has its Post (sell) or Save (edit) button, before the step that submits it
 	* starts: that step counts as one that may have changed the listing.
 	*/
 	async function expectSubmit(page, button) {
-		await expectElement$2(page, LISTING_FORM$2[button], FORM$2, `${button === "post" ? "Post" : "Save"} button`);
+		await expectElement$2(page, LISTING_FORM$2[button], FORM$3, `${button === "post" ? "Post" : "Save"} button`);
 	}
 	/** Fills only the price (a price change on the edit page). */
-	async function fillPrice$2(page, cents) {
-		await expectElement$2(page, LISTING_FORM$2.price, FORM$2, "price field");
+	async function fillPrice$3(page, cents) {
+		await expectElement$2(page, LISTING_FORM$2.price, FORM$3, "price field");
 		await page.fill(LISTING_FORM$2.price, depopPriceField(cents));
 	}
 	/**
@@ -9864,10 +9877,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function submitListing$2(page, button) {
 		const selector = LISTING_FORM$2[button];
-		await expectElement$2(page, selector, FORM$2, `${button === "post" ? "Post" : "Save"} button`);
+		await expectElement$2(page, selector, FORM$3, `${button === "post" ? "Post" : "Save"} button`);
 		if (button === "post" && await page.exists(LISTING_FORM$2.postAnother)) await page.check(LISTING_FORM$2.postAnother, false);
 		await page.click(selector);
-		const end = Date.now() + ANSWER_MS$1;
+		const end = Date.now() + ANSWER_MS$2;
 		for (;;) {
 			const path = new URL(page.url()).pathname;
 			const slug = slugFromPath(path);
@@ -9891,8 +9904,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				type: "refused",
 				message: "Depop didn't take the listing: it marked a field as needing a fix."
 			};
-			if (Date.now() >= end) throw changed$4(FORM$2, "showed no product and no message after the submit");
-			await lookAgain$1(page, LOOK_EVERY_MS$3);
+			if (Date.now() >= end) throw changed$4(FORM$3, "showed no product and no message after the submit");
+			await lookAgain$2(page, LOOK_EVERY_MS$4);
 		}
 	}
 	/** The product a page links to (the Done page's link to the new listing), when it links one. */
@@ -9915,25 +9928,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* category's product types as options ("T-shirts"). The product type is searched for, then
 	* picked in its group; a group the list doesn't have stops the step before anything is sent.
 	*/
-	async function pickCategory$1(page, path) {
+	async function pickCategory$2(page, path) {
 		const [department, category, type] = path;
 		if (department === void 0 || category === void 0 || type === void 0) throw new Error("a category path has a department, a category, and a product type");
 		const box = combo("group");
 		if (await page.exists(LISTING_FORM$2.clearCategory)) await page.click(LISTING_FORM$2.clearCategory);
-		await expectElement$2(page, box.input, FORM$2, "category search");
+		await expectElement$2(page, box.input, FORM$3, "category search");
 		const group = `${FORM_DEPARTMENTS[department] ?? department} > ${category}`;
 		for (const search of [type, category]) {
 			await page.fill(box.input, "");
 			await page.type(box.input, search);
-			await awaitElement$2(page, box.anyOption, FORM$2, "category options");
+			await awaitElement$2(page, box.anyOption, FORM$3, "category options");
 			const index = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) => text.replace(/\s+/g, " ").trim()).indexOf(group);
 			if (index < 0) continue;
 			const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll("\"", "\\\"")}")`;
-			if (await page.count(option) !== 1) throw changed$4(FORM$2, `has no one "${type}" in the category group "${group}"`);
+			if (await page.count(option) !== 1) throw changed$4(FORM$3, `has no one "${type}" in the category group "${group}"`);
 			await page.click(option);
 			return;
 		}
-		throw changed$4(FORM$2, `has no category group "${group}"`);
+		throw changed$4(FORM$3, `has no category group "${group}"`);
 	}
 	/** The category picker's groups and their headers ("Men > Tops"), in the same order. */
 	const CATEGORY_GROUPS = "ul#group-menu > div";
@@ -9945,44 +9958,44 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		Kidswear: "Kids"
 	};
 	/** Whether `selector` is on the page within `ms` (a part Depop's scripts draw). */
-	async function appears$2(page, selector, ms) {
+	async function appears$3(page, selector, ms) {
 		const end = Date.now() + ms;
 		for (;;) {
 			if (await page.exists(selector)) return true;
 			if (Date.now() >= end) return false;
-			await lookAgain$1(page, 500);
+			await lookAgain$2(page, 500);
 		}
 	}
 	/** Opens one of the form's comboboxes and picks the option with exactly this text. */
 	async function pick$1(page, name, text, what) {
 		const box = combo(name);
-		await expectElement$2(page, box.toggle, FORM$2, `${what} picker`);
+		await expectElement$2(page, box.toggle, FORM$3, `${what} picker`);
 		if (!await page.exists(box.open)) await page.click(box.toggle);
-		await awaitElement$2(page, box.anyOption, FORM$2, `${what} options`);
-		await expectElement$2(page, box.option(text), FORM$2, `${what} "${text}"`);
+		await awaitElement$2(page, box.anyOption, FORM$3, `${what} options`);
+		await expectElement$2(page, box.option(text), FORM$3, `${what} "${text}"`);
 		await page.click(box.option(text));
 	}
 	/** How long Depop takes to draw the size picker once a category is picked. */
 	const SIZE_PICKER_MS = 1e4;
-	async function pickSize$1(page, size) {
+	async function pickSize$2(page, size) {
 		const box = combo("variants");
-		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$4(FORM$2, `has no size picker (${box.toggle})`);
+		if (!await appears$3(page, box.toggle, SIZE_PICKER_MS)) throw changed$4(FORM$3, `has no size picker (${box.toggle})`);
 		if (!await page.exists(box.open)) await page.click(box.toggle);
-		await awaitElement$2(page, box.anyOption, FORM$2, "size options");
+		await awaitElement$2(page, box.anyOption, FORM$3, "size options");
 		const offered = (await page.texts(box.anyOption)).map((option) => option.trim());
 		const label = offered.includes(size) ? size : offered.find((option) => sizeOptionMatches(option, size));
-		if (label === void 0) throw changed$4(FORM$2, `offers no size "${size}" for this category`);
+		if (label === void 0) throw changed$4(FORM$3, `offers no size "${size}" for this category`);
 		await page.click(box.option(label));
 	}
 	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
 	/** Picks the brand, or leaves it empty; the brand the form then shows (`''` for none). */
-	async function pickBrand$1(page, brand) {
+	async function pickBrand$2(page, brand) {
 		const box = combo("brand");
 		if (await page.exists(LISTING_FORM$2.clearBrand)) await page.click(LISTING_FORM$2.clearBrand);
-		await expectElement$2(page, box.input, FORM$2, "brand search");
+		await expectElement$2(page, box.input, FORM$3, "brand search");
 		if (brand === null) return "";
 		await page.type(box.input, brand);
-		await awaitElement$2(page, box.anyOption, FORM$2, "brand suggestions");
+		await awaitElement$2(page, box.anyOption, FORM$3, "brand suggestions");
 		const suggestions = (await page.texts(box.anyOption)).map((suggestion) => suggestion.trim());
 		const own = brand.toLowerCase();
 		const longer = suggestions.filter((suggestion) => suggestion.toLowerCase().startsWith(`${own} `));
@@ -10020,7 +10033,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		for (;;) {
 			if (await page.exists(LISTING_FORM$2.form)) return "editing";
 			if (!new URL(page.url()).pathname.startsWith("/products/edit/") || Date.now() >= end) return "not_editable";
-			await lookAgain$1(page, 500);
+			await lookAgain$2(page, 500);
 		}
 	}
 	/** Checks the product page has its Delete listing button, before the step that deletes. */
@@ -10042,7 +10055,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		for (;;) {
 			if (await done()) return true;
 			if (Date.now() >= end) return false;
-			await lookAgain$1(page, 500);
+			await lookAgain$2(page, 500);
 		}
 	}
 
@@ -10590,7 +10603,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the one that offers this slug.
 	*/
 structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application/ld+json\"]" };
-	const PAGE$11 = "product page";
+	const PAGE$12 = "product page";
 	/** The product as the page's first query loaded it. */
 	const productRecordSchema = object({
 		slug: string().regex(DEPOP_SLUG),
@@ -10657,13 +10670,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		let status;
 		let text;
 		if (records.length > 0) {
-			const product = expectShape$1(productRecordSchema, records[0], PAGE$11);
+			const product = expectShape$1(productRecordSchema, records[0], PAGE$12);
 			status = STATUSES$1[product.status];
-			if (status === void 0) throw changed$4(PAGE$11, "shows a product status Listora does not know");
+			if (status === void 0) throw changed$4(PAGE$12, "shows a product status Listora does not know");
 			text = product.description;
 		} else {
 			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
-			if (status === void 0 || offer.description === void 0) throw changed$4(PAGE$11, "has none of the product data Listora reads");
+			if (status === void 0 || offer.description === void 0) throw changed$4(PAGE$12, "has none of the product data Listora reads");
 			text = offer.description;
 		}
 		const priceCents = offer.priceCents;
@@ -10693,20 +10706,20 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return [];
 			}
 		});
-		if (blocks.length === 0) throw changed$4(PAGE$11, "has no product data (structured data)");
+		if (blocks.length === 0) throw changed$4(PAGE$12, "has no product data (structured data)");
 		const own = blocks.find((block) => {
 			const read = structuredDataSchema.safeParse(block);
 			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
 		});
 		if (own === void 0) {
-			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$4(PAGE$11, "offers a different product");
-			expectShape$1(structuredDataSchema, blocks[0], PAGE$11);
-			throw changed$4(PAGE$11, "has none of the product data Listora reads");
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$4(PAGE$12, "offers a different product");
+			expectShape$1(structuredDataSchema, blocks[0], PAGE$12);
+			throw changed$4(PAGE$12, "has none of the product data Listora reads");
 		}
-		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$11);
-		if (offers.priceCurrency !== "USD") throw changed$4(PAGE$11, "shows a price that is not in US dollars");
+		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$12);
+		if (offers.priceCurrency !== "USD") throw changed$4(PAGE$12, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
-		if (match?.[1] === void 0) throw changed$4(PAGE$11, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$4(PAGE$12, "shows a price Listora can't read");
 		return {
 			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
 			...offers.availability === void 0 ? {} : { availability: offers.availability },
@@ -11755,7 +11768,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				const opened = await editor(op, step);
 				if (!("slug" in opened)) return opened;
 				await step("fill in the price", { mutates: false }, async (page) => {
-					await fillPrice$2(page, priceCents);
+					await fillPrice$3(page, priceCents);
 					await expectSubmit(page, "save");
 				});
 				return step("save", {
@@ -11921,19 +11934,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		price: "[data-testid=\"active-listings\"] [data-testid=\"listing-row\"] [data-testid=\"listing-row__price\"]",
 		next: "a[data-testid=\"pagination__next\"]"
 	};
-	const PAGE$10 = "active listings page";
+	const PAGE$11 = "active listings page";
 	/** Opens the page of active listings that starts at `offset` and reads its rows. */
 	async function readActiveListingsPage(page, site, offset) {
 		await page.goto(absolute$2(site, EBAY_PATHS.active(offset)));
-		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$3(PAGE$10, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
+		if (!await page.exists(ACTIVE_LISTINGS_PAGE.list)) throw changed$3(PAGE$11, `has no list of listings (${ACTIVE_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(ACTIVE_LISTINGS_PAGE.row, "data-item-id");
 		const titles = await page.texts(ACTIVE_LISTINGS_PAGE.title);
 		const labels = await page.texts(ACTIVE_LISTINGS_PAGE.customLabel);
 		const prices = await page.texts(ACTIVE_LISTINGS_PAGE.price);
-		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$3(PAGE$10, "shows rows without a title, Custom label, or price");
+		if (titles.length !== ids.length || labels.length !== ids.length || prices.length !== ids.length) throw changed$3(PAGE$11, "shows rows without a title, Custom label, or price");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$3(PAGE$10, "shows a row without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$3(PAGE$11, "shows a row without an item number");
 				const label = labels[index] ?? "";
 				return {
 					itemId: id,
@@ -11947,7 +11960,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 
 // src/ebay/pages/item-page.ts
-	const ITEM_PAGE$1 = {
+	const ITEM_PAGE$2 = {
 		root: "[data-testid=\"x-item-page\"]",
 		title: "[data-testid=\"x-item-title\"]",
 		price: "[data-testid=\"x-price-primary\"]",
@@ -11957,11 +11970,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		sold: "[data-testid=\"x-sold-notice\"]",
 		notFound: "[data-testid=\"x-page-missing\"]"
 	};
-	const PAGE$9 = "listing page";
+	const PAGE$10 = "listing page";
 	/** Opens the listing's page and reads it. */
 	async function readItem$2(page, site, itemId) {
 		await page.goto(itemUrl$2(site, itemId));
-		if (page.status() === 404 || await page.exists(ITEM_PAGE$1.notFound)) return {
+		if (page.status() === 404 || await page.exists(ITEM_PAGE$2.notFound)) return {
 			found: false,
 			authoritative: false
 		};
@@ -11969,26 +11982,26 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	/** Reads the listing page the browser shows now (after a form sent it there). */
 	async function readShownItem$1(page, site) {
-		const itemId = itemIdFromPath$1(new URL(page.url()).pathname);
-		if (itemId === null) throw changed$3(PAGE$9, "is not at a listing address");
-		await expectElement$1(page, ITEM_PAGE$1.root, PAGE$9, "listing details");
-		if (((await page.text(ITEM_PAGE$1.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$3(PAGE$9, "shows a different item number");
-		const title = await page.text(ITEM_PAGE$1.title);
-		if (title === null || title === "") throw changed$3(PAGE$9, "shows no title");
-		const priceCents = parsePrice$2(await page.text(ITEM_PAGE$1.price));
-		if (priceCents === null) throw changed$3(PAGE$9, "shows no price Listora can read");
-		const soldNotice = await page.text(ITEM_PAGE$1.sold);
-		const endedNotice = await page.text(ITEM_PAGE$1.ended);
+		const itemId = itemIdFromPath$2(new URL(page.url()).pathname);
+		if (itemId === null) throw changed$3(PAGE$10, "is not at a listing address");
+		await expectElement$1(page, ITEM_PAGE$2.root, PAGE$10, "listing details");
+		if (((await page.text(ITEM_PAGE$2.itemNumber))?.replace(/\D/g, "") ?? "") !== itemId) throw changed$3(PAGE$10, "shows a different item number");
+		const title = await page.text(ITEM_PAGE$2.title);
+		if (title === null || title === "") throw changed$3(PAGE$10, "shows no title");
+		const priceCents = parsePrice$2(await page.text(ITEM_PAGE$2.price));
+		if (priceCents === null) throw changed$3(PAGE$10, "shows no price Listora can read");
+		const soldNotice = await page.text(ITEM_PAGE$2.sold);
+		const endedNotice = await page.text(ITEM_PAGE$2.ended);
 		const status = soldNotice !== null ? "sold" : endedNotice !== null ? "ended" : "active";
 		const times = [];
 		for (const [shown, what] of [
-			[await page.text(ITEM_PAGE$1.lastUpdated), "last-updated time"],
+			[await page.text(ITEM_PAGE$2.lastUpdated), "last-updated time"],
 			[soldNotice, "sale time"],
 			[endedNotice, "end time"]
 		]) {
 			if (shown === null) continue;
 			const time = ebayTimeIn(shown);
-			if (time === null) throw changed$3(PAGE$9, `shows a ${what} Listora can't read`);
+			if (time === null) throw changed$3(PAGE$10, `shows a ${what} Listora can't read`);
 			times.push(time.getTime());
 		}
 		return {
@@ -12011,19 +12024,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		reason: "input[name=\"reason\"][value=\"NotAvailable\"]",
 		submit: "button[data-testid=\"end-listing__submit\"]"
 	};
-	const PAGE$8 = "end listing page";
+	const PAGE$9 = "end listing page";
 	/** Opens the end page of a listing on sale. */
 	async function openEndPage(page, site, itemId) {
 		await page.goto(absolute$2(site, EBAY_PATHS.end(itemId)));
-		await expectElement$1(page, END_PAGE.form, PAGE$8, "end listing form");
-		await expectElement$1(page, END_PAGE.reason, PAGE$8, "reason \"The item is no longer available\"");
+		await expectElement$1(page, END_PAGE.form, PAGE$9, "end listing form");
+		await expectElement$1(page, END_PAGE.reason, PAGE$9, "reason \"The item is no longer available\"");
 		await page.check(END_PAGE.reason, true);
 	}
 	/** Ends the listing the end page shows, and waits for its page. */
 	async function endListing(page) {
-		await expectElement$1(page, END_PAGE.submit, PAGE$8, "End listing button");
+		await expectElement$1(page, END_PAGE.submit, PAGE$9, "End listing button");
 		await page.click(END_PAGE.submit);
-		await page.waitFor(ITEM_PAGE$1.root);
+		await page.waitFor(ITEM_PAGE$2.root);
 	}
 
 // src/ebay/payload.ts
@@ -12050,11 +12063,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		submit: "button[data-testid=\"listing-form__submit\"]",
 		error: "[data-testid=\"listing-form__error\"]"
 	};
-	const FORM$1 = "listing form";
+	const FORM$2 = "listing form";
 	/** Opens the form for a new listing in its category. */
 	async function openNewListingForm(page, site, categoryId) {
 		await page.goto(absolute$2(site, EBAY_PATHS.form("AddItem", { categoryId })));
-		await expectElement$1(page, LISTING_FORM$1.form, "listing form for a new listing", FORM$1);
+		await expectElement$1(page, LISTING_FORM$1.form, "listing form for a new listing", FORM$2);
 	}
 	/**
 	* Opens the form for an existing listing, in `categoryId` when given; `not_editable` when eBay
@@ -12073,44 +12086,44 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* relist).
 	*/
 	async function fillListing$2(page, payload, sku, photos) {
-		await expectElement$1(page, LISTING_FORM$1.form, FORM$1, FORM$1);
+		await expectElement$1(page, LISTING_FORM$1.form, FORM$2, FORM$2);
 		if (payload.categoryId === null) throw new Error("a listing without a category passed validation");
-		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$3(FORM$1, `is not in category ${payload.categoryId}`);
+		if (await page.attribute(LISTING_FORM$1.category, "data-category-id") !== payload.categoryId) throw changed$3(FORM$2, `is not in category ${payload.categoryId}`);
 		if (photos !== null) {
-			await expectElement$1(page, LISTING_FORM$1.photos, FORM$1, "photo input");
+			await expectElement$1(page, LISTING_FORM$1.photos, FORM$2, "photo input");
 			await page.upload(LISTING_FORM$1.photos, photos);
 		}
-		await expectElement$1(page, LISTING_FORM$1.title, FORM$1, "title field");
+		await expectElement$1(page, LISTING_FORM$1.title, FORM$2, "title field");
 		await page.fill(LISTING_FORM$1.title, payload.title);
-		await expectElement$1(page, LISTING_FORM$1.customLabel, FORM$1, "Custom label (SKU) field");
+		await expectElement$1(page, LISTING_FORM$1.customLabel, FORM$2, "Custom label (SKU) field");
 		await page.fill(LISTING_FORM$1.customLabel, sku);
 		await fillItemSpecifics(page, payload.itemSpecifics);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
-		await expectElement$1(page, LISTING_FORM$1.condition, FORM$1, "condition list");
-		if (!(await page.attributes(`${LISTING_FORM$1.condition} option`, "value")).includes(String(payload.condition.id))) throw changed$3(FORM$1, `offers no condition "${payload.condition.label}" for this category`);
+		await expectElement$1(page, LISTING_FORM$1.condition, FORM$2, "condition list");
+		if (!(await page.attributes(`${LISTING_FORM$1.condition} option`, "value")).includes(String(payload.condition.id))) throw changed$3(FORM$2, `offers no condition "${payload.condition.label}" for this category`);
 		await page.select(LISTING_FORM$1.condition, String(payload.condition.id));
 		if (await page.exists(LISTING_FORM$1.conditionDescription)) await page.fill(LISTING_FORM$1.conditionDescription, payload.conditionDescription ?? "");
-		await expectElement$1(page, LISTING_FORM$1.description, FORM$1, "description editor");
+		await expectElement$1(page, LISTING_FORM$1.description, FORM$2, "description editor");
 		await page.fill(LISTING_FORM$1.description, payload.descriptionHtml);
-		await fillPrice$1(page, payload.price.amountCents);
+		await fillPrice$2(page, payload.price.amountCents);
 	}
 	/** Fills only the price (a price change on the revise form). */
-	async function fillPrice$1(page, cents) {
-		await expectElement$1(page, LISTING_FORM$1.price, FORM$1, "price field");
+	async function fillPrice$2(page, cents) {
+		await expectElement$1(page, LISTING_FORM$1.price, FORM$2, "price field");
 		await page.fill(LISTING_FORM$1.price, ebayPriceField(cents));
 	}
 	/** Submits the form ("List it" for a new listing or a relist, "Revise it" for a change). */
 	async function submitListing$1(page) {
-		await expectElement$1(page, LISTING_FORM$1.submit, FORM$1, "submit button");
+		await expectElement$1(page, LISTING_FORM$1.submit, FORM$2, "submit button");
 		await page.click(LISTING_FORM$1.submit);
-		await page.waitFor(`${LISTING_FORM$1.error}, ${ITEM_PAGE$1.root}`);
+		await page.waitFor(`${LISTING_FORM$1.error}, ${ITEM_PAGE$2.root}`);
 		const message = await page.text(LISTING_FORM$1.error);
 		if (message !== null) return {
 			type: "refused",
 			message
 		};
-		const itemId = itemIdFromPath$1(new URL(page.url()).pathname);
-		if (itemId === null) throw changed$3(FORM$1, "opened a page that is not a listing");
+		const itemId = itemIdFromPath$2(new URL(page.url()).pathname);
+		if (itemId === null) throw changed$3(FORM$2, "opened a page that is not a listing");
 		return {
 			type: "listed",
 			itemId
@@ -12122,7 +12135,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	*/
 	async function readListingForm(page, site, itemId) {
 		if (await openListingForm(page, site, "ReviseItem", itemId, null) === "not_editable") return null;
-		await expectElement$1(page, LISTING_FORM$1.description, FORM$1, "description editor");
+		await expectElement$1(page, LISTING_FORM$1.description, FORM$2, "description editor");
 		const sku = (await page.attribute(LISTING_FORM$1.customLabel, "value"))?.trim() ?? "";
 		return {
 			descriptionHtml: await page.text(LISTING_FORM$1.description) ?? "",
@@ -12135,7 +12148,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	*/
 	async function fillItemSpecifics(page, specifics) {
 		const fields = (await page.attributes(LISTING_FORM$1.itemSpecific, "data-name")).filter((name) => name !== null);
-		if (fields.length === 0) throw changed$3(FORM$1, `has no item specifics (${LISTING_FORM$1.itemSpecific})`);
+		if (fields.length === 0) throw changed$3(FORM$2, `has no item specifics (${LISTING_FORM$1.itemSpecific})`);
 		for (const specific of specifics) {
 			const value = specific.values.join(", ");
 			const field = fields.find((name) => name.toLowerCase() === specific.name.toLowerCase());
@@ -12143,7 +12156,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				await page.fill(LISTING_FORM$1.itemSpecificInput(field), value);
 				continue;
 			}
-			await expectElement$1(page, LISTING_FORM$1.addItemSpecific, FORM$1, "\"Add item specific\" button");
+			await expectElement$1(page, LISTING_FORM$1.addItemSpecific, FORM$2, "\"Add item specific\" button");
 			const index = await page.count(LISTING_FORM$1.customItemSpecific);
 			await page.click(LISTING_FORM$1.addItemSpecific);
 			const row = `${LISTING_FORM$1.customItemSpecific} >> nth=${String(index)}`;
@@ -12169,25 +12182,25 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		soldAt: "[data-testid=\"sold-listings\"] [data-testid=\"sold-row\"] [data-testid=\"sold-row__date\"]",
 		next: "a[data-testid=\"pagination__next\"]"
 	};
-	const PAGE$7 = "sold listings page";
+	const PAGE$8 = "sold listings page";
 	/** Opens the page of sold listings that starts at `offset` and reads its rows. */
 	async function readSoldListingsPage(page, site, offset) {
 		await page.goto(absolute$2(site, EBAY_PATHS.sold(offset)));
-		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$3(PAGE$7, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
+		if (!await page.exists(SOLD_LISTINGS_PAGE.list)) throw changed$3(PAGE$8, `has no list of sales (${SOLD_LISTINGS_PAGE.list})`);
 		const ids = await page.attributes(SOLD_LISTINGS_PAGE.row, "data-item-id");
 		const orders = await page.texts(SOLD_LISTINGS_PAGE.order);
 		const prices = await page.texts(SOLD_LISTINGS_PAGE.price);
 		const dates = await page.texts(SOLD_LISTINGS_PAGE.soldAt);
-		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$3(PAGE$7, "shows sales without an order number, price, or date");
+		if (orders.length !== ids.length || prices.length !== ids.length || dates.length !== ids.length) throw changed$3(PAGE$8, "shows sales without an order number, price, or date");
 		return {
 			rows: ids.map((id, index) => {
-				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$3(PAGE$7, "shows a sale without an item number");
+				if (id === null || !EBAY_ITEM_ID.test(id)) throw changed$3(PAGE$8, "shows a sale without an item number");
 				const orderId = /\d{2}-\d{5}-\d{5}/.exec(orders[index] ?? "")?.[0];
-				if (orderId === void 0) throw changed$3(PAGE$7, "shows an order number Listora can't read");
+				if (orderId === void 0) throw changed$3(PAGE$8, "shows an order number Listora can't read");
 				const priceCents = parsePrice$2(prices[index] ?? null);
-				if (priceCents === null) throw changed$3(PAGE$7, "shows a price Listora can't read");
+				if (priceCents === null) throw changed$3(PAGE$8, "shows a price Listora can't read");
 				const soldAt = ebayTimeIn(dates[index] ?? null);
-				if (soldAt === null) throw changed$3(PAGE$7, "shows a sale time Listora can't read");
+				if (soldAt === null) throw changed$3(PAGE$8, "shows a sale time Listora can't read");
 				return {
 					orderId,
 					itemId: id,
@@ -12209,7 +12222,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* How many of the newest active listings a lookup by SKU looks through. A listing whose item
 	* number Listora never learned is one it just listed, so it is among the newest.
 	*/
-	const SKU_LOOKUP_DEPTH$1 = 8;
+	const SKU_LOOKUP_DEPTH$2 = 8;
 	/** Pages of sold listings one sale check goes through at most (newest first). */
 	const MAX_SOLD_PAGES$1 = 5;
 	function createEbayScripts(options) {
@@ -12318,7 +12331,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 				const opened = await editable(op, step, null);
 				if (!("itemId" in opened)) return opened;
-				await step("fill in the price", { mutates: false }, (page) => fillPrice$1(page, priceCents));
+				await step("fill in the price", { mutates: false }, (page) => fillPrice$2(page, priceCents));
 				return step("revise it", { mutates: true }, async (page) => submitted(page, await submitListing$1(page)));
 			},
 			end: async (op, step) => {
@@ -12695,12 +12708,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		categoryDialog: "[data-testid=\"DialogWrapper\"]",
 		anyCategoryRow: "[data-testid=\"DialogWrapper\"] button[data-testid=\"CategoryRow\"]",
 		/** The first row with the name: Mercari lists one name twice under one category at most. */
-		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}") >> nth=0`,
+		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$2(name)}") >> nth=0`,
 		brand: "input[data-testid=\"Brand\"]",
 		brandOption: "[data-testid=\"Brand-option\"]",
 		/** The brands Mercari suggests once photos are in, as chips under the field (each a checkbox). */
 		brandChipLabel: "[data-testid=\"SuggestedBrandChipGroup\"] label",
-		brandChipTicked: (name) => `[data-testid="SuggestedBrandChipGroup"] input[type="checkbox"][aria-label="${quote$1(name)}"]:checked`,
+		brandChipTicked: (name) => `[data-testid="SuggestedBrandChipGroup"] input[type="checkbox"][aria-label="${quote$2(name)}"]:checked`,
 		/** What to type for Mercari's "No brand / Not sure" option, and its label. */
 		noBrandSearch: "No brand",
 		noBrand: "No brand / Not sure",
@@ -12757,12 +12770,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		*/
 		listingError: "[data-testid=\"ListingError\"]"
 	};
-	const FORM = "listing form";
+	const FORM$1 = "listing form";
 	/** How long a picked category gets to open its subcategories, or close the dialog. */
 	const SUBCATEGORIES_MS = 3e3;
 	/** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
-	const APPEAR_MS = 8e3;
-	const LOOK_EVERY_MS$2 = 150;
+	const APPEAR_MS$2 = 8e3;
+	const LOOK_EVERY_MS$3 = 150;
 	/** How long the brand suggestions stay the same before Listora takes them as Mercari's answer. */
 	const BRAND_SETTLED_MS = 2e3;
 	/** How long an empty brand list gets to fill before the search counts as finding nothing. */
@@ -12779,7 +12792,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	*/
 	async function openSellForm(page, site) {
 		await page.goto(absolute$1(site, MERCARI_PATHS.sell));
-		await awaitElement$1(page, `${LISTING_FORM.form}, ${VERIFICATION_DIALOG}`, "sell page", FORM);
+		await awaitElement$1(page, `${LISTING_FORM.form}, ${VERIFICATION_DIALOG}`, "sell page", FORM$1);
 		return await page.exists("[data-testid=\"VerificationExceptionDialog\"]") ? "verification_required" : "form";
 	}
 	/**
@@ -12789,55 +12802,55 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* nothing is sent.
 	*/
 	async function fillListing$1(page, payload, sku, photos) {
-		await expectElement(page, LISTING_FORM.form, FORM, FORM);
+		await expectElement(page, LISTING_FORM.form, FORM$1, FORM$1);
 		if (await page.exists(LISTING_FORM.templatesTip)) await page.click(LISTING_FORM.templatesTip);
 		if (photos !== null) {
-			await expectElement(page, LISTING_FORM.photos, FORM, "photo input");
+			await expectElement(page, LISTING_FORM.photos, FORM$1, "photo input");
 			await page.upload(LISTING_FORM.photos, photos);
 		}
-		await expectElement(page, LISTING_FORM.title, FORM, "title field");
+		await expectElement(page, LISTING_FORM.title, FORM$1, "title field");
 		await page.fill(LISTING_FORM.title, payload.title);
-		await expectElement(page, LISTING_FORM.description, FORM, "description field");
+		await expectElement(page, LISTING_FORM.description, FORM$1, "description field");
 		await page.fill(LISTING_FORM.description, withSkuLine(payload.description, sku));
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		await pickCategory(page, payload.category);
+		await pickCategory$1(page, payload.category);
 		if (payload.imei || await page.exists(LISTING_FORM.imei)) return "imei_required";
-		await pickBrand(page, payload.brand);
+		await pickBrand$1(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
-		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM, `condition "${payload.condition.label}"`);
+		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM$1, `condition "${payload.condition.label}"`);
 		await page.click(LISTING_FORM.condition(payload.condition.id));
-		if (payload.size !== null) await pickSize(page, payload.size, payload.sizeSet ?? null);
+		if (payload.size !== null) await pickSize$1(page, payload.size, payload.sizeSet ?? null);
 		await chooseShipping(page);
-		await fillPrice(page, payload.price.amountCents);
+		await fillPrice$1(page, payload.price.amountCents);
 		await smartPricingOff(page);
 		if (await page.exists(LISTING_FORM.imei)) return "imei_required";
 		return "filled";
 	}
 	/** Switches Mercari's Smart Pricing off when the form has it on. */
 	async function smartPricingOff(page) {
-		if (!await appears$1(page, LISTING_FORM.smartPricing, 2e3)) return;
+		if (!await appears$2(page, LISTING_FORM.smartPricing, 2e3)) return;
 		if ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() !== "ON") return;
 		await page.click(LISTING_FORM.smartPricing);
 		const off = async () => (await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "OFF";
-		if (!await off() && await appears$1(page, LISTING_FORM.smartPricingTurnOff, 2e3)) await page.click(LISTING_FORM.smartPricingTurnOff);
-		const end = Date.now() + APPEAR_MS;
+		if (!await off() && await appears$2(page, LISTING_FORM.smartPricingTurnOff, 2e3)) await page.click(LISTING_FORM.smartPricingTurnOff);
+		const end = Date.now() + APPEAR_MS$2;
 		while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === "ON") {
-			if (Date.now() >= end) throw changed$2(FORM, "kept Smart Pricing on");
-			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+			if (Date.now() >= end) throw changed$2(FORM$1, "kept Smart Pricing on");
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$3));
 		}
 	}
 	/** Fills only the price (a price change on the edit page). */
-	async function fillPrice(page, cents) {
-		await expectElement(page, LISTING_FORM.price, FORM, "price field");
-		await page.fill(LISTING_FORM.price, priceField(cents));
+	async function fillPrice$1(page, cents) {
+		await expectElement(page, LISTING_FORM.price, FORM$1, "price field");
+		await page.fill(LISTING_FORM.price, priceField$1(cents));
 	}
 	/** The category, a row per level in Mercari's category dialog; it closes on the last one. */
-	async function pickCategory(page, path) {
-		await expectElement(page, LISTING_FORM.category, FORM, "category picker");
+	async function pickCategory$1(page, path) {
+		await expectElement(page, LISTING_FORM.category, FORM$1, "category picker");
 		await page.click(LISTING_FORM.category);
 		for (const [level, name] of path.entries()) {
 			const row = LISTING_FORM.categoryRow(name);
-			if (!await appears$1(page, row)) throw changed$2(FORM, `offers no category level ${String(level + 1)} "${name}"`);
+			if (!await appears$2(page, row)) throw changed$2(FORM$1, `offers no category level ${String(level + 1)} "${name}"`);
 			await page.click(row);
 		}
 		const whole = LISTING_FORM.categoryRow(`All ${path.at(-1) ?? ""}`);
@@ -12849,9 +12862,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				break;
 			}
 			if (!await page.exists(LISTING_FORM.anyCategoryRow)) break;
-			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$3));
 		}
-		if (await shown() !== path.join(" > ")) throw changed$2(FORM, "shows a different category than picked");
+		if (await shown() !== path.join(" > ")) throw changed$2(FORM$1, "shows a different category than picked");
 	}
 	/**
 	* Picks the item's brand, or Mercari's "No brand / Not sure" when Mercari doesn't list it or the
@@ -12861,22 +12874,22 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* field is searched, matching exactly, then ignoring case and punctuation (`Abercrombie and
 	* Fitch` is Mercari's `Abercrombie & Fitch`), and again by the brand's first word.
 	*/
-	async function pickBrand(page, brand) {
-		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
+	async function pickBrand$1(page, brand) {
+		await expectElement(page, LISTING_FORM.brand, FORM$1, "brand search");
 		if (brand !== null) {
-			if (await pickBrandChip(page, (name) => brandKey(name) === brandKey(brand))) return;
+			if (await pickBrandChip(page, (name) => brandKey$1(name) === brandKey$1(brand))) return;
 			const first = brand.split(/\s+/)[0] ?? "";
 			const searches = [brand, ...first.length >= 3 && first !== brand ? [first] : []];
 			for (const search of searches) if (await pickBrandOption(page, search, brand)) return;
 		}
 		if (await pickBrandChip(page, (name) => name === LISTING_FORM.noBrand)) return;
-		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed$2(FORM, `offers no "${LISTING_FORM.noBrand}" brand`);
+		if (!await pickBrandOption(page, LISTING_FORM.noBrandSearch, LISTING_FORM.noBrand)) throw changed$2(FORM$1, `offers no "${LISTING_FORM.noBrand}" brand`);
 	}
 	/** Ticks the suggested brand chip whose name passes `wanted` (kept when already ticked). */
 	async function pickBrandChip(page, wanted) {
 		const name = (await page.texts(LISTING_FORM.brandChipLabel)).map((name) => name.trim()).find(wanted);
 		if (name === void 0) return false;
-		if (!await page.exists(LISTING_FORM.brandChipTicked(name))) await page.click(`${LISTING_FORM.brandChipLabel}:text-is("${quote$1(name)}") >> nth=0`);
+		if (!await page.exists(LISTING_FORM.brandChipTicked(name))) await page.click(`${LISTING_FORM.brandChipLabel}:text-is("${quote$2(name)}") >> nth=0`);
 		return true;
 	}
 	/** Types `search` into the brand field and picks the option that is `wanted`, if it comes. */
@@ -12884,7 +12897,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await page.click(LISTING_FORM.brand);
 		if ((await page.value(LISTING_FORM.brand) ?? "") !== "") await page.fill(LISTING_FORM.brand, "");
 		await page.type(LISTING_FORM.brand, search);
-		const end = Date.now() + APPEAR_MS;
+		const end = Date.now() + APPEAR_MS$2;
 		let previous = null;
 		let settledAt = Date.now();
 		for (;;) {
@@ -12895,17 +12908,17 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				settledAt = Date.now();
 			}
 			const settled = offered.length === 0 ? BRAND_EMPTY_MS : BRAND_SETTLED_MS;
-			const match = offered.find((option) => option === wanted) ?? offered.find((option) => option.toLowerCase() === wanted.toLowerCase()) ?? offered.find((option) => brandKey(option) === brandKey(wanted));
+			const match = offered.find((option) => option === wanted) ?? offered.find((option) => option.toLowerCase() === wanted.toLowerCase()) ?? offered.find((option) => brandKey$1(option) === brandKey$1(wanted));
 			if (match !== void 0) {
-				await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
+				await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$2(match)}") >> nth=0`);
 				return true;
 			}
 			if (Date.now() >= end || Date.now() - settledAt >= settled) return false;
-			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$3));
 		}
 	}
 	/** A brand name without case, punctuation, or spacing: `Levi's` and `LEVIS` are one. */
-	function brandKey(name) {
+	function brandKey$1(name) {
 		return name.toLowerCase().replaceAll("&", "and").replace(/[^a-z0-9]+/g, "");
 	}
 	/**
@@ -12913,53 +12926,53 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* (`Standard`, `Petite`, `Maternity`, `Tall`), and each option's label names its part and size
 	* (`aria-label="Petite S (4-6)"`), so a size in a later part is picked by that label.
 	*/
-	async function pickSize(page, size, set) {
-		await expectElement(page, LISTING_FORM.size, FORM, "size list");
+	async function pickSize$1(page, size, set) {
+		await expectElement(page, LISTING_FORM.size, FORM$1, "size list");
 		await page.click(LISTING_FORM.size);
-		if (!await appears$1(page, LISTING_FORM.sizeOption, 4e3)) {
+		if (!await appears$2(page, LISTING_FORM.sizeOption, 4e3)) {
 			await page.click(LISTING_FORM.size);
-			if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed$2(FORM, "shows no sizes");
+			if (!await appears$2(page, LISTING_FORM.sizeOption)) throw changed$2(FORM$1, "shows no sizes");
 		}
 		const offered = await page.texts(LISTING_FORM.sizeOption);
 		const spaced = (text) => text.replace(/\s+/g, " ").trim();
 		const label = offered.find((option) => spaced(option) === spaced(size));
-		if (label === void 0) throw changed$2(FORM, `offers no size "${size}" for this category`);
+		if (label === void 0) throw changed$2(FORM$1, `offers no size "${size}" for this category`);
 		if (set !== null) {
-			const inSet = `${LISTING_FORM.sizeOption}[aria-label="${quote$1(`${set} ${spaced(label)}`)}"]`;
-			if (!await page.exists(inSet)) throw changed$2(FORM, `offers no size "${size}" in its ${set} sizes`);
+			const inSet = `${LISTING_FORM.sizeOption}[aria-label="${quote$2(`${set} ${spaced(label)}`)}"]`;
+			if (!await page.exists(inSet)) throw changed$2(FORM$1, `offers no size "${size}" in its ${set} sizes`);
 			await page.click(inSet);
 			return;
 		}
-		await page.click(`${LISTING_FORM.sizeOption}:text-is("${quote$1(label)}") >> nth=0`);
+		await page.click(`${LISTING_FORM.sizeOption}:text-is("${quote$2(label)}") >> nth=0`);
 	}
 	/**
 	* Mercari's prepaid label, with the label Mercari recommends for the category, and no free
 	* shipping (the buyer pays).
 	*/
 	async function chooseShipping(page) {
-		await expectElement(page, LISTING_FORM.prepaidLabel, FORM, "prepaid label shipping");
+		await expectElement(page, LISTING_FORM.prepaidLabel, FORM$1, "prepaid label shipping");
 		await page.click(LISTING_FORM.prepaidLabel);
-		if (!await appears$1(page, LISTING_FORM.freeShipping)) throw changed$2(FORM, "asks nothing about free shipping for the prepaid label");
+		if (!await appears$2(page, LISTING_FORM.freeShipping)) throw changed$2(FORM$1, "asks nothing about free shipping for the prepaid label");
 		const label = await page.attribute(LISTING_FORM.shippingClass, "value");
-		if (label === null || label.trim() === "") throw changed$2(FORM, "recommends no shipping label");
+		if (label === null || label.trim() === "") throw changed$2(FORM$1, "recommends no shipping label");
 		await page.click(LISTING_FORM.freeShipping);
-		if (!await appears$1(page, LISTING_FORM.freeShippingNo)) throw changed$2(FORM, "offers no way to turn free shipping off");
+		if (!await appears$2(page, LISTING_FORM.freeShippingNo)) throw changed$2(FORM$1, "offers no way to turn free shipping off");
 		await page.click(LISTING_FORM.freeShippingNo);
 	}
 	/** Whether `selector` is on the page within a moment (Mercari's scripts draw it). */
-	async function appears$1(page, selector, ms = APPEAR_MS) {
+	async function appears$2(page, selector, ms = APPEAR_MS$2) {
 		const end = Date.now() + ms;
 		for (;;) {
 			if (await page.exists(selector)) return true;
 			if (Date.now() >= end) return false;
-			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$3));
 		}
 	}
-	function quote$1(text) {
+	function quote$2(text) {
 		return text.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
 	}
 	/** How long Mercari gets to answer a submit (its photos upload first). */
-	const ANSWER_MS = 45e3;
+	const ANSWER_MS$1 = 45e3;
 	/**
 	* Submits the form with its List (sell) or Save (edit) button, and waits for Mercari's answer:
 	* the listing's page, or the form again with Mercari's message or a field marked as needing a
@@ -12970,20 +12983,20 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		const href = await page.attribute(LISTING_FORM.liveListing, "href");
 		if (href === null) return null;
 		try {
-			return itemIdFromPath(new URL(href, page.url()).pathname);
+			return itemIdFromPath$1(new URL(href, page.url()).pathname);
 		} catch {
 			return null;
 		}
 	}
 	async function submitListing(page, button) {
 		const selector = LISTING_FORM[button];
-		await expectElement(page, selector, FORM, `${button === "list" ? "List" : "Save"} button`);
+		await expectElement(page, selector, FORM$1, `${button === "list" ? "List" : "Save"} button`);
 		const start = new URL(page.url()).pathname;
 		await page.click(selector);
-		const end = Date.now() + ANSWER_MS;
+		const end = Date.now() + ANSWER_MS$1;
 		for (;;) {
 			const path = new URL(page.url()).pathname;
-			const itemId = itemIdFromPath(path);
+			const itemId = itemIdFromPath$1(path);
 			if (itemId !== null) return {
 				type: "listed",
 				itemId
@@ -13022,8 +13035,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				type: "listed",
 				itemId: null
 			};
-			if (Date.now() >= end) throw changed$2(FORM, "showed no listing and no message after the submit");
-			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+			if (Date.now() >= end) throw changed$2(FORM$1, "showed no listing and no message after the submit");
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$3));
 			await page.waitFor("body", "attached");
 		}
 	}
@@ -13032,10 +13045,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const EDIT_PAGE = { 
 	/** Deactivate on an active listing, Activate on an inactive one. */
 toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
-	const PAGE$6 = "edit page";
+	const PAGE$7 = "edit page";
 	/** How long the edit page may take to draw its form, or to answer the toggle. */
 	const DRAW_MS = 25e3;
-	const LOOK_EVERY_MS$1 = 150;
+	const LOOK_EVERY_MS$2 = 150;
 	/**
 	* Opens the editor; `not_editable` when Mercari showed something else (a sold listing's page) or
 	* answered with an error (a listing it removed).
@@ -13048,7 +13061,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		for (;;) {
 			if (await page.exists(LISTING_FORM.form)) return "editing";
 			if (!onEditPage(page) || Date.now() >= end) return "not_editable";
-			await lookAgain(page, LOOK_EVERY_MS$1);
+			await lookAgain$1(page, LOOK_EVERY_MS$2);
 		}
 	}
 	/**
@@ -13060,7 +13073,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const shown = (await page.text(EDIT_PAGE.toggle))?.trim();
 		if (shown === "Deactivate") return "active";
 		if (shown === "Activate") return "inactive";
-		throw changed$2(PAGE$6, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
+		throw changed$2(PAGE$7, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
 	}
 	/** Deactivates the listing the editor shows, and waits for Mercari to take it. */
 	async function deactivate(page) {
@@ -13076,12 +13089,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* know: nothing is clicked.
 	*/
 	async function toggled(page, label) {
-		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed$2(PAGE$6, `has no ${label} button (${EDIT_PAGE.toggle})`);
+		if ((await page.text(EDIT_PAGE.toggle))?.trim() !== label) throw changed$2(PAGE$7, `has no ${label} button (${EDIT_PAGE.toggle})`);
 		await page.click(EDIT_PAGE.toggle);
 		const end = Date.now() + DRAW_MS;
 		while (onEditPage(page)) {
-			if (Date.now() >= end) throw changed$2(PAGE$6, `stayed open after ${label}`);
-			await lookAgain(page, LOOK_EVERY_MS$1);
+			if (Date.now() >= end) throw changed$2(PAGE$7, `stayed open after ${label}`);
+			await lookAgain$1(page, LOOK_EVERY_MS$2);
 		}
 	}
 	/** Whether the page is still an edit page (`/sell/edit/<id>/`). */
@@ -13105,7 +13118,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* - The description's last line is Listora's SKU line (payload.ts); the read reports the
 	*   description without it, and the SKU separately.
 	*/
-	const ITEM_PAGE = {
+	const ITEM_PAGE$1 = {
 		root: "[data-testid=\"ItemDetail\"]",
 		name: "[data-testid=\"ItemName\"]",
 		price: "[data-testid=\"ItemPrice\"]",
@@ -13124,7 +13137,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	async function readItem$1(page, site, id) {
 		await page.goto(itemUrl$1(site, id));
 		if (page.status() === 410) {
-			const shown = await page.exists(ITEM_PAGE.data) ? await readShownItem(page, site) : null;
+			const shown = await page.exists(ITEM_PAGE$1.data) ? await readShownItem(page, site) : null;
 			return shown?.state.found === true ? shown : {
 				state: {
 					found: false,
@@ -13134,7 +13147,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				soldAt: null
 			};
 		}
-		if (await page.exists(ITEM_PAGE.deleted)) return {
+		if (await page.exists(ITEM_PAGE$1.deleted)) return {
 			state: {
 				found: false,
 				authoritative: true
@@ -13142,7 +13155,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			sku: null,
 			soldAt: null
 		};
-		if (page.status() === 404 || await page.exists(ITEM_PAGE.notFound)) return {
+		if (page.status() === 404 || await page.exists(ITEM_PAGE$1.notFound)) return {
 			state: {
 				found: false,
 				authoritative: false
@@ -13180,9 +13193,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* status (`on_sale`, ...), and last change in seconds (the revision).
 	*/
 	async function readShownItem(page, site) {
-		const id = itemIdFromPath(new URL(page.url()).pathname);
+		const id = itemIdFromPath$1(new URL(page.url()).pathname);
 		if (id === null) throw changed$2("listing page", "is not at a listing address");
-		const text = await page.text(ITEM_PAGE.data);
+		const text = await page.text(ITEM_PAGE$1.data);
 		if (text === null) throw changed$2("listing page", "embeds none of the data Listora reads");
 		let data;
 		try {
@@ -13383,7 +13396,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			]);
 			if (shown > 0 && Math.max(named, photos) === shown) break;
 			if (Date.now() >= end) throw changed$2(name, shown === 0 ? "shows no rows" : "has rows that link to no listing");
-			await lookAgain(page, 500);
+			await lookAgain$1(page, 500);
 		}
 		const sold = tab === "in_progress" || tab === "sold";
 		const [shownRows, named, titles, prices, soldAts, headings] = await Promise.all([
@@ -13402,7 +13415,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const updated = updatedColumn < 0 ? [] : await page.texts(`${LISTINGS_PAGE.row} > td:nth-child(${String(updatedColumn + 1)})`);
 		return {
 			rows: links.map((href, index) => {
-				const id = href === null ? null : itemIdFromPath(new URL(href, site.origin).pathname);
+				const id = href === null ? null : itemIdFromPath$1(new URL(href, site.origin).pathname);
 				if (id === null) throw changed$2(name, "has a row that links to no listing");
 				const soldAt = sold && soldAts.length === links.length ? new Date(soldAts[index] ?? "") : null;
 				if (soldAt !== null && Number.isNaN(soldAt.getTime())) throw changed$2(name, "has a sold row whose sold time Listora cannot read");
@@ -13425,7 +13438,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		shipping: "[data-testid=\"CarrierBlock\"], [data-testid=\"ShippingCTA\"], [data-testid*=\"Tracking\"]",
 		notFound: "[data-testid=\"NotFound\"]"
 	};
-	const PAGE$5 = "order page";
+	const PAGE$6 = "order page";
 	/** "Tracking number 9400 1118 ..." or "Tracking #: 1Z...": the number after the word. */
 	const TRACKING_LINE = /tracking(?:\s*(?:number|no\.?|#))?\s*[:#]?\s*([A-Z0-9][A-Z0-9 -]{8,48}[A-Z0-9])/i;
 	function orderUrl(site, itemId) {
@@ -13439,7 +13452,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			buyerName: null,
 			trackingNumber: null
 		};
-		await awaitElement$1(page, ORDER_PAGE.summary, PAGE$5, "order summary");
+		await awaitElement$1(page, ORDER_PAGE.summary, PAGE$6, "order summary");
 		const buyer = (await page.text(ORDER_PAGE.buyer))?.trim() ?? null;
 		const shipping = await page.texts(ORDER_PAGE.shipping);
 		return {
@@ -13462,7 +13475,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* How many of the newest active listings a lookup by SKU opens. A listing whose id Listora
 	* never learned is one it just posted, so it is among the newest.
 	*/
-	const SKU_LOOKUP_DEPTH = 8;
+	const SKU_LOOKUP_DEPTH$1 = 8;
 	/** Pages of a sold tab one sale check goes through at most (newest first). */
 	const MAX_SOLD_PAGES = 5;
 	/**
@@ -13609,7 +13622,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				};
 				const opened = await editor(op, step);
 				if (!("id" in opened)) return opened;
-				await step("fill in the price", { mutates: false }, (page) => fillPrice(page, priceCents));
+				await step("fill in the price", { mutates: false }, (page) => fillPrice$1(page, priceCents));
 				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			end: async (op, step) => {
@@ -13820,6 +13833,32 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	function changed(pageName, problem) {
 		return new PageChangedError(`Vinted's ${pageName} ${problem}.`);
 	}
+	/** How often a look for a part Vinted's scripts draw runs (it only reads, so no pacing). */
+	const LOOK_EVERY_MS$1 = 150;
+	/**
+	* Whether `selector` comes within `ms`: Vinted's form draws its lists after a tap. Each look
+	* inspects the page, so a check that comes up instead stops the run.
+	*/
+	async function appears$1(page, selector, ms) {
+		const end = Date.now() + ms;
+		for (;;) {
+			if (await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await lookAgain(page, 150);
+		}
+	}
+	/**
+	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
+	* the run) and learns its address anew, which Vinted's own scripts change without loading a page.
+	*/
+	async function lookAgain(page, ms) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		await page.waitFor("body", "attached");
+	}
+	/** A text for a `:text-is("...")` selector, its quotes and backslashes escaped. */
+	function quote$1(text) {
+		return text.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+	}
 
 // src/vinted/pages/account-page.ts
 /**
@@ -13922,7 +13961,9 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		is_closed: boolean().optional(),
 		is_hidden: boolean().optional(),
 		is_draft: boolean().optional(),
-		is_reserved: boolean().optional()
+		is_reserved: boolean().optional(),
+		is_processing: boolean().optional(),
+		is_visible: union([boolean(), number()]).optional()
 	}).catchall(unknown());
 	const paginationSchema = object({
 		current_page: number().int(),
@@ -14017,12 +14058,14 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		const { description, sku } = splitSkuLine(record.description ?? "");
 		if (record.is_draft === true) return {
 			state: null,
+			inReview: false,
 			sku,
 			record
 		};
 		return {
 			record,
 			sku,
+			inReview: record.is_closed !== true && record.is_hidden !== true && (record.is_processing === true || record.is_visible === false || record.is_visible === 0),
 			state: {
 				found: true,
 				externalListingId: record.id,
@@ -14048,6 +14091,37 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	}
 	function text$2(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+	}
+
+// src/vinted/pages/item-page.ts
+	const ITEM_PAGE = {
+		hide: "button[data-testid=\"item-hide-button\"]",
+		unhide: "button[data-testid=\"item-unhide-button\"]"
+	};
+	const PAGE$5 = "listing page";
+	/** How long the page gets to draw the seller's controls, and to answer a tap on one. */
+	const APPEAR_MS$1 = 8e3;
+	/** Opens the listing's page as its seller; `false` when Vinted answers that it has none (404). */
+	async function openItemPage(page, site, id) {
+		await page.goto(absolute(site, itemPath(id)));
+		return page.status() !== 404;
+	}
+	/**
+	* Whether the open page offers the seller `control` (Hide or Unhide) within its time. A listing
+	* already hidden offers Unhide, and one on sale Hide.
+	*/
+	function offers(page, control) {
+		return appears$1(page, ITEM_PAGE[control], APPEAR_MS$1);
+	}
+	/**
+	* Taps Hide (or Unhide) on the open page, then waits for the page to offer the other: the one
+	* step that changes the listing. A page that never does is one Listora no longer understands;
+	* the change may have been sent, so the read-back decides.
+	*/
+	async function toggleHidden(page, control) {
+		if (!await page.exists(ITEM_PAGE[control])) throw changed(PAGE$5, `has no ${control === "hide" ? "Hide" : "Unhide"} for this listing`);
+		await page.click(ITEM_PAGE[control]);
+		if (!await appears$1(page, ITEM_PAGE[control === "hide" ? "unhide" : "hide"], APPEAR_MS$1)) throw changed(PAGE$5, `didn't show the listing ${control === "hide" ? "hidden" : "for sale"}`);
 	}
 
 // src/vinted/pages/listing-details.ts
@@ -14174,6 +14248,304 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
+// src/vinted/pages/upload-form.ts
+/**
+	* Vinted's upload form ("Sell an item | Vinted"): the upload page (`/items/new`) for a new
+	* listing, and the same form on a listing's edit page (`/items/<id>/edit`). Filling it changes
+	* nothing; only its Upload (Save on the edit page) does.
+	*
+	* The form, in the order the script fills it: photos (one file input, in posting order, up to
+	* 20), title, description (with Listora's SKU line), the category level by level in its list
+	* (each level's categories appear once the one above is picked, down to one without
+	* subcategories), then the fields the category asks for: brand (searched in Vinted's list; its
+	* "No brand" when Vinted lists none), size (the item's label in the category's list, when the
+	* form asks one), condition, up to two colours, and the package size (Vinted's form recommends
+	* one for the category, which Listora keeps unless the listing names one); then the price.
+	*
+	* Read on the test account (2026-11-05, Vinted plan M2's read of the bare form, nothing typed or
+	* sent): the page's title, its category field (`catalog-select-dropdown-input`) and list
+	* (`catalog-select-dropdown-content`, whose top levels are `catalog-icon-<id>` cells and whose
+	* categories are picked by their names), and that picking a category asks Vinted for its fields
+	* (`POST /api/v2/item_upload/attributes`). Vinted then sent the account to its verification
+	* (`/users/verification`), a check the profile stops at, so every other part here is Listora's
+	* model of the form, named after the category field's pattern, until the mapping reads it. A
+	* part that differs stops the step before anything is sent (`PageChangedError`), and its fix is
+	* this module's selectors.
+	*
+	* After Upload, Vinted either shows its messages under the fields it refuses (a rejection in
+	* Vinted's own words), or opens the new listing's page (`/items/<id>-<slug>`), whose id the
+	* script returns. Vinted then reviews the upload before it goes live: the read-back says so.
+	*/
+	/** A dropdown field of the form: its input, and the list it opens. */
+	const dropdown = (name) => ({
+		input: `[data-testid="${name}-select-dropdown-input"]`,
+		list: `[data-testid="${name}-select-dropdown-content"]`
+	});
+	const UPLOAD_FORM = {
+		/** The form is there once its category field is (read on the test account). */
+		form: "[data-testid=\"catalog-select-dropdown-input\"]",
+		photos: "input[type=\"file\"][data-testid=\"add-photos-input\"]",
+		/** A photo the form took, as its thumbnail. */
+		photo: "[data-testid=\"item-photo\"]",
+		title: "input[data-testid=\"title--input\"]",
+		description: "textarea[data-testid=\"description--input\"]",
+		category: dropdown("catalog"),
+		brand: dropdown("brand"),
+		/** What to search for Vinted's brand for an item without one, and its name. */
+		noBrand: "No brand",
+		size: dropdown("size"),
+		condition: dropdown("status"),
+		color: dropdown("color"),
+		/** A package size's choice, and the one chosen (Vinted's recommendation, until changed). */
+		packageSize: (size) => `input[type="radio"][data-testid="package-size--${size}"]`,
+		packageSizeChosen: "input[type=\"radio\"][data-testid^=\"package-size--\"]:checked",
+		price: "input[data-testid=\"price-input--input\"]",
+		/** Upload on the upload page, Save on the edit page: the one control that changes anything. */
+		save: "button[data-testid=\"upload-form-save-button\"]",
+		/** Vinted's message under a field it refuses. */
+		error: "[data-testid$=\"--validation-text\"]"
+	};
+	/** An option of a list, by its whole name: the innermost element that shows it. */
+	function option(list, name) {
+		return `${list} *:text-is("${quote$1(name)}") >> nth=-1`;
+	}
+	const FORM = "upload form";
+	/** How long a list Vinted draws after a tap, or the fields a category asks for, get to appear. */
+	const APPEAR_MS = 8e3;
+	/** How long the form gets to take every photo. */
+	const PHOTOS_MS = 3e4;
+	/** How long Vinted gets to answer an Upload or a Save. */
+	const ANSWER_MS = 3e4;
+	/** Opens the empty upload form. */
+	async function openUploadForm(page, site) {
+		await page.goto(absolute(site, VINTED_PATHS.upload));
+		await awaitElement(page, UPLOAD_FORM.form, FORM, "category field");
+	}
+	/**
+	* Opens the listing's edit form: `editing` once it shows the form, `missing` for a listing
+	* Vinted no longer has (404), and `not_editable` for a page without the form (one that sold).
+	*/
+	async function openEditForm(page, site, id) {
+		await page.goto(absolute(site, VINTED_PATHS.edit(id)));
+		if (page.status() === 404) return "missing";
+		return await appears$1(page, UPLOAD_FORM.price, APPEAR_MS) ? "editing" : "not_editable";
+	}
+	/**
+	* Fills the whole upload form from the payload (photos only on a new listing: `files`), or says
+	* why the form can't take it. Nothing is sent.
+	*/
+	async function fillUploadForm(page, payload, sku, files) {
+		if (payload.category === null) throw new Error("a Vinted listing has a category");
+		await addPhotos$1(page, files);
+		await awaitElement(page, UPLOAD_FORM.title, FORM, "title");
+		await page.fill(UPLOAD_FORM.title, payload.title);
+		await awaitElement(page, UPLOAD_FORM.description, FORM, "description");
+		await page.fill(UPLOAD_FORM.description, withSkuLine(payload.description, sku));
+		await pickCategory(page, payload.category);
+		await awaitElement(page, UPLOAD_FORM.condition.input, FORM, "category's condition field");
+		await pickBrand(page, payload.brand);
+		const size = await pickSize(page, payload.size);
+		if (size !== null) return size;
+		if (payload.condition === null) throw new Error("a Vinted listing has a condition");
+		await pickOne(page, UPLOAD_FORM.condition, payload.condition, "condition");
+		await pickColors(page, payload.colors);
+		if (!await pickPackageSize(page, payload.packageSize)) return { type: "package_size_required" };
+		await fillPrice(page, payload.price.amountCents);
+		return null;
+	}
+	/** Fills only the price (an edit page's price change). */
+	async function fillPrice(page, priceCents) {
+		await awaitElement(page, UPLOAD_FORM.price, FORM, "price");
+		await page.fill(UPLOAD_FORM.price, priceField(priceCents));
+	}
+	/**
+	* Uploads (Upload, or Save on the edit page), then waits for Vinted's answer: its messages under
+	* the fields it refuses, or the listing's page. A form that shows neither in time is one Listora
+	* no longer understands: the change may have been sent, so a read-back decides.
+	*/
+	async function submitUploadForm(page) {
+		await awaitElement(page, UPLOAD_FORM.save, FORM, "Upload button");
+		const start = new URL(page.url()).pathname;
+		await page.click(UPLOAD_FORM.save);
+		const end = Date.now() + ANSWER_MS;
+		for (;;) {
+			const path = new URL(page.url()).pathname;
+			const itemId = itemIdFromPath(path);
+			if (itemId !== null) return {
+				type: "posted",
+				itemId
+			};
+			const messages = (await page.texts(UPLOAD_FORM.error)).map((text) => text.replace(/\s+/g, " ").trim()).filter((text) => text !== "");
+			if (messages.length > 0) return {
+				type: "refused",
+				message: [...new Set(messages)].join(" ")
+			};
+			if (path !== start) return {
+				type: "posted",
+				itemId: null
+			};
+			if (Date.now() >= end) throw changed(FORM, "showed no listing and no message after Upload");
+			await lookAgain(page, 150);
+		}
+	}
+	/** A price for Vinted's field: dollars, with cents only when there are any (`45`, `12.50`). */
+	function priceField(cents) {
+		const dollars = Math.floor(cents / 100);
+		const rest = cents % 100;
+		return rest === 0 ? String(dollars) : `${String(dollars)}.${String(rest).padStart(2, "0")}`;
+	}
+	async function addPhotos$1(page, files) {
+		if (files.length === 0) return;
+		await awaitElement(page, UPLOAD_FORM.photos, FORM, "photo input");
+		await page.upload(UPLOAD_FORM.photos, files);
+		const end = Date.now() + PHOTOS_MS;
+		while (await page.count(UPLOAD_FORM.photo) < files.length) {
+			if (Date.now() >= end) throw changed(FORM, `showed ${String(await page.count(UPLOAD_FORM.photo))} of ${String(files.length)} photos`);
+			await lookAgain(page, 150);
+		}
+	}
+	/** Picks the category level by level, down to the one without subcategories it names. */
+	async function pickCategory(page, path) {
+		const { input, list } = UPLOAD_FORM.category;
+		await awaitElement(page, input, FORM, "category field");
+		await page.click(input);
+		for (const [level, name] of path.entries()) {
+			const row = option(list, name);
+			if (!await appears$1(page, row, APPEAR_MS)) throw changed(FORM, `offers no category level ${String(level + 1)} "${name}"`);
+			await page.click(row);
+		}
+		const end = Date.now() + APPEAR_MS;
+		while (await page.exists(list)) {
+			if (Date.now() >= end) throw changed(FORM, "kept its category list open after the category");
+			await lookAgain(page, 150);
+		}
+	}
+	/**
+	* Picks the item's brand from Vinted's list, matched by name ignoring case and punctuation
+	* (`Levi's` is Vinted's `Levi’s`), or Vinted's "No brand" when it lists none or the item has none.
+	*/
+	async function pickBrand(page, brand) {
+		const { input, list } = UPLOAD_FORM.brand;
+		if (!await page.exists(input)) return;
+		for (const wanted of brand === null ? [UPLOAD_FORM.noBrand] : [brand, UPLOAD_FORM.noBrand]) {
+			await page.click(input);
+			await page.fill(input, wanted);
+			if (!await appears$1(page, list, APPEAR_MS)) throw changed(FORM, "shows no brand list");
+			const match = (await listed(page, list)).find((name) => brandKey(name) === brandKey(wanted));
+			if (match !== void 0) {
+				await page.click(option(list, match));
+				return;
+			}
+		}
+		throw changed(FORM, `offers no "${UPLOAD_FORM.noBrand}" brand`);
+	}
+	/** Picks the item's size where the form asks one; a problem when the item's isn't offered. */
+	async function pickSize(page, size) {
+		const { input, list } = UPLOAD_FORM.size;
+		if (!await page.exists(input)) return null;
+		await page.click(input);
+		if (!await appears$1(page, list, APPEAR_MS)) throw changed(FORM, "shows no size list");
+		const offered = await listed(page, list);
+		const match = size === null ? void 0 : matchSize(offered, size);
+		if (match === void 0) {
+			await page.click(input);
+			return {
+				type: "size_not_offered",
+				size,
+				offered: offered.slice(0, 6)
+			};
+		}
+		await page.click(option(list, match));
+		return null;
+	}
+	async function pickOne(page, field, name, what) {
+		await awaitElement(page, field.input, FORM, `${what} field`);
+		await page.click(field.input);
+		const row = option(field.list, name);
+		if (!await appears$1(page, row, APPEAR_MS)) throw changed(FORM, `offers no ${what} "${name}"`);
+		await page.click(row);
+	}
+	/** Ticks up to two colours in Vinted's list, then closes it; a category without colours has none. */
+	async function pickColors(page, colors) {
+		const { input, list } = UPLOAD_FORM.color;
+		if (colors.length === 0 || !await page.exists(input)) return;
+		await page.click(input);
+		for (const color of colors) {
+			const row = option(list, color);
+			if (!await appears$1(page, row, APPEAR_MS)) throw changed(FORM, `offers no colour "${color}"`);
+			await page.click(row);
+		}
+		if (await page.exists(list)) await page.click(input);
+	}
+	/**
+	* Keeps the package size Vinted recommends, or picks the one the listing names; `false` when
+	* the form has none chosen and the listing names none (the seller picks it).
+	*/
+	async function pickPackageSize(page, size) {
+		if (size !== null) {
+			const choice = UPLOAD_FORM.packageSize(size);
+			if (!await page.exists(choice)) throw changed(FORM, `offers no ${size} package size`);
+			await page.check(choice, true);
+			return true;
+		}
+		return page.exists(UPLOAD_FORM.packageSizeChosen);
+	}
+	/** The names a list shows, each once, in its order. */
+	async function listed(page, list) {
+		const names = (await page.texts(`${list} *`)).map((text) => text.replace(/\s+/g, " ").trim()).filter((text) => text !== "");
+		return [...new Set(names)];
+	}
+	function brandKey(name) {
+		return name.normalize("NFKD").toLowerCase().replace(/\band\b/g, "&").replace(/[^a-z0-9&]/g, "");
+	}
+	function sizeKey(label) {
+		return label.toLowerCase().replace(/\s+/g, "");
+	}
+	/**
+	* The size list's label for the item's size: the label itself, else one that starts with it
+	* before Vinted's other names for it (`M` is `M / 38 / 10`, `10` is `10 (EU 41)`).
+	*/
+	function matchSize(offered, size) {
+		const wanted = sizeKey(size);
+		return offered.find((label) => sizeKey(label) === wanted) ?? offered.find((label) => sizeKey(label.split(/\s*[/(|]\s*/)[0] ?? "") === wanted);
+	}
+
+// src/vinted/payload.ts
+/**
+	* What the Vinted scripts put into Vinted's upload form, built purely from the listing content,
+	* and Vinted's rules for it (golden-tested in `__golden__/`). The payload extends the assisted
+	* one, so a step that falls back to the seller copies the same title, description, price, and
+	* photos (docs/features/vinted.md, "Create, price, hide, and unhide").
+	*
+	* - The category is a path of Vinted's category list (categories.ts), picked level by level.
+	* - The condition is one of Vinted's five, never claiming more than the item's: "Very good" is
+	*   pre-owned.
+	* - Brand and size are picked on the form from Vinted's own lists: the brand matched by name
+	*   (Vinted's "No brand" when it lists none), the size by the item's label. Vinted's size lists
+	*   depend on the category and are not mapped yet (the taxonomy snapshot, Vinted plan M2), so a
+	*   size the form doesn't offer stops the create before anything is sent.
+	* - Colours: up to two, in Vinted's names.
+	* - Package size sets the buyer's shipping: Vinted's form recommends one for the category, which
+	*   Listora keeps unless the listing names one (a `Package size` aspect: small, medium, large).
+	* - Vinted has no seller SKU field, so the scripts end the description with Listora's SKU line
+	*   (`SKU: AJ-000184`), how a later attempt or a read-back finds a listing whose id Listora never
+	*   learned; Vinted bans the same item listed twice, so a create is never posted twice.
+	*/
+	/**
+	* Vinted's limits for a listing (modeled from its US help center and the upload form until the
+	* mapping, Vinted plan M2, reads the form's own): up to 20 photos, a title of up to 100
+	* characters, a description of up to 2,000, and a price from $1 to $5,000 in cents.
+	*/
+	const VINTED_LIMITS = {
+		titleMinLength: 3,
+		titleMaxLength: 100,
+		descriptionMaxLength: 2e3,
+		minPriceCents: 100,
+		maxPriceCents: 5e5,
+		maxPhotos: 20,
+		maxColors: 2
+	};
+
 // src/vinted/scripts.ts
 /** Sold-order pages (20 each) a sale check reads per state, and the orders whose items it reads. */
 	const ORDER_LIMITS = {
@@ -14193,12 +14565,163 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		status: "completed",
 		step: "read your completed sales"
 	}];
+	/**
+	* How many of the newest wardrobe listings a lookup by SKU reads. A listing whose id Listora
+	* never learned is one it just posted, so it is among the newest.
+	*/
+	const SKU_LOOKUP_DEPTH = 8;
+	/** How long an end waits at the soonest for Vinted to finish reviewing a listing. */
+	const REVIEW_WAIT_MS = 6e4;
 	function createVintedScripts(options) {
 		const { site } = options;
 		/** Opens the seller's settings, a Vinted page the web API reads go from. */
 		const openSettings = (step) => step("open your profile settings", { mutates: false }, (page) => openAccount(page, site));
+		/**
+		* The listing as Vinted's web API shows it to its seller, read from an open Vinted page;
+		* `null` for one it doesn't have (or a draft, which is no listing).
+		*/
+		const readListing = (step, id) => step("read the listing", { mutates: false }, async (page) => {
+			await openAccount(page, site);
+			return listedItem(await readItem(page, site, id));
+		});
+		/** The listing among the seller's newest whose description ends with this SKU, if any. */
+		async function findBySku(step, sku, title) {
+			const memberId = await step("find your wardrobe", { mutates: false }, async (page) => {
+				await openAccount(page, site);
+				return (await currentMember(page, site)).id;
+			});
+			const listed = (await step("look at the newest listings", { mutates: false }, (page) => readWardrobePage(page, site, memberId, 1))).items.filter((one) => one.state !== null);
+			const titled = title === void 0 ? [] : listed.filter((one) => one.state?.title === title);
+			const candidates = titled.length > 0 ? titled : listed.slice(0, 8);
+			for (const candidate of candidates) {
+				const id = candidate.state?.externalListingId;
+				if (id === void 0) continue;
+				const found = listedItem(await step("look for the SKU", { mutates: false }, (page) => readItem(page, site, id)));
+				if (found?.sku === sku) return found;
+			}
+			return null;
+		}
+		/** Posts a new listing from the payload: the upload form, then Upload. */
+		async function createListing(op, step) {
+			const payload = op.payload;
+			if (payload === null) throw new Error("a create has a payload");
+			const sku = listingSku(op.listing);
+			if (mayHaveAppliedBefore(op)) {
+				const earlier = await findBySku(step, sku, payload.title);
+				if (earlier !== null) return {
+					type: "applied",
+					externalListingId: earlier.state.externalListingId
+				};
+			}
+			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
+			await step("open the upload form", {
+				mutates: false,
+				timeScale: 2
+			}, (page) => openUploadForm(page, site));
+			const problem = await step("fill in the listing", {
+				mutates: false,
+				timeScale: 3
+			}, (page) => fillUploadForm(page, payload, sku, files));
+			if (problem !== null) return refusedFill(problem);
+			const result = await step("upload", {
+				mutates: true,
+				timeScale: 3
+			}, async (page) => submitted(await submitUploadForm(page)));
+			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+			try {
+				const found = await findBySku(step, sku, payload.title);
+				if (found !== null) return {
+					...result,
+					externalListingId: found.state.externalListingId
+				};
+			} catch {}
+			return result;
+		}
+		/**
+		* The listing as a read-back: by its id, else found by its SKU line among the newest (not
+		* finding it that way is no proof it is gone). One Vinted is reviewing is not live yet, and
+		* never gone. A 404 for its id is not taken as gone either: Vinted's answer for an item its
+		* seller deleted is not read yet, and a new upload may not be readable at once.
+		*/
+		async function readBack(ref, step) {
+			const id = ref.externalListingId;
+			const read = id === null ? await findBySku(step, listingSku(ref)) : await readListing(step, id);
+			if (read === null) return {
+				found: false,
+				authoritative: false
+			};
+			if (read.inReview) return {
+				found: false,
+				authoritative: false,
+				inReview: true
+			};
+			return read.state;
+		}
 		return {
-			read: () => Promise.reject(new PageChangedError("Listora doesn't read Vinted listings back yet.")),
+			create: (op, step) => createListing(op, step),
+			price: async (op, step) => {
+				const priceCents = op.desired.priceCents;
+				if (priceCents === void 0) return {
+					type: "rejected",
+					code: "missing_price",
+					message: "There is no price to set."
+				};
+				if (priceCents < VINTED_LIMITS.minPriceCents || priceCents > VINTED_LIMITS.maxPriceCents) return {
+					type: "rejected",
+					code: "invalid_price",
+					message: "Vinted prices are from $1 to $5,000."
+				};
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await readListing(step, id);
+				if (shown === null) return notListed();
+				if (shown.state.status === "sold") return sold();
+				if (shown.inReview) return inReview("changed");
+				const opened = await step("open the edit form", {
+					mutates: false,
+					timeScale: 2
+				}, (page) => openEditForm(page, site, id));
+				if (opened === "missing") return notListed();
+				if (opened === "not_editable") throw changed("edit form", "shows no price for a listing that has not sold");
+				await step("fill in the price", { mutates: false }, (page) => fillPrice(page, priceCents));
+				return step("save", {
+					mutates: true,
+					timeScale: 2
+				}, async (page) => submitted(await submitUploadForm(page)));
+			},
+			end: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await readListing(step, id);
+				if (shown === null) return notListed();
+				if (shown.state.status !== "active") return { type: "applied" };
+				if (shown.inReview) return inReview("hidden");
+				return step("hide", { mutates: true }, async (page) => {
+					if (!await openItemPage(page, site, id) || !await offers(page, "hide")) throw changed("listing page", "offers no Hide for a listing for sale");
+					await toggleHidden(page, "hide");
+					return { type: "applied" };
+				});
+			},
+			relist: async (op, step) => {
+				const id = op.listing.externalListingId;
+				if (id === null) return notListed();
+				const shown = await readListing(step, id);
+				if (shown === null) return notListed();
+				if (shown.state.status === "sold") return sold();
+				if (shown.state.status === "active") return {
+					type: "applied",
+					externalListingId: id
+				};
+				return step("unhide", { mutates: true }, async (page) => {
+					if (!await openItemPage(page, site, id) || !await offers(page, "unhide")) throw changed("listing page", "offers no Unhide for a hidden listing");
+					await toggleHidden(page, "unhide");
+					return {
+						type: "applied",
+						externalListingId: id
+					};
+				});
+			},
+			read: async (ref, step) => readBack(ref, step),
 			health: (step) => step("open your profile settings", { mutates: false }, async (page) => {
 				await openAccount(page, site);
 				return sellerIdentity(await signedInMember(page, site));
@@ -14259,6 +14782,73 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 				return orders;
 			}
 		};
+	}
+	function listedItem(item) {
+		const state = item?.state ?? null;
+		return item === null || state === null ? null : {
+			...item,
+			state
+		};
+	}
+	/** A change to a listing that is not on Vinted (yet, or any more). */
+	function notListed() {
+		return {
+			type: "rejected",
+			code: "not_listed",
+			message: "This listing is not on Vinted."
+		};
+	}
+	function sold() {
+		return {
+			type: "rejected",
+			code: "listing_sold",
+			message: "This listing sold on Vinted, so it cannot be changed.",
+			fixHint: "List the item again as a new Vinted listing."
+		};
+	}
+	/** Vinted reviews the listing and won't let it be changed (`hidden`, `changed`) until it's done. */
+	function inReview(what) {
+		return {
+			type: "not_yet",
+			code: "in_review",
+			message: `Vinted is reviewing this listing and won't let it be ${what} until the review ends. Listora tries again.`,
+			retryAfterMs: REVIEW_WAIT_MS
+		};
+	}
+	/**
+	* After Upload or Save: Vinted's refusal, or the listing it opened. The listing is read back by
+	* the operation's check, not here: the submit already happened.
+	*/
+	function submitted(outcome) {
+		if (outcome.type === "refused") return {
+			type: "rejected",
+			code: "validation_failed",
+			message: outcome.message
+		};
+		return outcome.itemId === null ? { type: "applied" } : {
+			type: "applied",
+			externalListingId: outcome.itemId
+		};
+	}
+	/** A form that can't take the listing as it is, before anything was sent. */
+	function refusedFill(problem) {
+		switch (problem.type) {
+			case "size_not_offered": return {
+				type: "rejected",
+				code: "size_not_offered",
+				message: problem.size === null ? `Vinted needs a size for this category${examples(problem.offered)}.` : `Vinted doesn't offer size ${problem.size} for this category${examples(problem.offered)}.`,
+				fixHint: "Set the listing's Size to one of Vinted's sizes, or list it in Vinted."
+			};
+			case "package_size_required": return {
+				type: "rejected",
+				code: "package_size_required",
+				message: "Vinted needs a package size for this listing, and it recommends none.",
+				fixHint: "Add a Package size (small, medium, or large) to the listing's details."
+			};
+		}
+	}
+	function examples(offered) {
+		return offered.length === 0 ? "" : ` (its sizes include ${offered.join(", ")})`;
 	}
 	/** An item for sale as an import takes it, with its details. */
 	function listedListing(item) {
@@ -15710,7 +16300,10 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 				return (call, step) => runScriptCall(scripts, call, step);
 			}
 			case "vinted": {
-				const scripts = createVintedScripts({ site: { origin } });
+				const scripts = createVintedScripts({
+					site: { origin },
+					photos
+				});
 				return (call, step) => runScriptCall(scripts, call, step);
 			}
 			case "fake_site": {

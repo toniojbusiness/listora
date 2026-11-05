@@ -62,6 +62,9 @@ import {
 } from '@listora/db';
 import {
   isContentKind,
+  isListingAutomationOn,
+  isListingAutomationVerified,
+  loadFeatureGate,
   MARKETPLACE_NAMES,
   operationMode,
   parseListingContent,
@@ -109,7 +112,7 @@ import { delayAfterAttempt, maxAttemptsFor, type RetryPolicy } from './policy.ts
 import { isWriteKind, READ_ONLY_ERROR, readOnlyListing, readOnlyMessage } from './read-only.ts';
 import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
-import { REFUSED_CONTENT_ERROR } from './status-display.ts';
+import { IN_REVIEW_CODE, REFUSED_CONTENT_ERROR } from './status-display.ts';
 import {
   attemptNow,
   operationPriority,
@@ -798,12 +801,18 @@ async function loadConnection(
     .where('id', '=', listing.connection_id)
     .executeTakeFirst();
   if (connection === undefined) return null;
+  // Listing steps on a marketplace whose automation has not passed live stay assisted, but in
+  // the owner's Test mode (docs/features/verified-features.md).
+  const listingAutomation =
+    isListingAutomationVerified(listing.marketplace) ||
+    isListingAutomationOn(listing.marketplace, await loadFeatureGate(trx, listing.account_id));
   return {
     ref: {
       id: connection.id,
       mode: connection.mode,
       status: connection.status,
       sellerId: connection.external_user_id,
+      listingAutomation,
     },
     runsOn: connection.runs_on,
   };
@@ -1175,7 +1184,7 @@ async function sendTo(
       return {
         resolution: undecidedRead(ctx, comparison, true) ?? {
           type: 'verify',
-          error: notShown(ctx.name, comparison.fields),
+          error: notShown(ctx.name, comparison.fields, read.remote),
           unknownResult: true,
         },
         detail: { ...detail, readBack: comparison },
@@ -1328,23 +1337,32 @@ async function checkTarget(
   // proof it didn't go through: a marketplace's own search can lag behind a listing it just took
   // (Poshmark's closet, for minutes, 2026-10-27), and so can the new listing's own page
   // (Poshmark's, while it holds a new listing back), and sending again would post it twice. It
-  // is read again later instead; when the attempts run out it fails, and the seller checks. A
+  // is read again later instead; when the attempts run out it fails, and the seller checks. So
+  // is any change the marketplace took and then held back while it reviews the listing
+  // (Vinted's review, `in_review`): sending it again changes nothing until the review ends. A
   // step that was interrupted before its send is not this case: its read-back decides as before.
+  const sentAndUnseen =
+    (ctx.op.error_code === 'not_applied' &&
+      (ctx.op.kind === 'create' || ctx.op.kind === 'relist')) ||
+    ctx.op.error_code === IN_REVIEW_CODE;
   if (
     comparison.reason === 'not_found' &&
     ctx.op.status === 'verifying' &&
-    ctx.op.error_code === 'not_applied' &&
-    (ctx.op.kind === 'create' || ctx.op.kind === 'relist') &&
+    sentAndUnseen &&
     !read.remote.found &&
     !read.remote.authoritative
   ) {
     return {
-      resolution: { type: 'verify', error: notShown(ctx.name, fields), unknownResult: false },
+      resolution: {
+        type: 'verify',
+        error: notShown(ctx.name, fields, read.remote),
+        unknownResult: false,
+      },
       detail,
     };
   }
   // Read back and not applied: sending again is no longer blind.
-  return { resolution: { type: 'retry', error: notShown(ctx.name, fields) }, detail };
+  return { resolution: { type: 'retry', error: notShown(ctx.name, fields, read.remote) }, detail };
 }
 
 /**
@@ -1963,7 +1981,17 @@ function describeFields(fields: readonly (keyof DesiredListingState)[]): string 
   return fields.length === 0 ? '' : ` (${fields.map((field) => FIELD_WORDS[field]).join(', ')})`;
 }
 
-function notShown(name: string, fields: readonly (keyof DesiredListingState)[]): OperationError {
+function notShown(
+  name: string,
+  fields: readonly (keyof DesiredListingState)[],
+  remote?: RemoteListingState,
+): OperationError {
+  if (remote !== undefined && !remote.found && remote.inReview === true) {
+    return {
+      code: IN_REVIEW_CODE,
+      message: `${name} is reviewing the listing and hasn't put it up for sale yet.`,
+    };
+  }
   return fields.length === 0
     ? { code: 'not_applied', message: `${name} doesn't show the change.` }
     : {

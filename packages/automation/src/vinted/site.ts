@@ -28,6 +28,13 @@ export const VINTED_LOGIN_PATH = '/member/signup/select_type';
 export const VINTED_PATHS = {
   /** The seller's own profile settings: only a signed-in member sees it. */
   account: '/settings/profile',
+  /**
+   * The upload form ("Sell an item | Vinted"), which posts a new listing: read on the test
+   * account (2026-11-05, Vinted plan M2's read of the bare form, nothing typed or sent).
+   */
+  upload: '/items/new',
+  /** A listing's edit form: the upload form, filled with the listing (modeled). */
+  edit: (id: string) => `/items/${encodeURIComponent(id)}/edit`,
 } as const;
 
 /**
@@ -52,6 +59,12 @@ export const VINTED_API_PATHS = {
 /** An item's page path: `/items/<numeric id>`, a slug of its title after a dash. */
 export function itemPath(id: string): string {
   return `/items/${id}`;
+}
+
+/** The item id of an item page's path (`/items/<id>` or `/items/<id>-<slug>`), else `null`. */
+export function itemIdFromPath(path: string): string | null {
+  const id = /^\/items\/(\d{1,20})(?:-[^/]*)?\/?$/.exec(path)?.[1];
+  return id ?? null;
 }
 
 /** Vinted's ids (items, members, transactions) are numbers. */
@@ -100,6 +113,10 @@ export const VINTED_CHALLENGE_SIGNS: ChallengeSigns = {
   ],
   // Code and identity checks after sign-in (a code by email or text, Vinted's ID check).
   verificationPaths: [
+    // Vinted's account verification before listing (an email code): picking a category on the
+    // upload form sent the test account there (`/users/verification?ref_url=/items/new`,
+    // 2026-11-05, Vinted plan M2).
+    /^\/users\/verification(\/|$)/i,
     /^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i,
     /^\/member\/(verification|verify|two_factor|2fa)(\/|$)/i,
     /^\/(identity|id-verification|kyc)(\/|$)/i,

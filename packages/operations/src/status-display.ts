@@ -64,6 +64,14 @@ export interface ListingStatusInput {
  */
 export const REFUSED_CONTENT_ERROR = 'validation_failed';
 
+/**
+ * The error code of an operation whose listing the marketplace holds back while it reviews it
+ * (`RemoteListingState.inReview`, Vinted's review of every new upload): not live yet, and never
+ * gone. It shows as "In Vinted's review", never as listed, and a delist that waits for the review
+ * shows as waiting for it.
+ */
+export const IN_REVIEW_CODE = 'in_review';
+
 /** The operations that carry listing content (the schema's invariant), which a refusal is about. */
 const CONTENT_KINDS: readonly OperationKind[] = ['create', 'revise', 'relist'];
 
@@ -94,14 +102,17 @@ const IN_PROGRESS = {
 
 /**
  * What a relist does: brings back the listing Listora ended (`reactivate`: Mercari activates it,
- * Poshmark puts it back for sale) or posts a new listing (`new`: Depop, whose End deletes, and
+ * Poshmark puts it back for sale, Vinted unhides it) or posts a new listing (`new`: Depop, whose End deletes, and
  * any listing whose id a read-back cleared because the marketplace removed it, which the
  * executor sends as a create).
  */
 export type RelistMode = 'reactivate' | 'new';
 
-/** The marketplaces where a relist brings back the ended listing itself. */
-const REACTIVATES: readonly Marketplace[] = ['mercari', 'poshmark'];
+/**
+ * The marketplaces where a relist brings back the ended listing itself (Vinted's unhides the
+ * listing its end hid).
+ */
+const REACTIVATES: readonly Marketplace[] = ['mercari', 'poshmark', 'vinted'];
 
 /**
  * How a relist goes for a listing on `marketplace`: `externalListingId` is its marketplace id
@@ -279,10 +290,15 @@ function describeUnsettled(
       return { tone: 'in_progress', label: `${doingNow}...` };
     case 'retrying':
       // Listora is still on it; the attempt count and the last try's error are the support
-      // views', not the seller's.
-      return { tone: 'in_progress', label: `${doingNow}...` };
+      // views', not the seller's. A change the marketplace takes only after its review says so.
+      return operation.errorCode === IN_REVIEW_CODE
+        ? { tone: 'in_progress', label: `${doingNow}... after ${name}'s review`, ...detail }
+        : { tone: 'in_progress', label: `${doingNow}...` };
     case 'verifying':
-      return { tone: 'checking', label: 'Checking...', ...detail };
+      // Taken, but held back while the marketplace reviews it: never "Listed" until it is live.
+      return operation.errorCode === IN_REVIEW_CODE
+        ? { tone: 'checking', label: `In ${name}'s review`, ...detail }
+        : { tone: 'checking', label: 'Checking...', ...detail };
     case 'needs_user_action':
       return { tone: 'action_needed', label: `Action needed - ${USER_STEP[kind]} on ${name}` };
     case 'failed':

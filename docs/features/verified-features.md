@@ -146,10 +146,11 @@ write ran only on the captain's own accounts. Tristin's Depop shop was only ever
 | eBay        | every feature                     | Hidden: no eBay connection has run live                                                                                                                                                                                                                                                                                                                                               |
 | eBay        | `market_comps`                    | Hidden: the logged-out reader is tested on stand-in pages (eBay showed the recorder a bot check); its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                                       |
 | Vinted      | `listing_import`, `sales_history` | Hidden: built (Vinted plan M4); a read-only run on the test account (2026-11-05) read its member, an empty wardrobe, and a sold-orders answer that waits for the account's verification; Listora's own read from the Mac stopped at a bot check, as it must. Its live test is the captain's import on the iPhone ([vinted.md](vinted.md))                                             |
-| Vinted      | every other feature               | Hidden: Vinted's listing steps are assisted only ([vinted.md](vinted.md))                                                                                                                                                                                                                                                                                                             |
+| Vinted      | every other feature               | Hidden: built through M5 at most, no live run ([vinted.md](vinted.md))                                                                                                                                                                                                                                                                                                                |
 | Vinted      | `market_comps`                    | Hidden: the logged-out reader is tested on a recorded public search (2026-11-05, no bot check); its live test is the captain's, on the iPhone at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                           |
 
-Listing actions, as they ran live (only revise is gated, see above):
+Listing actions, as they ran live (only revise is gated, see above, and the automated listing
+steps of a marketplace that joins automation in milestones, below):
 
 | Marketplace | Publish, price, end, relist              | Revise (details) |
 | ----------- | ---------------------------------------- | ---------------- |
@@ -157,7 +158,7 @@ Listing actions, as they ran live (only revise is gated, see above):
 | Poshmark    | Passed 2026-10-27, the captain's account | Not run live     |
 | Mercari     | Passed 2026-10-27, the captain's account | Not run live     |
 | eBay        | Not run live                             | Not run live     |
-| Vinted      | Assisted only: the seller does each step | Assisted only    |
+| Vinted      | Built (M5), not run live: Test mode only | Assisted only    |
 
 Mark a feature verified only after a live end-to-end run proves it. Make one change that adds
 its entry to `VERIFIED_FEATURES`, with the date and what the run proved, and adds its row here.
@@ -173,3 +174,10 @@ A Test mode run's passed entry in the owner's log (`npm run admin -- feature-tes
   `isLinkingOn`): Vinted's Link accounts row shows only in Test mode, or once the account linked
   it, until its live link ([vinted.md](vinted.md)). Putting linking on the list for every
   marketplace would hide eBay's linking, which never ran live either.
+- The automated listing steps (publish, price, end, relist) of such a marketplace are held back
+  the same way (`LISTING_AUTOMATION_NOT_VERIFIED`, `isListingAutomationOn`): on a seller's linked
+  Vinted they stay the seller's assisted tasks, and run automated only for an account in Test
+  mode. The executor reads the account's gate with the listing's connection
+  (`ConnectionRef.listingAutomation`), and the automation adapter reports those kinds assisted
+  without it, so the worker never hands such a step to the phone. Vinted leaves the list in the
+  change that records its live run ([vinted.md](vinted.md)).

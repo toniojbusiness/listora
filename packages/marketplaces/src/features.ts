@@ -198,6 +198,31 @@ export function isLinkingOn(marketplace: Marketplace, gate: FeatureGate): boolea
 }
 
 /**
+ * Listing steps done by browser automation (publishing, price changes, delisting, relisting:
+ * docs/features/automation.md) are not on the feature list either: they passed live on every
+ * marketplace automation serves, except on these, which join automation in milestones. Here a
+ * linked session's listing steps stay the seller's assisted tasks, and are automated only for an
+ * account in Test mode, the way their live test is run (docs/features/test-mode.md); the
+ * marketplace leaves this list in the change that records that run. Vinted: create, price, hide,
+ * and unhide are built (Vinted plan M5), and their live test is on the captain's Vinted test
+ * account (docs/features/vinted.md).
+ */
+export const LISTING_AUTOMATION_NOT_VERIFIED: readonly Marketplace[] = ['vinted'];
+
+/** Whether the marketplace's automated listing steps passed live (or this process runs `all`). */
+export function isListingAutomationVerified(marketplace: Marketplace): boolean {
+  return featureSet === 'all' || !LISTING_AUTOMATION_NOT_VERIFIED.includes(marketplace);
+}
+
+/**
+ * Whether the account's listing steps on the marketplace may be automated on a linked session:
+ * they passed live, or the account is in Test mode. Otherwise they stay assisted.
+ */
+export function isListingAutomationOn(marketplace: Marketplace, gate: FeatureGate): boolean {
+  return gate.testMode || isListingAutomationVerified(marketplace);
+}
+
+/**
  * Customer features of Listora itself rather than of one marketplace, held to the same rule:
  * hidden until a live end-to-end test passes, except in the owner's Test mode.
  */

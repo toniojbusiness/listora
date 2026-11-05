@@ -51,7 +51,11 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
      marketplace saying it is gone, is read again later and never sent again: a marketplace's
      own search, and even a new listing's own page, can lag minutes behind a listing it just took
      (Poshmark's closet and listing page, 2026-10-27), and sending again would post it twice.
-     When its attempts run out it fails, and the seller checks.
+     When its attempts run out it fails, and the seller checks. So is any change the marketplace
+     took whose listing it then holds back for its review (`inReview` on the read, code
+     `in_review`): Vinted reviews every new upload, usually for a minute, sometimes for days.
+     The listing shows "In Vinted's review", never as listed, and a delist the marketplace won't
+     take during its review waits for it ("Delisting... after Vinted's review").
    - `pendingUser` (assisted, or an automated step that met a check automation must not pass)
      → `needs_user_action` until the user confirms (`confirmOperationByUser`), or `failed` when
      the user dismisses the task (`dismissOperationByUser`, with a Retry that makes a new task;

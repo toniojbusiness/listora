@@ -34,7 +34,13 @@ export type WriteResult =
   /** The marketplace took the change; the engine still reads it back to verify. */
   | { type: 'applied'; externalListingId?: string; revision?: number }
   /** The marketplace refused it (a validation message on its form): retrying cannot help. */
-  | { type: 'rejected'; code: string; message: string; fixHint?: string };
+  | { type: 'rejected'; code: string; message: string; fixHint?: string }
+  /**
+   * The marketplace can't take the change yet, and nothing was sent: Vinted refuses to hide or
+   * delete a listing while it reviews it (`code` `in_review`). The step is tried again later,
+   * after `retryAfterMs` at the soonest.
+   */
+  | { type: 'not_yet'; code: string; message: string; retryAfterMs?: number };
 
 /** What an offer answer's script reports when it ran to its end (docs/features/offers.md). */
 export type OfferAnswerResult =

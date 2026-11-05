@@ -16,6 +16,7 @@ import type {
   ValidationIssue,
 } from '@listora/marketplaces';
 
+import { useMarketplaceFeatures } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 
 import { runOperationStep, type StepDependencies } from './executor.ts';
@@ -271,6 +272,154 @@ describe('operation step executor (real Postgres)', () => {
       status: 'verifying',
       error_code: 'not_applied',
     });
+  });
+
+  it("never posts a create again while the marketplace reviews it, and confirms it once it's live", async () => {
+    // Vinted reviews every new upload, usually for a minute, sometimes for days: the listing is
+    // the seller's, not live, and never gone.
+    const { op, payload } = await newCreate();
+    let sends = 0;
+    const reads: RemoteListingState[] = [
+      { found: false, authoritative: false, inReview: true },
+      { found: false, authoritative: false, inReview: true },
+      { ...ACTIVE, externalListingId: 'STUB-8' },
+    ];
+    const adapter = stubAdapter({
+      execute: () => {
+        sends += 1;
+        return Promise.resolve({ type: 'confirmed', externalListingId: 'STUB-8' });
+      },
+      read: () => Promise.resolve(reads.shift() ?? { ...ACTIVE, externalListingId: 'STUB-8' }),
+    });
+
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'verifying',
+      error_code: 'in_review',
+    });
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'verifying',
+      error_code: 'in_review',
+    });
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    expect(sends).toBe(1);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'succeeded',
+      success_evidence: 'read_back',
+    });
+  });
+
+  it('never sends a price change again while the marketplace reviews the listing', async () => {
+    const created = await harness.createListing('depop');
+    const listing = await harness.db
+      .updateTable('marketplace_listing')
+      .set({ external_listing_id: 'STUB-9', status: 'active' })
+      .where('id', '=', created.id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    const op = await harness.enqueue(listing, 'price', { priceCents: 3900, currency: 'USD' });
+    const payload = { accountId: harness.accountId, operationId: op.id };
+    let sends = 0;
+    const reads: RemoteListingState[] = [
+      { found: false, authoritative: false, inReview: true },
+      { found: false, authoritative: false, inReview: true },
+      { ...ACTIVE, externalListingId: 'STUB-9', priceCents: 3900, revision: 2 },
+    ];
+    const adapter = stubAdapter({
+      execute: () => {
+        sends += 1;
+        return Promise.resolve({ type: 'confirmed' });
+      },
+      read: () =>
+        Promise.resolve(
+          reads.shift() ?? {
+            ...ACTIVE,
+            externalListingId: 'STUB-9',
+            priceCents: 3900,
+            revision: 2,
+          },
+        ),
+    });
+
+    for (let step = 0; step < 3; step += 1) {
+      await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    }
+    expect(sends).toBe(1);
+    expect(await harness.operation(op.id)).toMatchObject({ status: 'succeeded' });
+  });
+
+  it("tells the adapter whether the account may automate a marketplace's listing steps that haven't passed live", async () => {
+    // Vinted's listing steps are automated only in the owner's Test mode until they pass live
+    // (docs/features/verified-features.md); every other marketplace's always are.
+    useMarketplaceFeatures('verified');
+    try {
+      const connection = await harness.db
+        .insertInto('marketplace_connection')
+        .values({
+          account_id: harness.accountId,
+          marketplace: 'vinted',
+          mode: 'automation',
+          status: 'connected',
+          token_ciphertext: Buffer.from('sealed session'),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const seen: (boolean | undefined)[] = [];
+      const adapter: MarketplaceAdapter = {
+        ...stubAdapter({
+          capabilities: { create: 'assisted' },
+          execute: (op) =>
+            Promise.resolve({
+              type: 'pendingUser',
+              task: { kind: 'list_manually', deepLink: null, payload: { action: op.kind } },
+            }),
+        }),
+        id: 'vinted',
+        capabilities: (ref) => {
+          seen.push(ref?.listingAutomation);
+          return { ...CAPABILITIES, create: 'assisted' };
+        },
+      };
+      const listingOn = async () => {
+        const created = await harness.createListing('vinted');
+        return harness.db
+          .updateTable('marketplace_listing')
+          .set({ connection_id: connection.id })
+          .where('id', '=', created.id)
+          .returningAll()
+          .executeTakeFirstOrThrow();
+      };
+      const run = async () => {
+        const op = await harness.enqueue(await listingOn(), 'create', {
+          status: 'active',
+          title: 'Stub jacket',
+          priceCents: 4500,
+        });
+        await runOperationStep(
+          deps(adapter),
+          { accountId: harness.accountId, operationId: op.id },
+          new AbortController().signal,
+        );
+      };
+
+      await run();
+      expect(seen.at(-1)).toBe(false);
+      await harness.db
+        .updateTable('account')
+        .set({ test_mode: true })
+        .where('id', '=', harness.accountId)
+        .execute();
+      await run();
+      expect(seen.at(-1)).toBe(true);
+    } finally {
+      useMarketplaceFeatures('all');
+      await harness.db
+        .updateTable('account')
+        .set({ test_mode: false })
+        .where('id', '=', harness.accountId)
+        .execute();
+    }
   });
 
   it('never confirms a read older than the revision the send was confirmed with', async () => {
