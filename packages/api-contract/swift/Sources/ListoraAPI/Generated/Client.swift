@@ -18622,6 +18622,183 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// Get where I source
+    ///
+    /// Where the household sources and what an item costs there, which the scan's call weighs the
+    /// payouts against: at the bins (an outlet that sells by the pound) each item's typical weight
+    /// for its category at `binsPricePerPound`, or at a thrift store its typical shelf price for
+    /// its category, or `storeItemPrice` when the seller set one. An account that never saved its
+    /// own gets Listora's default, the bins at $1.99 a pound, with `isDefault` true.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing/cost`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/cost/get(getSourcingCost)`.
+    public func getSourcingCost(_ input: Operations.GetSourcingCost.Input) async throws -> Operations.GetSourcingCost.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetSourcingCost.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/sourcing/cost",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetSourcingCost.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.SourcingCost.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Replace where I source
+    ///
+    /// Saves where the household sources; the scans made from then on weigh it (scans already made
+    /// keep their call). A price left out takes Listora's default: $1.99 a pound at the bins, and
+    /// the typical price by category at a store. A price out of bounds ($0.10 to $20 a pound, $0 to
+    /// $1,000 an item) or not in USD is `422 validation_failed`. It belongs to the account, so a
+    /// member who is not its owner or an admin gets `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/sourcing/cost`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/cost/put(replaceSourcingCost)`.
+    public func replaceSourcingCost(_ input: Operations.ReplaceSourcingCost.Input) async throws -> Operations.ReplaceSourcingCost.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.ReplaceSourcingCost.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/sourcing/cost",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .put
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.ReplaceSourcingCost.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.SourcingCost.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// Start a sourcing run
     ///
     /// Starts one trip to a store (docs/features/thrift-scan.md): every item the seller scans

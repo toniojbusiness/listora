@@ -1263,6 +1263,17 @@ export interface DescriptionStyleTable {
   updated_at: UpdatedAt;
 }
 
+/** Where the household sources, which the scan's call weighs (docs/features/thrift-scan.md). */
+export interface SourcingCostTable {
+  account_id: string;
+  mode: 'bins' | 'store';
+  bins_price_per_pound_cents: number;
+  /** At a store, the seller's own price per item; null: the typical price by category. */
+  store_item_cents: number | null;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Sale emails ---------------------------------------------------------------------------------
 
 /** An account's forwarding address and email sale settings (docs/features/email-sales.md). */
@@ -1651,6 +1662,7 @@ export interface Database {
   listing_refresh_setting: ListingRefreshSettingTable;
   price_drop_rule: PriceDropRuleTable;
   description_style: DescriptionStyleTable;
+  sourcing_cost: SourcingCostTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;
   pack_check_setting: PackCheckSettingTable;

@@ -239,6 +239,7 @@ describe('a scan’s prices wait for what they rest on (real Postgres)', () => {
       'asking',
       'web',
       'retail',
+      'cost',
       'missing',
       'missing',
       'missing',

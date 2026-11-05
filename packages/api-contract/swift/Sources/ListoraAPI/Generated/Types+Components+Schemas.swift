@@ -17120,6 +17120,165 @@ extension Components {
                 case optimisticPayout
             }
         }
+        /// Where the household sources, which the scan's call weighs each item's likely cost by:
+        /// `bins`, an outlet that sells by the pound, at `binsPricePerPound` times the item's typical
+        /// weight for its category; or `store`, a thrift store that prices each item, at
+        /// `storeItemPrice` when the seller set one, else the typical shelf price for its category.
+        /// Estimates; the real cost is known at the haul's checkout.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingCost`.
+        public struct SourcingCost: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SourcingCost/mode`.
+            public var mode: Components.Schemas.SourcingMode
+            /// The bins' price per pound (Listora's default $1.99), kept while at a store.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingCost/binsPricePerPound`.
+            public var binsPricePerPound: Components.Schemas.Money
+            /// The seller's own price for any item at a store; absent, the typical price by category.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingCost/storeItemPrice`.
+            public var storeItemPrice: Components.Schemas.Money?
+            /// True when this is Listora's default, because the seller never saved their own.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingCost/isDefault`.
+            public var isDefault: Swift.Bool
+            /// Creates a new `SourcingCost`.
+            ///
+            /// - Parameters:
+            ///   - mode:
+            ///   - binsPricePerPound: The bins' price per pound (Listora's default $1.99), kept while at a store.
+            ///   - storeItemPrice: The seller's own price for any item at a store; absent, the typical price by category.
+            ///   - isDefault: True when this is Listora's default, because the seller never saved their own.
+            public init(
+                mode: Components.Schemas.SourcingMode,
+                binsPricePerPound: Components.Schemas.Money,
+                storeItemPrice: Components.Schemas.Money? = nil,
+                isDefault: Swift.Bool
+            ) {
+                self.mode = mode
+                self.binsPricePerPound = binsPricePerPound
+                self.storeItemPrice = storeItemPrice
+                self.isDefault = isDefault
+            }
+            public enum CodingKeys: String, CodingKey {
+                case mode
+                case binsPricePerPound
+                case storeItemPrice
+                case isDefault
+            }
+        }
+        /// Where the household sources; a price left out takes Listora's default.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingCostReplace`.
+        public struct SourcingCostReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SourcingCostReplace/mode`.
+            public var mode: Components.Schemas.KnownSourcingMode
+            /// $0.10 to $20 a pound, in USD.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingCostReplace/binsPricePerPound`.
+            public var binsPricePerPound: Components.Schemas.Money?
+            /// $0 to $1,000 an item, in USD.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SourcingCostReplace/storeItemPrice`.
+            public var storeItemPrice: Components.Schemas.Money?
+            /// Creates a new `SourcingCostReplace`.
+            ///
+            /// - Parameters:
+            ///   - mode:
+            ///   - binsPricePerPound: $0.10 to $20 a pound, in USD.
+            ///   - storeItemPrice: $0 to $1,000 an item, in USD.
+            public init(
+                mode: Components.Schemas.KnownSourcingMode,
+                binsPricePerPound: Components.Schemas.Money? = nil,
+                storeItemPrice: Components.Schemas.Money? = nil
+            ) {
+                self.mode = mode
+                self.binsPricePerPound = binsPricePerPound
+                self.storeItemPrice = storeItemPrice
+            }
+            public enum CodingKeys: String, CodingKey {
+                case mode
+                case binsPricePerPound
+                case storeItemPrice
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.mode = try container.decode(
+                    Components.Schemas.KnownSourcingMode.self,
+                    forKey: .mode
+                )
+                self.binsPricePerPound = try container.decodeIfPresent(
+                    Components.Schemas.Money.self,
+                    forKey: .binsPricePerPound
+                )
+                self.storeItemPrice = try container.decodeIfPresent(
+                    Components.Schemas.Money.self,
+                    forKey: .storeItemPrice
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "mode",
+                    "binsPricePerPound",
+                    "storeItemPrice"
+                ])
+            }
+        }
+        /// A `KnownSourcingMode`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SourcingMode`.
+        public struct SourcingMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SourcingMode/value1`.
+            public var value1: Components.Schemas.KnownSourcingMode?
+            /// - Remark: Generated from `#/components/schemas/SourcingMode/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SourcingMode`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSourcingMode? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `bins`: an outlet that sells by the pound. `store`: a thrift store that prices each item.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSourcingMode`.
+        @frozen public enum KnownSourcingMode: String, Codable, Hashable, Sendable, CaseIterable {
+            case bins = "bins"
+            case store = "store"
+        }
         /// - Remark: Generated from `#/components/schemas/SourcingRunCreate`.
         public struct SourcingRunCreate: Codable, Hashable, Sendable {
             /// Where the seller is, as they name it ("Goodwill Outlet on 5th").
@@ -18788,9 +18947,11 @@ extension Components {
                 case displayOnly
             }
         }
-        /// Buy, Your call, or Skip, from resale value only: whether the item pays out at least the
-        /// worth-listing amount after the marketplace's fees. Always shown with its confidence and
-        /// `basedOn`.
+        /// Buy, Your call, or Skip: whether the item pays out at least the worth-listing amount after
+        /// the marketplace's fees, and for a Buy over the item's likely cost where the household
+        /// sources too (`sourcing`). A Buy needs no flag and, at any confidence, an estimate some other source backs (an
+        /// unsure read of a clearly valuable item is still a Buy). Always shown with its confidence
+        /// and `basedOn`.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/ScanCall`.
@@ -18843,6 +19004,8 @@ extension Components {
             public var worthListing: Components.Schemas.Money
             /// - Remark: Generated from `#/components/schemas/ScanCall/prices`.
             public var prices: Components.Schemas.ScanPrices?
+            /// - Remark: Generated from `#/components/schemas/ScanCall/sourcing`.
+            public var sourcing: Components.Schemas.ScanSourcing?
             /// What else the call weighed, each with what it rests on: the retail price, new with
             /// tags, how the brand resells on the web, the household's own sales trend, the style.
             /// The first is the three `prices` (kind `prices`) when there are any, for a client built
@@ -18867,6 +19030,7 @@ extension Components {
             ///   - payoutMarketplace: The marketplace whose fees the payouts are after.
             ///   - worthListing: The least payout worth buying for.
             ///   - prices:
+            ///   - sourcing:
             ///   - signals: What else the call weighed, each with what it rests on: the retail price, new with
             public init(
                 call: Components.Schemas.ScanCallKind,
@@ -18882,6 +19046,7 @@ extension Components {
                 payoutMarketplace: Components.Schemas.Marketplace? = nil,
                 worthListing: Components.Schemas.Money,
                 prices: Components.Schemas.ScanPrices? = nil,
+                sourcing: Components.Schemas.ScanSourcing? = nil,
                 signals: [Components.Schemas.ScanSignal]
             ) {
                 self.call = call
@@ -18897,6 +19062,7 @@ extension Components {
                 self.payoutMarketplace = payoutMarketplace
                 self.worthListing = worthListing
                 self.prices = prices
+                self.sourcing = sourcing
                 self.signals = signals
             }
             public enum CodingKeys: String, CodingKey {
@@ -18913,7 +19079,53 @@ extension Components {
                 case payoutMarketplace
                 case worthListing
                 case prices
+                case sourcing
                 case signals
+            }
+        }
+        /// What the item likely costs where the household sources (`getSourcingCost`), which a Buy's
+        /// low end must pay out over on top of the worth-listing amount.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ScanSourcing`.
+        public struct ScanSourcing: Codable, Hashable, Sendable {
+            /// An estimate, from the item's category.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSourcing/cost`.
+            public var cost: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ScanSourcing/mode`.
+            public var mode: Components.Schemas.SourcingMode
+            /// As the card says it ("Bins cost about $1.49").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSourcing/label`.
+            public var label: Swift.String
+            /// What it rests on ("About 0.75 lb for a dress, at your $1.99 a pound").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScanSourcing/basedOn`.
+            public var basedOn: Swift.String
+            /// Creates a new `ScanSourcing`.
+            ///
+            /// - Parameters:
+            ///   - cost: An estimate, from the item's category.
+            ///   - mode:
+            ///   - label: As the card says it ("Bins cost about $1.49").
+            ///   - basedOn: What it rests on ("About 0.75 lb for a dress, at your $1.99 a pound").
+            public init(
+                cost: Components.Schemas.Money,
+                mode: Components.Schemas.SourcingMode,
+                label: Swift.String,
+                basedOn: Swift.String
+            ) {
+                self.cost = cost
+                self.mode = mode
+                self.label = label
+                self.basedOn = basedOn
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cost
+                case mode
+                case label
+                case basedOn
             }
         }
         /// A `KnownScanCallKind`, or one added after this client was built (shown by `label`).
@@ -19251,7 +19463,8 @@ extension Components {
         /// `own_sales`: the household's own sales like it. `market_sold`: a marketplace's sold
         /// listings of close matches. `asking`: what listings like it ask now (never sold prices). `retail`: the
         /// original retail price. `web`: what the web's listings ask (never sold prices).
-        /// `brand_pulse`: what the wider web says of the brand. `missing`: a source not checked.
+        /// `brand_pulse`: what the wider web says of the brand. `cost`: what the item likely costs
+        /// where the household sources. `missing`: a source not checked.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanRealityKind`.
@@ -19262,6 +19475,7 @@ extension Components {
             case retail = "retail"
             case web = "web"
             case brandPulse = "brand_pulse"
+            case cost = "cost"
             case missing = "missing"
         }
         /// A `KnownScanConfidence`, or one added after this client was built.
@@ -19372,8 +19586,8 @@ extension Components {
         /// in a marketplace's public search (eBay's, Poshmark's, or Mercari's sold listings,
         /// `comparisons`), when the household's own sales are too few. `web_info`: what web pages say
         /// such items resell for (the research, with its sites), never a high-confidence call.
-        /// `ai_estimate`: the AI's estimate alone, never a high-confidence Buy. `none`: nothing to go
-        /// on.
+        /// `ai_estimate`: the AI's estimate, never high confidence, and never a Buy when no other
+        /// source backs it. `none`: nothing to go on.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanBasis`.
@@ -19538,7 +19752,8 @@ extension Components {
         /// by web pages (it never moves the call). `calibrated`: the AI
         /// estimate and the web's asking prices were scaled by what the household's own items went for
         /// against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
-        /// built before them.
+        /// built before them. `cost`: what the item likely costs where the household sources
+        /// (`ScanCall.sourcing`).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownScanSignalKind`.
@@ -19555,6 +19770,7 @@ extension Components {
             case calibrated = "calibrated"
             case prices = "prices"
             case missing = "missing"
+            case cost = "cost"
         }
         /// The item's original retail price, with where it came from: one model's price (`low` equals
         /// `high`), or, when the scan could not pin the exact model, the range across the likely

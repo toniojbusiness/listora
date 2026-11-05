@@ -316,7 +316,7 @@ describe('the thrift scan (real Postgres)', () => {
       confidence: 'medium',
       basis: 'own_history',
       basedOn: 'Your 3 sales like it',
-      why: 'Even its low end pays out $24 after fees, over your $8',
+      why: 'Even its low end pays out $24 after fees, over your $8 plus its $0.80 bins cost',
       low: usd(2500),
       high: usd(2900),
       payoutMarketplace: 'depop',
@@ -340,6 +340,10 @@ describe('the thrift scan (real Postgres)', () => {
         text: 'You sold 2 like it on eBay: $92-$97, most around $95 (shown, not used for the price)',
       },
       { kind: 'own_sales', text: 'You sold 2 like it on Depop: $24-$27, most around $25' },
+      {
+        kind: 'cost',
+        text: 'Bins cost about $0.80: about 0.4 lb for leggings, at your $1.99 a pound',
+      },
       { kind: 'missing', text: "Couldn't check the web" },
     ]);
     expect(body.researchLinks[0]?.label).toBe(DEPOP_SEARCH_LABEL);
@@ -489,6 +493,33 @@ describe('the thrift scan (real Postgres)', () => {
       basis: 'none',
       basedOn: 'Not enough to go on',
     });
+  });
+
+  it('weighs the price per item the seller saved for a thrift store, and says so on the card', async () => {
+    const saved = await api.call('replaceSourcingCost', {
+      token,
+      body: { mode: 'store', storeItemPrice: usd(500) },
+    });
+    expect(saved.status).toBe(200);
+    try {
+      const run = await startRun();
+      const shirt = await scanImage(
+        answer({ brand: 'Nobody Knows', category: 'clothing/tops/t_shirts' }),
+      );
+      const body = await priced((await scan(run.id, shirt.base64)).body.id);
+      expect(body.call.sourcing).toEqual({
+        cost: usd(500),
+        mode: 'store',
+        label: 'Store price about $5',
+        basedOn: 'Your store price per item',
+      });
+      expect(body.realityCheck).toContainEqual({
+        kind: 'cost',
+        text: 'Store price about $5: your store price per item',
+      });
+    } finally {
+      await api.call('replaceSourcingCost', { token, body: { mode: 'bins' } });
+    }
   });
 
   it('refuses images that are not small JPEGs, an item first', async () => {
@@ -795,7 +826,9 @@ describe('the thrift scan (real Postgres)', () => {
           "Likely sale is the middle of the web's asks, scaled to your sales, fast sale its low end; list at leaves room for offers (your items went for 77% of what they asked)",
       });
       expect(body.call.label).toBe('Grab');
-      expect(body.call.why).toBe('Even its low end pays out $17 after fees, over your $8');
+      expect(body.call.why).toBe(
+        'Even its low end pays out $17 after fees, over your $8 plus its $2.79 bins cost',
+      );
       expect(body.pricing).toMatchObject({
         status: 'ready',
         label: 'Checked your sales and the web.',
@@ -805,6 +838,10 @@ describe('the thrift scan (real Postgres)', () => {
       expect(body.realityCheck).toEqual([
         { kind: 'web', text: 'Listings on the web ask $30-$50 (poshmark.com, ebay.com)' },
         { kind: 'retail', text: 'Retail about $98 (levi.com)' },
+        {
+          kind: 'cost',
+          text: 'Bins cost about $2.79: about 1.4 lb for jeans, at your $1.99 a pound',
+        },
       ]);
       // They lead the signals too, for an app built before them.
       expect(body.call.signals.map((signal) => signal.kind)).toEqual([
@@ -812,9 +849,10 @@ describe('the thrift scan (real Postgres)', () => {
         'retail',
         'web_resale',
         'calibrated',
+        'cost',
       ]);
       expect(body.call.signals[0]?.label).toBe('List at $35 · Likely sale $25 · Fast sale $17');
-      expect(body.call.signals.at(-1)?.basedOn).toBe(
+      expect(body.call.signals.at(-2)?.basedOn).toBe(
         "Your items went for 77% of what they asked (3 sales); the AI estimate and the web's asking prices are scaled to it",
       );
       // The research's own range is shown as it came: what the web's listings ask.
@@ -1090,11 +1128,17 @@ describe('the thrift scan (real Postgres)', () => {
       ['retail', 'Retail $68 on the tag'],
       ['style', 'Y2K'],
       ['calibrated', 'Scaled to your sales'],
+      // What a jumpsuit weighs at the bins' default $1.99 a pound.
+      ['cost', 'Bins cost about $1.49'],
       // No web fixture for it: the lookup failed, and the card says so.
       ['missing', "Couldn't check the web"],
     ]);
     expect(body.realityCheck).toEqual([
       { kind: 'retail', text: 'Retail $68 on the tag' },
+      {
+        kind: 'cost',
+        text: 'Bins cost about $1.49: about 0.75 lb for a jumpsuit, at your $1.99 a pound',
+      },
       { kind: 'missing', text: "Couldn't check the web" },
     ]);
     // The AI estimate ($24-$40, scaled by the household's 0.76875 to $18-$31) is under the

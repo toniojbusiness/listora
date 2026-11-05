@@ -29086,6 +29086,289 @@ public enum Operations {
             }
         }
     }
+    /// Get where I source
+    ///
+    /// Where the household sources and what an item costs there, which the scan's call weighs the
+    /// payouts against: at the bins (an outlet that sells by the pound) each item's typical weight
+    /// for its category at `binsPricePerPound`, or at a thrift store its typical shelf price for
+    /// its category, or `storeItemPrice` when the seller set one. An account that never saved its
+    /// own gets Listora's default, the bins at $1.99 a pound, with `isDefault` true.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sourcing/cost`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/cost/get(getSourcingCost)`.
+    public enum GetSourcingCost {
+        public static let id: Swift.String = "getSourcingCost"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/sourcing/cost/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetSourcingCost.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetSourcingCost.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetSourcingCost.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.GetSourcingCost.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/sourcing/cost/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/sourcing/cost/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SourcingCost)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.SourcingCost {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetSourcingCost.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetSourcingCost.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Where the household sources.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sourcing/cost/get(getSourcingCost)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetSourcingCost.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetSourcingCost.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sourcing/cost/get(getSourcingCost)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Replace where I source
+    ///
+    /// Saves where the household sources; the scans made from then on weigh it (scans already made
+    /// keep their call). A price left out takes Listora's default: $1.99 a pound at the bins, and
+    /// the typical price by category at a store. A price out of bounds ($0.10 to $20 a pound, $0 to
+    /// $1,000 an item) or not in USD is `422 validation_failed`. It belongs to the account, so a
+    /// member who is not its owner or an admin gets `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/sourcing/cost`.
+    /// - Remark: Generated from `#/paths//v1/sourcing/cost/put(replaceSourcingCost)`.
+    public enum ReplaceSourcingCost {
+        public static let id: Swift.String = "replaceSourcingCost"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/sourcing/cost/PUT/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ReplaceSourcingCost.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ReplaceSourcingCost.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ReplaceSourcingCost.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/sourcing/cost/PUT/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/sourcing/cost/PUT/requestBody/content/application\/json`.
+                case json(Components.Schemas.SourcingCostReplace)
+            }
+            public var body: Operations.ReplaceSourcingCost.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.ReplaceSourcingCost.Input.Headers = .init(),
+                body: Operations.ReplaceSourcingCost.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/sourcing/cost/PUT/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/sourcing/cost/PUT/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SourcingCost)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.SourcingCost {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ReplaceSourcingCost.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ReplaceSourcingCost.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The saved setting.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sourcing/cost/put(replaceSourcingCost)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ReplaceSourcingCost.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ReplaceSourcingCost.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/sourcing/cost/put(replaceSourcingCost)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Start a sourcing run
     ///
     /// Starts one trip to a store (docs/features/thrift-scan.md): every item the seller scans

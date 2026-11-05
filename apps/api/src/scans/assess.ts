@@ -2,7 +2,8 @@
  * The scan's call (docs/features/thrift-scan.md): from the AI's read, the household's own sales
  * like the item and their trend, the retail price (off a tag, or from the web research), what
  * the web says such items resell for, and each marketplace's comparisons (eBay's sold listings
- * among them), with the brand's pulse on the wider web as a signal. Made when the read lands,
+ * among them), with the brand's pulse on the wider web as a signal, weighed against what the
+ * item likely costs where the household sources (`getSourcingCost`). Made when the read lands,
  * and again when the web research comes in.
  */
 import type { ScanRetail, ScanTrend } from '@listora/api-contract';
@@ -12,6 +13,7 @@ import { loadFeatureGate } from '@listora/marketplaces';
 import { OWN_SALES_MAY_MODEL_PRICES } from '@listora/pricing';
 import {
   DEFAULT_SCAN_CALL_SETTINGS,
+  itemCost,
   priceCalibration,
   salesTrend,
   scanCall,
@@ -22,6 +24,7 @@ import {
   type ScanCallInput,
 } from '@listora/sourcing';
 
+import { loadSourcingCost } from '../sourcing/cost.ts';
 import { payoutFees } from '../sourcing/fees.ts';
 import { ownSales, ownSalesMarketplaces, unsoldItems } from '../sourcing/repository.ts';
 import { marketInputs, type StoredComparison } from './comparisons.ts';
@@ -41,9 +44,10 @@ export async function assessScan(
   /** The household's own sales (`scanSales`), when the caller already has them. */
   loadedSales?: readonly OwnSale[],
 ): Promise<ScanCallDetail> {
-  const [sales, unsold] = await Promise.all([
+  const [sales, unsold, sourcing] = await Promise.all([
     loadedSales ?? scanSales(db, tenant, now),
     unsoldItems(db, tenant),
+    loadSourcingCost(db, tenant),
   ]);
   const history = scanOwnHistory(read, sales);
   const matched = new Set(history.forCall?.saleIds ?? []);
@@ -97,6 +101,8 @@ export async function assessScan(
     style: read.style ?? undefined,
     unsold: unsoldLikeIt(read, unsold),
     markets,
+    // What the item likely costs where the household sources, by the read's category.
+    cost: itemCost(read.category, sourcing.settings),
   };
   const rule = scanCall(input, settings);
   return {

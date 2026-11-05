@@ -3134,6 +3134,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sourcing/cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get where I source
+         * @description Where the household sources and what an item costs there, which the scan's call weighs the
+         *     payouts against: at the bins (an outlet that sells by the pound) each item's typical weight
+         *     for its category at `binsPricePerPound`, or at a thrift store its typical shelf price for
+         *     its category, or `storeItemPrice` when the seller set one. An account that never saved its
+         *     own gets Listora's default, the bins at $1.99 a pound, with `isDefault` true.
+         */
+        get: operations["getSourcingCost"];
+        /**
+         * Replace where I source
+         * @description Saves where the household sources; the scans made from then on weigh it (scans already made
+         *     keep their call). A price left out takes Listora's default: $1.99 a pound at the bins, and
+         *     the typical price by category at a store. A price out of bounds ($0.10 to $20 a pound, $0 to
+         *     $1,000 an item) or not in USD is `422 validation_failed`. It belongs to the account, so a
+         *     member who is not its owner or an admin gets `403 forbidden`.
+         */
+        put: operations["replaceSourcingCost"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sourcing-runs": {
         parameters: {
             query?: never;
@@ -7662,6 +7694,37 @@ export interface components {
             /** @description What `high` pays out after those fees. An estimate. */
             optimisticPayout: components["schemas"]["Money"];
         };
+        /**
+         * @description Where the household sources, which the scan's call weighs each item's likely cost by:
+         *     `bins`, an outlet that sells by the pound, at `binsPricePerPound` times the item's typical
+         *     weight for its category; or `store`, a thrift store that prices each item, at
+         *     `storeItemPrice` when the seller set one, else the typical shelf price for its category.
+         *     Estimates; the real cost is known at the haul's checkout.
+         */
+        SourcingCost: {
+            mode: components["schemas"]["SourcingMode"];
+            /** @description The bins' price per pound (Listora's default $1.99), kept while at a store. */
+            binsPricePerPound: components["schemas"]["Money"];
+            /** @description The seller's own price for any item at a store; absent, the typical price by category. */
+            storeItemPrice?: components["schemas"]["Money"];
+            /** @description True when this is Listora's default, because the seller never saved their own. */
+            isDefault: boolean;
+        };
+        /** @description Where the household sources; a price left out takes Listora's default. */
+        SourcingCostReplace: {
+            mode: components["schemas"]["KnownSourcingMode"];
+            /** @description $0.10 to $20 a pound, in USD. */
+            binsPricePerPound?: components["schemas"]["Money"];
+            /** @description $0 to $1,000 an item, in USD. */
+            storeItemPrice?: components["schemas"]["Money"];
+        };
+        /** @description A `KnownSourcingMode`, or one added after this client was built. */
+        SourcingMode: components["schemas"]["KnownSourcingMode"];
+        /**
+         * @description `bins`: an outlet that sells by the pound. `store`: a thrift store that prices each item.
+         * @enum {string}
+         */
+        KnownSourcingMode: "bins" | "store";
         SourcingRunCreate: {
             /** @description Where the seller is, as they name it ("Goodwill Outlet on 5th"). */
             place?: string;
@@ -8070,9 +8133,11 @@ export interface components {
             displayOnly: boolean;
         };
         /**
-         * @description Buy, Your call, or Skip, from resale value only: whether the item pays out at least the
-         *     worth-listing amount after the marketplace's fees. Always shown with its confidence and
-         *     `basedOn`.
+         * @description Buy, Your call, or Skip: whether the item pays out at least the worth-listing amount after
+         *     the marketplace's fees, and for a Buy over the item's likely cost where the household
+         *     sources too (`sourcing`). A Buy needs no flag and, at any confidence, an estimate some other source backs (an
+         *     unsure read of a clearly valuable item is still a Buy). Always shown with its confidence
+         *     and `basedOn`.
          */
         ScanCall: {
             call: components["schemas"]["ScanCallKind"];
@@ -8103,6 +8168,7 @@ export interface components {
             /** @description The least payout worth buying for. */
             worthListing: components["schemas"]["Money"];
             prices?: components["schemas"]["ScanPrices"];
+            sourcing?: components["schemas"]["ScanSourcing"];
             /**
              * @description What else the call weighed, each with what it rests on: the retail price, new with
              *     tags, how the brand resells on the web, the household's own sales trend, the style.
@@ -8110,6 +8176,19 @@ export interface components {
              *     before `prices`; a client that shows `prices` leaves that signal out.
              */
             signals: components["schemas"]["ScanSignal"][];
+        };
+        /**
+         * @description What the item likely costs where the household sources (`getSourcingCost`), which a Buy's
+         *     low end must pay out over on top of the worth-listing amount.
+         */
+        ScanSourcing: {
+            /** @description An estimate, from the item's category. */
+            cost: components["schemas"]["Money"];
+            mode: components["schemas"]["SourcingMode"];
+            /** @description As the card says it ("Bins cost about $1.49"). */
+            label: string;
+            /** @description What it rests on ("About 0.75 lb for a dress, at your $1.99 a pound"). */
+            basedOn: string;
         };
         /** @description A `KnownScanCallKind`, or one added after this client was built (shown by `label`). */
         ScanCallKind: components["schemas"]["KnownScanCallKind"];
@@ -8172,10 +8251,11 @@ export interface components {
          * @description `own_sales`: the household's own sales like it. `market_sold`: a marketplace's sold
          *     listings of close matches. `asking`: what listings like it ask now (never sold prices). `retail`: the
          *     original retail price. `web`: what the web's listings ask (never sold prices).
-         *     `brand_pulse`: what the wider web says of the brand. `missing`: a source not checked.
+         *     `brand_pulse`: what the wider web says of the brand. `cost`: what the item likely costs
+         *     where the household sources. `missing`: a source not checked.
          * @enum {string}
          */
-        KnownScanRealityKind: "own_sales" | "market_sold" | "asking" | "retail" | "web" | "brand_pulse" | "missing";
+        KnownScanRealityKind: "own_sales" | "market_sold" | "asking" | "retail" | "web" | "brand_pulse" | "cost" | "missing";
         /** @description A `KnownScanConfidence`, or one added after this client was built. */
         ScanConfidence: components["schemas"]["KnownScanConfidence"];
         /** @enum {string} */
@@ -8187,8 +8267,8 @@ export interface components {
          *     in a marketplace's public search (eBay's, Poshmark's, or Mercari's sold listings,
          *     `comparisons`), when the household's own sales are too few. `web_info`: what web pages say
          *     such items resell for (the research, with its sites), never a high-confidence call.
-         *     `ai_estimate`: the AI's estimate alone, never a high-confidence Buy. `none`: nothing to go
-         *     on.
+         *     `ai_estimate`: the AI's estimate, never high confidence, and never a Buy when no other
+         *     source backs it. `none`: nothing to go on.
          * @enum {string}
          */
         KnownScanBasis: "own_history" | "market_sold" | "web_info" | "ai_estimate" | "none";
@@ -8222,10 +8302,11 @@ export interface components {
          *     by web pages (it never moves the call). `calibrated`: the AI
          *     estimate and the web's asking prices were scaled by what the household's own items went for
          *     against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
-         *     built before them.
+         *     built before them. `cost`: what the item likely costs where the household sources
+         *     (`ScanCall.sourcing`).
          * @enum {string}
          */
-        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "brand_pulse" | "trend" | "style" | "asking" | "demand" | "unsold" | "calibrated" | "prices" | "missing";
+        KnownScanSignalKind: "retail" | "new_with_tags" | "web_resale" | "brand_pulse" | "trend" | "style" | "asking" | "demand" | "unsold" | "calibrated" | "prices" | "missing" | "cost";
         /**
          * @description The item's original retail price, with where it came from: one model's price (`low` equals
          *     `high`), or, when the scan could not pin the exact model, the range across the likely
@@ -8994,6 +9075,10 @@ export type SourcingKitCall = components['schemas']['SourcingKitCall'];
 export type OwnSalesBucket = components['schemas']['OwnSalesBucket'];
 export type OwnSalesOnMarketplace = components['schemas']['OwnSalesOnMarketplace'];
 export type OwnSalesForCall = components['schemas']['OwnSalesForCall'];
+export type SourcingCost = components['schemas']['SourcingCost'];
+export type SourcingCostReplace = components['schemas']['SourcingCostReplace'];
+export type SourcingMode = components['schemas']['SourcingMode'];
+export type KnownSourcingMode = components['schemas']['KnownSourcingMode'];
 export type SourcingRunCreate = components['schemas']['SourcingRunCreate'];
 export type SourcingRun = components['schemas']['SourcingRun'];
 export type SourcingRunCheckout = components['schemas']['SourcingRunCheckout'];
@@ -9024,6 +9109,7 @@ export type ScanAiEstimate = components['schemas']['ScanAiEstimate'];
 export type ScanFlags = components['schemas']['ScanFlags'];
 export type ScanOwnSales = components['schemas']['ScanOwnSales'];
 export type ScanCall = components['schemas']['ScanCall'];
+export type ScanSourcing = components['schemas']['ScanSourcing'];
 export type ScanCallKind = components['schemas']['ScanCallKind'];
 export type KnownScanCallKind = components['schemas']['KnownScanCallKind'];
 export type ScanPricing = components['schemas']['ScanPricing'];
@@ -13601,6 +13687,52 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getSourcingCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where the household sources. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcingCost"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceSourcingCost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourcingCostReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcingCost"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
     createSourcingRun: {
         parameters: {
             query?: never;
@@ -14217,6 +14349,7 @@ export const knownOfferResponseStatusValues: ReadonlyArray<FlattenedDeepRequired
 export const knownSyncStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSyncState"]> = ["syncing", "synced", "failed", "not_synced"];
 export const knownMarketplaceFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceFeature"]> = ["sales_history", "sale_checks", "offers", "offer_answers", "listing_import", "listing_refresh", "revise", "market_comps", "price_drops"];
 export const knownAppFeatureValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownAppFeature"]> = ["thrift_scan"];
+export const knownSourcingModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSourcingMode"]> = ["bins", "store"];
 export const knownScanImageRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanImageRole"]> = ["item", "tag"];
 export const knownScanComparisonStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanComparisonStatus"]> = ["checking", "read", "not_enough", "paused", "limit", "failed"];
 export const knownScanDemandKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDemandKind"]> = ["strong", "steady", "crowded", "unknown"];
@@ -14225,11 +14358,11 @@ export const scanComparisonStatsLevelValues: ReadonlyArray<FlattenedDeepRequired
 export const knownScanCallKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanCallKind"]> = ["buy", "your_call", "skip", "checking"];
 export const knownScanPricingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanPricingStatus"]> = ["checking", "ready"];
 export const knownScanPricingSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanPricingSource"]> = ["web", "ebay", "depop", "poshmark", "mercari"];
-export const knownScanRealityKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRealityKind"]> = ["own_sales", "market_sold", "asking", "retail", "web", "brand_pulse", "missing"];
+export const knownScanRealityKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRealityKind"]> = ["own_sales", "market_sold", "asking", "retail", "web", "brand_pulse", "cost", "missing"];
 export const knownScanConfidenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanConfidence"]> = ["high", "medium", "low"];
 export const knownScanBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanBasis"]> = ["own_history", "market_sold", "web_info", "ai_estimate", "none"];
 export const knownScanDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanDecision"]> = ["undecided", "kept", "skipped", "replaced"];
-export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "brand_pulse", "trend", "style", "asking", "demand", "unsold", "calibrated", "prices", "missing"];
+export const knownScanSignalKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanSignalKind"]> = ["retail", "new_with_tags", "web_resale", "brand_pulse", "trend", "style", "asking", "demand", "unsold", "calibrated", "prices", "missing", "cost"];
 export const knownScanRetailSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanRetailSource"]> = ["tag", "web"];
 export const knownScanTrendSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendSource"]> = ["own_history"];
 export const knownScanTrendDirectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownScanTrendDirection"]> = ["up", "down", "steady", "unknown"];

@@ -14,6 +14,15 @@ export {
   priceCalibration,
 } from './calibration.ts';
 export type { PriceCalibration, PriceCalibrationSettings, PriceRange } from './calibration.ts';
+export {
+  BINS_PRICE_PER_POUND_RANGE,
+  DEFAULT_SOURCING_COST,
+  dollarsAndCents,
+  itemCost,
+  SOURCING_MODES,
+  STORE_ITEM_RANGE,
+} from './cost.ts';
+export type { ItemCost, SourcingCostSettings, SourcingMode } from './cost.ts';
 export { friendlyPrice, scanPrices } from './prices.ts';
 export type { ScanPrices } from './prices.ts';
 export {
