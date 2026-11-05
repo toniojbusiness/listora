@@ -94,7 +94,7 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     private var warm = false
     private let photos: PhotoCache
     /// The marketplaces whose runs the phone may get, for keeping their web views ready.
-    private static let marketplaces = ["poshmark", "mercari", "depop", "ebay"]
+    private static let marketplaces = ["poshmark", "mercari", "depop", "ebay", "vinted"]
 
     /// `photoHosts`: Listora's own photo hosts, the only ones it fetches a listing's photos from.
     public init(

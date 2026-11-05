@@ -32,12 +32,13 @@ Code:
 
 - **Execution location.** `marketplace_connection.runs_on` is `cloud` or `phone`, and
   `phone_device_id` names the phone that runs it: the one the seller linked the marketplace on.
-  Poshmark, Mercari, and Depop default to `phone` (`profiles.ts`, overridable per marketplace with
+  Poshmark, Mercari, Depop, and Vinted default to `phone` (`profiles.ts`, overridable per marketplace with
   `AUTOMATION_<MARKETPLACE>_RUNS_ON`). eBay automation and every API or assisted step stay where
   they always run. `PUT /v1/connections/{marketplace}/execution` moves one marketplace, and the work that
   waits (and no phone runs at the moment) moves with it.
 - **Whether the cloud is allowed.** Each profile's `cloudAllowed` says whether a marketplace may
   run in the cloud at all: false for Poshmark, Mercari, and Depop, which refuse the cloud runner,
+  and for Vinted, which never runs there ([vinted.md](vinted.md)),
   true for eBay (`AUTOMATION_<MARKETPLACE>_CLOUD_ALLOWED` changes it, so a marketplace can go back
   to the cloud without an app update). The connection's `execution.cloudAllowed` carries it, with
   `cloudBlockedReason` ("Depop blocks cloud servers, so Listora runs it from your phone") while

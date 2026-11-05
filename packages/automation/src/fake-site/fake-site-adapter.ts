@@ -15,6 +15,7 @@ import {
   createEbayAssistedAdapter,
   createMercariAdapter,
   createPoshmarkAdapter,
+  createVintedAdapter,
   type AssistedAdapter,
 } from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';
@@ -63,5 +64,7 @@ export function assistedAdapter(marketplace: AutomatedMarketplace): AssistedAdap
       return createDepopAssistedAdapter();
     case 'ebay':
       return createEbayAssistedAdapter();
+    case 'vinted':
+      return createVintedAdapter();
   }
 }

@@ -145,7 +145,7 @@ write ran only on the captain's own accounts. Tristin's Depop shop was only ever
 | Poshmark    | `market_comps`                  | Hidden: the logged-out reader is tested on a recorded public search (2026-11-02); its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                                                       |
 | eBay        | every feature                   | Hidden: no eBay connection has run live                                                                                                                                                                                                                                                                                                                                               |
 | eBay        | `market_comps`                  | Hidden: the logged-out reader is tested on stand-in pages (eBay showed the recorder a bot check); its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                                       |
-| Vinted      | every feature                   | Hidden: Vinted is assisted only; no automation is built yet ([vinted.md](vinted.md))                                                                                                                                                                                                                                                                                                  |
+| Vinted      | every feature                   | Hidden: Vinted's listings are assisted only; only linking and the session check are built ([vinted.md](vinted.md))                                                                                                                                                                                                                                                                    |
 
 Listing actions, as they ran live (only revise is gated, see above):
 
@@ -166,4 +166,8 @@ A Test mode run's passed entry in the owner's log (`npm run admin -- feature-tes
 
 - Whether the eBay listing actions that haven't run live should fall back to assisted mode
   until they pass.
-- Pack check's label reads (live on Depop) and linking are not on the list yet.
+- Pack check's label reads (live on Depop) and linking are not on the list yet. Linking a
+  marketplace that joins automation in milestones is held back instead (`LINKING_NOT_VERIFIED`,
+  `isLinkingOn`): Vinted's Link accounts row shows only in Test mode, or once the account linked
+  it, until its live link ([vinted.md](vinted.md)). Putting linking on the list for every
+  marketplace would hide eBay's linking, which never ran live either.

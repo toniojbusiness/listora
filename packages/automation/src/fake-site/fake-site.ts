@@ -6,7 +6,7 @@
  * and fault injection for every page automation must stop at or recover from.
  *
  *   GET  /login                 the login page (a password field: no Listora session needs it)
- *   POST /login                 (also /login/, and eBay's /signin/) log in by hand: any username and password; sets the session cookie
+ *   POST /login                 (also /login/, eBay's /signin/, and Vinted's /member/signup/select_type) log in by hand: any username and password; sets the session cookie
  *   GET  /                      the seller's account page ([data-account])
  *   GET  /listings?sku=...      search by the seller's SKU
  *   GET  /listings/new          the new-listing form (multipart, with photo upload)
@@ -310,8 +310,12 @@ export class FakeAutomationSite {
     };
 
     // Each marketplace's own sign-in path, as the app opens it on this stand-in (eBay's is
-    // `/signin/`).
-    if (['/login', '/login/', '/signin', '/signin/'].includes(url.pathname)) {
+    // `/signin/`, Vinted's its sign-up and sign-in chooser).
+    if (
+      ['/login', '/login/', '/signin', '/signin/', '/member/signup/select_type'].includes(
+        url.pathname,
+      )
+    ) {
       if (method === 'POST') {
         // The seller logs in by hand, as on the app's linking screen in development: any
         // username with a password starts a session as that seller.

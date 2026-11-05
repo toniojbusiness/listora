@@ -133,6 +133,9 @@ from the app
   session; one that uses eBay's API gets the API adapter, and both address the same listings by
   item number and SKU. With only `FAKE_AUTOMATION_SITE_URL` set, development drives the fake site
   instead.
+- **Vinted** (`vinted/`, [vinted.md](vinted.md)) has only its session check so far, on the
+  seller's iPhone (vinted.com, or the fake Vinted site with `FAKE_VINTED_SITE_URL`). Its listings
+  stay on the assisted adapter, so the registry never routes a Vinted step to automation yet.
 - **Routing.** The automation adapters join the marketplace adapters
   (`createMarketplaceAdapters`, its `automation` setting): a marketplace's
   `ConnectionAwareAdapter` serves its automation adapter under an `automation` connection whose
@@ -231,6 +234,7 @@ never skips them.
 | `FAKE_MERCARI_SITE_URL`                      | The Mercari adapter drives the fake Mercari site instead of mercari.com |
 | `FAKE_DEPOP_SITE_URL`                        | The Depop adapter drives the fake Depop site instead of depop.com       |
 | `FAKE_EBAY_SITE_URL`                         | The eBay adapter drives the fake eBay site instead of ebay.com          |
+| `FAKE_VINTED_SITE_URL`                       | The Vinted adapter drives the fake Vinted site instead of vinted.com    |
 | `AUTOMATION_STEP_TIMEOUT_MS`, `_CALL_`       | One script step's timeout, and one automated call's                     |
 | `AUTOMATION_<MARKETPLACE>_*`                 | Pacing, the pause between sessions, and the per-seller rate limits      |
 | `AUTOMATION_<MARKETPLACE>_RUNS_ON`           | Where new connections' steps run: `phone` or `cloud`                    |

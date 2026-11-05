@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEPOP_PACING, DEPOP_READ_ONLY_PACING } from './depop/site.ts';
 import { DEFAULT_LIMITS, DEFAULT_PACING, PACING_FLOOR, READ_ONLY_PACING } from './profiles.ts';
 import { AutomationConfigError, loadAutomationSettings } from './settings.ts';
+import { VINTED_LIMITS, VINTED_PACING, VINTED_READ_ONLY_PACING } from './vinted/site.ts';
 
 const HOUR = 3_600_000;
 
@@ -24,16 +25,22 @@ describe('loadAutomationSettings', () => {
       fakePoshmarkUrl: undefined,
       fakeMercariSiteUrl: undefined,
       fakeDepopSiteUrl: undefined,
+      fakeVintedSiteUrl: undefined,
     });
     for (const profile of Object.values(settings.profiles)) {
-      // Depop's own pace is quicker, still a person's (depop/site.ts).
-      expect(profile.pacing).toEqual(
-        profile.marketplace === 'depop' ? DEPOP_PACING : DEFAULT_PACING,
-      );
-      expect(profile.readOnlyPacing).toEqual(
-        profile.marketplace === 'depop' ? DEPOP_READ_ONLY_PACING : READ_ONLY_PACING,
-      );
-      expect(profile.limits).toEqual(DEFAULT_LIMITS);
+      // Depop's own pace is quicker, still a person's (depop/site.ts); Vinted's slower and with
+      // fewer runs, while it has no live run behind it (vinted/site.ts).
+      const own = {
+        depop: [DEPOP_PACING, DEPOP_READ_ONLY_PACING, DEFAULT_LIMITS],
+        vinted: [VINTED_PACING, VINTED_READ_ONLY_PACING, VINTED_LIMITS],
+      } as const;
+      const [pacing, readOnlyPacing, limits] =
+        profile.marketplace === 'depop' || profile.marketplace === 'vinted'
+          ? own[profile.marketplace]
+          : [DEFAULT_PACING, READ_ONLY_PACING, DEFAULT_LIMITS];
+      expect(profile.pacing).toEqual(pacing);
+      expect(profile.readOnlyPacing).toEqual(readOnlyPacing);
+      expect(profile.limits).toEqual(limits);
     }
     expect(settings.profiles.poshmark.origins).toContain('https://poshmark.com');
   });

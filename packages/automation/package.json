@@ -13,6 +13,7 @@
     "fake-mercari": "node --env-file-if-exists=../../.env src/mercari/fake/cli.ts",
     "fake-depop-site": "node --env-file-if-exists=../../.env src/depop/fake/cli.ts",
     "fake-ebay-site": "node --env-file-if-exists=../../.env src/ebay/fake/cli.ts",
+    "fake-vinted-site": "node --env-file-if-exists=../../.env src/vinted/fake/cli.ts",
     "phone:bundle": "node src/phone/bundle.ts",
     "depop:taxonomy": "node src/depop/taxonomy/refresh.ts",
     "recordings:record": "node src/recordings/record.ts"

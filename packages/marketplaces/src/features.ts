@@ -177,6 +177,27 @@ export function marketplacesWith<M extends Marketplace>(
 }
 
 /**
+ * Linking by signing in (Link accounts, docs/features/marketplace-linking.md) is not on the
+ * feature list yet: it shows for every marketplace browser automation serves, except on these
+ * marketplaces, which join automation in milestones and whose linking has not passed a live
+ * link yet. Each is linked only in Test mode, the way its live link is run
+ * (docs/features/test-mode.md), and leaves this list in the change that records that run.
+ * Vinted: linking, the session check, and the member read are built (Vinted plan M3), and their
+ * live test is the captain's link of the Vinted test account on the iPhone.
+ */
+export const LINKING_NOT_VERIFIED: readonly Marketplace[] = ['vinted'];
+
+/** Whether linking the marketplace passed live (or this process runs `all`). */
+export function isLinkingVerified(marketplace: Marketplace): boolean {
+  return featureSet === 'all' || !LINKING_NOT_VERIFIED.includes(marketplace);
+}
+
+/** Whether the account may link the marketplace by signing in: it passed live, or Test mode. */
+export function isLinkingOn(marketplace: Marketplace, gate: FeatureGate): boolean {
+  return gate.testMode || isLinkingVerified(marketplace);
+}
+
+/**
  * Customer features of Listora itself rather than of one marketplace, held to the same rule:
  * hidden until a live end-to-end test passes, except in the owner's Test mode.
  */
