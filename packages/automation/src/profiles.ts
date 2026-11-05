@@ -59,6 +59,12 @@ export interface ChallengeSigns {
   readonly botCheckPaths: readonly RegExp[];
   /** Elements only its CAPTCHA or bot-check pages show. */
   readonly challengeSelectors: readonly string[];
+  /**
+   * The `message_code`s its web API answers a read with when the marketplace wants the member
+   * to verify themselves first (Vinted's `user_verification_required`): a check the seller
+   * completes in the marketplace, never Listora.
+   */
+  readonly apiVerificationCodes?: readonly string[];
 }
 
 export interface AutomationProfile {
@@ -217,8 +223,9 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     marketplace: 'vinted',
     origins: [VINTED_SITE_URL, 'https://vinted.com'],
     cookieDomains: ['vinted.com'],
-    // Whether Vinted's pages read a same-origin web API is for the mapping (Vinted plan M2).
-    apiOrigins: [],
+    // Vinted's pages read its web API on their own origin (`/api/v2/`), as the listings and
+    // orders reads do (vinted/pages/api.ts; the mapping, Vinted plan M2, confirms it).
+    apiOrigins: [VINTED_SITE_URL],
     loginUrl: `${VINTED_SITE_URL}${VINTED_LOGIN_PATH}`,
     emailsSignInLinks: false,
     pacing: VINTED_PACING,

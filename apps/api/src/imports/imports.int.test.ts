@@ -45,6 +45,7 @@ describe('listing imports (real Postgres)', () => {
       ['depop', false],
       ['poshmark', false],
       ['mercari', false],
+      ['vinted', false],
     ]);
     expect(before.body.marketplaces[0]?.unavailableReason).toBe(
       'Link Depop in Listora first, so it can read your listings.',

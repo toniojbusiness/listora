@@ -3,7 +3,7 @@
  * Depop, eBay, and Vinted have their own adapters (poshmark/, mercari/, depop/, ebay/, vinted/),
  * which drive poshmark.com, mercari.com, depop.com, ebay.com, and vinted.com, or their fakes with
  * `FAKE_POSHMARK_URL`, `FAKE_MERCARI_SITE_URL`, `FAKE_DEPOP_SITE_URL`, `FAKE_EBAY_SITE_URL`, and
- * `FAKE_VINTED_SITE_URL`. Vinted's has only the session check so far (Vinted plan M3). In development and
+ * `FAKE_VINTED_SITE_URL`. Vinted's only reads so far (Vinted plan M3 and M4). In development and
  * tests, `FAKE_AUTOMATION_SITE_URL` serves each marketplace without its own fake through the
  * fake site's adapter, so a development setup never drives a real marketplace. The Depop and
  * eBay automation adapters serve only sellers whose connection is a browser session: one that
@@ -50,6 +50,9 @@ export function createAutomationAdapters(
             sessions: deps.sessions,
             photos: deps.photos,
             logger: deps.logger,
+            // Only the session check for Vinted: every Vinted listing step stays assisted until
+            // its own listing scripts pass live (Vinted plan M5).
+            ...(marketplace === 'vinted' ? { sessionCheckOnly: true } : {}),
           }),
         ];
   const adapters: Partial<Record<AutomatedMarketplace, MarketplaceAdapter>> = Object.fromEntries(
@@ -96,7 +99,8 @@ export function createAutomationAdapters(
     });
   }
   if (settings.fakeVintedSiteUrl !== undefined || siteUrl === undefined) {
-    // Only the session check so far (Vinted plan M3): Vinted's listings stay assisted.
+    // Reads only so far (the session check, M3; listings and sold orders, M4): Vinted's
+    // listing steps stay assisted.
     adapters.vinted = createVintedAutomationAdapter({
       profile: settings.profiles.vinted,
       sessions: deps.sessions,

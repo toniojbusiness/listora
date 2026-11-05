@@ -35,10 +35,16 @@ export interface FakeSiteAdapterOptions {
   sessions: AutomationSessions;
   photos: PhotoSource;
   logger: Logger;
+  /**
+   * Only the session check (and the read every adapter has): for a marketplace whose listing
+   * steps stay assisted however it is linked (Vinted, until its listing scripts pass live).
+   */
+  sessionCheckOnly?: boolean;
 }
 
 export function createFakeSiteAdapter(options: FakeSiteAdapterOptions): AutomationAdapter {
   const site = new URL(options.siteUrl).origin;
+  const scripts = createFakeSiteScripts({ site, photos: options.photos });
 
   return new AutomationAdapter({
     marketplace: options.marketplace,
@@ -46,7 +52,8 @@ export function createFakeSiteAdapter(options: FakeSiteAdapterOptions): Automati
     sessions: options.sessions,
     // Fallback tasks still open the real marketplace, where the user does the step.
     assisted: assistedAdapter(options.marketplace),
-    scripts: createFakeSiteScripts({ site, photos: options.photos }),
+    scripts:
+      options.sessionCheckOnly === true ? { read: scripts.read, health: scripts.health } : scripts,
     scriptSet: { name: 'fake_site', marketplace: options.marketplace, siteUrl: options.siteUrl },
     readFreshness: 'revision',
     logger: options.logger,

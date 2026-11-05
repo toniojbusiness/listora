@@ -4,17 +4,17 @@
  * signs of Vinted's own checks and private page parts that its automation profile adds to the
  * generic ones.
  *
- * Every path here and every selector in `pages/` is Listora's model of Vinted's pages, not yet
- * read on a signed-in session: the read-only mapping of Vinted's pages (Vinted plan M2,
- * `recordings/`) and the first linked session on the test account confirm them. A page that
- * differs stops the step before it reads anything wrong, and a check says it could not read
- * Vinted; fixing it is a change to one page module.
+ * The settings page, its header's user menu, and the web API's current member, wardrobe, and
+ * sold orders were read on the test account's signed-in session (2026-11-05, read-only); the
+ * rest of `pages/` is still Listora's model of Vinted's pages, which the read-only mapping
+ * (Vinted plan M2, `recordings/`) confirms. A page that differs stops the step before it reads
+ * anything wrong, and a check says it could not read Vinted; fixing it is a change to one page
+ * module.
  */
 import type { ChallengeSigns, PacingSettings, RunLimits } from '../profiles.ts';
 
 /**
- * Vinted US. Member pages are `/member/<id>-<login>`; the seller's own settings are under
- * `/settings/`.
+ * Vinted US. Member pages are `/member/<id>`; the seller's own settings are under `/settings/`.
  */
 export const VINTED_SITE_URL = 'https://www.vinted.com';
 
@@ -30,28 +30,32 @@ export const VINTED_PATHS = {
   account: '/settings/profile',
 } as const;
 
-/** A member page's path: `/member/<numeric id>` with the member's login after a dash. */
-const MEMBER_PATH = /^\/member\/(\d{1,20})(?:-([^/?#]+))?\/?$/;
-
 /**
- * The member a profile link names: Vinted's numeric member id and the login in its slug (`null`
- * when the link carries none), else `null` for any other path (a page under `/member/` that is
- * not a member, such as the sign-in chooser).
+ * The reads Vinted's own pages make from its same-origin web API (`/api/v2/`), which the session
+ * check and the listings and orders reads make the same way (`pages/api.ts`). The current
+ * member, the wardrobe, and the sold orders answered on the test account (2026-11-05); the item
+ * and transaction reads are modeled until the mapping (Vinted plan M2) records them.
  */
-export function memberFromPath(path: string): { id: string; login: string | null } | null {
-  const match = MEMBER_PATH.exec(path);
-  if (match?.[1] === undefined) return null;
-  const slug = match[2];
-  let login: string | null = null;
-  if (slug !== undefined) {
-    try {
-      login = decodeURIComponent(slug);
-    } catch {
-      login = null;
-    }
-  }
-  return { id: match[1], login };
+export const VINTED_API_PATHS = {
+  /** The member signed in: their `id` and `login` (read on the test account, 2026-11-05). */
+  currentUser: '/api/v2/users/current',
+  /** A member's wardrobe: their listings, a page at a time. */
+  wardrobe: (memberId: string) => `/api/v2/wardrobe/${encodeURIComponent(memberId)}/items`,
+  /** One item, with its description, photos, and details. */
+  item: (id: string) => `/api/v2/items/${encodeURIComponent(id)}`,
+  /** The signed-in member's own orders (`type=sold`: the ones they sold). */
+  myOrders: '/api/v2/my_orders',
+  /** One transaction (an order): its items, price, and status. */
+  transaction: (id: string) => `/api/v2/transactions/${encodeURIComponent(id)}`,
+} as const;
+
+/** An item's page path: `/items/<numeric id>`, a slug of its title after a dash. */
+export function itemPath(id: string): string {
+  return `/items/${id}`;
 }
+
+/** Vinted's ids (items, members, transactions) are numbers. */
+export const VINTED_ID = /^\d{1,20}$/;
 
 /**
  * Vinted's pace: the gentler pre-2026-10-28 pace before every action (0.45 to 1.1 s) and 5 to
@@ -103,6 +107,9 @@ export const VINTED_CHALLENGE_SIGNS: ChallengeSigns = {
   botCheckPaths: [],
   // DataDome's challenge container, should one be drawn in the page rather than in its frame.
   challengeSelectors: ['#ddChallengeContainer', 'iframe[src*="captcha-delivery.com"]'],
+  // The web API's answer (400) to a read of the sold orders while the member has not verified
+  // their account (a phone number): read on the test account, 2026-11-05.
+  apiVerificationCodes: ['user_verification_required'],
 };
 
 /**
