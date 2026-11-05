@@ -18,6 +18,15 @@ import {
 } from './depop/site.ts';
 import { EBAY_CHALLENGE_SIGNS, EBAY_PRIVATE_SELECTORS } from './ebay/site.ts';
 import { MERCARI_CHALLENGE_SIGNS, MERCARI_PRIVATE_SELECTORS } from './mercari/site.ts';
+import {
+  VINTED_CHALLENGE_SIGNS,
+  VINTED_LIMITS,
+  VINTED_LOGIN_PATH,
+  VINTED_PACING,
+  VINTED_PRIVATE_SELECTORS,
+  VINTED_READ_ONLY_PACING,
+  VINTED_SITE_URL,
+} from './vinted/site.ts';
 
 /** A closed range of milliseconds; each wait picks uniformly inside it. */
 export type DelayRange = readonly [min: number, max: number];
@@ -204,6 +213,24 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     runsOn: 'cloud',
     cloudAllowed: true,
   },
+  vinted: {
+    marketplace: 'vinted',
+    origins: [VINTED_SITE_URL, 'https://vinted.com'],
+    cookieDomains: ['vinted.com'],
+    // Whether Vinted's pages read a same-origin web API is for the mapping (Vinted plan M2).
+    apiOrigins: [],
+    loginUrl: `${VINTED_SITE_URL}${VINTED_LOGIN_PATH}`,
+    emailsSignInLinks: false,
+    pacing: VINTED_PACING,
+    readOnlyPacing: VINTED_READ_ONLY_PACING,
+    limits: VINTED_LIMITS,
+    challenges: VINTED_CHALLENGE_SIGNS,
+    privateSelectors: VINTED_PRIVATE_SELECTORS,
+    // Vinted uses automated tools to act on accounts (its terms, section 7): the seller's own
+    // iPhone, session, and network is the least risky place to run, and the cloud is never one.
+    runsOn: 'phone',
+    cloudAllowed: false,
+  },
 };
 
 /**
@@ -216,6 +243,7 @@ export const AUTOMATED_MARKETPLACES = [
   'mercari',
   'depop',
   'ebay',
+  'vinted',
 ] as const satisfies readonly AutomatedMarketplace[];
 
 export function isAutomatedMarketplace(
@@ -244,7 +272,7 @@ export function standInProfile(base: AutomationProfile, siteUrl: string): Automa
     apiOrigins: base.apiOrigins.length > 0 ? [site.origin] : [],
     cookieDomains: [site.hostname],
     // The marketplace's own sign-in path, on the stand-in (`/login` on Poshmark, `/login/` on
-    // Mercari and Depop, `/signin/` on eBay).
+    // Mercari and Depop, `/signin/` on eBay, `/member/signup/select_type` on Vinted).
     loginUrl: new URL(new URL(base.loginUrl).pathname, site.origin).href,
   };
 }

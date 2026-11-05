@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import {
   loadAutomationSettings,
+  PHONE_RUNTIME_VERSION,
   SALE_CHECK_TASK,
   saleCheckJobKey,
   SESSION_CHECK_TASK,
 } from '@listora/automation';
 import { SESSION_CHECK_DEADLINE_MS } from '@listora/connections';
+import { useMarketplaceFeatures } from '@listora/marketplaces';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -153,7 +155,77 @@ describe('marketplace sessions (real Postgres)', () => {
           emailsSignInLinks: false,
         },
       },
+      // Every built feature runs in these tests, Vinted's linking among them.
+      {
+        marketplace: 'vinted',
+        status: 'not_linked',
+        readOnly: false,
+        statusDisplay: { tone: 'neutral', label: 'Not linked' },
+        login: {
+          url: 'https://www.vinted.com/member/signup/select_type',
+          cookieDomains: ['vinted.com'],
+          emailsSignInLinks: false,
+        },
+      },
     ]);
+  });
+
+  describe('Vinted, whose linking has not passed live', () => {
+    const SELLER = 'linking.vinted@example.com';
+    const vinted = cookie({ name: '_vinted_fr_session', domain: '.vinted.com' });
+    const listedOf = async (as: string) =>
+      (await api.call('listMarketplaceSessions', { token: as })).body.data.map(
+        (session) => session.marketplace,
+      );
+    const setTestMode = async (on: boolean) => {
+      const tenant = await api.tenantOf(SELLER);
+      await api.db
+        .updateTable('account')
+        .set({ test_mode: on })
+        .where('id', '=', tenant.accountId)
+        .execute();
+    };
+
+    beforeAll(() => {
+      useMarketplaceFeatures('verified');
+    });
+
+    afterAll(() => {
+      useMarketplaceFeatures('all');
+    });
+
+    it('is hidden from a seller: not listed, and neither read nor linked', async () => {
+      const seller = await api.signIn(SELLER);
+      expect(await listedOf(seller)).toEqual(['poshmark', 'mercari', 'depop', 'ebay']);
+      expect((await get('vinted', seller)).status).toBe(404);
+      expect((await link('vinted', { cookies: [vinted] }, { as: seller })).status).toBe(404);
+      expect(await connectionOf(SELLER, 'vinted')).toBeUndefined();
+    });
+
+    it('links in Test mode, checked on the phone, and stays listed once linked', async () => {
+      const seller = await api.signIn(SELLER);
+      await setTestMode(true);
+      expect(await listedOf(seller)).toContain('vinted');
+      // The iPhone links it, as the app does: it registers itself first and names itself.
+      const installationId = randomUUID();
+      await api.call('registerDevice', {
+        token: seller,
+        params: { installationId },
+        body: { name: 'Test iPhone', platform: 'ios', runtimeVersion: PHONE_RUNTIME_VERSION },
+      });
+      const linked = await link('vinted', { cookies: [vinted], installationId }, { as: seller });
+      expect(linked.status).toBe(201);
+      expect(linked.body).toMatchObject({ marketplace: 'vinted', status: 'checking' });
+      expect(await connectionOf(SELLER, 'vinted')).toMatchObject({
+        mode: 'automation',
+        runs_on: 'phone',
+      });
+      expect((await checkOf(SELLER, 'vinted')).status).toBe('pending');
+      // Test mode off: the linked account can still be checked, relinked, and unlinked.
+      await setTestMode(false);
+      expect(await listedOf(seller)).toContain('vinted');
+      expect((await get('vinted', seller)).status).toBe(200);
+    });
   });
 
   it('links eBay by signing in until its API is connected, which then takes over', async () => {
@@ -691,6 +763,7 @@ describe('marketplace sessions without a token vault (real Postgres)', () => {
     expect(await api.db.selectFrom('marketplace_connection').select('id').execute()).toEqual([]);
     const listed = await api.call('listMarketplaceSessions', { token });
     expect(listed.body.data.map((session) => session.status)).toEqual([
+      'not_linked',
       'not_linked',
       'not_linked',
       'not_linked',

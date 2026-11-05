@@ -1544,10 +1544,12 @@ export interface paths {
         /**
          * List the marketplaces linked by signing in
          * @description One entry per marketplace whose connection can be a browser session (`connect:
-         *     session`): Poshmark, Mercari, Depop, and eBay (Depop and eBay until their APIs are
-         *     connected; an API connection is `api_connected`). Each says whether it is linked, where
-         *     the app opens the marketplace's sign-in page, and which cookies to hand over. Not
-         *     paginated.
+         *     session`): Poshmark, Mercari, Depop, eBay, and Vinted (Depop and eBay until their APIs
+         *     are connected; an API connection is `api_connected`). Each says whether it is linked,
+         *     where the app opens the marketplace's sign-in page, and which cookies to hand over. A
+         *     marketplace whose linking has not passed live (Vinted, until its live link) is listed only
+         *     in the owner's Test mode or once the account linked it; otherwise it is left out, and
+         *     reading or linking it is `404`. Not paginated.
          */
         get: operations["listMarketplaceSessions"];
         put?: never;

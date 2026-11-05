@@ -11,7 +11,7 @@ and a feature turns on only after it passes live on the captain's Vinted test ac
 ([verified-features.md](verified-features.md)). Every write to a real Vinted account first reads
 the signed-in member name and stops unless it is the named test account.
 
-## Today: assisted (M1)
+## Today: assisted (M1), with linking built (M3)
 
 Vinted runs on the assisted adapter (`createVintedAdapter` in
 `packages/marketplaces/src/assisted/marketplaces.ts`, [marketplaces.md](marketplaces.md)):
@@ -32,6 +32,66 @@ Vinted runs on the assisted adapter (`createVintedAdapter` in
   unverified until a real Vinted sale confirms it.
 - **The iPhone app** shows Vinted by name, in the marketplace list as an assisted marketplace.
 
+## Linking and the session check (M3)
+
+Vinted is linked by signing in, like Poshmark, Mercari, and Depop
+([marketplace-linking.md](marketplace-linking.md)), and runs on the seller's iPhone only
+([phone-execution.md](phone-execution.md)):
+
+- **The profile** (`vinted` in `packages/automation/src/profiles.ts`, its parts in
+  `packages/automation/src/vinted/site.ts`): `runsOn: 'phone'` and `cloudAllowed: false`, so the
+  app offers no cloud and the API refuses a move there. Vinted uses automated enforcement (its
+  terms, section 7), so the seller's own iPhone, session, and network is the only place it runs.
+  Origins `https://www.vinted.com` and `https://vinted.com`, cookies on `vinted.com`, no API
+  origins yet (M2 finds out whether Vinted's pages read a same-origin web API).
+- **Pace.** 0.45 to 1.1 s before every action and 5 to 20 s between sessions (read-only
+  connections 0.6 to 1.5 s), and 15 runs an hour and 100 a day: half the other marketplaces',
+  while Vinted has no live run behind it. `AUTOMATION_VINTED_*` changes them within the floor and
+  ceiling ([automation.md](automation.md)).
+- **Checks.** Vinted's sign-up and sign-in chooser (`/member/signup/...`, `/member/login`), its
+  code and ID-check steps, and DataDome (its challenge frames on `captcha-delivery.com`, already
+  a generic sign, and its `#ddChallengeContainer`) stop the run, and the app hands the check to
+  the seller. Listora never solves, skips, or hides one.
+- **Private parts.** Screenshots black out addresses, conversations, messages, and the member's
+  own details (`VINTED_PRIVATE_SELECTORS`), on top of every form field.
+- **Linking.** Link accounts opens Vinted's sign-in chooser
+  (`https://www.vinted.com/member/signup/select_type`) in the app; the seller signs in there,
+  and the app hands over the cookies on `vinted.com`.
+- **The session check** (`createVintedAutomationAdapter`, `vinted/scripts.ts`, the bundled phone
+  runtime) opens the seller's profile settings (`/settings/profile`) and reads the member signed
+  in from the header's own profile link (`/member/<id>-<login>`): the login, lower-cased, is the
+  connection's seller (`external_user_id`). A link without a login, or links to more than one
+  member, leave the seller unknown, never a guess. A settings page without the link is
+  `Not confirmed` ("couldn't read Vinted"), and the session is kept.
+- **Every listing step stays assisted**, linked or not: the Vinted automation adapter has no
+  listing script yet, the registry keeps Vinted on its assisted adapter
+  (`createMarketplaceAdapters`), and the session checks ask the automation adapter directly. A
+  linked Vinted gets no sale check, import, or offer read either: those features are hidden
+  ([verified-features.md](verified-features.md)), and its adapter reads none of them.
+- **Hidden until its live link.** Linking is not on the feature list yet, so Vinted is in
+  `LINKING_NOT_VERIFIED` (`packages/marketplaces/src/features.ts`): Link accounts lists it only in
+  the owner's Test mode ([test-mode.md](test-mode.md)) or once the account linked it (so a linked
+  account can still be checked, relinked, and unlinked), and `getMarketplaceSession` and
+  `linkMarketplaceSession` answer `404` otherwise. The live test is the captain's link of the
+  Vinted test account on the iPhone, in Test mode; it removes Vinted from that list in the
+  change that records it.
+- **Modeled pages.** The paths and selectors (`vinted/site.ts`, `vinted/pages/`) are Listora's
+  model, not yet read on a signed-in session: the read-only mapping (M2, `recordings/`) and the
+  first linked session confirm them, and a page that differs is one page module to fix. The
+  fake Vinted site (`vinted/fake/`, `npm run dev:fake-vinted-site`, `FAKE_VINTED_SITE_URL`)
+  serves those modeled pages, with Vinted's checks as faults.
+- **The phone** needs no new app build: the server hands the app the runtime with the Vinted
+  scripts, and the check's origins and cookie domains come from the server. The app's own build
+  only adds Vinted to the web views it keeps warm while open (`WebPhoneRuntime`), so a build
+  without it starts Vinted's first call a moment slower.
+
+Tests: `vinted/adapter.int.test.ts` (the check on the fake site in Chromium: the member read, an
+unknown member, a changed page, DataDome, a CAPTCHA, a sign-in code, a signed-out session, a rate
+limit, an error page, and every listing step assisted), `phone/health-vinted.int.test.ts` (the
+same check through the phone runtime), `vinted/site.test.ts` (member paths, the profile, its
+checks), and `marketplace-sessions.int.test.ts` (hidden from a seller, linked in Test mode on the
+phone, and still listed once linked).
+
 Not yet for Vinted:
 
 - AI-written copy of its own: a Vinted listing starts from the item's own title and description.
@@ -42,16 +102,17 @@ Not yet for Vinted:
 
 ## Milestones still to come
 
-| #   | Milestone                                                                                                                           |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| M2  | Map Vinted's pages read-only (upload form, item page, listings, sold orders, offers, labels) and write the taxonomy snapshot        |
-| M3  | The `vinted` automation profile (`runsOn: 'phone'`, never the cloud), linking on the iPhone, and the session check with member name |
-| M4  | Listing import and sales history                                                                                                    |
-| M5  | Create, price, hide (delist), and unhide (relist), each read back; "In Vinted's review" is never "Listed"                           |
-| M6  | Sale checks and auto-delist, with bundles (one order, several items) and escrow completion                                          |
-| M7  | Offers: read, then accept, decline, counter                                                                                         |
-| M8  | Shipping labels and pack check (carrier, label or QR code, ship within 5 business days)                                             |
-| M9  | Thrift-scan comparisons: asking prices from the public search unless sold results prove readable                                    |
+M3's live link of the test account on the iPhone is still to run (above).
+
+| #   | Milestone                                                                                                                    |
+| --- | ---------------------------------------------------------------------------------------------------------------------------- |
+| M2  | Map Vinted's pages read-only (upload form, item page, listings, sold orders, offers, labels) and write the taxonomy snapshot |
+| M4  | Listing import and sales history                                                                                             |
+| M5  | Create, price, hide (delist), and unhide (relist), each read back; "In Vinted's review" is never "Listed"                    |
+| M6  | Sale checks and auto-delist, with bundles (one order, several items) and escrow completion                                   |
+| M7  | Offers: read, then accept, decline, counter                                                                                  |
+| M8  | Shipping labels and pack check (carrier, label or QR code, ship within 5 business days)                                      |
+| M9  | Thrift-scan comparisons: asking prices from the public search unless sold results prove readable                             |
 
 ## What differs on Vinted
 
