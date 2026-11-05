@@ -1,9 +1,9 @@
 # Recorded marketplace pages
 
-Tests run the Depop, Poshmark, and Mercari automation scripts against **recordings of the real
-pages**, not only against hand-made fakes. The fakes were written from Listora's own model of
-each site, so a test could pass while the real site failed (the fixes in #115, #117, and #120
-were all pages the fakes drew differently). A recording is what the real page was while the
+Tests run the Depop, Poshmark, and Mercari automation scripts (and Vinted's comparison read)
+against **recordings of the real pages**, not only against hand-made fakes. The fakes were
+written from Listora's own model of each site, so a test could pass while the real site failed
+(the fixes in #115, #117, and #120 were all pages the fakes drew differently). A recording is what the real page was while the
 script ran on it, so a page module that no longer reads the real page fails in CI, and a
 re-recording shows what the marketplace changed.
 
@@ -15,16 +15,16 @@ The code is in `packages/automation/src/recordings/`; each marketplace's plan is
 
 Each marketplace's plan lists its entries (`plans.ts`); each is one recording:
 
-| Entry      | Page                                        | Script                                                                                   |
-| ---------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `hub`      | A page only the signed-in seller sees       | The adapter's health check                                                               |
-| `listings` | The seller's shop, closet, or listings      | The adapter's `listings` read (imports and drift checks)                                 |
-| `listing`  | One of the seller's listings for sale       | The adapter's read-back of it                                                            |
-| `edit`     | That listing's edit page                    | Opening the editor (Poshmark's also reads its private SKU)                               |
-| `sold`     | The seller's sold items                     | The adapter's sale check (`orders`)                                                      |
-| `offers`   | The buyers' offers on the seller's listings | The adapter's offers read ([offers.md](offers.md)); where recorded                       |
-| `form-*`   | The sell form, one per form shape           | The create's own form filling, without photos, never sent                                |
-| `search`   | The public search, as a logged-out visitor  | A thrift scan comparison read ([thrift-scan.md](thrift-scan.md)); Depop's and Poshmark's |
+| Entry      | Page                                        | Script                                                                                              |
+| ---------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `hub`      | A page only the signed-in seller sees       | The adapter's health check                                                                          |
+| `listings` | The seller's shop, closet, or listings      | The adapter's `listings` read (imports and drift checks)                                            |
+| `listing`  | One of the seller's listings for sale       | The adapter's read-back of it                                                                       |
+| `edit`     | That listing's edit page                    | Opening the editor (Poshmark's also reads its private SKU)                                          |
+| `sold`     | The seller's sold items                     | The adapter's sale check (`orders`)                                                                 |
+| `offers`   | The buyers' offers on the seller's listings | The adapter's offers read ([offers.md](offers.md)); where recorded                                  |
+| `form-*`   | The sell form, one per form shape           | The create's own form filling, without photos, never sent                                           |
+| `search`   | The public search, as a logged-out visitor  | A thrift scan comparison read ([thrift-scan.md](thrift-scan.md)); Depop's, Poshmark's, and Vinted's |
 
 The form shapes are each marketplace's distinct forms: on Depop the 17 department and size-list
 shapes ([depop-automation.md](depop-automation.md#live-verification)), on Mercari each size group
@@ -35,8 +35,8 @@ one the form takes.
 
 ## How a recording is made
 
-`npm run recordings:record -- <depop|mercari|poshmark>` (`-- --help` for its options) runs the
-marketplace's plan in a Chrome on the Mac where the seller is signed in, started with
+`npm run recordings:record -- <depop|mercari|poshmark|vinted>` (`-- --help` for its options) runs
+the marketplace's plan in a Chrome on the Mac where the seller is signed in, started with
 `--remote-debugging-port=9333` (`--cdp` names another). Each entry gets a tab of its own, opened
 in the background so the seller's own tabs stay in front, and runs through the same session
 rules as every automated run (`ScriptSession`: the marketplace's pace before every action, the
@@ -56,7 +56,10 @@ and names (Poshmark), which the plan's `identity` adds to the words redacted; th
 with its own profile (`profile`, the comparison read's), through the phone's page backend, where
 comparisons run. As it never uses the seller's session, a logged-out entry can also be recorded
 in a Chrome no seller ever signed in to (Poshmark's search was, on 2026-11-02: a headless Chrome
-with a fresh profile of its own, `--cdp http://127.0.0.1:9334`). A data global read by a dotted
+with a fresh profile of its own, `--cdp http://127.0.0.1:9334`; Vinted's too, on 2026-11-05).
+Vinted's plan has only its public search until Vinted's pages are mapped
+([vinted.md](vinted.md), M2), so the plan tests that need a seller's pages and form shapes skip
+it. A data global read by a dotted
 path (`__INITIAL_STATE__.$_search.gridData.data`, `PageDriver.pageData`) is recorded and
 replayed by that path, so a recording keeps only the part the script read. eBay's and
 Mercari's public searches have no recording: each showed a bot check to the recorder's first logged-out page load (eBay on
@@ -101,7 +104,8 @@ names a user, profile, buyer, or seller (`PublicUser`), or one under such a norm
 (Apollo's `"PublicUser:123"`, whose `:<id>` is dropped before the check), is a person's: its name,
 username, id, and photo are redacted, whether in the data or in the JSON inside the document.
 Credentials (values under token, secret, password,
-session, and signature keys; JSON web tokens; long opaque tokens; token query parameters), other
+session, and signature keys; JSON web tokens; long opaque tokens, but not a long name of only
+words and numbers such as Vinted's test ids; token query parameters), other
 email addresses and phone numbers, and every image address (the seller's photos and avatar) are
 replaced too. A recording that still holds anything of the kind (`unredacted`) is not written;
 `recording.test.ts` checks every committed one the same way.

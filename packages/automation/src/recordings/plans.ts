@@ -2,6 +2,7 @@
 import { depopRecordingPlan } from '../depop/recording-plan.ts';
 import { mercariRecordingPlan } from '../mercari/recording-plan.ts';
 import { poshmarkRecordingPlan } from '../poshmark/recording-plan.ts';
+import { vintedRecordingPlan } from '../vinted/recording-plan.ts';
 import type { RecordingPlan } from './plan.ts';
 import type { RecordedMarketplace } from './recording.ts';
 
@@ -13,5 +14,7 @@ export function recordingPlan(marketplace: RecordedMarketplace): RecordingPlan {
       return mercariRecordingPlan;
     case 'poshmark':
       return poshmarkRecordingPlan;
+    case 'vinted':
+      return vintedRecordingPlan;
   }
 }

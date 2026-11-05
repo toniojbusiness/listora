@@ -119,6 +119,15 @@ const PHONE = /(?<![\d-])(?:\+?1[-. ])?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}(?![\d-])/
 /** A long run of letters and digits with both, as session ids and signatures are. */
 const LONG_TOKEN =
   /(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])/g;
+/**
+ * Whether a long run is a name made of words and numbers (Vinted's test ids,
+ * `product-item-id-10671028219--description-subtitle`): each part between its dashes and
+ * underscores only letters or only digits, at least three of them. A token's parts mix them.
+ */
+function isWordsAndNumbers(found: string): boolean {
+  const parts = found.split(/[-_]+/).filter((part) => part !== '');
+  return parts.length >= 3 && parts.every((part) => /^(?:[A-Za-z]+|\d+)$/.test(part));
+}
 const TOKEN_PARAMETER =
   /([?&](?:[A-Za-z_]*token|auth|sig|signature|key|session|code|ticket)=)([^&"'\s<>]+)/gi;
 /** An image's address, its slashes escaped or not (`https:\/\/` in JSON inside a script). */
@@ -241,7 +250,7 @@ function redactOnce(
       .replace(TOKEN_PARAMETER, (_found, name: string, value: string) => `${name}${token(value)}`)
       .replace(EMAIL, 'user@example.com')
       .replace(PHONE, '555-555-0100')
-      .replace(LONG_TOKEN, token);
+      .replace(LONG_TOKEN, (found) => (isWordsAndNumbers(found) ? found : token(found)));
     return out;
   };
   // A number under an id's key is the id too: the same placeholder, as a number.

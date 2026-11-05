@@ -462,13 +462,14 @@ export type ItemScanDecision = (typeof ITEM_SCAN_DECISIONS)[number];
 /**
  * `market_comparison.marketplace`: the marketplaces whose thrift-scan comparisons Listora reads
  * (docs/features/thrift-scan.md). A marketplace joins with its comparisons, after it joins
- * `MARKETPLACES` (Vinted's are milestone M9 of docs/features/vinted.md).
+ * `MARKETPLACES`.
  */
 export const MARKET_COMPARISON_MARKETPLACES = [
   'ebay',
   'depop',
   'poshmark',
   'mercari',
+  'vinted',
 ] as const satisfies readonly Marketplace[];
 export type MarketComparisonMarketplace = (typeof MARKET_COMPARISON_MARKETPLACES)[number];
 

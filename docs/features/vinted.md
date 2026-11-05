@@ -32,6 +32,11 @@ Vinted runs on the assisted adapter (`createVintedAdapter` in
   Its fee table (`vinted-us-2025-11-01`, [pricing.md](pricing.md)) has no rules and is marked
   unverified until a real Vinted sale confirms it.
 - **The iPhone app** shows Vinted by name, in the marketplace list as an assisted marketplace.
+- **Thrift-scan comparisons (M9).** The scan card's Vinted row: close matches' asking prices in
+  Vinted's public search, read on the iPhone logged out within budgets, cached, and stopped at
+  any check; Vinted shows a visitor no sold listings, so the sold side is the household's own
+  Vinted sales. Behind `market_comps` on Vinted, off for sellers until the captain's live test
+  on the phone ([thrift-scan.md](thrift-scan.md), "Vinted").
 
 ## Linking and the session check (M3)
 
@@ -155,7 +160,6 @@ every listing step stays assisted).
 Not yet for Vinted:
 
 - AI-written copy of its own: a Vinted listing starts from the item's own title and description.
-- Thrift-scan comparisons (`market_comparison` keeps its own marketplace list, M9).
 - Delist-latency and verified-success alarms (`ALARMED_MARKETPLACES` in `infra/src/config.ts`):
   the seller delists Vinted by hand, so they join with its automation.
 - Categories (an imported item's), and the order and label pages, until Vinted's pages are
@@ -172,7 +176,6 @@ M3's live link and M4's live import of the test account on the iPhone are still 
 | M6  | Sale checks and auto-delist, with bundles (one order, several items) and escrow completion                                   |
 | M7  | Offers: read, then accept, decline, counter                                                                                  |
 | M8  | Shipping labels and pack check (carrier, label or QR code, ship within 5 business days)                                      |
-| M9  | Thrift-scan comparisons: asking prices from the public search unless sold results prove readable                             |
 
 ## What differs on Vinted
 

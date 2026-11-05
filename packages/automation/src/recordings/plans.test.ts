@@ -6,6 +6,14 @@ import { buildPoshmarkPayload, validatePoshmarkPayload } from '../poshmark/paylo
 import { recordingPlan } from './plans.ts';
 import { RECORDED_MARKETPLACES } from './recording.ts';
 
+/**
+ * The marketplaces whose seller pages are recorded: every one but Vinted, whose plan has only
+ * its public search until its pages are mapped (docs/features/vinted.md, M2).
+ */
+const SELLER_PAGES = RECORDED_MARKETPLACES.filter(
+  (marketplace): marketplace is Exclude<typeof marketplace, 'vinted'> => marketplace !== 'vinted',
+);
+
 const validate = {
   depop: (content: Parameters<typeof buildDepopAutomationPayload>) =>
     validateDepopAutomationPayload(buildDepopAutomationPayload(...content)),
@@ -16,21 +24,18 @@ const validate = {
 };
 
 describe('recording plans', () => {
-  it.each(RECORDED_MARKETPLACES)(
-    '%s: every form shape is a listing the form takes',
-    (marketplace) => {
-      const plan = recordingPlan(marketplace);
-      const forms = plan.entries.filter((entry) => entry.mode === 'form');
-      expect(forms.length).toBeGreaterThan(8);
-      for (const entry of forms) {
-        const content = entry.content;
-        if (content === undefined) throw new Error(`${entry.name} has no listing`);
-        expect(validate[marketplace]([content.item, content.variant]), entry.name).toEqual([]);
-      }
-    },
-  );
+  it.each(SELLER_PAGES)('%s: every form shape is a listing the form takes', (marketplace) => {
+    const plan = recordingPlan(marketplace);
+    const forms = plan.entries.filter((entry) => entry.mode === 'form');
+    expect(forms.length).toBeGreaterThan(8);
+    for (const entry of forms) {
+      const content = entry.content;
+      if (content === undefined) throw new Error(`${entry.name} has no listing`);
+      expect(validate[marketplace]([content.item, content.variant]), entry.name).toEqual([]);
+    }
+  });
 
-  it.each(RECORDED_MARKETPLACES)(
+  it.each(SELLER_PAGES)(
     '%s: names each entry once, and records every kind of page',
     (marketplace) => {
       const plan = recordingPlan(marketplace);
@@ -44,6 +49,13 @@ describe('recording plans', () => {
       expect(pages).toEqual(new Set(['hub', 'shop', 'listing', 'edit', 'sell-form', 'sold']));
     },
   );
+
+  it('records only the public search of Vinted, logged out', () => {
+    const entries = recordingPlan('vinted').entries;
+    expect(entries.map((entry) => [entry.name, entry.page, entry.session])).toEqual([
+      ['search', 'search', 'logged_out'],
+    ]);
+  });
 
   it('records the public search logged out only, never in the seller session', () => {
     for (const marketplace of RECORDED_MARKETPLACES) {

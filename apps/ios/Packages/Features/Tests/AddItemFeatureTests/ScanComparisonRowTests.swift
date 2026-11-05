@@ -3,7 +3,8 @@ import Testing
 @testable import AddItemFeature
 
 /// A marketplace's comparison row on the card where it shows sold listings (eBay, Poshmark, Mercari):
-/// what close matches sold for under its sold label, and its own sold pace.
+/// what close matches sold for under its sold label, and its own sold pace; and where it shows
+/// none (Vinted), close matches' asking prices under theirs.
 @MainActor
 @Suite(.timeLimit(.minutes(1)))
 struct ScanComparisonRowTests {
@@ -51,5 +52,17 @@ struct ScanComparisonRowTests {
         )
         #expect(card.listedSignals.isEmpty)
         #expect(card.basedOn == "Sold listings on Poshmark: 44 like it in the last 42 days")
+    }
+
+    @Test
+    func `shows Vinted's asking prices under their label, never as sold`() throws {
+        let card = try ScanCard(decodeScan(vintedAskingScanJSON(id: "scan-1")))
+        let vinted = try #require(card.comparisons.first)
+        #expect(vinted.marketplace == "Vinted")
+        #expect(vinted.status == .read)
+        #expect(vinted.label == "Vinted: asking $25-$30, 5 like it for sale")
+        #expect(vinted.askingLabel == "Asking prices - not sold listings")
+        #expect(vinted.soldLabel == nil)
+        #expect(vinted.demand == "Crowded on Vinted")
     }
 }

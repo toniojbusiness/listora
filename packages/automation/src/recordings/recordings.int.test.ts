@@ -52,7 +52,11 @@ for (const marketplace of RECORDED_MARKETPLACES) {
         )
         .map((entry) => entry.name);
       expect([...recordings.keys()].sort()).toEqual(expected.sort());
-      expect(recordings.has('listings')).toBe(true);
+      // Every plan with the seller's pages records their listings (Vinted's has only its
+      // public search so far).
+      if (plan.entries.some((entry) => entry.name === 'listings')) {
+        expect(recordings.has('listings')).toBe(true);
+      }
     });
 
     for (const [name, recorded] of recordings) {

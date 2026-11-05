@@ -18088,9 +18088,9 @@ extension Components {
         /// One marketplace's comparisons for the scanned item (docs/features/thrift-scan.md,
         /// "Marketplace comparisons"): listings of the same brand and item type (and the model and size
         /// where the scan read them) in the marketplace's public search, read on the seller's iPhone in
-        /// a web view that holds no account. Depop shows a visitor no sold listings, so its prices are
-        /// asking prices (`asking`), always labeled so, and the household's own sales (`ownSales`) are
-        /// the sold side; eBay, Poshmark, and Mercari show their sold listings, so their rows have what
+        /// a web view that holds no account. Depop and Vinted show a visitor no sold listings, so their
+        /// prices are asking prices (`asking`), always labeled so, and the household's own sales
+        /// (`ownSales`) are the sold side; eBay, Poshmark, and Mercari show their sold listings, so their rows have what
         /// close matches sold for (`sold`) as well. While `status` is `checking`, the phone reads `read` and answers it with
         /// `saveScanComparison`.
         ///
@@ -19362,6 +19362,7 @@ extension Components {
             case depop = "depop"
             case poshmark = "poshmark"
             case mercari = "mercari"
+            case vinted = "vinted"
         }
         /// - Remark: Generated from `#/components/schemas/ScanMissingSource`.
         public struct ScanMissingSource: Codable, Hashable, Sendable {

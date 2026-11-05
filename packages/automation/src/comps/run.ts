@@ -21,6 +21,7 @@ import { depopComparisonScript, depopWarmUpScript } from './depop.ts';
 import { ebayComparisonScript, ebayWarmUpScript } from './ebay.ts';
 import { poshmarkComparisonScript, poshmarkWarmUpScript } from './poshmark.ts';
 import { mercariComparisonScript, mercariWarmUpScript } from './mercari.ts';
+import { vintedComparisonScript, vintedWarmUpScript } from './vinted.ts';
 import {
   comparisonStats,
   COMPARISON_VERSION,
@@ -35,6 +36,7 @@ const SITES: Readonly<Record<ComparisonMarketplace, string>> = {
   ebay: 'https://www.ebay.com',
   poshmark: 'https://poshmark.com',
   mercari: 'https://www.mercari.com',
+  vinted: 'https://www.vinted.com',
 };
 
 /** What a read found, whichever marketplace read it. */
@@ -69,6 +71,10 @@ const READERS: Readonly<
   mercari: {
     read: (siteUrl, input) => mercariComparisonScript(siteUrl, input.query, new Date(input.now)),
     warmUp: mercariWarmUpScript,
+  },
+  vinted: {
+    read: (siteUrl, input) => vintedComparisonScript(siteUrl, input.query, new Date(input.now)),
+    warmUp: vintedWarmUpScript,
   },
 };
 

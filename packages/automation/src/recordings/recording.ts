@@ -18,8 +18,11 @@ import { fileURLToPath } from 'node:url';
 import { format } from 'prettier';
 import { z } from 'zod';
 
-/** The marketplaces with recorded pages: the ones automated in the seller's own browser. */
-export const RECORDED_MARKETPLACES = ['depop', 'mercari', 'poshmark'] as const;
+/**
+ * The marketplaces with recorded pages: the ones automated in the seller's own browser, and
+ * Vinted, whose public search is recorded before its automation (docs/features/vinted.md).
+ */
+export const RECORDED_MARKETPLACES = ['depop', 'mercari', 'poshmark', 'vinted'] as const;
 export type RecordedMarketplace = (typeof RECORDED_MARKETPLACES)[number];
 
 /** The kinds of page a recording is of. */

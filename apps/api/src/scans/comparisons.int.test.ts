@@ -1,5 +1,5 @@
 import { SCAN_OUTPUT_NAME, SCAN_RESEARCH_OUTPUT_NAME } from '@listora/analysis';
-import { useMarketplaceFeatures } from '@listora/marketplaces';
+import { isFeatureOn, SELLER_FEATURES, useMarketplaceFeatures } from '@listora/marketplaces';
 import { ASKING_PRICES_LABEL, claimsSoldData, marketSoldLabel } from '@listora/pricing';
 import { itemResearchKey } from '@listora/sourcing';
 import { photoSetHash, sha256Hex } from '@listora/shared';
@@ -101,6 +101,23 @@ const MERCARI_READ = {
   ms: 3100,
 };
 
+/**
+ * What the phone answers for a read of Vinted, which shows a visitor no sold listings: five close
+ * matches asking $25 to $30, and Vinted's "500+" results as 500. Numbers only.
+ */
+const VINTED_READ = {
+  outcome: 'read' as const,
+  stats: {
+    level: 'model_and_size' as const,
+    forSale: { count: 5, lowCents: 2500, medianCents: 2800, highCents: 3000 },
+    read: { sold: 0, forSale: 96 },
+  },
+  forSaleTotal: 500,
+  ms: 2100,
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 describe('the thrift scan marketplace comparisons (real Postgres)', () => {
   let api: TestApi;
   let token: string;
@@ -177,6 +194,45 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     return row;
   }
 
+  function vintedOf(scan: Awaited<ReturnType<typeof scanOf>>) {
+    const row = scan.comparisons?.find((one) => one.marketplace === 'vinted');
+    if (row === undefined) throw new Error('the scan has no Vinted comparison');
+    return row;
+  }
+
+  /** A sold pair of the owner's Levi's 501 jeans: a one-item sale on Vinted, three days back. */
+  async function soldOnVinted(cents: number) {
+    const item = await api.call('createItem', {
+      token,
+      body: { details: { title: '501', brand: "Levi's", category: 'clothing/bottoms/jeans' } },
+    });
+    const sale = await api.db
+      .insertInto('sale')
+      .values({
+        account_id: tenant.accountId,
+        marketplace: 'vinted',
+        sold_at: new Date(api.clock.now - 3 * DAY_MS),
+        detection_source: 'manual',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await api.db
+      .insertInto('sale_item')
+      .values({
+        account_id: tenant.accountId,
+        sale_id: sale.id,
+        marketplace: 'vinted',
+        item_id: item.body.id,
+        sale_price_cents: cents,
+      })
+      .execute();
+    await api.db
+      .updateTable('inventory_item')
+      .set({ status: 'sold' })
+      .where('id', '=', item.body.id)
+      .execute();
+  }
+
   async function answerRead(scanId: string, comparisonId: string, body: unknown, as = token) {
     return api.call('saveScanComparison', {
       token: as,
@@ -204,7 +260,9 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
     return priced;
   }
 
-  async function reads(marketplace: 'depop' | 'ebay' | 'poshmark' | 'mercari' = 'depop') {
+  async function reads(
+    marketplace: 'depop' | 'ebay' | 'poshmark' | 'mercari' | 'vinted' = 'depop',
+  ) {
     return api.db
       .selectFrom('market_comparison')
       .selectAll()
@@ -236,6 +294,7 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
       'ebay',
       'poshmark',
       'mercari',
+      'vinted',
     ]);
     const [row] = await reads();
     expect(row).toMatchObject({ status: 'pending', scan_id: scan.id, marketplace: 'depop' });
@@ -712,6 +771,89 @@ describe('the thrift scan marketplace comparisons (real Postgres)', () => {
       label: 'Not checked: eBay limit for this hour',
     });
     expect(ebayOf(await scanOf(answer())).status).toBe('checking');
+  });
+
+  it('hands the phone a read of Vinted by brand and type words, the model, and the size', async () => {
+    const scan = await scanOf(answer());
+    const vinted = vintedOf(scan);
+    expect(vinted).toMatchObject({ status: 'checking', label: 'Checking Vinted...' });
+    expect(vinted.read?.input).toMatchObject({
+      version: 1,
+      marketplace: 'vinted',
+      query: {
+        words: 'levis 501 jeans',
+        brand: "Levi's",
+        model: '501',
+        sizeLabel: '28',
+        // Vinted's item boxes name no category: a listing's title must name the type.
+        productTypes: [],
+        typeWords: ['jeans'],
+      },
+    });
+    const [row] = await reads('vinted');
+    expect(row).toMatchObject({ status: 'pending', scan_id: scan.id, marketplace: 'vinted' });
+  });
+
+  it("shows Vinted's asking prices under their label, never as sold, with the household's own Vinted sales as the sold side", async () => {
+    await soldOnVinted(2600);
+    await soldOnVinted(2900);
+    const scan = await scanOf(answer());
+    const read = vintedOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    const answered = await answerAndPrice(scan.id, read.id, VINTED_READ);
+    const vinted = vintedOf(answered.body);
+    expect(vinted).toEqual({
+      marketplace: 'vinted',
+      status: 'read',
+      label: 'Vinted: asking $25-$30, 5 like it for sale',
+      asking: {
+        count: 5,
+        low: { amountCents: 2500, currency: 'USD' },
+        median: { amountCents: 2800, currency: 'USD' },
+        high: { amountCents: 3000, currency: 'USD' },
+        label: ASKING_PRICES_LABEL,
+      },
+      supply: 500,
+      cached: false,
+      demand: {
+        demand: 'steady',
+        basedOn: 'Your 2 sales like it in the last 90 days; 500 for sale on Vinted now',
+      },
+    });
+    expect(claimsSoldData(vinted.label)).toBe(false);
+    expect(vinted.sold).toBeUndefined();
+    // The sold side is the household's own Vinted sales.
+    expect(answered.body.ownSales.map((line) => [line.marketplace, line.soldCount])).toEqual([
+      ['vinted', 2],
+    ]);
+    const [row] = await reads('vinted');
+    expect(row).toMatchObject({ status: 'read', for_sale_total: 500, sold_total: null });
+    // The other cases count no sales of the household's.
+    await api.db.deleteFrom('sale_item').where('marketplace', '=', 'vinted').execute();
+    await api.db.deleteFrom('sale').where('marketplace', '=', 'vinted').execute();
+  });
+
+  it('pauses Vinted for the day at a check', async () => {
+    const scan = await scanOf(answer());
+    const read = vintedOf(scan).read;
+    if (read === undefined) throw new Error('no read');
+    await answerRead(scan.id, read.id, {
+      outcome: 'check',
+      ms: 800,
+      message: 'the page showed a CAPTCHA',
+    });
+    expect(vintedOf(await scanOf(answer({ line: '550' })))).toEqual({
+      marketplace: 'vinted',
+      status: 'paused',
+      label: 'Vinted prices paused today',
+    });
+  });
+
+  it("keeps Vinted's comparisons hidden from a seller until they pass live", () => {
+    useMarketplaceFeatures('verified');
+    expect(isFeatureOn('vinted', 'market_comps', SELLER_FEATURES)).toBe(false);
+    // The owner's Test mode reads them, for the live test on the phone.
+    expect(isFeatureOn('vinted', 'market_comps', { testMode: true })).toBe(true);
   });
 
   it("stops at the hour's budget", async () => {

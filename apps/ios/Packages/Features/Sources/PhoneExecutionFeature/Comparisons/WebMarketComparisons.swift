@@ -167,6 +167,7 @@ final class ComparisonLane {
         "ebay": ["https://www.ebay.com", "https://ebay.com", "https://signin.ebay.com"],
         "poshmark": ["https://poshmark.com", "https://www.poshmark.com"],
         "mercari": ["https://www.mercari.com", "https://mercari.com"],
+        "vinted": ["https://www.vinted.com", "https://vinted.com"],
     ]
 
     /// A warm-up names only the marketplace: the runtime paces it as the marketplace's reads.
