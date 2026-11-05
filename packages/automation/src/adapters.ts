@@ -3,9 +3,10 @@
  * Depop, eBay, and Vinted have their own adapters (poshmark/, mercari/, depop/, ebay/, vinted/),
  * which drive poshmark.com, mercari.com, depop.com, ebay.com, and vinted.com, or their fakes with
  * `FAKE_POSHMARK_URL`, `FAKE_MERCARI_SITE_URL`, `FAKE_DEPOP_SITE_URL`, `FAKE_EBAY_SITE_URL`, and
- * `FAKE_VINTED_SITE_URL`. Vinted's only reads so far (Vinted plan M3 and M4). In development and
- * tests, `FAKE_AUTOMATION_SITE_URL` serves each marketplace without its own fake through the
- * fake site's adapter, so a development setup never drives a real marketplace. The Depop and
+ * `FAKE_VINTED_SITE_URL`. Vinted's listing steps serve only Test mode until they pass live
+ * (Vinted plan M5). In development and tests, `FAKE_AUTOMATION_SITE_URL` serves each marketplace
+ * without its own fake through the fake site's adapter, so a development setup never drives a
+ * real marketplace. The Depop and
  * eBay automation adapters serve only sellers whose connection is a browser session: one that
  * uses the marketplace's API gets the API adapter (`createMarketplaceAdapters` in
  * `@listora/marketplaces`).
@@ -50,8 +51,8 @@ export function createAutomationAdapters(
             sessions: deps.sessions,
             photos: deps.photos,
             logger: deps.logger,
-            // Only the session check for Vinted: every Vinted listing step stays assisted until
-            // its own listing scripts pass live (Vinted plan M5).
+            // Only the session check for Vinted: the generic fake site doesn't model Vinted's
+            // listing rules (its review, Hide and Unhide), which Vinted's own fake does.
             ...(marketplace === 'vinted' ? { sessionCheckOnly: true } : {}),
           }),
         ];
@@ -99,11 +100,11 @@ export function createAutomationAdapters(
     });
   }
   if (settings.fakeVintedSiteUrl !== undefined || siteUrl === undefined) {
-    // Reads only so far (the session check, M3; listings and sold orders, M4): Vinted's
-    // listing steps stay assisted.
+    // Its listing steps serve only Test mode until they pass live (Vinted plan M5).
     adapters.vinted = createVintedAutomationAdapter({
       profile: settings.profiles.vinted,
       sessions: deps.sessions,
+      photos: deps.photos,
       logger: deps.logger,
       ...(settings.fakeVintedSiteUrl === undefined ? {} : { siteUrl: settings.fakeVintedSiteUrl }),
     });

@@ -52,11 +52,11 @@ export type AutomatedMarketplace = Marketplace;
  * operations with them, the browser runner its automated steps, and the API reads each
  * marketplace's capabilities from them, so every process routes an operation to the same mode.
  *
- * - Vinted's listing steps are assisted (docs/features/vinted.md): its automation adapter, which
- *   serves a linked Vinted session, only reads so far (the session check, M3; the listings an
- *   import reads and the sold orders, M4), and a kind of step without a script stays the
- *   assisted adapter's, so every Vinted step stays the seller's task even on a linked session.
- *   Once its listing scripts pass live (M5), a linked session gets them as Poshmark's does.
+ * - Vinted is assisted until a seller links a session, when its automation adapter serves it
+ *   (docs/features/vinted.md): its reads (the session check, M3; the listings an import reads and
+ *   the sold orders, M4) and its listing steps (create, price, hide, unhide, M5). The listing
+ *   steps have not passed live, so they stay the seller's tasks but for an account in Test mode
+ *   (`LISTING_AUTOMATION_NOT_VERIFIED`, `ConnectionRef.listingAutomation`).
  * - Poshmark, Mercari, and Depop are assisted (every step is a user task that only the user's
  *   confirmation finishes) until a seller links a browser session, when their automation
  *   adapter serves them (decision D1). Poshmark's drives poshmark.com (the fake Poshmark with

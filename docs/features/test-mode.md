@@ -74,6 +74,10 @@ that account only:
   mark, and Import listings.
 - **Price drops:** Settings > Price drops, the item's Price drop, and the price drop schedule
   ([price-drops.md](price-drops.md)).
+- **Vinted's automated listing steps:** publishing, price changes, hiding, and unhiding on a
+  linked Vinted run on the owner's iPhone instead of becoming tasks
+  (`LISTING_AUTOMATION_NOT_VERIFIED`, [vinted.md](vinted.md)). They record no run in the owner's
+  log: each one is an operation with its own history and read-back.
 - **The thrift scan:** Add Item's Scan mode and its API (`isAppFeatureOn('thrift_scan', gate)`,
   [thrift-scan.md](thrift-scan.md)); the scan camera shows the owner its speed against the
   plan's targets, tagged "Testing". A scan reads nothing from a marketplace, so it records no

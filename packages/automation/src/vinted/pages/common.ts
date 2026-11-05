@@ -38,3 +38,33 @@ export async function awaitElement(
 export function changed(pageName: string, problem: string): PageChangedError {
   return new PageChangedError(`Vinted's ${pageName} ${problem}.`);
 }
+
+/** How often a look for a part Vinted's scripts draw runs (it only reads, so no pacing). */
+export const LOOK_EVERY_MS = 150;
+
+/**
+ * Whether `selector` comes within `ms`: Vinted's form draws its lists after a tap. Each look
+ * inspects the page, so a check that comes up instead stops the run.
+ */
+export async function appears(page: PageDriver, selector: string, ms: number): Promise<boolean> {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (await page.exists(selector)) return true;
+    if (Date.now() >= end) return false;
+    await lookAgain(page, LOOK_EVERY_MS);
+  }
+}
+
+/**
+ * Looks at the page again after a moment: the driver inspects it (a check that came up stops
+ * the run) and learns its address anew, which Vinted's own scripts change without loading a page.
+ */
+export async function lookAgain(page: PageDriver, ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  await page.waitFor('body', 'attached');
+}
+
+/** A text for a `:text-is("...")` selector, its quotes and backslashes escaped. */
+export function quote(text: string): string {
+  return text.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+}

@@ -168,3 +168,51 @@ describe("the server reads an app's session-check answers, old and new", () => {
     expect(valueOf(checked(42))).toBe('unreadable');
   });
 });
+
+describe('the server reads Vinted listing answers', () => {
+  const read = {
+    script: 'read',
+    ref: {
+      listingId: 'listing-1',
+      externalListingId: '7400000001',
+      externalSku: null,
+      externalUrl: null,
+    },
+  } as const;
+
+  it('keeps that a listing is in the marketplace’s review', () => {
+    const answer = readPhoneAnswer(
+      read,
+      ran({ found: false, authoritative: false, inReview: true }),
+    );
+    expect(answer).toMatchObject({
+      type: 'ran',
+      result: { ok: true, value: { found: false, authoritative: false, inReview: true } },
+    });
+  });
+
+  it('reads a change the marketplace can’t take yet, with its wait', () => {
+    const end = {
+      script: 'end',
+      op: {
+        operationId: 'op-1',
+        kind: 'end',
+        idempotencyKey: 'key-1',
+        attempt: 1,
+        desired: { status: 'ended' },
+        listing: read.ref,
+        payload: null,
+      },
+    } as const;
+    const waiting = {
+      type: 'not_yet',
+      code: 'in_review',
+      message: "Vinted is reviewing this listing and won't let it be hidden until the review ends.",
+      retryAfterMs: 60_000,
+    };
+    expect(readPhoneAnswer(end, ran(waiting))).toMatchObject({
+      type: 'ran',
+      result: { ok: true, value: waiting },
+    });
+  });
+});

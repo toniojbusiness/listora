@@ -336,7 +336,7 @@ describe('describeOperation', () => {
 
   it('says whether a relist brings the listing back or posts a new one', () => {
     const relisting = (
-      marketplace: 'mercari' | 'depop' | 'ebay',
+      marketplace: 'mercari' | 'vinted' | 'depop' | 'ebay',
       externalListingId: string | null,
     ) =>
       describeListingStatus({
@@ -347,10 +347,46 @@ describe('describeOperation', () => {
       }).label;
     // Mercari activates the listing it ended; Poshmark puts it back for sale.
     expect(relisting('mercari', 'm123456789')).toBe('Reactivating...');
+    // Vinted unhides the listing its end hid.
+    expect(relisting('vinted', '7400000001')).toBe('Reactivating...');
     // A Depop relist posts a new listing, and so does one of a listing the marketplace removed.
     expect(relisting('depop', 'old-slug')).toBe('Relisting (new listing)...');
     expect(relisting('mercari', null)).toBe('Relisting (new listing)...');
     // eBay relists under a new id of its own.
     expect(relisting('ebay', '110012345678')).toBe('Relisting...');
+  });
+
+  it("says a listing in the marketplace's review is in its review, never listed, and a delist waits for it", () => {
+    const reviewing = describeListingStatus({
+      marketplace: 'vinted',
+      listingStatus: 'publishing',
+      operation: operation({
+        kind: 'create',
+        status: 'verifying',
+        errorCode: 'in_review',
+        errorMessage: "Vinted is reviewing the listing and hasn't put it up for sale yet.",
+        successEvidence: null,
+      }),
+    });
+    expect(reviewing).toEqual({
+      tone: 'checking',
+      label: "In Vinted's review",
+      detail: "Vinted is reviewing the listing and hasn't put it up for sale yet.",
+    });
+    const delisting = describeListingStatus({
+      marketplace: 'vinted',
+      listingStatus: 'active',
+      operation: operation({
+        kind: 'end',
+        status: 'retrying',
+        errorCode: 'in_review',
+        errorMessage: "Vinted: Vinted is reviewing this listing and won't let it be hidden.",
+        successEvidence: null,
+      }),
+    });
+    expect(delisting).toMatchObject({
+      tone: 'in_progress',
+      label: "Delisting... after Vinted's review",
+    });
   });
 });

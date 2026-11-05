@@ -11,7 +11,7 @@ and a feature turns on only after it passes live on the captain's Vinted test ac
 ([verified-features.md](verified-features.md)). Every write to a real Vinted account first reads
 the signed-in member name and stops unless it is the named test account.
 
-## Today: assisted (M1), with linking (M3) and import and sales history (M4) built
+## Today: assisted (M1), with linking (M3), import and sales history (M4), and listing (M5) built
 
 Vinted runs on the assisted adapter (`createVintedAdapter` in
 `packages/marketplaces/src/assisted/marketplaces.ts`, [marketplaces.md](marketplaces.md)):
@@ -73,9 +73,9 @@ Vinted is linked by signing in, like Poshmark, Mercari, and Depop
   `Not confirmed` ("couldn't read Vinted"), and the session is kept. Read on the test account
   (2026-11-05): the menu's own profile link is `/member/<id>`, with no login, and is drawn only
   once the menu is opened, so M3's first model of it (a header link with the login) was wrong.
-- **Every listing step stays assisted**, linked or not: the registry serves a linked Vinted
-  session with its automation adapter (`createMarketplaceAdapters`), which only reads, and a kind
-  of step without a script stays the assisted adapter's. The generic fake site
+- **A seller's listing steps stay assisted**, linked or not: the registry serves a linked Vinted
+  session with its automation adapter (`createMarketplaceAdapters`), whose listing scripts (M5,
+  below) run only in the owner's Test mode until they pass live. The generic fake site
   (`FAKE_AUTOMATION_SITE_URL`) serves Vinted only its session check, never its writing scripts.
   A linked Vinted gets no offer read: offers are not built (M7).
 - **Hidden until its live link.** Linking is not on the feature list yet, so Vinted is in
@@ -155,24 +155,108 @@ out, `since`, the history's pages; DataDome, verification required, a rate limit
 Listora doesn't know, a signed-out answer), `phone/health-vinted.int.test.ts` (both reads through
 the phone runtime), `vinted/pages/listing-details.test.ts`, `imports/src/start.test.ts` (hidden
 from a seller, on in Test mode), and `automation/src/adapters.test.ts` (a linked Vinted reads, and
-every listing step stays assisted).
+its listing steps are automated only in Test mode).
 
 Not yet for Vinted:
 
 - AI-written copy of its own: a Vinted listing starts from the item's own title and description.
 - Delist-latency and verified-success alarms (`ALARMED_MARKETPLACES` in `infra/src/config.ts`):
-  the seller delists Vinted by hand, so they join with its automation.
+  a seller delists Vinted by hand until its listing steps pass live, so they join then.
 - Categories (an imported item's), and the order and label pages, until Vinted's pages are
   mapped (M2).
 
+## Create, price, hide, and unhide (M5)
+
+Built, and hidden until their live test: Vinted is in `LISTING_AUTOMATION_NOT_VERIFIED`
+(`packages/marketplaces/src/features.ts`), so on a seller's linked Vinted every listing step stays
+the assisted task above, and only an account in Test mode gets them automated, on its iPhone
+([verified-features.md](verified-features.md), [test-mode.md](test-mode.md)). The executor reads
+the account's gate with the listing's connection (`ConnectionRef.listingAutomation`), and the
+automation adapter reports those kinds assisted without it (`AutomationAdapter.capabilities`).
+
+| Operation | How (`vinted/scripts.ts`)                                                                                                                       | Confirmed by                       |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Create    | The upload form (`/items/new`, `pages/upload-form.ts`), then Upload: the only step that changes anything                                        | The item from Vinted's web API     |
+| Price     | The listing's own read first (a sold one is refused, one in review waits), then the edit form's price (`/items/<id>/edit`), then Save           | The same                           |
+| End       | **Hide** on the listing's page (`pages/item-page.ts`): the listing is kept, with its id and likes. Never a delete                               | The item reads hidden (`ended`)    |
+| Relist    | **Unhide** on the listing's page: the same listing again. Vinted's terms ban deleting and relisting the same item, so a relist never posts anew | The item reads for sale (`active`) |
+| Read      | The item from Vinted's web API (`/api/v2/items/<id>`), or the newest wardrobe listing with the listing's SKU line when Listora has no id        |                                    |
+| Revise    | Not automated: Edit listing stays the seller's in Vinted (`revise` is hidden everywhere)                                                        |                                    |
+
+- **The form, as the script fills it:** up to 20 photos in posting order (each must show on the
+  form, or the step stops), title, description with Listora's SKU line (`SKU: AJ-000184`), the
+  category picked level by level down to one without subcategories, then the fields the category
+  asks for: brand (Vinted's list, matched by name ignoring case and punctuation; Vinted's "No
+  brand" when it lists none), size (the item's label, or one that starts with it, `M` is `M / 38
+/ 10`), condition, up to two colours, and the package size, then the price (`45`, `12.50`).
+- **Package size** sets the buyer's shipping. Vinted's form recommends one for the category,
+  which Listora keeps; a `Package size` aspect (small, medium, large) picks another. A category
+  with no recommendation and a listing that names none is refused before anything is sent
+  (`package_size_required`).
+- **Category** (`vinted/categories.ts`): women's, men's, and unisex clothing, shoes, bags,
+  accessories, and jewellery map to a category of Vinted's Women and Men trees, every target one
+  the upload form offered the test account (its category list, read 2026-11-05 by M2). Vinted
+  files jackets and coats by their kind, which the item's title or name picks (denim, bomber,
+  puffer, trench, ...). Kids', home, and other items, shoes of no kind, and a jacket that names
+  none ask the seller for a category (`variant.categoryRef`, Vinted's names joined with `>`).
+  The map is checked against M2's taxonomy snapshot once it lands.
+- **Conditions** (`payload.ts`): new with tags is "New with tags", new without tags "New without
+  tags", pre-owned excellent "Very good", pre-owned good and new with defects "Good", pre-owned
+  fair "Satisfactory".
+- **Sizes** are Vinted's per category, read on the form: a size the category's list doesn't have
+  is refused before anything is sent (`size_not_offered`, naming a few of its sizes). M2's
+  taxonomy moves this check into validation.
+- **Limits** (`VINTED_LIMITS`, modeled until M2 reads the form): titles of 3 to 100 characters,
+  descriptions up to 2,000 characters with the SKU line (1,929 of the seller's), prices from $1 to
+  $5,000, 20 photos.
+- **No duplicates.** Vinted bans the same item listed twice. A create whose earlier attempt may
+  have posted (`mayHaveApplied`) first reads the newest wardrobe listings for its SKU line and
+  posts nothing when it finds it; an Upload whose page doesn't name the new listing finds it the
+  same way.
+- **Vinted's review.** Vinted reviews every new upload, usually for a minute, sometimes for days.
+  A listing under review reads as not live yet (`inReview`, never "gone"), so the create stays
+  `verifying` with "In Vinted's review" and is never sent again; it succeeds once a read shows it
+  for sale ([operations.md](operations.md)). Vinted won't hide or delete a listing it is
+  reviewing, so an end reads the listing first and waits (`not_yet`, code `in_review`, "Delisting...
+  after Vinted's review"), tried again after a minute at the soonest; a price change waits the
+  same way. Read from the web API's item (`is_processing`, or `is_visible` false while not
+  hidden): modeled until the mapping reads an item under review.
+- **Checks.** Vinted's account verification before listing (`/users/verification`, which M2
+  met on the test account when it picked a category) stops the run like every other check, and
+  the step becomes the seller's task.
+- **Modeled pages.** Only the upload page's path and title and its category field and list were
+  read (M2); the other fields' selectors, the item page's Hide and Unhide, the edit form, and the
+  item's review fields are Listora's model until the mapping reads them. A page that differs
+  stops the step before anything is sent (or, after Upload, leaves it to the read-back), and its
+  fix is one page module.
+- **The phone** needs no new app build: the server hands the app the runtime with the Vinted
+  scripts (`npm run phone:bundle` rebuilds the committed copy).
+
+**The live test** is the captain's, in Test mode, on toniojx only (the scripts first read the
+signed-in member and change nothing for another), once Vinted's seller verification of the
+account is done: list a test item, change its price, end it (Hide), relist it (Unhide), end it
+again, then delete it in Vinted. It removes Vinted from `LISTING_AUTOMATION_NOT_VERIFIED` in the
+change that records it, with the run in the listing actions table of
+[verified-features.md](verified-features.md).
+
+Tests: `vinted/adapter.conformance.int.test.ts` and `phone/conformance-vinted.int.test.ts` (the
+shared conformance suite in Chromium and through the phone runtime: create, price, end, relist,
+read-backs, absences, error mapping, health), `vinted/listing.int.test.ts` (every field, 20
+photos, the mapped category, No brand, the package size kept and picked and missing, a size the
+form lacks, a category without sizes, Vinted's refusal, no second upload, the review's reads and
+waits, a sold listing, Vinted's account verification, a changed form, a Hide that may have gone
+through, and the Test-mode gate), `vinted/payload.test.ts`, `vinted/categories.test.ts`,
+`operations/src/executor.int.test.ts` (a create and a price change in review are never sent
+again, and the gate reaches the adapter), and `operations/src/status-display.test.ts`.
+
 ## Milestones still to come
 
-M3's live link and M4's live import of the test account on the iPhone are still to run (above).
+M3's live link, M4's live import, and M5's live listing on the test account on the iPhone are
+still to run (above).
 
 | #   | Milestone                                                                                                                    |
 | --- | ---------------------------------------------------------------------------------------------------------------------------- |
 | M2  | Map Vinted's pages read-only (upload form, item page, listings, sold orders, offers, labels) and write the taxonomy snapshot |
-| M5  | Create, price, hide (delist), and unhide (relist), each read back; "In Vinted's review" is never "Listed"                    |
 | M6  | Sale checks and auto-delist, with bundles (one order, several items) and escrow completion                                   |
 | M7  | Offers: read, then accept, decline, counter                                                                                  |
 | M8  | Shipping labels and pack check (carrier, label or QR code, ship within 5 business days)                                      |

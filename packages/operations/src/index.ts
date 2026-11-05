@@ -111,6 +111,7 @@ export type { OperationChange, OperationError, OperationRow } from './transition
 export {
   describeListingStatus,
   describeOperation,
+  IN_REVIEW_CODE,
   isRetryableFailure,
   REFUSED_CONTENT_ERROR,
   relistMode,

@@ -101,7 +101,9 @@ from the app
   `MarketplaceAdapter`: kinds with a script are `automation`, the rest assisted, reads are
   `automation`. It maps every way a run ends onto an outcome and never claims more than it
   knows: only an applied script is `confirmed`, a failure after a mutating step is `unknown`,
-  one before it `transient`, a marketplace validation message `rejected`, and a check, a missing
+  one before it `transient`, a marketplace validation message `rejected`, a change the
+  marketplace can't take yet and that sent nothing (`not_yet`: Vinted won't hide a listing it is
+  reviewing) `transient` with its wait, and a check, a missing
   session, or a page the script no longer understands the assisted task (a script throws
   `PageChangedError` when a page's data is not what it reads, which ends the run as
   `element_missing`). The fake site's adapter (`fake-site/`) is the reference and passes the
@@ -133,11 +135,13 @@ from the app
   session; one that uses eBay's API gets the API adapter, and both address the same listings by
   item number and SKU. With only `FAKE_AUTOMATION_SITE_URL` set, development drives the fake site
   instead.
-- **Vinted** (`vinted/`, [vinted.md](vinted.md)) only reads so far, on the seller's iPhone
-  (vinted.com, or the fake Vinted site with `FAKE_VINTED_SITE_URL`): its session check, and the
-  listings an import reads and the sold orders, from Vinted's web API with the session's cookies
-  (`apiGet`'s `pageCookies`). Every Vinted listing step stays the assisted adapter's: its adapter
-  has no listing script, and the generic fake site serves Vinted only its session check.
+- **Vinted** (`vinted/`, [vinted.md](vinted.md)) runs on the seller's iPhone only (vinted.com,
+  or the fake Vinted site with `FAKE_VINTED_SITE_URL`): its session check, the listings an
+  import reads and the sold orders, from Vinted's web API with the session's cookies
+  (`apiGet`'s `pageCookies`), and create, price, end (Hide), and relist (Unhide), each read back
+  from the web API. Those listing steps have not passed live, so they serve only an account in
+  Test mode (`LISTING_AUTOMATION_NOT_VERIFIED`, [verified-features.md](verified-features.md));
+  the generic fake site serves Vinted only its session check.
 - **Routing.** The automation adapters join the marketplace adapters
   (`createMarketplaceAdapters`, its `automation` setting): a marketplace's
   `ConnectionAwareAdapter` serves its automation adapter under an `automation` connection whose

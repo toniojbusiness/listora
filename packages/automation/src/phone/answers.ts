@@ -62,7 +62,12 @@ const foundListing = z.object({
 });
 
 const listingState = z.discriminatedUnion('found', [
-  z.object({ found: z.literal(false), authoritative: z.boolean() }),
+  z.object({
+    found: z.literal(false),
+    authoritative: z.boolean(),
+    // Held back while the marketplace reviews it (Vinted); a runtime older than it sends none.
+    inReview: z.literal(true).optional(),
+  }),
   foundListing,
 ]);
 
@@ -95,6 +100,12 @@ const writeResult = z.discriminatedUnion('type', [
     code: short,
     message: z.string().min(1).max(1_000),
     fixHint: z.string().min(1).max(1_000).optional(),
+  }),
+  z.object({
+    type: z.literal('not_yet'),
+    code: short,
+    message: z.string().min(1).max(1_000),
+    retryAfterMs: z.number().int().min(0).max(86_400_000).optional(),
   }),
 ]);
 

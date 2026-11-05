@@ -32,6 +32,7 @@ import type { EbayAutomationPayload } from '../ebay/payload.ts';
 import { createFakeSiteScripts } from '../fake-site/scripts.ts';
 import { createMercariScripts } from '../mercari/scripts.ts';
 import { createVintedScripts } from '../vinted/scripts.ts';
+import type { VintedListingPayload } from '../vinted/payload.ts';
 import type { MercariListingPayload } from '../mercari/payload.ts';
 import { createPoshmarkScripts } from '../poshmark/scripts.ts';
 import type { PoshmarkListingPayload } from '../poshmark/payload.ts';
@@ -230,8 +231,8 @@ function scriptRunner(
         runScriptCall(scripts, call as ScriptCall<PoshmarkListingPayload>, step);
     }
     case 'vinted': {
-      const scripts = createVintedScripts({ site: { origin } });
-      return (call, step) => runScriptCall(scripts, call, step);
+      const scripts = createVintedScripts({ site: { origin }, photos });
+      return (call, step) => runScriptCall(scripts, call as ScriptCall<VintedListingPayload>, step);
     }
     case 'fake_site': {
       const scripts = createFakeSiteScripts({ site: origin, photos });

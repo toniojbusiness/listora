@@ -19,6 +19,7 @@
  */
 import type { Marketplace } from '@listora/db';
 import {
+  isListingAutomationVerified,
   MARKETPLACE_NAMES,
   type AdapterContext,
   type AssistedAdapter,
@@ -130,6 +131,8 @@ export class AutomationAdapter<
   readonly #name: string;
   readonly #options: AutomationAdapterOptions<P>;
   readonly #capabilities: MarketplaceCapabilities;
+  /** The capabilities while the listing steps stay assisted (`#listingStepsOn`). */
+  readonly #assistedListingCapabilities: MarketplaceCapabilities;
   readonly #log: Logger;
 
   constructor(options: AutomationAdapterOptions<P>) {
@@ -163,10 +166,27 @@ export class AutomationAdapter<
         options.scripts.orders === undefined ? ['email', 'manual'] : ['poll', 'email', 'manual'],
       imageTransport: 'upload',
     };
+    this.#assistedListingCapabilities = {
+      ...this.#capabilities,
+      create: assisted.create,
+      updatePrice: assisted.updatePrice,
+      updateDetails: assisted.updateDetails,
+      delist: assisted.delist,
+      relist: assisted.relist,
+      markSold: assisted.markSold,
+      refresh: 'none',
+    };
   }
 
-  capabilities(): MarketplaceCapabilities {
-    return this.#capabilities;
+  /**
+   * The capabilities under `connection`: a marketplace whose automated listing steps have not
+   * passed live serves them assisted, but on a connection the account may automate them on
+   * (Test mode, `ConnectionRef.listingAutomation`).
+   */
+  capabilities(connection?: ConnectionRef | null): MarketplaceCapabilities {
+    return this.#listingStepsOn(connection)
+      ? this.#capabilities
+      : this.#assistedListingCapabilities;
   }
 
   buildPayload(item: ItemSnapshot, variant: ListingVariant): P {
@@ -186,6 +206,9 @@ export class AutomationAdapter<
   async execute(op: OperationRequest<P>, ctx: AdapterContext): Promise<Outcome> {
     const script = this.#options.scripts[SCRIPT_FOR_KIND[op.kind]];
     if (script === undefined) return this.#assistedTask(op);
+    if (!this.#listingStepsOn(ctx.connection)) {
+      return this.#assistedTask(op, { automation: 'not_verified' });
+    }
     const connection = ctx.connection;
     if (connection === null) return this.#assistedTask(op, { automation: 'no_connection' });
     let run: SessionRun<WriteResult>;
@@ -448,6 +471,16 @@ export class AutomationAdapter<
             ...(value.fixHint === undefined ? {} : { fixHint: value.fixHint }),
             excerpt,
           };
+        case 'not_yet':
+          return {
+            type: 'transient',
+            code: value.code,
+            message: value.message.includes(this.#name)
+              ? value.message
+              : `${this.#name}: ${value.message}`,
+            ...(value.retryAfterMs === undefined ? {} : { retryAfterMs: value.retryAfterMs }),
+            excerpt,
+          };
         default:
           return assertNever(value, 'write result');
       }
@@ -597,6 +630,14 @@ export class AutomationAdapter<
           : session.read(name, script, sessionSignal),
       signal,
     );
+  }
+
+  /**
+   * Whether the listing steps run as scripts under `connection`: always where they passed live,
+   * and otherwise only where the account may automate them (docs/features/verified-features.md).
+   */
+  #listingStepsOn(connection: ConnectionRef | null | undefined): boolean {
+    return isListingAutomationVerified(this.id) || connection?.listingAutomation === true;
   }
 
   #connection(ctx: AdapterContext): NonNullable<AdapterContext['connection']> {

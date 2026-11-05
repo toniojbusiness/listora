@@ -4,7 +4,7 @@
  * in as, and it stops at Vinted's checks (DataDome, a CAPTCHA, a sign-in code, a signed-out
  * session) without ever passing one. It reads the seller's listings for sale for an import and
  * their sold orders for the sales history (M4), only ever with GETs, and stops at a check there
- * too. Every listing step stays the seller's assisted task. No traffic goes to Vinted; the pages
+ * too. The listing steps (M5) are in listing.int.test.ts. No traffic goes to Vinted; the pages
  * and the web API are invented until the mapping (M2) records the real ones.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -14,7 +14,7 @@ import type { AdapterContext } from '@listora/marketplaces';
 import { automationProfile } from '../profiles.ts';
 import { PlaywrightBrowserRunner } from '../runner/browser-runner.ts';
 import { MemoryScreenshotStore } from '../runner/screenshots.ts';
-import { FakeSiteSessions, QUICK_PACING, silentLogger } from '../test-support.ts';
+import { FakeSiteSessions, QUICK_PACING, silentLogger, stubPhotos } from '../test-support.ts';
 import { createVintedAutomationAdapter } from './adapter.ts';
 import {
   FakeVintedSite,
@@ -80,6 +80,7 @@ describe('Vinted automation adapter on the fake Vinted site', () => {
       siteUrl: site.url,
       profile,
       sessions,
+      photos: stubPhotos,
       logger: silentLogger,
     });
   });
@@ -374,20 +375,6 @@ describe('Vinted automation adapter on the fake Vinted site', () => {
       await expect(adapter.listOrdersSince(null, ctx())).rejects.toMatchObject({
         code: 'element_missing',
       });
-    });
-  });
-
-  it('keeps every listing step the seller’s in the Vinted app', () => {
-    expect(adapter.capabilities()).toMatchObject({
-      connect: 'session',
-      create: 'assisted',
-      updatePrice: 'assisted',
-      updateDetails: 'assisted',
-      delist: 'assisted',
-      relist: 'assisted',
-      refresh: 'none',
-      // The sold orders are read (M4); a sale check's delists elsewhere stay hidden (M6).
-      saleDetection: ['poll', 'email', 'manual'],
     });
   });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMarketplaceAdapters, loadDepopConfig, loadEbayConfig } from '@listora/marketplaces';
+import {
+  createMarketplaceAdapters,
+  loadDepopConfig,
+  loadEbayConfig,
+  useMarketplaceFeatures,
+} from '@listora/marketplaces';
 import { createLogger } from '@listora/shared';
 
 import { HttpPhotoSource } from './adapter/photos.ts';
@@ -57,7 +62,7 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     });
   });
 
-  it("reads a linked Vinted's listings and sold orders, and keeps every listing step assisted", () => {
+  it("reads a linked Vinted's listings and sold orders, and automates its listing steps only in Test mode", () => {
     const production = createMarketplaceAdapters({
       fakeMarketplaceUrl: undefined,
       ebay: undefined,
@@ -72,7 +77,7 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     const linked = production.get('vinted');
     expect(linked !== undefined && 'listListings' in linked).toBe(true);
     expect(linked !== undefined && 'listOrdersSince' in linked).toBe(true);
-    expect(production.capabilities('vinted', automated)).toMatchObject({
+    const assisted = {
       connect: 'session',
       create: 'assisted',
       updatePrice: 'assisted',
@@ -81,7 +86,32 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
       relist: 'assisted',
       refresh: 'none',
       saleDetection: ['poll', 'email', 'manual'],
-    });
+    };
+    const automatedSteps = {
+      ...assisted,
+      create: 'automation',
+      updatePrice: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      verifyRead: 'automation',
+    };
+    // A seller's linked Vinted: its listing steps haven't passed live, so they stay assisted, but
+    // for an account in Test mode (docs/features/verified-features.md).
+    useMarketplaceFeatures('verified');
+    try {
+      expect(production.capabilities('vinted', automated)).toMatchObject(assisted);
+      expect(
+        production.capabilities('vinted', { ...automated, listingAutomation: false }),
+      ).toMatchObject(assisted);
+      expect(
+        production.capabilities('vinted', { ...automated, listingAutomation: true }),
+      ).toMatchObject(automatedSteps);
+      // Every other marketplace's passed live, whatever the account.
+      expect(production.capabilities('mercari', automated)?.create).toBe('automation');
+    } finally {
+      useMarketplaceFeatures('all');
+    }
+    expect(production.capabilities('vinted', automated)).toMatchObject(automatedSteps);
     // Without a linked session, Vinted is assisted and reads nothing.
     expect(production.capabilities('vinted', null)).toMatchObject({
       create: 'assisted',
