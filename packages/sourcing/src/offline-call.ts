@@ -103,7 +103,7 @@ export function offlineScanCall(
   return {
     ...identity,
     call: decideCall(
-      { conservativePayoutCents, optimisticPayoutCents, confidence, flagged: false },
+      { conservativePayoutCents, optimisticPayoutCents, flagged: false },
       { worthListingCents: kit.call.worthListing.amountCents },
     ),
     confidence,
