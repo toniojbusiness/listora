@@ -34,6 +34,10 @@ describe('bin codes', () => {
     expect(nextCode(['B-009'])).toBe('B-010');
     expect(nextCode(['GARAGE'])).toBe('B-1');
     expect(nextCode(['GARAGE', 'B-1'])).toBe('B-2');
+    // A series with no room for a longer number falls back to the first free B- code, not B-1.
+    const full = `${'X'.repeat(31)}9`;
+    expect(nextCode([full])).toBe('B-1');
+    expect(nextCode([full, 'B-1', 'B-2'])).toBe('B-3');
   });
 
   it('orders codes as people read them', () => {
