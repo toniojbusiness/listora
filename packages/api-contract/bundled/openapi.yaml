@@ -4408,6 +4408,53 @@ paths:
                 $ref: '#/components/schemas/SourcingKit'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/sourcing/cost:
+    get:
+      tags:
+        - sourcing
+      operationId: getSourcingCost
+      summary: Get where I source
+      description: |
+        Where the household sources and what an item costs there, which the scan's call weighs the
+        payouts against: at the bins (an outlet that sells by the pound) each item's typical weight
+        for its category at `binsPricePerPound`, or at a thrift store its typical shelf price for
+        its category, or `storeItemPrice` when the seller set one. An account that never saved its
+        own gets Listora's default, the bins at $1.99 a pound, with `isDefault` true.
+      responses:
+        '200':
+          description: Where the household sources.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingCost'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - sourcing
+      operationId: replaceSourcingCost
+      summary: Replace where I source
+      description: |
+        Saves where the household sources; the scans made from then on weigh it (scans already made
+        keep their call). A price left out takes Listora's default: $1.99 a pound at the bins, and
+        the typical price by category at a store. A price out of bounds ($0.10 to $20 a pound, $0 to
+        $1,000 an item) or not in USD is `422 validation_failed`. It belongs to the account, so a
+        member who is not its owner or an admin gets `403 forbidden`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingCostReplace'
+      responses:
+        '200':
+          description: The saved setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourcingCost'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/sourcing-runs:
     post:
       tags:
@@ -13044,6 +13091,57 @@ components:
         optimisticPayout:
           $ref: '#/components/schemas/Money'
           description: What `high` pays out after those fees. An estimate.
+    SourcingCost:
+      type: object
+      description: |
+        Where the household sources, which the scan's call weighs each item's likely cost by:
+        `bins`, an outlet that sells by the pound, at `binsPricePerPound` times the item's typical
+        weight for its category; or `store`, a thrift store that prices each item, at
+        `storeItemPrice` when the seller set one, else the typical shelf price for its category.
+        Estimates; the real cost is known at the haul's checkout.
+      required:
+        - mode
+        - binsPricePerPound
+        - isDefault
+      properties:
+        mode:
+          $ref: '#/components/schemas/SourcingMode'
+        binsPricePerPound:
+          $ref: '#/components/schemas/Money'
+          description: The bins' price per pound (Listora's default $1.99), kept while at a store.
+        storeItemPrice:
+          $ref: '#/components/schemas/Money'
+          description: The seller's own price for any item at a store; absent, the typical price by category.
+        isDefault:
+          type: boolean
+          description: True when this is Listora's default, because the seller never saved their own.
+    SourcingCostReplace:
+      type: object
+      additionalProperties: false
+      description: Where the household sources; a price left out takes Listora's default.
+      required:
+        - mode
+      properties:
+        mode:
+          $ref: '#/components/schemas/KnownSourcingMode'
+        binsPricePerPound:
+          $ref: '#/components/schemas/Money'
+          description: $0.10 to $20 a pound, in USD.
+        storeItemPrice:
+          $ref: '#/components/schemas/Money'
+          description: $0 to $1,000 an item, in USD.
+    SourcingMode:
+      description: A `KnownSourcingMode`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSourcingMode'
+        - type: string
+          maxLength: 64
+    KnownSourcingMode:
+      type: string
+      description: '`bins`: an outlet that sells by the pound. `store`: a thrift store that prices each item.'
+      enum:
+        - bins
+        - store
     SourcingRunCreate:
       type: object
       additionalProperties: false
@@ -13786,9 +13884,11 @@ components:
     ScanCall:
       type: object
       description: |
-        Buy, Your call, or Skip, from resale value only: whether the item pays out at least the
-        worth-listing amount after the marketplace's fees. Always shown with its confidence and
-        `basedOn`.
+        Buy, Your call, or Skip: whether the item pays out at least the worth-listing amount after
+        the marketplace's fees, and for a Buy over the item's likely cost where the household
+        sources too (`sourcing`). A Buy needs no flag and, at any confidence, an estimate some other source backs (an
+        unsure read of a clearly valuable item is still a Buy). Always shown with its confidence
+        and `basedOn`.
       required:
         - call
         - label
@@ -13840,6 +13940,8 @@ components:
           description: The least payout worth buying for.
         prices:
           $ref: '#/components/schemas/ScanPrices'
+        sourcing:
+          $ref: '#/components/schemas/ScanSourcing'
         signals:
           type: array
           description: |
@@ -13850,6 +13952,30 @@ components:
           maxItems: 16
           items:
             $ref: '#/components/schemas/ScanSignal'
+    ScanSourcing:
+      type: object
+      description: |
+        What the item likely costs where the household sources (`getSourcingCost`), which a Buy's
+        low end must pay out over on top of the worth-listing amount.
+      required:
+        - cost
+        - mode
+        - label
+        - basedOn
+      properties:
+        cost:
+          $ref: '#/components/schemas/Money'
+          description: An estimate, from the item's category.
+        mode:
+          $ref: '#/components/schemas/SourcingMode'
+        label:
+          type: string
+          maxLength: 60
+          description: As the card says it ("Bins cost about $1.49").
+        basedOn:
+          type: string
+          maxLength: 200
+          description: What it rests on ("About 0.75 lb for a dress, at your $1.99 a pound").
     ScanCallKind:
       description: A `KnownScanCallKind`, or one added after this client was built (shown by `label`).
       anyOf:
@@ -13965,7 +14091,8 @@ components:
         `own_sales`: the household's own sales like it. `market_sold`: a marketplace's sold
         listings of close matches. `asking`: what listings like it ask now (never sold prices). `retail`: the
         original retail price. `web`: what the web's listings ask (never sold prices).
-        `brand_pulse`: what the wider web says of the brand. `missing`: a source not checked.
+        `brand_pulse`: what the wider web says of the brand. `cost`: what the item likely costs
+        where the household sources. `missing`: a source not checked.
       enum:
         - own_sales
         - market_sold
@@ -13973,6 +14100,7 @@ components:
         - retail
         - web
         - brand_pulse
+        - cost
         - missing
     ScanConfidence:
       description: A `KnownScanConfidence`, or one added after this client was built.
@@ -13999,8 +14127,8 @@ components:
         in a marketplace's public search (eBay's, Poshmark's, or Mercari's sold listings,
         `comparisons`), when the household's own sales are too few. `web_info`: what web pages say
         such items resell for (the research, with its sites), never a high-confidence call.
-        `ai_estimate`: the AI's estimate alone, never a high-confidence Buy. `none`: nothing to go
-        on.
+        `ai_estimate`: the AI's estimate, never high confidence, and never a Buy when no other
+        source backs it. `none`: nothing to go on.
       enum:
         - own_history
         - market_sold
@@ -14061,7 +14189,8 @@ components:
         by web pages (it never moves the call). `calibrated`: the AI
         estimate and the web's asking prices were scaled by what the household's own items went for
         against what they asked. `prices`: the three prices (`ScanCall.prices`) for a client
-        built before them.
+        built before them. `cost`: what the item likely costs where the household sources
+        (`ScanCall.sourcing`).
       enum:
         - retail
         - new_with_tags
@@ -14075,6 +14204,7 @@ components:
         - calibrated
         - prices
         - missing
+        - cost
     ScanRetail:
       type: object
       description: |

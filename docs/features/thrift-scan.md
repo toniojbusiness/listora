@@ -63,7 +63,10 @@ Code:
 
 ## The call
 
-The call judges resale value only: no cost or margin, since a haul's price is known only at
+The call weighs what an item pays out against what it likely costs where the household sources
+([What it costs](#what-it-costs)). At the bins that cost is about a dollar or two, so a clearly
+valuable item is a Grab even when the exact model is unsure (the captain, 2026-11-04: "a $100
+dress was a 'maybe' that is an instant 'grab'"). The real cost is known only at the haul's
 checkout ([hauls.md](hauls.md)).
 
 1. **The range.** The seller's own matching sales, from the low to the high quartile, when at
@@ -82,18 +85,64 @@ checkout ([hauls.md](hauls.md)).
 3. **The confidence.** High: at least 5 sales of the same brand and category and an
    identification at least 0.8 sure. Medium: a match on the brand and an identification at
    least 0.6 sure. Low: a match on the category only, an unsure identification, or the AI
-   estimate alone (which therefore never makes a Buy). On eBay's sold listings: high with at
+   estimate alone. The web's asks: medium with an identification at least 0.8 sure and 2 sites,
+   else low. On eBay's sold listings: high with at
    least 10 sold of the exact model (`highMarketSold`) and an identification at least 0.8 sure,
    medium with one at least 0.6 sure, low otherwise. Slowing own sales, or an eBay search that
    sells slowly, keep a call from high.
-4. **The call.** **Skip** when even the high end pays out less than the worth-listing amount.
-   **Buy** when the low end pays out at least that, the confidence is medium or high, and the AI
-   raised no flag (visible damage, a lot or bundle, a counterfeit-prone brand). **Your call**
-   otherwise.
+4. **The call** (`scanCall`, its rule `decideCall`; 2026-11-05).
+   - **Grab** (`buy`) when even the low end pays out at least the worth-listing amount plus the
+     item's likely cost, and the AI raised no flag (visible damage, a lot or bundle, a
+     counterfeit-prone brand). At any confidence: the confidence is shown beside it, and the why
+     says "though the exact item is unsure" when it is low.
+   - Unless it rests on an estimate standing alone: a range from the web's asks or the AI
+     estimate is no Grab when every other source that prices the item says it pays less (its
+     high end, after fees and the cost, under the line: the household's own sales like it even
+     when too few for a range, each marketplace's sold listings and asks, the web's asks, the AI
+     estimate, and the retail price), nor when it is the AI estimate with no other source at all.
+     The why says what it rests on: "Pays out $27-$54 after fees on the AI estimate, but your
+     sales like it say less", "... on the AI estimate alone, with nothing to check it". The web's
+     asks with nothing else may Grab: they are listings on real sites.
+   - **Leave** (`skip`) when even the high end pays out less than the worth-listing amount. The
+     cost does not raise this line: a wrong Leave throws away an item that would have paid, while
+     at the bins the cost is small, and with the cost on it the backtest's Leaves held 3 times in
+     7, against 2 in 2 without ([Results, 2026-11-05](#results-2026-11-05-the-call-at-the-bins)).
+   - **Maybe** (`your_call`) otherwise: the range straddles the line, a flag needs a look, or
+     that lone estimate.
+
+   Until 2026-11-05 a Buy also needed medium or high confidence, which an unsure read never
+   reached: across all 46 live scans to then (2026-10-31 to 11-04) there were no Grabs, and about
+   25 Maybes cleared the line even at their low end with no flag.
 
 **Wording.** The call always shows its confidence and what it rests on ("Your 5 sales like it",
 "Sold listings on eBay: 9 like it in the last 14 days", or the AI estimate's label). Ranges are quartiles, never one price, and "sold" appears only next
 to real sold data (a unit test checks the call's wording with `claimsSoldData`).
+
+### What it costs
+
+Where the household sources is a setting (`getSourcingCost`, `replaceSourcingCost` at
+`/v1/sourcing/cost`, table `sourcing_cost`, owner or admin to change it; no row means the
+default), and `itemCost` in `@listora/sourcing` (`cost.ts`) turns it into one item's likely cost
+by the read's category:
+
+- **The bins** (`bins`, the default): outlets that sell by the pound. The item's typical weight
+  for its category times the price per pound, **$1.99 a pound** by default: Goodwill's outlets
+  price most goods by weight at about $0.49 to $1.89 a pound depending on the location
+  (Wikipedia, "Goodwill Industries", read 2026-11-05), so the default sits just above that range
+  and never understates the cost. The weights are rough, common figures for one used adult
+  garment: a T-shirt 0.35 lb, a dress 0.75 lb, jeans 1.4 lb, a sweater 1 lb, a hoodie 1.25 lb, a
+  jacket 2 lb, a coat 3 lb, sneakers 2 lb, boots 3.5 lb, a handbag 1.3 lb; a category not in the
+  table takes its group's, else 1 lb. At bins prices a pound either way moves the cost by about
+  $2. A seller can set their own price, $0.10 to $20 a pound.
+- **A thrift store** (`store`): the typical shelf price for the category at a chain thrift store
+  (tops $5, sweaters $7, bottoms $7, a dress $8, outerwear $12, a coat $15, shoes $10, a bag $8,
+  else $6), or the seller's own price for any item ($0 to $1,000).
+
+The call adds the cost to the Grab's line ("Even its low end pays out $41 after fees, over your
+$8 plus its $1.49 bins cost"), carries it as `ScanCall.sourcing` and a `cost` signal, and the
+card's reality check says it ("Bins cost about $1.49: about 0.75 lb for a dress, at your $1.99 a
+pound"). The setting moves scans made after it is saved; a scan's call stays as made. Settings on
+the iPhone has no screen for it yet (Open items); until then every account is on the default.
 
 ## Three prices
 
@@ -192,9 +241,11 @@ sweater ... Verdict: KEEP IT"):
 - **The verdict first**, stamped big in its color: **Grab** (green, `buy`), **Maybe** (amber,
   `your_call`, with "Your call" beside it: the seller decides), **Leave** (red, `skip`), with its
   one-line why (`ScanCall.why`, `callWhy` in `@listora/sourcing`): "Even its low end pays out $11
-  after fees, over your $8", "Pays out $5-$12 after fees: it may or may not clear your $8", "Pays
-  out $9-$15 after fees, but often faked: check it's real", "Pays out $6 at most after fees, under
-  your $8". The rule is unchanged ("The call" above); only its words are.
+  after fees, over your $8 plus its $1.49 bins cost" (with ", though the exact item is unsure" on
+  an unsure read), "Pays out $5-$12 after fees: it may or may not clear your $8 plus its $1.49
+  bins cost", "Pays out $9-$15 after fees, but often faked: check it's real", "Pays out $9-$15
+  after fees on the web's asks, but Depop's asks say less", "Pays out $6 at most after fees,
+  under your $8" ("The call" above).
 - **What it is**: the brand and item, then the size, material, era, and condition when known
   ("Size L · Wool · Vintage 1990s · Pre-owned good"); while the prices wait, how sure the read is
   ("Sure of what it is").
@@ -207,7 +258,8 @@ sweater ... Verdict: KEEP IT"):
   listings ask now said to be asks ("Depop asks $15-$25 now, 6 like it for sale (asks, not
   sales)", "Listings on the web ask $30-$50 (poshmark.com)"), the original retail price ("Retail
   about $98 (levi.com)"), the brand's pulse in one line ("Levi's is in demand on the web: ..."),
-  and what could not be checked. The label guard holds it: a line of the household's own sales
+  what the item likely costs where the household sources ("Bins cost about $1.49: about 0.75 lb
+  for a dress, at your $1.99 a pound"), and what could not be checked. The label guard holds it: a line of the household's own sales
   says "sold" only with such sales, one of sold listings only under their label with a comparison
   of them, and no other line says it.
 - No walls of labels: the per-marketplace own-sales rows, the AI estimate row, the web info block,
@@ -482,6 +534,38 @@ What it found, and why it was not shipped:
   to the error): the web's market for these brands, eBay's sold listings among them, pays more
   than this seller's Depop buyers. That gap is per seller, which is what calibrating a range by
   the seller's own sale-to-ask ratio addresses, not a better web search.
+
+### Results, 2026-11-05: the call at the bins
+
+The rule above ("The call", 2026-11-05) against the one before it (a Buy needed medium or high
+confidence; no cost), on the same 64 sales and the same stored reads and research, replayed with
+`--replay` (no AI spend): `anthropic-1img-research` (1 photo, with web research) and
+`anthropic-2img-2026-11-02` (2 photos, no research). Both rules are scored the same way: a Grab
+held when the item's payout, less its bins cost by its labeled category at $1.99 a pound, reached
+$8; a Leave held when it did not. 41 of the 64 sales (64%) paid that much, so a Grab that holds
+less often than 64% is no better than grabbing everything.
+
+| `calibrated` (the call at the store) | Before: Grab | held    | Leave | held | After: Grab | held     | Leave | held |
+| ------------------------------------ | ------------ | ------- | ----- | ---- | ----------- | -------- | ----- | ---- |
+| 1 photo, with research               | 10           | 9 (90%) | 2     | 2    | 19          | 15 (79%) | 2     | 2    |
+| 2 photos                             | 11           | 9 (82%) | 1     | 0    | 16          | 13 (81%) | 1     | 0    |
+
+- **More of the items that paid are Grabs**: 15 of the 41 against 9 on one photo, 13 against 9
+  on two, holding about 80% of the time, well over the 64% base rate. The Grabs that missed
+  mostly missed narrowly (a payout less cost of $4 to $7 against $8).
+- **Leaves are unchanged** with the cost kept off the Leave's line. With it on the line the
+  Leaves rose to 7 and held 3 (1 photo), 3 and held 0 (2 photos), so it stays off.
+- **The `ai` variant** (no calibration) went from 11 Grabs holding 9 to 24 holding 17 (71%) on
+  one photo; **`labels`** (an own-history-only call with sure labels) from 15 holding 10 to 25
+  holding 15 (60%): a category-level match of the household's own sales is a loose range.
+- **An AI estimate with nothing to check it** is a Maybe; on these reads that changed one Grab
+  on one photo (a miss) and two on two photos (both held) in the `ai` variant, and none in
+  `calibrated`, so the data cannot settle it. It is kept for the rule's other aim: no single
+  unverified number makes a Grab on its own.
+- The set is every one a sale, cheap mall brands at a $13.50 median; it says how well Grab picks
+  items that pay, not whether a Leave would have sold. The $100 dress of the captain's report is
+  a unit test with invented fixtures (`call.test.ts`, "grabs a clearly valuable dress on an
+  unsure read").
 
 ## The scan at the store (M2)
 
@@ -1693,6 +1777,16 @@ reads every shot as the same shirt); the iPhone simulator scans with the debug f
   on the kit's brand counts, which count only brands that sold; comparing a shot's feature print
   with the unsold items' photos (the plan's fuller check) needs their prints on the iPhone and
   is not built. No "unsold for N days": an imported listing's date is when Listora read it.
+- **Where the household sources, on the iPhone.** `getSourcingCost` and `replaceSourcingCost`
+  are built and the call uses them, but Settings has no screen for them yet: a new iPhone build
+  adds one (bins or store, the price per pound, the price per item). Until then every account is
+  on the bins at $1.99 a pound.
+- **The offline call's copy of the rule** (`OfflineScanCall.swift`) still has the confidence
+  gate the server's dropped. It never sees low confidence (its range is always medium), so its
+  calls equal the server's (the golden cases hold); drop it with the next iPhone change there.
+- **No own-history basis on live scans**: none of the 46 live scans to 2026-11-04 rested on the
+  household's own sales, even on the account with 68 of them. Worth checking whether the read's
+  category paths match the sales' or `ownSalesMarketplaces` leaves them out.
 - **Later milestones:** upgrading a run's drafts (M6) is built; its live test is the captain
   listing a run's draft on `tonioreign`.
 

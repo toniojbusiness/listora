@@ -71,6 +71,16 @@ export function callDetail(input: {
             basedOn: rule.prices.basedOn,
           },
         }),
+    ...(rule.cost === undefined
+      ? {}
+      : {
+          sourcing: {
+            cost: usd(rule.cost.cents),
+            mode: rule.cost.mode,
+            label: rule.cost.label,
+            basedOn: rule.cost.basedOn,
+          },
+        }),
     // The three prices lead the signals too, so an app built before `prices` shows them.
     signals: [
       ...(rule.prices === undefined ? [] : [pricesSignal(rule.prices)]),

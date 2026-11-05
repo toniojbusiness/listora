@@ -2,9 +2,10 @@
  * The scan card's reality check (docs/features/thrift-scan.md, "The card"): what the prices
  * rest on, in short plain lines a seller reads at a glance, like a friend who checked: their own
  * sales like it, sold listings elsewhere, what listings ask now, the original retail price, the
- * brand's pulse, and any source that could not be checked. Every line is made from the scan's
- * own data; "sold" appears only on the household's own sales and a marketplace's sold listings
- * (the label guard, `scanLabelViolations`, holds it).
+ * brand's pulse, what the item likely costs where the household sources, and any source that
+ * could not be checked. Every line is made from the scan's own data; "sold" appears only on the
+ * household's own sales and a marketplace's sold listings (the label guard,
+ * `scanLabelViolations`, holds it).
  */
 import type { ItemScan, ScanRealityLine } from '@listora/api-contract';
 import type { BrandPulse } from '@listora/analysis';
@@ -73,6 +74,10 @@ export function realityCheck(
       text: `${brand} is ${PULSE_WORDS[pulse.verdict]} on the web: ${pulse.reason.replace(/[.]$/, '')}`,
     });
   }
+  const cost = view.call.sourcing;
+  if (cost !== undefined) {
+    lines.push({ kind: 'cost', text: `${cost.label}: ${lowerFirst(cost.basedOn)}` });
+  }
   for (const source of pricing.missing) lines.push({ kind: 'missing', text: source.label });
   return lines.slice(0, 10).map((line) => ({ ...line, text: clip(line.text) }));
 }
@@ -110,4 +115,9 @@ function marketplaceName(marketplace: ItemScan['ownSales'][number]['marketplace'
     default:
       return marketplace;
   }
+}
+
+/** "about 0.75 lb ...": a basedOn as the second half of a line. */
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
 }

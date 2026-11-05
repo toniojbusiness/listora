@@ -15,6 +15,7 @@ import {
   type ScanCallInput,
   type ScanCallSettings,
 } from './call.ts';
+import { DEFAULT_SOURCING_COST, itemCost } from './cost.ts';
 import type { MatchLevel, OwnHistoryComparisons } from './own-history.ts';
 
 const settings: ScanCallSettings = { ...DEFAULT_SCAN_CALL_SETTINGS, worthListingCents: 1_000 };
@@ -141,7 +142,7 @@ describe("scanCall with a marketplace's sold listings", () => {
     expect(thin).toMatchObject({ basis: 'ai_estimate', confidence: 'low' });
   });
 
-  it('is high confidence only with many sold of the exact model and a sure read', () => {
+  it('is high confidence only with many sold of the exact model and a sure read, and buys at any', () => {
     expect(scanCall(input({ markets: [ebaySold(10)] }), settings).confidence).toBe('high');
     expect(scanCall(input({ markets: [ebaySold(10, 'type')] }), settings).confidence).toBe(
       'medium',
@@ -151,7 +152,7 @@ describe("scanCall with a marketplace's sold listings", () => {
     ).toBe('medium');
     expect(
       scanCall(input({ identityConfidence: 0.5, markets: [ebaySold(10)] }), settings),
-    ).toMatchObject({ call: 'your_call', confidence: 'low' });
+    ).toMatchObject({ call: 'buy', confidence: 'low' });
   });
 
   it("keeps a call from high confidence where the marketplace's sold pace reads slow", () => {
@@ -234,9 +235,13 @@ describe('scanCall', () => {
     expect(confidence({ ownHistory: history(1_200, 2_000), identityConfidence: 0.5 })).toBe('low');
   });
 
-  it('never buys on a low-confidence read', () => {
+  it('buys on a low-confidence read when even its low end pays, saying the item is unsure', () => {
     const call = scanCall(input({ ownHistory: history(1_200, 2_000, 9, 'category') }), settings);
-    expect(call).toMatchObject({ call: 'your_call', confidence: 'low' });
+    expect(call).toMatchObject({
+      call: 'buy',
+      confidence: 'low',
+      why: 'Even its low end pays out $11 after fees, over your $10, though the exact item is unsure',
+    });
   });
 
   it('never buys a flagged item', () => {
@@ -267,7 +272,7 @@ describe('scanCall', () => {
         basedOn:
           'Likely sale is the middle of the AI estimate, fast sale its low end; list at leaves room for offers (items usually go for about 75% of what they ask)',
       },
-      why: 'Pays out $14-$27 after fees, but on little to go on',
+      why: 'Pays out $14-$27 after fees on the AI estimate, but your sales like it say less',
       signals: [],
     });
     const low = { lowCents: 300, midCents: 500, highCents: 800 };
@@ -436,11 +441,14 @@ describe('scanCall', () => {
         basedOn: 'Web info - not sold listings: poshmark.com, ebay.com',
       },
     ]);
-    // One site, or an unsure read: low confidence, so never a Buy.
+    // One site, or an unsure read: low confidence, still a Buy when even its low end pays.
     expect(scanCall(input({ web: { ...web, sites: ['ebay.com'] } }), settings).confidence).toBe(
       'low',
     );
-    expect(scanCall(input({ web, identityConfidence: 0.7 }), settings).call).toBe('your_call');
+    expect(scanCall(input({ web, identityConfidence: 0.7 }), settings)).toMatchObject({
+      call: 'buy',
+      confidence: 'low',
+    });
     // Web info with no site behind it is nothing to go on.
     expect(scanCall(input({ web: { ...web, sites: [] } }), settings).basis).toBe('none');
     // The household's own sales come first.
@@ -723,6 +731,11 @@ describe('scanCall three prices', () => {
 });
 
 describe('callWhy', () => {
+  const binsDress = itemCost('clothing/dresses/dresses');
+  const storeDress = itemCost('clothing/dresses/dresses', {
+    ...DEFAULT_SOURCING_COST,
+    mode: 'store',
+  });
   const flags = { visibleDamage: false, lotOrBundle: false, counterfeitProne: false };
   const worth = { worthListingCents: 800 };
   const payouts = (
@@ -740,7 +753,27 @@ describe('callWhy', () => {
       callWhy('buy', payouts(1_100, 1_800), flags, worth),
       callWhy('skip', payouts(300, 640), flags, worth),
       callWhy('your_call', payouts(500, 1_200), flags, worth),
-      callWhy('your_call', payouts(900, 1_500, 'low'), flags, worth),
+      callWhy('buy', payouts(1_100, 1_800, 'low'), flags, worth),
+      callWhy('buy', payouts(1_100, 1_800), flags, worth, { cost: binsDress }),
+      callWhy('skip', payouts(300, 640), flags, worth, { cost: binsDress }),
+      callWhy('your_call', payouts(500, 1_200), flags, worth, { cost: storeDress }),
+      callWhy('your_call', payouts(900, 1_500), flags, worth, {
+        unsupported: {
+          kind: 'disagreed',
+          estimate: "the web's asks",
+          by: { name: "Depop's asks", plural: true },
+        },
+      }),
+      callWhy('your_call', payouts(900, 1_500), flags, worth, {
+        unsupported: {
+          kind: 'disagreed',
+          estimate: 'the AI estimate',
+          by: { name: 'the retail price', plural: false },
+        },
+      }),
+      callWhy('your_call', payouts(900, 1_500), flags, worth, {
+        unsupported: { kind: 'alone', estimate: 'the AI estimate' },
+      }),
       callWhy('your_call', payouts(900, 1_500), { ...flags, visibleDamage: true }, worth),
       callWhy('your_call', payouts(900, 1_500), { ...flags, counterfeitProne: true }, worth),
       callWhy('your_call', payouts(900, 1_500), { ...flags, lotOrBundle: true }, worth),
@@ -749,7 +782,13 @@ describe('callWhy', () => {
       'Even its low end pays out $11 after fees, over your $8',
       'Pays out $6 at most after fees, under your $8',
       'Pays out $5-$12 after fees: it may or may not clear your $8',
-      'Pays out $9-$15 after fees, but on little to go on',
+      'Even its low end pays out $11 after fees, over your $8, though the exact item is unsure',
+      'Even its low end pays out $11 after fees, over your $8 plus its $1.49 bins cost',
+      'Pays out $6 at most after fees, under your $8',
+      'Pays out $5-$12 after fees: it may or may not clear your $8 plus its $8 store price',
+      "Pays out $9-$15 after fees on the web's asks, but Depop's asks say less",
+      'Pays out $9-$15 after fees on the AI estimate, but the retail price says less',
+      'Pays out $9-$15 after fees on the AI estimate alone, with nothing to check it',
       'Pays out $9-$15 after fees, but it shows damage',
       "Pays out $9-$15 after fees, but often faked: check it's real",
       "Pays out $9-$15 after fees, but it's a lot or bundle",
@@ -764,5 +803,173 @@ describe('callWhy', () => {
     expect(callWhy('your_call', payouts(-50, -50), flags, worth)).toBe(
       'Pays out $0 after fees: it may or may not clear your $8',
     );
+  });
+});
+
+describe('scanCall weighed against what the item costs at the bins', () => {
+  const dressAtTheBins = itemCost('clothing/dresses/dresses');
+
+  it('raises the Grab line by the cost, and leaves the Leave line where it is', () => {
+    const cost = { ...dressAtTheBins, cents: 300 };
+    const grab = scanCall(input({ ownHistory: history(1_200, 2_000) }), settings);
+    expect(grab.call).toBe('buy');
+    const costly = scanCall(input({ ownHistory: history(1_200, 2_000), cost }), settings);
+    expect(costly).toMatchObject({
+      call: 'your_call',
+      why: 'Pays out $11-$18 after fees: it may or may not clear your $10 plus its $3 bins cost',
+    });
+    // A high end that pays out the worth-listing amount is never a Leave, whatever the cost.
+    const near = scanCall(input({ ownHistory: history(500, 1_150), cost }), settings);
+    expect(near.call).toBe('your_call');
+    expect(scanCall(input({ ownHistory: history(500, 1_100), cost }), settings)).toMatchObject({
+      call: 'skip',
+      why: 'Pays out $10 at most after fees, under your $10',
+    });
+  });
+
+  it('shows the cost with the call, as a signal saying what it rests on', () => {
+    const call = scanCall(
+      input({ ownHistory: history(1_400, 2_000), cost: dressAtTheBins }),
+      settings,
+    );
+    expect(call.cost).toEqual(dressAtTheBins);
+    expect(call.signals).toContainEqual({
+      kind: 'cost',
+      label: 'Bins cost about $1.49',
+      basedOn: 'About 0.75 lb for a dress, at your $1.99 a pound',
+    });
+    expect(call.why).toBe(
+      'Even its low end pays out $13 after fees, over your $10 plus its $1.49 bins cost',
+    );
+  });
+
+  // The captain's report (2026-11-04): a navy maxi dress at the bins came back "Maybe" on a
+  // 0.7-sure read with the web's asks, Depop's asks, one Poshmark sale, and a $250 retail all
+  // well over the line. Invented fixtures with the same shape.
+  it('grabs a clearly valuable dress on an unsure read, saying the item is unsure', () => {
+    const call = scanCall(
+      {
+        identityConfidence: 0.7,
+        flags: NO_FLAGS,
+        fees: tenPercent,
+        calibration: { saleToAsking: 0.75, sales: 0 },
+        namedBrand: true,
+        aiEstimate: { lowCents: 1_500, midCents: 2_500, highCents: 4_000 },
+        retail: { lowCents: 25_000, highCents: 25_000, from: 'web', site: 'example-boutique.com' },
+        web: {
+          lowCents: 8_000,
+          highCents: 17_200,
+          sites: ['poshmark.com', 'ebay.com', 'vestiairecollective.com'],
+          reputation: 'unknown',
+        },
+        markets: [
+          { marketplace: 'Depop', asking: { count: 21, lowCents: 5_500, highCents: 12_500 } },
+          {
+            marketplace: 'Poshmark',
+            asking: { count: 45, lowCents: 7_600, highCents: 17_500 },
+            sold: { count: 1, lowCents: 10_000, highCents: 10_000, windowDays: 67, level: 'type' },
+          },
+        ],
+        cost: dressAtTheBins,
+      },
+      DEFAULT_SCAN_CALL_SETTINGS,
+    );
+    expect(call).toMatchObject({
+      call: 'buy',
+      confidence: 'low',
+      basis: 'web_info',
+      range: { lowCents: 4_500, highCents: 9_675 },
+      why: 'Even its low end pays out $41 after fees, over your $8 plus its $1.49 bins cost, though the exact item is unsure',
+    });
+    expect(claimsSoldData(call.why)).toBe(false);
+    // The same dress with a flag is the seller's call.
+    const torn = scanCall(
+      input({
+        identityConfidence: 0.7,
+        web: { lowCents: 8_000, highCents: 17_200, sites: ['poshmark.com'], reputation: 'unknown' },
+        flags: { ...NO_FLAGS, visibleDamage: true },
+        cost: dressAtTheBins,
+      }),
+      DEFAULT_SCAN_CALL_SETTINGS,
+    );
+    expect(torn).toMatchObject({
+      call: 'your_call',
+      why: 'Pays out $72-$155 after fees, but it shows damage',
+    });
+  });
+
+  it('makes no Grab of an AI estimate every other source says pays less, and says what it rests on', () => {
+    const call = scanCall(
+      input({
+        identityConfidence: 0.4,
+        aiEstimate: { lowCents: 3_000, midCents: 4_500, highCents: 6_000 },
+        ownHistory: history(400, 600, 2),
+        markets: [{ marketplace: 'Depop', asking: { count: 3, lowCents: 500, highCents: 900 } }],
+        cost: dressAtTheBins,
+      }),
+      settings,
+    );
+    expect(call).toMatchObject({
+      call: 'your_call',
+      basis: 'ai_estimate',
+      why: 'Pays out $27-$54 after fees on the AI estimate, but your sales like it say less',
+    });
+    // One source that agrees is enough: Depop's asks clear the line.
+    const backed = scanCall(
+      input({
+        identityConfidence: 0.4,
+        aiEstimate: { lowCents: 3_000, midCents: 4_500, highCents: 6_000 },
+        ownHistory: history(400, 600, 2),
+        markets: [
+          { marketplace: 'Depop', asking: { count: 3, lowCents: 2_000, highCents: 4_000 } },
+        ],
+        cost: dressAtTheBins,
+      }),
+      settings,
+    );
+    expect(backed.call).toBe('buy');
+  });
+
+  it("makes no Grab of an AI estimate with nothing to check it, but grabs on the web's asks alone", () => {
+    const alone = scanCall(
+      input({ aiEstimate: { lowCents: 3_000, midCents: 4_500, highCents: 6_000 } }),
+      settings,
+    );
+    expect(alone).toMatchObject({
+      call: 'your_call',
+      why: 'Pays out $27-$54 after fees on the AI estimate alone, with nothing to check it',
+    });
+    const web = scanCall(
+      input({
+        identityConfidence: 0.5,
+        web: { lowCents: 3_000, highCents: 6_000, sites: ['ebay.com'], reputation: 'unknown' },
+      }),
+      settings,
+    );
+    expect(web).toMatchObject({ call: 'buy', confidence: 'low' });
+  });
+
+  it("makes no Grab of the web's asks every other source says pays less", () => {
+    const call = scanCall(
+      input({
+        web: {
+          lowCents: 3_000,
+          highCents: 6_000,
+          sites: ['ebay.com', 'poshmark.com'],
+          reputation: 'unknown',
+        },
+        markets: [
+          {
+            marketplace: 'eBay',
+            sold: { count: 3, lowCents: 400, highCents: 900, windowDays: 30, level: 'type' },
+          },
+        ],
+      }),
+      settings,
+    );
+    expect(call).toMatchObject({
+      call: 'your_call',
+      why: "Pays out $27-$54 after fees on the web's asks, but eBay's sold listings say less",
+    });
   });
 });

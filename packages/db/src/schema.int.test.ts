@@ -750,6 +750,14 @@ const COLUMNS = {
     'updated_at',
   ],
   description_style: ['account_id', 'depop', 'created_at', 'updated_at'],
+  sourcing_cost: [
+    'account_id',
+    'mode',
+    'bins_price_per_pound_cents',
+    'store_item_cents',
+    'created_at',
+    'updated_at',
+  ],
   feature_test_run: [
     'id',
     'account_id',

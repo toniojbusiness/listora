@@ -7,6 +7,8 @@ import {
 import {
   calibratedWebAsks,
   DEFAULT_SCAN_CALL_SETTINGS,
+  DEFAULT_SOURCING_COST,
+  itemCost,
   MATCH_LEVELS,
   brandKey,
   priceCalibration,
@@ -26,6 +28,7 @@ import {
   type ScanCallKind,
   type ScanCallSettings,
   type ScanIdentity,
+  type SourcingCostSettings,
 } from '@listora/sourcing';
 import type { ThriftScan } from '@listora/analysis';
 
@@ -57,6 +60,11 @@ export interface ScanBacktestOptions {
   /** The web research after each read (with a reader only); without one the call has no web info. */
   readonly researcher?: ScanResearcher;
   readonly settings?: ScanCallSettings;
+  /**
+   * Where the household sources (default: the bins at $1.99 a pound): each call weighs the
+   * item's likely cost there, and a call is scored against the payout less that cost.
+   */
+  readonly sourcingCost?: SourcingCostSettings;
   readonly worthSweepCents?: readonly number[];
 }
 
@@ -65,6 +73,8 @@ export interface ItemResult {
   readonly salePriceCents: number;
   /** What the seller got: the sale price less the actual fees, or the estimated ones. */
   readonly payoutCents: number;
+  /** What the item likely cost where the household sources, by its labeled category. */
+  readonly costCents: number;
   readonly read: ScanRead | undefined;
   /** The web research of the read, when one ran and the read had a brand. */
   readonly research?: ResearchRead | undefined;
@@ -127,7 +137,10 @@ export interface CallScores {
   readonly counts: Readonly<Record<ScanCallKind, number>>;
   readonly byConfidence: Readonly<Record<CallConfidence, number>>;
   readonly byBasis: Readonly<Record<CallBasis, number>>;
-  /** Buys that really paid out the worth-listing amount, and Skips that really paid less. */
+  /**
+   * Buys whose payout, less the item's likely cost, really reached the worth-listing amount, and
+   * Skips whose payout less the cost really fell short.
+   */
   readonly buyHeld: number;
   readonly skipHeld: number;
 }
@@ -177,12 +190,17 @@ export interface ScanBacktestReport {
     readonly medianPayoutCents: number;
     /** Items with actual fees, and their total against the fee table's estimate. */
     readonly feeCalibration: FeeCalibration | null;
-    /** Items whose payout is at least each worth amount: the share a perfect call buys. */
+    /**
+     * Items whose payout, less their likely cost, is at least each worth amount: the share a
+     * perfect call buys.
+     */
     readonly worthShare: readonly { worthListingCents: number; items: number }[];
   };
   readonly reader: { readonly id: string; readonly description: string } | null;
   readonly researcher: { readonly id: string; readonly description: string } | null;
   readonly settings: ScanCallSettings;
+  /** Where the household sources: the cost each call weighs and each score subtracts. */
+  readonly sourcingCost: SourcingCostSettings;
   readonly read: ReadScores | null;
   readonly ownHistory: readonly OwnHistoryScores[];
   /** Every price the card shows, before and after the calibration, overall and by category. */
@@ -204,6 +222,7 @@ export async function runScanBacktest(
   options: ScanBacktestOptions = {},
 ): Promise<ScanBacktestReport> {
   const settings = options.settings ?? DEFAULT_SCAN_CALL_SETTINGS;
+  const sourcingCost = options.sourcingCost ?? DEFAULT_SOURCING_COST;
   const items = dataset.manifest.items;
   const table = feeTableFor('depop', new Date());
   const feeCalibration = calibration(items, table);
@@ -234,7 +253,7 @@ export async function runScanBacktest(
     const calls: Partial<Record<CallVariant, VariantResult>> = {};
     const itemInputs: Partial<Record<CallVariant, ScanCallInput>> = {};
     for (const name of variants) {
-      const made = variant(name, item, read, research, others, settings, fees);
+      const made = variant(name, item, read, research, others, settings, fees, sourcingCost);
       calls[name] = made.result;
       itemInputs[name] = made.input;
     }
@@ -243,6 +262,7 @@ export async function runScanBacktest(
       id: item.id,
       salePriceCents: item.salePriceCents,
       payoutCents: payoutOf(item),
+      costCents: itemCost(item.category, sourcingCost).cents,
       read,
       ...(research === undefined ? {} : { research }),
       calls,
@@ -259,7 +279,9 @@ export async function runScanBacktest(
       feeCalibration: feeCalibration ?? null,
       worthShare: sweepAmounts.map((worthListingCents) => ({
         worthListingCents,
-        items: results.filter((result) => result.payoutCents >= worthListingCents).length,
+        items: results.filter(
+          (result) => result.payoutCents - result.costCents >= worthListingCents,
+        ).length,
       })),
     },
     reader:
@@ -271,6 +293,7 @@ export async function runScanBacktest(
         ? null
         : { id: options.researcher.id, description: options.researcher.description },
     settings,
+    sourcingCost,
     read: options.reader === undefined ? null : readScores(items, results),
     ownHistory: variants.map((name) => ownHistoryScores(name, results, settings)),
     prices: options.reader === undefined ? [] : priceScores(items, results, settings),
@@ -299,6 +322,7 @@ function variant(
   others: readonly HistorySale[],
   settings: ScanCallSettings,
   fees: (priceCents: number) => number,
+  sourcingCost: SourcingCostSettings,
 ): { result: VariantResult; input: ScanCallInput } {
   const scan = read?.ok === true ? read.scan : undefined;
   const snapped =
@@ -316,7 +340,11 @@ function variant(
     minComparisons: settings.minComparisons,
   });
   const calibration = name === 'calibrated' ? priceCalibration(others) : undefined;
-  const input = callInput(name, scan, research, ownHistory, fees, identity, calibration);
+  const input = {
+    ...callInput(name, scan, research, ownHistory, fees, identity, calibration),
+    // The cost of the kind of item the call takes it for: the read's category, or the label's.
+    cost: itemCost(identity.category, sourcingCost),
+  };
   return {
     result: {
       identity,
@@ -513,7 +541,7 @@ function callScores(
     counts[call.call] += 1;
     byConfidence[call.confidence] += 1;
     byBasis[call.basis] += 1;
-    const worth = result.payoutCents >= worthListingCents;
+    const worth = result.payoutCents - result.costCents >= worthListingCents;
     if (call.call === 'buy' && worth) buyHeld += 1;
     if (call.call === 'skip' && !worth) skipHeld += 1;
   }

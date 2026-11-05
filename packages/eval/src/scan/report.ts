@@ -30,6 +30,14 @@ export function formatScanReport(
     `  call settings: worth listing ${money(settings.worthListingCents)}, at least ` +
       `${String(settings.minComparisons)} of your sales for a range, ` +
       `${String(settings.highComparisons)} for high confidence`,
+    report.sourcingCost.mode === 'bins'
+      ? `  sourcing: the bins at ${money(report.sourcingCost.binsPricePerPoundCents)} a pound; ` +
+        "each payout is less the item's likely cost (its typical weight by category)"
+      : `  sourcing: a thrift store, ${
+          report.sourcingCost.storeItemCents === undefined
+            ? 'its typical price by category'
+            : `${money(report.sourcingCost.storeItemCents)} an item`
+        }; each payout is less that cost`,
     '',
   ];
 
@@ -102,7 +110,7 @@ export function formatScanReport(
   lines.push(...table([callHeader(), ...report.calls.map(callRow)]));
   lines.push('');
 
-  lines.push('Worth-listing sweep (items worth it: payout at least the amount):');
+  lines.push('Worth-listing sweep (items worth it: payout less cost at least the amount):');
   const worthShare = new Map(
     dataset.worthShare.map((entry) => [entry.worthListingCents, entry.items]),
   );

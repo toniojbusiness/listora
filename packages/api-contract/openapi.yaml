@@ -351,6 +351,8 @@ paths:
     $ref: './paths/marketplace-features.yaml#/~1v1~1marketplace-features~1test-mode'
   /v1/sourcing/kit:
     $ref: './paths/sourcing.yaml#/~1v1~1sourcing~1kit'
+  /v1/sourcing/cost:
+    $ref: './paths/sourcing.yaml#/~1v1~1sourcing~1cost'
   /v1/sourcing-runs:
     $ref: './paths/sourcing-runs.yaml#/~1v1~1sourcing-runs'
   /v1/sourcing-runs/{runId}/end:
@@ -1382,6 +1384,14 @@ components:
       $ref: './components/schemas/sourcing.yaml#/OwnSalesOnMarketplace'
     OwnSalesForCall:
       $ref: './components/schemas/sourcing.yaml#/OwnSalesForCall'
+    SourcingCost:
+      $ref: './components/schemas/sourcing.yaml#/SourcingCost'
+    SourcingCostReplace:
+      $ref: './components/schemas/sourcing.yaml#/SourcingCostReplace'
+    SourcingMode:
+      $ref: './components/schemas/sourcing.yaml#/SourcingMode'
+    KnownSourcingMode:
+      $ref: './components/schemas/sourcing.yaml#/KnownSourcingMode'
     SourcingRunCreate:
       $ref: './components/schemas/sourcing.yaml#/SourcingRunCreate'
     SourcingRun:
@@ -1442,6 +1452,8 @@ components:
       $ref: './components/schemas/sourcing.yaml#/ScanOwnSales'
     ScanCall:
       $ref: './components/schemas/sourcing.yaml#/ScanCall'
+    ScanSourcing:
+      $ref: './components/schemas/sourcing.yaml#/ScanSourcing'
     ScanCallKind:
       $ref: './components/schemas/sourcing.yaml#/ScanCallKind'
     KnownScanCallKind:
