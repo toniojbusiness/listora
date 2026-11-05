@@ -145,6 +145,7 @@ write ran only on the captain's own accounts. Tristin's Depop shop was only ever
 | Poshmark    | `market_comps`                  | Hidden: the logged-out reader is tested on a recorded public search (2026-11-02); its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                                                       |
 | eBay        | every feature                   | Hidden: no eBay connection has run live                                                                                                                                                                                                                                                                                                                                               |
 | eBay        | `market_comps`                  | Hidden: the logged-out reader is tested on stand-in pages (eBay showed the recorder a bot check); its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                                       |
+| Vinted      | every feature                   | Hidden: Vinted is assisted only; no automation is built yet ([vinted.md](vinted.md))                                                                                                                                                                                                                                                                                                  |
 
 Listing actions, as they ran live (only revise is gated, see above):
 
@@ -154,6 +155,7 @@ Listing actions, as they ran live (only revise is gated, see above):
 | Poshmark    | Passed 2026-10-27, the captain's account | Not run live     |
 | Mercari     | Passed 2026-10-27, the captain's account | Not run live     |
 | eBay        | Not run live                             | Not run live     |
+| Vinted      | Assisted only: the seller does each step | Assisted only    |
 
 Mark a feature verified only after a live end-to-end run proves it. Make one change that adds
 its entry to `VERIFIED_FEATURES`, with the date and what the run proved, and adds its row here.

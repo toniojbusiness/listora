@@ -114,6 +114,7 @@ export const MARKETPLACE_NAMES = {
   depop: 'Depop',
   poshmark: 'Poshmark',
   mercari: 'Mercari',
+  vinted: 'Vinted',
 } as const satisfies Record<Marketplace, string>;
 
 export function isMarketplace(value: string): value is Marketplace {

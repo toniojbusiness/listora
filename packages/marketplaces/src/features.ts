@@ -104,6 +104,9 @@ export const VERIFIED_FEATURES: VerifiedFeatures = {
       run: "An import read all 11 of the captain's listings for sale.",
     },
   },
+  // Vinted is assisted only; each automation feature joins here once it passes live
+  // (docs/features/vinted.md).
+  vinted: {},
 };
 
 /**

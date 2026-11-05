@@ -3526,7 +3526,7 @@ export interface components {
          */
         Marketplace: components["schemas"]["KnownMarketplace"];
         /** @enum {string} */
-        KnownMarketplace: "ebay" | "depop" | "poshmark" | "mercari";
+        KnownMarketplace: "ebay" | "depop" | "poshmark" | "mercari" | "vinted";
         /**
          * @description A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
          *     nothing that depends on an unknown mode.
@@ -4668,8 +4668,9 @@ export interface components {
         /**
          * @description A marketplace listing URL as the user shared it. Accepted: listing pages on
          *     `ebay.com` (`/itm/<item id>`), `poshmark.com` (`/listing/<title>-<id>`),
-         *     `mercari.com` (`/us/item/<id>/`), and `depop.com` (`/products/<slug>/`), and the
-         *     marketplaces' share short links (`ebay.us`, `posh.mk`, `merc.li`, `depop.app.link`).
+         *     `mercari.com` (`/us/item/<id>/`), `depop.com` (`/products/<slug>/`), and `vinted.com`
+         *     (`/items/<id>-<title>`), and the marketplaces' share short links (`ebay.us`, `posh.mk`,
+         *     `merc.li`, `depop.app.link`).
          *     The server keeps the canonical form (https, no query or fragment) as the listing's
          *     `externalUrl`, and the listing id as `externalListingId`; a short link has no
          *     listing id, because only the marketplace can resolve it and Listora never fetches it.
@@ -14252,7 +14253,7 @@ type ReadonlyArray<T> = [
     unknown[]
 ] ? Readonly<Exclude<T, undefined>> : Readonly<Exclude<T, undefined>[]>;
 export const currencyCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["CurrencyCode"]> = ["USD"];
-export const knownMarketplaceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplace"]> = ["ebay", "depop", "poshmark", "mercari"];
+export const knownMarketplaceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplace"]> = ["ebay", "depop", "poshmark", "mercari", "vinted"];
 export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownIntegrationMode"]> = ["api", "automation", "assisted"];
 export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];

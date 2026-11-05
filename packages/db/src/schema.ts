@@ -54,6 +54,7 @@ import type {
   ItemScanDecision,
   ExpenseKind,
   ScanResearchKind,
+  MarketComparisonMarketplace,
   MarketComparisonStatus,
   LabelOrderState,
   LabelReadStatus,
@@ -1374,7 +1375,7 @@ export interface MarketComparisonTable {
   id: Id;
   account_id: string;
   scan_id: Nullable<string>;
-  marketplace: Marketplace;
+  marketplace: MarketComparisonMarketplace;
   query_key: string;
   query: Jsonb<JsonObject>;
   status: Generated<MarketComparisonStatus>;

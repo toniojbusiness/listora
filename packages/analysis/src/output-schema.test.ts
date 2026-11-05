@@ -157,7 +157,10 @@ describe('itemAnalysisSchema', () => {
 describe('vocabulary', () => {
   it("matches the contract's conditions and marketplaces", () => {
     expect([...CONDITIONS]).toEqual([...itemConditionValues]);
-    expect(Object.keys(MARKETPLACE_COPY_LIMITS)).toEqual([...knownMarketplaceValues]);
+    // Vinted listings start from the item's own copy (docs/features/vinted.md).
+    expect(Object.keys(MARKETPLACE_COPY_LIMITS)).toEqual(
+      knownMarketplaceValues.filter((marketplace) => marketplace !== 'vinted'),
+    );
   });
 
   it('ends every category with "other" and keeps subcategory ids unique per category', () => {

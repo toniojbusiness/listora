@@ -55,7 +55,9 @@ export const MARKETPLACE_COPY_LIMITS = {
     hashtags: 0,
     sources: ['https://www.mercari.com/us/help_center/topics/listing/guides/creating-a-listing/'],
   },
-} as const satisfies Record<KnownMarketplace, MarketplaceCopyLimits>;
+  // Vinted gets no copy of its own yet: its listings start from the item's own title and
+  // description (docs/features/vinted.md).
+} as const satisfies Record<Exclude<KnownMarketplace, 'vinted'>, MarketplaceCopyLimits>;
 
 /**
  * Characters the analysis aims the Depop copy and its hashtags at: Depop's 1,000 less the 71 the

@@ -52,6 +52,8 @@ export {
   createEbayAssistedAdapter,
   createMercariAdapter,
   createPoshmarkAdapter,
+  createVintedAdapter,
+  VINTED_MAX_PHOTOS,
 } from './assisted/marketplaces.ts';
 export {
   CAPABILITY_FOR_KIND,

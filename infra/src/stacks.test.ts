@@ -8,7 +8,12 @@ import { MARKETPLACES } from '@listora/db';
 import { METRIC_NAMESPACE, TRUST_METRICS } from '@listora/observability/catalog';
 
 import { CDK_BOOTSTRAP_QUALIFIER } from './bootstrap.ts';
-import { APP_SECRETS, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
+import {
+  ALARMED_MARKETPLACES,
+  APP_SECRETS,
+  ENVIRONMENT_SETTINGS,
+  SERVICE_NAMES,
+} from './config.ts';
 import {
   containerEnvironment,
   containerSecretNames,
@@ -1358,8 +1363,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           'connection-needs-relink',
           'sale-checks-unhealthy',
           'deletion-overdue',
-          ...MARKETPLACES.map((marketplace) => `delist-latency-${marketplace}`),
-          ...MARKETPLACES.map((marketplace) => `verified-success-${marketplace}`),
+          ...ALARMED_MARKETPLACES.map((marketplace) => `delist-latency-${marketplace}`),
+          ...ALARMED_MARKETPLACES.map((marketplace) => `verified-success-${marketplace}`),
           'database-cpu',
           'database-free-storage',
           'database-free-memory',
@@ -1497,14 +1502,18 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
     });
 
     it('alarms per marketplace on p95 delist latency and the verified-success rate', () => {
-      expect(Object.keys(settings.delistLatencyAlarmMinutes)).toEqual([...MARKETPLACES]);
+      expect(Object.keys(settings.delistLatencyAlarmMinutes)).toEqual([...ALARMED_MARKETPLACES]);
+      // Vinted is assisted only: the seller delists it, so it has no alarms yet.
+      expect(MARKETPLACES.filter((marketplace) => marketplace !== 'vinted')).toEqual([
+        ...ALARMED_MARKETPLACES,
+      ]);
       expect(settings.delistLatencyAlarmMinutes).toEqual({
         ebay: 10,
         depop: 13 * 60,
         poshmark: 13 * 60,
         mercari: 13 * 60,
       });
-      for (const marketplace of MARKETPLACES) {
+      for (const marketplace of ALARMED_MARKETPLACES) {
         const dimensions = [{ Name: 'Marketplace', Value: marketplace }];
         expect(alarmNamed(`delist-latency-${marketplace}`)).toEqual(
           expect.objectContaining({
@@ -1752,7 +1761,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         LISTORA_ENV: environment,
         ALERT_FROM: sender.address,
         ALERT_TO: 'ops@example.com',
-        MARKETPLACES: MARKETPLACES.join(','),
+        MARKETPLACES: ALARMED_MARKETPLACES.join(','),
         MONTHLY_COST_THRESHOLD_USD: String(settings.monthlyCostAlarmUsd),
       };
       for (const [name, handler] of [

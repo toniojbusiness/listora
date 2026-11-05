@@ -80,6 +80,7 @@ describe('marketplace connections API (fake eBay)', () => {
       'depop',
       'poshmark',
       'mercari',
+      'vinted',
     ]);
     const [ebay, ...assisted] = listed.body.data;
     expect(ebay).toMatchObject({
@@ -300,6 +301,7 @@ describe('marketplace connections API (fake eBay)', () => {
       });
       expect(health.body.connections.map((connection) => connection.statusDisplay.label)).toEqual([
         'Not connected',
+        'Not linked',
         'Not linked',
         'Not linked',
         'Not linked',

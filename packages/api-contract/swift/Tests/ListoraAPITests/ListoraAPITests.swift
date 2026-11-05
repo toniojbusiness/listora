@@ -84,7 +84,7 @@ import Testing
 
         let listing = try output.ok.body.json
         #expect(listing.marketplace.value1 == nil)
-        #expect(listing.marketplace.value2 == "vinted")
+        #expect(listing.marketplace.value2 == "grailed")
         #expect(listing.mode.value2 == "partner_api")
         #expect(listing.status.value1 == nil)
         #expect(listing.status.value2 == "paused")
@@ -101,7 +101,7 @@ import Testing
         let output = try await client.listConnections()
 
         let connections = try output.ok.body.json.data
-        #expect(connections.map(\.marketplace.value2) == ["ebay", "vinted"])
+        #expect(connections.map(\.marketplace.value2) == ["ebay", "grailed"])
         #expect(connections.first?.marketplace.value1 == .ebay)
         let future = try #require(connections.last)
         #expect(future.status.value2 == "waitlisted")
@@ -238,7 +238,7 @@ private let futureListingJSON = """
     {
       "id": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
       "itemId": "0b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d",
-      "marketplace": "vinted",
+      "marketplace": "grailed",
       "mode": "partner_api",
       "status": "paused",
       "statusDisplay": { "tone": "paused", "label": "Paused on Vinted" },
@@ -269,7 +269,7 @@ private let connectionsJSON = """
           }
         },
         {
-          "marketplace": "vinted",
+          "marketplace": "grailed",
           "mode": "assisted",
           "status": "waitlisted",
           "statusDisplay": { "tone": "neutral", "label": "Coming soon" },

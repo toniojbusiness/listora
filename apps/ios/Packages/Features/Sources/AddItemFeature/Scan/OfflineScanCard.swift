@@ -84,6 +84,7 @@ struct OfflineScanCard: Equatable {
         case "depop": "Depop"
         case "poshmark": "Poshmark"
         case "mercari": "Mercari"
+        case "vinted": "Vinted"
         default: marketplace
         }
     }

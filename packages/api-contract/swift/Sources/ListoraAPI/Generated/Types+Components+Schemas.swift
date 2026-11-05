@@ -110,6 +110,7 @@ extension Components {
             case depop = "depop"
             case poshmark = "poshmark"
             case mercari = "mercari"
+            case vinted = "vinted"
         }
         /// A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
         /// nothing that depends on an unknown mode.
@@ -4733,8 +4734,9 @@ extension Components {
         }
         /// A marketplace listing URL as the user shared it. Accepted: listing pages on
         /// `ebay.com` (`/itm/<item id>`), `poshmark.com` (`/listing/<title>-<id>`),
-        /// `mercari.com` (`/us/item/<id>/`), and `depop.com` (`/products/<slug>/`), and the
-        /// marketplaces' share short links (`ebay.us`, `posh.mk`, `merc.li`, `depop.app.link`).
+        /// `mercari.com` (`/us/item/<id>/`), `depop.com` (`/products/<slug>/`), and `vinted.com`
+        /// (`/items/<id>-<title>`), and the marketplaces' share short links (`ebay.us`, `posh.mk`,
+        /// `merc.li`, `depop.app.link`).
         /// The server keeps the canonical form (https, no query or fragment) as the listing's
         /// `externalUrl`, and the listing id as `externalListingId`; a short link has no
         /// listing id, because only the marketplace can resolve it and Listora never fetches it.

@@ -97,7 +97,7 @@ struct MarketplaceRowTests {
         #expect(!row.usesAPI)
     }
 
-    @Test(arguments: ["depop", "poshmark", "mercari"])
+    @Test(arguments: ["depop", "poshmark", "mercari", "vinted"])
     func `assisted marketplaces show assisted mode and no connect button`(marketplace: String) throws {
         let row = try MarketplaceRow(connection: connection(
             marketplace: marketplace,
@@ -111,7 +111,8 @@ struct MarketplaceRowTests {
         #expect(row.modeLabel == "Assisted")
         #expect(row.statusLabel == "Not linked")
         #expect(row.action == nil)
-        #expect(["Depop", "Poshmark", "Mercari"].contains(row.name))
+        #expect(["Depop", "Poshmark", "Mercari", "Vinted"].contains(row.name))
+        #expect(row.marketplace != nil)
     }
 
     @Test
@@ -129,14 +130,14 @@ struct MarketplaceRowTests {
     @Test
     func `values added after this version show generically and offer nothing`() throws {
         let row = try MarketplaceRow(connection: connection(
-            marketplace: "vinted",
+            marketplace: "grailed",
             status: "waitlisted",
             tone: "sparkly",
             label: "Coming soon",
             actions: ["join_waitlist", "connect"],
         ))
-        #expect(row.id == "vinted")
-        #expect(row.name == "vinted")
+        #expect(row.id == "grailed")
+        #expect(row.name == "grailed")
         #expect(row.marketplace == nil)
         #expect(row.tone == .neutral)
         // An unknown marketplace cannot be connected from this version, whatever it offers.

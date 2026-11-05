@@ -22,6 +22,23 @@ export function createMercariAdapter(): AssistedAdapter {
 }
 
 /**
+ * Vinted (docs/features/vinted.md). Assisted until its browser automation passes live: Listora
+ * prepares the listing and opens vinted.com, and the seller posts and confirms it. Vinted takes
+ * up to 20 photos. Listora reads no Vinted sale emails yet, so the seller confirms each sale.
+ */
+export function createVintedAdapter(): AssistedAdapter {
+  return new AssistedAdapter({
+    marketplace: 'vinted',
+    siteUrl: 'https://www.vinted.com/',
+    capabilities: { saleDetection: ['manual'] },
+    limits: { maxPhotos: VINTED_MAX_PHOTOS },
+  });
+}
+
+/** Vinted's photo limit per listing (its US help center). */
+export const VINTED_MAX_PHOTOS = 20;
+
+/**
  * Depop before its API is connected. The flags still describe Depop itself, which never reuses
  * an external SKU and has no listing titles, whichever mode serves it.
  */

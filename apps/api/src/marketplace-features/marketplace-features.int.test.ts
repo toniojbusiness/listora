@@ -119,6 +119,8 @@ describe('marketplace features (real Postgres, verified features)', () => {
       },
       { marketplace: 'poshmark', features: [] },
       { marketplace: 'mercari', features: ['sales_history', 'sale_checks', 'listing_import'] },
+      // Vinted is assisted only: none of its automation has passed live.
+      { marketplace: 'vinted', features: [] },
     ]);
     // Listora's own features that have not passed live, the thrift scan among them, are hidden.
     expect([...knownAppFeatureValues]).toEqual([...APP_FEATURES]);

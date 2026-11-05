@@ -569,6 +569,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/read-only.md](features/read-only.md)                     | Read-only connections: Listora only reads the account; every write refuses                   |
 | [features/phone-execution.md](features/phone-execution.md)         | Running marketplaces' automated steps on the seller's iPhone                                 |
 | [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site                          |
+| [features/vinted.md](features/vinted.md)                           | Vinted: assisted mode now, its automation milestones, and what differs there                 |
 | [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                                   |
 | [features/pricing.md](features/pricing.md)                         | Pricing data rules, floors, fee tables, tiers, the label guard                               |
 | [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                                   |

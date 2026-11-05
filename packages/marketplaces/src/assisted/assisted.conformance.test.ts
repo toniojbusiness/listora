@@ -7,6 +7,7 @@ import {
   createEbayAssistedAdapter,
   createMercariAdapter,
   createPoshmarkAdapter,
+  createVintedAdapter,
 } from './marketplaces.ts';
 
 const golden = (name: string): string =>
@@ -38,4 +39,11 @@ describeAdapterConformance({
   adapter: createEbayAssistedAdapter(),
   connection: null,
   goldenDir: golden('ebay'),
+});
+
+describeAdapterConformance({
+  name: 'Vinted (assisted)',
+  adapter: createVintedAdapter(),
+  connection: null,
+  goldenDir: golden('vinted'),
 });

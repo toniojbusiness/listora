@@ -6,6 +6,7 @@ public enum ListingMarketplace: String, CaseIterable, Sendable {
     case depop
     case poshmark
     case mercari
+    case vinted
 
     public var displayName: String {
         switch self {
@@ -13,6 +14,7 @@ public enum ListingMarketplace: String, CaseIterable, Sendable {
         case .depop: "Depop"
         case .poshmark: "Poshmark"
         case .mercari: "Mercari"
+        case .vinted: "Vinted"
         }
     }
 }
@@ -152,6 +154,20 @@ nonisolated(unsafe) private let rules: [Rule] = [
             return (id, "https://www.depop.com/products/\(id)/")
         },
         shortLinkHosts: ["depop.app.link"],
+        shortLinkPath: shortCode,
+    ),
+    // Vinted's US site: `/items/<numeric id>-<title slug>`. The app shares the full page URL,
+    // so Vinted has no short-link host.
+    Rule(
+        marketplace: .vinted,
+        hosts: ["vinted.com", "www.vinted.com"],
+        listing: { path in
+            guard let match = try? #/\/items\/(([0-9]{1,19})(?:-[A-Za-z0-9]+)*)\/?/#.wholeMatch(in: path),
+                  match.1.count <= 200
+            else { return nil }
+            return (String(match.2), "https://www.vinted.com/items/\(match.1.lowercased())")
+        },
+        shortLinkHosts: [],
         shortLinkPath: shortCode,
     ),
 ]

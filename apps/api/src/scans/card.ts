@@ -112,6 +112,8 @@ function marketplaceName(marketplace: ItemScan['ownSales'][number]['marketplace'
       return 'Poshmark';
     case 'mercari':
       return 'Mercari';
+    case 'vinted':
+      return 'Vinted';
     default:
       return marketplace;
   }

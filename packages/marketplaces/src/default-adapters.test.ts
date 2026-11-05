@@ -19,7 +19,7 @@ describe('createMarketplaceAdapters', () => {
       ebay: undefined,
       depop: undefined,
     });
-    expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari']);
+    expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari', 'vinted']);
     // Without the eBay API's keys and without a linked session, the user lists on eBay.
     for (const connection of [null, api, automated]) {
       expect(adapters.capabilities('ebay', connection)).toMatchObject({
@@ -30,6 +30,16 @@ describe('createMarketplaceAdapters', () => {
     }
     expect(adapters.get('poshmark')).toBeInstanceOf(AssistedAdapter);
     expect(adapters.get('mercari')).toBeInstanceOf(AssistedAdapter);
+    // Vinted is assisted whatever the connection, until its automation passes live.
+    expect(adapters.get('vinted')).toBeInstanceOf(AssistedAdapter);
+    for (const connection of [null, automated]) {
+      expect(adapters.capabilities('vinted', connection)).toMatchObject({
+        create: 'assisted',
+        delist: 'assisted',
+        verifyRead: 'user_confirm',
+        saleDetection: ['manual'],
+      });
+    }
     // Depop stays assisted even under an api connection while it has no api adapter.
     expect(adapters.capabilities('depop', api)?.verifyRead).toBe('user_confirm');
   });
@@ -40,7 +50,7 @@ describe('createMarketplaceAdapters', () => {
       ebay: undefined,
       depop: undefined,
     });
-    expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari']);
+    expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari', 'vinted']);
     const ebay = adapters.get('ebay');
     if (!(ebay instanceof ConnectionAwareAdapter)) throw new Error('connection-aware');
     expect(ebay.adapterFor(null)).toBeInstanceOf(FakeMarketplaceAdapter);

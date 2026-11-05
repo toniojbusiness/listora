@@ -56,7 +56,10 @@ struct ListingURLTests {
         for marketplace in ListingMarketplace.allCases {
             let cases = fixtures.listings.filter { $0.marketplace == marketplace.rawValue }
             #expect(cases.contains { $0.listingId != nil }, "no full listing URL for \(marketplace)")
-            #expect(cases.contains { $0.listingId == nil }, "no short link for \(marketplace)")
+            // Vinted's app shares the full page URL; it has no short links.
+            if marketplace != .vinted {
+                #expect(cases.contains { $0.listingId == nil }, "no short link for \(marketplace)")
+            }
         }
         #expect(!fixtures.notListings.isEmpty)
         #expect(!fixtures.unsupported.isEmpty)

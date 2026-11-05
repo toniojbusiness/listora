@@ -47,6 +47,7 @@ export const ORDER_DATA_MAY_ADJUST_FEES: Readonly<Record<KnownMarketplace, boole
   depop: true,
   poshmark: true,
   mercari: true,
+  vinted: true,
 };
 
 /**
@@ -61,4 +62,5 @@ export const OWN_SALES_MAY_MODEL_PRICES: Readonly<Record<KnownMarketplace, boole
   depop: true,
   poshmark: true,
   mercari: true,
+  vinted: true,
 };

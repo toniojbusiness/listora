@@ -148,7 +148,7 @@ export interface EnvironmentSettings {
    * marketplace over an hour (from the sale being recorded to the verified delist of the
    * item's listing there) exceeds this many minutes: the item may stay for sale after selling.
    */
-  readonly delistLatencyAlarmMinutes: Readonly<Record<Marketplace, number>>;
+  readonly delistLatencyAlarmMinutes: Readonly<Record<AlarmedMarketplace, number>>;
   /**
    * The monthly AWS Budget of the whole account, in US dollars: the alarm topic hears when the
    * month's actual cost reaches it and when AWS forecasts the month will (docs/features/alerts.md).
@@ -169,11 +169,23 @@ export type BuyerDataRetention = 'off' | 'on';
 const AI_DAILY_COST_ALARM_USD = 0.8;
 
 /**
+ * The marketplaces with delist-latency and verified-success alarms: those Listora delists and
+ * verifies itself. Vinted joins with its automation (docs/features/vinted.md).
+ */
+export const ALARMED_MARKETPLACES = [
+  'ebay',
+  'depop',
+  'poshmark',
+  'mercari',
+] as const satisfies readonly Marketplace[];
+export type AlarmedMarketplace = (typeof ALARMED_MARKETPLACES)[number];
+
+/**
  * eBay delists through its API within minutes of a sale. The browser runner delists Depop
  * (until its partner API is granted), Poshmark, and Mercari, and their scheduled sale checks
  * run about every 12 hours, so a delist there can take that long.
  */
-const DELIST_LATENCY_ALARM_MINUTES: Readonly<Record<Marketplace, number>> = {
+const DELIST_LATENCY_ALARM_MINUTES: Readonly<Record<AlarmedMarketplace, number>> = {
   ebay: 10,
   depop: 13 * 60,
   poshmark: 13 * 60,

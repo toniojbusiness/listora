@@ -220,7 +220,7 @@ struct SalesModelsTests {
         let model = MarkSoldModel(request: request, service: FakeSalesService(sale: sale()), timing: fast, now: now)
         #expect(model.marketplace == .ebay)
         #expect(model.marketplaces.first == .ebay)
-        #expect(model.marketplaces.count == 4)
+        #expect(model.marketplaces.count == 5)
         #expect(model.lines.map(\.priceCents) == [4500])
         #expect(model.missing == nil)
 

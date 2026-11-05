@@ -95,6 +95,9 @@ export function marketplaceCategories(
     case 'ebay':
       // eBay's categories come from its own taxonomy (packages/marketplaces/src/ebay).
       return null;
+    case 'vinted':
+      // Vinted's categories join with its taxonomy snapshot (docs/features/vinted.md, M2).
+      return null;
   }
 }
 
@@ -195,6 +198,7 @@ function ownCategory(marketplace: Marketplace, ref: string): CategoryChoice | nu
       return found === null ? null : namedChoice(found.path);
     }
     case 'ebay':
+    case 'vinted':
       return null;
   }
 }
@@ -218,6 +222,7 @@ function forward(
       return found === null ? null : namedChoice(found.path);
     }
     case 'ebay':
+    case 'vinted':
       return null;
   }
 }
