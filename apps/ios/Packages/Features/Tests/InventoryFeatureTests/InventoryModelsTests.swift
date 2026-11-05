@@ -47,7 +47,7 @@ struct InventoryModelsTests {
         service.item = Fixtures.item(listings: [Fixtures.listing()])
         let model = ItemDetailModel(itemID: Fixtures.itemID, service: service, timing: .fast)
         await model.load()
-        #expect(model.rows.map(\.id) == ["ebay", "depop", "poshmark", "mercari"])
+        #expect(model.rows.map(\.id) == ["ebay", "depop", "poshmark", "mercari", "vinted"])
         #expect(model.rows[0].statusLabel == "Active (confirmed by eBay)")
         #expect(model.rows[1].statusLabel == "Not listed")
 
@@ -156,8 +156,10 @@ struct InventoryModelsTests {
         await fromAnalysis.prepare()
         #expect(fromAnalysis.selected == ["ebay"])
         // eBay through its API; the others assisted, through a task.
-        #expect(fromAnalysis.choices.filter(\.isAvailable).map(\.id) == ["ebay", "depop", "poshmark", "mercari"])
-        #expect(fromAnalysis.choices.filter(\.isAssisted).map(\.id) == ["depop", "poshmark", "mercari"])
+        #expect(
+            fromAnalysis.choices.filter(\.isAvailable).map(\.id) == ["ebay", "depop", "poshmark", "mercari", "vinted"],
+        )
+        #expect(fromAnalysis.choices.filter(\.isAssisted).map(\.id) == ["depop", "poshmark", "mercari", "vinted"])
         await fromAnalysis.next()
         #expect(fromAnalysis.title == "Analysis title")
         #expect(fromAnalysis.priceCents == 4500)
@@ -269,7 +271,7 @@ struct InventoryModelsTests {
             listingCopy: ListingCopyStore(directory: URL.temporaryDirectory.appending(path: UUID().uuidString)),
         )
         await model.prepare()
-        #expect(model.choices.filter(\.isAvailable).map(\.id) == ["depop", "mercari"])
+        #expect(model.choices.filter(\.isAvailable).map(\.id) == ["depop", "mercari", "vinted"])
         #expect(model.choices.first { $0.id == "ebay" }?.detail == "Connect eBay in Settings > Marketplaces first")
         #expect(model.choices.first { $0.id == "poshmark" }?
             .detail == "Already on Poshmark. Change it from the item screen.")

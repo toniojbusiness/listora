@@ -38,7 +38,7 @@ Marketplace:
       maxLength: 64
 KnownMarketplace:
   type: string
-  enum: [ebay, depop, poshmark, mercari]
+  enum: [ebay, depop, poshmark, mercari, vinted]
 IntegrationMode:
   description: |
     A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer

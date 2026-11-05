@@ -426,7 +426,7 @@ describe('vocabulary', () => {
   // These sets mirror the data model (docs/architecture.md section 6). Changing one is a
   // contract change: update the database, the server, and the iOS app together.
   it.each([
-    ['KnownMarketplace', ['ebay', 'depop', 'poshmark', 'mercari']],
+    ['KnownMarketplace', ['ebay', 'depop', 'poshmark', 'mercari', 'vinted']],
     [
       'KnownItemStatus',
       ['draft', 'ready', 'listed', 'sold_pending_delist', 'sold', 'shipped', 'archived'],

@@ -9,7 +9,7 @@ import type { CurrencyCode } from '@listora/shared';
 /** Currencies the `currency_code` domain accepts; matches CurrencyCode in @listora/shared. */
 export const CURRENCY_CODES = ['USD'] as const satisfies readonly CurrencyCode[];
 
-export const MARKETPLACES = ['ebay', 'depop', 'poshmark', 'mercari'] as const;
+export const MARKETPLACES = ['ebay', 'depop', 'poshmark', 'mercari', 'vinted'] as const;
 export type Marketplace = (typeof MARKETPLACES)[number];
 
 export const AUTH_PROVIDERS = ['dev', 'cognito'] as const;
@@ -458,6 +458,19 @@ export type ItemScanBasis = (typeof ITEM_SCAN_BASES)[number];
  */
 export const ITEM_SCAN_DECISIONS = ['undecided', 'kept', 'skipped', 'replaced'] as const;
 export type ItemScanDecision = (typeof ITEM_SCAN_DECISIONS)[number];
+
+/**
+ * `market_comparison.marketplace`: the marketplaces whose thrift-scan comparisons Listora reads
+ * (docs/features/thrift-scan.md). A marketplace joins with its comparisons, after it joins
+ * `MARKETPLACES` (Vinted's are milestone M9 of docs/features/vinted.md).
+ */
+export const MARKET_COMPARISON_MARKETPLACES = [
+  'ebay',
+  'depop',
+  'poshmark',
+  'mercari',
+] as const satisfies readonly Marketplace[];
+export type MarketComparisonMarketplace = (typeof MARKET_COMPARISON_MARKETPLACES)[number];
 
 /**
  * `market_comparison.status`: `pending` until the phone answers the read, then `read`, `check`

@@ -158,6 +158,7 @@ struct TaskPresentation: Equatable, Sendable {
         case .depop: "Depop"
         case .poshmark: "Poshmark"
         case .mercari: "Mercari"
+        case .vinted: "Vinted"
         case nil: marketplace.value2 ?? "the marketplace"
         }
     }

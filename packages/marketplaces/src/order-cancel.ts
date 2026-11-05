@@ -53,6 +53,14 @@ const GUIDES = {
       'Confirm the cancellation.',
     ],
   },
+  vinted: {
+    url: 'https://www.vinted.com/',
+    steps: [
+      'In the Vinted app, open your Inbox and the conversation for this order.',
+      'Open the order details and choose to cancel the transaction.',
+      'Pick the reason that the item is no longer available, and confirm.',
+    ],
+  },
 } as const satisfies Record<Marketplace, Omit<OrderCancelGuide, 'marketplace'>>;
 
 export function orderCancelGuide(marketplace: Marketplace): OrderCancelGuide {

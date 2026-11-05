@@ -194,6 +194,7 @@ enum TodayFormatting {
         case "depop": "Depop"
         case "poshmark": "Poshmark"
         case "mercari": "Mercari"
+        case "vinted": "Vinted"
         default: id
         }
     }

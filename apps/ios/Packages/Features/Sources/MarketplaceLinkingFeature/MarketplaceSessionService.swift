@@ -218,6 +218,7 @@ extension MarketplaceLink {
         switch marketplace {
         case "poshmark": "Poshmark"
         case "mercari": "Mercari"
+        case "vinted": "Vinted"
         case "depop": "Depop"
         case "ebay": "eBay"
         default: marketplace.capitalized

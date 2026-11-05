@@ -179,7 +179,10 @@ describe('pricing (real Postgres)', () => {
         'depop',
         'poshmark',
         'mercari',
+        'vinted',
       ]);
+      // Vinted charges sellers no fee, so its floor is the cost, shipping, and profit alone.
+      expect(body.floors.at(-1)?.breakdown.estimatedFees).toEqual(usd(0));
       for (const floor of body.floors) {
         const { cost, estimatedFees, shipping, minimumProfit } = floor.breakdown;
         expect(cost).toEqual(usd(1000));
@@ -277,7 +280,7 @@ describe('pricing (real Postgres)', () => {
       const noneBody = (await pricing(none.id)).body;
       expect(noneBody.aiEstimate).toBeUndefined();
       expect(noneBody.tiers).toEqual([]);
-      expect(noneBody.floors).toHaveLength(4);
+      expect(noneBody.floors).toHaveLength(5);
 
       const malformed = await createItem({ cost: usd(1000) });
       await addAnalysis(malformed.id, {

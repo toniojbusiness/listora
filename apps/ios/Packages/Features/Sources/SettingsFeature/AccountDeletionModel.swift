@@ -77,6 +77,7 @@ public final class AccountDeletionModel {
         case "depop": "Depop"
         case "poshmark": "Poshmark"
         case "mercari": "Mercari"
+        case "vinted": "Vinted"
         default: id
         }
         guard let displayName = access.displayName, !displayName.isEmpty else { return name }

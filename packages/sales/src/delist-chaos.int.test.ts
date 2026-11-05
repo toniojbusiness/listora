@@ -30,6 +30,7 @@ import {
   loadDepopConfig,
   loadEbayConfig,
   type AdapterLookup,
+  type AutomatedMarketplace,
   type ListingContent,
   type MarketplaceAdapter,
 } from '@listora/marketplaces';
@@ -182,7 +183,7 @@ describe('auto-delist chaos: an item listed on four marketplaces sells', () => {
   interface Listed {
     itemId: string;
     sku: string;
-    listings: Record<Marketplace, string>;
+    listings: Record<AutomatedMarketplace, string>;
     /** The marketplace's own ids of the API listings. */
     ebayItemId: string;
     depopSku: string;

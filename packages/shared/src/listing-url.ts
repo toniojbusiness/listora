@@ -8,7 +8,7 @@
  * against `packages/shared/fixtures/listing-urls.json`, so change them together.
  */
 
-export type ListingUrlMarketplace = 'ebay' | 'depop' | 'poshmark' | 'mercari';
+export type ListingUrlMarketplace = 'ebay' | 'depop' | 'poshmark' | 'mercari' | 'vinted';
 
 export type ListingUrlParse =
   | {
@@ -86,6 +86,24 @@ const RULES: readonly MarketplaceUrlRule[] = [
       return { listingId: id, canonicalUrl: `https://www.depop.com/products/${id}/` };
     },
     shortLinkHosts: ['depop.app.link'],
+    shortLinkPath: SHORT_CODE,
+  },
+  {
+    // Vinted's US site: `/items/<numeric id>-<title slug>`. The app shares the full page URL,
+    // so Vinted has no short-link host here.
+    marketplace: 'vinted',
+    hosts: ['vinted.com', 'www.vinted.com'],
+    listing: (path) => {
+      const match = /^\/items\/(([0-9]{1,19})(?:-[A-Za-z0-9]+)*)\/?$/.exec(path);
+      if (match?.[1] === undefined || match[2] === undefined || match[1].length > 200) {
+        return undefined;
+      }
+      return {
+        listingId: match[2],
+        canonicalUrl: `https://www.vinted.com/items/${match[1].toLowerCase()}`,
+      };
+    },
+    shortLinkHosts: [],
     shortLinkPath: SHORT_CODE,
   },
 ];

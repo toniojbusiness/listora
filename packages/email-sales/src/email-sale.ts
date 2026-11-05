@@ -17,6 +17,8 @@ import { enqueuePush } from '@listora/push';
 import { recordSale, STANDING_SALE_STATUSES, type RecordSaleResult } from '@listora/sales';
 import { z } from 'zod';
 
+import { EMAIL_SALE_MARKETPLACES, type EmailSaleMarketplace } from './senders.ts';
+
 /** Why a sale email waits for the seller. */
 export const EMAIL_SALE_TASK_REASONS = [
   'ask_before_delist',
@@ -54,7 +56,7 @@ const detailsSchema = z.object({
 });
 
 const taskPayloadSchema = z.object({
-  marketplace: z.enum(['poshmark', 'mercari', 'depop']),
+  marketplace: z.enum(EMAIL_SALE_MARKETPLACES),
   inboundEventId: z.uuid(),
   emailSale: detailsSchema,
 });
@@ -141,7 +143,7 @@ export async function standingSaleOf(
 export interface NewEmailSaleTask {
   kind: 'confirm_sale' | 'review_match';
   accountId: string;
-  marketplace: 'poshmark' | 'mercari' | 'depop';
+  marketplace: EmailSaleMarketplace;
   inboundEventId: string;
   /** The matched item and its listing (a confirm task). */
   itemId: string | null;

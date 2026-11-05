@@ -44,6 +44,7 @@ public struct ImportRow: Identifiable, Equatable, Sendable {
         case "depop": "Depop"
         case "poshmark": "Poshmark"
         case "mercari": "Mercari"
+        case "vinted": "Vinted"
         case "ebay": "eBay"
         default: id.capitalized
         }

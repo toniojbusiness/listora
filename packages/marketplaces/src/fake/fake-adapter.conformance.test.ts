@@ -1,6 +1,7 @@
 /**
  * The fake marketplace adapter against the shared conformance suite, once as a marketplace
- * whose reads carry revisions and once as one without a freshness marker.
+ * whose reads carry revisions, once as one without a freshness marker, and once as Vinted (the
+ * newest marketplace, which the fake serves like every other).
  */
 import { fileURLToPath } from 'node:url';
 
@@ -41,5 +42,18 @@ describeAdapterConformance({
   goldenDir: fileURLToPath(new URL('__golden__/no-freshness/', import.meta.url)),
   marketplace: fakeConformanceMarketplace(fake, 'depop'),
   unreachable: new FakeMarketplaceAdapter({ marketplace: 'depop', baseUrl: unreachableUrl }),
+});
+
+describeAdapterConformance({
+  name: 'FakeMarketplaceAdapter as Vinted',
+  adapter: new FakeMarketplaceAdapter({
+    marketplace: 'vinted',
+    baseUrl: fake.url,
+    requestTimeoutMs: CONFORMANCE_TIMEOUT_MS,
+  }),
+  connection: null,
+  goldenDir: fileURLToPath(new URL('__golden__/vinted/', import.meta.url)),
+  marketplace: fakeConformanceMarketplace(fake, 'vinted'),
+  unreachable: new FakeMarketplaceAdapter({ marketplace: 'vinted', baseUrl: unreachableUrl }),
   teardown: () => fake.close(),
 });

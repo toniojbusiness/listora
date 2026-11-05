@@ -1085,7 +1085,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['item_scan', 'decision', values.ITEM_SCAN_DECISIONS],
   ['scan_research', 'kind', values.SCAN_RESEARCH_KINDS],
   ['expense', 'kind', values.EXPENSE_KINDS],
-  ['market_comparison', 'marketplace', values.MARKETPLACES],
+  ['market_comparison', 'marketplace', values.MARKET_COMPARISON_MARKETPLACES],
   ['market_comparison', 'status', values.MARKET_COMPARISON_STATUSES],
 ];
 

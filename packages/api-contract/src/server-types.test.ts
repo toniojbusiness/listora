@@ -14,7 +14,7 @@ const typo: ListingStatus = 'actve';
 // @ts-expect-error A misspelled tone must not compile on the server.
 const badTone: StatusDisplay = { tone: 'sucess', label: 'Active (confirmed by eBay)' };
 // @ts-expect-error A marketplace the contract does not know must not compile.
-const badMarketplace: Listing['marketplace'] = 'vinted';
+const badMarketplace: Listing['marketplace'] = 'marketplace_added_later';
 // @ts-expect-error An error code the contract does not know must not compile.
 const badCode: ErrorCode = 'code_added_later';
 

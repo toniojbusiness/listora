@@ -133,11 +133,32 @@ const MERCARI_2025_01_06: FeeTable = {
 };
 
 /** Every table, current and past. */
+/**
+ * Vinted US (docs/features/vinted.md). Vinted charges sellers nothing: its US terms and help
+ * center put the Vinted fee ("usually 5% + $0.70") and shipping on the buyer. Read from Vinted's
+ * public pages for the Vinted plan on 2026-11-04 and not yet checked against a real Vinted sale,
+ * so unverified. It applies from Vinted's US relaunch in November 2025. Bump is an optional
+ * paid service and is not included.
+ */
+const VINTED_2026_11_04: FeeTable = {
+  marketplace: 'vinted',
+  version: 'vinted-us-2025-11-01',
+  effectiveFrom: '2025-11-01',
+  sourceUrl: 'https://www.vinted.com/terms_and_conditions',
+  verifiedOn: '2026-11-04',
+  verified: false,
+  notes:
+    'No seller fee: buyers pay the Vinted fee and shipping. Bump is optional and not included. ' +
+    "Effective day: Vinted's US relaunch in November 2025.",
+  rules: [],
+};
+
 export const FEE_TABLES: readonly FeeTable[] = [
   EBAY_2026_10_24,
   DEPOP_2026_10_24,
   POSHMARK_2026_10_24,
   MERCARI_2025_01_06,
+  VINTED_2026_11_04,
 ];
 
 /** The table in effect for `marketplace` on `at` (UTC): the latest whose day has come. */

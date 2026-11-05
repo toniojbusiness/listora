@@ -36,7 +36,7 @@ interface MarketplaceCapabilities {
   limits: { perSellerPerMin?: number; appPerMin?: number; appPerDay?: number };
 }
 interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
-  id: 'ebay' | 'depop' | 'poshmark' | 'mercari';
+  id: 'ebay' | 'depop' | 'poshmark' | 'mercari' | 'vinted';
   capabilities(connection?: ConnectionRef | null): MarketplaceCapabilities;
   buildPayload(item: ItemSnapshot, variant: ListingVariant, connection: ConnectionRef | null): P; // pure
   validate(payload: P, connection: ConnectionRef | null): ValidationIssue[]; // pure
@@ -75,6 +75,7 @@ browser runner's session vault).
 | Depop       | API after partner approval; browser automation until then, assisted fallback    | `PUT` by a SKU Listora names per listing (`AJ-000184-D1`, `-D2` after a relist), `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                                                                    | `v1:order.*` webhooks (`X-Depop-Signature`) + orders poll                           |
 | Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                   | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms                                                            | DKIM-verified forwarded emails, scheduled browser check, manual                     |
 | Mercari     | Browser automation (permitted; no public API), assisted fallback                | Same as Poshmark ([mercari.md](mercari.md)); ends by deactivating, relists by activating                                                                                                              | Forwarded emails, scheduled browser check, manual                                   |
+| Vinted      | Assisted (automation to come, [vinted.md](vinted.md))                           | Copy-assist, photos saved in order, a link to vinted.com, user confirms                                                                                                                               | Manual                                                                              |
 
 **Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
 reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
@@ -146,8 +147,9 @@ adapter whose marketplace has no such marker declares `readFreshness: 'none'` an
 `revision: null`.
 
 **Assisted adapters.** `AssistedAdapter` (`assisted/assisted-adapter.ts`) is the base for assisted
-mode. `createPoshmarkAdapter`, `createMercariAdapter`, `createDepopAssistedAdapter`, and
-`createEbayAssistedAdapter` configure it: those marketplaces run on it until the browser runner
+mode. `createPoshmarkAdapter`, `createMercariAdapter`, `createDepopAssistedAdapter`,
+`createEbayAssistedAdapter`, and `createVintedAdapter` configure it (Vinted only on it for now,
+[vinted.md](vinted.md)): those marketplaces run on it until the browser runner
 (decision D1, [automation.md](automation.md)) or their API (Depop's partner API, eBay's once
 Listora's developer keys exist) takes over, and it stays their fallback when automation meets a
 check it must not pass. `execute` never contacts the marketplace: it returns

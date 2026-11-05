@@ -44,7 +44,7 @@ describe('fee tables', () => {
   });
 
   it('have one current table per marketplace, each with a unique version', () => {
-    for (const marketplace of ['ebay', 'depop', 'poshmark', 'mercari'] as const) {
+    for (const marketplace of ['ebay', 'depop', 'poshmark', 'mercari', 'vinted'] as const) {
       expect(feeTableFor(marketplace, ON).marketplace).toBe(marketplace);
     }
     const versions = FEE_TABLES.map((table) => table.version);
@@ -59,6 +59,7 @@ describe('fee tables', () => {
       depop: /(^|\.)depop\.com$/,
       poshmark: /(^|\.)poshmark\.com$/,
       mercari: /^www\.mercari\.com$/,
+      vinted: /^www\.vinted\.com$/,
     };
     for (const table of FEE_TABLES) {
       const url = new URL(table.sourceUrl);

@@ -99,6 +99,10 @@ export function labelPageUrl(marketplace: Marketplace, externalOrderId: string |
       return id === null
         ? 'https://www.mercari.com/mypage/listings/in_progress/'
         : `https://www.mercari.com/transaction/order_status/${id}/`;
+    case 'vinted':
+      // Vinted's order pages are mapped in milestone M2 (docs/features/vinted.md); until then
+      // the seller finds the order in Vinted's inbox, where its label is.
+      return 'https://www.vinted.com/inbox';
     case 'ebay':
       return id === null
         ? 'https://www.ebay.com/sh/ord'

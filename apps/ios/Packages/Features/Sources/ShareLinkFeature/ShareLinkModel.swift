@@ -75,7 +75,7 @@ public final class ShareLinkModel {
             listing = nil
             phase = .unsupported(
                 title: "Not a marketplace listing",
-                message: "Listora links listings from eBay, Depop, Poshmark, and Mercari. "
+                message: "Listora links listings from eBay, Depop, Poshmark, Mercari, and Vinted. "
                     + "Share a listing from one of them.",
             )
         }

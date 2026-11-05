@@ -1,7 +1,7 @@
 # Listora
 
 Mobile-first reseller operating system: take photos once, create the item once, and manage it
-everywhere (Depop, Poshmark, Mercari, eBay).
+everywhere (Depop, Poshmark, Mercari, eBay, Vinted).
 
 Read [docs/architecture.md](docs/architecture.md) before contributing. It covers the stack,
 the conventions, and the product invariants, and links to each feature's own doc in

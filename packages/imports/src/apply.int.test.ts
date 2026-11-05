@@ -22,9 +22,10 @@ import {
   FAKE_MEDIA_PATH,
   fakeMediaPhoto,
   linkAutomationSession,
+  type AutomatedMarketplace,
 } from '@listora/automation';
 import { LocalTokenVault, SessionVault, startConnectionDeletion } from '@listora/connections';
-import { inTransaction, jsonb, type Db, type JsonObject, type Marketplace } from '@listora/db';
+import { inTransaction, jsonb, type Db, type JsonObject } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import type { ListedListing } from '@listora/marketplaces';
 import type { PhotoJobPayload, PhotoJobQueue } from '@listora/photos';
@@ -103,7 +104,7 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
       .executeTakeFirstOrThrow());
   });
 
-  async function link(marketplace: Marketplace): Promise<string> {
+  async function link(marketplace: AutomatedMarketplace): Promise<string> {
     const profile = automationProfile(marketplace);
     const domain = profile.cookieDomains[0] ?? '.example.com';
     const { connectionId } = await linkAutomationSession(
@@ -163,7 +164,10 @@ describe('settling an import (real Postgres, a local image CDN)', () => {
   }
 
   /** An import of `listings` on `marketplace` whose pages are all read. */
-  async function imported(marketplace: Marketplace, listings: ListedListing[]): Promise<string> {
+  async function imported(
+    marketplace: AutomatedMarketplace,
+    listings: ListedListing[],
+  ): Promise<string> {
     const connectionId = await link(marketplace);
     const { id } = await db
       .insertInto('listing_import')

@@ -26,8 +26,8 @@ export function identityFromUrl(url: string, field = 'url'): ListingIdentity {
       );
     case 'unsupported':
       throw validationFailed(
-        [{ field, message: 'is not a listing on eBay, Depop, Poshmark, or Mercari' }],
-        'Listora links listings from eBay, Depop, Poshmark, and Mercari. Share a listing from one of them.',
+        [{ field, message: 'is not a listing on eBay, Depop, Poshmark, Mercari, or Vinted' }],
+        'Listora links listings from eBay, Depop, Poshmark, Mercari, and Vinted. Share a listing from one of them.',
       );
     default:
       return assertNever(parsed);
