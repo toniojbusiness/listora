@@ -21,6 +21,10 @@
  * marketplace says shipped is `shipped`, and the fees it showed replace the estimate; one a
  * check reads again after it was recorded brings its shipping then (`updateRecordedOrder`).
  *
+ * An order the marketplace shows canceled after the buyer paid (`RemoteOrder.canceled`) is never
+ * handed over; a sale Listora recorded of it no longer stands (`settleCanceledOrder`): canceled
+ * before it shipped, returned after, as the seller would record it, and the seller is told.
+ *
  * The runner hands the sale over instead of recording it, because the auto-delist fan-out
  * decides from each listing's capabilities whether it is marked sold or ended, and only the
  * worker's adapters include the API adapters (eBay, Depop) that decide it.
@@ -39,14 +43,16 @@ import {
   type JsonObject,
   type Marketplace,
 } from '@listora/db';
-import type { AdapterLookup, RemoteOrder } from '@listora/marketplaces';
+import { MARKETPLACE_NAMES, type AdapterLookup, type RemoteOrder } from '@listora/marketplaces';
 import { isPackCheckEnabled } from '@listora/pack-check';
+import { enqueuePush, type PushNotification } from '@listora/push';
 import {
   changeSale,
   finishInboundEvent,
   recordSale,
   replaceWithActualFees,
   SaleStateError,
+  type SaleChangeResult,
   type SaleLine,
 } from '@listora/sales';
 import type { Logger } from '@listora/shared';
@@ -390,6 +396,154 @@ export async function updateRecordedOrder(
     if (error instanceof SaleStateError) return false;
     throw error;
   }
+}
+
+/** What became of a recorded sale whose order the marketplace canceled after payment. */
+export interface CanceledOrderSettled {
+  saleId: string;
+  /** `cancel` before it shipped; `record_return` after (the buyer was refunded). */
+  action: 'cancel' | 'record_return';
+  result: SaleChangeResult;
+}
+
+/**
+ * An order the marketplace shows canceled after the buyer paid (Vinted: it didn't ship in time,
+ * the buyer or seller canceled, or Vinted refunded the buyer before the order completed): the
+ * sale Listora recorded of it no longer stands. Before it shipped it is canceled, after it
+ * shipped it is returned (the buyer got their money back), exactly as the seller would record
+ * either (`changeSale`): its delists that reached no marketplace yet stop, its items go back to
+ * the inventory, and Listora asks the seller whether to relist them and where. Listora never
+ * relists by itself. The seller is told once, by a push.
+ *
+ * An order a check handed over whose sale the worker has not recorded yet is settled with no
+ * sale (its event `ignored`), so it never becomes one. A sale canceled or returned already, or
+ * none at all, is left as it is: `null`. In the check's transaction.
+ */
+export async function settleCanceledOrder(
+  trx: DbTransaction,
+  sale: { accountId: string; marketplace: Marketplace },
+  order: RemoteOrder,
+): Promise<CanceledOrderSettled | null> {
+  const recorded = await trx
+    .selectFrom('sale')
+    .select(['id', 'status'])
+    .where('account_id', '=', sale.accountId)
+    .where('marketplace', '=', sale.marketplace)
+    .where('external_order_id', '=', order.externalOrderId)
+    .executeTakeFirst();
+  if (recorded === undefined) {
+    await trx
+      .updateTable('inbound_event')
+      .set({
+        result: 'ignored',
+        processed_at: new Date(),
+        error_message: `${MARKETPLACE_NAMES[sale.marketplace]} canceled this order.`,
+      })
+      .where('account_id', '=', sale.accountId)
+      .where('marketplace', '=', sale.marketplace)
+      .where('source', '=', 'poll')
+      .where('provider_event_id', 'in', [
+        `order:${order.externalOrderId}`.slice(0, 255),
+        `history:order:${order.externalOrderId}`.slice(0, 255),
+      ])
+      .where('processed_at', 'is', null)
+      .execute();
+    return null;
+  }
+  if (recorded.status === 'canceled' || recorded.status === 'returned') return null;
+  const action = recorded.status === 'shipped' ? 'record_return' : 'cancel';
+  let result: SaleChangeResult;
+  try {
+    result = await changeSale(trx, {
+      accountId: sale.accountId,
+      saleId: recorded.id,
+      action,
+      userId: null,
+    });
+  } catch (error) {
+    // Changed in Listora meanwhile.
+    if (error instanceof SaleStateError) return null;
+    throw error;
+  }
+  const items = await trx
+    .selectFrom('sale_item')
+    .innerJoin('inventory_item as item', (join) =>
+      join
+        .onRef('item.account_id', '=', 'sale_item.account_id')
+        .onRef('item.id', '=', 'sale_item.item_id'),
+    )
+    .select(['item.id', 'item.title', 'item.sku'])
+    .where('sale_item.account_id', '=', sale.accountId)
+    .where('sale_item.sale_id', '=', recorded.id)
+    .orderBy('sale_item.created_at')
+    .orderBy('item.id')
+    .execute();
+  const first = items[0];
+  if (first !== undefined) {
+    await enqueuePush(
+      trx,
+      canceledOrderNotification({
+        accountId: sale.accountId,
+        saleId: recorded.id,
+        itemId: first.id,
+        label: itemLabel(first),
+        others: items.length - 1,
+        marketplace: sale.marketplace,
+        action,
+        relist: result.relistPending.length > 0,
+      }),
+      { key: `sale_canceled:${recorded.id}` },
+    );
+  }
+  return { saleId: recorded.id, action, result };
+}
+
+const LABEL_MAX_LENGTH = 60;
+
+/** The item as the seller knows it: its title, or its SKU when it has none. */
+function itemLabel(item: { title: string | null; sku: string }): string {
+  const title = item.title?.trim() ?? '';
+  if (title === '') return item.sku;
+  return title.length <= LABEL_MAX_LENGTH ? title : `${title.slice(0, LABEL_MAX_LENGTH - 3)}...`;
+}
+
+/**
+ * "Order canceled on Vinted": what the marketplace did, what Listora did of it, and what is the
+ * seller's to decide. It opens the (first) item, whose screen asks whether to relist it.
+ */
+export function canceledOrderNotification(input: {
+  accountId: string;
+  saleId: string;
+  itemId: string;
+  label: string;
+  /** The order's other items (a bundle's). */
+  others: number;
+  marketplace: Marketplace;
+  action: 'cancel' | 'record_return';
+  /** Whether an item waits for the seller's "Relist it?". */
+  relist: boolean;
+}): PushNotification {
+  const name = MARKETPLACE_NAMES[input.marketplace];
+  const what =
+    input.others === 0
+      ? input.label
+      : `${input.label} and ${String(input.others)} more ${input.others === 1 ? 'item' : 'items'}`;
+  const parts =
+    input.action === 'cancel'
+      ? [`${name} canceled the order of ${what}, so it no longer counts as sold.`]
+      : [
+          `${name} refunded the buyer for ${what} after it shipped, so Listora recorded it as returned.`,
+        ];
+  if (input.relist) parts.push('Open it to choose whether to relist it, and where.');
+  return {
+    accountId: input.accountId,
+    category: 'sale_canceled',
+    title: input.action === 'cancel' ? `Order canceled on ${name}` : `Order refunded on ${name}`,
+    body: parts.join(' '),
+    urgency: 'normal',
+    threadId: `item:${input.itemId}`,
+    data: { itemId: input.itemId, saleId: input.saleId },
+  };
 }
 
 function soldItemSources(

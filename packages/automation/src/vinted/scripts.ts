@@ -6,9 +6,11 @@
  * - `health` (M3): opens the seller's profile settings and reads the member signed in.
  * - `listings` (M4): one page of the seller's wardrobe from Vinted's web API, then each listing
  *   for sale's own item read for its description and details, for an import.
- * - `orders` (M4): the seller's sold orders, in progress and completed (never canceled), each
- *   with the items that sold in it (a bundle sells several), for the sales history and sale
- *   checks.
+ * - `orders` (M4, M6): the seller's sold orders, in progress and completed, each with the items
+ *   that sold in it (a bundle sells several), whether it shipped, for the sales history and sale
+ *   checks; an order the buyer has not paid for yet is no sale. A check also reads the newest
+ *   canceled ones, and those in progress Vinted says canceled, so a sale Listora recorded of one
+ *   no longer stands.
  * - `create` (M5): fills the upload form and uploads; only Upload changes anything. A later
  *   attempt first looks for the listing by its SKU line, so a create Vinted already took is
  *   never posted twice (Vinted bans the same item listed twice).
@@ -51,6 +53,7 @@ import { listingSku } from '../adapter/sku-line.ts';
 import type { StepRunner } from '../runner/types.ts';
 import { currentMember, openAccount, signedInMember } from './pages/account-page.ts';
 import {
+  orderProgress,
   orderTime,
   priceCents,
   readItem,
@@ -58,6 +61,7 @@ import {
   readTransactionItems,
   readWardrobePage,
   type VintedItem,
+  type VintedOrderProgress,
   type VintedOrderRecord,
 } from './pages/api.ts';
 import { changed, type VintedSite } from './pages/common.ts';
@@ -85,11 +89,19 @@ export const ORDER_LIMITS = { pages: 2, reads: 20 } as const;
 /** What the sales history (a check with no `since`) reads at most: 200 orders per state. */
 export const HISTORY_ORDER_LIMITS = { pages: 10, reads: 150 } as const;
 
-/** The states of sold orders read, and the step that reads each. Canceled ones never are. */
+/** The lists of sold orders read, and the step that reads each. */
 const ORDER_STATES = [
   { status: 'in_progress', step: 'read your sales in progress' },
   { status: 'completed', step: 'read your completed sales' },
 ] as const;
+/**
+ * The canceled orders a check reads: the newest page, and only those paid for this long before
+ * the check's `since` at the most (an order is refunded at the latest a few weeks after it was
+ * paid for: 5 business days to ship it, its way to the buyer, and their 2 days). Only the list:
+ * a canceled order needs no read of its own, it is matched to a sale by its id. The sales history
+ * reads none: a canceled order is no sale.
+ */
+export const CANCELED_ORDER_LIMITS = { pages: 1, lookbackMs: 30 * 24 * 3_600_000 } as const;
 
 /**
  * How many of the newest wardrobe listings a lookup by SKU reads. A listing whose id Listora
@@ -343,6 +355,7 @@ export function createVintedScripts(
       await openSettings(step);
       const limits = since === null ? HISTORY_ORDER_LIMITS : ORDER_LIMITS;
       const orders: RemoteOrder[] = [];
+      const seen = new Set<string>();
       for (const state of ORDER_STATES) {
         let reads = 0;
         state: for (let number = 1; number <= limits.pages; number += 1) {
@@ -353,6 +366,15 @@ export function createVintedScripts(
             const soldAt = orderTime(order);
             // Newest first: once one was paid for before `since`, so was every one after it.
             if (since !== null && soldAt < since) break state;
+            if (seen.has(order.transaction_id)) continue;
+            const progress = orderProgress(order, state.status);
+            // Not paid for yet (an accepted offer): no sale, and nothing to read.
+            if (progress === 'unpaid') continue;
+            seen.add(order.transaction_id);
+            if (progress === 'canceled') {
+              orders.push(canceledOrder(order, soldAt));
+              continue;
+            }
             if (reads === limits.reads) break state;
             reads += 1;
             const items = await step('read the order', { mutates: false }, (page) =>
@@ -360,16 +382,32 @@ export function createVintedScripts(
             );
             // Gone since the list was read (Vinted deleted it): nothing Listora can tell of it.
             if (items === null) continue;
+            const shipped = shippedFrom(progress);
             orders.push({
               externalOrderId: order.transaction_id,
               soldAt,
-              // A completed order was delivered and the buyer confirmed it (or two days passed).
-              ...(state.status === 'completed' ? { shipped: true } : {}),
+              ...(shipped === undefined ? {} : { shipped }),
               items: orderItems(order, items),
             });
           }
           if (!shown.hasNext) break;
         }
+      }
+      if (since === null) return orders;
+      // The newest canceled orders, so a sale Listora recorded of one no longer stands.
+      const oldest = since.getTime() - CANCELED_ORDER_LIMITS.lookbackMs;
+      canceled: for (let number = 1; number <= CANCELED_ORDER_LIMITS.pages; number += 1) {
+        const shown = await step('read your canceled sales', { mutates: false }, (page) =>
+          readSoldOrders(page, site, 'canceled', number),
+        );
+        for (const order of shown.orders) {
+          const soldAt = orderTime(order);
+          if (soldAt.getTime() < oldest) break canceled;
+          if (seen.has(order.transaction_id)) continue;
+          seen.add(order.transaction_id);
+          orders.push(canceledOrder(order, soldAt));
+        }
+        if (!shown.hasNext) break;
       }
       return orders;
     },
@@ -452,6 +490,24 @@ function examples(offered: readonly string[]): string {
 function listedListing(item: VintedItem): ListedListing {
   if (item.state === null) throw new Error('a draft is not a listing');
   return { ...item.state, details: listingDetails(item.record, item.sku) };
+}
+
+/**
+ * Whether an order shipped: sent, on its way, delivered, or completed (delivered, and the buyer
+ * confirmed it or two days passed), or still waiting to be sent; unknown words say nothing.
+ */
+function shippedFrom(progress: VintedOrderProgress): boolean | undefined {
+  if (progress === 'shipped' || progress === 'completed') return true;
+  if (progress === 'to_ship') return false;
+  return undefined;
+}
+
+/**
+ * A canceled order as its list shows it: no sale, so no items; it is matched to a sale Listora
+ * recorded by its id alone.
+ */
+function canceledOrder(order: VintedOrderRecord, soldAt: Date): RemoteOrder {
+  return { externalOrderId: order.transaction_id, soldAt, canceled: true, items: [] };
 }
 
 /**
