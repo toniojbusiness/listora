@@ -65,6 +65,13 @@ export interface ScanCallSettings {
   readonly minMarketSold: number;
   /** Sold close matches of the exact model a high-confidence call on them needs. */
   readonly highMarketSold: number;
+  /**
+   * A Grab on the likely sale: its payout after fees, less the item's cost, at least this many
+   * times the worth-listing amount ...
+   */
+  readonly grabLikelyMultiple: number;
+  /** ... while even the fast sale's payout, less the cost, is at least this share of it. */
+  readonly grabFastShare: number;
 }
 
 /**
@@ -85,6 +92,8 @@ export const DEFAULT_SCAN_CALL_SETTINGS: ScanCallSettings = {
   minAskingMatches: 5,
   minMarketSold: 5,
   highMarketSold: 10,
+  grabLikelyMultiple: 1.5,
+  grabFastShare: 0.5,
 };
 
 /** What else the call weighed, each said with what it rests on. */
@@ -265,11 +274,13 @@ export interface ScanCall {
  *   least `minComparisons`, else a marketplace's sold listings, the web's asks, or the AI
  *   estimate;
  * - **Skip** when even the range's high end pays out under the worth-listing amount;
- * - **Buy** when its low end, less the cost, pays out at least that and no flag is raised, at
- *   any confidence (at the bins a clearly valuable item is worth its pound even when the exact
- *   model is unsure), unless the range is an estimate (the web's asks or the AI's) that every
- *   other source says pays less, or the AI estimate with nothing to check it (`unsupportedBy`);
- * - **Your call** otherwise: the range straddles the amount, a flag, or that lone estimate.
+ * - **Buy** when no flag is raised and its low end, less the cost, pays out at least that, or
+ *   its likely sale clearly does (`grabLikelyMultiple` times it) while even its fast sale pays
+ *   out `grabFastShare` of it; at any confidence and on any source (at the bins a clearly
+ *   valuable item is worth its pound even when the exact model is unsure, and a source that
+ *   timed out is only left out), unless the range is an estimate (the web's asks or the AI's)
+ *   that every other source says pays less (`unsupportedBy`);
+ * - **Your call** otherwise: the range straddles the amount, a flag, or that contradicted estimate.
  */
 export function scanCall(
   input: ScanCallInput,
@@ -446,6 +457,18 @@ export function scanCall(
 
   const conservativePayoutCents = payout(range.lowCents, input.fees);
   const optimisticPayoutCents = payout(range.highCents, input.fees);
+  const expected =
+    basis === 'own_history' && history
+      ? Math.round(history.prices.medianCents * tagsBump)
+      : basis === 'ai_estimate' && aiEstimate
+        ? aiEstimate.midCents
+        : (range.lowCents + range.highCents) / 2;
+  const prices = {
+    ...scanPrices(range, expected, calibration),
+    basedOn: pricesBasedOn(basis, calibration),
+  };
+  // The likely sale as the card shows it, so the why's payout is the card's price less fees.
+  const likelyPayoutCents = payout(prices.realisticCents, input.fees);
   const flagged =
     input.flags.visibleDamage || input.flags.lotOrBundle || input.flags.counterfeitProne;
   const cost = input.cost;
@@ -464,6 +487,7 @@ export function scanCall(
     {
       conservativePayoutCents,
       optimisticPayoutCents,
+      likelyPayoutCents,
       costCents,
       flagged,
       unsupported: unsupported !== undefined,
@@ -472,7 +496,7 @@ export function scanCall(
   );
   const why = callWhy(
     call,
-    { conservativePayoutCents, optimisticPayoutCents, confidence },
+    { conservativePayoutCents, optimisticPayoutCents, likelyPayoutCents, confidence },
     input.flags,
     settings,
     {
@@ -483,16 +507,6 @@ export function scanCall(
   if (cost !== undefined) {
     signals.push({ kind: 'cost', label: cost.label, basedOn: cost.basedOn });
   }
-  const expected =
-    basis === 'own_history' && history
-      ? Math.round(history.prices.medianCents * tagsBump)
-      : basis === 'ai_estimate' && aiEstimate
-        ? aiEstimate.midCents
-        : (range.lowCents + range.highCents) / 2;
-  const prices = {
-    ...scanPrices(range, expected, calibration),
-    basedOn: pricesBasedOn(basis, calibration),
-  };
   return {
     call,
     confidence,
@@ -526,18 +540,17 @@ interface OtherSource {
 }
 
 /**
- * Why a range resting on an estimate (the web's asks or the AI's) makes no Grab on its own:
- * every other source that prices the item says it pays less (`disagreed`), or, for the AI
- * estimate, there is no other source to check it against (`alone`).
+ * Why a range resting on an estimate (the web's asks or the AI's) makes no Grab: every other
+ * source that prices the item says it pays less. An estimate with no other source at all, the
+ * AI's for an item with no brand to look up or whose lookups timed out, is not held back
+ * (2026-11-05: a missing source is only ever left out, and must not by itself demote a Grab).
  */
-export type UnsupportedEstimate =
-  | {
-      readonly kind: 'disagreed';
-      /** What the range rests on, as the why names it: "the web's asks", "the AI estimate". */
-      readonly estimate: string;
-      readonly by: { readonly name: string; readonly plural: boolean };
-    }
-  | { readonly kind: 'alone'; readonly estimate: string };
+export interface UnsupportedEstimate {
+  readonly kind: 'disagreed';
+  /** What the range rests on, as the why names it: "the web's asks", "the AI estimate". */
+  readonly estimate: string;
+  readonly by: { readonly name: string; readonly plural: boolean };
+}
 
 /**
  * Every source other than the range's own that prices the item: the household's own sales like
@@ -585,10 +598,9 @@ function otherSources(
 }
 
 /**
- * Whether the range's own estimate stands unsupported, so it makes no Grab: every other source
+ * Whether the range's own estimate stands contradicted, so it makes no Grab: every other source
  * says the item pays less (its high end, after fees and the cost, under the worth-listing
- * amount), or the range is the AI estimate with no other source at all. Undefined when a
- * source agrees, or the range is the web's asks with nothing else (several sites' listings).
+ * amount). Undefined when a source agrees, or there is no other source.
  */
 function unsupportedBy(
   basis: 'web_info' | 'ai_estimate',
@@ -599,7 +611,7 @@ function unsupportedBy(
 ): UnsupportedEstimate | undefined {
   const estimate = basis === 'web_info' ? "the web's asks" : 'the AI estimate';
   const [first] = sources;
-  if (first === undefined) return basis === 'ai_estimate' ? { kind: 'alone', estimate } : undefined;
+  if (first === undefined) return undefined;
   const disagrees = (source: OtherSource) =>
     payout(source.highCents, fees) - costCents < worthListingCents;
   return sources.every(disagrees)
@@ -609,15 +621,18 @@ function unsupportedBy(
 
 /**
  * The headline's one-line why, from the payouts after fees against the worth-listing amount:
- * a Grab pays out enough even at the range's low end; a Leave not even at its high end; a Maybe
- * says what holds it back (a flag, little to go on, or a range across the amount). Never says
- * "sold": the payouts are estimates whatever the range rests on.
+ * a Grab pays out enough even at the range's low end, or clearly at its likely sale; a Leave not
+ * even at its high end; a Maybe says what holds it back (a flag, a contradicted estimate, or a
+ * range across the amount). Never says "sold": the payouts are estimates whatever the range
+ * rests on.
  */
 export function callWhy(
   call: ScanCallKind,
   payouts: {
     readonly conservativePayoutCents: number;
     readonly optimisticPayoutCents: number;
+    /** The payout at the likely sale; a Grab that rests on it says so. */
+    readonly likelyPayoutCents?: number;
     readonly confidence: CallConfidence;
   },
   flags: ScanFlags,
@@ -639,11 +654,16 @@ export function callWhy(
     cost === undefined || cost.cents === 0
       ? `your ${worth}`
       : `your ${worth} plus its ${dollarsAndCents(cost.cents)} ${cost.mode === 'bins' ? 'bins cost' : 'store price'}`;
+  const unsure = payouts.confidence === 'low' ? ', though the exact item is unsure' : '';
   switch (call) {
-    case 'buy':
-      return payouts.confidence === 'low'
-        ? `Even its low end pays out ${low} after fees, over ${line}, though the exact item is unsure`
-        : `Even its low end pays out ${low} after fees, over ${line}`;
+    case 'buy': {
+      const likely = payouts.likelyPayoutCents;
+      // A Grab on the likely sale: its low end alone does not clear the line.
+      return likely !== undefined &&
+        payouts.conservativePayoutCents - (cost?.cents ?? 0) < settings.worthListingCents
+        ? `Likely pays out ${dollars(likely)} after fees, well over ${line}, and ${low} at a fast sale${unsure}`
+        : `Even its low end pays out ${low} after fees, over ${line}${unsure}`;
+    }
     case 'skip':
       return `Pays out ${high} at most after fees, under your ${worth}`;
     case 'your_call':
@@ -651,12 +671,9 @@ export function callWhy(
         return `Pays out ${range} after fees, but often faked: check it's real`;
       if (flags.visibleDamage) return `Pays out ${range} after fees, but it shows damage`;
       if (flags.lotOrBundle) return `Pays out ${range} after fees, but it's a lot or bundle`;
-      if (weighed.unsupported?.kind === 'disagreed') {
+      if (weighed.unsupported !== undefined) {
         const { estimate, by } = weighed.unsupported;
         return `Pays out ${range} after fees on ${estimate}, but ${by.name} ${by.plural ? 'say' : 'says'} less`;
-      }
-      if (weighed.unsupported?.kind === 'alone') {
-        return `Pays out ${range} after fees on ${weighed.unsupported.estimate} alone, with nothing to check it`;
       }
       return `Pays out ${range} after fees: it may or may not clear ${line}`;
   }
@@ -665,31 +682,42 @@ export function callWhy(
 /**
  * The call from a range's payouts and the item's likely cost, the one rule the server's call
  * and the iPhone's offline call share (`offlineScanCall`, kept equal by golden cases): **Skip**
- * when even the optimistic payout is under the worth-listing amount; **Buy** when the
- * conservative one less the cost reaches it, with no flag and an estimate that does not stand
- * unsupported; **Your call** otherwise. The cost raises only the Buy's line: a wrong Leave
- * throws away an item that would have paid, while at bins prices the cost is small, and with it
- * on the Leave's line too the backtest's Leaves held 3 times in 7 against 2 in 2 without
- * (thrift-scan.md "Backtest", 2026-11-05). The offline call has no cost (its tag gives no
- * category) and no other source, so its rule is the payouts against the amount.
+ * when even the optimistic payout is under the worth-listing amount; **Buy**, with no flag and
+ * an estimate no other source contradicts, when the conservative payout less the cost reaches
+ * it, or the likely sale's payout less the cost reaches `grabLikelyMultiple` times it while the
+ * conservative one less the cost still reaches `grabFastShare` of it (a wide range whose likely
+ * sale clearly pays, at a cost of a dollar or two: thrift-scan.md "Results, 2026-11-05: clear
+ * grabs"); **Your call** otherwise. The cost raises only the Buy's line: a wrong Leave throws
+ * away an item that would have paid, while at bins prices the cost is small, and with it on the
+ * Leave's line too the backtest's Leaves held 3 times in 7 against 2 in 2 without. The offline
+ * call has no cost (its tag gives no category), no likely sale, and no other source, so its
+ * rule is the payouts against the amount.
  */
 export function decideCall(
   range: {
     readonly conservativePayoutCents: number;
     readonly optimisticPayoutCents: number;
+    /** The payout at the likely sale (the card's); none: the Buy rests on the low end alone. */
+    readonly likelyPayoutCents?: number;
     /** The item's likely cost; none: 0. */
     readonly costCents?: number;
     readonly flagged: boolean;
     /** The range is an estimate every other source says pays less (`unsupportedBy`). */
     readonly unsupported?: boolean;
   },
-  settings: Pick<ScanCallSettings, 'worthListingCents'>,
+  settings: Pick<ScanCallSettings, 'worthListingCents'> &
+    Partial<Pick<ScanCallSettings, 'grabLikelyMultiple' | 'grabFastShare'>>,
 ): ScanCallKind {
+  const worth = settings.worthListingCents;
   const cost = range.costCents ?? 0;
-  if (range.optimisticPayoutCents < settings.worthListingCents) return 'skip';
-  return range.conservativePayoutCents - cost >= settings.worthListingCents &&
-    !range.flagged &&
-    range.unsupported !== true
+  if (range.optimisticPayoutCents < worth) return 'skip';
+  if (range.flagged || range.unsupported === true) return 'your_call';
+  const low = range.conservativePayoutCents - cost;
+  if (low >= worth) return 'buy';
+  const likely = range.likelyPayoutCents;
+  const multiple = settings.grabLikelyMultiple ?? DEFAULT_SCAN_CALL_SETTINGS.grabLikelyMultiple;
+  const share = settings.grabFastShare ?? DEFAULT_SCAN_CALL_SETTINGS.grabFastShare;
+  return likely !== undefined && likely - cost >= worth * multiple && low >= worth * share
     ? 'buy'
     : 'your_call';
 }

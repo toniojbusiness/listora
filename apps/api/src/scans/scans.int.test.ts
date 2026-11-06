@@ -450,19 +450,21 @@ describe('the thrift scan (real Postgres)', () => {
     });
   });
 
-  it('rests on the AI estimate alone at low confidence, and skips what pays out too little', async () => {
+  it('rests on the AI estimate alone at low confidence, grabs what clearly pays, and skips what pays out too little', async () => {
     const run = await startRun();
     const unknown = await scanImage(
       answer({ brand: 'Nobody Knows', category: 'clothing/tops/t_shirts' }),
     );
     const ai = await priced((await scan(run.id, unknown.base64)).body.id);
     expect(ai.ownSales).toEqual([]);
+    // Nothing else prices it: the AI estimate alone may Grab, saying the item is unsure.
     expect(ai.call).toMatchObject({
-      call: 'your_call',
+      call: 'buy',
       confidence: 'low',
       basis: 'ai_estimate',
       basedOn: AI_ESTIMATE_LABEL,
     });
+    expect(ai.call.why).toMatch(/, though the exact item is unsure$/);
     const cheap = await scanImage(
       answer({
         brand: '',
