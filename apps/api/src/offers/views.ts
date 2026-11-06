@@ -18,6 +18,7 @@ import {
   loadFeatureGate,
   MARKETPLACE_NAMES,
   OFFER_RULES,
+  offerFloorCents,
   type FeatureGate,
 } from '@listora/marketplaces';
 
@@ -175,7 +176,7 @@ function offerView(
     ...(answers.includes('counter')
       ? {
           counterRange: {
-            above: usd(row.amount_cents),
+            above: usd(counterAbove(row)),
             ...(row.list_price_cents === null ? {} : { below: usd(row.list_price_cents) }),
           },
         }
@@ -277,6 +278,17 @@ export async function offerCheckViews(db: DbExecutor, tenant: Tenant): Promise<O
     status: row.waiting !== null ? 'waiting' : row.last_outcome === 'failed' ? 'failed' : 'ok',
     ...(row.last_succeeded_at === null ? {} : { checkedAt: row.last_succeeded_at.toISOString() }),
   }));
+}
+
+/**
+ * What a counteroffer has to be more than: the buyer's offer, and, where the marketplace sets a
+ * floor (Vinted's 40% below the price), a cent under that floor, so a counter takes the floor.
+ */
+function counterAbove(row: Pick<OfferRow, 'marketplace' | 'amount_cents' | 'list_price_cents'>) {
+  const floor = isOfferMarketplace(row.marketplace)
+    ? offerFloorCents(row.marketplace, row.list_price_cents)
+    : null;
+  return floor === null ? row.amount_cents : Math.max(row.amount_cents, floor - 1);
 }
 
 function usd(amountCents: number) {

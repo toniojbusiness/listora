@@ -29,6 +29,8 @@ export interface FakeOffer {
    * buyer and never on the seller.
    */
   sentBySeller?: boolean;
+  /** The buyer's price before the seller countered it (set by a counter). */
+  buyerAmountCents?: number;
 }
 
 /** What the next answer meets. */
@@ -141,7 +143,9 @@ export class FakeOfferDesk {
     this.#offers.set(id, {
       ...offer,
       status: answer === 'accept' ? 'accepted' : answer === 'decline' ? 'declined' : 'countered',
-      ...(counterCents === null ? {} : { amountCents: counterCents }),
+      ...(counterCents === null
+        ? {}
+        : { amountCents: counterCents, buyerAmountCents: offer.amountCents }),
     });
     if (fault?.type === 'lost_answer') return { status: 500, message: 'Something went wrong.' };
     return { status: 303, offerId: id };

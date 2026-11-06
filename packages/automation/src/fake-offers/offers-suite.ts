@@ -31,6 +31,8 @@ export interface OfferSuiteSetup {
   details: (offer: FakeOffer) => Partial<RemoteOffer>;
   /** The next read of the offers meets a bot check. */
   botCheckOnOffers: () => void;
+  /** The code that check stops the read with (default `bot_check`; Vinted's DataDome is `captcha`). */
+  botCheckCode?: string;
   /** The next offer page is one Listora no longer reads. */
   redesignOfferPage: () => void;
   /** What the adapter puts before a marketplace's own message. */
@@ -156,9 +158,11 @@ export function offerSuite(title: string, setup: () => OfferSuiteSetup): void {
     });
 
     it('stops at a bot check on the offers and never passes it', async () => {
-      const { adapter, ctx, botCheckOnOffers } = setup();
+      const { adapter, ctx, botCheckOnOffers, botCheckCode } = setup();
       botCheckOnOffers();
-      await expect(adapter.listOffers?.(ctx())).rejects.toMatchObject({ code: 'bot_check' });
+      await expect(adapter.listOffers?.(ctx())).rejects.toMatchObject({
+        code: botCheckCode ?? 'bot_check',
+      });
     });
 
     it('hands an answer to the seller when the offer page is one Listora no longer reads', async () => {

@@ -15,6 +15,7 @@ import { createTestApi, type TestApi } from '../test-support.ts';
 
 const OWNER = 'offers.owner@example.com';
 const STRANGER = 'offers.stranger@example.com';
+const VINTED_SELLER = 'offers.vinted@example.com';
 
 describe('offers (real Postgres)', () => {
   let api: TestApi;
@@ -241,6 +242,65 @@ describe('offers (real Postgres)', () => {
       .where('offer_id', '=', offer.id)
       .execute();
     expect(responses).toEqual([]);
+  });
+
+  it("shows a Vinted offer as non-binding, and refuses a counteroffer below Vinted's 40% floor", async () => {
+    // An account of its own, so its Vinted connection leaves the other tests' reads alone.
+    const sellerToken = await api.signIn(VINTED_SELLER);
+    const seller = await api.tenantOf(VINTED_SELLER);
+    const vinted = await api.db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: seller.accountId,
+        marketplace: 'vinted',
+        mode: 'automation',
+        status: 'connected',
+        token_ciphertext: Buffer.from('sealed'),
+        runs_on: 'phone',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    // The listing's price is $50.00 now: Vinted takes no offer, nor counter, below $30.00.
+    const offer = await api.db
+      .insertInto('marketplace_offer')
+      .values({
+        account_id: seller.accountId,
+        connection_id: vinted.id,
+        marketplace: 'vinted',
+        external_offer_id: '9100001/59100001',
+        listing_title: 'Denim jacket',
+        amount_cents: 2000,
+        list_price_cents: 5000,
+        buyer_name: 'jacketfan',
+        offer_url: 'https://www.vinted.com/inbox/9100001',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const shown = await api.call('getOffer', { token: sellerToken, params: { offerId: offer.id } });
+    expect(shown.body).toMatchObject({
+      marketplace: 'vinted',
+      actions: ['accept', 'decline', 'counter'],
+      // A counter has to be more than $29.99: at least the floor.
+      counterRange: { above: usd(2999), below: usd(5000) },
+      accept: { price: usd(2000), fees: usd(0), net: usd(2000) },
+    });
+    expect(shown.body.acceptNote).toContain("Vinted offers aren't binding");
+    const low = await answer(
+      offer.id,
+      { action: 'counter', offerAmount: usd(2000), counter: usd(2999) },
+      { token: sellerToken },
+    );
+    expect(low.status).toBe(422);
+    expect(JSON.stringify(low.error)).toContain(
+      'Vinted takes no offer this far below your listing price: a counteroffer has to be at least $30.00.',
+    );
+    const atFloor = await answer(
+      offer.id,
+      { action: 'counter', offerAmount: usd(2000), counter: usd(3000) },
+      { token: sellerToken },
+    );
+    expect(atFloor.status).toBe(202);
+    expect(atFloor.body).toMatchObject({ action: 'counter', counter: usd(3000), net: usd(3000) });
   });
 
   it("quotes a counteroffer's net after fees, and hides another account's offers", async () => {

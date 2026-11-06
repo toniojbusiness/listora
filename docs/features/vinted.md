@@ -11,7 +11,7 @@ and a feature turns on only after it passes live on the captain's Vinted test ac
 ([verified-features.md](verified-features.md)). Every write to a real Vinted account first reads
 the signed-in member name and stops unless it is the named test account.
 
-## Today: assisted (M1), with linking (M3), import and sales history (M4), and listing (M5) built
+## Today: assisted (M1), with linking, import, sales history, listing, and offers built
 
 Vinted runs on the assisted adapter (`createVintedAdapter` in
 `packages/marketplaces/src/assisted/marketplaces.ts`, [marketplaces.md](marketplaces.md)):
@@ -77,7 +77,8 @@ Vinted is linked by signing in, like Poshmark, Mercari, and Depop
   session with its automation adapter (`createMarketplaceAdapters`), whose listing scripts (M5,
   below) run only in the owner's Test mode until they pass live. The generic fake site
   (`FAKE_AUTOMATION_SITE_URL`) serves Vinted only its session check, never its writing scripts.
-  A linked Vinted gets no offer read: offers are not built (M7).
+  A linked Vinted's offers are read and answered only in Test mode until they pass live (M7,
+  below).
 - **Hidden until its live link.** Linking is not on the feature list yet, so Vinted is in
   `LINKING_NOT_VERIFIED` (`packages/marketplaces/src/features.ts`): Link accounts lists it only in
   the owner's Test mode ([test-mode.md](test-mode.md)) or once the account linked it (so a linked
@@ -249,16 +250,82 @@ through, and the Test-mode gate), `vinted/payload.test.ts`, `vinted/categories.t
 `operations/src/executor.int.test.ts` (a create and a price change in review are never sent
 again, and the gate reaches the adapter), and `operations/src/status-display.test.ts`.
 
+## Offers (M7)
+
+Built, and hidden until their live test: `offers` and `offer_answers` are not on Vinted's list in
+`features.ts`, so a seller's Vinted offers are never read, and only an account in Test mode reads
+and answers them, on its iPhone ([offers.md](offers.md), [test-mode.md](test-mode.md)). The flow
+is every marketplace's (a read into Tasks, an answer only for the seller's confirmed tap, sent
+once, done only by read-back); what differs on Vinted is in `vinted/pages/offers.ts` and
+`OFFER_RULES.vinted`:
+
+- **Offers live in conversations.** A buyer asks for a price in the conversation about the item,
+  and the seller answers there. The read opens the seller's settings, reads the member signed in
+  (`/api/v2/users/current`), then their 20 newest conversations (`/api/v2/inbox`), then each
+  one's record (`/api/v2/conversations/<id>`), a step each: its `transaction` (the item, or a
+  bundle's items, and the `seller_id` and `buyer_id`), the buyer's public `login`, and its
+  messages. The newest offer message decides: the buyer's (`offer_request_message`), pending,
+  waits on the seller; the seller's (`offer_message`), pending, is their counteroffer and waits on
+  the buyer; accepted is accepted; the buyer's declined is declined; expired, canceled, or the
+  seller's counteroffer the buyer declined is over. A conversation about an item the member
+  bought, or about no sale, holds none of the seller's offers. A status or author Listora
+  doesn't know stops the read rather than guess. Listora's id of a Vinted offer is
+  `<conversation id>/<transaction id>`; its Open in Vinted is the conversation. A bundle's offer
+  names no one listing and covers its items (`listingCount`).
+- **Not binding.** Accepting lets the buyer buy at that price; the item sells only once they pay
+  (`accept: 'buyer_checkout'`, the offer's note says so), so the sale comes through the sale
+  checks from Vinted's sold orders, never from the accept. Vinted shows no offer expiry Listora
+  has read, so none is shown.
+- **The 40% floor.** Vinted's buyers offer at most 40% below the price, and a counteroffer is an
+  offer too: `floorPercent: 60` makes `requestOfferAnswer` refuse a counter below 60% of the
+  listing's price (rounded up to the cent) before anything reaches the phone, and the offer's
+  `counterRange` starts a cent under that floor, so the app's own check matches. It binds only
+  when the price rose after the offer; otherwise a counter above the offer is above it already.
+- **Conversation-scoped answers only.** An answer opens the offer's own conversation
+  (`/inbox/<id>`), reads it from the web API (an offer that moved or is over sends nothing), and
+  uses only the offer card's Accept, Decline, or Counter offer and its confirmation (a counter's
+  price goes in the offer dialog's price field). Only that confirmation changes anything.
+  Listora never types in the conversation's message box, sends no message of its own, and never
+  writes to any other member: the plan leaves out offers to likers and any outreach (Vinted's
+  terms ban mass messages, and its robots.txt bans automation that simulates a customer
+  interaction). Like every write,
+  the answer first reads the member signed in and changes nothing unless it is the linked one.
+- **Checks.** DataDome (on a page or an API answer) and Vinted's sign-in steps stop the read or
+  the answer for the seller; an offer card the page doesn't draw hands the answer to the seller in
+  Vinted (`element_missing`).
+- **Modeled pages.** The inbox and conversation reads, their fields, and the conversation page's
+  offer card (`CONVERSATION_PAGE`) are Listora's model until the read-only mapping (M2) records a
+  conversation with an offer; a page or record that differs stops the step, and its fix is
+  `pages/offers.ts`. A read looks at the 20 newest conversations only: an offer in an older
+  conversation is not read (and one Listora had there closes) until the mapping shows whether the
+  inbox names the conversations with offers.
+- **The phone** needs no new app build: the server hands the app the runtime with the offer
+  scripts (`npm run phone:bundle`), and offers already run on runtime version 3.
+
+**The live test** is the captain's, in Test mode, on toniojx only, once Vinted's seller
+verification of the account is done: a second account makes offers on a toniojx test listing;
+Tasks shows the offer (read), then decline one, counter one (above the floor), and accept one,
+each confirmed by Listora's read-back; the test listing is deleted in Vinted afterward. It adds
+`offers` and `offer_answers` to Vinted's list in `features.ts` in the change that records it.
+
+Tests: `vinted/offers.int.test.ts` (the shared offers suite on the fake Vinted's conversations,
+then a conversation about a purchase or no sale, an offer waiting on the buyer, a bundle, an
+unknown status, Vinted's refusal of a counter below its floor, a session signed in as another
+member, a read-back of a gone or replaced offer, only GETs besides the answer, and no message
+sent after any test), `phone/health-vinted.int.test.ts` (a read and a counter through the phone
+runtime), `vinted/pages/offers.test.ts` (the statuses, the floor, hidden for sellers), and
+`apps/api/src/offers/offers.int.test.ts` (the non-binding note, the counter range, and the
+floor's refusal).
+
 ## Milestones still to come
 
-M3's live link, M4's live import, and M5's live listing on the test account on the iPhone are
-still to run (above).
+M3's live link, M4's live import, M5's live listing, and M7's live offers on the test account on
+the iPhone are still to run (above).
 
 | #   | Milestone                                                                                                                    |
 | --- | ---------------------------------------------------------------------------------------------------------------------------- |
 | M2  | Map Vinted's pages read-only (upload form, item page, listings, sold orders, offers, labels) and write the taxonomy snapshot |
 | M6  | Sale checks and auto-delist, with bundles (one order, several items) and escrow completion                                   |
-| M7  | Offers: read, then accept, decline, counter                                                                                  |
 | M8  | Shipping labels and pack check (carrier, label or QR code, ship within 5 business days)                                      |
 
 ## What differs on Vinted
