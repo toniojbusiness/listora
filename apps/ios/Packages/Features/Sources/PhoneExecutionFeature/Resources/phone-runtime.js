@@ -13921,9 +13921,11 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	*   `is_reserved`), its `photos`, `brand_title`, `size_title`, and condition (`status`).
 	* - `GET /api/v2/items/<id>`: one item as its page loads it, with its whole `description`, its
 	*   `catalog_id`, and its colours (`color1`, `color2`).
-	* - `GET /api/v2/my_orders?type=sold&status=<in_progress|completed>&page=<n>&per_page=20`: the
-	*   member's sold orders, newest first: each with its `transaction_id`, `date` (when the buyer
-	*   paid), `title`, and `price`. Canceled orders are never asked for.
+	* - `GET /api/v2/my_orders?type=sold&status=<in_progress|completed|canceled>&page=<n>&per_page=20`:
+	*   the member's sold orders, newest first: each with its `transaction_id`, `date` (when the
+	*   buyer paid), `title`, `price`, and where it stands in Vinted's words (`status`, "Payment
+	*   successful", "Parcel on its way", "Order completed", ...; `orderProgress`). Canceled ones
+	*   are read only to settle a sale Listora recorded of them (Vinted plan M6).
 	* - `GET /api/v2/transactions/<id>`: one order, with the items that sold in it (`items`, or one
 	*   `item`): a bundle sells several in one order.
 	*
@@ -13977,8 +13979,26 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		transaction_id: id,
 		date: string(),
 		title: string().nullish(),
-		price: priceSchema.optional()
+		price: priceSchema.optional(),
+		status: string().nullish(),
+		transaction_user_status: string().nullish()
 	}).catchall(unknown());
+	/** Vinted's words for each state, tried in this order (a label "sent" to ship it is to ship). */
+	const ORDER_WORDS = [
+		["canceled", /\bcancel|\brefund|\bfailed\b/],
+		["unpaid", /waiting for (the )?(buyer'?s? )?payment|awaiting payment|payment (is )?(pending|processing)|not (yet )?paid|\bunpaid\b|offer accepted/],
+		["completed", /\bcompleted?\b|\bfinali[sz]ed\b/],
+		["to_ship", /shipping label|\blabel\b|to (ship|send)\b|ship (it )?by|send (it )?by|send (it|the item|the parcel)\b|payment successful|\bpaid\b/],
+		["shipped", /\bsent\b|\bshipped\b|on (its|the) way|in transit|delivered|dropped off|picked up|arrived|collected/]
+	];
+	/** Where an order in one of the lists stands (`VintedOrderProgress`). */
+	function orderProgress(order, list) {
+		if (list === "completed") return "completed";
+		if (list === "canceled") return "canceled";
+		const words = [order.status, order.transaction_user_status].filter((value) => typeof value === "string").join(" ").toLowerCase().replaceAll("_", " ");
+		if (words.trim() === "") return "unknown";
+		return ORDER_WORDS.find(([, pattern]) => pattern.test(words))?.[0] ?? "unknown";
+	}
 	const ordersSchema = object({
 		my_orders: array(unknown()),
 		pagination: paginationSchema
@@ -14011,7 +14031,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		const { item } = expectShape(object({ item: unknown() }), answer.body, "item");
 		return vintedItem(expectShape(itemSchema, item, "item"), site);
 	}
-	/** The member's sold orders in one state, one page of them, newest first. */
+	/** The member's sold orders in one list, one page of them, newest first. */
 	async function readSoldOrders(page, site, status, number) {
 		const query = new URLSearchParams({
 			type: "sold",
@@ -14557,7 +14577,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		pages: 10,
 		reads: 150
 	};
-	/** The states of sold orders read, and the step that reads each. Canceled ones never are. */
+	/** The lists of sold orders read, and the step that reads each. */
 	const ORDER_STATES = [{
 		status: "in_progress",
 		step: "read your sales in progress"
@@ -14565,6 +14585,17 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		status: "completed",
 		step: "read your completed sales"
 	}];
+	/**
+	* The canceled orders a check reads: the newest page, and only those paid for this long before
+	* the check's `since` at the most (an order is refunded at the latest a few weeks after it was
+	* paid for: 5 business days to ship it, its way to the buyer, and their 2 days). Only the list:
+	* a canceled order needs no read of its own, it is matched to a sale by its id. The sales history
+	* reads none: a canceled order is no sale.
+	*/
+	const CANCELED_ORDER_LIMITS = {
+		pages: 1,
+		lookbackMs: 2592e6
+	};
 	/**
 	* How many of the newest wardrobe listings a lookup by SKU reads. A listing whose id Listora
 	* never learned is one it just posted, so it is among the newest.
@@ -14758,6 +14789,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 				await openSettings(step);
 				const limits = since === null ? HISTORY_ORDER_LIMITS : ORDER_LIMITS;
 				const orders = [];
+				const seen = /* @__PURE__ */ new Set();
 				for (const state of ORDER_STATES) {
 					let reads = 0;
 					state: for (let number = 1; number <= limits.pages; number += 1) {
@@ -14765,19 +14797,41 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 						for (const order of shown.orders) {
 							const soldAt = orderTime(order);
 							if (since !== null && soldAt < since) break state;
+							if (seen.has(order.transaction_id)) continue;
+							const progress = orderProgress(order, state.status);
+							if (progress === "unpaid") continue;
+							seen.add(order.transaction_id);
+							if (progress === "canceled") {
+								orders.push(canceledOrder(order, soldAt));
+								continue;
+							}
 							if (reads === limits.reads) break state;
 							reads += 1;
 							const items = await step("read the order", { mutates: false }, (page) => readTransactionItems(page, site, order.transaction_id));
 							if (items === null) continue;
+							const shipped = shippedFrom(progress);
 							orders.push({
 								externalOrderId: order.transaction_id,
 								soldAt,
-								...state.status === "completed" ? { shipped: true } : {},
+								...shipped === void 0 ? {} : { shipped },
 								items: orderItems(order, items)
 							});
 						}
 						if (!shown.hasNext) break;
 					}
+				}
+				if (since === null) return orders;
+				const oldest = since.getTime() - CANCELED_ORDER_LIMITS.lookbackMs;
+				canceled: for (let number = 1; number <= CANCELED_ORDER_LIMITS.pages; number += 1) {
+					const shown = await step("read your canceled sales", { mutates: false }, (page) => readSoldOrders(page, site, "canceled", number));
+					for (const order of shown.orders) {
+						const soldAt = orderTime(order);
+						if (soldAt.getTime() < oldest) break canceled;
+						if (seen.has(order.transaction_id)) continue;
+						seen.add(order.transaction_id);
+						orders.push(canceledOrder(order, soldAt));
+					}
+					if (!shown.hasNext) break;
 				}
 				return orders;
 			}
@@ -14856,6 +14910,26 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		return {
 			...item.state,
 			details: listingDetails$1(item.record, item.sku)
+		};
+	}
+	/**
+	* Whether an order shipped: sent, on its way, delivered, or completed (delivered, and the buyer
+	* confirmed it or two days passed), or still waiting to be sent; unknown words say nothing.
+	*/
+	function shippedFrom(progress) {
+		if (progress === "shipped" || progress === "completed") return true;
+		if (progress === "to_ship") return false;
+	}
+	/**
+	* A canceled order as its list shows it: no sale, so no items; it is matched to a sale Listora
+	* recorded by its id alone.
+	*/
+	function canceledOrder(order, soldAt) {
+		return {
+			externalOrderId: order.transaction_id,
+			soldAt,
+			canceled: true,
+			items: []
 		};
 	}
 	/**
