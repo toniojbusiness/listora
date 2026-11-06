@@ -16,7 +16,7 @@
  * layout.
  */
 
-export const CARRIERS = ['usps', 'ups', 'fedex', 'dhl', 'other'] as const;
+export const CARRIERS = ['usps', 'ups', 'fedex', 'dhl', 'speedx', 'other'] as const;
 export type Carrier = (typeof CARRIERS)[number];
 
 /** The shortest tracking number Listora compares by its end (a FedEx number is 12 digits). */

@@ -4,7 +4,7 @@
  * headless Chromium standing in for the app's web view, on the fake Vinted site. It reads the
  * member as the browser runner does, and stops at Vinted's checks for the seller to complete.
  * The import's listings read and the sales history's orders read (M4) run there the same way,
- * from Vinted's web API with the session's own cookies. Vinted has no listing scripts yet, so it
+ * from Vinted's web API with the session's own cookies, and so does Pack check's label read (M8). Vinted has no listing scripts yet, so it
  * has no conformance suite of its own (conformance-<marketplace>).
  */
 import { afterAll, describe, expect, it } from 'vitest';
@@ -110,6 +110,41 @@ describe('Vinted session check on the phone', () => {
         externalOrderId: '9801',
         shipped: true,
         items: [{ externalListingId: '8102', priceCents: 1400 }],
+      },
+    ]);
+  });
+
+  it("reads an order's shipment for Pack check: its carrier, QR code, and ship-by date", async () => {
+    site.orders = [
+      {
+        id: '9802',
+        paidAt: new Date('2026-11-06T12:00:00.000Z'),
+        state: 'in_progress',
+        itemIds: [],
+        priceCents: 1400,
+        title: 'Invented tee to ship',
+        shipment: { carrier: 'FedEx', tracking_code: '612345678901', label_type: 'qr_code' },
+      },
+    ];
+    // Paid on a Friday: the fifth business day is the next Friday.
+    expect(
+      await adapter(site.url).readOrderLabels(
+        [{ externalOrderId: '9802', externalListingIds: [], soldAt: '2026-11-06T12:00:00.000Z' }],
+        ctx(),
+      ),
+    ).toEqual([
+      {
+        externalOrderId: '9802',
+        found: true,
+        trackingNumber: '612345678901',
+        buyerFirstName: null,
+        orderState: 'to_ship',
+        carrierName: 'FedEx',
+        // As the phone answers it: the server's answer schema reads it as a time (answers.ts).
+        shipBy: '2026-11-13T12:00:00.000Z',
+        labelExpiresAt: null,
+        labelFormat: 'qr_code',
+        labelFileUrl: null,
       },
     ]);
   });

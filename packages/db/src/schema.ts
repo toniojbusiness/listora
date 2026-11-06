@@ -48,6 +48,7 @@ import type {
   InboundEventSource,
   ItemStatus,
   LabelCarrier,
+  LabelFormat,
   ItemScanBasis,
   ItemScanCall,
   ItemScanConfidence,
@@ -1572,6 +1573,8 @@ export interface SaleLabelTable {
   label_expires_at: NullableTimestamp;
   /** The label's file on the marketplace's own site (https), when its page names one. */
   label_file_url: Nullable<string>;
+  /** A label to print or a QR code shown at drop-off, when the order page says; else `null`. */
+  label_format: Nullable<LabelFormat>;
   /** The label Listora last printed for the order (canonical); set with `printed_at`. */
   printed_tracking_number: Nullable<string>;
   printed_at: NullableTimestamp;

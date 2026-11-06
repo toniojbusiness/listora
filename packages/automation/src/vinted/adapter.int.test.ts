@@ -377,4 +377,110 @@ describe('Vinted automation adapter on the fake Vinted site', () => {
       });
     });
   });
+
+  describe('shipping labels, for Pack check (M8)', () => {
+    /** A USPS label, invented. */
+    const USPS = '9400111899223197428490';
+    const request = (id: string, soldAt = '2026-11-05T15:00:00.000Z') => ({
+      externalOrderId: id,
+      externalListingIds: [],
+      soldAt,
+    });
+
+    it("reads each order's carrier, label, and ship-by date, with GETs only", async () => {
+      site.orders = [
+        order('51', {
+          state: 'in_progress',
+          shipment: {
+            id: 801,
+            status: 'label_sent',
+            carrier: { name: 'USPS' },
+            tracking_code: USPS,
+            label_type: 'label',
+            label_url: `${site.url}/shipments/801/label.pdf`,
+            shipping_deadline: '2026-11-12T15:00:00.000Z',
+          },
+        }),
+      ];
+      const from = site.requests.length;
+      const labels = await adapter.readOrderLabels([request('51')], ctx());
+      expect(labels).toEqual([
+        {
+          externalOrderId: '51',
+          found: true,
+          trackingNumber: USPS,
+          buyerFirstName: null,
+          orderState: 'to_ship',
+          carrierName: 'USPS',
+          shipBy: new Date('2026-11-12T15:00:00.000Z'),
+          labelExpiresAt: null,
+          labelFormat: 'label',
+          labelFileUrl: `${site.url}/shipments/801/label.pdf`,
+        },
+      ]);
+      expect(onlyRead(from)).toBe(true);
+    });
+
+    it('reads a QR code shown at the counter, with no file to print, and 5 business days to ship', async () => {
+      site.orders = [
+        order('52', {
+          state: 'in_progress',
+          shipment: {
+            carrier_name: 'SpeedX',
+            tracking_code: 'SPXUS0012345678',
+            label_type: 'qr_code',
+            label_url: `${site.url}/shipments/802/qr.png`,
+          },
+        }),
+      ];
+      // Paid on a Thursday: the fifth business day is the next Thursday.
+      const [label] = await adapter.readOrderLabels(
+        [request('52', '2026-11-05T15:00:00.000Z')],
+        ctx(),
+      );
+      expect(label).toMatchObject({
+        found: true,
+        carrierName: 'SpeedX',
+        trackingNumber: 'SPXUS0012345678',
+        labelFormat: 'qr_code',
+        labelFileUrl: null,
+        shipBy: new Date('2026-11-12T15:00:00.000Z'),
+      });
+    });
+
+    it('reads an order with no label yet, shipped and canceled orders, and one Vinted no longer has', async () => {
+      site.orders = [
+        order('53', { state: 'in_progress', shipment: { status: 'pending' } }),
+        order('54', { state: 'completed', shipment: { tracking_code: USPS, status: 'delivered' } }),
+        order('55', { state: 'canceled', shipment: { tracking_code: USPS } }),
+      ];
+      const labels = await adapter.readOrderLabels(
+        [request('53'), request('54'), request('55'), request('56'), request('listing:9')],
+        ctx(),
+      );
+      expect(
+        labels.map((one) => (one.found ? [one.trackingNumber, one.orderState] : null)),
+      ).toEqual([[null, 'to_ship'], [USPS, 'shipped'], [USPS, 'canceled'], null, null]);
+    });
+
+    it('never takes a label file from another host', async () => {
+      site.orders = [
+        order('57', {
+          state: 'in_progress',
+          shipment: { tracking_code: USPS, label_url: 'https://files.example.com/label.pdf' },
+        }),
+      ];
+      const [label] = await adapter.readOrderLabels([request('57')], ctx());
+      expect(label).toMatchObject({ found: true, labelFileUrl: null, labelFormat: null });
+    });
+
+    it('stops at DataDome on the web API, and reads no label', async () => {
+      site.orders = [order('58', { state: 'in_progress' })];
+      inject({ type: 'datadome_api' }, 'orders');
+      await expect(adapter.readOrderLabels([request('58')], ctx())).rejects.toMatchObject({
+        code: 'captcha',
+      });
+      expect(sessions.challenges).toEqual(['captcha']);
+    });
+  });
 });

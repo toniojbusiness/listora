@@ -1,4 +1,5 @@
 import { createInventoryItem, jsonb, type Marketplace } from '@listora/db';
+import { useMarketplaceFeatures } from '@listora/marketplaces';
 import { ordersToRead, recordLabelReads } from '@listora/pack-check';
 import { DOUBLE_PRINT } from '@listora/pack-check/testing';
 import sharp from 'sharp';
@@ -653,6 +654,110 @@ describe('pack check (real Postgres)', () => {
     expect(
       (await printLabel(tee.saleId, '9400111899223197422222')).body.label?.printed?.count,
     ).toBe(1);
+  });
+
+  it("shows a Vinted order's QR code, carrier, ship-by date, and its days to ship, as information", async () => {
+    const jacket = await order({ title: 'Vinted jacket', marketplace: 'vinted' });
+    const tee = await order({ title: 'Vinted tee', marketplace: 'vinted' });
+    const shipBy = new Date(api.clock.now + 5 * 24 * HOUR);
+    await recordLabelReads(
+      api.db,
+      tenant.accountId,
+      [
+        {
+          saleId: jacket.saleId,
+          status: 'read',
+          trackingNumber: 'SPXUS0012345678',
+          buyerFirstName: null,
+          orderState: 'to_ship',
+          carrierName: 'SpeedX',
+          shipBy,
+          labelFormat: 'qr_code',
+          // A QR code has nothing to print, whatever the page names.
+          labelFileUrl: 'https://www.vinted.com/shipments/1/qr.png',
+        },
+        {
+          saleId: tee.saleId,
+          status: 'read',
+          trackingNumber: '9400111899223197425555',
+          buyerFirstName: null,
+          orderState: 'to_ship',
+          carrierName: 'USPS',
+          labelFormat: 'label',
+          labelFileUrl: 'https://www.vinted.com/shipments/2/label.pdf',
+        },
+      ],
+      new Date(api.clock.now),
+    );
+    const data = (await api.call('listPackOrders', { token })).body.data;
+    const qr = data.find((entry) => entry.saleId === jacket.saleId);
+    expect(qr).toMatchObject({
+      shipBy: shipBy.toISOString(),
+      label: { carrier: 'speedx', format: 'qr_code' },
+      labelStatus: { tone: 'neutral', label: 'SpeedX QR code •••• 5678 (from Vinted)' },
+      labelPageUrl: 'https://www.vinted.com/inbox',
+    });
+    expect(qr?.label?.fileUrl).toBeUndefined();
+    expect(qr?.shippingNote).toBe(
+      "No label to print: show the QR code in Vinted at the SpeedX counter, which prints the label. Vinted cancels the order if it isn't shipped within 5 business days. Need more time? Ask the buyer in Vinted for 3 or 5 more days.",
+    );
+    const label = data.find((entry) => entry.saleId === tee.saleId);
+    expect(label).toMatchObject({
+      label: {
+        carrier: 'usps',
+        format: 'label',
+        fileUrl: 'https://www.vinted.com/shipments/2/label.pdf',
+      },
+      labelStatus: { label: 'USPS •••• 5555 (from Vinted)' },
+    });
+    expect(label?.shippingNote).toMatch(/^Vinted cancels the order/);
+    // Another marketplace has nothing to add.
+    const depop = await order({ title: 'Depop note', tracking: '9400111899223197426666' });
+    const listed = (await api.call('listPackOrders', { token })).body.data;
+    expect(listed.find((entry) => entry.saleId === depop.saleId)?.shippingNote).toBeUndefined();
+  });
+
+  it("reads Vinted's labels only in Test mode until its label read passes live", async () => {
+    await api.db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: tenant.accountId,
+        marketplace: 'vinted',
+        mode: 'automation',
+        status: 'connected',
+        token_ciphertext: Buffer.from('sealed'),
+        runs_on: 'phone',
+      })
+      .execute();
+    await order({ title: 'Unread Vinted order', marketplace: 'vinted' });
+    const vintedWork = () =>
+      api.db
+        .selectFrom('phone_work')
+        .select('purpose')
+        .where('account_id', '=', tenant.accountId)
+        .where('marketplace', '=', 'vinted')
+        .execute();
+    const testMode = (on: boolean) =>
+      api.db
+        .updateTable('account')
+        .set({ test_mode: on })
+        .where('id', '=', tenant.accountId)
+        .execute();
+    useMarketplaceFeatures('verified');
+    try {
+      await testMode(false);
+      const refreshed = await api.call('refreshPackLabels', { token });
+      expect(refreshed.body.marketplaces).not.toContain('vinted');
+      expect(await vintedWork()).toEqual([]);
+      await testMode(true);
+      expect((await api.call('refreshPackLabels', { token })).body.marketplaces).toContain(
+        'vinted',
+      );
+      expect(await vintedWork()).toEqual([{ purpose: 'label_read' }]);
+    } finally {
+      useMarketplaceFeatures('all');
+      await testMode(false);
+    }
   });
 
   it("opens the order's page on the marketplace where Listora can't print its label", async () => {

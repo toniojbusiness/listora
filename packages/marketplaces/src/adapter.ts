@@ -453,6 +453,11 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
 export interface LabelReadRequest {
   externalOrderId: string;
   externalListingIds: string[];
+  /**
+   * When the buyer paid, as Listora recorded the sale (ISO 8601): a marketplace whose page names
+   * no ship-by date has it by its rule (Vinted: five business days after the purchase).
+   */
+  soldAt?: string;
 }
 
 /**
@@ -478,6 +483,11 @@ export type RemoteOrderLabel =
       shipBy?: Date | null;
       /** When the label stops being usable, when the page says. */
       labelExpiresAt?: Date | null;
+      /**
+       * What the marketplace gives the seller to ship with, when the page says: a label to
+       * print, or a QR code the carrier scans at drop-off, which prints the label there.
+       */
+      labelFormat?: 'label' | 'qr_code' | null;
       /**
        * The label's file (a PDF) on the marketplace's own site, when the page names one under a
        * field that says it is the label's: the phone downloads it through the seller's session

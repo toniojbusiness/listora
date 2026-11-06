@@ -78,6 +78,9 @@ that account only:
   linked Vinted run on the owner's iPhone instead of becoming tasks
   (`LISTING_AUTOMATION_NOT_VERIFIED`, [vinted.md](vinted.md)). They record no run in the owner's
   log: each one is an operation with its own history and read-back.
+- **Vinted's label read for Pack check:** a linked Vinted's orders have their carrier, label or
+  QR code, and ship-by date read on the owner's iPhone (`LABEL_READS_NOT_VERIFIED`,
+  [vinted.md](vinted.md#shipping-labels-and-pack-check-m8)).
 - **The thrift scan:** Add Item's Scan mode and its API (`isAppFeatureOn('thrift_scan', gate)`,
   [thrift-scan.md](thrift-scan.md)); the scan camera shows the owner its speed against the
   plan's targets, tagged "Testing". A scan reads nothing from a marketplace, so it records no

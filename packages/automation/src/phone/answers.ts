@@ -168,6 +168,7 @@ const labels = z
           .max(2_048)
           .nullable()
           .optional(),
+        labelFormat: z.enum(['label', 'qr_code']).nullable().optional(),
       }),
       z.object({ externalOrderId: z.string().min(1).max(200), found: z.literal(false) }),
     ]),

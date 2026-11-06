@@ -1673,7 +1673,7 @@
 		const hhmm = `(?:[01]\\d|2[0-3]):[0-5]\\d`;
 		return typeof args.precision === "number" ? args.precision === -1 ? `${hhmm}` : args.precision === 0 ? `${hhmm}:[0-5]\\d` : `${hhmm}:[0-5]\\d\\.\\d{${args.precision}}` : args.seconds ? `${hhmm}:[0-5]\\d(?:\\.\\d+)?` : `${hhmm}(?::[0-5]\\d(?:\\.\\d+)?)?`;
 	}
-	function time$2(args) {
+	function time$3(args) {
 		return new RegExp(`^${timeSource(args)}$`);
 	}
 	function datetime$1(args) {
@@ -2338,7 +2338,7 @@
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISOTime = /*@__PURE__*/ $constructor("$ZodISOTime", (inst, def) => {
-		def.pattern ?? (def.pattern = time$2(def));
+		def.pattern ?? (def.pattern = time$3(def));
 		$ZodStringFormat.init(inst, def);
 	});
 	const $ZodISODuration = /*@__PURE__*/ $constructor("$ZodISODuration", (inst, def) => {
@@ -6085,7 +6085,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		inst.keyType = def.keyType;
 		inst.valueType = def.valueType;
 	});
-	function record(keyType, valueType, params) {
+	function record$1(keyType, valueType, params) {
 		if (!valueType || !valueType._zod) return new ZodRecord({
 			type: "record",
 			keyType: string(),
@@ -10365,7 +10365,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	function listingDetails$3(edit, listed, sku) {
 		const categoryPath = strings(edit["categories"] ?? edit["category"]).slice(0, 3);
 		const ids = categoryIds(edit, categoryPath);
-		const condition = text$4(edit["condition"]);
+		const condition = text$5(edit["condition"]);
 		return {
 			photoUrls: photoUrls$3(edit["pictures"] ?? edit["pictures_data"] ?? listed["pictures"] ?? listed["preview"]),
 			brand: brand$1(edit),
@@ -10385,10 +10385,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* server checks it against Depop's taxonomy (`importedCategory`), which the phone doesn't carry.
 	*/
 	function categoryIds(edit, shown) {
-		const type = text$4(edit["product_type"]);
-		const group = text$4(edit["group"]);
+		const type = text$5(edit["product_type"]);
+		const group = text$5(edit["group"]);
 		if (type === null || group === null) return null;
-		const gender = text$4(edit["gender"])?.toLowerCase();
+		const gender = text$5(edit["gender"])?.toLowerCase();
 		const department = edit["is_kids"] === true ? "kidswear" : (gender === void 0 ? void 0 : GENDERS[gender]) ?? DEPARTMENT_NAMES[(shown[0] ?? "").toLowerCase()];
 		return department === void 0 ? null : [
 			department,
@@ -10398,8 +10398,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** The brand's name as the listing shows it, before Depop's slug of it; "Other" is none. */
 	function brand$1(edit) {
-		if ((typeof edit["brand"] === "string" ? text$4(edit["brand"]) : null)?.toLowerCase() === UNBRANDED) return null;
-		return text$4(edit["brand_name"]) ?? text$4(edit["brandName"]) ?? named$1(edit["brand"]);
+		if ((typeof edit["brand"] === "string" ? text$5(edit["brand"]) : null)?.toLowerCase() === UNBRANDED) return null;
+		return text$5(edit["brand_name"]) ?? text$5(edit["brandName"]) ?? named$1(edit["brand"]);
 	}
 	/** The listing's colours that Listora's vocabulary has, in Depop's order, each once. */
 	function colours$1(value) {
@@ -10416,7 +10416,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	function originalPrice(pricing) {
 		if (pricing === null || typeof pricing !== "object") return null;
 		const record = pricing;
-		const key = text$4(record["final_price_key"]) ?? "original_price";
+		const key = text$5(record["final_price_key"]) ?? "original_price";
 		if (key === "original_price") return null;
 		const original = amountCents(record["original_price"]);
 		const final = amountCents(record[key]);
@@ -10478,15 +10478,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** A name as Depop gives it: a string, or an object with its `name`. */
 	function named$1(value) {
-		if (typeof value === "string") return text$4(value);
+		if (typeof value === "string") return text$5(value);
 		if (value !== null && typeof value === "object") {
 			const record = value;
-			return text$4(record["name"]) ?? text$4(record["label"]) ?? text$4(record["display"]);
+			return text$5(record["name"]) ?? text$5(record["label"]) ?? text$5(record["display"]);
 		}
 		return null;
 	}
 	function strings(value) {
-		if (typeof value === "string") return text$4(value) === null ? [] : [value.trim()];
+		if (typeof value === "string") return text$5(value) === null ? [] : [value.trim()];
 		if (!Array.isArray(value)) return [];
 		return value.flatMap((entry) => {
 			const name = named$1(entry);
@@ -10498,9 +10498,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const first = Array.isArray(variants) ? variants[0] : variants !== null && typeof variants === "object" ? Object.values(variants)[0] : void 0;
 		if (first === null || typeof first !== "object") return null;
 		const record = first;
-		return named$1(record["size"]) ?? text$4(record["size_name"]) ?? null;
+		return named$1(record["size"]) ?? text$5(record["size_name"]) ?? null;
 	}
-	function text$4(value) {
+	function text$5(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
@@ -10750,7 +10750,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const PAGE_SIZE = 24;
 	/** A dollar amount as the receipts show it (`"18.00"`). */
 	const amount = string().regex(/^\d+(\.\d{1,2})?$/);
-	const time$1 = datetime({ offset: true });
+	const time$2 = datetime({ offset: true });
 	/**
 	* One package of a purchase: Depop's label for it (`tracking.reference`, by `shipping_provider`),
 	* when it must ship by, when the label expires, and the label's file (`LABEL_FILE_FIELDS`). A
@@ -10760,8 +10760,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const parcelSchema = object({
 		shipping_provider: string().nullish(),
 		tracking: object({ reference: string().nullish() }).catchall(unknown()).nullish(),
-		shipping_deadline: time$1.nullish(),
-		label_expires_at: time$1.nullish()
+		shipping_deadline: time$2.nullish(),
+		label_expires_at: time$2.nullish()
 	}).catchall(unknown());
 	/**
 	* The parcel fields that can name the label's file, in the order they are read: a URL directly
@@ -10779,7 +10779,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	const receiptSchema = object({
 		purchase_id: number().int().positive(),
 		status: string(),
-		sold_timestamp: time$1,
+		sold_timestamp: time$2,
 		currency: string(),
 		items_amount: amount,
 		seller_amount: amount.nullish(),
@@ -10885,7 +10885,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			carrierName: present(parcel?.shipping_provider) ? parcel.shipping_provider.trim() : null,
 			shipBy: deadlines.length === 0 ? null : new Date(Math.min(...deadlines.map(Number))),
 			labelExpiresAt: present(parcel?.label_expires_at) ? new Date(parcel.label_expires_at) : null,
-			labelFileUrl: parcel === void 0 ? null : labelFile(parcel, site),
+			labelFileUrl: parcel === void 0 ? null : labelFile$1(parcel, site),
 			buyerFirstName: present(receipt.buyer?.first_name) ? receipt.buyer.first_name.trim() : null
 		};
 	}
@@ -10894,7 +10894,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* a Depop sale by its purchase id); one named otherwise is found by the products that sold in it,
 	* whose slugs (Listora's listing ids) `slugOf` gives by product id.
 	*/
-	function orderLabel(order, receipts, slugOf = /* @__PURE__ */ new Map()) {
+	function orderLabel$1(order, receipts, slugOf = /* @__PURE__ */ new Map()) {
 		const sold = (receipt) => receipt.productIds.flatMap((id) => {
 			const slug = slugOf.get(id);
 			return slug === void 0 ? [] : [slug];
@@ -10920,7 +10920,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* The label's file a parcel names (`LABEL_FILE_FIELDS`), when it is on Depop's own site: the
 	* phone downloads it through the seller's session, so a file anywhere else is not taken.
 	*/
-	function labelFile(parcel, site) {
+	function labelFile$1(parcel, site) {
 		const named = [...LABEL_FILE_FIELDS.map((field) => parcel[field]), ...LABEL_FILE_OBJECTS.map((field) => {
 			const shown = parcel[field];
 			return shown !== null && typeof shown === "object" ? shown.url : null;
@@ -11056,8 +11056,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			listPriceCents: positive(firstMoney(direct(record, LIST_PRICE), names)),
 			buyerName: texts(fieldValues(buyer, USERNAME))[0]?.slice(0, 100) ?? null,
 			turn,
-			madeAt: time(direct(record, MADE)),
-			expiresAt: time(direct(record, EXPIRES)),
+			madeAt: time$1(direct(record, MADE)),
+			expiresAt: time$1(direct(record, EXPIRES)),
 			url: names.url(record, id),
 			listingCount: count(direct(record, COUNT)),
 			shippingCents: firstMoney(direct(record, SHIPPING), names)
@@ -11082,7 +11082,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return typeof found === "number" && found > 1 ? Math.min(found, 500) : null;
 	}
 	/** An ISO time from a time string or a Unix time in seconds or milliseconds. */
-	function time(values) {
+	function time$1(values) {
 		for (const value of values) {
 			const date = typeof value === "string" ? new Date(value) : typeof value === "number" ? new Date(value < 0xe8d4a51000 ? value * 1e3 : value) : null;
 			if (date !== null && !Number.isNaN(date.getTime())) return date.toISOString();
@@ -11247,7 +11247,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		has_more: boolean(),
 		last: union([string(), number()]).nullish()
 	}).catchall(unknown());
-	const records = array(record(string(), unknown()));
+	const records = array(record$1(string(), unknown()));
 	/** A page of the products with offers. */
 	const productsPageSchema = object({
 		objects: records,
@@ -11876,7 +11876,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 					}, new Set(others.flatMap((receipt) => receipt.productIds)));
 					for (const [id, product] of sold) slugOf.set(id, product.state.externalListingId);
 				}
-				return orders.map((order) => orderLabel(order, receipts, slugOf));
+				return orders.map((order) => orderLabel$1(order, receipts, slugOf));
 			},
 			listings: async (cursor, step, held) => {
 				const shown = await step("read your listings for sale", { mutates: false }, async (page) => {
@@ -13203,7 +13203,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		} catch {
 			throw changed$2("listing page", "embeds data Listora can't parse");
 		}
-		const parsed = object({ props: object({ pageProps: object({ serverState: record(string(), unknown()) }) }) }).safeParse(data);
+		const parsed = object({ props: object({ pageProps: object({ serverState: record$1(string(), unknown()) }) }) }).safeParse(data);
 		if (!parsed.success) throw changed$2("listing page", "has none of the listing data Listora reads");
 		const raw = parsed.data.props.pageProps.serverState[`ItemDetail:${id}`];
 		if (raw === void 0 || raw === null) return {
@@ -13214,26 +13214,26 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			sku: null,
 			soldAt: null
 		};
-		const record$1 = itemRecordSchema.safeParse(raw);
-		if (!record$1.success) throw changed$2("listing page", "shows the listing without what Listora reads");
-		const status = STATUSES[record$1.data.status];
+		const record = itemRecordSchema.safeParse(raw);
+		if (!record.success) throw changed$2("listing page", "shows the listing without what Listora reads");
+		const status = STATUSES[record.data.status];
 		if (status === void 0) throw changed$2("listing page", "shows a status Listora does not know");
-		const { description, sku } = splitSkuLine(record$1.data.description);
+		const { description, sku } = splitSkuLine(record.data.description);
 		return {
 			state: {
 				found: true,
 				externalListingId: id,
 				externalUrl: itemUrl$1(site, id),
 				status,
-				title: record$1.data.name,
+				title: record.data.name,
 				description,
-				priceCents: record$1.data.price,
+				priceCents: record.data.price,
 				currency: "USD",
-				revision: record$1.data.updated * 1e3,
-				refreshedAt: (/* @__PURE__ */ new Date(record$1.data.updated * 1e3)).toISOString()
+				revision: record.data.updated * 1e3,
+				refreshedAt: (/* @__PURE__ */ new Date(record.data.updated * 1e3)).toISOString()
 			},
 			sku,
-			soldAt: record$1.data.lastSoldAt ? /* @__PURE__ */ new Date(record$1.data.lastSoldAt * 1e3) : null,
+			soldAt: record.data.lastSoldAt ? /* @__PURE__ */ new Date(record.data.lastSoldAt * 1e3) : null,
 			record: raw,
 			records: parsed.data.props.pageProps.serverState
 		};
@@ -13257,7 +13257,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const condition = conditionId(record);
 		return {
 			photoUrls: photoUrls$2(record["photos"] ?? record["photoUrls"]),
-			brand: named(record["brand"]) ?? text$3(record["brandName"]),
+			brand: named(record["brand"]) ?? text$4(record["brandName"]),
 			size: named(record["itemSize"]) ?? named(record["size"]),
 			condition: condition === null ? null : CONDITIONS$2[condition] ?? null,
 			categoryRef: categoryPath.length >= 2 ? categoryPath.join(" > ") : null,
@@ -13289,7 +13289,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const name = named(level);
 			return name === null ? [] : [name];
 		});
-		const title = text$3(record["categoryTitle"]);
+		const title = text$4(record["categoryTitle"]);
 		return title === null ? [] : title.split(">").map((name) => name.trim()).filter((name) => name !== "");
 	}
 	/** Mercari's condition names, for a condition record that gives its name but not its id. */
@@ -13323,14 +13323,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		return /^https?:\/\/[^/\s]+\/\S+$/.test(value);
 	}
 	function named(value) {
-		if (typeof value === "string") return text$3(value);
+		if (typeof value === "string") return text$4(value);
 		if (value !== null && typeof value === "object") {
 			const record = value;
-			return text$3(record["name"]) ?? text$3(record["displayName"]);
+			return text$4(record["name"]) ?? text$4(record["displayName"]);
 		}
 		return null;
 	}
-	function text$3(value) {
+	function text$4(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
@@ -13925,7 +13925,8 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	*   member's sold orders, newest first: each with its `transaction_id`, `date` (when the buyer
 	*   paid), `title`, and `price`. Canceled orders are never asked for.
 	* - `GET /api/v2/transactions/<id>`: one order, with the items that sold in it (`items`, or one
-	*   `item`): a bundle sells several in one order.
+	*   `item`): a bundle sells several in one order; and its `shipment`, which Pack check's label
+	*   read takes (`shipment.ts`).
 	*
 	* Read on the test account's signed-in session (2026-11-05, read-only): the wardrobe answers in
 	* this shape (`items`, `pagination` with `current_page` and `total_pages`), and the sold orders
@@ -14027,12 +14028,17 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 			hasNext: hasNext(shown.pagination, shown.my_orders.length)
 		};
 	}
-	/** The items that sold in one order (several for a bundle); `null` when Vinted answers 404. */
-	async function readTransactionItems(page, site, transactionId) {
+	/** One order as the web API shows it, read leniently; `null` when Vinted answers 404. */
+	async function readTransaction(page, site, transactionId) {
 		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.transaction(transactionId)), SIGNED_IN);
 		if (answer.status === 404) return null;
 		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for an order`);
-		const { transaction } = expectShape(transactionSchema, answer.body, "order");
+		return expectShape(transactionSchema, answer.body, "order").transaction;
+	}
+	/** The items that sold in one order (several for a bundle); `null` when Vinted answers 404. */
+	async function readTransactionItems(page, site, transactionId) {
+		const transaction = await readTransaction(page, site, transactionId);
+		if (transaction === null) return null;
 		return (transaction.items ?? (transaction.item === void 0 ? [] : [transaction.item])).map((entry) => vintedItem(expectShape(itemSchema, entry, "item"), site));
 	}
 	/** A Vinted amount in US dollars (`"18.0"`, `"1250.50"`, `18`) in cents. */
@@ -14071,7 +14077,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 				externalListingId: record.id,
 				externalUrl: itemUrl(site, record.id),
 				status: record.is_closed === true ? "sold" : record.is_hidden === true ? "ended" : "active",
-				title: text$2(record.title),
+				title: text$3(record.title),
 				description: record.description === void 0 || record.description === null ? null : description,
 				priceCents: priceCents(record.price, record.currency),
 				currency: "USD",
@@ -14089,7 +14095,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		if (!parsed.success) throw changed(API, `shows ${what} data Listora doesn't know`);
 		return parsed.data;
 	}
-	function text$2(value) {
+	function text$3(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 	}
 
@@ -14200,7 +14206,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		return {
 			photoUrls: photoUrls$1(record["photos"]),
 			brand: brand(record),
-			size: text$1(record["size_title"]),
+			size: text$2(record["size_title"]),
 			condition: condition(record),
 			categoryRef: typeof catalog === "number" && Number.isSafeInteger(catalog) || typeof catalog === "string" && /^\d+$/.test(catalog) ? String(catalog) : null,
 			categoryPath: [],
@@ -14221,11 +14227,11 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	}
 	function brand(record) {
 		const dto = record["brand_dto"];
-		const shown = text$1(record["brand_title"]) ?? (dto !== null && typeof dto === "object" ? text$1(dto["title"]) : null);
+		const shown = text$2(record["brand_title"]) ?? (dto !== null && typeof dto === "object" ? text$2(dto["title"]) : null);
 		return shown === null || NO_BRAND.test(shown) ? null : shown;
 	}
 	function condition(record) {
-		const label = text$1(record["status"])?.toLowerCase();
+		const label = text$2(record["status"])?.toLowerCase();
 		const byLabel = label === void 0 ? void 0 : CONDITIONS$1[label];
 		if (byLabel !== void 0) return byLabel;
 		const statusId = record["status_id"];
@@ -14234,7 +14240,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	/** The item's colours that Listora's vocabulary has, in Vinted's order, each once. */
 	function colours(record) {
 		const named = [record["color1"], record["color2"]].flatMap((value) => {
-			const shown = text$1(value);
+			const shown = text$2(value);
 			return shown === null ? [] : [shown];
 		});
 		const listed = array(object({ title: string() })).safeParse(record["colors"]);
@@ -14244,8 +14250,163 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		});
 		return [...new Set(known)];
 	}
-	function text$1(value) {
+	function text$2(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
+	}
+
+// src/vinted/pages/shipment.ts
+/** Vinted's rule: an order not shipped within this many business days cancels itself. */
+	const SHIP_WITHIN_BUSINESS_DAYS = 5;
+	/**
+	* The names the fields go by, first match wins. Modeled: Vinted's EU web API names a shipment's
+	* tracking number `tracking_code`, the rest is Listora's guess at its US shape.
+	*/
+	const SHIPMENT_FIELDS = {
+		shipment: ["shipment", "shipping_order"],
+		tracking: ["tracking_code", "tracking_number"],
+		carrier: [
+			"carrier_name",
+			"carrier",
+			"courier_name",
+			"courier"
+		],
+		deadline: [
+			"shipping_deadline",
+			"ship_by",
+			"ship_until",
+			"shipment_deadline"
+		],
+		labelExpires: ["label_expires_at", "label_expiry"],
+		labelFormat: ["label_type", "label_format"],
+		labelFile: [
+			"label_url",
+			"shipping_label_url",
+			"label_pdf_url"
+		],
+		status: ["status"]
+	};
+	/** Shipment statuses that say the package left the seller. */
+	const SHIPPED_STATUSES = /* @__PURE__ */ new Set([
+		"shipped",
+		"in_transit",
+		"delivered",
+		"completed"
+	]);
+	/** Statuses (the order's or its shipment's) that say the order is canceled or refunded. */
+	const CANCELED_STATUSES = /* @__PURE__ */ new Set([
+		"canceled",
+		"cancelled",
+		"refunded",
+		"failed"
+	]);
+	/** The order's statuses that say it is still the seller's to ship. */
+	const OPEN_ORDER_STATUSES = /* @__PURE__ */ new Set([
+		"in_progress",
+		"paid",
+		"payment_successful"
+	]);
+	/** Shipment formats that are a QR code shown at the counter, not a label to print. */
+	const QR_FORMATS = /* @__PURE__ */ new Set([
+		"qr_code",
+		"qr",
+		"label_free",
+		"digital"
+	]);
+	const LABEL_FORMATS = /* @__PURE__ */ new Set([
+		"label",
+		"pdf",
+		"printed",
+		"printable"
+	]);
+	/** The order's label as its read shows it, for the order Listora asked about. */
+	function orderLabel(request, transaction, site) {
+		const shipment = record(first(transaction, SHIPMENT_FIELDS.shipment));
+		const tracking = text$1(first(shipment, SHIPMENT_FIELDS.tracking));
+		const format = labelFormat(text$1(first(shipment, SHIPMENT_FIELDS.labelFormat)));
+		const shownDeadline = time(first(shipment, SHIPMENT_FIELDS.deadline));
+		const soldAt = request.soldAt === void 0 ? null : time(request.soldAt);
+		return {
+			externalOrderId: request.externalOrderId,
+			found: true,
+			trackingNumber: tracking,
+			buyerFirstName: null,
+			...orderState(transaction, shipment),
+			carrierName: carrierName(first(shipment, SHIPMENT_FIELDS.carrier)),
+			shipBy: shownDeadline ?? (soldAt === null ? null : addBusinessDays(soldAt, 5)),
+			labelExpiresAt: time(first(shipment, SHIPMENT_FIELDS.labelExpires)),
+			labelFormat: format,
+			labelFileUrl: format === "qr_code" ? null : labelFile(first(shipment, SHIPMENT_FIELDS.labelFile), site)
+		};
+	}
+	/**
+	* `days` business days after `from`, at the same time of day: Saturdays and Sundays don't count
+	* (in UTC). Holidays aren't counted out, so the date is never later than Vinted's own.
+	*/
+	function addBusinessDays(from, days) {
+		const at = new Date(from.getTime());
+		let left = days;
+		while (left > 0) {
+			at.setUTCDate(at.getUTCDate() + 1);
+			const weekday = at.getUTCDay();
+			if (weekday !== 0 && weekday !== 6) left -= 1;
+		}
+		return at;
+	}
+	/**
+	* How the order stands, when the read says: canceled (the order's or the shipment's status),
+	* shipped (the shipment left the seller, or the order completed), or to ship (an order in
+	* progress whose shipment hasn't left). Nothing when it says neither.
+	*/
+	function orderState(transaction, shipment) {
+		const order = status(first(transaction, SHIPMENT_FIELDS.status));
+		const sent = status(first(shipment, SHIPMENT_FIELDS.status));
+		if (CANCELED_STATUSES.has(order) || CANCELED_STATUSES.has(sent)) return { orderState: "canceled" };
+		if (SHIPPED_STATUSES.has(sent) || order === "completed") return { orderState: "shipped" };
+		if (OPEN_ORDER_STATUSES.has(order)) return { orderState: "to_ship" };
+		return {};
+	}
+	function labelFormat(shown) {
+		const format = shown?.toLowerCase().replaceAll(/[\s-]+/g, "_") ?? "";
+		if (QR_FORMATS.has(format)) return "qr_code";
+		if (LABEL_FORMATS.has(format)) return "label";
+		return null;
+	}
+	/** The carrier's name, as a string or as `{ name }` / `{ title }`. */
+	function carrierName(shown) {
+		const named = record(shown);
+		return text$1(named === null ? shown : named["name"] ?? named["title"] ?? null);
+	}
+	/**
+	* The label's file, when it is on Vinted's own site: the phone downloads it through the seller's
+	* session, so a file anywhere else is not taken.
+	*/
+	function labelFile(shown, site) {
+		const named = text$1(shown);
+		if (named === null || !URL.canParse(named, site.origin)) return null;
+		const url = new URL(named, site.origin);
+		return url.origin === site.origin || url.protocol === "https:" && (url.hostname === "vinted.com" || url.hostname.endsWith(".vinted.com")) ? url.href : null;
+	}
+	function first(from, names) {
+		if (from === null) return void 0;
+		for (const name of names) {
+			const value = from[name];
+			if (value !== void 0 && value !== null && value !== "") return value;
+		}
+	}
+	function record(value) {
+		return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
+	}
+	function text$1(value) {
+		if (typeof value === "number" && Number.isFinite(value)) return String(value);
+		return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+	}
+	function status(value) {
+		return text$1(value)?.toLowerCase().replaceAll(/[\s-]+/g, "_") ?? "";
+	}
+	/** An ISO time, or a Unix time in seconds; `null` for anything else. */
+	function time(value) {
+		const at = typeof value === "number" ? /* @__PURE__ */ new Date(value * 1e3) : typeof value === "string" && value.trim() !== "" ? new Date(value.trim()) : null;
+		return at === null || Number.isNaN(at.getTime()) ? null : at;
 	}
 
 // src/vinted/pages/upload-form.ts
@@ -14780,6 +14941,26 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 					}
 				}
 				return orders;
+			},
+			labels: async (orders, step) => {
+				if (orders.length === 0) return [];
+				await openSettings(step);
+				const labels = [];
+				for (const order of orders) {
+					if (!VINTED_ID.test(order.externalOrderId)) {
+						labels.push({
+							externalOrderId: order.externalOrderId,
+							found: false
+						});
+						continue;
+					}
+					const transaction = await step("read the order", { mutates: false }, (page) => readTransaction(page, site, order.externalOrderId));
+					labels.push(transaction === null ? {
+						externalOrderId: order.externalOrderId,
+						found: false
+					} : orderLabel(order, transaction, site));
+				}
+				return labels;
 			}
 		};
 	}
@@ -15446,7 +15627,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	*/
 	const PAGE$1 = "sales page";
 	const salesSchema = object({ $_order_list: object({ userSales: object({
-		data: object({ sales_summary: array(record(string(), unknown())) }),
+		data: object({ sales_summary: array(record$1(string(), unknown())) }),
 		meta: object({ count: number().optional() }).catchall(unknown())
 	}) }) });
 	/** The seller's sales the list shows, newest first. */
@@ -15502,7 +15683,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		story_type: string(),
 		content: object({
 			type: string(),
-			data: array(record(string(), unknown()))
+			data: array(record$1(string(), unknown()))
 		}).catchall(unknown())
 	}).catchall(unknown())) }) }) });
 	/** The buyers' offers on the seller's listings that the page shows. Only reads. */

@@ -13,7 +13,8 @@
  *   member's sold orders, newest first: each with its `transaction_id`, `date` (when the buyer
  *   paid), `title`, and `price`. Canceled orders are never asked for.
  * - `GET /api/v2/transactions/<id>`: one order, with the items that sold in it (`items`, or one
- *   `item`): a bundle sells several in one order.
+ *   `item`): a bundle sells several in one order; and its `shipment`, which Pack check's label
+ *   read takes (`shipment.ts`).
  *
  * Read on the test account's signed-in session (2026-11-05, read-only): the wardrobe answers in
  * this shape (`items`, `pagination` with `current_page` and `total_pages`), and the sold orders
@@ -94,6 +95,8 @@ const transactionSchema = z.object({
     .object({ id, items: z.array(z.unknown()).optional(), item: z.unknown().optional() })
     .catchall(z.unknown()),
 });
+/** One order: its `id`, the items that sold in it, and the rest as Vinted shows it. */
+export type VintedTransactionRecord = z.infer<typeof transactionSchema>['transaction'];
 
 /** One item as the web API shows it: its state, and its record for the details an import reads. */
 export interface VintedItem {
@@ -174,19 +177,29 @@ export async function readSoldOrders(
   };
 }
 
-/** The items that sold in one order (several for a bundle); `null` when Vinted answers 404. */
-export async function readTransactionItems(
+/** One order as the web API shows it, read leniently; `null` when Vinted answers 404. */
+export async function readTransaction(
   page: PageDriver,
   site: VintedSite,
   transactionId: string,
-): Promise<VintedItem[] | null> {
+): Promise<VintedTransactionRecord | null> {
   const answer = await page.apiGet(
     absolute(site, VINTED_API_PATHS.transaction(transactionId)),
     SIGNED_IN,
   );
   if (answer.status === 404) return null;
   if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for an order`);
-  const { transaction } = expectShape(transactionSchema, answer.body, 'order');
+  return expectShape(transactionSchema, answer.body, 'order').transaction;
+}
+
+/** The items that sold in one order (several for a bundle); `null` when Vinted answers 404. */
+export async function readTransactionItems(
+  page: PageDriver,
+  site: VintedSite,
+  transactionId: string,
+): Promise<VintedItem[] | null> {
+  const transaction = await readTransaction(page, site, transactionId);
+  if (transaction === null) return null;
   const entries = transaction.items ?? (transaction.item === undefined ? [] : [transaction.item]);
   return entries.map((entry) => vintedItem(expectShape(itemSchema, entry, 'item'), site));
 }

@@ -11,7 +11,7 @@ and a feature turns on only after it passes live on the captain's Vinted test ac
 ([verified-features.md](verified-features.md)). Every write to a real Vinted account first reads
 the signed-in member name and stops unless it is the named test account.
 
-## Today: assisted (M1), with linking (M3), import and sales history (M4), and listing (M5) built
+## Today: assisted (M1), with linking (M3), import and sales history (M4), listing (M5), and labels (M8) built
 
 Vinted runs on the assisted adapter (`createVintedAdapter` in
 `packages/marketplaces/src/assisted/marketplaces.ts`, [marketplaces.md](marketplaces.md)):
@@ -162,8 +162,7 @@ Not yet for Vinted:
 - AI-written copy of its own: a Vinted listing starts from the item's own title and description.
 - Delist-latency and verified-success alarms (`ALARMED_MARKETPLACES` in `infra/src/config.ts`):
   a seller delists Vinted by hand until its listing steps pass live, so they join then.
-- Categories (an imported item's), and the order and label pages, until Vinted's pages are
-  mapped (M2).
+- Categories (an imported item's), and the order page, until Vinted's pages are mapped (M2).
 
 ## Create, price, hide, and unhide (M5)
 
@@ -249,17 +248,75 @@ through, and the Test-mode gate), `vinted/payload.test.ts`, `vinted/categories.t
 `operations/src/executor.int.test.ts` (a create and a price change in review are never sent
 again, and the gate reaches the adapter), and `operations/src/status-display.test.ts`.
 
+## Shipping labels and Pack check (M8)
+
+Built, and hidden until its live test: Vinted is in `LABEL_READS_NOT_VERIFIED`
+(`packages/marketplaces/src/features.ts`), so a seller's Vinted orders are packed by scanning the
+label, as on a marketplace Listora doesn't read, and only an account in Test mode has them read
+([pack-check.md](pack-check.md#reading-labels), [test-mode.md](test-mode.md)). The request
+(`queueLabelReads`) and the phone's claim both check the gate.
+
+On Vinted the buyer picks the carrier (USPS, FedEx, or SpeedX) and pays the shipping; the seller
+gets a prepaid label to print, or a QR code shown at the carrier's counter, which prints the label
+there. Vinted cancels an order not shipped within 5 business days, and the seller can ask the
+buyer in Vinted for 3 or 5 more days.
+
+- **The read** (`labels` in `vinted/scripts.ts`, `vinted/pages/shipment.ts`): on the seller's
+  iPhone, from their settings page, one GET of the order (`/api/v2/transactions/<id>`, Listora
+  names a Vinted sale by its transaction id) per order, through the Vinted pacing. Its
+  `shipment` gives the tracking number, the carrier's name (SpeedX is `speedx`, migration
+  `20261105205205_vinted_labels`), the label or QR code (`sale_label.label_format`), the label's
+  file when it is on Vinted's own site, and the ship-by date. The order's status (or the
+  shipment's) says whether it is to ship, shipped, or canceled; a status Listora doesn't know
+  says nothing. An order Vinted no longer has is not found. No buyer name is read: Vinted shows
+  a member login, and the label carries the name.
+- **Ship-by.** The date the shipment shows (an extension the buyer granted moves it), or else 5
+  business days after the purchase (`sale.sold_at`, sent with the read as `soldAt`): weekends
+  left out, holidays not, so it is never later than Vinted's. It becomes the sale's `ship_by`, as
+  on Depop, which Today shows.
+- **A QR code** keeps no file to print (even if the page names one): the order offers "Open QR
+  code on Vinted" (the inbox, until M2 maps the order page), and the label shows as "SpeedX QR
+  code •••• 5678 (from Vinted)".
+- **The extension, as information.** Every Vinted order to ship shows the server's
+  `shippingNote` in Pack orders and its packing session: "Vinted cancels the order if it isn't
+  shipped within 5 business days. Need more time? Ask the buyer in Vinted for 3 or 5 more days.",
+  after "No label to print: show the QR code in Vinted at the SpeedX counter, which prints the
+  label." for a QR code (`packages/pack-check/src/shipping-note.ts`). Listora never asks for the
+  extension itself.
+- **Checks.** DataDome on the web API stops the read as a CAPTCHA, for the seller, like every
+  other Vinted read; the order is then scanned.
+- **Modeled.** Every shipment field is Listora's model (`SHIPMENT_FIELDS`: Vinted's EU web API
+  names a tracking number `tracking_code`) until the mapping (M2) records an order with a label.
+  A value counts only under a field that names it; a shipment in no shape Listora knows reads
+  as no label yet, and the seller scans it.
+- **The phone** needs a new app build only to show the shipping note and the "Open QR code"
+  wording (`ShippingNote`, `OrderPrintActions`); the read itself comes with the runtime the
+  server hands the app (`npm run phone:bundle` rebuilt the committed copy), and an older build
+  shows the rest.
+
+**The live test** is the captain's, in Test mode, on toniojx only, with Pack check on: a label of
+the M6 test order (a purchase on a test listing). Pack orders shows its carrier, its label or QR
+code, and its ship-by date, and a label file on Vinted prints. It removes Vinted from
+`LABEL_READS_NOT_VERIFIED` in the change that records it.
+
+Tests: `vinted/pages/shipment.test.ts` (business days, the shown date over the rule, order
+states, carrier and format shapes, files only on Vinted's site and none for a QR code),
+`vinted/adapter.int.test.ts` (a label, a QR code, no label yet, shipped, canceled, gone, a file
+elsewhere, DataDome), `phone/health-vinted.int.test.ts` (the read through the phone runtime),
+`pack-check/src/shipping-note.test.ts`, `apps/api/src/pack-check/pack-check.int.test.ts` (the
+QR code, SpeedX, ship-by, and note in the to-ship list; the read only in Test mode), and
+`marketplaces/src/features.test.ts`.
+
 ## Milestones still to come
 
-M3's live link, M4's live import, and M5's live listing on the test account on the iPhone are
-still to run (above).
+M3's live link, M4's live import, M5's live listing, and M8's live label read on the test account
+on the iPhone are still to run (above).
 
 | #   | Milestone                                                                                                                    |
 | --- | ---------------------------------------------------------------------------------------------------------------------------- |
 | M2  | Map Vinted's pages read-only (upload form, item page, listings, sold orders, offers, labels) and write the taxonomy snapshot |
 | M6  | Sale checks and auto-delist, with bundles (one order, several items) and escrow completion                                   |
 | M7  | Offers: read, then accept, decline, counter                                                                                  |
-| M8  | Shipping labels and pack check (carrier, label or QR code, ship within 5 business days)                                      |
 
 ## What differs on Vinted
 

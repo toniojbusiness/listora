@@ -72,7 +72,8 @@ reaches the flow through `SalePackEntry` in `SalesFeature`, which `AppDependenci
 
 A label's tracking number and the buyer's first name come from the marketplace's own order page,
 read through the seller's session where the connection's automated steps run: on the seller's
-iPhone for Depop, Poshmark, and Mercari ([phone-execution.md](phone-execution.md)). A read is
+iPhone for Depop, Poshmark, Mercari, and Vinted ([phone-execution.md](phone-execution.md);
+Vinted's only in Test mode until its live test, [vinted.md](vinted.md#shipping-labels-and-pack-check-m8)). A read is
 `phone_work` with purpose `label_read`, one per connection; the phone's claim picks up to 10
 orders that need one (`ordersToRead`): unshipped, not packed, sold in the last 30 days, with no
 label yet, and not read again sooner than 30 minutes after a read that found no label, 15 after
@@ -95,6 +96,13 @@ What each marketplace's page gives, as read on the captain's accounts (2026-10-2
 | Mercari     | The order page, `/transaction/order_status/<item id>/` (the sold tab's "View order")                                                                  | Read-only on the one real sale (delivered): the order was found and the buyer's first name read. Neither that page nor the help center's tracking page shows a tracking number for a delivered order, so it read as "no label". An open order's "Tracking" line is read where the shipping block shows one; not seen on a real order yet. |
 | Depop       | The receipts Depop's sold items page loads, `webapi.depop.com/presentation/api/v1/receipts/?role=seller`, page after page (`&after=<page_info.last>`) | Read-only on a seller's shop with sales (2026-10-28): see "Depop's receipts" below. A receipt that isn't in this shape fails the read visibly (`element_missing` evidence).                                                                                                                                                               |
 | Poshmark    | `/order/sales` (the Seller Hub's sales), `$_order_list.userSales.data.sales_summary`, then an order's own page                                        | The empty list ("You have not sold anything yet.") is real; the account never sold. Orders are read by field names (`adapter/label-fields.ts`).                                                                                                                                                                                           |
+
+Vinted's is read from each order's web API record (its `shipment`), modeled until Vinted's pages
+are mapped: the carrier (USPS, FedEx, or SpeedX), a label or a QR code shown at the counter
+(`label_format`), and the ship-by date, else 5 business days after the purchase
+([vinted.md](vinted.md#shipping-labels-and-pack-check-m8)). A Vinted order also carries the
+server's `shippingNote`: the days to ship and the extension the seller can ask the buyer for, as
+information.
 
 A read never guesses: a value counts only under a field that names it, and a number must be a
 tracking number (`canonicalTracking`). A failed read leaves the order to be scanned.
@@ -222,6 +230,7 @@ Per marketplace (2026-10-30, not live-tested yet; the captain tests it on the te
 | Poshmark    | No: its label read is mapped from an empty sales page only, so where it offers the file is not known.                                                                                                                                                                                                             | The order, `poshmark.com/order/sales/<id>`        |
 | Mercari     | No: its order page makes the label when it is printed (`shippingLabelCreation`), so getting the file may not be only a read.                                                                                                                                                                                      | `mercari.com/transaction/order_status/<item id>/` |
 | eBay        | No: eBay sells its labels; buying one is not a read.                                                                                                                                                                                                                                                              | `ebay.com/sh/ord/details?orderid=<id>`            |
+| Vinted      | When the order's shipment names the label's file on Vinted's own site; never for a QR code, which the carrier's counter prints from. Modeled until M2 maps the order page.                                                                                                                                        | `vinted.com/inbox`                                |
 
 ## Package photo
 
@@ -332,6 +341,9 @@ Migration `20261028105844_pack_check_order_state`: `sale_label.order_state` (`to
 Migration `20261030182456_pack_label_print`: `sale_label.label_file_url` (the label's file on
 the marketplace's site), and Listora's last print of the label: `printed_tracking_number`,
 `printed_at`, `print_count`.
+
+Migration `20261105205205_vinted_labels`: `sale_label.carrier` gains `speedx`, and
+`sale_label.label_format` (`label`, `qr_code`; null when the page doesn't say).
 
 All of it is deleted with the account (the package photos with it); the photos also go when the
 seller removes them or unpacks the order, and 60 days after the sale shipped

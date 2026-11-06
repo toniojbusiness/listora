@@ -4,6 +4,7 @@ import {
   ago,
   describeItem,
   labelPageUrl,
+  shippingNote,
   trackingTail,
   verdictWords,
   type CheckedScan,
@@ -18,6 +19,7 @@ const CARRIER_NAMES = {
   ups: 'UPS',
   fedex: 'FedEx',
   dhl: 'DHL',
+  speedx: 'SpeedX',
   other: 'Label',
 } as const;
 
@@ -77,6 +79,7 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
             trackingNumber: order.label.trackingNumber,
             carrier: order.label.carrier,
             source: order.label.source,
+            ...(order.label.format === null ? {} : { format: order.label.format }),
             ...(order.label.fileUrl === null ? {} : { fileUrl: order.label.fileUrl }),
             ...(order.label.print === null
               ? {}
@@ -91,6 +94,7 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
         }),
     labelStatus: labelStatus(order, context),
     labelPageUrl: labelPageUrl(order.marketplace, order.externalOrderId),
+    ...shippingNoteView(order),
     ...(pack === null
       ? {}
       : {
@@ -108,6 +112,13 @@ export function packOrderView(order: PackOrderRecord, context: PackViewContext):
         }),
     packStatus: packStatus(order, context.now),
   };
+}
+
+/** How the marketplace has the order shipped, while it is still to ship. */
+function shippingNoteView(order: PackOrderRecord): { shippingNote?: string } {
+  if (order.saleStatus !== 'detected' && order.saleStatus !== 'confirmed') return {};
+  const note = shippingNote(order.marketplace, order.label);
+  return note === null ? {} : { shippingNote: note };
 }
 
 /** Poshmark's sale checks name an order by its listing (`listing:<id>`): show the id alone. */
@@ -130,10 +141,11 @@ function labelStatus(order: PackOrderRecord, context: PackViewContext): StatusDi
   const name = MARKETPLACE_NAMES[order.marketplace];
   if (order.label !== null) {
     const carrier = CARRIER_NAMES[order.label.carrier];
+    const kind = order.label.format === 'qr_code' ? ' QR code' : '';
     const from = order.label.source === 'marketplace' ? `from ${name}` : 'you scanned it';
     return {
       tone: 'neutral',
-      label: `${carrier} ${trackingTail(order.label.trackingNumber)} (${from})`,
+      label: `${carrier}${kind} ${trackingTail(order.label.trackingNumber)} (${from})`,
     };
   }
   if (context.reading.has(order.marketplace)) {

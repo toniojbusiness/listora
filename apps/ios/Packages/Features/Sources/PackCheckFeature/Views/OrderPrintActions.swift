@@ -34,7 +34,7 @@ struct OrderPrintActions: View {
             } else if let page = order.labelPageUrl.flatMap(URL.init(string:)) {
                 Link(destination: page) {
                     Label(
-                        "Open label on \(MarketplaceName.of(order.marketplace))",
+                        "Open \(order.label?.format?.value1 == .qrCode ? "QR code" : "label") on \(MarketplaceName.of(order.marketplace))",
                         systemImage: "arrow.up.right.square",
                     )
                 }

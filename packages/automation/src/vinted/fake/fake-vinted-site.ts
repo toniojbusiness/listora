@@ -17,7 +17,7 @@
  *   GET  /api/v2/wardrobe/<id>/items  the member's wardrobe (web API), newest first, a page at a time
  *   GET  /api/v2/items/<id>           one item (web API), with its description
  *   GET  /api/v2/my_orders            the member's sold orders (web API), `type=sold&status=...`
- *   GET  /api/v2/transactions/<id>    one order (web API), with the items that sold in it
+ *   GET  /api/v2/transactions/<id>    one order (web API), with the items that sold in it and its shipment
  *   GET  /items/new                   the upload form; POST /items/new uploads (multipart, photos)
  *   GET  /items/<id>/edit             the listing's edit form; POST saves it (its price, title, text)
  *   GET  /items/<id>                  the listing's page, with its seller's Hide or Unhide
@@ -151,6 +151,11 @@ export interface FakeVintedOrder {
   /** What the buyer paid for the items, without Vinted's buyer fee. */
   priceCents: number;
   title: string;
+  /**
+   * Its shipment, as the transaction's web API read shows it (modeled, `pages/shipment.ts`):
+   * shown as given, so a test can serve any shape.
+   */
+  shipment?: Record<string, unknown>;
 }
 
 interface Reply {
@@ -429,7 +434,14 @@ export class FakeVintedSite {
         const found = this.items.find((one) => one.id === id);
         return found === undefined ? [] : [this.#itemJson(found, true)];
       });
-      return json(200, { transaction: { id: Number(order.id), status: order.state, items } });
+      return json(200, {
+        transaction: {
+          id: Number(order.id),
+          status: order.state,
+          items,
+          ...(order.shipment === undefined ? {} : { shipment: order.shipment }),
+        },
+      });
     }
     const status = url.searchParams.get('status') ?? 'all';
     const sold = this.orders.filter(

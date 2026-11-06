@@ -865,6 +865,7 @@ const COLUMNS = {
     'printed_tracking_number',
     'printed_at',
     'print_count',
+    'label_format',
   ],
   sale_pack: [
     'account_id',
@@ -1041,6 +1042,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['session_check', 'status', values.SESSION_CHECK_STATUSES],
   ['sale_label', 'source', values.SALE_LABEL_SOURCES],
   ['sale_label', 'carrier', values.LABEL_CARRIERS],
+  ['sale_label', 'label_format', values.LABEL_FORMATS],
   ['sale_label', 'read_status', values.LABEL_READ_STATUSES],
   ['sale_label', 'order_state', values.LABEL_ORDER_STATES],
   ['sale_pack', 'matched_by', values.PACK_MATCHES],
