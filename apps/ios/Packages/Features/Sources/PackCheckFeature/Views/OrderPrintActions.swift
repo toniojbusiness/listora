@@ -34,7 +34,7 @@ struct OrderPrintActions: View {
             } else if let page = order.labelPageUrl.flatMap(URL.init(string:)) {
                 Link(destination: page) {
                     Label(
-                        "Open \(order.label?.format?.value1 == .qrCode ? "QR code" : "label") on \(MarketplaceName.of(order.marketplace))",
+                        "Open \(labelWord) on \(MarketplaceName.of(order.marketplace))",
                         systemImage: "arrow.up.right.square",
                     )
                 }
@@ -44,5 +44,10 @@ struct OrderPrintActions: View {
         }
         .sheet(item: $printingStickers) { batch in StickerPrintView(stickers: batch.stickers) }
         .sheet(item: $printingLabel) { print in LabelPrintView(model: print) }
+    }
+
+    /// A QR code shown at the carrier's counter (Vinted) is no label to print.
+    private var labelWord: String {
+        order.label?.format?.value1 == .qrCode ? "QR code" : "label"
     }
 }
