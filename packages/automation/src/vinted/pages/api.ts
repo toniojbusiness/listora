@@ -9,9 +9,11 @@
  *   `is_reserved`), its `photos`, `brand_title`, `size_title`, and condition (`status`).
  * - `GET /api/v2/items/<id>`: one item as its page loads it, with its whole `description`, its
  *   `catalog_id`, and its colours (`color1`, `color2`).
- * - `GET /api/v2/my_orders?type=sold&status=<in_progress|completed>&page=<n>&per_page=20`: the
- *   member's sold orders, newest first: each with its `transaction_id`, `date` (when the buyer
- *   paid), `title`, and `price`. Canceled orders are never asked for.
+ * - `GET /api/v2/my_orders?type=sold&status=<in_progress|completed|canceled>&page=<n>&per_page=20`:
+ *   the member's sold orders, newest first: each with its `transaction_id`, `date` (when the
+ *   buyer paid), `title`, `price`, and where it stands in Vinted's words (`status`, "Payment
+ *   successful", "Parcel on its way", "Order completed", ...; `orderProgress`). Canceled ones
+ *   are read only to settle a sale Listora recorded of them (Vinted plan M6).
  * - `GET /api/v2/transactions/<id>`: one order, with the items that sold in it (`items`, or one
  *   `item`): a bundle sells several in one order; and its `shipment`, which Pack check's label
  *   read takes (`shipment.ts`).
@@ -84,9 +86,70 @@ const orderSchema = z
     date: z.string(),
     title: z.string().nullish(),
     price: priceSchema.optional(),
+    // Where the order stands, in Vinted's words, and for whom it waits (modeled until the
+    // mapping records an order in each state).
+    status: z.string().nullish(),
+    transaction_user_status: z.string().nullish(),
   })
   .catchall(z.unknown());
 export type VintedOrderRecord = z.infer<typeof orderSchema>;
+
+/** The sold-order lists Vinted's My orders page has: its In progress, Completed, and Canceled tabs. */
+export type VintedOrderList = 'in_progress' | 'completed' | 'canceled';
+
+/**
+ * Where an order stands on Vinted (docs/features/vinted.md, "Sale checks and auto-delist"):
+ *
+ * - `unpaid`: the buyer has not paid yet (an accepted offer waiting for payment). Not a sale:
+ *   on Vinted an item is sold once it is paid for, never when an offer is accepted.
+ * - `to_ship`: paid, and waiting for the seller to send it (Vinted cancels it after 5 business
+ *   days unsent). Vinted holds the buyer's money until the order completes.
+ * - `shipped`: sent, on its way, or delivered; the buyer has 2 days after delivery to report a
+ *   problem, and the money stays with Vinted until then.
+ * - `completed`: the buyer confirmed it, or 2 days passed after delivery: the sale is final, and
+ *   Vinted pays the seller.
+ * - `canceled`: canceled or refunded after payment: it no longer stands.
+ * - `unknown`: words Listora doesn't know, so it says nothing of its shipping.
+ *
+ * The list an order is in decides first (a Completed one is completed, a Canceled one canceled),
+ * then Vinted's words for it.
+ */
+export type VintedOrderProgress =
+  'unpaid' | 'to_ship' | 'shipped' | 'completed' | 'canceled' | 'unknown';
+
+/** Vinted's words for each state, tried in this order (a label "sent" to ship it is to ship). */
+const ORDER_WORDS: readonly (readonly [Exclude<VintedOrderProgress, 'unknown'>, RegExp])[] = [
+  ['canceled', /\bcancel|\brefund|\bfailed\b/],
+  [
+    'unpaid',
+    /waiting for (the )?(buyer'?s? )?payment|awaiting payment|payment (is )?(pending|processing)|not (yet )?paid|\bunpaid\b|offer accepted/,
+  ],
+  ['completed', /\bcompleted?\b|\bfinali[sz]ed\b/],
+  [
+    'to_ship',
+    /shipping label|\blabel\b|to (ship|send)\b|ship (it )?by|send (it )?by|send (it|the item|the parcel)\b|payment successful|\bpaid\b/,
+  ],
+  [
+    'shipped',
+    /\bsent\b|\bshipped\b|on (its|the) way|in transit|delivered|dropped off|picked up|arrived|collected/,
+  ],
+];
+
+/** Where an order in one of the lists stands (`VintedOrderProgress`). */
+export function orderProgress(
+  order: VintedOrderRecord,
+  list: VintedOrderList,
+): VintedOrderProgress {
+  if (list === 'completed') return 'completed';
+  if (list === 'canceled') return 'canceled';
+  const words = [order.status, order.transaction_user_status]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase()
+    .replaceAll('_', ' ');
+  if (words.trim() === '') return 'unknown';
+  return ORDER_WORDS.find(([, pattern]) => pattern.test(words))?.[0] ?? 'unknown';
+}
 
 const ordersSchema = z.object({ my_orders: z.array(z.unknown()), pagination: paginationSchema });
 
@@ -150,11 +213,11 @@ export async function readItem(
   return vintedItem(expectShape(itemSchema, item, 'item'), site);
 }
 
-/** The member's sold orders in one state, one page of them, newest first. */
+/** The member's sold orders in one list, one page of them, newest first. */
 export async function readSoldOrders(
   page: PageDriver,
   site: VintedSite,
-  status: 'in_progress' | 'completed',
+  status: VintedOrderList,
   number: number,
 ): Promise<{ orders: VintedOrderRecord[]; hasNext: boolean }> {
   const query = new URLSearchParams({

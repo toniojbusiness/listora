@@ -20,6 +20,10 @@
  * A `history` read is the same read with nothing handed over: it reads every sold order the
  * pages show and records what it saw, to prove a marketplace's sale check reads the seller's
  * real sold items, without acting on any of them and without touching the schedule.
+ *
+ * An order the marketplace shows canceled after the buyer paid (`RemoteOrder.canceled`, Vinted)
+ * is no sold order: it is never handed over, and a sale Listora recorded of it is canceled, or
+ * returned once it shipped (`settleCanceledOrder`). It is not counted among the orders seen.
  */
 import { sql } from 'kysely';
 
@@ -48,7 +52,12 @@ import type { SaleCheckSettings } from '../settings.ts';
 import { readFailure, recordReadFailed, recordReadSucceeded } from '../read-health/health.ts';
 import { saleCheckError, saleCheckErrorMessage } from './health.ts';
 import { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './interval.ts';
-import { orderEventPayload, queueSaleOrder, updateRecordedOrder } from './orders.ts';
+import {
+  orderEventPayload,
+  queueSaleOrder,
+  settleCanceledOrder,
+  updateRecordedOrder,
+} from './orders.ts';
 import { checksSales, queueSaleCheckForPhone, type SaleCheckJobPayload } from './schedule.ts';
 import { queueSoldItemPhotos } from './sold-photos.ts';
 
@@ -333,20 +342,22 @@ export async function recordSaleCheckOrders(
   const { db } = deps;
   const { key } = prepared;
   const log = deps.logger.child({ task: 'sale_check', connectionId: key.connectionId });
+  const sold = orders.filter((order) => order.canceled !== true);
   if (prepared.kind === 'history') {
-    await finishRun(db, prepared, { outcome: 'succeeded', orders, added: 0 });
+    await finishRun(db, prepared, { outcome: 'succeeded', orders: sold, added: 0 });
     log.info(
       {
         event: 'sale_history_read',
         runId: prepared.runId,
         marketplace: prepared.marketplace,
-        orders: orders.length,
+        orders: sold.length,
       },
       'sale history read',
     );
     return;
   }
-  const added = await recordOrders(db, prepared, orders);
+  const added = await recordOrders(db, prepared, sold);
+  const canceled = await settleCanceledOrders(db, prepared, orders);
   // The new orders count as sales already: the worker records them as sales right after.
   const history = await saleTimes(db, key.accountId, prepared.marketplace);
   const now = new Date();
@@ -355,11 +366,11 @@ export async function recordSaleCheckOrders(
     [...history, ...added.map((order) => order.soldAt)],
     deps.settings,
   );
-  const newest = orders.reduce<Date | null>(
+  const newest = sold.reduce<Date | null>(
     (latest, order) => (latest === null || order.soldAt > latest ? order.soldAt : latest),
     prepared.checkedThrough,
   );
-  await finishRun(db, prepared, { outcome: 'succeeded', orders, added: added.length });
+  await finishRun(db, prepared, { outcome: 'succeeded', orders: sold, added: added.length });
   await recordReadSucceeded(db, readTarget(prepared));
   await finish(db, key, {
     outcome: 'succeeded',
@@ -372,8 +383,9 @@ export async function recordSaleCheckOrders(
       event: 'sale_check_finished',
       runId: prepared.runId,
       marketplace: prepared.marketplace,
-      orders: orders.length,
+      orders: sold.length,
       added: added.length,
+      canceled,
       nextInMs: next.delayMs,
       basis: next.basis,
     },
@@ -463,6 +475,30 @@ async function recordOrders(
     });
   }
   return added;
+}
+
+/**
+ * Settles each order the marketplace shows canceled after payment, each in its own transaction:
+ * a sale Listora recorded of it no longer stands (orders.ts). Returns how many sales it changed.
+ */
+async function settleCanceledOrders(
+  db: DbExecutor,
+  prepared: StartedSaleCheck,
+  orders: readonly RemoteOrder[],
+): Promise<number> {
+  let changed = 0;
+  for (const order of orders) {
+    if (order.canceled !== true) continue;
+    const settled = await inTransaction(db, (trx) =>
+      settleCanceledOrder(
+        trx,
+        { accountId: prepared.key.accountId, marketplace: prepared.marketplace },
+        order,
+      ),
+    );
+    if (settled !== null) changed += 1;
+  }
+  return changed;
 }
 
 /** Whether an order's earlier event recorded no sale: nothing of it was a Listora listing then. */

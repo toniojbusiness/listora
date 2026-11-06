@@ -11,7 +11,7 @@ and a feature turns on only after it passes live on the captain's Vinted test ac
 ([verified-features.md](verified-features.md)). Every write to a real Vinted account first reads
 the signed-in member name and stops unless it is the named test account.
 
-## Today: assisted (M1), with linking (M3), import and sales history (M4), listing (M5), and labels (M8) built
+## Today: assisted (M1), with linking (M3), import and sales history (M4), listing (M5), sale checks (M6), and labels (M8) built
 
 Vinted runs on the assisted adapter (`createVintedAdapter` in
 `packages/marketplaces/src/assisted/marketplaces.ts`, [marketplaces.md](marketplaces.md)):
@@ -21,8 +21,8 @@ Vinted runs on the assisted adapter (`createVintedAdapter` in
   to vinted.com. The seller does the step in the Vinted app and confirms it. Only that
   confirmation finishes the step; Listora never says Vinted confirmed it.
 - **Sales.** The seller confirms each Vinted sale (`saleDetection: ['manual']`). Listora reads
-  no Vinted sale emails yet. A linked Vinted's sold orders are read too (M4, below), behind
-  features that are still hidden.
+  no Vinted sale emails yet. A linked Vinted's sold orders are read too (M4 and M6, below),
+  behind features that are still hidden.
 - **Shared listings.** Sharing a Vinted listing to Listora links it. The URL parser
   (`packages/shared/src/listing-url.ts`, and `ListingURL` in the iPhone app) reads
   `vinted.com/items/<id>-<title>`, keeps the numeric id as the listing id, and stores
@@ -127,8 +127,8 @@ API from the seller's settings page, on their iPhone, with GETs only
   bundle is one order with several items, each at its own price; a single item takes the
   order's price. A completed order is shipped (delivered, and confirmed or two days passed).
   The sales history reads at most 10 pages and 150 orders' items per state; a later check
-  reads 2 pages and 20, back to the last check. Escrow completion, a cancel after payment, and
-  the delists elsewhere that a new sale starts are M6's: `sale_checks` stays hidden until then.
+  reads 2 pages and 20, back to the last check. Where an order in progress stands, a cancel
+  after payment, and the delists a new sale starts are M6's (below).
 - **Checks.** DataDome's answer to an API call it blocks (403, JSON naming
   `captcha-delivery.com`) stops the run as a CAPTCHA, and Vinted's "Member verification
   required" (400, `user_verification_required`, `apiVerificationCodes` in the profile) as a
@@ -248,6 +248,77 @@ through, and the Test-mode gate), `vinted/payload.test.ts`, `vinted/categories.t
 `operations/src/executor.int.test.ts` (a create and a price change in review are never sent
 again, and the gate reaches the adapter), and `operations/src/status-display.test.ts`.
 
+## Sale checks and auto-delist (M6)
+
+Built, and hidden until their live test: `sale_checks` stays off the list in `features.ts` (it
+needs `sales_history`), so a seller's Vinted sales are confirmed by hand, and only an account in
+Test mode gets Vinted's sale checks, on its iPhone. A check is the `orders` read above, run on
+the schedule every marketplace's sale checks run on ([automation.md](automation.md)); each new
+paid order goes to the sale intake (`recordSale`), which delists its items everywhere else
+([auto-delist.md](auto-delist.md)).
+
+- **A sale is a paid order.** Vinted marks an item sold when the buyer pays, never when the seller
+  accepts an offer (offers aren't binding). An order in progress whose words say it waits for
+  payment ("Waiting for payment", "Offer accepted") is no sale: it is not handed over, and its
+  items aren't read.
+- **Bundles.** One Vinted order can sell several of the seller's listings. It is one sale with a
+  line per item, each at its own price, and each item gets its own delist run, so each is
+  delisted everywhere else ([sales.md](sales.md#mark-as-sold-the-same-intake-as-a-detected-sale)).
+- **Escrow.** Vinted holds the buyer's money until the order completes: the buyer confirms it, or
+  2 days pass after delivery, and Vinted pays the seller. Listora counts the sale from payment,
+  as Vinted marks the item sold then, and follows the order (`orderProgress` in
+  `vinted/pages/api.ts`, from the list the order is in, then Vinted's words for it):
+  - not paid ("Waiting for payment"): no sale;
+  - paid and to send ("Payment successful", a label to print): a sale to ship;
+  - sent, on its way, or delivered (the buyer's 2 days): shipped;
+  - completed (the Completed list): shipped, and final;
+  - canceled or refunded (the Canceled list, or its words): canceled, or returned once it
+    shipped (below);
+  - words Listora doesn't know: nothing said of its shipping.
+
+  Each check reads back to the oldest sale still waiting to ship, so its shipping reaches it.
+
+- **Cancel after payment.** Vinted cancels an order the seller doesn't send within 5 business
+  days, and the buyer or seller can cancel one before it ships; within the buyer's 2 days after
+  delivery, Vinted may refund them. A check reads the newest page of the seller's Canceled
+  orders (list only, no read of each order, those paid up to 30 days before where the check's read starts:
+  `CANCELED_ORDER_LIMITS`), and an order in progress whose words say canceled or refunded
+  counts the same. Such an order is handed to the sale check as `canceled`
+  (`RemoteOrder.canceled`), and `settleCanceledOrder` (`sale-checks/orders.ts`) makes the sale
+  Listora recorded of it stop standing, as the seller would record it: canceled before it
+  shipped, returned after (the buyer got their money back). Its delists that reached no
+  marketplace yet stop, its items go back to the inventory, Listora asks the seller whether to
+  relist each and where (never relisting by itself, [sales.md](sales.md#the-lifecycle)), and one
+  push says so ("Order canceled on Vinted", "Order refunded on Vinted"). An order canceled
+  before Listora recorded its sale never becomes one (its pending event is `ignored`). The
+  sales history reads no Canceled list: a canceled order is no sale. A canceled order is not
+  counted among a check's orders seen.
+- **Sold elsewhere.** An item that sells on another marketplace ends its Vinted listing with
+  Hide (M5), from the seller's iPhone; until Vinted's listing steps pass live, a seller's Vinted
+  delist is an urgent assisted task, as on every assisted marketplace.
+- **Modeled.** The orders' words (`status`, `transaction_user_status`) and the Canceled list
+  (`status=canceled`) are Listora's model until the mapping (M2) records an order in each state;
+  a word Listora doesn't know says nothing of shipping, never a guess.
+- **The phone** needs no new app build: the server hands the app the runtime with the new reads
+  (`npm run phone:bundle` rebuilt the committed copy), and the push opens the item as every
+  other does.
+
+**The live test** is the captain's, in Test mode, on toniojx only, after Vinted's seller
+verification of the account: a test listing on Vinted, also listed on one of the captain's test
+shops (never Tristin's Depop), bought on Vinted by a second account. The next sync's sale check
+finds the sale, and the listing elsewhere is delisted; then the order's shipping, and a
+cancel of a second test purchase before it ships, reach their sales. It removes `sales_history`
+(once M4's test has run) and `sale_checks` from hidden in the change that records it.
+
+Tests: `vinted/sale-checks.int.test.ts` (on real Postgres and Chromium: a bundle as one sale
+delisting each item elsewhere, then shipped and completed; an accepted offer not paid for; a
+cancel after payment stopping the delists, the item back, a relist asked once; a refund after
+shipping as a return; an order canceled before Listora recorded it; a sale elsewhere hiding the
+Vinted listing), `vinted/adapter.int.test.ts` (each order's state, an unpaid order, canceled
+orders with no reads of their own), `vinted/pages/order-progress.test.ts`,
+`phone/health-vinted.int.test.ts` (a canceled order through the phone runtime), and
+`phone/answers.test.ts`.
+
 ## Shipping labels and Pack check (M8)
 
 Built, and hidden until its live test: Vinted is in `LABEL_READS_NOT_VERIFIED`
@@ -309,13 +380,12 @@ QR code, SpeedX, ship-by, and note in the to-ship list; the read only in Test mo
 
 ## Milestones still to come
 
-M3's live link, M4's live import, M5's live listing, and M8's live label read on the test account
-on the iPhone are still to run (above).
+M3's live link, M4's live import, M5's live listing, M6's live sale, and M8's live label read on
+the test account on the iPhone are still to run (above).
 
 | #   | Milestone                                                                                                                    |
 | --- | ---------------------------------------------------------------------------------------------------------------------------- |
 | M2  | Map Vinted's pages read-only (upload form, item page, listings, sold orders, offers, labels) and write the taxonomy snapshot |
-| M6  | Sale checks and auto-delist, with bundles (one order, several items) and escrow completion                                   |
 | M7  | Offers: read, then accept, decline, counter                                                                                  |
 
 ## What differs on Vinted

@@ -140,12 +140,35 @@ export interface FakeVintedItem {
   inReview?: boolean;
 }
 
+/** Vinted's words for an order (modeled until the mapping records them). */
+function orderWords(order: FakeVintedOrder): string {
+  if (order.state === 'completed') return 'Order completed';
+  if (order.state === 'canceled') return 'Order canceled';
+  switch (order.progress ?? 'to_ship') {
+    case 'unpaid':
+      return 'Waiting for payment';
+    case 'to_ship':
+      return 'Payment successful';
+    case 'shipped':
+      return 'Parcel on its way';
+    case 'delivered':
+      return 'Parcel delivered';
+  }
+}
+
 /** One sold order, as the fake keeps it. */
 export interface FakeVintedOrder {
   id: string;
   /** When the buyer paid. */
   paidAt: Date;
   state: 'in_progress' | 'completed' | 'canceled';
+  /**
+   * Where an order in progress stands (default `to_ship`): `unpaid` is an accepted offer the
+   * buyer has not paid for yet. Each is shown in Vinted's words (`status`).
+   */
+  progress?: 'unpaid' | 'to_ship' | 'shipped' | 'delivered';
+  /** Vinted's words for it, in place of the ones its state and progress give. */
+  statusText?: string;
   /** The items that sold in it: several for a bundle. */
   itemIds: string[];
   /** What the buyer paid for the items, without Vinted's buyer fee. */
@@ -455,7 +478,7 @@ export class FakeVintedSite {
         title: order.title,
         date: order.paidAt.toISOString(),
         price: { amount: amount(order.priceCents), currency_code: 'USD' },
-        status: order.state === 'completed' ? 'Order completed' : 'Payment successful',
+        status: order.statusText ?? orderWords(order),
       })),
       pagination,
     });

@@ -115,6 +115,7 @@ const orders = z
       externalOrderId: z.string().min(1).max(200),
       soldAt: z.iso.datetime({ offset: true }).transform((time) => new Date(time)),
       shipped: z.boolean().optional(),
+      canceled: z.boolean().optional(),
       fees: z
         .array(
           z.object({

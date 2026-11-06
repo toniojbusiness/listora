@@ -271,7 +271,7 @@ describe('Vinted automation adapter on the fake Vinted site', () => {
   });
 
   describe('sold orders, for the sales history', () => {
-    it('reads every sale in progress and completed, never a canceled one, with its items', async () => {
+    it('reads every sale in progress and completed, and no canceled one in the history, with its items', async () => {
       site.items = [
         item('7001', { state: 'sold', title: 'Invented jacket', priceCents: 3000 }),
         item('7002', { state: 'sold', title: 'Invented tee', priceCents: 1200 }),
@@ -298,7 +298,8 @@ describe('Vinted automation adapter on the fake Vinted site', () => {
       expect(
         orders.map((one) => [one.externalOrderId, one.soldAt.toISOString(), one.shipped]),
       ).toEqual([
-        ['9001', '2026-10-30T10:00:00.000Z', undefined],
+        // Paid and waiting to be sent ("Payment successful"); a completed one shipped.
+        ['9001', '2026-10-30T10:00:00.000Z', false],
         ['9002', '2026-10-25T10:00:00.000Z', true],
       ]);
       // One item at what the buyer paid for it; a bundle's items at their own prices.
@@ -341,6 +342,95 @@ describe('Vinted automation adapter on the fake Vinted site', () => {
       expect(site.requests.some((request) => request.path === '/api/v2/transactions/9102')).toBe(
         false,
       );
+    });
+
+    it('tells where each order in progress stands: to send, sent, delivered, or words it does not know', async () => {
+      site.items = ['7301', '7302', '7303', '7304'].map((id) => item(id, { state: 'sold' }));
+      const paidAt = new Date('2026-11-03T10:00:00.000Z');
+      site.orders = [
+        order('9301', { state: 'in_progress', progress: 'to_ship', itemIds: ['7301'], paidAt }),
+        order('9302', { state: 'in_progress', progress: 'shipped', itemIds: ['7302'], paidAt }),
+        order('9303', { state: 'in_progress', progress: 'delivered', itemIds: ['7303'], paidAt }),
+        order('9304', {
+          state: 'in_progress',
+          statusText: 'Something new on Vinted',
+          itemIds: ['7304'],
+          paidAt,
+        }),
+      ];
+      const orders = await adapter.listOrdersSince(new Date('2026-11-01T00:00:00.000Z'), ctx());
+      expect(orders.map((one) => [one.externalOrderId, one.shipped, one.canceled])).toEqual([
+        ['9301', false, undefined],
+        ['9302', true, undefined],
+        ['9303', true, undefined],
+        ['9304', undefined, undefined],
+      ]);
+    });
+
+    it('reads no sale of an accepted offer the buyer has not paid for, nor its items', async () => {
+      site.items = [item('7401', { state: 'active' })];
+      site.orders = [
+        order('9401', {
+          state: 'in_progress',
+          progress: 'unpaid',
+          itemIds: ['7401'],
+          paidAt: new Date('2026-11-03T10:00:00.000Z'),
+        }),
+      ];
+      expect(await adapter.listOrdersSince(null, ctx())).toEqual([]);
+      expect(site.requests.some((request) => request.path === '/api/v2/transactions/9401')).toBe(
+        false,
+      );
+    });
+
+    it('reports the orders Vinted canceled or refunded after payment, with no items and no reads of their own', async () => {
+      site.items = [item('7501', { state: 'sold' }), item('7502', { state: 'active' })];
+      site.orders = [
+        // Refunded while in progress, in Vinted's words.
+        order('9501', {
+          state: 'in_progress',
+          statusText: 'Refunded to the buyer',
+          itemIds: ['7501'],
+          paidAt: new Date('2026-11-02T10:00:00.000Z'),
+        }),
+        // On the Canceled tab: paid three weeks before the check's since, within its lookback.
+        order('9502', {
+          state: 'canceled',
+          itemIds: ['7502'],
+          paidAt: new Date('2026-10-10T10:00:00.000Z'),
+        }),
+        // Paid too long before: the check stops there.
+        order('9503', {
+          state: 'canceled',
+          itemIds: ['7502'],
+          paidAt: new Date('2026-08-01T10:00:00.000Z'),
+        }),
+      ];
+      const from = site.requests.length;
+      const orders = await adapter.listOrdersSince(new Date('2026-11-01T00:00:00.000Z'), ctx());
+      expect(orders).toEqual([
+        {
+          externalOrderId: '9501',
+          soldAt: new Date('2026-11-02T10:00:00.000Z'),
+          canceled: true,
+          items: [],
+        },
+        {
+          externalOrderId: '9502',
+          soldAt: new Date('2026-10-10T10:00:00.000Z'),
+          canceled: true,
+          items: [],
+        },
+      ]);
+      expect(
+        site.requests
+          .slice(from)
+          .filter((request) => request.path.startsWith('/api/v2/transactions')),
+      ).toEqual([]);
+      expect(onlyRead(from)).toBe(true);
+      // The sales history reads no canceled order: a canceled order is no sale.
+      const history = await adapter.listOrdersSince(null, ctx());
+      expect(history.map((one) => one.externalOrderId)).toEqual(['9501']);
     });
 
     it('reads the history across pages, up to its limit', async () => {

@@ -112,6 +112,21 @@ describe('Vinted session check on the phone', () => {
         items: [{ externalListingId: '8102', priceCents: 1400 }],
       },
     ]);
+    // A check (with a since) also reads the canceled orders, so a recorded sale of one no
+    // longer stands (M6): the phone hands it over as canceled, with no items.
+    site.orders = [
+      {
+        id: '9802',
+        paidAt: new Date('2026-10-31T13:00:00.000Z'),
+        state: 'canceled',
+        itemIds: ['8102'],
+        priceCents: 1400,
+        title: 'Invented sold tee',
+      },
+    ];
+    expect(await phone.listOrdersSince(new Date('2026-10-30T00:00:00.000Z'), ctx())).toMatchObject([
+      { externalOrderId: '9802', canceled: true, items: [] },
+    ]);
   });
 
   it("reads an order's shipment for Pack check: its carrier, QR code, and ship-by date", async () => {

@@ -112,6 +112,19 @@ describe("the server reads an app's sale-check answers, old and new", () => {
     });
   });
 
+  it('reads an order the marketplace canceled after payment as canceled, with no items (Vinted M6)', () => {
+    const order = {
+      externalOrderId: '9802',
+      soldAt: '2026-10-31T13:00:00.000Z',
+      canceled: true,
+      items: [],
+    };
+    expect(readPhoneAnswer(call, ran([order]))).toMatchObject({
+      type: 'ran',
+      result: { ok: true, value: [{ ...order, soldAt: new Date(order.soldAt) }] },
+    });
+  });
+
   it("reads a call the app could not run as the phone's failure, a change only for a write", () => {
     const notRun = { type: 'not_run', message: 'WebKit stopped the page' };
     expect(readPhoneAnswer(call, notRun)).toEqual({

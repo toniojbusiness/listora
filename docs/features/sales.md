@@ -81,6 +81,12 @@ Listora's listings, and keeps it current: the sale checks of an automation conne
   (`updateRecordedOrder`), as the seller would. Each check reads back to the oldest sale on the
   marketplace still waiting to ship (sold in the last 30 days, `OPEN_SALE_LOOKBACK_MS`), not
   only the day before its last check, so a sale's shipping reaches it at the next sync.
+- **An order canceled after payment no longer stands.** A sale check that reads an order the
+  marketplace shows canceled or refunded after the buyer paid (`RemoteOrder.canceled`, Vinted so
+  far, [vinted.md](vinted.md#sale-checks-and-auto-delist-m6)) cancels the sale Listora recorded
+  of it, or records it returned once it shipped, exactly as the seller would
+  (`settleCanceledOrder`, [the lifecycle](#the-lifecycle)), and tells the seller with one push.
+  Such an order never becomes a sale.
 - **One sale, reported twice.** A sale the seller marked sold by hand on a marketplace and then
   found there by a check (or its history) is the same order, not a double sale
   (`findSaleOfSameListing`, `@listora/sales`).
