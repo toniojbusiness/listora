@@ -2,6 +2,8 @@ import {
   AI_ESTIMATE_LABEL,
   ASKING_PRICES_LABEL,
   claimsSoldData,
+  feeEstimator,
+  feeTableFor,
   MARKET_SOLD_LABEL_PREFIX,
 } from '@listora/pricing';
 import { describe, expect, it } from 'vitest';
@@ -9,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   brandPulseSignal,
   callWhy,
+  decideCall,
   DEFAULT_SCAN_CALL_SETTINGS,
   pricesSignal,
   scanCall,
@@ -501,10 +504,11 @@ describe("scanCall calibrated to the seller's sales", () => {
   });
 
   it('can turn a Buy on raw asks into Your call, and says the default with no sales', () => {
-    // At $15 worth listing: the raw asks' low end pays $22.50, the scaled one $14.40.
-    const fifteen = { ...settings, worthListingCents: 1_500 };
-    expect(scanCall(input({ web }), fifteen).call).toBe('buy');
-    expect(scanCall(input({ web, calibration }), fifteen).call).toBe('your_call');
+    // At $16 worth listing: the raw asks' low end pays $22.50; scaled, the low end pays $14.40
+    // and the likely sale ($25) $22.50, under 1.5 times the line.
+    const sixteen = { ...settings, worthListingCents: 1_600 };
+    expect(scanCall(input({ web }), sixteen).call).toBe('buy');
+    expect(scanCall(input({ web, calibration }), sixteen).call).toBe('your_call');
     const call = scanCall(
       input({
         web,
@@ -771,8 +775,8 @@ describe('callWhy', () => {
           by: { name: 'the retail price', plural: false },
         },
       }),
-      callWhy('your_call', payouts(900, 1_500), flags, worth, {
-        unsupported: { kind: 'alone', estimate: 'the AI estimate' },
+      callWhy('buy', { ...payouts(500, 1_800, 'low'), likelyPayoutCents: 1_400 }, flags, worth, {
+        cost: binsDress,
       }),
       callWhy('your_call', payouts(900, 1_500), { ...flags, visibleDamage: true }, worth),
       callWhy('your_call', payouts(900, 1_500), { ...flags, counterfeitProne: true }, worth),
@@ -788,7 +792,7 @@ describe('callWhy', () => {
       'Pays out $5-$12 after fees: it may or may not clear your $8 plus its $8 store price',
       "Pays out $9-$15 after fees on the web's asks, but Depop's asks say less",
       'Pays out $9-$15 after fees on the AI estimate, but the retail price says less',
-      'Pays out $9-$15 after fees on the AI estimate alone, with nothing to check it',
+      'Likely pays out $14 after fees, well over your $8 plus its $1.49 bins cost, and $5 at a fast sale, though the exact item is unsure',
       'Pays out $9-$15 after fees, but it shows damage',
       "Pays out $9-$15 after fees, but often faked: check it's real",
       "Pays out $9-$15 after fees, but it's a lot or bundle",
@@ -930,14 +934,18 @@ describe('scanCall weighed against what the item costs at the bins', () => {
     expect(backed.call).toBe('buy');
   });
 
-  it("makes no Grab of an AI estimate with nothing to check it, but grabs on the web's asks alone", () => {
+  it("grabs on the AI estimate or the web's asks alone: a source left out is no reason to wait", () => {
     const alone = scanCall(
-      input({ aiEstimate: { lowCents: 3_000, midCents: 4_500, highCents: 6_000 } }),
+      input({
+        identityConfidence: 0.4,
+        aiEstimate: { lowCents: 3_000, midCents: 4_500, highCents: 6_000 },
+      }),
       settings,
     );
     expect(alone).toMatchObject({
-      call: 'your_call',
-      why: 'Pays out $27-$54 after fees on the AI estimate alone, with nothing to check it',
+      call: 'buy',
+      basis: 'ai_estimate',
+      why: 'Even its low end pays out $27 after fees, over your $10, though the exact item is unsure',
     });
     const web = scanCall(
       input({
@@ -971,5 +979,182 @@ describe('scanCall weighed against what the item costs at the bins', () => {
       call: 'your_call',
       why: "Pays out $27-$54 after fees on the web's asks, but eBay's sold listings say less",
     });
+  });
+});
+
+/**
+ * The live Maybes after the bins rule (2026-11-05): the household kept a heritage-brand sweater
+ * and a pair of jeans, both new with tags, that came back Maybe. Each rested on the web's asks of
+ * one brand page, whose lowest ask scaled by the default 75% twice put the low end (the fast sale)
+ * at about $8, under the $8 line plus the bins cost, while the likely sale ($17) paid out nearly
+ * twice the line. Invented fixtures with the same shape, the real Depop fees, and the bins cost.
+ */
+describe('scanCall clear grabs at the bins', () => {
+  const depopFees = feeEstimator(feeTableFor('depop', new Date('2026-11-05T12:00:00Z')), undefined);
+  const defaultCalibration = { saleToAsking: 0.75, sales: 0 };
+  const sweater = itemCost('clothing/tops/sweaters');
+  const jeans = itemCost('clothing/bottoms/jeans');
+  const hoodie = itemCost('clothing/tops/hoodies_sweatshirts');
+  const live = (overrides: Partial<ScanCallInput>): ScanCallInput => ({
+    identityConfidence: 0.55,
+    flags: NO_FLAGS,
+    fees: depopFees,
+    calibration: defaultCalibration,
+    namedBrand: true,
+    ...overrides,
+  });
+  const heritageSweater = live({
+    identityConfidence: 0.8,
+    newWithTags: true,
+    aiEstimate: { lowCents: 1_500, midCents: 2_200, highCents: 3_000 },
+    retail: { lowCents: 11_800, highCents: 12_900, from: 'web', site: 'example-knits.com' },
+    web: { lowCents: 1_400, highCents: 4_500, sites: ['poshmark.com'], reputation: 'unknown' },
+    markets: [
+      { marketplace: 'Depop', asking: { count: 20, lowCents: 1_575, highCents: 2_845 } },
+      {
+        marketplace: 'Poshmark',
+        asking: { count: 41, lowCents: 1_800, highCents: 3_000 },
+        sold: { count: 4, lowCents: 925, highCents: 2_225, windowDays: 78, level: 'type' },
+      },
+      { marketplace: 'Vinted', asking: { count: 49, lowCents: 500, highCents: 1_000 } },
+    ],
+    cost: sweater,
+  });
+
+  it('grabs a new-with-tags sweater whose likely sale clearly pays, on one site of asks', () => {
+    const call = scanCall(heritageSweater);
+    expect(call).toMatchObject({
+      call: 'buy',
+      confidence: 'low',
+      basis: 'web_info',
+      prices: { fastCents: 700, realisticCents: 1_700 },
+    });
+    expect(call.why).toBe(
+      'Likely pays out $16 after fees, well over your $8 plus its $1.99 bins cost, and $7 at a fast sale, though the exact item is unsure',
+    );
+    expect(claimsSoldData(call.why)).toBe(false);
+    expect(call.why.length).toBeLessThanOrEqual(140);
+  });
+
+  it('grabs new-with-tags jeans though a marketplace sold a few like it for less', () => {
+    const call = scanCall(
+      live({
+        newWithTags: true,
+        aiEstimate: { lowCents: 1_000, midCents: 1_800, highCents: 2_800 },
+        retail: {
+          lowCents: 5_499,
+          highCents: 9_999,
+          from: 'web',
+          site: 'example-workwear.com',
+          models: ['5-pocket', 'carpenter', 'double front'],
+        },
+        web: { lowCents: 1_500, highCents: 4_500, sites: ['poshmark.com'], reputation: 'unknown' },
+        markets: [
+          { marketplace: 'Depop', asking: { count: 22, lowCents: 1_499, highCents: 2_950 } },
+          {
+            marketplace: 'Poshmark',
+            asking: { count: 4, lowCents: 1_100, highCents: 2_175 },
+            sold: { count: 3, lowCents: 900, highCents: 1_000, windowDays: 25, level: 'type' },
+          },
+        ],
+        cost: jeans,
+      }),
+    );
+    expect(call).toMatchObject({
+      call: 'buy',
+      basis: 'web_info',
+      prices: { realisticCents: 1_700 },
+    });
+    expect(call.why).toMatch(
+      /^Likely pays out \$16 after fees, well over your \$8 plus its \$2\.79 bins cost/,
+    );
+  });
+
+  it('grabs the brandless read of those jeans on the AI estimate alone', () => {
+    const call = scanCall(
+      live({
+        identityConfidence: 0.45,
+        namedBrand: false,
+        newWithTags: true,
+        aiEstimate: { lowCents: 1_200, midCents: 1_800, highCents: 2_800 },
+        cost: jeans,
+      }),
+    );
+    expect(call).toMatchObject({
+      call: 'buy',
+      basis: 'ai_estimate',
+      why: 'Even its low end pays out $11 after fees, over your $8 plus its $2.79 bins cost, though the exact item is unsure',
+    });
+  });
+
+  it('still grabs the sweater when the web lookup timed out', () => {
+    // A missing source is left out of the call: here the range falls back to the scaled AI estimate.
+    const call = scanCall({ ...heritageSweater, web: undefined });
+    expect(call).toMatchObject({ call: 'buy', basis: 'ai_estimate' });
+  });
+
+  it('keeps a flag, and a range that truly straddles the line, a Maybe', () => {
+    const damaged = scanCall({ ...heritageSweater, flags: { ...NO_FLAGS, visibleDamage: true } });
+    expect(damaged).toMatchObject({ call: 'your_call' });
+    expect(damaged.why).toMatch(/but it shows damage$/);
+    // A hoodie whose likely sale pays out a dollar or two over the line: the seller's call.
+    const ownCalibration = { saleToAsking: 0.83, sales: 5 };
+    const straddles = [
+      live({
+        calibration: ownCalibration,
+        aiEstimate: { lowCents: 1_200, midCents: 1_800, highCents: 2_500 },
+        web: { lowCents: 1_200, highCents: 2_500, sites: ['poshmark.com'], reputation: 'unknown' },
+        cost: hoodie,
+      }),
+      live({
+        calibration: ownCalibration,
+        aiEstimate: { lowCents: 800, midCents: 1_200, highCents: 1_800 },
+        retail: { lowCents: 4_499, highCents: 5_999, from: 'web', site: 'example-mall.com' },
+        web: { lowCents: 1_600, highCents: 2_000, sites: ['ebay.com'], reputation: 'unknown' },
+        cost: hoodie,
+      }),
+      live({
+        identityConfidence: 0.3,
+        namedBrand: false,
+        aiEstimate: { lowCents: 500, midCents: 900, highCents: 1_500 },
+        cost: hoodie,
+      }),
+    ];
+    for (const straddle of straddles) {
+      const call = scanCall(straddle);
+      expect(call.call).toBe('your_call');
+      expect(call.why).toMatch(/: it may or may not clear your \$8 plus its \$2\.49 bins cost$/);
+    }
+  });
+
+  it('needs the likely sale well over the line, and the fast sale over half of it', () => {
+    const at = (likelyPayoutCents: number, conservativePayoutCents: number) =>
+      decideCall(
+        {
+          conservativePayoutCents,
+          optimisticPayoutCents: 3_000,
+          likelyPayoutCents,
+          costCents: 200,
+          flagged: false,
+        },
+        DEFAULT_SCAN_CALL_SETTINGS,
+      );
+    // $8 line: the likely sale less the cost at $12, the fast sale less the cost at $4.
+    expect(at(1_400, 600)).toBe('buy');
+    expect(at(1_399, 600)).toBe('your_call');
+    expect(at(1_400, 599)).toBe('your_call');
+    expect(at(900, 1_000)).toBe('buy');
+    // Without a likely sale (the offline call) only the low end counts.
+    expect(
+      decideCall(
+        {
+          conservativePayoutCents: 600,
+          optimisticPayoutCents: 3_000,
+          costCents: 200,
+          flagged: false,
+        },
+        DEFAULT_SCAN_CALL_SETTINGS,
+      ),
+    ).toBe('your_call');
   });
 });

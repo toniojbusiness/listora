@@ -91,24 +91,37 @@ checkout ([hauls.md](hauls.md)).
    medium with one at least 0.6 sure, low otherwise. Slowing own sales, or an eBay search that
    sells slowly, keep a call from high.
 4. **The call** (`scanCall`, its rule `decideCall`; 2026-11-05).
-   - **Grab** (`buy`) when even the low end pays out at least the worth-listing amount plus the
-     item's likely cost, and the AI raised no flag (visible damage, a lot or bundle, a
-     counterfeit-prone brand). At any confidence: the confidence is shown beside it, and the why
-     says "though the exact item is unsure" when it is low.
-   - Unless it rests on an estimate standing alone: a range from the web's asks or the AI
-     estimate is no Grab when every other source that prices the item says it pays less (its
-     high end, after fees and the cost, under the line: the household's own sales like it even
-     when too few for a range, each marketplace's sold listings and asks, the web's asks, the AI
-     estimate, and the retail price), nor when it is the AI estimate with no other source at all.
-     The why says what it rests on: "Pays out $27-$54 after fees on the AI estimate, but your
-     sales like it say less", "... on the AI estimate alone, with nothing to check it". The web's
-     asks with nothing else may Grab: they are listings on real sites.
+   - **Grab** (`buy`) when the AI raised no flag (visible damage, a lot or bundle, a
+     counterfeit-prone brand) and either:
+     - even the low end (the fast sale) pays out at least the worth-listing amount plus the
+       item's likely cost ("Even its low end pays out $41 after fees, over your $8 plus its
+       $1.49 bins cost"); or
+     - the likely sale clearly pays: its payout, less the cost, is at least 1.5 times the
+       worth-listing amount (`grabLikelyMultiple`, $12 at $8), while the fast sale's is at least
+       half of it (`grabFastShare`, $4), so even a quick, cheap sale still covers the bins cost
+       a few times over ("Likely pays out $16 after fees, well over your $8 plus its $1.99 bins
+       cost, and $7 at a fast sale"). The likely sale is the card's
+       ([Three prices](#three-prices)). A wide range of the web's asks (one brand page's cheapest
+       to dearest, scaled twice by the calibration) puts its low end far under where the item
+       likely sells, so the low end alone kept clear grabs a Maybe
+       ([Results, 2026-11-05: clear grabs](#results-2026-11-05-clear-grabs)).
+   - At any confidence and on any source: the confidence is shown beside it, and the why says
+     "though the exact item is unsure" when it is low. The AI estimate with no other source (a
+     read with no brand to look up, or one whose lookups timed out) may Grab too: a missing
+     source is only ever left out, and never by itself makes a Grab a Maybe.
+   - Unless it rests on an estimate every other source contradicts: a range from the web's asks
+     or the AI estimate is no Grab when every other source that prices the item says it pays
+     less (its high end, after fees and the cost, under the line: the household's own sales like
+     it even when too few for a range, each marketplace's sold listings and asks, the web's asks,
+     the AI estimate, and the retail price). The why says what it rests on: "Pays out $27-$54
+     after fees on the AI estimate, but your sales like it say less".
    - **Leave** (`skip`) when even the high end pays out less than the worth-listing amount. The
      cost does not raise this line: a wrong Leave throws away an item that would have paid, while
      at the bins the cost is small, and with the cost on it the backtest's Leaves held 3 times in
      7, against 2 in 2 without ([Results, 2026-11-05](#results-2026-11-05-the-call-at-the-bins)).
-   - **Maybe** (`your_call`) otherwise: the range straddles the line, a flag needs a look, or
-     that lone estimate.
+   - **Maybe** (`your_call`) otherwise: the range truly straddles the line (the likely sale pays
+     out under 1.5 times it, or the fast sale under half of it), a flag needs a look, or that
+     contradicted estimate.
 
    Until 2026-11-05 a Buy also needed medium or high confidence, which an unsure read never
    reached: across all 46 live scans to then (2026-10-31 to 11-04) there were no Grabs, and about
@@ -558,14 +571,58 @@ less often than 64% is no better than grabbing everything.
 - **The `ai` variant** (no calibration) went from 11 Grabs holding 9 to 24 holding 17 (71%) on
   one photo; **`labels`** (an own-history-only call with sure labels) from 15 holding 10 to 25
   holding 15 (60%): a category-level match of the household's own sales is a loose range.
-- **An AI estimate with nothing to check it** is a Maybe; on these reads that changed one Grab
+- **An AI estimate with nothing to check it** was a Maybe; on these reads that changed one Grab
   on one photo (a miss) and two on two photos (both held) in the `ai` variant, and none in
-  `calibrated`, so the data cannot settle it. It is kept for the rule's other aim: no single
-  unverified number makes a Grab on its own.
+  `calibrated`, so the data could not settle it. It was dropped the same day
+  ([clear grabs](#results-2026-11-05-clear-grabs)).
 - The set is every one a sale, cheap mall brands at a $13.50 median; it says how well Grab picks
   items that pay, not whether a Leave would have sold. The $100 dress of the captain's report is
   a unit test with invented fixtures (`call.test.ts`, "grabs a clearly valuable dress on an
   unsure read").
+
+### Results, 2026-11-05: clear grabs
+
+After the rule above went live the captain reported: "we are still saying maybe for clear
+grabs". **The live scans** (read-only, both household accounts, every scan from the rule's
+deploy to 2026-11-05 20:37 UTC): 7 scans, all Maybe, none a Grab.
+
+| Live scan (no names)                        | Rests on                          | Low end less cost | Likely sale less cost | Why it stayed Maybe                                         | Now   |
+| ------------------------------------------- | --------------------------------- | ----------------- | --------------------- | ----------------------------------------------------------- | ----- |
+| Heritage-brand sweater, new with tags, kept | the web's asks, 1 site, 0.8 sure  | $5.17             | $13.99                | the low end: $14 lowest ask x 56% = $7.88, $7.16 after fees | Grab  |
+| Wide-leg jeans, new with tags, kept         | the web's asks, 1 site, 0.55 sure | $4.92             | $13.19                | the low end: $15 x 56% = $8.44, $7.71 after fees            | Grab  |
+| The same jeans, first photo (no brand)      | the AI estimate alone, 0.45 sure  | $8.36             | $14.16                | "the AI estimate alone, with nothing to check it"           | Grab  |
+| Hoodie, a brand page's asks                 | the web's asks, 1 site, 0.55 sure | $5.04             | $9.63                 | straddles                                                   | Maybe |
+| Sherpa hoodie, brand pulse slow             | the web's asks, 1 site, 0.55 sure | $7.70             | $8.66                 | straddles                                                   | Maybe |
+| Kids' sweatshirt, no brand                  | the AI estimate alone, 0.3 sure   | $1.89             | $5.76                 | straddles                                                   | Maybe |
+| Hoodie with visible damage, no brand        | the AI estimate alone, 0.4 sure   | $4.79             | $8.66                 | the damage flag                                             | Maybe |
+
+- Every one was low confidence (one site of asks, or a read under 0.8 sure), which no longer
+  gates a Grab, so the deciding line was the low end. On the web's asks that low end is the
+  cheapest ask on one brand page, scaled by the default 75% twice (the account of the two kept
+  items had no sales with an asking price to give its own ratio), then less Depop's fees and the
+  bins cost. Mercari failed on two of them and eBay asked for a check on one; those were left out
+  and decided nothing.
+- The kept sweater also had Depop asks of $16-$28 (20 like it), Poshmark asks of $18-$30 (41)
+  and 4 sold at $9-$22, and a retail price of $118-$129; the kept jeans Depop asks of $15-$30 (22)
+  and 3 sold on Poshmark at $9-$10. Their likely sale ($17) paid out nearly twice the line.
+- The regression tests are these seven with invented fixtures (`call.test.ts`, "scanCall clear
+  grabs at the bins").
+
+**The backtest** (`--replay`, no AI spend; the same 64 sales, scored as above):
+
+| `calibrated`           | Before: Grab | held     | After: Grab | held     | Leave (held), both |
+| ---------------------- | ------------ | -------- | ----------- | -------- | ------------------ |
+| 1 photo, with research | 19           | 15 (79%) | 25          | 19 (76%) | 2 (2)              |
+| 2 photos               | 16           | 13 (81%) | 19          | 15 (79%) | 1 (0)              |
+
+- 19 and 15 of the 41 items that paid are Grabs, against 15 and 13. The new Grabs held 4 of 6
+  and 2 of 3; the misses all paid out more than their bins cost, by $2 to $6, under the $8 line.
+  `ai`: 30 holding 21 (70%) against 24 holding 17; 22 holding 17 (77%) against 18 holding 14.
+- Measured and not taken (`grabLikelyMultiple` x `grabFastShare`): 1.25 x 0.75 held a little
+  more often (28 holding 23 on one photo) but left both kept items a Maybe, their fast sales
+  paying out $5 over the cost; 2 x anything changed one Grab; at 1.5 a fast-sale floor of 0 or
+  0.25 made the same calls as 0.5. Keeping "the AI estimate alone" a Maybe would have kept 2 more
+  Maybes on one photo (1 paid) and 3 on two (2 paid).
 
 ## The scan at the store (M2)
 
