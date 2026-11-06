@@ -565,6 +565,14 @@ export interface RemoteOrder {
    * its pages don't show them.
    */
   fees?: OrderFee[];
+  /**
+   * The marketplace shows the order canceled after the buyer paid (Vinted: an order it canceled
+   * or refunded before the order completed, say because it didn't ship in time): it no longer
+   * stands. A sale check never records one as a sale; one Listora recorded is canceled (or
+   * returned, once it shipped), and its delists that reached no marketplace yet stop. Absent
+   * when the order stands, or the pages don't say.
+   */
+  canceled?: boolean;
 }
 
 /** Finds the adapter for a marketplace; `undefined` when Listora has none configured. */
