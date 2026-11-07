@@ -4,8 +4,9 @@
  * headless Chromium standing in for the app's web view, on the fake Vinted site. It reads the
  * member as the browser runner does, and stops at Vinted's checks for the seller to complete.
  * The import's listings read and the sales history's orders read (M4) run there the same way,
- * from Vinted's web API with the session's own cookies, and so does Pack check's label read (M8). Vinted has no listing scripts yet, so it
- * has no conformance suite of its own (conformance-<marketplace>).
+ * from Vinted's web API with the session's own cookies, and so do the offers' read and an answer
+ * on its conversation page (M7) and Pack check's label read (M8). The listing scripts (M5) run
+ * there in conformance-vinted.
  */
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -127,6 +128,54 @@ describe('Vinted session check on the phone', () => {
     expect(await phone.listOrdersSince(new Date('2026-10-30T00:00:00.000Z'), ctx())).toMatchObject([
       { externalOrderId: '9802', canceled: true, items: [] },
     ]);
+  });
+
+  it("reads the buyers' offers from the conversations, and answers one on its conversation page", async () => {
+    const offer = site.offers.add({
+      listingId: '8101',
+      listingTitle: 'Invented denim jacket',
+      amountCents: 3000,
+      listPriceCents: 4200,
+      buyer: 'invented-buyer',
+    });
+    const ids = site.conversationOf(offer.id);
+    const vinted = adapter(site.url);
+    const read = await vinted.listOffers(ctx());
+    expect(read).toEqual([
+      expect.objectContaining({
+        externalOfferId: `${ids.id}/${ids.transactionId}`,
+        externalListingId: '8101',
+        amountCents: 3000,
+        listPriceCents: 4200,
+        buyerName: 'invented-buyer',
+        turn: 'seller',
+      }),
+    ]);
+    const ref = {
+      externalOfferId: `${ids.id}/${ids.transactionId}`,
+      externalListingId: '8101',
+      url: null,
+    };
+    await expect(
+      vinted.answerOffer(
+        {
+          responseId: 'r1',
+          offer: ref,
+          answer: 'counter',
+          expectedAmountCents: 3000,
+          counterCents: 3600,
+        },
+        ctx(),
+      ),
+    ).resolves.toEqual({ type: 'sent' });
+    await expect(vinted.readOffer(ref, ctx())).resolves.toMatchObject({
+      found: true,
+      status: 'countered',
+      offer: { amountCents: 3600 },
+    });
+    // The answer only: no message of Listora's own in the conversation.
+    expect(site.messages).toEqual([]);
+    site.offers.clear();
   });
 
   it("reads an order's shipment for Pack check: its carrier, QR code, and ship-by date", async () => {

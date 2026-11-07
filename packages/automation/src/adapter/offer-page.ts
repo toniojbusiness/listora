@@ -76,6 +76,12 @@ export interface OfferPages {
   selectors: OfferPageSelectors;
   /** The offer's page, from its reference (its URL, or its id). */
   url: (ref: OfferRef) => string;
+  /**
+   * Reads the offer on its open page from the marketplace's own data (Vinted's web API) instead
+   * of the page's words, waiting for the page to draw the offer while it waits on the seller.
+   * Only reads.
+   */
+  read?: (page: PageDriver, ref: OfferRef) => Promise<RemoteOfferState>;
 }
 
 const STATUS_WORDS: readonly [RegExp, Extract<RemoteOfferState, { found: true }>['status']][] = [
@@ -138,7 +144,13 @@ export async function answerOnOfferPage(
   const { selectors } = pages;
   const button = selectors[request.answer];
   const opened = await step('open the offer', { mutates: false }, async (page) => {
-    const shown = await readOfferPage(page, pages, request.offer);
+    let shown: RemoteOfferState;
+    if (pages.read === undefined) {
+      shown = await readOfferPage(page, pages, request.offer);
+    } else {
+      await page.goto(pages.url(request.offer));
+      shown = await pages.read(page, request.offer);
+    }
     if (!shown.found || shown.status !== 'pending') return shown;
     if (!(await page.exists(button))) {
       throw new PageChangedError(`${pages.name}'s offer page has no button for that answer`);

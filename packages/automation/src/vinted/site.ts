@@ -35,6 +35,13 @@ export const VINTED_PATHS = {
   upload: '/items/new',
   /** A listing's edit form: the upload form, filled with the listing (modeled). */
   edit: (id: string) => `/items/${encodeURIComponent(id)}/edit`,
+  /** The seller's inbox: their conversations with buyers (modeled, M7). */
+  inbox: '/inbox',
+  /**
+   * One conversation, where a buyer's offer on the item it is about is answered: Vinted's offers
+   * live in the conversation (modeled, M7).
+   */
+  conversation: (id: string) => `/inbox/${encodeURIComponent(id)}`,
 } as const;
 
 /**
@@ -54,6 +61,10 @@ export const VINTED_API_PATHS = {
   myOrders: '/api/v2/my_orders',
   /** One transaction (an order): its items, price, and status. */
   transaction: (id: string) => `/api/v2/transactions/${encodeURIComponent(id)}`,
+  /** The member's conversations, newest first, a page at a time (modeled, M7). */
+  inbox: '/api/v2/inbox',
+  /** One conversation, with its transaction (the item it is about) and its messages (M7). */
+  conversation: (id: string) => `/api/v2/conversations/${encodeURIComponent(id)}`,
 } as const;
 
 /** An item's page path: `/items/<numeric id>`, a slug of its title after a dash. */

@@ -8,11 +8,13 @@ answer is sent only for the seller's tap on a confirmation that shows the amount
 after fees, never on its own, and it is shown as done only once a read of the offer on the
 marketplace shows it.
 
-Poshmark and Depop are read and answered. Mercari is not yet: its website showed the captain's
+Poshmark, Depop, and Vinted are read and answered (Vinted's in its conversations,
+[vinted.md](vinted.md#offers-m7)). Mercari is not yet: its website showed the captain's
 session no page of the offers buyers make (below). Sellers see only what passed live
 ([verified-features.md](verified-features.md)). Today that is Depop's offer reads. Poshmark's
-offers and every answer from Listora are hidden: nothing reads them, an offer shows no Accept,
-Decline, or Counter ("Answer this offer in Depop."), and asking for an answer is refused.
+and Vinted's offers and every answer from Listora are hidden: nothing reads them, an offer shows
+no Accept, Decline, or Counter ("Answer this offer in Depop."), and asking for an answer is
+refused.
 
 | Where                                                    | What                                                                      |
 | -------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -45,6 +47,11 @@ Decline, or Counter ("Answer this offer in Depop."), and asking for an answer is
     `/vm-rest/users/<id>/offers/feed`: `$_order_activity.orderActivity.activeOffers`, a
     `sale_offer_summaries` story for the offers on the seller's listings, an `info_message` when
     there are none. The read waits for the page's `active-offer-section`.
+  - **Vinted** (modeled, Vinted plan M7): the seller's 20 newest conversations from its web API
+    (`/api/v2/inbox`), then each one's record (`/api/v2/conversations/<id>`), whose newest
+    offer message decides where the offer stands; a buyer may offer at most 40% below the price,
+    so no counter goes below that floor (`OFFER_RULES.vinted.floorPercent`), and offers aren't
+    binding ([vinted.md](vinted.md#offers-m7)).
   - **Depop** (read on a real shop's session and in Depop's own scripts, 2026-10-28): the
     products with offers, `GET /presentation/api/v1/offers/me/products/?after=<page_info.last>`
     (`cursor=` is ignored; `objects`, each named by `product_id` with its price, but no slug, so
@@ -130,16 +137,16 @@ between runs ([phone-execution.md](phone-execution.md)).
 
 ## Local development and tests
 
-Nothing to configure. The fake Poshmark and Depop sites hold offers (`site.offers`,
+Nothing to configure. The fake Poshmark, Depop, and Vinted sites hold offers (`site.offers`,
 `FakeOfferDesk`) in their marketplace's data, an offer page every fake shares (amount, status,
 Accept, Decline, Counter, the confirmation), and faults (a refusal, an answer taken whose page
 then failed, a server error). Accept, decline, and counter are only ever tested on the fakes and
 recorded pages, never on a real buyer's offer.
 
-- `fake-offers/offers-suite.ts`, run by `poshmark/offers.int.test.ts` and
-  `depop/offers.int.test.ts` in a real headless Chromium: the read, accept, decline, counter,
-  refusals, an offer that moved or went away, a lost answer reported as unknown, a bot check that
-  stops the read, and a page Listora no longer reads.
+- `fake-offers/offers-suite.ts`, run by `poshmark/offers.int.test.ts`,
+  `depop/offers.int.test.ts`, and `vinted/offers.int.test.ts` in a real headless Chromium: the
+  read, accept, decline, counter, refusals, an offer that moved or went away, a lost answer
+  reported as unknown, a bot check that stops the read, and a page Listora no longer reads.
 - `phone/work.int.test.ts`, through the phone runtime: a read on the phone making tasks and
   closing them, an accept done only on read-back and the sale check it asks for, a lost answer
   read back and never sent again, an answer the phone stopped in the middle of treated as maybe

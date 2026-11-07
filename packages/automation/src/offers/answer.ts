@@ -35,6 +35,7 @@ import {
   loadFeatureGate,
   MARKETPLACE_NAMES,
   OFFER_RULES,
+  offerFloorCents,
   recordFeatureTestRun,
   type ConnectionRef,
   type FeatureGate,
@@ -237,6 +238,16 @@ export async function requestOfferAnswer(
         throw new OfferAnswerRefusedError(
           'invalid',
           'A counteroffer has to be less than your listing price.',
+        );
+      }
+      // A counteroffer is an offer too: none below the marketplace's floor (Vinted's 40% below).
+      const floor = isOfferMarketplace(offer.marketplace)
+        ? offerFloorCents(offer.marketplace, offer.list_price_cents)
+        : null;
+      if (floor !== null && counterCents < floor) {
+        throw new OfferAnswerRefusedError(
+          'invalid',
+          `${name} takes no offer this far below your listing price: a counteroffer has to be at least ${dollarText(floor)}.`,
         );
       }
     } else if (input.counterCents !== null) {
@@ -632,4 +643,9 @@ async function settleOffer(
       reason: 'offer',
     });
   }
+}
+
+/** "$36.00". */
+function dollarText(cents: number): string {
+  return `$${String(Math.floor(cents / 100))}.${String(cents % 100).padStart(2, '0')}`;
 }

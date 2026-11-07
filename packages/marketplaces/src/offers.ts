@@ -96,6 +96,12 @@ export interface OfferRules {
   accept: 'sale' | 'buyer_checkout';
   /** In the seller's words, what accepting does there. */
   acceptNote: string;
+  /**
+   * The least an offer may be on the marketplace, as a percent of the listing's price, when the
+   * marketplace sets one: Vinted's buyers offer at most 40% below the price (60), and a seller's
+   * counteroffer is an offer too, so Listora sends none below it.
+   */
+  floorPercent?: number;
 }
 
 /**
@@ -103,8 +109,7 @@ export interface OfferRules {
  * website showed the captain's session no page of the offers buyers make (2026-10-27), and its
  * sellers answer offers in its app (docs/features/offers.md, open items).
  */
-/** The marketplaces whose offers Listora reads and answers. */
-export type OfferMarketplace = Extract<Marketplace, 'poshmark' | 'depop'>;
+export type OfferMarketplace = Extract<Marketplace, 'poshmark' | 'depop' | 'vinted'>;
 
 export const OFFER_RULES: Readonly<Record<OfferMarketplace, OfferRules>> = {
   poshmark: {
@@ -117,10 +122,33 @@ export const OFFER_RULES: Readonly<Record<OfferMarketplace, OfferRules>> = {
     accept: 'buyer_checkout',
     acceptNote: 'Accepting lets the buyer buy it at this price; it sells once they check out.',
   },
+  // Vinted's offers live in the buyer's conversation and aren't binding: an accepted offer is a
+  // price the buyer may pay, and the item sells only once they pay (its terms, section 14).
+  vinted: {
+    counter: true,
+    accept: 'buyer_checkout',
+    acceptNote:
+      "Vinted offers aren't binding: accepting lets the buyer buy it at this price, and it sells only once they pay.",
+    floorPercent: 60,
+  },
 };
 
 export function isOfferMarketplace(marketplace: Marketplace): marketplace is OfferMarketplace {
   return Object.hasOwn(OFFER_RULES, marketplace);
+}
+
+/**
+ * The least an offer, and so a counteroffer, may be on the marketplace for a listing at
+ * `listPriceCents`, in cents (rounded up), or `null` where the marketplace sets no floor or the
+ * listing's price is unknown.
+ */
+export function offerFloorCents(
+  marketplace: OfferMarketplace,
+  listPriceCents: number | null,
+): number | null {
+  const percent = OFFER_RULES[marketplace].floorPercent;
+  if (percent === undefined || listPriceCents === null) return null;
+  return Math.ceil((listPriceCents * percent) / 100);
 }
 
 /** Whether a read of the offer shows the answer took effect. */
