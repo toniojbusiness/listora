@@ -21,12 +21,19 @@
  * - `read` (M5): the listing from Vinted's web API, by its id or else by its SKU line; one Vinted
  *   is reviewing reads as not live yet (`inReview`), never as listed.
  *
+ * - `offers` (M7): the buyers' offers waiting on the seller, from their newest conversations
+ *   (Vinted's offers live in the conversation about the item), a step per conversation;
+ *   `offer`: one offer as it stands now, an answer's read-back.
+ * - `answerOffer` (M7): accept, decline, or counter one offer on its own conversation page; only
+ *   the answer's own confirmation changes anything, and Listora sends no message of its own.
+ *
  * The listing scripts serve a seller only once they passed live (`LISTING_AUTOMATION_NOT_VERIFIED`
  * in `@listora/marketplaces`); until then they run only in the owner's Test mode.
  */
 import type {
   ListedListing,
   ListingRef,
+  RemoteOffer,
   RemoteListing,
   OperationRequest,
   RemoteListingState,
@@ -34,6 +41,7 @@ import type {
   RemoteOrderItem,
 } from '@listora/marketplaces';
 
+import { answerOnOfferPage } from '../adapter/offer-page.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import {
   mayHaveAppliedBefore,
@@ -59,6 +67,12 @@ import {
 import { changed, type VintedSite } from './pages/common.ts';
 import { offers, openItemPage, toggleHidden } from './pages/item-page.ts';
 import { listingDetails } from './pages/listing-details.ts';
+import {
+  readConversationIds,
+  readPendingConversationOffer,
+  readVintedOffer,
+  vintedOfferPages,
+} from './pages/offers.ts';
 import {
   fillPrice,
   fillUploadForm,
@@ -309,6 +323,34 @@ export function createVintedScripts(
       }
       return { listings, next: shown.hasNext ? String(number + 1) : null };
     },
+    offers: async (step) => {
+      // The member, then their newest conversations, then each one's offer, a step each, as
+      // Depop's offers are read: a conversation is one read of Vinted's web API.
+      const { memberId, conversations } = await step(
+        'read your conversations',
+        { mutates: false },
+        async (page) => {
+          await openAccount(page, site);
+          const member = await currentMember(page, site);
+          return { memberId: member.id, conversations: await readConversationIds(page, site) };
+        },
+      );
+      const offers: RemoteOffer[] = [];
+      for (const conversationId of conversations) {
+        offers.push(
+          ...(await step("read a conversation's offer", { mutates: false }, (page) =>
+            readPendingConversationOffer(page, site, memberId, conversationId),
+          )),
+        );
+      }
+      return offers;
+    },
+    offer: (ref, step) =>
+      step('read the offer', { mutates: false }, async (page) => {
+        await openAccount(page, site);
+        return readVintedOffer(page, site, ref);
+      }),
+    answerOffer: (request, step) => answerOnOfferPage(step, vintedOfferPages(site), request),
     orders: async (since, step) => {
       await openSettings(step);
       const limits = since === null ? HISTORY_ORDER_LIMITS : ORDER_LIMITS;

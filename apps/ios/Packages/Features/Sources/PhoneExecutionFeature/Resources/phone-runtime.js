@@ -370,7 +370,14 @@
 		*/
 		upload: "/items/new",
 		/** A listing's edit form: the upload form, filled with the listing (modeled). */
-		edit: (id) => `/items/${encodeURIComponent(id)}/edit`
+		edit: (id) => `/items/${encodeURIComponent(id)}/edit`,
+		/** The seller's inbox: their conversations with buyers (modeled, M7). */
+		inbox: "/inbox",
+		/**
+		* One conversation, where a buyer's offer on the item it is about is answered: Vinted's offers
+		* live in the conversation (modeled, M7).
+		*/
+		conversation: (id) => `/inbox/${encodeURIComponent(id)}`
 	};
 	/**
 	* The reads Vinted's own pages make from its same-origin web API (`/api/v2/`), which the session
@@ -388,7 +395,11 @@
 		/** The signed-in member's own orders (`type=sold`: the ones they sold). */
 		myOrders: "/api/v2/my_orders",
 		/** One transaction (an order): its items, price, and status. */
-		transaction: (id) => `/api/v2/transactions/${encodeURIComponent(id)}`
+		transaction: (id) => `/api/v2/transactions/${encodeURIComponent(id)}`,
+		/** The member's conversations, newest first, a page at a time (modeled, M7). */
+		inbox: "/api/v2/inbox",
+		/** One conversation, with its transaction (the item it is about) and its messages (M7). */
+		conversation: (id) => `/api/v2/conversations/${encodeURIComponent(id)}`
 	};
 	/** An item's page path: `/items/<numeric id>`, a slug of its title after a dash. */
 	function itemPath(id) {
@@ -10114,7 +10125,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const keys = Object.keys(value).slice(0, 12);
 		return keys.length === 0 ? " (it is empty)" : ` (it has: ${keys.join(", ")})`;
 	}
-	const price = object({
+	const price$1 = object({
 		priceAmount: string(),
 		currencyName: string()
 	});
@@ -10125,7 +10136,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		status: string(),
 		/** The whole listing text: copy, Listora's SKU line, hashtags. */
 		description: string(),
-		price,
+		price: price$1,
 		/** Depop's last change to the product, to the second. */
 		dateUpdated: string()
 	});
@@ -10210,7 +10221,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	/** The cookie Depop's pages send as their bearer token. */
 	const TOKEN_COOKIE$2 = "access_token";
-	const API$3 = "web API";
+	const API$4 = "web API";
 	/** One page of the seller's own listings. */
 	const PAGE_SIZE$1 = 24;
 	const amount$1 = object({ amount: string() });
@@ -10253,13 +10264,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readOwnProduct(page, site, slug) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE$2 });
 		if (answer.status === 404) return null;
-		if (answer.status !== 200) throw changed$4(API$3, `answered ${String(answer.status)} for a product`);
-		const product = expectShape$1(editListingSchema, answer.body, API$3);
+		if (answer.status !== 200) throw changed$4(API$4, `answered ${String(answer.status)} for a product`);
+		const product = expectShape$1(editListingSchema, answer.body, API$4);
 		const status = STATUSES$2[product.status];
-		if (status === void 0) throw changed$4(API$3, "shows a product status Listora does not know");
-		if (product.pricing.currency_name !== "USD") throw changed$4(API$3, "shows a price that is not in US dollars");
+		if (status === void 0) throw changed$4(API$4, "shows a product status Listora does not know");
+		if (product.pricing.currency_name !== "USD") throw changed$4(API$4, "shows a price that is not in US dollars");
 		const key = product.pricing.final_price_key ?? "original_price";
-		const price = expectShape$1(priceSchema$1, product.pricing[key], API$3).price_breakdown.price.amount;
+		const price = expectShape$1(priceSchema$1, product.pricing[key], API$4).price_breakdown.price.amount;
 		const { description, sku } = listingCopy(product.description);
 		return {
 			record: answer.body,
@@ -10272,8 +10283,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				description,
 				priceCents: cents$1(price),
 				currency: "USD",
-				revision: revision(product.updated_at, API$3),
-				refreshedAt: new Date(revision(product.updated_at, API$3)).toISOString()
+				revision: revision(product.updated_at, API$4),
+				refreshedAt: new Date(revision(product.updated_at, API$4)).toISOString()
 			},
 			sku
 		};
@@ -10290,11 +10301,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			statusFilter: filter
 		});
 		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$2 });
-		if (answer.status !== 200) throw changed$4(API$3, `answered ${String(answer.status)} for the seller's listings`);
-		const feed = expectShape$1(feedSchema, answer.body, API$3);
+		if (answer.status !== 200) throw changed$4(API$4, `answered ${String(answer.status)} for the seller's listings`);
+		const feed = expectShape$1(feedSchema, answer.body, API$4);
 		return {
 			products: feed.products.map((entry) => {
-				const read = productRead(expectShape$1(productRecordSchema$1, entry, API$3), site, API$3);
+				const read = productRead(expectShape$1(productRecordSchema$1, entry, API$4), site, API$4);
 				return {
 					state: read.listing,
 					sku: read.sku,
@@ -10307,7 +10318,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** A US dollar amount (`"18.00"`) in cents. */
 	function cents$1(value) {
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
-		if (match?.[1] === void 0) throw changed$4(API$3, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$4(API$4, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 
@@ -10746,7 +10757,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* is read: no name, address, or message is kept. Only reads.
 	*/
 	const TOKEN_COOKIE$1 = "access_token";
-	const API$2 = "receipts API";
+	const API$3 = "receipts API";
 	const PAGE_SIZE = 24;
 	/** A dollar amount as the receipts show it (`"18.00"`). */
 	const amount = string().regex(/^\d+(\.\d{1,2})?$/);
@@ -10815,11 +10826,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		});
 		if (cursor !== null) query.set("after", cursor);
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for the receipts`);
-		const shown = expectShape$1(receiptsSchema, answer.body, API$2);
+		if (answer.status !== 200) throw changed$4(API$3, `answered ${String(answer.status)} for the receipts`);
+		const shown = expectShape$1(receiptsSchema, answer.body, API$3);
 		const receipts = shown.objects.map((receipt) => readReceipt(receipt, site));
 		const next = shown.page_info.has_more ? shown.page_info.last ?? null : null;
-		if (shown.page_info.has_more && next === null) throw changed$4(API$2, "has more receipts but no cursor");
+		if (shown.page_info.has_more && next === null) throw changed$4(API$3, "has more receipts but no cursor");
 		return {
 			receipts,
 			next
@@ -10828,8 +10839,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	/** What each line of a purchase sold for, and its product's slug, by product id. */
 	async function readReceiptLines(page, site, purchaseId) {
 		const answer = await page.apiGet(`${site.api}/presentation/api/v1/receipts/${encodeURIComponent(purchaseId)}/`, { bearerCookie: TOKEN_COOKIE$1 });
-		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for a receipt`);
-		const shown = expectShape$1(receiptDetailSchema, answer.body, API$2);
+		if (answer.status !== 200) throw changed$4(API$3, `answered ${String(answer.status)} for a receipt`);
+		const shown = expectShape$1(receiptDetailSchema, answer.body, API$3);
 		return new Map(shown.lines.map((line) => [line.product_id, {
 			slug: line.slug ?? null,
 			priceCents: cents(line.product_amount)
@@ -10840,8 +10851,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* know throws `PageChangedError`.
 	*/
 	function readReceipt(value, site = depopSite(DEPOP_SITE_URL)) {
-		const receipt = expectShape$1(receiptSchema, value, API$2);
-		if (receipt.currency !== "USD") throw changed$4(API$2, "shows a sale that is not in US dollars");
+		const receipt = expectShape$1(receiptSchema, value, API$3);
+		if (receipt.currency !== "USD") throw changed$4(API$3, "shows a sale that is not in US dollars");
 		return {
 			purchaseId: String(receipt.purchase_id),
 			soldAt: new Date(receipt.sold_timestamp),
@@ -11137,7 +11148,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		const status = STATUS_WORDS.find(([words]) => words.test(statusText ?? ""))?.[1];
 		const amountCents = dollarsToCents(await page.text(selectors.amount));
 		if (status === void 0 || amountCents === null) throw new PageChangedError(`${pages.name}'s offer page shows no offer Listora can read`);
-		const optional = async (selector) => selector === void 0 ? null : nonEmpty((await page.text(selector))?.trim());
+		const optional = async (selector) => selector === void 0 ? null : nonEmpty$1((await page.text(selector))?.trim());
 		const expires = await optional(selectors.expires);
 		return {
 			found: true,
@@ -11168,7 +11179,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		const { selectors } = pages;
 		const button = selectors[request.answer];
 		const opened = await step("open the offer", { mutates: false }, async (page) => {
-			const shown = await readOfferPage(page, pages, request.offer);
+			let shown;
+			if (pages.read === void 0) shown = await readOfferPage(page, pages, request.offer);
+			else {
+				await page.goto(pages.url(request.offer));
+				shown = await pages.read(page, request.offer);
+			}
 			if (!shown.found || shown.status !== "pending") return shown;
 			if (!await page.exists(button)) throw new PageChangedError(`${pages.name}'s offer page has no button for that answer`);
 			return shown;
@@ -11206,7 +11222,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			return { type: "applied" };
 		});
 	}
-	function nonEmpty(text) {
+	function nonEmpty$1(text) {
 		return text === void 0 || text === "" ? null : text;
 	}
 	/** "35.00": how a price field takes a price. */
@@ -11236,7 +11252,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* her; a status Listora doesn't know stops the read (`PageChangedError`), so a buyer's offer is
 	* never missed or guessed. Only reads.
 	*/
-	const API$1 = "web API";
+	const API$2 = "web API";
 	/** The cookie Depop's pages send as their bearer token. */
 	const TOKEN_COOKIE = "access_token";
 	/** Pages of products and of one product's offers a read follows at most. */
@@ -11292,7 +11308,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	/** One offer as Depop shows it now (the read-back of an answer). Only reads. */
 	async function readOffer(page, site, ref) {
-		const ids = splitOfferId(ref.externalOfferId);
+		const ids = splitOfferId$1(ref.externalOfferId);
 		if (ids === null) return { found: false };
 		await onDepop$1(page, site);
 		const product = {
@@ -11323,7 +11339,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		return {
 			name: "Depop",
 			selectors: DEFAULT_OFFER_PAGE,
-			url: (ref) => absolute$3(site, DEPOP_PATHS.offer(splitOfferId(ref.externalOfferId)?.offerId ?? ref.externalOfferId))
+			url: (ref) => absolute$3(site, DEPOP_PATHS.offer(splitOfferId$1(ref.externalOfferId)?.offerId ?? ref.externalOfferId))
 		};
 	}
 	/** Listora's id of a Depop offer: its product, its variant (if any), and the offer's own id. */
@@ -11334,7 +11350,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			offerId
 		].join("/");
 	}
-	function splitOfferId(id) {
+	function splitOfferId$1(id) {
 		const [productId, variantId, offerId, ...rest] = id.split("/");
 		if (productId === void 0 || offerId === void 0 || productId === "" || offerId === "") return null;
 		if (rest.length > 0) return null;
@@ -11352,7 +11368,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const shown = await apiPage(page, `${site.api}/presentation/api/v1/offers/me/products/${query}`, productsPageSchema, "products with offers");
 			for (const object of shown.objects) {
 				const [id] = texts([object["id"], object["product_id"]]);
-				if (id === void 0) throw changed$4(API$1, "lists a product with offers without its id");
+				if (id === void 0) throw changed$4(API$2, "lists a product with offers without its id");
 				products.push({
 					id,
 					slug: texts([object["slug"], object["product_slug"]])[0] ?? null,
@@ -11406,8 +11422,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	}
 	async function apiPage(page, url, schema, list) {
 		const answer = await page.apiGet(url, { bearerCookie: TOKEN_COOKIE });
-		if (answer.status !== 200) throw changed$4(API$1, `answered ${String(answer.status)} for offers`);
-		return expectShape$1(schema, answer.body, `${API$1} for ${list}`);
+		if (answer.status !== 200) throw changed$4(API$2, `answered ${String(answer.status)} for offers`);
+		return expectShape$1(schema, answer.body, `${API$2} for ${list}`);
 	}
 	function nextPage(shown) {
 		const last = shown.page_info.last;
@@ -11417,15 +11433,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	function offerOf(record, product, site) {
 		const [offerId] = texts([record["offer_id"], record["id"]]);
 		const [statusText] = texts([record["offer_display_status"], record["status"]]);
-		if (offerId === void 0 || statusText === void 0) throw changed$4(API$1, "shows an offer Listora can't read");
+		if (offerId === void 0 || statusText === void 0) throw changed$4(API$2, "shows an offer Listora can't read");
 		const status = depopOfferStatus(statusText);
-		if (status === null) throw changed$4(API$1, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
+		if (status === null) throw changed$4(API$2, `shows an offer status Listora doesn't know (${statusText.slice(0, 40)})`);
 		if (status === "not_the_sellers" || status === "inactive") return {
 			status,
 			offer: placeholder(offerId, product)
 		};
 		const amountCents = dollarsToCents(record["offer_value"] ?? record["value"]);
-		if (amountCents === null || amountCents <= 0) throw changed$4(API$1, "shows an offer without its amount");
+		if (amountCents === null || amountCents <= 0) throw changed$4(API$2, "shows an offer without its amount");
 		const offerer = record["offerer"] ?? record["buyer"] ?? record["user"];
 		const buyerName = typeof offerer === "object" && offerer !== null ? texts([offerer["username"]])[0] ?? null : texts([record["offerer_username"], record["username"]])[0] ?? null;
 		const expires = texts([record["expires_at"]])[0];
@@ -13937,14 +13953,14 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	* read leniently (a detail it lacks is left out), and one Listora doesn't know at all throws
 	* `PageChangedError`, as a page does. Only reads.
 	*/
-	const API = "web API";
+	const API$1 = "web API";
 	/** Vinted's pages sign their API reads in with the session's cookies alone. */
-	const SIGNED_IN = { pageCookies: true };
+	const SIGNED_IN$1 = { pageCookies: true };
 	/** Wardrobe items a page asks for (Vinted's own wardrobe pages ask for 96). */
 	const WARDROBE_PAGE_SIZE = 96;
 	/** Sold orders a page asks for. */
 	const ORDERS_PAGE_SIZE = 20;
-	const id = union([number().int().nonnegative(), string().regex(VINTED_ID)]).transform(String);
+	const id$1 = union([number().int().nonnegative(), string().regex(VINTED_ID)]).transform(String);
 	/** A price, as `{ amount: "18.0", currency_code: "USD" }` or as `"18.0"` beside `currency`. */
 	const priceSchema = union([
 		object({
@@ -13955,7 +13971,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		number()
 	]);
 	const itemSchema = object({
-		id,
+		id: id$1,
 		title: string().optional(),
 		description: string().nullish(),
 		price: priceSchema.optional(),
@@ -13976,7 +13992,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		pagination: paginationSchema
 	});
 	const orderSchema = object({
-		transaction_id: id,
+		transaction_id: id$1,
 		date: string(),
 		title: string().nullish(),
 		price: priceSchema.optional(),
@@ -14004,7 +14020,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 		pagination: paginationSchema
 	});
 	const transactionSchema = object({ transaction: object({
-		id,
+		id: id$1,
 		items: array(unknown()).optional(),
 		item: unknown().optional()
 	}).catchall(unknown()) });
@@ -14015,8 +14031,8 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 			per_page: String(96),
 			order: "newest_first"
 		});
-		const answer = await page.apiGet(`${absolute(site, VINTED_API_PATHS.wardrobe(memberId))}?${query.toString()}`, SIGNED_IN);
-		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for your wardrobe`);
+		const answer = await page.apiGet(`${absolute(site, VINTED_API_PATHS.wardrobe(memberId))}?${query.toString()}`, SIGNED_IN$1);
+		if (answer.status !== 200) throw changed(API$1, `answered ${String(answer.status)} for your wardrobe`);
 		const wardrobe = expectShape(wardrobeSchema, answer.body, "wardrobe");
 		return {
 			items: wardrobe.items.map((entry) => vintedItem(expectShape(itemSchema, entry, "item"), site)),
@@ -14025,9 +14041,9 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	}
 	/** One item as its page loads it; `null` when Vinted answers 404 (an item it deleted). */
 	async function readItem(page, site, itemId) {
-		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.item(itemId)), SIGNED_IN);
+		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.item(itemId)), SIGNED_IN$1);
 		if (answer.status === 404) return null;
-		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for an item`);
+		if (answer.status !== 200) throw changed(API$1, `answered ${String(answer.status)} for an item`);
 		const { item } = expectShape(object({ item: unknown() }), answer.body, "item");
 		return vintedItem(expectShape(itemSchema, item, "item"), site);
 	}
@@ -14039,8 +14055,8 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 			page: String(number),
 			per_page: String(20)
 		});
-		const answer = await page.apiGet(`${absolute(site, VINTED_API_PATHS.myOrders)}?${query.toString()}`, SIGNED_IN);
-		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for your sold orders`);
+		const answer = await page.apiGet(`${absolute(site, VINTED_API_PATHS.myOrders)}?${query.toString()}`, SIGNED_IN$1);
+		if (answer.status !== 200) throw changed(API$1, `answered ${String(answer.status)} for your sold orders`);
 		const shown = expectShape(ordersSchema, answer.body, "sold orders");
 		return {
 			orders: shown.my_orders.map((entry) => expectShape(orderSchema, entry, "order")),
@@ -14049,25 +14065,25 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	}
 	/** The items that sold in one order (several for a bundle); `null` when Vinted answers 404. */
 	async function readTransactionItems(page, site, transactionId) {
-		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.transaction(transactionId)), SIGNED_IN);
+		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.transaction(transactionId)), SIGNED_IN$1);
 		if (answer.status === 404) return null;
-		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for an order`);
+		if (answer.status !== 200) throw changed(API$1, `answered ${String(answer.status)} for an order`);
 		const { transaction } = expectShape(transactionSchema, answer.body, "order");
 		return (transaction.items ?? (transaction.item === void 0 ? [] : [transaction.item])).map((entry) => vintedItem(expectShape(itemSchema, entry, "item"), site));
 	}
 	/** A Vinted amount in US dollars (`"18.0"`, `"1250.50"`, `18`) in cents. */
 	function priceCents(price, currency) {
-		if (price === void 0) throw changed(API, "shows an item without a price");
+		if (price === void 0) throw changed(API$1, "shows an item without a price");
 		const amount = typeof price === "object" ? price.amount : price;
-		if (((typeof price === "object" ? price.currency_code : void 0) ?? currency ?? "USD") !== "USD") throw changed(API, "shows a price that is not in US dollars");
+		if (((typeof price === "object" ? price.currency_code : void 0) ?? currency ?? "USD") !== "USD") throw changed(API$1, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(amount).trim());
-		if (match?.[1] === void 0) throw changed(API, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed(API$1, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 	/** When a sold order was paid for; throws for a time Listora can't read. */
 	function orderTime(order) {
 		const at = new Date(order.date);
-		if (Number.isNaN(at.getTime())) throw changed(API, "shows an order time Listora can't read");
+		if (Number.isNaN(at.getTime())) throw changed(API$1, "shows an order time Listora can't read");
 		return at;
 	}
 	/** The item's listing URL on the site: `/items/<id>`, which Vinted sends on to its slug. */
@@ -14106,7 +14122,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	}
 	function expectShape(schema, value, what) {
 		const parsed = schema.safeParse(value);
-		if (!parsed.success) throw changed(API, `shows ${what} data Listora doesn't know`);
+		if (!parsed.success) throw changed(API$1, `shows ${what} data Listora doesn't know`);
 		return parsed.data;
 	}
 	function text$2(value) {
@@ -14266,6 +14282,244 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	}
 	function text$1(value) {
 		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
+	}
+
+// src/vinted/pages/offers.ts
+/**
+	* The buyers' offers on Vinted (docs/features/vinted.md, "Offers", M7). A Vinted offer lives in
+	* the conversation between the buyer and the seller about the item: the buyer asks for a price
+	* there, and the seller accepts, declines, or counters it there. So Listora reads offers from the
+	* seller's conversations, through the reads Vinted's own inbox makes from its web API (from a
+	* Vinted page, signed in by the session's cookies), and answers one on its own conversation:
+	*
+	* - `GET /api/v2/inbox?page=1&per_page=20`: the member's conversations, newest first
+	*   (`conversations`, each with its `id`);
+	* - `GET /api/v2/conversations/<id>`: one conversation, with the `transaction` it is about (its
+	*   `id`, the `item_id` or a bundle's `item_ids`, `item_title`, and the `seller_id` and
+	*   `buyer_id`), the `opposite_user` (the buyer's public `login`), and its `messages`, among
+	*   them the offers (`entity_type` `offer_request_message`, the buyer's, or `offer_message`, the
+	*   seller's counteroffer), each with its author (`user_id`), `price`, the listing's
+	*   `original_price`, and `status`.
+	*
+	* The newest offer in a conversation is where it stands: the buyer's, pending, waits on the
+	* seller; the seller's, pending, is their counteroffer and waits on the buyer; an accepted one is
+	* accepted; a declined buyer's offer is declined; an expired or canceled one, or the seller's
+	* counteroffer the buyer declined, is over. A conversation about an item the member bought (the
+	* member is the buyer), or about no sale, holds no offer of the seller's. A status or author
+	* Listora doesn't know stops the read (`PageChangedError`): an offer is never guessed.
+	*
+	* Listora's id of a Vinted offer is `<conversation id>/<transaction id>`: one negotiation per
+	* conversation, whose amount moves as the buyer and the seller answer. Vinted's offers aren't
+	* binding (an accepted one is a price the buyer may pay), and Vinted shows no expiry Listora has
+	* read, so an offer's `expiresAt` is unknown.
+	*
+	* Modeled until the read-only mapping (Vinted plan M2) records the inbox and a conversation with
+	* an offer: the paths, the fields, and the conversation page's offer controls. A shape that
+	* differs stops the read, and its fix is this module. Only reads.
+	*/
+	const API = "web API";
+	const SIGNED_IN = { pageCookies: true };
+	/** The newest conversations a read of the offers looks at (one inbox page). */
+	const INBOX_PAGE_SIZE = 20;
+	/** The messages that are offers: the buyer's ask, and the seller's counteroffer. */
+	const OFFER_ENTITIES = ["offer_request_message", "offer_message"];
+	/**
+	* The conversation page's offer controls, as Listora models them until the mapping (M2) reads a
+	* conversation with an offer: the offer's card, with Accept, Decline, and Counter offer; the
+	* confirmation each opens (Counter offer's with its price field); and Vinted's message when it
+	* refuses the answer. The conversation's message box is never touched: Listora sends no message
+	* of its own on Vinted, only the offer's own answer.
+	*/
+	const CONVERSATION_PAGE = {
+		card: "[data-testid=\"offer-request-card\"]",
+		amount: "[data-testid=\"offer-request-price\"]",
+		status: "[data-testid=\"offer-request-status\"]",
+		gone: "[data-testid=\"conversation-not-found\"]",
+		accept: "button[data-testid=\"offer-request-accept\"]",
+		decline: "button[data-testid=\"offer-request-decline\"]",
+		counter: "button[data-testid=\"offer-request-counter\"]",
+		counterInput: "[data-testid=\"offer-counter-modal\"] input[name=\"price\"]",
+		confirm: "[data-testid=\"offer-confirm-modal\"] button[type=\"submit\"]",
+		error: "[data-testid=\"offer-request-error\"]",
+		/** The conversation's own message box: never typed in. */
+		composer: "[data-testid=\"conversation-message-input\"]"
+	};
+	const id = union([number().int().nonnegative(), string().regex(VINTED_ID)]).transform(String);
+	const price = union([
+		object({
+			amount: union([string(), number()]),
+			currency_code: string().optional()
+		}),
+		string(),
+		number()
+	]);
+	const inboxSchema = object({ conversations: array(object({ id }).catchall(unknown())) });
+	const offerEntity = object({
+		user_id: id,
+		price,
+		original_price: price.nullish(),
+		status: string(),
+		created_at: string().nullish()
+	}).catchall(unknown());
+	const messageSchema = object({
+		entity_type: string(),
+		entity: unknown(),
+		created_at_ts: union([string(), number()]).nullish()
+	}).catchall(unknown());
+	const conversationSchema = object({ conversation: object({
+		id,
+		opposite_user: object({ login: string().nullish() }).catchall(unknown()).nullish(),
+		transaction: object({
+			id,
+			item_id: id.nullish(),
+			item_ids: array(id).nullish(),
+			item_title: string().nullish(),
+			seller_id: id,
+			buyer_id: id
+		}).catchall(unknown()).nullish(),
+		messages: array(messageSchema)
+	}).catchall(unknown()) });
+	/**
+	* Where the newest offer stands by its status and whose it is; `null` for a status Listora
+	* doesn't know.
+	*/
+	function vintedOfferStatus(status, author) {
+		switch (status.trim().toLowerCase()) {
+			case "pending": return author === "buyer" ? "pending" : "countered";
+			case "accepted": return "accepted";
+			case "rejected":
+			case "declined": return author === "buyer" ? "declined" : "over";
+			case "expired":
+			case "canceled":
+			case "cancelled":
+			case "withdrawn": return "over";
+			default: return null;
+		}
+	}
+	/** Listora's id of a Vinted offer: its conversation and the transaction it is about. */
+	function vintedOfferId(conversationId, transactionId) {
+		return `${conversationId}/${transactionId}`;
+	}
+	function splitOfferId(value) {
+		const [conversationId, transactionId, ...rest] = value.split("/");
+		if (conversationId === void 0 || transactionId === void 0 || rest.length > 0) return null;
+		if (!VINTED_ID.test(conversationId) || !VINTED_ID.test(transactionId)) return null;
+		return {
+			conversationId,
+			transactionId
+		};
+	}
+	/** The ids of the member's newest conversations, newest first. Only reads. */
+	async function readConversationIds(page, site) {
+		const query = new URLSearchParams({
+			page: "1",
+			per_page: String(20)
+		});
+		const answer = await page.apiGet(`${absolute(site, VINTED_API_PATHS.inbox)}?${query.toString()}`, SIGNED_IN);
+		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for your conversations`);
+		const inbox = inboxSchema.safeParse(answer.body);
+		if (!inbox.success) throw changed(API, "shows conversations Listora doesn't know");
+		return inbox.data.conversations.slice(0, 20).map((one) => one.id);
+	}
+	/**
+	* The offer in one of the member's conversations, as it stands; `null` for a conversation that
+	* holds no offer of theirs (gone, about no sale, about an item the member bought, or with no
+	* offer in it). Only reads.
+	*/
+	async function readConversationOffer(page, site, memberId, conversationId) {
+		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.conversation(conversationId)), SIGNED_IN);
+		if (answer.status === 404) return null;
+		if (answer.status !== 200) throw changed(API, `answered ${String(answer.status)} for a conversation`);
+		const parsed = conversationSchema.safeParse(answer.body);
+		if (!parsed.success) throw changed(API, "shows a conversation Listora doesn't know");
+		return conversationOffer(parsed.data.conversation, memberId, site);
+	}
+	/** The buyers' offers waiting on the seller in one conversation (none, or one). Only reads. */
+	async function readPendingConversationOffer(page, site, memberId, conversationId) {
+		const shown = await readConversationOffer(page, site, memberId, conversationId);
+		return shown?.status === "pending" ? [shown.offer] : [];
+	}
+	/** One offer as Vinted shows it now (an answer's read-back), from an open Vinted page. */
+	async function readVintedOffer(page, site, ref) {
+		const ids = splitOfferId(ref.externalOfferId);
+		if (ids === null) return { found: false };
+		const shown = await readConversationOffer(page, site, (await currentMember(page, site)).id, ids.conversationId);
+		if (shown?.offer.externalOfferId !== ref.externalOfferId) return { found: false };
+		if (shown.status === "over") return { found: false };
+		return {
+			found: true,
+			offer: shown.offer,
+			status: shown.status
+		};
+	}
+	/**
+	* Vinted's pages for an answer (adapter/offer-page.ts): the offer's conversation, read from the
+	* web API, with the conversation page's offer controls. The page must draw the offer's card while
+	* the offer waits on the seller; a page without it stops the answer as one Listora no longer
+	* reads, and the seller answers in Vinted.
+	*/
+	function vintedOfferPages(site) {
+		return {
+			name: "Vinted",
+			selectors: CONVERSATION_PAGE,
+			url: (ref) => conversationUrl(site, ref),
+			read: async (page, ref) => {
+				const shown = await readVintedOffer(page, site, ref);
+				if (shown.found && shown.status === "pending") await awaitElement(page, CONVERSATION_PAGE.card, "conversation", "buyer's offer");
+				return shown;
+			}
+		};
+	}
+	function conversationUrl(site, ref) {
+		const ids = splitOfferId(ref.externalOfferId);
+		return absolute(site, VINTED_PATHS.conversation(ids?.conversationId ?? "0"));
+	}
+	function conversationOffer(conversation, memberId, site) {
+		const transaction = conversation.transaction;
+		if (transaction?.seller_id !== memberId) return null;
+		const newest = conversation.messages.filter((message) => OFFER_ENTITIES.includes(message.entity_type.toLowerCase())).at(-1);
+		if (newest === void 0) return null;
+		const entity = offerEntity.safeParse(newest.entity);
+		if (!entity.success) throw changed(API, "shows an offer Listora can't read");
+		const author = entity.data.user_id === transaction.buyer_id ? "buyer" : entity.data.user_id === transaction.seller_id ? "seller" : null;
+		if (author === null) throw changed(API, "shows an offer from someone outside the sale");
+		const status = vintedOfferStatus(entity.data.status, author);
+		if (status === null) throw changed(API, `shows an offer status Listora doesn't know (${entity.data.status.slice(0, 40)})`);
+		const amountCents = priceCents(entity.data.price, void 0);
+		if (amountCents <= 0) throw changed(API, "shows an offer without its amount");
+		const items = transaction.item_ids ?? [];
+		const bundle = items.length > 1;
+		const listingId = bundle ? null : transaction.item_id ?? items[0] ?? null;
+		const original = entity.data.original_price;
+		return {
+			status,
+			offer: {
+				externalOfferId: vintedOfferId(conversation.id, transaction.id),
+				externalListingId: listingId,
+				listingTitle: nonEmpty(transaction.item_title, 200),
+				amountCents,
+				listPriceCents: original === null || original === void 0 ? null : priceCents(original, void 0),
+				buyerName: nonEmpty(conversation.opposite_user?.login, 100),
+				turn: status === "pending" ? "seller" : "buyer",
+				madeAt: iso(entity.data.created_at ?? newest.created_at_ts),
+				expiresAt: null,
+				url: absolute(site, VINTED_PATHS.conversation(conversation.id)),
+				listingCount: bundle ? Math.min(items.length, 500) : null,
+				shippingCents: null
+			}
+		};
+	}
+	/** The text trimmed and cut to `max`, or `null` when there is none. */
+	function nonEmpty(text, max) {
+		const trimmed = text?.trim() ?? "";
+		return trimmed === "" ? null : trimmed.slice(0, max);
+	}
+	/** An ISO time from a time string or a Unix time in seconds or milliseconds. */
+	function iso(value) {
+		if (value === null || value === void 0) return null;
+		const numeric = typeof value === "number" ? value : /^\d+$/.test(value) ? Number(value) : null;
+		const date = numeric === null ? new Date(value) : new Date(numeric < 0xe8d4a51000 ? numeric * 1e3 : numeric);
+		return Number.isNaN(date.getTime()) ? null : date.toISOString();
 	}
 
 // src/vinted/pages/upload-form.ts
@@ -14785,6 +15039,23 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 					next: shown.hasNext ? String(number + 1) : null
 				};
 			},
+			offers: async (step) => {
+				const { memberId, conversations } = await step("read your conversations", { mutates: false }, async (page) => {
+					await openAccount(page, site);
+					return {
+						memberId: (await currentMember(page, site)).id,
+						conversations: await readConversationIds(page, site)
+					};
+				});
+				const offers = [];
+				for (const conversationId of conversations) offers.push(...await step("read a conversation's offer", { mutates: false }, (page) => readPendingConversationOffer(page, site, memberId, conversationId)));
+				return offers;
+			},
+			offer: (ref, step) => step("read the offer", { mutates: false }, async (page) => {
+				await openAccount(page, site);
+				return readVintedOffer(page, site, ref);
+			}),
+			answerOffer: (request, step) => answerOnOfferPage(step, vintedOfferPages(site), request),
 			orders: async (since, step) => {
 				await openSettings(step);
 				const limits = since === null ? HISTORY_ORDER_LIMITS : ORDER_LIMITS;

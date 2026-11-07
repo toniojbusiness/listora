@@ -9,6 +9,9 @@
  * - Create, price, end (Hide), and relist (Unhide), each confirmed by a read-back of the listing
  *   from Vinted's web API, in which a listing Vinted reviews is not live yet (M5). Revising a
  *   listing's details stays the seller's in Vinted.
+ * - The buyers' offers, read from the seller's conversations, and accept, decline, or counter on
+ *   the offer's own conversation, each confirmed by a read-back (M7). Offers and their answers
+ *   are hidden for sellers until they pass live (`offers`, `offer_answers` in `features.ts`).
  *
  * The listing scripts serve only the owner's Test mode until they pass live on the captain's
  * test account (`LISTING_AUTOMATION_NOT_VERIFIED`); every other seller's Vinted steps stay the

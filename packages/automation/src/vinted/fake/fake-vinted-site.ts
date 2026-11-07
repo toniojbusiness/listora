@@ -22,6 +22,11 @@
  *   GET  /items/<id>/edit             the listing's edit form; POST saves it (its price, title, text)
  *   GET  /items/<id>                  the listing's page, with its seller's Hide or Unhide
  *   POST /items/<id>/hide, /unhide    hides the listing, or puts it back on sale
+ *   GET  /api/v2/inbox                the member's conversations (web API), newest first (M7)
+ *   GET  /api/v2/conversations/<id>   one conversation (web API): its sale and messages, offers among them
+ *   GET  /inbox/<id>                  a conversation, with the buyer's offer card and the message box
+ *   POST /inbox/<id>/offer            answers the offer (accept, decline, counter at `price`)
+ *   POST /inbox/<id>/messages         sends a message (recorded: Listora must never send one)
  *   GET  /users/verification          Vinted's account verification before listing
  *   GET  /media/<name>.jpg            a listing photo on the fake's image CDN (fake-photos.ts)
  *
@@ -40,6 +45,7 @@ import type { SessionCookie } from '@listora/connections';
 
 import { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from '../../fake-photos/fake-photos.ts';
 import { splitSkuLine } from '../../adapter/sku-line.ts';
+import { FakeOfferDesk, type FakeOffer } from '../../fake-offers/fake-offers.ts';
 import { itemIdFromPath, VINTED_LOGIN_PATH, VINTED_PATHS } from '../site.ts';
 import {
   EMPTY_FORM,
@@ -49,6 +55,7 @@ import {
   uploadForm,
   type FormValues,
 } from './listing-pages.ts';
+import { conversationJson, conversationPage, type FakeVintedConversation } from './offer-pages.ts';
 
 /** Vinted's session cookie, as the fake names it. */
 const SESSION_COOKIE = '_vinted_fr_session';
@@ -67,7 +74,11 @@ export type FakeVintedAction =
   | 'create'
   | 'update'
   | 'end'
-  | 'relist';
+  | 'relist'
+  /** The inbox and conversation reads of the web API (M7). */
+  | 'offers'
+  /** A conversation's page, where an offer is answered. */
+  | 'conversation_page';
 
 export type FakeVintedFault =
   /** DataDome's challenge drawn in the page instead of the settings (status 403). */
@@ -203,6 +214,20 @@ export class FakeVintedSite {
   readonly #previous = new Map<string, FakeVintedItem>();
   /** The next answer for the member signed in shows no login (the `no_login` fault). */
   #hideLogin = false;
+  /** Buyers' offers on the seller's items, each in its own conversation, and the answers taken. */
+  readonly offers = new FakeOfferDesk();
+  /** Offers in conversations where the member is the buyer (an item they bought). */
+  readonly boughtByMember = new Set<string>();
+  /** A bundle offer's items, by its offer id. */
+  readonly bundles = new Map<string, string[]>();
+  /** Conversations about no sale (a question). */
+  chats = 0;
+  /** A status every conversation's newest offer shows instead of its own. */
+  offerStatusOverride: string | null = null;
+  /** Every message sent in a conversation: Listora must never send one. */
+  readonly messages: { conversationId: string; body: string }[] = [];
+  readonly #conversationIds = new Map<string, { id: string; transactionId: string }>();
+  #nextConversation = 9_100_000;
 
   private constructor() {
     this.#server = createServer((request, response) => {
@@ -258,6 +283,44 @@ export class FakeVintedSite {
   finishReview(id: string): void {
     const found = this.items.find((one) => one.id === id);
     if (found !== undefined) found.inReview = false;
+  }
+
+  /** The conversation an offer is in (its id and its sale's), made the first time it is asked. */
+  conversationOf(offerId: string): { id: string; transactionId: string } {
+    let ids = this.#conversationIds.get(offerId);
+    if (ids === undefined) {
+      this.#nextConversation += 1;
+      ids = {
+        id: String(this.#nextConversation),
+        transactionId: String(this.#nextConversation + 50_000_000),
+      };
+      this.#conversationIds.set(offerId, ids);
+    }
+    return ids;
+  }
+
+  /** The member's conversations with offers, newest first. */
+  #conversations(member: Member): FakeVintedConversation[] {
+    return this.offers
+      .all()
+      .reverse()
+      .map((offer: FakeOffer) => {
+        const ids = this.conversationOf(offer.id);
+        const bought = this.boughtByMember.has(offer.id);
+        const other = String(Number(ids.id) + 1_000_000);
+        return {
+          ...ids,
+          buyerId: bought ? member.id : other,
+          sellerId: bought ? other : member.id,
+          itemIds: this.bundles.get(offer.id) ?? [offer.listingId],
+          offer,
+        };
+      });
+  }
+
+  /** The ids of the conversations about no sale. */
+  #chatIds(): string[] {
+    return Array.from({ length: this.chats }, (_, n) => String(8_100_000 + n));
   }
 
   /** The seller's items whose description ends with Listora's line for this SKU. */
@@ -352,6 +415,12 @@ export class FakeVintedSite {
       return;
     }
 
+    const conversationReply = await this.#conversationPages(request, url, method, member);
+    if (conversationReply !== null) {
+      send(conversationReply);
+      return;
+    }
+
     const listingReply = await this.#listingPages(request, url, method, member);
     if (listingReply !== null) {
       send(listingReply);
@@ -398,6 +467,9 @@ export class FakeVintedSite {
       const login = this.#hideLogin ? null : member.login;
       this.#hideLogin = false;
       return json(200, { user: { id: Number(member.id), login, real_name: null }, code: 0 });
+    }
+    if (path === '/api/v2/inbox' || path.startsWith('/api/v2/conversations/')) {
+      return this.#conversationApi(url, member);
     }
     const wardrobe = /^\/api\/v2\/wardrobe\/(\d+)\/items$/.exec(path);
     const item = /^\/api\/v2\/items\/(\d+)$/.exec(path);
@@ -470,6 +542,102 @@ export class FakeVintedSite {
       })),
       pagination,
     });
+  }
+
+  /** The inbox and one conversation, as the web API answers them (M7). Only GETs. */
+  #conversationApi(url: URL, member: Member): Reply {
+    const fault = this.#takeFault('offers');
+    if (fault !== null) {
+      const reply = apiFaultReply(fault);
+      if (reply !== null) return reply;
+    }
+    const conversations = this.#conversations(member);
+    if (url.pathname === '/api/v2/inbox') {
+      const ids = [...this.#chatIds(), ...conversations.map((one) => one.id)];
+      const size = Math.max(1, Number(url.searchParams.get('per_page') ?? '20') || 20);
+      return json(200, {
+        conversations: ids.slice(0, size).map((id) => ({ id: Number(id), unread: false })),
+        pagination: { current_page: 1, total_pages: Math.max(1, Math.ceil(ids.length / size)) },
+      });
+    }
+    const id = /^\/api\/v2\/conversations\/(\d+)$/.exec(url.pathname)?.[1];
+    if (id !== undefined && this.#chatIds().includes(id)) {
+      return json(200, {
+        conversation: {
+          id: Number(id),
+          opposite_user: { id: 1, login: 'asking-member' },
+          transaction: null,
+          messages: [{ entity_type: 'message', entity: { body: 'Is this still available?' } }],
+        },
+      });
+    }
+    const found = conversations.find((one) => one.id === id);
+    return found === undefined
+      ? json(404, { code: 404, message: 'Not found' })
+      : json(200, conversationJson(found, member.id, this.offerStatusOverride));
+  }
+
+  /** A conversation's page, its offer's answer, and its message box; `null` for other paths. */
+  async #conversationPages(
+    request: IncomingMessage,
+    url: URL,
+    method: string,
+    member: Member,
+  ): Promise<Reply | null> {
+    const match = /^\/inbox\/(\d+)(?:\/(offer|messages))?$/.exec(url.pathname);
+    if (match === null) return null;
+    const [, id = '', verb] = match;
+    const conversation = this.#conversations(member).find((one) => one.id === id);
+    if (conversation === undefined) {
+      return {
+        status: 404,
+        body: page(
+          'Page not found | Vinted',
+          '<p data-testid="conversation-not-found">This conversation is no longer available.</p>',
+        ),
+      };
+    }
+    const show = (error: string | null, status = 200, redesigned = false): Reply => ({
+      status,
+      body: page(
+        `${conversation.offer.buyer} | Vinted`,
+        `${header(member, 'shown')}${conversationPage(
+          conversation,
+          error === null ? url.searchParams.get('confirm') : null,
+          error,
+          redesigned,
+        )}`,
+      ),
+    });
+    if (verb === undefined) {
+      if (method !== 'GET') return notFound();
+      const fault = this.#takeFault('conversation_page');
+      const token = cookieValue(request.headers.cookie, SESSION_COOKIE) ?? '';
+      const reply = fault === null ? null : this.#faultReply(fault, token, url.pathname, member);
+      if (reply !== null) return reply;
+      return show(null, 200, fault?.type === 'redesigned');
+    }
+    if (method !== 'POST') return notFound();
+    const form = new URLSearchParams(await readBody(request));
+    if (verb === 'messages') {
+      this.messages.push({ conversationId: id, body: form.get('body') ?? '' });
+      return { status: 303, headers: { location: `/inbox/${id}` } };
+    }
+    const action = form.get('action') ?? '';
+    const counter = form.get('price');
+    const { offer } = conversation;
+    // Vinted takes no offer more than 40% below the listing's price, a counteroffer included.
+    const floor = Math.ceil((offer.listPriceCents * 60) / 100);
+    const cents = priceCents(counter ?? '');
+    if (action === 'counter' && cents !== null && cents < floor) {
+      return show(`Offers can't be lower than $${(floor / 100).toFixed(2)}.`, 422);
+    }
+    const answered = this.offers.answer(offer.id, action, counter);
+    if (answered.status === 303) return { status: 303, headers: { location: `/inbox/${id}` } };
+    if (answered.status === 500) {
+      return { status: 500, body: page('Error | Vinted', '<h1>Something went wrong</h1>') };
+    }
+    return show(answered.message, answered.status);
   }
 
   /** An item as the web API shows it; the wardrobe's records carry no description. */
