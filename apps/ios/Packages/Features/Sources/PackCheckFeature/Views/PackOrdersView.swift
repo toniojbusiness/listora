@@ -195,6 +195,7 @@ struct PackOrderCard: View {
                     tone: StatusTone(order.labelStatus.tone),
                     showsIcon: StatusTone(order.labelStatus.tone) != .neutral,
                 )
+                ShippingNote(order: order)
                 StatusBadge(
                     order.packStatus.label,
                     tone: StatusTone(order.packStatus.tone),

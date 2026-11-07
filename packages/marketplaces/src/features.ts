@@ -223,6 +223,28 @@ export function isListingAutomationOn(marketplace: Marketplace, gate: FeatureGat
 }
 
 /**
+ * Pack check's label reads (docs/features/pack-check.md, "Reading labels") are not on the
+ * feature list either: they run for every marketplace that reads its order labels while Pack
+ * check is on, except on these, which join in milestones and whose label read has not passed a
+ * live test yet. Here an order's label is read only for an account in Test mode, the way its live
+ * test is run (docs/features/test-mode.md); otherwise the seller scans the label, as on a
+ * marketplace Listora doesn't read. The marketplace leaves this list in the change that records
+ * that run. Vinted: the label read is built (Vinted plan M8), and its live test is a label of a
+ * sale on the captain's Vinted test account (docs/features/vinted.md).
+ */
+export const LABEL_READS_NOT_VERIFIED: readonly Marketplace[] = ['vinted'];
+
+/** Whether the marketplace's label read passed live (or this process runs `all`). */
+export function isLabelReadVerified(marketplace: Marketplace): boolean {
+  return featureSet === 'all' || !LABEL_READS_NOT_VERIFIED.includes(marketplace);
+}
+
+/** Whether the account's orders on the marketplace have their labels read: live, or Test mode. */
+export function isLabelReadOn(marketplace: Marketplace, gate: FeatureGate): boolean {
+  return gate.testMode || isLabelReadVerified(marketplace);
+}
+
+/**
  * Customer features of Listora itself rather than of one marketplace, held to the same rule:
  * hidden until a live end-to-end test passes, except in the owner's Test mode.
  */

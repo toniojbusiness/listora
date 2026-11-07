@@ -10,6 +10,7 @@ import { sql } from 'kysely';
 import type {
   DbExecutor,
   LabelCarrier,
+  LabelFormat,
   LabelOrderState,
   LabelReadStatus,
   Marketplace,
@@ -56,6 +57,8 @@ export interface PackLabelRecord {
   trackingNumber: string;
   carrier: LabelCarrier;
   source: SaleLabelSource;
+  /** A label to print or a QR code shown at drop-off, when the order page says. */
+  format: LabelFormat | null;
   /** The label's file on the marketplace's own site, when its order page names one. */
   fileUrl: string | null;
   /** Listora's prints of this label; `null` before the first. */
@@ -227,6 +230,7 @@ export async function loadPackOrdersById(
                 trackingNumber: label.tracking_number,
                 carrier: label.carrier,
                 source: label.source,
+                format: label.label_format,
                 fileUrl: label.label_file_url,
                 print:
                   label.printed_at === null ||

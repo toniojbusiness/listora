@@ -43,6 +43,7 @@ import {
 import type { SessionVault } from '@listora/connections';
 import {
   isFeatureOn,
+  isLabelReadOn,
   loadFeatureGate,
   MARKETPLACE_NAMES,
   type AdapterLookup,
@@ -749,6 +750,10 @@ async function claimStepState(
     case 'label_read': {
       const adapter = deps.adapters(new TranscriptSessions([])).lookup(work.marketplace);
       if (adapter?.readOrderLabels === undefined) return null;
+      // A label read not live yet (Vinted's) runs only in Test mode, also when it was asked for
+      // before the account left it.
+      if (!isLabelReadOn(work.marketplace, await loadFeatureGate(trx, work.account_id)))
+        return null;
       const orders = await ordersToRead(trx, work.account_id, work.marketplace, new Date());
       return orders.length === 0 ? null : { kind: 'label_read', orders };
     }
@@ -1072,6 +1077,7 @@ async function replay(
             step.orders.map((order) => ({
               externalOrderId: order.externalOrderId,
               externalListingIds: order.externalListingIds,
+              ...(order.soldAt === undefined ? {} : { soldAt: order.soldAt }),
             })),
             { connection, signal },
           ),
@@ -1119,6 +1125,7 @@ function labelResults(
       ...(label.shipBy === undefined ? {} : { shipBy: label.shipBy }),
       ...(label.labelExpiresAt === undefined ? {} : { labelExpiresAt: label.labelExpiresAt }),
       ...(label.labelFileUrl === undefined ? {} : { labelFileUrl: label.labelFileUrl }),
+      ...(label.labelFormat === undefined ? {} : { labelFormat: label.labelFormat }),
     };
     return label.trackingNumber === null
       ? { saleId: order.saleId, status: 'no_label', ...found }

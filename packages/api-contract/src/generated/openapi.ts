@@ -6806,10 +6806,19 @@ export interface components {
         /** @description A `KnownLabelCarrier`, or one added after this client was built. */
         LabelCarrier: components["schemas"]["KnownLabelCarrier"];
         /**
-         * @description The carrier a tracking number's shape names; `other` when it can't tell.
+         * @description The carrier the marketplace's order page names, or else the one a tracking number's shape
+         *     names; `other` when it can't tell. `speedx` is one of the carriers a Vinted buyer picks.
          * @enum {string}
          */
-        KnownLabelCarrier: "usps" | "ups" | "fedex" | "dhl" | "other";
+        KnownLabelCarrier: "usps" | "ups" | "fedex" | "dhl" | "speedx" | "other";
+        /** @description A `KnownLabelFormat`, or one added after this client was built. */
+        LabelFormat: components["schemas"]["KnownLabelFormat"];
+        /**
+         * @description What the marketplace gives the seller to ship with: `label`, a shipping label to print, or
+         *     `qr_code`, a code shown at the carrier's counter, which prints the label there (Vinted).
+         * @enum {string}
+         */
+        KnownLabelFormat: "label" | "qr_code";
         /** @description A `KnownLabelSource`, or one added after this client was built. */
         LabelSource: components["schemas"]["KnownLabelSource"];
         /**
@@ -6857,6 +6866,8 @@ export interface components {
             trackingNumber: string;
             carrier: components["schemas"]["LabelCarrier"];
             source: components["schemas"]["LabelSource"];
+            /** @description Absent when the marketplace's order page doesn't say. */
+            format?: components["schemas"]["LabelFormat"];
             /**
              * Format: uri
              * @description The label's file (a PDF) on the marketplace's own site, as its order page names it. The
@@ -6931,6 +6942,13 @@ export interface components {
              *     Listora can't (`PackLabel.fileUrl` absent). The app opens it as a plain link.
              */
             labelPageUrl?: string;
+            /**
+             * @description The server's words on how the marketplace has the order shipped, for information: Vinted's
+             *     five business days to ship, the extra days the seller can ask the buyer for in Vinted, and
+             *     a QR code shown at the carrier's counter instead of a printed label. Absent where there is
+             *     nothing to say. Clients show it as given.
+             */
+            shippingNote?: string;
             pack?: components["schemas"]["PackRecord"];
             packStatus: components["schemas"]["StatusDisplay"];
         };
@@ -8991,6 +9009,8 @@ export type PackCheckSettings = components['schemas']['PackCheckSettings'];
 export type PackCheckSettingsReplace = components['schemas']['PackCheckSettingsReplace'];
 export type LabelCarrier = components['schemas']['LabelCarrier'];
 export type KnownLabelCarrier = components['schemas']['KnownLabelCarrier'];
+export type LabelFormat = components['schemas']['LabelFormat'];
+export type KnownLabelFormat = components['schemas']['KnownLabelFormat'];
 export type LabelSource = components['schemas']['LabelSource'];
 export type KnownLabelSource = components['schemas']['KnownLabelSource'];
 export type PackMatch = components['schemas']['PackMatch'];
@@ -14333,7 +14353,8 @@ export const knownRefreshCadenceValues: ReadonlyArray<FlattenedDeepRequired<comp
 export const knownListingRefreshStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingRefreshState"]> = ["scheduled", "off", "unavailable"];
 export const knownPriceDropRuleScopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceDropRuleScope"]> = ["item", "brand"];
 export const knownPlannedPriceDropStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPlannedPriceDropState"]> = ["scheduled", "at_floor", "last_failed", "unavailable"];
-export const knownLabelCarrierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelCarrier"]> = ["usps", "ups", "fedex", "dhl", "other"];
+export const knownLabelCarrierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelCarrier"]> = ["usps", "ups", "fedex", "dhl", "speedx", "other"];
+export const knownLabelFormatValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelFormat"]> = ["label", "qr_code"];
 export const knownLabelSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownLabelSource"]> = ["marketplace", "scan"];
 export const knownPackMatchValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPackMatch"]> = ["sticker", "label", "photo"];
 export const knownPackScanVerdictValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPackScanVerdict"]> = ["match", "found", "wrong_order", "already_packed", "sticker_mismatch", "unknown_label", "sticker_scanned", "not_a_label"];

@@ -256,6 +256,7 @@ private struct OrderHeader: View {
                 tone: StatusTone(order.labelStatus.tone),
                 showsIcon: StatusTone(order.labelStatus.tone) != .neutral,
             )
+            ShippingNote(order: order)
             if let sticker {
                 StatusBadge("Sticker \(sticker.replacingOccurrences(of: "LISTORA:", with: ""))", tone: .neutral)
             }

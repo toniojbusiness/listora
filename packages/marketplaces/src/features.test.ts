@@ -11,6 +11,7 @@ import {
   isFeatureInTesting,
   isFeatureOn,
   isFeatureVerified,
+  isLabelReadOn,
   loadMarketplaceFeatures,
   MARKETPLACE_FEATURES,
   MarketplaceFeaturesConfigError,
@@ -100,6 +101,17 @@ describe('marketplace features (docs/features/verified-features.md)', () => {
     expect(isAppFeatureInTesting('thrift_scan', SELLER_FEATURES)).toBe(false);
     useMarketplaceFeatures('all');
     expect(appFeaturesOn(SELLER_FEATURES)).toEqual(['thrift_scan']);
+  });
+
+  it("reads Vinted's order labels only in Test mode until its label read passes live", () => {
+    useMarketplaceFeatures('verified');
+    expect(isLabelReadOn('vinted', SELLER_FEATURES)).toBe(false);
+    expect(isLabelReadOn('vinted', { testMode: true })).toBe(true);
+    for (const marketplace of ['depop', 'poshmark', 'mercari'] as const) {
+      expect(isLabelReadOn(marketplace, SELLER_FEATURES)).toBe(true);
+    }
+    useMarketplaceFeatures('all');
+    expect(isLabelReadOn('vinted', SELLER_FEATURES)).toBe(true);
   });
 
   it('reads MARKETPLACE_FEATURES, verified unless set, and never all beside Cognito', () => {

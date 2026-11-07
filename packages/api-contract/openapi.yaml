@@ -1204,6 +1204,10 @@ components:
       $ref: './components/schemas/pack-check.yaml#/LabelCarrier'
     KnownLabelCarrier:
       $ref: './components/schemas/pack-check.yaml#/KnownLabelCarrier'
+    LabelFormat:
+      $ref: './components/schemas/pack-check.yaml#/LabelFormat'
+    KnownLabelFormat:
+      $ref: './components/schemas/pack-check.yaml#/KnownLabelFormat'
     LabelSource:
       $ref: './components/schemas/pack-check.yaml#/LabelSource'
     KnownLabelSource:

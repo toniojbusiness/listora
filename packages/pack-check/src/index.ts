@@ -52,6 +52,7 @@ export {
 } from './photos.ts';
 export type { PackPhotosDependencies, PackPhotosOptions } from './photos.ts';
 export { checkScan, PackOrderNotFoundError } from './scan.ts';
+export { shippingNote } from './shipping-note.ts';
 export type { CheckedScan, ScanInput } from './scan.ts';
 export {
   DEFAULT_PACK_CHECK_SETTINGS,
