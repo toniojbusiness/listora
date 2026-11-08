@@ -138,7 +138,19 @@ export type FakeDepopSiteFault =
   /** A read serves the product as it was before its latest change. */
   | { type: 'stale_read' }
   /** The page without the elements and data the adapter reads, as after a site redesign. */
-  | { type: 'redesigned' };
+  | { type: 'redesigned' }
+  /**
+   * The sell form marks a field as needing a fix on its first Post and sends nothing
+   * (`ListingFormView.marksOnPost`; `form` only).
+   */
+  | {
+      type: 'marks_on_post';
+      field: 'photos' | 'description';
+      words: string | null;
+      thenPosts?: boolean;
+    }
+  /** The sell form never shows its photos as added (`form` only). */
+  | { type: 'photos_stall' };
 
 export interface FakeDepopSiteFaultRule {
   action: FakeDepopSiteAction;
@@ -669,6 +681,8 @@ export class FakeDepopSite {
       case 'reject':
       case 'slow':
       case 'stale_read':
+      case 'marks_on_post':
+      case 'photos_stall':
       case undefined:
         break;
     }
@@ -719,6 +733,16 @@ export class FakeDepopSite {
               message: null,
               viewer: session.seller,
               boosted: this.#boostByDefault,
+              ...(fault?.type === 'marks_on_post'
+                ? {
+                    marksOnPost: {
+                      field: fault.field,
+                      words: fault.words,
+                      ...(fault.thenPosts === true ? { thenPosts: true } : {}),
+                    },
+                  }
+                : {}),
+              ...(fault?.type === 'photos_stall' ? { photosStall: true } : {}),
             }),
           };
         }

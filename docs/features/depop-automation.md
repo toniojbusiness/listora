@@ -284,9 +284,27 @@ condition, and colour: "Item info added"), but only into fields still empty, so 
 are in place first instead of waiting up to 15 seconds for Depop's fill (as before 2026-10-27).
 Depop then needs a moment to take the photos (it uploads them to its image server; a Post before
 that is refused with "Please insert at least one image"), so the script waits until every photo
-shows as added. A field Depop's fill still took over is put back once, and the form is checked
-to show every pick (product type, size, condition, Listora's brand, every item detail) and Boost
-off before the Post step starts.
+shows as added (30 seconds). When they don't (a seller's phone showed 0 of 6 after 30 seconds on
+2026-11-07, and the same photos went through on the next try), the script opens a fresh form and
+fills it with the photos once more (the step "add the photos again"); only a second miss gives
+the listing to the seller as a task. A field Depop's fill still took over is put back once, and
+the form is checked to show every pick (product type, size, condition, Listora's brand, every
+item detail) and Boost off before the Post step starts.
+
+**Depop's answer to Post.** Depop opens its Done page (or the product), shows a message (a
+refusal in Depop's words), or marks fields as needing a fix and stays on the form. A mark only
+counts once it has lasted 2 seconds on the form (`MARK_SETTLE_MS`), so a submit Depop takes a
+moment later is a post, never a refusal. Each marked field is read with its label and Depop's
+own words for it (the element its `aria-errormessage` names, `error-pictureIds` for the photos):
+
+- a field Depop explains is the seller's to fix: "Depop didn't take the listing: Description:
+  ...", with no Retry (`validation_failed`);
+- a field it doesn't explain, or the photos (which Depop marks while it is still taking them),
+  was transient on a seller's bulk listings (2026-11-05 and -07: the same content went through a
+  minute later). The first attempt tries again on its own (`form_not_ready`; the next attempt
+  looks for the listing by its SKU first), and a later one fails with a Retry that names the
+  fields (`form_refused`). Before, every mark was "it marked a field as needing a fix", with no
+  field named and no Retry.
 
 Each picker is a combobox as Depop draws it: an input that shows the pick, a toggle button, and
 a menu that keeps its options while closed. Every item detail's picker (colours, material, body
@@ -347,6 +365,9 @@ failure:
 - a stale read
 - a redesigned page
 - a form that starts with Boost on (`boostByDefault`)
+- a form whose first Post marks a field (the photos or the description), with or without Depop's
+  words, and optionally takes the submit a moment later (`marks_on_post`)
+- a form that never shows its photos as added (`photos_stall`)
 
 Four test files cover it:
 

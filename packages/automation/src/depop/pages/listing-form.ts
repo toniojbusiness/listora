@@ -18,6 +18,7 @@
  * After submitting, the form either shows Depop's validation message (a rejection in Depop's own
  * words) or opens the product's page (`/products/<slug>/`, where Depop shows a new listing).
  */
+import { PageChangedError } from '../../runner/errors.ts';
 import type { PageDriver, UploadFile } from '../../runner/types.ts';
 import { depopListingText, depopPriceField, type DepopAutomationPayload } from '../payload.ts';
 import { DEPOP_PATHS, slugFromPath } from '../site.ts';
@@ -51,8 +52,13 @@ export const LISTING_FORM = {
   /** "Post and add another": checked, Depop opens a new empty form instead of the listing. */
   postAnother: 'input#post-another[type="checkbox"]',
   error: '[role="alert"]',
-  /** A field Depop marks as needing a fix. */
+  /**
+   * A field Depop marks as needing a fix. Each field names the element of its own message
+   * (`aria-errormessage`, `error-pictureIds` for the photos), which Depop fills only sometimes.
+   */
   invalid: '[aria-invalid="true"]',
+  /** The photos field's own message, which a field marked for the photos names. */
+  photosError: 'error-pictureIds',
   clearBrand: 'button[data-testid="brandButton__clear"]',
   clearCategory: 'button[data-testid="groupButton__clear"]',
   /**
@@ -72,6 +78,11 @@ const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 
 /** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 const ANSWER_MS = 45_000;
+/**
+ * How long a field Depop marks after a submit stays marked, the page still the form, before it
+ * counts as Depop's answer: a submit Depop then takes goes on to the next page meanwhile.
+ */
+export const MARK_SETTLE_MS = 2_000;
 // A look only reads the page (no action, so no pacing): a short interval loses less time
 // after the element appears.
 const LOOK_EVERY_MS = 150;
@@ -115,6 +126,7 @@ export async function fillListing(
   payload: DepopAutomationPayload,
   sku: string,
   photos: readonly UploadFile[] | null,
+  photosWaitMs = PHOTOS_MS,
 ): Promise<void> {
   await awaitElement(page, LISTING_FORM.form, FORM, FORM);
   await page.fill(LISTING_FORM.description, depopListingText(payload, sku));
@@ -129,7 +141,7 @@ export async function fillListing(
     // form, a moment after its description field.
     await awaitElement(page, LISTING_FORM.photos, FORM, 'photo input');
     await page.upload(LISTING_FORM.photos, photos);
-    await photosAdded(page, photos.length);
+    await photosAdded(page, photos.length, photosWaitMs);
     await lookAgain(page, PHOTO_FILL_MS);
     // Depop's fill may still have taken a field over: Listora's values are put back once.
     if ((await mismatch(page, payload, brand)) !== null) brand = await fillPicks(page, payload);
@@ -141,15 +153,28 @@ export async function fillListing(
 /** How long Depop gets to fill in item info from the photos once they are added. */
 const PHOTO_FILL_MS = 1_500;
 /** How long Depop gets to take the photos (it uploads them to its image server first). */
-const PHOTOS_MS = 30_000;
+export const PHOTOS_MS = 30_000;
+
+/**
+ * The form never showed every photo as added in time (`PHOTOS_MS`). Nothing was sent: the script
+ * opens a fresh form and adds them once more before it gives the listing to the seller
+ * (2026-11-07: a seller's phone showed 0 of 6 photos after 30 seconds, and the same photos went
+ * through on the next try).
+ */
+export class PhotosNotAddedError extends PageChangedError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PhotosNotAddedError';
+  }
+}
 
 /** Waits until Depop shows every photo as added: Post refuses a form whose photos are still going. */
-async function photosAdded(page: PageDriver, count: number): Promise<void> {
-  if (
-    !(await appears(page, `${LISTING_FORM.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS))
-  ) {
+async function photosAdded(page: PageDriver, count: number, waitMs: number): Promise<void> {
+  if (!(await appears(page, `${LISTING_FORM.photoPreview} >> nth=${String(count - 1)}`, waitMs))) {
     const shown = await page.count(LISTING_FORM.photoPreview);
-    throw changed(FORM, `shows ${String(shown)} of ${String(count)} photos as added`);
+    throw new PhotosNotAddedError(
+      `Depop's ${FORM} shows ${String(shown)} of ${String(count)} photos as added.`,
+    );
   }
 }
 
@@ -293,9 +318,25 @@ export async function fillPrice(page: PageDriver, cents: number): Promise<void> 
   await page.fill(LISTING_FORM.price, depopPriceField(cents));
 }
 
+/** A field Depop marked as needing a fix after a submit. */
+export interface MarkedField {
+  /** The field's label ("Description", "Add a photo"), else its id. */
+  name: string;
+  /** Depop's own message for it, when it gave one. */
+  words: string | null;
+  /** The photos field: Depop marks it while it is still taking the photos. */
+  photos: boolean;
+}
+
 export type Submitted =
   /** The form showed Depop's validation message; nothing was posted or saved. */
   | { type: 'refused'; message: string }
+  /**
+   * Depop marked fields as needing a fix and stayed on the form, with no message of its own
+   * (2026-11-05 and -07: on a form Listora's check passed, whose same content Depop took a minute
+   * later); nothing was posted or saved.
+   */
+  | { type: 'marked'; fields: MarkedField[] }
   /**
    * Depop took it: it opened the product's page, or its own Done page after a post, which
    * doesn't say the product's slug (`null`; the operation's check finds it by its SKU).
@@ -316,6 +357,8 @@ export async function submitListing(page: PageDriver, button: 'post' | 'save'): 
   }
   await page.click(selector);
   const end = Date.now() + ANSWER_MS;
+  /** When Depop's marks were first seen, while they last. */
+  let markedSince: number | null = null;
   for (;;) {
     const path = new URL(page.url()).pathname;
     const slug = slugFromPath(path);
@@ -335,10 +378,13 @@ export async function submitListing(page: PageDriver, button: 'post' | 'save'): 
     const shown = await messages(page);
     if (shown.length > 0) return { type: 'refused', message: shown.join(' ') };
     if ((await page.count(LISTING_FORM.invalid)) > 0) {
-      return {
-        type: 'refused',
-        message: "Depop didn't take the listing: it marked a field as needing a fix.",
-      };
+      markedSince ??= Date.now();
+      // Marks that last, on a form that stays: Depop's answer.
+      if (Date.now() - markedSince >= MARK_SETTLE_MS) {
+        return { type: 'marked', fields: await markedFields(page) };
+      }
+    } else {
+      markedSince = null;
     }
     if (Date.now() >= end) throw changed(FORM, 'showed no product and no message after the submit');
     await lookAgain(page, LOOK_EVERY_MS);
@@ -353,6 +399,34 @@ async function linkedProduct(page: PageDriver): Promise<string | null> {
     if (slug !== null) return slug;
   }
   return null;
+}
+
+/** The fields Depop marks as needing a fix, each with its label and Depop's own words for it. */
+async function markedFields(page: PageDriver): Promise<MarkedField[]> {
+  const ids = await page.attributes(LISTING_FORM.invalid, 'id');
+  const labels = await page.attributes(LISTING_FORM.invalid, 'aria-label');
+  const errors = await page.attributes(LISTING_FORM.invalid, 'aria-errormessage');
+  const fields: MarkedField[] = [];
+  for (const [index, id] of ids.entries()) {
+    const error = errors[index] ?? null;
+    const label = id === null ? null : await page.text(`label[for="${cssString(id)}"]`);
+    const words = error === null ? null : await page.text(`[id="${cssString(error)}"]`);
+    fields.push({
+      name: clean(label) ?? clean(labels[index] ?? null) ?? id ?? 'a field',
+      words: clean(words),
+      photos: id === 'upload-input__input' || error === LISTING_FORM.photosError,
+    });
+  }
+  return fields;
+}
+
+function clean(text: string | null): string | null {
+  const trimmed = text?.replace(/\s+/g, ' ').trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+}
+
+function cssString(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
 
 /** Depop's messages on the form (its alerts with text). */
