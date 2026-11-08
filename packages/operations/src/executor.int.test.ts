@@ -16,7 +16,7 @@ import type {
   ValidationIssue,
 } from '@listora/marketplaces';
 
-import { useMarketplaceFeatures } from '@listora/marketplaces';
+import { ListingReadError, useMarketplaceFeatures } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
 
 import { runOperationStep, type StepDependencies } from './executor.ts';
@@ -162,6 +162,53 @@ describe('operation step executor (real Postgres)', () => {
       external_listing_id: null,
       pending_external_listing_id: 'STUB-2',
       last_verified_at: null,
+    });
+  });
+
+  it("waits out Listora's own pacing of a read-back without using an attempt, then confirms", async () => {
+    // A bulk listing on 2026-11-07: the seller's share of runs was used up, every read-back of the
+    // last listing was held back, each one used an attempt, and a listing Depop had taken failed
+    // as unconfirmed within a minute.
+    const { op, payload } = await newCreate();
+    let heldBack = 9;
+    const adapter = stubAdapter({
+      execute: () => Promise.resolve({ type: 'confirmed', externalListingId: 'STUB-1' }),
+      read: () =>
+        heldBack-- > 0
+          ? Promise.reject(
+              new ListingReadError(
+                'automation_paced',
+                'Listora will read the listing on Depop again shortly.',
+                120_000,
+              ),
+            )
+          : Promise.resolve(ACTIVE),
+    });
+
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    // More held-back reads than the operation has attempts.
+    for (let read = 0; read < 9; read += 1) {
+      const waiting = await harness.operation(op.id);
+      expect(waiting).toMatchObject({
+        status: 'verifying',
+        attempts: 1,
+        error_code: 'automation_paced',
+        success_evidence: null,
+      });
+      // The pacing's own wait, not the retry schedule's (10 ms here).
+      expect(waiting.next_attempt_at?.getTime()).toBeGreaterThan(Date.now() + 100_000);
+      await harness.db
+        .updateTable('marketplace_operation')
+        .set({ next_attempt_at: sql<Date>`now()` })
+        .where('id', '=', op.id)
+        .execute();
+      await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    }
+    // The send and the one read that reached the marketplace.
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'succeeded',
+      attempts: 2,
+      success_evidence: 'read_back',
     });
   });
 

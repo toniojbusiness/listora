@@ -64,6 +64,7 @@ import {
   isContentKind,
   isListingAutomationOn,
   isListingAutomationVerified,
+  ListingReadError,
   loadFeatureGate,
   MARKETPLACE_NAMES,
   operationMode,
@@ -257,6 +258,12 @@ type Resolution =
       unknownResult: boolean;
       /** The read must be repeated to confirm a match: it follows soon, not after the backoff. */
       soon?: boolean;
+      /**
+       * Listora held the read back before it reached the marketplace (the seller's share of
+       * runs for now, or another run on the session): it runs again once this long has passed,
+       * and a step that sent nothing either used no attempt (`sent` false).
+       */
+      heldBack?: { ms: number; sent: boolean };
     }
   | { type: 'failed'; error: OperationError }
   | { type: 'user'; task: UserTaskSpec };
@@ -1100,7 +1107,7 @@ async function sendTo(
     const read = await readOnce(deps, ctx, ref, signal);
     if (!read.ok) {
       return {
-        resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: false },
+        resolution: readAgain(ctx, read, false, false),
         detail: { step: 'send', precheck: { error: read.error } },
       };
     }
@@ -1168,7 +1175,7 @@ async function sendTo(
       const read = await readOnce(deps, ctx, target, signal);
       if (!read.ok) {
         return {
-          resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: true },
+          resolution: readAgain(ctx, read, true, true),
           detail: { ...detail, readBack: { error: read.error } },
           ...withId,
         };
@@ -1302,7 +1309,7 @@ async function checkTarget(
   const read = await readOnce(deps, ctx, ref, signal);
   if (!read.ok) {
     return {
-      resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: false },
+      resolution: readAgain(ctx, read, false, false),
       detail: { step: 'check', readBack: { error: read.error } },
     };
   }
@@ -1525,7 +1532,10 @@ function noteRevision(
   if (known === undefined || revision > known) seen.set(externalListingId, revision);
 }
 
-type ReadResult = { ok: true; remote: RemoteListingState } | { ok: false; error: string };
+type ReadResult =
+  | { ok: true; remote: RemoteListingState }
+  /** `heldBack`: Listora held the read back before it reached the marketplace (pacing). */
+  | { ok: false; error: string; heldBack?: { code: string; retryAfterMs: number } };
 
 async function readOnce(
   deps: StepDependencies,
@@ -1544,9 +1554,44 @@ async function readOnce(
     if (!result.done) return { ok: false, error: 'timeout' };
     return { ok: true, remote: result.value };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof ListingReadError && PACED_ERROR_CODES.includes(error.code)) {
+      // Listora's own pacing, not a failure: nothing reached the marketplace.
+      const retryAfterMs = error.retryAfterMs ?? CHECK_SOON_MS;
+      deps.logger.info(
+        { operationId: ctx.op.id, code: error.code, retryAfterMs },
+        'reading the listing back waits for the pacing',
+      );
+      return { ok: false, error: message, heldBack: { code: error.code, retryAfterMs } };
+    }
     deps.logger.warn({ err: error, operationId: ctx.op.id }, 'reading the listing back failed');
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: message };
   }
+}
+
+/**
+ * A read-back that got no answer: read again later. One Listora held back keeps the pacing's own
+ * code, so nothing runs it early (the open app's at-once rule, a delist hurrying its checks), and
+ * waits as long as the pacing asked.
+ */
+function readAgain(
+  ctx: StepContext,
+  read: Extract<ReadResult, { ok: false }>,
+  unknownResult: boolean,
+  sent: boolean,
+): Resolution {
+  if (read.heldBack === undefined) {
+    return { type: 'verify', error: cannotCheck(ctx.name), unknownResult };
+  }
+  return {
+    type: 'verify',
+    error: {
+      code: read.heldBack.code,
+      message: `Listora is pacing its visits to ${ctx.name} and checks the listing again shortly.`,
+    },
+    unknownResult,
+    heldBack: { ms: read.heldBack.retryAfterMs, sent },
+  };
 }
 
 async function executeOnce(
@@ -1773,6 +1818,24 @@ async function applyResolution(
       return 'retrying';
     }
     case 'verify': {
+      if (resolution.heldBack !== undefined) {
+        // Held back by Listora's own pacing: the read reaches the marketplace once the pacing
+        // allows (at most a day, the run limits' longest window), and a step that sent nothing
+        // used no attempt. Before 2026-11-08 each such read used one and an open app ran it
+        // again at once, so a bulk listing's last read-backs failed as unconfirmed in a minute.
+        await transitionOperation(
+          trx,
+          op,
+          {
+            to: 'verifying',
+            attempts: resolution.heldBack.sent ? attempts : attempts - 1,
+            delayMs: resolution.heldBack.ms,
+            error: resolution.error,
+          },
+          detail,
+        );
+        return 'verifying';
+      }
       if (!attemptsLeft && !(resolution.unknownResult && step.type === 'send')) {
         await transitionOperation(
           trx,

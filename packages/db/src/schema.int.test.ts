@@ -576,6 +576,7 @@ const COLUMNS = {
     'updated_at',
     'host',
     'steps',
+    'continues_session',
   ],
   sale_check_schedule: [
     'account_id',

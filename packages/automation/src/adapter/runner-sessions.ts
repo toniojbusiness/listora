@@ -236,7 +236,8 @@ export class RunnerSessions implements AutomationSessions {
 /**
  * Milliseconds until the seller's connection may get another run, or `null` when it may now:
  * at most `limits` runs per hour and per day, counted in `automation_run` across every runner,
- * restart, and phone.
+ * restart, and phone. A phone call that continues a session (`continues_session`, a send's
+ * read-back) is part of its run's visit and doesn't count.
  */
 export async function rateLimitWait(
   db: DbExecutor,
@@ -253,6 +254,7 @@ export async function rateLimitWait(
     const { rows } = await sql<{ started_at: Date }>`
       select started_at from automation_run
       where account_id = ${key.accountId} and connection_id = ${key.connectionId}
+        and not continues_session
         and started_at > now() - make_interval(secs => ${window.ms / 1000})
       order by started_at desc
       offset ${window.limit - 1} limit 1

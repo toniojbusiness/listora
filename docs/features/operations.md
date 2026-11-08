@@ -65,7 +65,11 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
 3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets
    seven. The delays are the worker's `OPERATION_RETRY_DELAY_SCALE` times the schedule above (1
    in production; the local stack for UI tests uses 0.1). A step whose result is unknown is always followed by a read-back, even after the
-   last attempt. A scheduled refresh gets three ([listing-refresh.md](listing-refresh.md)), so
+   last attempt. A read-back Listora's own pacing held back before it reached the marketplace
+   (the seller's share of automated runs for now, or another run on the session: the adapter's
+   `ListingReadError` with `automation_paced` or `automation_busy`) keeps that code, waits as
+   long as the pacing says, and uses no attempt unless its step also sent the change. A
+   scheduled refresh gets three ([listing-refresh.md](listing-refresh.md)), so
    one a marketplace won't confirm waits for its next interval. Retry (`retryOperation`) gives a
    failed operation a fresh set of attempts; it
    is refused once a newer operation exists on the listing, since it would undo that one. Try

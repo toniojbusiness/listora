@@ -1006,6 +1006,11 @@ export interface AutomationRunTable {
   host: Generated<AutomationRunHost>;
   /** The steps it ran, in order, and how long each took (`AutomationRunStep`). */
   steps: NullableJsonb<JsonArray>;
+  /**
+   * A phone call on a session the phone is already in (a send's read-back): the same visit as
+   * the run's first call, so the seller's share of runs and the pause count only first calls.
+   */
+  continues_session: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
