@@ -249,10 +249,16 @@ interface StartedRunner {
  * not once per slot (docs/performance.md). The local queue locks the jobs it fetches under the
  * runner's pool id, as a slot does, so recovery is unchanged. Size 1 holds at most one job
  * locked while every slot is busy, so a newly queued urgent delist waits behind one job at most.
- * (Graphile Worker logs a warning at start that the size is below the concurrency; that is
- * deliberate: a bigger batch would let more ordinary jobs hold their place ahead of a delist.)
+ * Graphile Worker warns at each runner's start that the size is below the concurrency; that is
+ * deliberate (a bigger batch would let more ordinary jobs hold their place ahead of a delist), so
+ * the warning is logged at debug (`LOCAL_QUEUE_WARNING`), not in every deploy's warnings.
  */
 const LOCAL_QUEUE_SIZE = 1;
+
+/** Graphile Worker's warning about `LOCAL_QUEUE_SIZE`, expected at every runner's start. */
+export const LOCAL_QUEUE_WARNING = new RegExp(
+  `^Your job batch size \\(${String(LOCAL_QUEUE_SIZE)}\\) is smaller than your concurrency setting`,
+);
 
 /**
  * One Graphile Worker runner for `handlers` with its own liveness session. It takes only jobs
@@ -315,7 +321,7 @@ async function startRunner(
       concurrency: options.concurrency,
       pollInterval: options.pollIntervalMs,
       noHandleSignals: true,
-      logger: createJobQueueLogger(options.logger),
+      logger: createJobQueueLogger(options.logger, { expectedWarnings: [LOCAL_QUEUE_WARNING] }),
       events,
       taskList,
       ...(options.crontab === undefined ? {} : { crontab: options.crontab }),
