@@ -147,7 +147,7 @@ write ran only on the captain's own accounts. Tristin's Depop shop was only ever
 | eBay        | `market_comps`                    | Hidden: the logged-out reader is tested on stand-in pages (eBay showed the recorder a bot check); its live test is the captain's, at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                                       |
 | Vinted      | `listing_import`, `sales_history` | Hidden: built (Vinted plan M4); a read-only run on the test account (2026-11-05) read its member, an empty wardrobe, and a sold-orders answer that waits for the account's verification; Listora's own read from the Mac stopped at a bot check, as it must. Its live test is the captain's import on the iPhone ([vinted.md](vinted.md))                                             |
 | Vinted      | `offers`, `offer_answers`         | Hidden: built (Vinted plan M7) on modeled pages: the offers read from the seller's conversations, and accept, decline, and counter (none below Vinted's 40% floor) on the offer's own conversation, read back; no live run. Its live test is the captain's, on the iPhone in Test mode, with offers from a second account on a toniojx test listing ([vinted.md](vinted.md))          |
-| Vinted      | every other feature               | Hidden: built through M5 at most, no live run ([vinted.md](vinted.md))                                                                                                                                                                                                                                                                                                                |
+| Vinted      | every other feature               | Hidden: built through M5 (and M8's label read) at most, no live run ([vinted.md](vinted.md))                                                                                                                                                                                                                                                                                          |
 | Vinted      | `market_comps`                    | Hidden: the logged-out reader is tested on a recorded public search (2026-11-05, no bot check); its live test is the captain's, on the iPhone at a store ([thrift-scan.md](thrift-scan.md))                                                                                                                                                                                           |
 
 Listing actions, as they ran live (only revise is gated, see above, and the automated listing
@@ -182,3 +182,8 @@ A Test mode run's passed entry in the owner's log (`npm run admin -- feature-tes
   (`ConnectionRef.listingAutomation`), and the automation adapter reports those kinds assisted
   without it, so the worker never hands such a step to the phone. Vinted leaves the list in the
   change that records its live run ([vinted.md](vinted.md)).
+- Pack check's label read of such a marketplace is held back the same way
+  (`LABEL_READS_NOT_VERIFIED`, `isLabelReadOn`): Vinted's labels are read only for an account in
+  Test mode (the request and the phone's claim both check it), and a seller scans them as on a
+  marketplace Listora doesn't read. Vinted leaves the list in the change that records its live
+  read of a label ([vinted.md](vinted.md#shipping-labels-and-pack-check-m8)).

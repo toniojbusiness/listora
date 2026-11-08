@@ -13471,7 +13471,9 @@ extension Components {
                 ])
             }
         }
-        /// The carrier a tracking number's shape names; `other` when it can't tell.
+        /// The carrier the marketplace's order page names, or else the one a tracking number's shape
+        /// names; `other` when it can't tell. `speedx` is one of the carriers a Vinted buyer picks.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownLabelCarrier`.
         @frozen public enum KnownLabelCarrier: String, Codable, Hashable, Sendable, CaseIterable {
@@ -13479,7 +13481,66 @@ extension Components {
             case ups = "ups"
             case fedex = "fedex"
             case dhl = "dhl"
+            case speedx = "speedx"
             case other = "other"
+        }
+        /// A `KnownLabelFormat`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/LabelFormat`.
+        public struct LabelFormat: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/LabelFormat/value1`.
+            public var value1: Components.Schemas.KnownLabelFormat?
+            /// - Remark: Generated from `#/components/schemas/LabelFormat/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `LabelFormat`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownLabelFormat? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// What the marketplace gives the seller to ship with: `label`, a shipping label to print, or
+        /// `qr_code`, a code shown at the carrier's counter, which prints the label there (Vinted).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownLabelFormat`.
+        @frozen public enum KnownLabelFormat: String, Codable, Hashable, Sendable, CaseIterable {
+            case label = "label"
+            case qrCode = "qr_code"
         }
         /// A `KnownLabelSource`, or one added after this client was built.
         ///
@@ -13701,6 +13762,10 @@ extension Components {
             public var carrier: Components.Schemas.LabelCarrier
             /// - Remark: Generated from `#/components/schemas/PackLabel/source`.
             public var source: Components.Schemas.LabelSource
+            /// Absent when the marketplace's order page doesn't say.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackLabel/format`.
+            public var format: Components.Schemas.LabelFormat?
             /// The label's file (a PDF) on the marketplace's own site, as its order page names it. The
             /// app downloads it through this iPhone's own session for the marketplace, never through
             /// Listora, and prints it with the order's item stickers, then records the print
@@ -13718,18 +13783,21 @@ extension Components {
             ///   - trackingNumber:
             ///   - carrier:
             ///   - source:
+            ///   - format: Absent when the marketplace's order page doesn't say.
             ///   - fileUrl: The label's file (a PDF) on the marketplace's own site, as its order page names it. The
             ///   - printed:
             public init(
                 trackingNumber: Swift.String,
                 carrier: Components.Schemas.LabelCarrier,
                 source: Components.Schemas.LabelSource,
+                format: Components.Schemas.LabelFormat? = nil,
                 fileUrl: Swift.String? = nil,
                 printed: Components.Schemas.PackLabelPrint? = nil
             ) {
                 self.trackingNumber = trackingNumber
                 self.carrier = carrier
                 self.source = source
+                self.format = format
                 self.fileUrl = fileUrl
                 self.printed = printed
             }
@@ -13737,6 +13805,7 @@ extension Components {
                 case trackingNumber
                 case carrier
                 case source
+                case format
                 case fileUrl
                 case printed
             }
@@ -13909,6 +13978,14 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/PackOrder/labelPageUrl`.
             public var labelPageUrl: Swift.String?
+            /// The server's words on how the marketplace has the order shipped, for information: Vinted's
+            /// five business days to ship, the extra days the seller can ask the buyer for in Vinted, and
+            /// a QR code shown at the carrier's counter instead of a printed label. Absent where there is
+            /// nothing to say. Clients show it as given.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PackOrder/shippingNote`.
+            public var shippingNote: Swift.String?
             /// - Remark: Generated from `#/components/schemas/PackOrder/pack`.
             public var pack: Components.Schemas.PackRecord?
             /// - Remark: Generated from `#/components/schemas/PackOrder/packStatus`.
@@ -13927,6 +14004,7 @@ extension Components {
             ///   - label:
             ///   - labelStatus:
             ///   - labelPageUrl: The order's own page on the marketplace, where the seller prints its label there when
+            ///   - shippingNote: The server's words on how the marketplace has the order shipped, for information: Vinted's
             ///   - pack:
             ///   - packStatus:
             public init(
@@ -13941,6 +14019,7 @@ extension Components {
                 label: Components.Schemas.PackLabel? = nil,
                 labelStatus: Components.Schemas.StatusDisplay,
                 labelPageUrl: Swift.String? = nil,
+                shippingNote: Swift.String? = nil,
                 pack: Components.Schemas.PackRecord? = nil,
                 packStatus: Components.Schemas.StatusDisplay
             ) {
@@ -13955,6 +14034,7 @@ extension Components {
                 self.label = label
                 self.labelStatus = labelStatus
                 self.labelPageUrl = labelPageUrl
+                self.shippingNote = shippingNote
                 self.pack = pack
                 self.packStatus = packStatus
             }
@@ -13970,6 +14050,7 @@ extension Components {
                 case label
                 case labelStatus
                 case labelPageUrl
+                case shippingNote
                 case pack
                 case packStatus
             }

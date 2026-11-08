@@ -103,6 +103,9 @@ export async function packOrder(
           tracking_number: trackingNumber,
           carrier: carrierOf(trackingNumber),
           source: 'scan',
+          // The marketplace's file and format were another label's.
+          label_format: null,
+          label_file_url: null,
         }),
       )
       .execute();

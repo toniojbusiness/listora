@@ -14,6 +14,7 @@ import {
   LABEL_CARRIERS,
   type DbExecutor,
   type LabelCarrier,
+  type LabelFormat,
   type LabelOrderState,
   type LabelReadStatus,
   type Marketplace,
@@ -38,6 +39,11 @@ export interface LabelReadTarget {
   saleId: string;
   externalOrderId: string;
   externalListingIds: string[];
+  /**
+   * When the sale was paid for (ISO 8601), for a marketplace whose ship-by date follows from it
+   * (Vinted). Absent on a read claimed before this was recorded.
+   */
+  soldAt?: string;
 }
 
 /** The orders of `marketplace` whose labels a read should look for now. */
@@ -56,7 +62,7 @@ export async function ordersToRead(
     .leftJoin('sale_pack as pack', (join) =>
       join.onRef('pack.account_id', '=', 'sale.account_id').onRef('pack.sale_id', '=', 'sale.id'),
     )
-    .select(['sale.id', 'sale.external_order_id'])
+    .select(['sale.id', 'sale.external_order_id', 'sale.sold_at'])
     .select((eb) =>
       eb
         .selectFrom('sale_item')
@@ -123,6 +129,7 @@ export async function ordersToRead(
             saleId: row.id,
             externalOrderId: row.external_order_id,
             externalListingIds: row.listing_ids ?? [],
+            soldAt: row.sold_at.toISOString(),
           },
         ],
   );
@@ -146,6 +153,8 @@ export interface FoundOrder {
   labelExpiresAt?: Date | null;
   /** The label's file on the marketplace's own site, when the page names one. */
   labelFileUrl?: string | null;
+  /** A label to print or a QR code shown at drop-off, when the page says. */
+  labelFormat?: LabelFormat | null;
 }
 
 /**
@@ -177,7 +186,10 @@ export async function recordLabelReads(
             carrier: namedCarrier(found?.carrierName) ?? carrierOf(tracking),
             source: 'marketplace' as const,
             label_expires_at: found?.labelExpiresAt ?? null,
-            label_file_url: labelFileUrl(found?.labelFileUrl),
+            label_format: found?.labelFormat ?? null,
+            // A QR code is shown at the carrier's counter: there is no file to print.
+            label_file_url:
+              found?.labelFormat === 'qr_code' ? null : labelFileUrl(found?.labelFileUrl),
           };
     const name = firstName === null ? {} : { buyer_first_name: firstName };
     const state = found?.orderState === undefined ? {} : { order_state: found.orderState };

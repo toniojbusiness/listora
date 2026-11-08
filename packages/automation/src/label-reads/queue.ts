@@ -3,13 +3,16 @@
  * marketplace's order pages for the shipping labels of its orders that still need a package,
  * through the seller's own session. `@listora/pack-check` decides which orders a read covers and
  * records what it found; this module asks for the read where the connection's automated steps
- * run. Poshmark, Mercari, and Depop run on the seller's iPhone, so a read waits in `phone_work`
- * (purpose `label_read`, one per connection) for the app, and phone/work.ts runs it.
+ * run. Poshmark, Mercari, Depop, and Vinted run on the seller's iPhone, so a read waits in
+ * `phone_work` (purpose `label_read`, one per connection) for the app, and phone/work.ts runs it.
+ * Vinted's label read has not passed live yet (`LABEL_READS_NOT_VERIFIED`), so it is asked for
+ * only on an account in Test mode.
  *
  * A connection whose steps run in the cloud is not read: no marketplace with a label read may
  * run there today (`cloudAllowed`), and the seller scans those labels instead.
  */
 import { inTransaction, type DbExecutor, type Marketplace } from '@listora/db';
+import { isLabelReadOn, loadFeatureGate } from '@listora/marketplaces';
 import { ordersToRead } from '@listora/pack-check';
 
 /** The marketplaces whose automation adapters read order labels. */
@@ -17,6 +20,7 @@ export const LABEL_READ_MARKETPLACES = [
   'depop',
   'poshmark',
   'mercari',
+  'vinted',
 ] as const satisfies readonly Marketplace[];
 
 /** Label reads go with routine changes: a seller packing waits on them. */
@@ -50,7 +54,10 @@ export async function queueLabelReads(
       .where('marketplace', 'in', LABEL_READ_MARKETPLACES);
     if (request.marketplace !== undefined)
       query = query.where('marketplace', '=', request.marketplace);
-    const connections = await query.orderBy('marketplace').execute();
+    const gate = await loadFeatureGate(trx, request.accountId);
+    const connections = (await query.orderBy('marketplace').execute()).filter((connection) =>
+      isLabelReadOn(connection.marketplace, gate),
+    );
     const queued: QueuedLabelRead[] = [];
     for (const connection of connections) {
       const orders = await ordersToRead(

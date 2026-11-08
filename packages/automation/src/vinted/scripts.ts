@@ -20,6 +20,8 @@
  *   so an end waits for the review (`not_yet`).
  * - `read` (M5): the listing from Vinted's web API, by its id or else by its SKU line; one Vinted
  *   is reviewing reads as not live yet (`inReview`), never as listed.
+ * - `labels` (M8): each order's shipment from its web API read, for Pack check: its carrier,
+ *   tracking number, label or QR code, and ship-by date (`pages/shipment.ts`). Only reads.
  *
  * - `offers` (M7): the buyers' offers waiting on the seller, from their newest conversations
  *   (Vinted's offers live in the conversation about the item), a step per conversation;
@@ -39,6 +41,7 @@ import type {
   RemoteListingState,
   RemoteOrder,
   RemoteOrderItem,
+  RemoteOrderLabel,
 } from '@listora/marketplaces';
 
 import { answerOnOfferPage } from '../adapter/offer-page.ts';
@@ -58,6 +61,7 @@ import {
   priceCents,
   readItem,
   readSoldOrders,
+  readTransaction,
   readTransactionItems,
   readWardrobePage,
   type VintedItem,
@@ -67,6 +71,7 @@ import {
 import { changed, type VintedSite } from './pages/common.ts';
 import { offers, openItemPage, toggleHidden } from './pages/item-page.ts';
 import { listingDetails } from './pages/listing-details.ts';
+import { orderLabel } from './pages/shipment.ts';
 import {
   readConversationIds,
   readPendingConversationOffer,
@@ -83,6 +88,7 @@ import {
   type Submitted,
 } from './pages/upload-form.ts';
 import { VINTED_LIMITS, type VintedListingPayload } from './payload.ts';
+import { VINTED_ID } from './site.ts';
 
 /** Sold-order pages (20 each) a sale check reads per state, and the orders whose items it reads. */
 export const ORDER_LIMITS = { pages: 2, reads: 20 } as const;
@@ -410,6 +416,28 @@ export function createVintedScripts(
         if (!shown.hasNext) break;
       }
       return orders;
+    },
+    labels: async (orders, step) => {
+      // One read per order, by its transaction id (Listora names a Vinted sale by it).
+      if (orders.length === 0) return [];
+      await openSettings(step);
+      const labels: RemoteOrderLabel[] = [];
+      for (const order of orders) {
+        // Not a Vinted order id: no order of Vinted's to read.
+        if (!VINTED_ID.test(order.externalOrderId)) {
+          labels.push({ externalOrderId: order.externalOrderId, found: false });
+          continue;
+        }
+        const transaction = await step('read the order', { mutates: false }, (page) =>
+          readTransaction(page, site, order.externalOrderId),
+        );
+        labels.push(
+          transaction === null
+            ? { externalOrderId: order.externalOrderId, found: false }
+            : orderLabel(order, transaction, site),
+        );
+      }
+      return labels;
     },
   };
 }

@@ -387,8 +387,15 @@ export const SALE_LABEL_SOURCES = ['marketplace', 'scan'] as const;
 export type SaleLabelSource = (typeof SALE_LABEL_SOURCES)[number];
 
 /** The carrier a label's tracking number names (`sale_label.carrier`). */
-export const LABEL_CARRIERS = ['usps', 'ups', 'fedex', 'dhl', 'other'] as const;
+export const LABEL_CARRIERS = ['usps', 'ups', 'fedex', 'dhl', 'speedx', 'other'] as const;
 export type LabelCarrier = (typeof LABEL_CARRIERS)[number];
+
+/**
+ * What the marketplace gives the seller to ship with (`sale_label.label_format`): a label to
+ * print, or a QR code the carrier scans at drop-off and prints the label for (Vinted).
+ */
+export const LABEL_FORMATS = ['label', 'qr_code'] as const;
+export type LabelFormat = (typeof LABEL_FORMATS)[number];
 
 /** The last read of a sale's order page for its label (`sale_label.read_status`). */
 export const LABEL_READ_STATUSES = ['read', 'no_label', 'not_found', 'failed'] as const;
