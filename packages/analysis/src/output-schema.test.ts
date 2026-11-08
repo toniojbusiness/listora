@@ -76,7 +76,7 @@ describe('itemAnalysisSchema', () => {
     ).toContain('variants.mercari.description');
   });
 
-  it("enforces Depop's description rules: hashtags count, at most five, no email", () => {
+  it("enforces Depop's description rules: hashtags count, no email", () => {
     const depop = (description: string, hashtags: string[]) =>
       issues(variants({ depop: { title: 'ok', description, hashtags } }));
     // 990 characters plus "\n\n#abc" is 996: fits. Plus "\n\n#abcdefghijk" does not.
@@ -84,10 +84,6 @@ describe('itemAnalysisSchema', () => {
     expect(depop('x'.repeat(990), ['abcdefghijk'])).toEqual([
       'variants.depop.description: with its hashtags must fit in 1000 characters',
     ]);
-    expect(depop('ok', ['a', 'b', 'c', 'd', 'e', 'f']).join('\n')).toContain(
-      'variants.depop.hashtags',
-    );
-    expect(depop('ok', ['#y2k']).join('\n')).toContain('variants.depop.hashtags.0');
     expect(depop('Ask me at seller@example.com', [])).toEqual([
       'variants.depop.description: must not contain an email address',
     ]);
@@ -99,16 +95,6 @@ describe('itemAnalysisSchema', () => {
     expect(subcategory({ value: 'sneakers', confidence: 0.9, source: 'photo' })).toEqual([
       'attributes.subcategory: sneakers is not a subcategory of clothing/bottoms',
     ]);
-    expect(
-      issues(
-        answer(
-          attributes({
-            category: null,
-            subcategory: { value: 'jeans', confidence: 0.9, source: 'photo' },
-          }),
-        ),
-      ),
-    ).toEqual(['attributes.subcategory: a subcategory needs its category']);
   });
 
   it('rejects a UPC without a valid check digit, and RN text that is not digits', () => {
@@ -125,13 +111,12 @@ describe('itemAnalysisSchema', () => {
   });
 
   it('rejects values outside the vocabulary, confidences outside 0..1, and extra keys', () => {
-    expect(
-      issues(
-        answer(
-          attributes({ colors: { values: ['teal' as 'blue'], confidence: 1, source: 'photo' } }),
-        ),
-      ).join('\n'),
-    ).toContain('attributes.colors.0');
+    expect(wireIssues(wire({ attributes: { colors: 'black' } })).join('\n')).toContain(
+      'attributes.colors',
+    );
+    expect(wireIssues(wire({ attributes: { condition: 7 } })).join('\n')).toContain(
+      'attributes.condition',
+    );
     expect(issues(answer({ title: { value: 'A title', confidence: 1.2 } })).join('\n')).toContain(
       'confidence.title',
     );
@@ -151,6 +136,109 @@ describe('itemAnalysisSchema', () => {
     expect(issues(answer({ needsEscalation: true }))).toEqual([
       'escalationReason: is required when needsEscalation is true',
     ]);
+  });
+});
+
+/** The wire form of the sample answer with some of its attributes and Depop copy replaced. */
+function wire(overrides: {
+  attributes?: Record<string, unknown>;
+  hashtags?: unknown;
+}): Record<string, unknown> {
+  const base = encodeAnalysisAnswer(answer());
+  return {
+    ...base,
+    attributes: { ...base.attributes, ...overrides.attributes },
+    variants: {
+      ...base.variants,
+      depop: {
+        ...base.variants.depop,
+        ...(overrides.hashtags === undefined ? {} : { hashtags: overrides.hashtags }),
+      },
+    },
+  };
+}
+
+describe('itemAnalysisSchema repairs', () => {
+  const parse = (value: unknown) => itemAnalysisSchema.parse(value);
+
+  it('reads a vocabulary word spelled its own way as the id it plainly means', () => {
+    const repaired = parse(
+      wire({
+        attributes: {
+          department: "Women's",
+          colors: ['Black', 'grey', 'Olive', 'dark green', 'Light Blue', 'black'],
+          pattern: 'Animal Print',
+          materials: ['Cotton', 'faux leather'],
+          condition: 'Pre-Owned Good',
+          sizeSystem: ' letter ',
+        },
+      }),
+    ).attributes;
+    expect(repaired).toMatchObject({
+      department: 'women',
+      // Each kept once, in order.
+      colors: ['black', 'gray', 'green', 'blue'],
+      pattern: 'animal_print',
+      materials: ['cotton', 'faux_leather'],
+      condition: 'pre_owned_good',
+      sizeSystem: 'letter',
+    });
+  });
+
+  it('leaves out a word that is no word of its list, as not found', () => {
+    const repaired = parse(
+      wire({
+        attributes: {
+          colors: ['chartreuse', 'navy'],
+          materials: ['unobtainium'],
+          pattern: 'zigzags',
+          condition: 'gently loved',
+        },
+      }),
+    );
+    expect(repaired.attributes).toMatchObject({
+      colors: ['navy'],
+      materials: [],
+      pattern: '',
+      condition: '',
+    });
+    expect(decodeAnalysisAnswer(repaired).attributes.condition).toBeNull();
+  });
+
+  it('reads the category the model meant from a path, a short name, or a subcategory', () => {
+    const category = (category: string, subcategory = '') => {
+      const { attributes } = parse(wire({ attributes: { category, subcategory } }));
+      return [attributes.category, attributes.subcategory];
+    };
+    expect(category('clothing/tops/t_shirts')).toEqual(['clothing/tops', 't_shirts']);
+    expect(category('Clothing / Tops', 'Sweaters')).toEqual(['clothing/tops', 'sweaters']);
+    expect(category('tops', 'sweaters')).toEqual(['clothing/tops', 'sweaters']);
+    expect(category('sneakers')).toEqual(['shoes', 'sneakers']);
+    expect(category('', 'jeans')).toEqual(['clothing/bottoms', 'jeans']);
+    expect(category('knitwear', 'sweaters')).toEqual(['clothing/tops', 'sweaters']);
+    // Nothing it plainly means: not found, and no subcategory without its category.
+    expect(category('knitwear')).toEqual(['', '']);
+    expect(category('', 'other')).toEqual(['', '']);
+    expect(category('clothing/tops', 'sweatshirt')).toEqual(['clothing/tops', '']);
+  });
+
+  it('still refuses a subcategory of another category than the one chosen', () => {
+    expect(
+      wireIssues(wire({ attributes: { category: 'clothing/bottoms', subcategory: 'sneakers' } })),
+    ).toEqual(['attributes.subcategory: sneakers is not a subcategory of clothing/bottoms']);
+  });
+
+  it("writes Depop's hashtags as the copy rules want them, five at most", () => {
+    const hashtags = (value: unknown) => parse(wire({ hashtags: value })).variants.depop.hashtags;
+    expect(hashtags(['#Y2K', 'vintage_tee', 'Levi’s', '90s-style', '#'])).toEqual([
+      'y2k',
+      'vintagetee',
+      'levis',
+      '90sstyle',
+    ]);
+    expect(hashtags(['a', 'b', 'a', 'c', 'd', 'e', 'f'])).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(hashtags(['x'.repeat(40)])).toEqual(['x'.repeat(30)]);
+    expect(wireIssues(wire({ hashtags: 'y2k' })).join('\n')).toContain('variants.depop.hashtags');
   });
 });
 

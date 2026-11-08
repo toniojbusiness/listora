@@ -1,3 +1,6 @@
+import { Writable } from 'node:stream';
+
+import { createLogger } from '@listora/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AiClient, type AiCall } from './client.ts';
@@ -464,6 +467,46 @@ describe('AiClient.checkGuards', () => {
     const { client } = setup();
     expect(client.modelFor('standard')).toBe('claude-haiku-5-5');
     expect(client.modelFor('premium')).toBe('claude-sonnet-5-5');
+  });
+});
+
+describe('AiClient failure log', () => {
+  it("logs what the model wrote that the schema refused, never the answer's copy", async () => {
+    const chunks: string[] = [];
+    const destination = new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        chunks.push(chunk.toString());
+        callback();
+      },
+    });
+    const fake = new FakeAiProvider({
+      fixtures: inMemoryFixtures({
+        [HASH]: {
+          outputs: { dominant_color: { color: 7, confidence: 0.9, note: 'secret copy' } },
+          usage: USAGE,
+        },
+      }),
+    });
+    const client = new AiClient({
+      provider: fake,
+      registry: createModelRegistry({}, CURRENT_PRICE_TABLE),
+      usageStore: new InMemoryUsageStore({ now: () => NOW }),
+      killSwitch: staticKillSwitch(false),
+      dailyBudgetMicros: 1_000_000,
+      now: () => NOW,
+      logger: createLogger({ service: 'test', level: 'info', destination }),
+    });
+    await expect(client.generate(call())).rejects.toMatchObject({ code: 'invalid_output' });
+    const line = JSON.parse(chunks.join('').trim()) as Record<string, unknown>;
+    expect(line).toMatchObject({
+      msg: 'AI call failed',
+      code: 'invalid_output',
+      invalidOutput: {
+        kind: 'schema',
+        issues: [{ path: 'color', code: 'invalid_type', received: '7' }],
+      },
+    });
+    expect(JSON.stringify(line)).not.toContain('secret copy');
   });
 });
 

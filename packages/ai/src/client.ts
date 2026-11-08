@@ -207,6 +207,9 @@ export class AiClient {
           code: sent.failure.code,
           costMicros: cost,
           usageEventId: recorded.id,
+          ...(sent.failure.invalidOutput === undefined
+            ? {}
+            : { invalidOutput: sent.failure.invalidOutput }),
         },
         'AI call failed',
       );

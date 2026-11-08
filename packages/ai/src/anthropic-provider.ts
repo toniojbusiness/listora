@@ -3,6 +3,7 @@ import { transformJSONSchema } from '@anthropic-ai/sdk/lib/transform-json-schema
 import { z } from 'zod';
 
 import { AiProviderError, type AiErrorCode } from './errors.ts';
+import { notJson, schemaIssues } from './invalid-output.ts';
 import { thinkingOffFor } from './models.ts';
 import type { AiProvider, ProviderRequest, ProviderResponse } from './provider.ts';
 import type { TokenUsage } from './types.ts';
@@ -256,14 +257,17 @@ function readResponse<T>(
   try {
     json = JSON.parse(jsonText(text));
   } catch {
-    throw new AiProviderError('invalid_output', 'the output is not valid JSON', { usage });
+    throw new AiProviderError('invalid_output', 'the output is not valid JSON', {
+      usage,
+      invalidOutput: notJson(text),
+    });
   }
   const parsed = request.output.schema.safeParse(json);
   if (!parsed.success) {
     throw new AiProviderError(
       'invalid_output',
       `the output does not match the ${request.output.name} schema: ${parsed.error.message}`,
-      { usage },
+      { usage, invalidOutput: schemaIssues(json, parsed.error) },
     );
   }
   const webSources = message.content.flatMap((block) =>

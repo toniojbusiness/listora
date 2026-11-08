@@ -199,6 +199,23 @@ describe('AnthropicProvider response', () => {
     const error = await failure(provider.generate(REQUEST));
     expect(error).toMatchObject({ code: 'invalid_output', usage: { outputTokens: 80 } });
   });
+
+  it('says what the model wrote that the schema refused, for the logs', async () => {
+    const broken = providerReturning(message({ text: '{"color":7,"confidence":0.9}' }));
+    expect(await failure(broken.provider.generate(REQUEST))).toMatchObject({
+      code: 'invalid_output',
+      invalidOutput: {
+        kind: 'schema',
+        issues: [{ path: 'color', code: 'invalid_type', received: '7' }],
+      },
+    });
+    const prose = providerReturning(message({ text: 'not json' }));
+    expect((await failure(prose.provider.generate(REQUEST))).invalidOutput).toEqual({
+      kind: 'not_json',
+      length: 8,
+      start: 'not json',
+    });
+  });
 });
 
 describe('toProviderError', () => {
