@@ -112,6 +112,14 @@ export const TRUST_METRICS = {
       'a sold item may stay for sale elsewhere. One value per marketplace that has any, with ' +
       'Marketplace as a log field; Maximum is the worst marketplace.',
   },
+  ApiResponseTime: {
+    unit: 'Milliseconds',
+    dimensionSets: [[]],
+    description:
+      "The API's time to answer one of the app's calls (a contract operation), from the " +
+      "request's arrival to its response; the long polls, which wait by design, are left out " +
+      '(p95; apps/api/src/response-time.ts). Written by the API, one value per response.',
+  },
   OverdueDeletions: {
     unit: 'Count',
     dimensionSets: [[]],

@@ -47,7 +47,14 @@ working automation connections whose sale checks fail or stopped running,
 metric for them and Logs Insights still reads them. They are `StuckOperations` and
 `OldestStuckOperationAge` per status (verifying, retrying, needs_user_action) and
 `MarketplaceConnections` per marketplace and status, for example
-`filter ispresent(StuckOperations) | stats max(OldestStuckOperationAge) by Status, bin(1h)`. The observability stack alarms on an
+`filter ispresent(StuckOperations) | stats max(OldestStuckOperationAge) by Status, bin(1h)`. The API
+writes one more, `ApiResponseTime`: one value per answered contract operation, from the request's
+arrival to its response, except the long polls (`waitForPhoneWork`, `waitForItemChange`,
+`researchScan`), which wait up to 15 or 20 seconds by design (`apps/api/src/response-time.ts`).
+The `api-latency-p95` alarm reads its p95 (over 2 seconds for 15 minutes) instead of the load
+balancer's or the HTTP API's latency, which count those waits: the phone's wait for work alone kept
+the alarm firing in the personal environment (17 times in the week to 2026-11-08). A new long poll
+adds its operation to `LONG_POLL_OPERATIONS`. The observability stack alarms on an
 operation unverified for 30 minutes, any failed delist, an account's AI cost today over
 `aiDailyCostAlarmUsd`, a connection needing relink, any connection whose sale checks fail or stopped
 running (`sale-checks-unhealthy`), and per marketplace on p95 delist latency over

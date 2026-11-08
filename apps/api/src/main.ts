@@ -15,6 +15,7 @@ import {
   EbayOAuthClient,
   useMarketplaceFeatures,
 } from '@listora/marketplaces';
+import { createMetricsEmitter } from '@listora/observability';
 import { scaledRetryPolicy } from '@listora/operations';
 import { graphilePhotoJobs, limitImageThreads } from '@listora/photos';
 import { ebaySellerSubscriptionsJob } from '@listora/sales';
@@ -60,6 +61,7 @@ const sessionVault =
 
 const app = buildApp({
   logger,
+  metrics: createMetricsEmitter({ service: 'api' }),
   db,
   rateLimits: config.rateLimits,
   auth: createAuthDriver(config.auth, logger),

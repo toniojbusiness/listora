@@ -178,6 +178,7 @@ describe('formatEmf', () => {
       ConnectionsNeedingRelink: 'Count',
       OverdueDeletions: 'Count',
       UnhealthySaleChecks: 'Count',
+      ApiResponseTime: 'Milliseconds',
     });
   });
 });

@@ -20,6 +20,7 @@
     { "path": "../../packages/db" },
     { "path": "../../packages/email-sales" },
     { "path": "../../packages/marketplaces" },
+    { "path": "../../packages/observability" },
     { "path": "../../packages/operations" },
     { "path": "../../packages/pack-check" },
     { "path": "../../packages/photos" },

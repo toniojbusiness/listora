@@ -24,6 +24,7 @@
     "@listora/email-sales": "*",
     "@listora/imports": "*",
     "@listora/marketplaces": "*",
+    "@listora/observability": "*",
     "@listora/operations": "*",
     "@listora/pack-check": "*",
     "@listora/photos": "*",

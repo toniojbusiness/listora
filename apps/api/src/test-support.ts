@@ -38,6 +38,7 @@ import {
   type AnalysisJobPayload,
   type AnalysisJobQueue,
 } from '@listora/analysis';
+import type { MetricsEmitter } from '@listora/observability';
 import { DEFAULT_RETRY_POLICY } from '@listora/operations';
 import {
   loadAutomationSettings,
@@ -405,6 +406,8 @@ export interface TestApiOptions {
    * no phone answers them, so a scan's prices never wait for one.
    */
   marketComparisons?: boolean;
+  /** Where the API's response time goes (default: nowhere). */
+  metrics?: MetricsEmitter;
 }
 
 export interface TestApi {
@@ -545,6 +548,7 @@ export async function createTestApi(
     ...(options.ebayWebhook === undefined ? {} : { ebayWebhook: options.ebayWebhook }),
     ...(options.saleEmails === undefined ? {} : { saleEmails: options.saleEmails }),
     ...(options.rateLimits === undefined ? {} : { rateLimits: options.rateLimits }),
+    ...(options.metrics === undefined ? {} : { metrics: options.metrics }),
     ...(options.scanPriceWaitMs === undefined ? {} : { scanPriceWaitMs: options.scanPriceWaitMs }),
     ...(options.marketComparisons === undefined
       ? {}

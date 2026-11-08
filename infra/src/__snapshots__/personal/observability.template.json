@@ -553,25 +553,13 @@
             "Ref": "Alarms04B5A0BF"
           }
         ],
-        "AlarmDescription": "API p95 response time stayed above 2 seconds for 15 minutes.",
+        "AlarmDescription": "API p95 response time (the app's calls, long polls left out) stayed above 2 seconds for 15 minutes.",
         "AlarmName": "listora-personal-api-latency-p95",
         "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "ApiId",
-            "Value": {
-              "Fn::GetStackOutput": {
-                "StackName": "listora-personal-compute",
-                "Region": "us-east-1",
-                "OutputName": "PublishOutputRefHttpApiF5A9A8A73B77AB98"
-              }
-            }
-          }
-        ],
         "EvaluationPeriods": 3,
         "ExtendedStatistic": "p95",
-        "MetricName": "IntegrationLatency",
-        "Namespace": "AWS/ApiGateway",
+        "MetricName": "ApiResponseTime",
+        "Namespace": "Listora",
         "OKActions": [
           {
             "Ref": "Alarms04B5A0BF"
