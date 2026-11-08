@@ -1,3 +1,4 @@
+import type { InvalidOutputDetail } from './invalid-output.ts';
 import { ZERO_USAGE, type AiTier, type TokenUsage } from './types.ts';
 
 /**
@@ -40,17 +41,25 @@ export class AiProviderError extends Error {
   /** Whether the same request may succeed if sent again later. */
   readonly retryable: boolean;
   readonly usage: TokenUsage;
+  /** For `invalid_output`: what the model wrote that its schema refused, redacted for logs. */
+  readonly invalidOutput: InvalidOutputDetail | undefined;
 
   constructor(
     code: AiErrorCode,
     message: string,
-    options: { retryable?: boolean; usage?: TokenUsage; cause?: unknown } = {},
+    options: {
+      retryable?: boolean;
+      usage?: TokenUsage;
+      cause?: unknown;
+      invalidOutput?: InvalidOutputDetail;
+    } = {},
   ) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = 'AiProviderError';
     this.code = code;
     this.retryable = options.retryable ?? false;
     this.usage = options.usage ?? ZERO_USAGE;
+    this.invalidOutput = options.invalidOutput;
   }
 }
 

@@ -9,6 +9,7 @@ import {
   analyzeItem,
   MAX_ANALYSIS_ATTEMPTS,
 } from './analyze.ts';
+import { encodeAnalysisAnswer, ITEM_ANALYSIS_OUTPUT_NAME } from './output-schema.ts';
 import { analysisFixture, answer, client, sequencedFixtures, tagInput } from './test-support.ts';
 
 async function failure(work: Promise<unknown>): Promise<AnalysisFailedError> {
@@ -72,6 +73,40 @@ describe('analyzeItem', () => {
     expect(outcome.costMicros).toBe(
       usageStore.events.reduce((sum, event) => sum + event.costMicros, 0),
     );
+  });
+
+  it('takes, on the first call, an answer whose words are only spelled its own way', async () => {
+    // The shapes live answers failed on (2026-11-05 to 11-07): a color, the category, and a
+    // Depop hashtag outside the vocabulary's spelling.
+    const wire = encodeAnalysisAnswer(answer());
+    const spelled = {
+      ...wire,
+      attributes: {
+        ...wire.attributes,
+        category: 'clothing/bottoms/jeans',
+        subcategory: '',
+        colors: ['Navy', 'grey'],
+      },
+      variants: {
+        ...wire.variants,
+        depop: { ...wire.variants.depop, hashtags: ['#Y2K', 'levis_501'] },
+      },
+    };
+    const { ai, usageStore } = client({
+      fixture: { outputs: { [ITEM_ANALYSIS_OUTPUT_NAME]: spelled } },
+    });
+    const outcome = await analyzeItem(ai, input, { tier: 'standard' });
+    expect(outcome.attempts).toBe(1);
+    expect(usageStore.events.map((event) => event.outcome)).toEqual(['succeeded']);
+    expect(outcome.result.details).toMatchObject({
+      category: { value: 'clothing/bottoms/jeans' },
+      colors: { values: ['navy', 'gray'] },
+    });
+    expect(
+      outcome.result.variants.find((variant) => variant.marketplace === 'depop'),
+    ).toMatchObject({
+      hashtags: ['y2k', 'levis501'],
+    });
   });
 
   it('fails visibly after a second schema violation, with what it cost', async () => {

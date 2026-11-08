@@ -26,6 +26,7 @@ export type {
 } from './controls.ts';
 export { AI_ERROR_CODES, AiCallError, AiGuardError, AiProviderError } from './errors.ts';
 export type { AiErrorCode, AiGuardReason } from './errors.ts';
+export type { InvalidOutputDetail, InvalidOutputIssue } from './invalid-output.ts';
 export {
   DEFAULT_FIXTURE_FILE,
   directoryFixtures,

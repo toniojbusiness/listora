@@ -57,6 +57,17 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
   schema (`itemAnalysisSchema`) also enforces each marketplace's copy limits
   (`marketplace-copy.ts`, with their sources) and cross-field rules; an answer that breaks it
   is `invalid_output`, retried once, then the analysis fails with a reason the user sees.
+  Before validation, a vocabulary word the model spelled its own way ("Olive", "Animal
+  Print", a full `clothing/tops/t_shirts` path in the category field, a hashtag with its "#")
+  is read as the id it plainly means, and a word that means none as not found
+  (`answer-repair.ts`). Live answers on both tiers failed on exactly these, a color, the
+  category, and a Depop hashtag (2026-11-05 to 11-07, 4 of 25 analyses), and the retry often
+  failed the same way. A contradiction between fields or copy over its limit is not repaired.
+- **Refused answers in the logs.** The `AI call failed` warning of an `invalid_output` call
+  carries `invalidOutput`: each refused value's path, rule, and what the model wrote there,
+  cut to 60 characters with emails, phone numbers, and links masked (`invalid-output.ts` in
+  `@listora/ai`), or, for text that is not JSON, its length and start. The rest of the answer,
+  the item's listing copy, is never logged.
   The Depop variant follows the account's description style: Listora's default in the system
   prompt, or the seller's own in the request ([description-style.md](description-style.md)).
   The answer is flat (details as plain values, empty when not found, with their confidences

@@ -2,14 +2,24 @@
  * The schema of the one structured answer an analysis call returns. It is the single source
  * of truth: the provider sends the JSON schema derived from it, and every answer is
  * validated against it, including the rules JSON Schema cannot state (a subcategory of the
- * chosen category, a UPC check digit, Depop's description rules, price order). An answer that
- * breaks any rule is rejected as `invalid_output` and the call is retried once.
+ * chosen category, a UPC check digit, Depop's description rules, price order). A vocabulary
+ * word or hashtag the model spelled its own way is first read as the id it plainly means
+ * (`answer-repair.ts`); an answer that still breaks any rule is rejected as `invalid_output`
+ * and the call is retried once.
  */
 import { isValidGtin } from '@listora/tag-parse';
 import { z } from 'zod';
 
 import type { OutputSchema } from '@listora/ai';
 
+import {
+  COLOR_ALIASES,
+  DEPARTMENT_ALIASES,
+  repairCategory,
+  repairHashtags,
+  vocabularyList,
+  vocabularyWord,
+} from './answer-repair.ts';
 import {
   depopDescription,
   EMAIL_ADDRESS,
@@ -62,9 +72,19 @@ const NOT_FOUND = '';
 /** Text that is empty when not found. */
 const optionalText = (maxLength: number) => z.string().trim().max(maxLength);
 const text = (maxLength: number) => z.string().trim().min(1).max(maxLength);
-/** One of `values`, or empty when not found. */
-const choice = <const V extends readonly [string, ...string[]]>(values: V) =>
-  z.enum([NOT_FOUND, ...values]);
+/**
+ * One of `values`, or empty when not found. A word the model spelled its own way is read as
+ * the id it plainly means, and a word that is none of them as not found (`answer-repair.ts`).
+ */
+const choice = <const V extends readonly [string, ...string[]]>(
+  values: V,
+  aliases?: Readonly<Record<string, V[number]>>,
+) => z.preprocess(vocabularyWord(values, aliases), z.enum([NOT_FOUND, ...values]));
+/** Words of `values`, read as `choice` reads one; words that are none of them are left out. */
+const choices = <const V extends readonly string[]>(
+  values: V,
+  aliases?: Readonly<Record<string, V[number]>>,
+) => z.preprocess(vocabularyList(values, aliases), z.array(z.enum(values)).max(10));
 
 /**
  * The details, flat: one plain value per detail, empty when not found. Lengths follow
@@ -85,14 +105,14 @@ const attributesSchema = z
       .string()
       .regex(/^(\d{12}|\d{13})?$/)
       .describe('UPC-A (12) or EAN-13 (13) digits with a valid check digit'),
-    department: choice(DEPARTMENTS),
+    department: choice(DEPARTMENTS, DEPARTMENT_ALIASES),
     category: choice(CATEGORIES),
     subcategory: choice(SUBCATEGORIES).describe('One of the chosen category'),
     sizeLabel: optionalText(32).describe('The size as printed, for example "M" or "32x30"'),
     sizeSystem: choice(SIZE_SYSTEMS),
-    colors: z.array(z.enum(COLORS)).max(10),
+    colors: choices(COLORS, COLOR_ALIASES),
     pattern: choice(PATTERNS),
-    materials: z.array(z.enum(MATERIALS)).max(10),
+    materials: choices(MATERIALS),
     condition: choice(CONDITIONS),
     conditionNotes: optionalText(2_000),
     flaws: z.array(text(200)).max(20),
@@ -149,7 +169,10 @@ const variantsSchema = z
       .object({
         title: text(LIMITS.depop.title),
         description: text(LIMITS.depop.description),
-        hashtags: z.array(z.string().regex(HASHTAG)).max(LIMITS.depop.hashtags),
+        hashtags: z.preprocess(
+          repairHashtags,
+          z.array(z.string().regex(HASHTAG)).max(LIMITS.depop.hashtags),
+        ),
       })
       .strict()
       .describe('Style-forward, casual copy; hashtags without the #'),
@@ -165,7 +188,7 @@ const cents = z.int().min(0).max(100_000_000);
 /** What the model returns: the wire form, validated by the API's grammar and by Zod. */
 export const itemAnalysisSchema = z
   .object({
-    attributes: attributesSchema,
+    attributes: z.preprocess(repairCategory, attributesSchema),
     confidence: confidenceSchema,
     title: text(120),
     description: text(4_000),

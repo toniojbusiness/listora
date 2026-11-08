@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 
 import { AI_ERROR_CODES, AiProviderError } from './errors.ts';
+import { schemaIssues } from './invalid-output.ts';
 import type { AiProvider, ProviderRequest, ProviderResponse } from './provider.ts';
 import type { TokenUsage } from './types.ts';
 
@@ -146,7 +147,7 @@ export class FakeAiProvider implements AiProvider {
         'invalid_output',
         `fake provider: the ${request.output.name} fixture for photo set ${hash} does not ` +
           `match the schema: ${parsed.error.message}`,
-        { usage },
+        { usage, invalidOutput: schemaIssues(answer, parsed.error) },
       );
     }
     return {
