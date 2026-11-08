@@ -89,6 +89,13 @@ export type FakeVintedFault =
   | { type: 'login_challenge' }
   /** The session is invalidated, and the page redirects to the sign-in chooser. */
   | { type: 'session_expired' }
+  /**
+   * The session is invalidated, and the page is drawn for a visitor instead (200): the header's
+   * "Sign up | Log in" button and the sign-in chooser over the page, whose own scripts then move
+   * the address to the chooser's, as the captain's phone met it (2026-11-08); with `stays`, the
+   * address stays the page's own.
+   */
+  | { type: 'signed_out'; stays?: boolean }
   | { type: 'rate_limited'; retryAfterSeconds?: number }
   /** A 5xx; with `afterApply`, the change was made before it. */
   | { type: 'server_error'; afterApply?: boolean }
@@ -695,6 +702,9 @@ export class FakeVintedSite {
       case 'session_expired':
         this.#sessions.delete(token);
         return redirectToLogin(path);
+      case 'signed_out':
+        this.#sessions.delete(token);
+        return { status: 200, body: visitorPage(fault.stays !== true) };
       case 'rate_limited':
         return {
           status: 429,
@@ -921,6 +931,7 @@ export class FakeVintedSite {
       case 'captcha':
       case 'login_challenge':
       case 'session_expired':
+      case 'signed_out':
       case 'rate_limited':
       case 'redesigned':
       case 'no_login':
@@ -1127,6 +1138,7 @@ function apiFaultReply(fault: FakeVintedFault): Reply | null {
     case 'server_error':
       return json(500, { code: 500, message: 'Something went wrong' });
     case 'session_expired':
+    case 'signed_out':
       return json(401, { code: 100, message: 'Unauthorized' });
     case 'datadome':
     case 'captcha':
@@ -1172,6 +1184,22 @@ function header(member: Member, menu: 'shown' | 'none'): string {
       ? '<nav data-testid="account-nav"><span>Menu</span></nav>'
       : `<button type="button" data-testid="user-menu-button" aria-label="Menu"></button><div hidden><a href="/member/${member.id}">Profile</a><a href="/settings/profile">Settings</a></div>`;
   return `<header><a href="/">Vinted</a>${userMenu}</header>`;
+}
+
+/**
+ * A page as Vinted draws it for a visitor: the header's "Sign up | Log in" button and the sign-up
+ * and sign-in chooser over the page, whose scripts move the address to the chooser's after it
+ * loads (the `signed_out` fault).
+ */
+function visitorPage(movesToSignIn: boolean): string {
+  return page(
+    'Buy and sell second-hand clothes | Vinted',
+    `<header><a href="/">Vinted</a><a href="${VINTED_LOGIN_PATH}" data-testid="header--login-button">Sign up | Log in</a></header>` +
+      `<div role="dialog"><button type="button" data-testid="google-oauth-button">Continue with Google</button><span role="button" data-testid="auth-select-type--register-switch">Log in</span></div>` +
+      (movesToSignIn
+        ? `<script>setTimeout(() => history.pushState(null, '', '${VINTED_LOGIN_PATH}'), 50);</script>`
+        : ''),
+  );
 }
 
 function loginForm(): string {

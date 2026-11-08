@@ -34,7 +34,7 @@ import {
   type PageEvidence,
 } from '../safety/evidence.ts';
 import { originForLog, sanitizeMessage } from '../safety/redaction.ts';
-import { MarketplaceError, PageChangedError } from './errors.ts';
+import { MarketplaceError, PageChangedError, SignedOutError } from './errors.ts';
 import type {
   ApiGetOptions,
   ApiResponse,
@@ -303,7 +303,17 @@ export class ScriptSession implements AutomationSession {
       return { ok: true, value, mutated, steps, stepMs };
     } catch (caught) {
       const stopped = this.#stop();
-      const thrown = stopped === null ? caught : new PageProblemError(stopped);
+      const thrown =
+        stopped !== null
+          ? new PageProblemError(stopped)
+          : caught instanceof SignedOutError
+            ? // A signed-out page stops the run as the sign-in page would.
+              new PageProblemError({
+                type: 'challenge',
+                kind: 'session_rejected',
+                sign: 'signed-out page',
+              })
+            : caught;
       const failure = await this.#failure(thrown, current, signal);
       this.#deps.logger.warn(
         {

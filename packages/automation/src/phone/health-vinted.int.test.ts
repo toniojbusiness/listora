@@ -53,6 +53,22 @@ describe('Vinted session check on the phone', () => {
     });
   });
 
+  it.each([
+    ['moves to the sign-in chooser', { type: 'signed_out' } as const],
+    ['stays', { type: 'signed_out', stays: true } as const],
+  ])(
+    'asks to link Vinted again when the settings are drawn for a visitor that %s, not a timeout',
+    async (_name, fault) => {
+      // The captain's phone, 2026-11-05 to 11-08: a session Vinted had signed out ran each read
+      // out of time at "open your profile settings" instead of asking to link again.
+      site.injectFault({ action: 'health', fault });
+      expect(await adapter(site.url).healthCheck(ctx())).toMatchObject({
+        status: 'reauth_required',
+        code: 'session_rejected',
+      });
+    },
+  );
+
   it('reads the listings for sale for an import, and the sold orders for the history', async () => {
     site.items = [
       {

@@ -73,6 +73,12 @@ Vinted is linked by signing in, like Poshmark, Mercari, and Depop
   `Not confirmed` ("couldn't read Vinted"), and the session is kept. Read on the test account
   (2026-11-05): the menu's own profile link is `/member/<id>`, with no login, and is drawn only
   once the menu is opened, so M3's first model of it (a header link with the login) was wrong.
+  A settings page drawn for a visitor instead, with the header's "Sign up | Log in" button
+  (`header--login-button`) or the sign-in chooser over it, or a web API answer of 401, is a
+  signed-out session (`SignedOutError`, `session_rejected`): the seller is asked to link Vinted
+  again. Before, the wait for the user menu ran every read out of time on such a page (the
+  captain's phone, 2026-11-05 to 11-08: "the step took too long" at the profile settings, the
+  wardrobe, and the conversations), so it showed as a timeout instead.
 - **A seller's listing steps stay assisted**, linked or not: the registry serves a linked Vinted
   session with its automation adapter (`createMarketplaceAdapters`), whose listing scripts (M5,
   below) run only in the owner's Test mode until they pass live. The generic fake site
@@ -98,7 +104,8 @@ Vinted is linked by signing in, like Poshmark, Mercari, and Depop
   without it starts Vinted's first call a moment slower.
 
 Tests: `vinted/adapter.int.test.ts` (the check on the fake site in Chromium: the member read, an
-unknown member, a changed page, DataDome, a CAPTCHA, a sign-in code, a signed-out session, a rate
+unknown member, a changed page, DataDome, a CAPTCHA, a sign-in code, a signed-out session, a
+page drawn for a visitor, a rate
 limit, an error page, and every listing step assisted), `phone/health-vinted.int.test.ts` (the
 same check through the phone runtime), `vinted/site.test.ts` (member paths, the profile, its
 checks), and `marketplace-sessions.int.test.ts` (hidden from a seller, linked in Test mode on the
