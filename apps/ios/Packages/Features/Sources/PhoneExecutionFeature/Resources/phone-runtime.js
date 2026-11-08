@@ -9695,6 +9695,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
 // src/depop/pages/listing-form.ts
 /**
+	* Depop's listing form: the sell page (`/products/create/`) for a new listing, and the same form
+	* on a listing's edit page (`/products/edit/<slug>/`). Filling it changes nothing; only
+	* submitting it does.
+	*
+	* The form, in the order the script fills it: the description (the whole listing text: copy,
+	* Listora's SKU line, hashtags; Depop listings have no title), the category (searched for, and
+	* picked in its group, headed by department and category), size (from the product type's size
+	* list), brand (typed into Depop's brand search and picked from its suggestions; without an
+	* exact suggestion the listing is posted without a brand, since the form takes only brands from
+	* its own list), condition, colours and material, the price in dollars and cents, Boost off, and
+	* last the photos (one file input, in posting order, the first the cover), so Depop's own fill
+	* from them finds Listora's values in place (docs/features/depop-automation.md, "Filling the
+	* form"). Shipping is left as the seller set it up on Depop: the form starts with the seller's
+	* own shipping choice, and a seller with none gets Depop's own message asking for one (a
+	* rejection the user can fix).
+	*
+	* After submitting, the form either shows Depop's validation message (a rejection in Depop's own
+	* words) or opens the product's page (`/products/<slug>/`, where Depop shows a new listing).
+	*/
+	/**
 	* Read on a real session (2026-10-26, from the evidence a stopped run logs): the sell page is
 	* drawn by Depop's scripts, with the photos input `#upload-input__input`, the description
 	* `textarea#description`, the price `#priceAmount__input`, and its pickers as comboboxes, each
@@ -9714,8 +9734,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		/** "Post and add another": checked, Depop opens a new empty form instead of the listing. */
 		postAnother: "input#post-another[type=\"checkbox\"]",
 		error: "[role=\"alert\"]",
-		/** A field Depop marks as needing a fix. */
+		/**
+		* A field Depop marks as needing a fix. Each field names the element of its own message
+		* (`aria-errormessage`, `error-pictureIds` for the photos), which Depop fills only sometimes.
+		*/
 		invalid: "[aria-invalid=\"true\"]",
+		/** The photos field's own message, which a field marked for the photos names. */
+		photosError: "error-pictureIds",
 		clearBrand: "button[data-testid=\"brandButton__clear\"]",
 		clearCategory: "button[data-testid=\"groupButton__clear\"]",
 		/**
@@ -9733,6 +9758,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 	const ANSWER_MS$2 = 45e3;
+	/**
+	* How long a field Depop marks after a submit stays marked, the page still the form, before it
+	* counts as Depop's answer: a submit Depop then takes goes on to the next page meanwhile.
+	*/
+	const MARK_SETTLE_MS = 2e3;
 	const LOOK_EVERY_MS$4 = 150;
 	/**
 	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
@@ -9762,7 +9792,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
 	* in the order given; `null` leaves the listing's photos as they are (an edit).
 	*/
-	async function fillListing$3(page, payload, sku, photos) {
+	async function fillListing$3(page, payload, sku, photos, photosWaitMs = PHOTOS_MS$1) {
 		await awaitElement$2(page, LISTING_FORM$2.form, FORM$3, FORM$3);
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		let brand = await fillPicks(page, payload);
@@ -9771,7 +9801,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (photos !== null) {
 			await awaitElement$2(page, LISTING_FORM$2.photos, FORM$3, "photo input");
 			await page.upload(LISTING_FORM$2.photos, photos);
-			await photosAdded(page, photos.length);
+			await photosAdded(page, photos.length, photosWaitMs);
 			await lookAgain$2(page, PHOTO_FILL_MS);
 			if (await mismatch(page, payload, brand) !== null) brand = await fillPicks(page, payload);
 		}
@@ -9782,11 +9812,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	const PHOTO_FILL_MS = 1500;
 	/** How long Depop gets to take the photos (it uploads them to its image server first). */
 	const PHOTOS_MS$1 = 3e4;
+	/**
+	* The form never showed every photo as added in time (`PHOTOS_MS`). Nothing was sent: the script
+	* opens a fresh form and adds them once more before it gives the listing to the seller
+	* (2026-11-07: a seller's phone showed 0 of 6 photos after 30 seconds, and the same photos went
+	* through on the next try).
+	*/
+	var PhotosNotAddedError = class extends PageChangedError {
+		constructor(message) {
+			super(message);
+			this.name = "PhotosNotAddedError";
+		}
+	};
 	/** Waits until Depop shows every photo as added: Post refuses a form whose photos are still going. */
-	async function photosAdded(page, count) {
-		if (!await appears$3(page, `${LISTING_FORM$2.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS$1)) {
+	async function photosAdded(page, count, waitMs) {
+		if (!await appears$3(page, `${LISTING_FORM$2.photoPreview} >> nth=${String(count - 1)}`, waitMs)) {
 			const shown = await page.count(LISTING_FORM$2.photoPreview);
-			throw changed$4(FORM$3, `shows ${String(shown)} of ${String(count)} photos as added`);
+			throw new PhotosNotAddedError(`Depop's ${FORM$3} shows ${String(shown)} of ${String(count)} photos as added.`);
 		}
 	}
 	/** The category and every picker the payload fills; the brand the form then shows. */
@@ -9892,6 +9934,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (button === "post" && await page.exists(LISTING_FORM$2.postAnother)) await page.check(LISTING_FORM$2.postAnother, false);
 		await page.click(selector);
 		const end = Date.now() + ANSWER_MS$2;
+		/** When Depop's marks were first seen, while they last. */
+		let markedSince = null;
 		for (;;) {
 			const path = new URL(page.url()).pathname;
 			const slug = slugFromPath(path);
@@ -9911,10 +9955,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				type: "refused",
 				message: shown.join(" ")
 			};
-			if (await page.count(LISTING_FORM$2.invalid) > 0) return {
-				type: "refused",
-				message: "Depop didn't take the listing: it marked a field as needing a fix."
-			};
+			if (await page.count(LISTING_FORM$2.invalid) > 0) {
+				markedSince ??= Date.now();
+				if (Date.now() - markedSince >= 2e3) return {
+					type: "marked",
+					fields: await markedFields(page)
+				};
+			} else markedSince = null;
 			if (Date.now() >= end) throw changed$4(FORM$3, "showed no product and no message after the submit");
 			await lookAgain$2(page, LOOK_EVERY_MS$4);
 		}
@@ -9927,6 +9974,31 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (slug !== null) return slug;
 		}
 		return null;
+	}
+	/** The fields Depop marks as needing a fix, each with its label and Depop's own words for it. */
+	async function markedFields(page) {
+		const ids = await page.attributes(LISTING_FORM$2.invalid, "id");
+		const labels = await page.attributes(LISTING_FORM$2.invalid, "aria-label");
+		const errors = await page.attributes(LISTING_FORM$2.invalid, "aria-errormessage");
+		const fields = [];
+		for (const [index, id] of ids.entries()) {
+			const error = errors[index] ?? null;
+			const label = id === null ? null : await page.text(`label[for="${cssString(id)}"]`);
+			const words = error === null ? null : await page.text(`[id="${cssString(error)}"]`);
+			fields.push({
+				name: clean(label) ?? clean(labels[index] ?? null) ?? id ?? "a field",
+				words: clean(words),
+				photos: id === "upload-input__input" || error === LISTING_FORM$2.photosError
+			});
+		}
+		return fields;
+	}
+	function clean(text) {
+		const trimmed = text?.replace(/\s+/g, " ").trim() ?? "";
+		return trimmed === "" ? null : trimmed;
+	}
+	function cssString(value) {
+		return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
 	}
 	/** Depop's messages on the form (its alerts with text). */
 	async function messages(page) {
@@ -11652,15 +11724,48 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		* operation's check, not here: the submit already happened, and its page may not show the
 		* product for a moment.
 		*/
-		function submitted(outcome) {
-			if (outcome.type === "refused") return {
+		function submitted(outcome, op) {
+			switch (outcome.type) {
+				case "refused": return {
+					type: "rejected",
+					code: "validation_failed",
+					message: outcome.message
+				};
+				case "marked": return marked(outcome.fields, op);
+				case "posted": return outcome.slug === null ? { type: "applied" } : {
+					type: "applied",
+					externalListingId: outcome.slug
+				};
+				default: return assertNever(outcome, "submit outcome");
+			}
+		}
+		/**
+		* Fields Depop marked after a submit, on a form Listora's own check passed, with nothing posted
+		* or saved. A field Depop explains is the seller's to fix. One it doesn't (and the photos field,
+		* which Depop marks while it is still taking the photos) was transient on 2026-11-05 and -07:
+		* the same content went through a minute later. So the first attempt tries again on its own
+		* (the next one looks for the listing by its SKU first), and a later one fails with a Retry,
+		* naming the fields.
+		*/
+		function marked(fields, op) {
+			const explained = fields.filter((field) => !field.photos && field.words !== null);
+			if (explained.length > 0) return {
 				type: "rejected",
 				code: "validation_failed",
-				message: outcome.message
+				message: `Depop didn't take the listing: ${explained.map((field) => `${field.name}: ${field.words ?? ""}`).join("; ")}`,
+				fixHint: "Fix it, then publish again."
 			};
-			return outcome.slug === null ? { type: "applied" } : {
-				type: "applied",
-				externalListingId: outcome.slug
+			const names = fieldNames$1(fields);
+			if (op.attempt <= 1) return {
+				type: "not_yet",
+				code: "form_not_ready",
+				message: `Depop marked ${names} when Listora posted, without saying why. Nothing was posted, and Listora tries again shortly.`
+			};
+			return {
+				type: "rejected",
+				code: "form_refused",
+				message: `Depop didn't take the listing: it marked ${names} as needing a fix, without saying why.`,
+				fixHint: `Check ${names} in Listora, then tap Retry.`
 			};
 		}
 		/**
@@ -11680,18 +11785,30 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				};
 			}
 			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-			await step("fill in the listing", {
+			const fill = async (page) => {
+				await openSellForm$1(page, site);
+				await fillListing$3(page, payload, sku, files, options.photosWaitMs);
+				await expectSubmit(page, "post");
+			};
+			if (!await step("fill in the listing", {
 				mutates: false,
 				timeScale: 4
 			}, async (page) => {
-				await openSellForm$1(page, site);
-				await fillListing$3(page, payload, sku, files);
-				await expectSubmit(page, "post");
-			});
+				try {
+					await fill(page);
+					return true;
+				} catch (thrown) {
+					if (thrown instanceof PhotosNotAddedError) return false;
+					throw thrown;
+				}
+			})) await step("add the photos again", {
+				mutates: false,
+				timeScale: 4
+			}, fill);
 			const result = await step("post", {
 				mutates: true,
 				timeScale: 2
-			}, async (page) => submitted(await submitListing$2(page, "post")));
+			}, async (page) => submitted(await submitListing$2(page, "post"), op));
 			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
 			try {
 				const found = await findBySku(step, sku, except);
@@ -11767,7 +11884,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return step("save", {
 					mutates: true,
 					timeScale: 2
-				}, async (page) => submitted(await submitListing$2(page, "save")));
+				}, async (page) => submitted(await submitListing$2(page, "save"), op));
 			},
 			price: async (op, step) => {
 				const priceCents = op.desired.priceCents;
@@ -11790,7 +11907,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return step("save", {
 					mutates: true,
 					timeScale: 2
-				}, async (page) => submitted(await submitListing$2(page, "save")));
+				}, async (page) => submitted(await submitListing$2(page, "save"), op));
 			},
 			end: async (op, step) => {
 				const slug = op.listing.externalListingId;
@@ -11939,6 +12056,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			type: "applied",
 			revision: read.state.revision
 		} : { type: "applied" };
+	}
+	/** "the description", "the photos", "the description and the photos". */
+	function fieldNames$1(fields) {
+		const names = [...new Set(fields.map((field) => field.photos ? "the photos" : `the ${field.name.toLowerCase()}`))];
+		if (names.length === 0) return "a field";
+		if (names.length === 1) return names[0] ?? "a field";
+		return `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
 	}
 
 // src/ebay/pages/active-listings-page.ts

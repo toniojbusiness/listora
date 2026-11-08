@@ -10,6 +10,7 @@ import {
   type RemoteListingState,
   type RemoteOffer,
 } from '@listora/marketplaces';
+import { assertNever } from '@listora/shared';
 
 import {
   mayHaveAppliedBefore,
@@ -28,7 +29,9 @@ import {
   fillListing,
   fillPrice,
   openSellForm,
+  PhotosNotAddedError,
   submitListing,
+  type MarkedField,
   type Submitted,
 } from './pages/listing-form.ts';
 import { onDepop, readOwnListings, readOwnProduct, type ApiProduct } from './pages/api.ts';
@@ -62,6 +65,8 @@ export interface DepopScriptOptions {
   /** The site the scripts drive: Depop, or its stand-in in development and tests. */
   site: DepopSite;
   photos: PhotoSource;
+  /** How long Depop gets to show the photos as added (`PHOTOS_MS`); shorter in tests only. */
+  photosWaitMs?: number;
 }
 
 export function createDepopScripts(
@@ -119,13 +124,61 @@ export function createDepopScripts(
    * operation's check, not here: the submit already happened, and its page may not show the
    * product for a moment.
    */
-  function submitted(outcome: Submitted): WriteResult {
-    if (outcome.type === 'refused') {
-      return { type: 'rejected', code: 'validation_failed', message: outcome.message };
+  function submitted(
+    outcome: Submitted,
+    op: OperationRequest<DepopAutomationPayload>,
+  ): WriteResult {
+    switch (outcome.type) {
+      case 'refused':
+        return { type: 'rejected', code: 'validation_failed', message: outcome.message };
+      case 'marked':
+        return marked(outcome.fields, op);
+      case 'posted':
+        return outcome.slug === null
+          ? { type: 'applied' }
+          : { type: 'applied', externalListingId: outcome.slug };
+      default:
+        return assertNever(outcome, 'submit outcome');
     }
-    return outcome.slug === null
-      ? { type: 'applied' }
-      : { type: 'applied', externalListingId: outcome.slug };
+  }
+
+  /**
+   * Fields Depop marked after a submit, on a form Listora's own check passed, with nothing posted
+   * or saved. A field Depop explains is the seller's to fix. One it doesn't (and the photos field,
+   * which Depop marks while it is still taking the photos) was transient on 2026-11-05 and -07:
+   * the same content went through a minute later. So the first attempt tries again on its own
+   * (the next one looks for the listing by its SKU first), and a later one fails with a Retry,
+   * naming the fields.
+   */
+  function marked(
+    fields: readonly MarkedField[],
+    op: OperationRequest<DepopAutomationPayload>,
+  ): WriteResult {
+    const explained = fields.filter((field) => !field.photos && field.words !== null);
+    if (explained.length > 0) {
+      return {
+        type: 'rejected',
+        code: 'validation_failed',
+        message: `Depop didn't take the listing: ${explained
+          .map((field) => `${field.name}: ${field.words ?? ''}`)
+          .join('; ')}`,
+        fixHint: 'Fix it, then publish again.',
+      };
+    }
+    const names = fieldNames(fields);
+    if (op.attempt <= 1) {
+      return {
+        type: 'not_yet',
+        code: 'form_not_ready',
+        message: `Depop marked ${names} when Listora posted, without saying why. Nothing was posted, and Listora tries again shortly.`,
+      };
+    }
+    return {
+      type: 'rejected',
+      code: 'form_refused',
+      message: `Depop didn't take the listing: it marked ${names} as needing a fix, without saying why.`,
+      fixHint: `Check ${names} in Listora, then tap Retry.`,
+    };
   }
 
   /**
@@ -151,13 +204,31 @@ export function createDepopScripts(
     const files = await step('get the photos', { mutates: false }, (_page, signal) =>
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );
-    await step('fill in the listing', { mutates: false, timeScale: 4 }, async (page) => {
+    const fill = async (page: PageDriver) => {
       await openSellForm(page, site);
-      await fillListing(page, payload, sku, files);
+      await fillListing(page, payload, sku, files, options.photosWaitMs);
       await expectSubmit(page, 'post');
-    });
+    };
+    const filled = await step(
+      'fill in the listing',
+      { mutates: false, timeScale: 4 },
+      async (page) => {
+        try {
+          await fill(page);
+          return true;
+        } catch (thrown) {
+          if (thrown instanceof PhotosNotAddedError) return false;
+          throw thrown;
+        }
+      },
+    );
+    // Depop never showed the photos as added: a fresh form, the photos once more, before the
+    // listing goes to the seller.
+    if (!filled) {
+      await step('add the photos again', { mutates: false, timeScale: 4 }, fill);
+    }
     const result = await step('post', { mutates: true, timeScale: 2 }, async (page) =>
-      submitted(await submitListing(page, 'post')),
+      submitted(await submitListing(page, 'post'), op),
     );
     if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
     // Depop's Done page doesn't name the new listing: it is found by its SKU in the same run,
@@ -251,7 +322,7 @@ export function createDepopScripts(
         await expectSubmit(page, 'save');
       });
       return step('save', { mutates: true, timeScale: 2 }, async (page) =>
-        submitted(await submitListing(page, 'save')),
+        submitted(await submitListing(page, 'save'), op),
       );
     },
     price: async (op, step) => {
@@ -273,7 +344,7 @@ export function createDepopScripts(
         await expectSubmit(page, 'save');
       });
       return step('save', { mutates: true, timeScale: 2 }, async (page) =>
-        submitted(await submitListing(page, 'save')),
+        submitted(await submitListing(page, 'save'), op),
       );
     },
     end: async (op, step) => {
@@ -457,4 +528,16 @@ function revisionOf(read: ProductPageRead | ApiProduct): Extract<WriteResult, { 
   return read.state.found && read.state.revision !== null
     ? { type: 'applied', revision: read.state.revision }
     : { type: 'applied' };
+}
+
+/** "the description", "the photos", "the description and the photos". */
+function fieldNames(fields: readonly MarkedField[]): string {
+  const names = [
+    ...new Set(
+      fields.map((field) => (field.photos ? 'the photos' : `the ${field.name.toLowerCase()}`)),
+    ),
+  ];
+  if (names.length === 0) return 'a field';
+  if (names.length === 1) return names[0] ?? 'a field';
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
 }

@@ -43,7 +43,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
   let adapter: ReturnType<typeof createDepopAutomationAdapter>;
   let sequence = 0;
 
-  function adapterOn(fake: FakeDepopSite) {
+  function adapterOn(fake: FakeDepopSite, photosWaitMs?: number) {
     const profile = { ...automationProfile('depop'), pacing: QUICK_PACING };
     const own = new FakeSiteSessions(fake, runner, standInProfile(profile, fake.url));
     return {
@@ -54,6 +54,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
         sessions: own,
         photos: stubPhotos,
         logger: silentLogger,
+        ...(photosWaitMs === undefined ? {} : { photosWaitMs }),
       }),
     };
   }
@@ -607,6 +608,79 @@ describe('Depop automation adapter on the fake Depop site', () => {
       await expect(adapter.listOrdersSince(null, ctx())).rejects.toThrow('Depop');
       expect(sessions.challenges).toEqual(['bot_check']);
     });
+  });
+
+  it('posts once more on its own when Depop marks a field without saying why, then names it', async () => {
+    // A seller's bulk listing (2026-11-05 and -07): Depop marked a field on Post with no word of
+    // why, on a form Listora's check passed, and took the same content a minute later.
+    const ref = newRef();
+    inject('form', { type: 'marks_on_post', field: 'photos', words: null });
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'transient',
+      code: 'form_not_ready',
+      message: expect.stringContaining('Depop marked the photos when Listora posted') as string,
+    });
+    expect(site.productsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+    // Marked again on the next attempt: a failure with a Retry, naming the field.
+    inject('form', { type: 'marks_on_post', field: 'description', words: null });
+    expect(await adapter.execute(request('create', ref, { attempt: 2 }), ctx())).toMatchObject({
+      type: 'rejected',
+      code: 'form_refused',
+      message:
+        "Depop didn't take the listing: it marked the description as needing a fix, without saying why.",
+      fixHint: 'Check the description in Listora, then tap Retry.',
+    });
+    expect(site.productsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+    // The next attempt looks for it first, finds nothing, and posts it once.
+    expect(await adapter.execute(request('create', ref, { attempt: 3 }), ctx())).toMatchObject({
+      type: 'confirmed',
+    });
+    expect(site.productsWithSku(ref.externalSku ?? '')).toHaveLength(1);
+  });
+
+  it("says what to fix when Depop explains the field it marked, in Depop's words", async () => {
+    const ref = newRef();
+    inject('form', { type: 'marks_on_post', field: 'description', words: 'Add a description' });
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'rejected',
+      code: 'validation_failed',
+      message: "Depop didn't take the listing: Description: Add a description",
+      fixHint: 'Fix it, then publish again.',
+    });
+    expect(site.productsWithSku(ref.externalSku ?? '')).toHaveLength(0);
+  });
+
+  it('takes a submit Depop marks a field on for a moment and then posts as posted, never as refused', async () => {
+    const ref = newRef();
+    inject('form', { type: 'marks_on_post', field: 'photos', words: null, thenPosts: true });
+    expect(await adapter.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'confirmed',
+    });
+    expect(site.productsWithSku(ref.externalSku ?? '')).toHaveLength(1);
+  });
+
+  it('adds the photos once more on a fresh form when Depop never shows them, then posts', async () => {
+    // 2026-11-07: the form showed 0 of 6 photos after 30 seconds, and the next try went through.
+    const quick = adapterOn(site, 1_500).adapter;
+    const ref = newRef();
+    site.inject({ action: 'form', fault: { type: 'photos_stall' } });
+    expect(await quick.execute(request('create', ref), ctx())).toMatchObject({
+      type: 'confirmed',
+    });
+    expect(site.productsWithSku(ref.externalSku ?? '')).toHaveLength(1);
+
+    // Twice: the seller lists it, as before.
+    const again = newRef();
+    site.inject({ action: 'form', fault: { type: 'photos_stall' }, times: 2 });
+    expect(await quick.execute(request('create', again), ctx())).toMatchObject({
+      type: 'pendingUser',
+      task: { kind: 'list_manually' },
+      excerpt: {
+        automation: 'page_changed',
+        failure: { code: 'element_missing', step: 'add the photos again' },
+      },
+    });
+    expect(site.productsWithSku(again.externalSku ?? '')).toHaveLength(0);
   });
 
   it('gives a create to the user when the sell page is not as Listora knows it', async () => {

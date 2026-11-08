@@ -52,6 +52,8 @@ export interface DepopAutomationAdapterOptions {
    * origin becomes the profile's). Defaults to Depop itself.
    */
   siteUrl?: string;
+  /** Tests only: how long Depop's form gets to show the photos as added. */
+  photosWaitMs?: number;
 }
 
 export function createDepopAutomationAdapter(
@@ -68,7 +70,11 @@ export function createDepopAutomationAdapter(
     sessions: options.sessions,
     // A step automation can't do opens the real Depop, where the user does it.
     assisted: createDepopAssistedAdapter(),
-    scripts: createDepopScripts({ site, photos: options.photos }),
+    scripts: createDepopScripts({
+      site,
+      photos: options.photos,
+      ...(options.photosWaitMs === undefined ? {} : { photosWaitMs: options.photosWaitMs }),
+    }),
     scriptSet: { name: 'depop', marketplace: 'depop', siteUrl },
     // A read carries Depop's own last change time (pages/api.ts).
     readFreshness: 'revision',

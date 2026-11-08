@@ -384,6 +384,14 @@ export interface ListingFormView {
   viewer: string;
   /** Whether "Boost your listing" starts on. */
   boosted?: boolean;
+  /**
+   * The first Post marks this field as needing a fix and sends nothing, as Depop's form did on a
+   * seller's phone (2026-11-05 and -07): with Depop's own `words` under it, or none; with
+   * `thenPosts`, Depop takes the submit a moment later anyway.
+   */
+  marksOnPost?: { field: 'photos' | 'description'; words: string | null; thenPosts?: boolean };
+  /** The photos never show as added on this form (2026-11-07: 0 of 6 after 30 seconds). */
+  photosStall?: boolean;
 }
 
 /**
@@ -420,8 +428,10 @@ export function listingFormPage(view: ListingFormView): string {
 <input type="hidden" name="${field}"></div>`;
   const form = `<form method="post" action="${action}" enctype="multipart/form-data" novalidate>
 <section><h2>Photos</h2><div id="photos"></div><div id="previews"></div><div id="item-info"></div></section>
+<p id="error-pictureIds"></p>
 <label for="description">Description</label>
-<textarea id="description" name="description" rows="6">${escape(product?.description ?? '')}</textarea>
+<textarea id="description" name="description" rows="6" aria-errormessage="error-description" aria-invalid="false">${escape(product?.description ?? '')}</textarea>
+<p id="error-description"></p>
 ${picker('group', 'Category', 'category')}
 <div id="material-field" hidden>${picker('attributes.material', 'Material', 'material')}</div>
 <div id="size-field" hidden>${picker('variants', 'Size', 'size')}</div>
@@ -453,7 +463,12 @@ ${create ? '<label><input type="checkbox" id="post-another" name="postAnother"> 
     create ? 'Sell | Depop' : 'Edit listing | Depop',
     view.viewer,
     `<main><h1>${create ? 'Sell an item' : 'Edit listing'}</h1>${message}<div id="listing-form">${create ? '' : form}</div></main>`,
-    { script: formScript(create, form, current) },
+    {
+      script: formScript(create, form, current, {
+        marksOnPost: view.marksOnPost ?? null,
+        photosStall: view.photosStall === true,
+      }),
+    },
   );
 }
 
@@ -470,9 +485,14 @@ function formScript(
     materials: readonly string[];
     details: Readonly<Record<string, readonly string[]>>;
   },
+  faults: {
+    marksOnPost: NonNullable<ListingFormView['marksOnPost']> | null;
+    photosStall: boolean;
+  },
 ): string {
   return `(() => {
   const create = ${String(create)};
+  const faults = ${scriptJson(faults)};
   const tree = ${scriptJson(fakeDepopTree())};
   const brands = ${scriptJson(FAKE_DEPOP_BRANDS)};
   const other = ${scriptJson(FAKE_DEPOP_OTHER_BRAND)};
@@ -660,11 +680,15 @@ function formScript(
       input.type = 'file';
       input.id = 'upload-input__input';
       input.name = 'photos';
+      input.setAttribute('aria-label', 'Add a photo');
+      input.setAttribute('aria-errormessage', 'error-pictureIds');
+      input.setAttribute('aria-invalid', 'false');
       input.multiple = true;
       input.accept = 'image/jpeg';
       input.addEventListener('change', () => {
         if (!create || input.files.length === 0) return;
         added = false;
+        if (faults.photosStall) return;
         setTimeout(() => {
           $('previews').replaceChildren(...[...input.files].map(() => {
             const preview = document.createElement('div');
@@ -705,6 +729,22 @@ function formScript(
       for (const element of missing) element.setAttribute('aria-invalid', 'true');
       if (missing.length > 0) {
         event.preventDefault();
+        return;
+      }
+      const mark = faults.marksOnPost;
+      if (mark !== null) {
+        faults.marksOnPost = null;
+        event.preventDefault();
+        const marked = mark.field === 'photos' ? $('upload-input__input') : $('description');
+        marked.setAttribute('aria-invalid', 'true');
+        const words = $(marked.getAttribute('aria-errormessage'));
+        if (words && mark.words !== null) words.textContent = mark.words;
+        if (mark.thenPosts) {
+          setTimeout(() => {
+            marked.setAttribute('aria-invalid', 'false');
+            form.submit();
+          }, 600);
+        }
         return;
       }
       if (!added) {
