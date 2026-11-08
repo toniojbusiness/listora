@@ -849,11 +849,16 @@ async function advance(
       work = await saveTranscript(trx, work, [...transcript, refused]);
       continue;
     }
-    const limited = await rateLimitWait(
-      trx,
-      { accountId: work.account_id, connectionId: work.connection_id },
-      profileFor(deps, pending.request).limits,
-    );
+    // A call on a session the phone is already in (a send's read-back) is the same visit as the
+    // run's first call, which the limit already counted: before 2026-11-08 it counted as a run of
+    // its own, so a bulk listing used two runs per item and its last read-backs were held back.
+    const limited = continuesSession(work)
+      ? null
+      : await rateLimitWait(
+          trx,
+          { accountId: work.account_id, connectionId: work.connection_id },
+          profileFor(deps, pending.request).limits,
+        );
     if (limited !== null) {
       // Answered by the server: the seller's account had its share of runs for now.
       const answered: TranscriptEntry = {
@@ -1193,7 +1198,8 @@ async function issueCall(
 ): Promise<PendingState> {
   const { request } = pending;
   const profile = profileFor(deps, request);
-  const startDelayMs = continuesSession(work) ? 0 : await sessionGapLeft(trx, work, profile);
+  const continues = continuesSession(work);
+  const startDelayMs = continues ? 0 : await sessionGapLeft(trx, work, profile);
   const run = await trx
     .insertInto('automation_run')
     .values({
@@ -1204,6 +1210,7 @@ async function issueCall(
       script: request.script.slice(0, 100),
       operation_id: request.purpose === 'operation' ? request.operationId : null,
       host: 'phone',
+      continues_session: continues,
     })
     .returning('id')
     .executeTakeFirstOrThrow();
@@ -1243,7 +1250,8 @@ async function issueCall(
  * Whether the call goes on a session the phone is in: the run already had a call of its own
  * answered by the phone (a send's read-back after the send, a create's lookup before it). Its
  * calls are one visit to the marketplace, as a person checks a listing right after posting it,
- * so only a run's first call waits out the pause between sessions.
+ * so only a run's first call waits out the pause between sessions or counts against the seller's
+ * share of runs.
  */
 function continuesSession(work: WorkRow): boolean {
   return entries(work).some((entry) => entry.run.type === 'ran');
@@ -1260,6 +1268,7 @@ async function sessionGapLeft(
     .select('started_at')
     .where('account_id', '=', work.account_id)
     .where('connection_id', '=', work.connection_id)
+    .where('continues_session', '=', false)
     .orderBy('started_at', 'desc')
     .limit(1)
     .executeTakeFirst();

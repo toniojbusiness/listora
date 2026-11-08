@@ -1,4 +1,5 @@
 export { isMarketplace, MARKETPLACE_NAMES, REMOTE_LISTING_STATUSES } from './adapter.ts';
+export { ListingReadError } from './read-error.ts';
 export type {
   AdapterContext,
   AdapterLookup,

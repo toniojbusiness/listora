@@ -978,6 +978,80 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect(later.every((delay) => delay === 0)).toBe(true);
   });
 
+  it("counts a run's read-back as part of its visit, not as a run of its own", async () => {
+    // A bulk listing on 2026-11-07 used two of the seller's runs per item (the create and its
+    // read-back), so its last read-backs were held back and the listings failed as unconfirmed.
+    await runPhone();
+    const counted = await db
+      .selectFrom('automation_run')
+      .select((eb) => eb.fn.countAll<string>().as('runs'))
+      .where('connection_id', '=', connectionId)
+      .executeTakeFirstOrThrow();
+    // Room for exactly one more run this hour: the create's own.
+    const limited: PhoneWorkDependencies = {
+      ...phone,
+      profiles: {
+        ...phone.profiles,
+        depop: {
+          ...phone.profiles.depop,
+          limits: { runsPerHour: Number(counted.runs) + 1, runsPerDay: 1_000 },
+        },
+      },
+    };
+    const first = await enqueue(await newListing(), 'create');
+    await step(first);
+    let run = await claimPhoneRun(limited, db, {
+      accountId,
+      deviceId,
+      runtimeVersion: PHONE_RUNTIME_VERSION,
+    });
+    let calls = 0;
+    while (run?.call) {
+      calls += 1;
+      const host = new PlaywrightPhoneHost(await webData.newPage());
+      const input = { ...run.call.input, startDelayMs: 0 };
+      const output = await runPhoneCall(input, host, { pacing: { random: () => 0 } });
+      await host.page.close();
+      run = await answerPhoneCall(limited, {
+        accountId,
+        deviceId,
+        runId: run.id,
+        index: run.call.index,
+        answer: asTheAppSendsIt(output),
+      });
+    }
+    // The create and its read-back, both on the phone: the read-back confirmed it.
+    expect(calls).toBeGreaterThan(1);
+    expect(await operation(first.id)).toMatchObject({
+      status: 'succeeded',
+      success_evidence: 'read_back',
+    });
+    const runs = await db
+      .selectFrom('automation_run')
+      .select(['continues_session'])
+      .where('operation_id', '=', first.id)
+      .orderBy('started_at')
+      .execute();
+    expect(runs.map((row) => row.continues_session)).toEqual([
+      false,
+      ...Array<boolean>(calls - 1).fill(true),
+    ]);
+    // The limit still holds for the next visit: the seller's share for the hour is used, so the
+    // server answers its first call itself and the phone runs nothing.
+    const next = await enqueue(await newListing(), 'create');
+    await step(next);
+    const held = await claimPhoneRun(limited, db, {
+      accountId,
+      deviceId,
+      runtimeVersion: PHONE_RUNTIME_VERSION,
+    });
+    expect(held).toMatchObject({ operationId: next.id, call: null });
+    expect(await operation(next.id)).toMatchObject({
+      status: 'retrying',
+      error_code: 'automation_paced',
+    });
+  });
+
   it('runs changes waiting out a backoff at once while the app is open, but keeps pacing waits', async () => {
     await runPhone();
     const waiting = async (errorCode: string) => {

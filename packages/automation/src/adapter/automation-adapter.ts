@@ -20,6 +20,7 @@
 import type { Marketplace } from '@listora/db';
 import {
   isListingAutomationVerified,
+  ListingReadError,
   MARKETPLACE_NAMES,
   type AdapterContext,
   type AssistedAdapter,
@@ -72,16 +73,22 @@ export type { AutomationScripts, WriteResult, WriteScript } from './script-call.
  * answer: `code` says why (`no_session`, `automation_paced`, `automation_busy`, or how the
  * script stopped, such as `element_missing`), `step` names the step it stopped at, and `detail`
  * is the script's own sanitized words for why (no page text, nothing typed), for the owner only.
+ * A read Listora held back (`automation_paced`, `automation_busy`) says when it may run
+ * (`retryAfterMs`).
  */
-export class AutomationReadError extends Error {
-  readonly code: string;
+export class AutomationReadError extends ListingReadError {
   readonly step: string | null;
   readonly detail: string | null;
 
-  constructor(code: string, step: string | null, message: string, detail: string | null = null) {
-    super(message);
+  constructor(
+    code: string,
+    step: string | null,
+    message: string,
+    detail: string | null = null,
+    retryAfterMs: number | null = null,
+  ) {
+    super(code, message, retryAfterMs);
     this.name = 'AutomationReadError';
-    this.code = code;
     this.step = step;
     this.detail = detail;
   }
@@ -563,6 +570,8 @@ export class AutomationAdapter<
           run.type === 'busy' ? 'automation_busy' : 'automation_paced',
           null,
           `Listora will ${what} on ${this.#name} again shortly.`,
+          null,
+          run.retryAfterMs,
         );
       case 'read_only':
         // Only a write is refused on a read-only connection; a read never is.

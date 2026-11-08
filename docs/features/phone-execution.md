@@ -85,8 +85,12 @@ iPhone...` while its check waits for the phone (saying so when it tries again af
    way, naming the runs it still runs (`running`); a run the device holds that it does not name
    stopped (the app was closed mid-call) and is recovered at once. The runner's per-seller rate
    limits and pause between sessions apply, counted in `automation_run` (`host = 'phone'`) with
-   the runner's runs; the pause comes before a run's first call only, since its later calls (a
-   send's read-back) are the same visit. The server speaks runtime versions 2 and 3
+   the runner's runs; the pause and the rate limits count a run's first call only, since its
+   later calls (a send's read-back) are the same visit (each is recorded with
+   `continues_session`; until 2026-11-08 the limits counted every call, so a bulk listing used two
+   of the seller's runs per item and its last read-backs were held back). A read-back Listora's
+   own limits do hold back keeps their code (`automation_paced`), uses no attempt, and runs once
+   they allow ([operations.md](operations.md)). The server speaks runtime versions 2 and 3
    (`SUPPORTED_PHONE_RUNTIME_VERSIONS`): each call names the version its phone last claimed with,
    and a version-2 app (installed before offers) gets every call but the offers' reads and
    answers, which wait for its update ([offers.md](offers.md)). The app also takes the server's

@@ -380,7 +380,8 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
    * Reads the listing back. Must observe the effect of any earlier attempt of an operation on
    * this listing, including one whose outcome was unknown (find it by external SKU or id).
    * A read may be stale; its `revision` (see `readFreshness`) lets the engine tell.
-   * Throws when the marketplace cannot be read; an assisted adapter always throws.
+   * Throws when the marketplace cannot be read (a `ListingReadError` says why); an assisted
+   * adapter always throws.
    */
   readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
   /** One cheap call that shows whether the connection works. Never throws. */
