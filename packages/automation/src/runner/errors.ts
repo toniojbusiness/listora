@@ -24,3 +24,18 @@ export class MarketplaceError extends Error {
     this.name = 'MarketplaceError';
   }
 }
+
+/**
+ * What a script throws when a page that only a signed-in seller sees is drawn for a visitor
+ * instead: the marketplace's signed-out header where its member's own is (Vinted's "Sign up | Log
+ * in" button). The marketplace signed the seller out without sending them to its sign-in page,
+ * so no inspection sees a login page; the run ends as one does (`session_rejected`), and the
+ * seller is asked to link the account again. The message is logged and stored, so it never
+ * repeats page content.
+ */
+export class SignedOutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SignedOutError';
+  }
+}

@@ -6639,6 +6639,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			this.name = "MarketplaceError";
 		}
 	};
+	/**
+	* What a script throws when a page that only a signed-in seller sees is drawn for a visitor
+	* instead: the marketplace's signed-out header where its member's own is (Vinted's "Sign up | Log
+	* in" button). The marketplace signed the seller out without sending them to its sign-in page,
+	* so no inspection sees a login page; the run ends as one does (`session_rejected`), and the
+	* seller is asked to link the account again. The message is logged and stored, so it never
+	* repeats page content.
+	*/
+	var SignedOutError = class extends Error {
+		constructor(message) {
+			super(message);
+			this.name = "SignedOutError";
+		}
+	};
 
 // src/runner/script-session.ts
 	var PageBackendError = class extends Error {
@@ -6760,7 +6774,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				};
 			} catch (caught) {
 				const stopped = this.#stop();
-				const thrown = stopped === null ? caught : new PageProblemError(stopped);
+				const thrown = stopped !== null ? new PageProblemError(stopped) : caught instanceof SignedOutError ? new PageProblemError({
+					type: "challenge",
+					kind: "session_rejected",
+					sign: "signed-out page"
+				}) : caught;
 				const failure = await this.#failure(thrown, current, signal);
 				this.#deps.logger.warn({
 					script: name,
@@ -14012,18 +14030,40 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* link, drawn only once the button is pressed, is `/member/<id>` with no login after it. So the
 	* member comes from the web API the pages read it from: `GET /api/v2/users/current`, the
 	* member's `id` and `login`.
+	*
+	* A session Vinted signed out does not always go to the chooser's own address first: on the
+	* captain's phone (2026-11-05 to 11-08), the settings page was drawn for a visitor, with the
+	* header's "Sign up | Log in" button (`header--login-button`) and the chooser over it, and the
+	* wait for the user menu ran the step out of time, shown as a timeout instead of "link Vinted
+	* again". So the wait ends at either header: the visitor's stops the run as signed out.
 	*/
-	const ACCOUNT_PAGE = { 
-	/** The user menu's button in the header, which only a signed-in member's pages draw. */
-userMenu: "header [data-testid=\"user-menu-button\"]" };
+	const ACCOUNT_PAGE = {
+		/** The user menu's button in the header, which only a signed-in member's pages draw. */
+		userMenu: "header [data-testid=\"user-menu-button\"]",
+		/**
+		* What Vinted draws for a visitor instead: the header's "Sign up | Log in" button, or the
+		* sign-up and sign-in chooser's "Log in" switch (read in the page evidence of the captain's
+		* phone, 2026-11-08).
+		*/
+		signedOut: "[data-testid=\"header--login-button\"], [data-testid=\"auth-select-type--register-switch\"]"
+	};
 	const currentUserSchema = object({ user: object({
 		id: union([number().int().nonnegative(), string().regex(VINTED_ID)]).transform(String),
 		login: string().nullish()
 	}).catchall(unknown()) });
-	/** Opens the seller's profile settings and waits for the header's user menu. */
+	/**
+	* Opens the seller's profile settings and waits for the header's user menu. Throws
+	* `SignedOutError` when the page is drawn for a visitor instead, and `PageChangedError` when it
+	* has neither header.
+	*/
 	async function openAccount(page, site) {
 		await page.goto(absolute(site, VINTED_PATHS.account));
-		await awaitElement(page, ACCOUNT_PAGE.userMenu, "profile settings", "user menu");
+		try {
+			await page.waitFor(`${ACCOUNT_PAGE.userMenu}, ${ACCOUNT_PAGE.signedOut}`, "attached");
+		} catch {}
+		if (await page.exists(ACCOUNT_PAGE.userMenu)) return;
+		if (await page.exists(ACCOUNT_PAGE.signedOut)) throw new SignedOutError("Vinted's profile settings show the signed-out header.");
+		throw changed("profile settings", `has no user menu (${ACCOUNT_PAGE.userMenu})`);
 	}
 	/**
 	* The member signed in, as Vinted's web API answers from an open Vinted page. Throws
@@ -14032,6 +14072,7 @@ userMenu: "header [data-testid=\"user-menu-button\"]" };
 	*/
 	async function currentMember(page, site) {
 		const answer = await page.apiGet(absolute(site, VINTED_API_PATHS.currentUser), { pageCookies: true });
+		if (answer.status === 401) throw new SignedOutError("Vinted's web API has no member signed in (401).");
 		if (answer.status !== 200) throw changed("web API", `answered ${String(answer.status)} for the member signed in`);
 		const parsed = currentUserSchema.safeParse(answer.body);
 		if (!parsed.success) throw changed("web API", "doesn't show which member is signed in");

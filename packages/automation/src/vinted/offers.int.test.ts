@@ -105,6 +105,14 @@ describe('Vinted offers (headless Chromium, fake Vinted)', () => {
     await expect(adapter.listOffers(ctx())).resolves.toEqual([]);
   });
 
+  it('asks to link Vinted again when its pages are drawn for a visitor, not a timeout', async () => {
+    // The captain's phone, 2026-11-08: "Stopped at read your conversations: the step took too
+    // long", on a session Vinted had signed out.
+    site.injectFault({ action: 'health', fault: { type: 'signed_out' } });
+    await expect(adapter.listOffers(ctx())).rejects.toMatchObject({ code: 'session_rejected' });
+    expect(sessions.challenges).toEqual(['session_rejected']);
+  });
+
   offerSuite('the offers suite', () => ({
     adapter,
     desk: site.offers,

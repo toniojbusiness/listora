@@ -139,6 +139,14 @@ describe('Vinted automation adapter on the fake Vinted site', () => {
     ['a CAPTCHA', { type: 'captcha' }, 'captcha'],
     ['a sign-in code', { type: 'login_challenge' }, 'login_challenge'],
     ['a signed-out session', { type: 'session_expired' }, 'session_rejected'],
+    // As the captain's phone met it (2026-11-08): the settings drawn for a visitor, then moved
+    // to the sign-in chooser's address by the page's own scripts, or left at its own.
+    ['a page drawn for a visitor', { type: 'signed_out' }, 'session_rejected'],
+    [
+      'a page drawn for a visitor that stays',
+      { type: 'signed_out', stays: true },
+      'session_rejected',
+    ],
   ] satisfies [string, FakeVintedFault, string][])(
     'stops at %s and asks the seller to link again',
     async (_name, fault, challenge) => {

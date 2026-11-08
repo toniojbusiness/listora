@@ -65,6 +65,10 @@ from the app
   marketplace itself failed and to try again (Mercari's "Your item could not be listed due to an
   error") ends the step as `server_error`, as a 5xx does: the change is read back, then tried
   again. It is not a refusal of the listing, and not a page Listora no longer understands.
+- **A signed-out page** (`SignedOutError`, `runner/errors.ts`). A page only a signed-in seller
+  sees, drawn for a visitor instead (Vinted's "Sign up | Log in" header where its member's own
+  is), ends the run as the sign-in page does (`session_rejected`), so the seller is asked to link
+  the account again: the marketplace signed them out without sending them to its sign-in page.
 - **Network rules** (`safety/network.ts`). The runner checks every request and WebSocket before
   Chromium sends it. The main frame may only load the profile's own origins; its API origins
   take every request but a main-frame navigation. No request may go
