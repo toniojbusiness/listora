@@ -74,13 +74,16 @@ export async function startListingImport(
     throw new ImportRefusedError('unsupported', `Listora can't import ${name} listings yet.`);
   }
   return inTransaction(executor, async (trx) => {
+    // Two starts wait for each other here, but work on the connection (a phone's claim, which
+    // holds `lockConnections`'s key-share lock) never does: `for update` would, and a sync
+    // starting imports of two connections deadlocked with a claim holding them in another order.
     const connection = await trx
       .selectFrom('marketplace_connection')
       .select(['id', 'mode', 'status', 'runs_on'])
       .where('account_id', '=', request.accountId)
       .where('marketplace', '=', request.marketplace)
       .where('mode', '=', 'automation')
-      .forUpdate()
+      .forNoKeyUpdate()
       .executeTakeFirst();
     if (
       connection === undefined ||

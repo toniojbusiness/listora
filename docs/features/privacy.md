@@ -133,6 +133,11 @@ unlink, after which it finds the connection gone and stops. Should work that bre
 still meet an unlink, Postgres rolls one of them back; when that is the unlink, it runs again
 (up to three times, each logged as a warning naming the deadlock), so an unlink always completes.
 
+A transaction that only orders its own change of a connection's row with others' (an import's
+start, a link, a Retry check) locks the row `for no key update`, never `for update`: `for update`
+waits for every holder of `for key share`, so a sync starting the imports of two connections
+deadlocked with a phone's claim that held both in id order (`POST /v1/phone-runs`, 2026-11-03).
+
 An operator runs the last one with
 `npm run admin -- marketplace-purge depop --mode api --actor <name> --reason <text>`, which only
 counts the connections until it is run again with `--confirm`; the log line names the actor and
