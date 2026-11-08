@@ -121,6 +121,9 @@ One shared poller per runner, measured 2026-10-29 (an idle worker with productio
 and 5 s poll, 60 s, `pg_stat_statements` on the local cluster): 77 queue polls a minute before,
 24 after. The local queue holds at most one fetched job while every slot is busy, so a newly
 queued delist waits behind one job at most. `engine.int.test.ts` checks that 8 slots poll as one.
+Graphile Worker warns at each runner's start that this size is below the runner's concurrency;
+the size is deliberate, so that warning is logged at debug (`LOCAL_QUEUE_WARNING`,
+`worker-logs.int.test.ts`) instead of in every deploy's warnings.
 
 Each runner's job fetch looks at listing queues only for jobs it can run
 (`packages/operations/src/job-fetch.ts`, which changes Graphile Worker's fetch on the runner's

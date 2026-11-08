@@ -48,12 +48,25 @@ export async function addJob(executor: DbExecutor, job: BackgroundJob): Promise<
   `.execute(executor);
 }
 
+export interface JobQueueLoggerOptions {
+  /**
+   * Graphile Worker warnings about a setting the caller chose on purpose, kept at debug: a
+   * warning in every start's log that nobody acts on hides the ones that need acting on.
+   */
+  readonly expectedWarnings?: readonly RegExp[];
+}
+
 /**
  * Routes Graphile Worker's log messages into a Listora structured logger. Graphile logs every
  * completed job at info; the operation engine logs each step itself, so Graphile's info lines
- * are kept at debug, and its warnings and errors keep their level.
+ * are kept at debug, and its warnings and errors keep their level, but for the warnings the
+ * caller expects (`expectedWarnings`).
  */
-export function createJobQueueLogger(logger: Logger): JobQueueLogger {
+export function createJobQueueLogger(
+  logger: Logger,
+  options: JobQueueLoggerOptions = {},
+): JobQueueLogger {
+  const expected = options.expectedWarnings ?? [];
   const factory: LogFunctionFactory = (scope) => {
     const scoped = logger.child({ jobQueue: scope });
     return (level, message, meta) => {
@@ -62,7 +75,11 @@ export function createJobQueueLogger(logger: Logger): JobQueueLogger {
           scoped.error(meta, message);
           return;
         case 'warning':
-          scoped.warn(meta, message);
+          if (expected.some((pattern) => pattern.test(message))) {
+            scoped.debug(meta, message);
+          } else {
+            scoped.warn(meta, message);
+          }
           return;
         case 'info':
         case 'debug':

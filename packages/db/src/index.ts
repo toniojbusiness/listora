@@ -17,7 +17,11 @@ export {
   JOB_QUEUE_SCHEMA,
   migrateJobQueue,
 } from './job-queue.ts';
-export type { BackgroundJob, JobQueueMigrationOptions } from './job-queue.ts';
+export type {
+  BackgroundJob,
+  JobQueueLoggerOptions,
+  JobQueueMigrationOptions,
+} from './job-queue.ts';
 export { jsonb } from './json.ts';
 export { listenForNotifications } from './notifications.ts';
 export type { NotificationListener, NotificationListenerOptions } from './notifications.ts';

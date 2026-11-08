@@ -40,4 +40,28 @@ describe('createJobQueueLogger', () => {
       jobQueue: { label: 'worker', workerId: 'pool-1' },
     });
   });
+
+  it('keeps a warning the caller expects at debug, and every other warning at warn', () => {
+    const chunks: string[] = [];
+    const destination = new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        chunks.push(chunk.toString());
+        callback();
+      },
+    });
+    const logger = createJobQueueLogger(
+      createLogger({ service: 'worker', level: 'debug', destination }),
+      { expectedWarnings: [/^Your job batch size \(1\) is smaller/] },
+    ).scope({ label: 'worker' });
+
+    logger.warn('Your job batch size (1) is smaller than your concurrency setting (5)');
+    logger.warn('Your job batch size (2) is smaller than your concurrency setting (5)');
+
+    const levels = chunks
+      .join('')
+      .trim()
+      .split('\n')
+      .map((line) => (JSON.parse(line) as { level: number }).level);
+    expect(levels).toEqual([20, 40]);
+  });
 });
