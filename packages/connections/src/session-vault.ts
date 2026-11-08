@@ -132,7 +132,9 @@ export class SessionVault {
         .select(['id', 'mode'])
         .where('account_id', '=', input.accountId)
         .where('marketplace', '=', input.marketplace)
-        .forUpdate()
+        // Orders links of one connection, and never waits for work holding it
+        // (`lockConnections`): a link changes no key.
+        .forNoKeyUpdate()
         .executeTakeFirst();
       if (existing?.mode === 'api') throw new ConnectionModeConflictError(input.marketplace);
 

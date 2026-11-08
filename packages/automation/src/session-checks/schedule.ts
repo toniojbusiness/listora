@@ -167,7 +167,8 @@ export async function requestSessionRecheck(
   now: Date,
 ): Promise<boolean> {
   return inTransaction(executor, async (trx) => {
-    // The connection's row lock orders this after any session write in flight (a relink).
+    // The connection's row lock orders this after any session write in flight (a relink); `for
+    // no key update`, so it never waits for work holding the connection (`lockConnections`).
     const connection = await trx
       .selectFrom('marketplace_connection')
       .select('marketplace')
@@ -176,7 +177,7 @@ export async function requestSessionRecheck(
       .where('mode', '=', 'automation')
       .where('status', 'in', ['connected', 'degraded'])
       .where('token_ciphertext', 'is not', null)
-      .forUpdate()
+      .forNoKeyUpdate()
       .executeTakeFirst();
     if (connection === undefined) return false;
     const current = await trx

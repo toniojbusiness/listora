@@ -12,8 +12,12 @@ import type { DbTransaction } from './database.ts';
  * that held one of them and then needed the connection (any insert that references it does)
  * deadlocked with an unlink. With the lock, the unlink waits for the work to commit, or the work
  * for the unlink, and then finds the connection gone. It blocks only deleting the connection and
- * changing its key, never another transaction's work on it. Returns the ids of the connections
- * that exist.
+ * changing its key (`external_user_id` is one, in a unique constraint), never another
+ * transaction's work on it. So a transaction that only orders its own change of a connection's
+ * row with others' (starting an import) locks it `for no key update`, never `for update`, which
+ * would wait for every holder of this lock: a sync starting imports of two connections, while a
+ * phone's claim held this lock on both in id order, deadlocked (2026-11-03). Returns the ids of
+ * the connections that exist.
  */
 export async function lockConnections(
   trx: DbTransaction,
