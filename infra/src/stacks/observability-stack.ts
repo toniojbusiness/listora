@@ -146,13 +146,6 @@ export class ObservabilityStack extends ListoraStack {
           tg.unhealthyHostCount({ period: Duration.minutes(1), statistic: 'Maximum' }),
           1,
         );
-        alarm(
-          'api-latency-p95',
-          'API p95 response time stayed above 2 seconds for 15 minutes.',
-          tg.targetResponseTime({ period: fiveMinutes, statistic: 'p95' }),
-          2,
-          { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
-        );
         break;
       }
       case 'http-api': {
@@ -167,18 +160,26 @@ export class ObservabilityStack extends ListoraStack {
           1,
           { datapointsToAlarm: 2 },
         );
-        alarm(
-          'api-latency-p95',
-          'API p95 response time stayed above 2 seconds for 15 minutes.',
-          api.metricIntegrationLatency({ period: fiveMinutes, statistic: 'p95' }),
-          2000,
-          { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
-        );
         break;
       }
       default:
         assertNever(endpoint);
     }
+    // The API's own response time (`ApiResponseTime`, apps/api/src/response-time.ts), not the
+    // load balancer's or the gateway's: theirs count the long polls, which wait up to 20 seconds
+    // by design, and the phone's wait alone kept this alarm firing.
+    alarm(
+      'api-latency-p95',
+      "API p95 response time (the app's calls, long polls left out) stayed above 2 seconds for 15 minutes.",
+      new cloudwatch.Metric({
+        namespace: METRIC_NAMESPACE,
+        metricName: 'ApiResponseTime' satisfies TrustMetricName,
+        statistic: 'p95',
+        period: fiveMinutes,
+      }),
+      2000,
+      { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
+    );
 
     for (const { name, service } of props.services) {
       this.runningTasksAlarm(alarm, settings, name, service);

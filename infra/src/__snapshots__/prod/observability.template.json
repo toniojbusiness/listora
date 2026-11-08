@@ -397,95 +397,20 @@
             "Ref": "Alarms04B5A0BF"
           }
         ],
-        "AlarmDescription": "API p95 response time stayed above 2 seconds for 15 minutes.",
+        "AlarmDescription": "API p95 response time (the app's calls, long polls left out) stayed above 2 seconds for 15 minutes.",
         "AlarmName": "listora-prod-api-latency-p95",
         "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "LoadBalancer",
-            "Value": {
-              "Fn::Join": [
-                "",
-                [
-                  {
-                    "Fn::Select": [
-                      1,
-                      {
-                        "Fn::Split": [
-                          "/",
-                          {
-                            "Fn::GetStackOutput": {
-                              "StackName": "listora-prod-compute",
-                              "Region": "us-east-1",
-                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
-                            }
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  "/",
-                  {
-                    "Fn::Select": [
-                      2,
-                      {
-                        "Fn::Split": [
-                          "/",
-                          {
-                            "Fn::GetStackOutput": {
-                              "StackName": "listora-prod-compute",
-                              "Region": "us-east-1",
-                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
-                            }
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  "/",
-                  {
-                    "Fn::Select": [
-                      3,
-                      {
-                        "Fn::Split": [
-                          "/",
-                          {
-                            "Fn::GetStackOutput": {
-                              "StackName": "listora-prod-compute",
-                              "Region": "us-east-1",
-                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
-                            }
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              ]
-            }
-          },
-          {
-            "Name": "TargetGroup",
-            "Value": {
-              "Fn::GetStackOutput": {
-                "StackName": "listora-prod-compute",
-                "Region": "us-east-1",
-                "OutputName": "PublishOutputFnGetAttLoadBalancerHttpsApiGroup1C2C0E6FTargetGroupFullName55EB795C"
-              }
-            }
-          }
-        ],
         "EvaluationPeriods": 3,
         "ExtendedStatistic": "p95",
-        "MetricName": "TargetResponseTime",
-        "Namespace": "AWS/ApplicationELB",
+        "MetricName": "ApiResponseTime",
+        "Namespace": "Listora",
         "OKActions": [
           {
             "Ref": "Alarms04B5A0BF"
           }
         ],
         "Period": 300,
-        "Threshold": 2,
+        "Threshold": 2000,
         "TreatMissingData": "notBreaching"
       }
     },

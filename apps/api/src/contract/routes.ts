@@ -98,7 +98,7 @@ export function contractRoute<K extends OperationId>(
   app.route({
     method: spec.method,
     url: spec.url,
-    config: { rateLimit: 'account' },
+    config: { rateLimit: 'account', operationId },
     // Before the body is parsed, so an unauthenticated client cannot make the server read it.
     onRequest: async (request) => {
       const { identity, tenant } = await authenticate(request, deps.auth, deps.db, deps.signUp);

@@ -1394,7 +1394,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
     }
 
     if (settings.ingress.via === 'http-api') {
-      it('alarms on server errors and latency (in milliseconds) of the HTTP API', () => {
+      it('alarms on server errors of the HTTP API', () => {
         // One user sends few requests: any server error counts, in 2 of 3 periods.
         expect(alarmNamed('api-5xx')).toMatchObject({
           Namespace: 'AWS/ApiGateway',
@@ -1406,14 +1406,22 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           EvaluationPeriods: 3,
           DatapointsToAlarm: 2,
         });
-        expect(alarmNamed('api-latency-p95')).toMatchObject({
-          Namespace: 'AWS/ApiGateway',
-          MetricName: 'IntegrationLatency',
-          ExtendedStatistic: 'p95',
-          Threshold: 2000,
-        });
       });
     }
+
+    it("alarms on the API's own p95 response time, which leaves the long polls out", () => {
+      // Not the gateway's or the load balancer's latency: those count the phone's 20-second
+      // wait for work, which kept the alarm firing (docs/features/alerts.md).
+      expect(alarmNamed('api-latency-p95')).toMatchObject({
+        Namespace: 'Listora',
+        MetricName: 'ApiResponseTime',
+        ExtendedStatistic: 'p95',
+        Threshold: 2000,
+        ComparisonOperator: 'GreaterThanThreshold',
+        EvaluationPeriods: 3,
+      });
+      expect(alarmNamed('api-latency-p95')).not.toHaveProperty('Dimensions');
+    });
 
     it('alarms when a service, the worker included, runs fewer tasks than it should', () => {
       for (const name of serviceNames) {

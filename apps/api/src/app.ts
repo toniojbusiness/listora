@@ -7,6 +7,7 @@ import { graphileBatchJobs, type BatchJobQueue } from '@listora/batches';
 import { openInviteeDirectory } from '@listora/accounts';
 import type { Db, KeyedSignals } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
+import type { MetricsEmitter } from '@listora/observability';
 import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import {
@@ -25,6 +26,7 @@ import { registerErrorHandling } from './errors.ts';
 import { API_FEATURES, type ApiRouteContext } from './features.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import { createRateLimiters, registerRateLimits, type RateLimits } from './rate-limits.ts';
+import { registerResponseTimeMetric } from './response-time.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { PhoneWorkDependencies } from '@listora/automation';
 
@@ -94,6 +96,8 @@ export interface AppDependencies extends HealthDependencies {
   rateLimits?: RateLimits;
   /** A `createLogger()` instance from @listora/shared. Omit in tests to keep output quiet. */
   logger?: FastifyBaseLogger;
+  /** Where the API's response time goes (`ApiResponseTime`, response-time.ts); none without it. */
+  metrics?: MetricsEmitter;
 }
 
 export const REQUEST_ID_HEADER = 'x-request-id';
@@ -144,6 +148,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
       ? undefined
       : createRateLimiters(deps.rateLimits, () => now().getTime());
   if (rateLimiters !== undefined) registerRateLimits(app, rateLimiters);
+  if (deps.metrics !== undefined) registerResponseTimeMetric(app, deps.metrics);
   registerCompression(app);
 
   registerHealthRoutes(app, deps);
